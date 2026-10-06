@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect } from "vite-plus/test";
+import { it } from "@effect/vitest";
 import {
   EnvironmentId,
   ProviderInstanceId,
@@ -56,50 +57,52 @@ function dependencies(threadId?: string, descriptorId = environmentId) {
 }
 
 describe("MCP-scoped worker identity", () => {
-  it("isolates concurrent Cursor and OpenCode sessions without changing global env", async () => {
-    const before = process.env.T3_THREAD_ID;
-    const identities = await Promise.all(
-      ["cursor-thread", "opencode-thread"].map((id) =>
-        Effect.runPromise(readWorkerIdentity().pipe(Effect.provide(dependencies(id)))),
-      ),
-    );
-    expect(identities).toEqual([
-      { threadId: "cursor-thread", environmentId, environmentName: "Development" },
-      { threadId: "opencode-thread", environmentId, environmentName: "Development" },
-    ]);
-    expect(process.env.T3_THREAD_ID).toBe(before);
-  });
-  it("exposes caller identity through the registered tool handler", async () => {
-    const deps = dependencies("cursor-thread");
-    const result = await Effect.runPromise(
-      Effect.gen(function* () {
+  it.effect("isolates concurrent Cursor and OpenCode sessions without changing global env", () =>
+    Effect.gen(function* () {
+      const before = process.env.T3_THREAD_ID;
+      const identities = yield* Effect.forEach(
+        ["cursor-thread", "opencode-thread"],
+        (id) => readWorkerIdentity().pipe(Effect.provide(dependencies(id))),
+        { concurrency: "unbounded" },
+      );
+      expect(identities).toEqual([
+        { threadId: "cursor-thread", environmentId, environmentName: "Development" },
+        { threadId: "opencode-thread", environmentId, environmentName: "Development" },
+      ]);
+      expect(process.env.T3_THREAD_ID).toBe(before);
+    }),
+  );
+  it.effect("exposes caller identity through the registered tool handler", () =>
+    Effect.gen(function* () {
+      const deps = dependencies("cursor-thread");
+      const result = yield* Effect.gen(function* () {
         const toolkit = yield* WorkerIdentityToolkit.pipe(
           Effect.provide(WorkerIdentityHandlersLive.pipe(Layer.provide(deps))),
         );
         return yield* toolkit
           .handle("t3_worker_identity", {})
           .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(deps));
-      }),
-    );
-    expect(result.at(-1)?.result).toEqual({
-      threadId: "cursor-thread",
-      environmentId,
-      environmentName: "Development",
-    });
-  });
-  it("refuses to guess identity for an external MCP client", async () => {
-    const result = await Effect.runPromise(
-      readWorkerIdentity().pipe(Effect.provide(dependencies()), Effect.flip),
-    );
-    expect(result.code).toBe("thread_credential_required");
-  });
-  it("refuses another environment's credential", async () => {
-    const result = await Effect.runPromise(
-      readWorkerIdentity().pipe(
+      });
+      expect(result.at(-1)?.result).toEqual({
+        threadId: "cursor-thread",
+        environmentId,
+        environmentName: "Development",
+      });
+    }),
+  );
+  it.effect("refuses to guess identity for an external MCP client", () =>
+    Effect.gen(function* () {
+      const result = yield* readWorkerIdentity().pipe(Effect.provide(dependencies()), Effect.flip);
+      expect(result.code).toBe("thread_credential_required");
+    }),
+  );
+  it.effect("refuses another environment's credential", () =>
+    Effect.gen(function* () {
+      const result = yield* readWorkerIdentity().pipe(
         Effect.provide(dependencies("thread", EnvironmentId.make("other"))),
         Effect.flip,
-      ),
-    );
-    expect(result.code).toBe("capability_denied");
-  });
+      );
+      expect(result.code).toBe("capability_denied");
+    }),
+  );
 });

@@ -1,17 +1,17 @@
-import { execFile } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { promisify } from "node:util";
-import { fileURLToPath } from "node:url";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeFSP from "node:fs/promises";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import * as NodeUtil from "node:util";
+import * as NodeURL from "node:url";
 import { expect, it } from "vite-plus/test";
-const exec = promisify(execFile);
+const exec = NodeUtil.promisify(NodeChildProcess.execFile);
 it("reports missing shell identity and accepts MCP-provided command-local identity", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "t3-caller-"));
+  const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-caller-"));
   try {
     const base = {
       ...process.env,
-      T3_AGENT_STATE_FILE: join(directory, "state.json"),
+      T3_AGENT_STATE_FILE: NodePath.join(directory, "state.json"),
       T3_THREAD_ID: "",
       T3_ENVIRONMENT_ID: "",
       T3_ENVIRONMENT_NAME: "",
@@ -20,7 +20,7 @@ it("reports missing shell identity and accepts MCP-provided command-local identi
       JSON.parse(
         (
           await exec(process.execPath, ["--import", "tsx", "src/cli.ts", "caller"], {
-            cwd: fileURLToPath(new URL("../", import.meta.url)),
+            cwd: NodeURL.fileURLToPath(new URL("../", import.meta.url)),
             env,
             timeout: 60_000,
           })
@@ -44,6 +44,6 @@ it("reports missing shell identity and accepts MCP-provided command-local identi
       caller: { environment: "Development", saved: false },
     });
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await NodeFSP.rm(directory, { recursive: true, force: true });
   }
 }, 120_000);
