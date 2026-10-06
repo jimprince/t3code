@@ -1,3 +1,4 @@
+import { interruptedRewindBoundary } from "../../fork/chat/interruptedRewind";
 import { worktreeSetupAgentStarted } from "@t3tools/client-runtime/worktree-setup";
 export { worktreeSetupAgentStarted } from "@t3tools/client-runtime/worktree-setup";
 import { isLiveSubagentTurnItem } from "@t3tools/client-runtime/state/subagentRuntime";
@@ -1364,6 +1365,18 @@ export function deriveMessagesTimelineRows(input: {
         checkpoints: input.turnDiffSummaries,
       })
     : new Map<MessageId, number>();
+  if (input.supportsConversationRollback) {
+    const fallback = interruptedRewindBoundary({
+      latestRun: input.latestRun ?? null,
+      runningRunId: input.runningRunId ?? null,
+      messages: timelineEntries.flatMap((entry) =>
+        entry.kind === "message" ? [entry.message] : [],
+      ),
+      checkpoints: input.turnDiffSummaries,
+    });
+    if (fallback !== null)
+      revertTurnCountByUserMessageId.set(fallback.messageId, fallback.turnCount);
+  }
   const nextRows: MessagesTimelineRow[] = [];
   const durationStartByMessageId = computeMessageDurationStart(
     timelineEntries.flatMap((entry) => (entry.kind === "message" ? [entry.message] : [])),
