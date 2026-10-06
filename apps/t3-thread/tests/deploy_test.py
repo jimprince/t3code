@@ -66,6 +66,49 @@ class DeployTest(unittest.TestCase):
     def events(self):
         return (self.root / "events").read_text() if (self.root / "events").exists() else ""
 
+    def prepare_failing_new_snapshot(self):
+        self.stop_watcher()
+        shutil.rmtree(self.snap / self.sha)
+        # The real clone succeeds, then the helper rejects the missing workspace.
+        # That production ERR-trap path normally removes the partial snapshot.
+
+    def test_retain_snapshots_promotes_and_restarts_without_pruning(self):
+        result = self.deploy("--retain-snapshots")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(os.readlink(self.snap / "current"), self.sha)
+        self.assertTrue((self.snap / "old/keep").is_file(), "successful retained deployment deleted its predecessor")
+        self.assertEqual((self.snap / "old/keep").read_text(), "old runtime")
+        self.assertTrue((self.snap / self.sha / "apps/t3-thread").is_dir())
+        self.assertIn("--user restart t3-thread-watcher.service", self.events())
+
+    def test_retain_snapshots_preserves_partial_and_current_on_workspace_failure(self):
+        self.prepare_failing_new_snapshot()
+        result = self.deploy("--retain-snapshots")
+        self.assertNotEqual(result.returncode, 0, "missing workspace must stop deployment")
+        self.assertTrue((self.snap / self.sha / "fixture").is_file(), "failed new snapshot was deleted despite retention")
+        self.assertEqual(os.readlink(self.snap / "current"), "old")
+        self.assertEqual((self.snap / "old/keep").read_text(), "old runtime")
+        self.assertIn("has no apps/t3-thread workspace", result.stderr)
+        self.assertNotIn("restart", self.events())
+
+    def test_default_workspace_failure_removes_partial_and_keeps_current(self):
+        self.prepare_failing_new_snapshot()
+        result = self.deploy()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.snap / self.sha).exists(), "default failed-snapshot cleanup changed")
+        self.assertEqual(os.readlink(self.snap / "current"), "old")
+        self.assertEqual((self.snap / "old/keep").read_text(), "old runtime")
+        self.assertIn("has no apps/t3-thread workspace", result.stderr)
+        self.assertNotIn("restart", self.events())
+
+    def test_retain_snapshots_prune_only_preserves_all_snapshots(self):
+        result = self.deploy("--retain-snapshots", "--prune-only")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(os.readlink(self.snap / "current"), "old")
+        self.assertEqual((self.snap / "old/keep").read_text(), "old runtime")
+        self.assertTrue((self.snap / self.sha / "apps/t3-thread").is_dir())
+        self.assertEqual(self.events(), "")
+
     def test_restart_after_promotion_before_prune(self):
         result = self.deploy()
         self.assertEqual(result.returncode, 0, result.stderr)
