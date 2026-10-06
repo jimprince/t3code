@@ -3,13 +3,18 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { ProjectIssue, ProjectRequestStage } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { CheckIcon, RotateCcwIcon } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { projectIssuesQuery, settleProjectRequest } from "../../state/projectIssues";
+import {
+  decideProjectRequest,
+  projectIssuesQuery,
+  settleProjectRequest,
+} from "../../state/projectIssues";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { Button } from "../ui/button";
+import { Input } from "../ui/input";
 import { projectReturnState } from "./projectNavigation";
 import { formatIssueAge } from "./projectIssuesBoard.logic";
 import { useNextReleaseItems } from "./ProjectRoadmapWidget";
@@ -24,6 +29,8 @@ import {
   isMaintenanceWithAgents,
   issueKey,
   latestProgressLine,
+  needsYouDecision,
+  type NeedsYouDecision,
   nextReleaseRequests,
   requestsByWorker,
   requestsOfSettledThreads,
@@ -131,6 +138,116 @@ export function useSettle(summary: OrchestratorSummary, refresh: () => void) {
 }
 
 export type SettleControls = ReturnType<typeof useSettle>;
+
+/** How long a one-click action waits, with Undo on offer, before it is sent. */
+const UNDO_MS = 5000;
+
+interface QueuedAction {
+  readonly key: string;
+  readonly label: string;
+  readonly send: () => Promise<boolean>;
+  readonly timer: ReturnType<typeof setTimeout>;
+}
+
+/**
+ * One-click actions that leave their row at once but are only sent after a few
+ * seconds, so Undo is a client-side cancel. Leaving the page sends what is queued.
+ */
+export function useUndoableActions() {
+  const queue = useRef(new Map<string, QueuedAction>());
+  const [queued, setQueued] = useState<ReadonlyArray<{ key: string; label: string }>>([]);
+  const [gone, setGone] = useState<ReadonlySet<string>>(new Set());
+  const forget = (key: string) => {
+    queue.current.delete(key);
+    setQueued((current) => current.filter((entry) => entry.key !== key));
+  };
+  const bring = (key: string) =>
+    setGone((current) => {
+      const next = new Set(current);
+      next.delete(key);
+      return next;
+    });
+  const fire = (key: string) => {
+    const action = queue.current.get(key);
+    if (!action) return;
+    clearTimeout(action.timer);
+    forget(key);
+    void action.send().then((sent) => {
+      if (!sent) bring(key);
+    });
+  };
+  const fireRef = useRef(fire);
+  useEffect(() => {
+    fireRef.current = fire;
+  });
+  useEffect(
+    () => () => {
+      for (const key of Array.from(queue.current.keys())) fireRef.current(key);
+    },
+    [],
+  );
+  return {
+    queued,
+    isGone: (key: string) => gone.has(key),
+    run: (key: string, label: string, send: () => Promise<boolean>) => {
+      if (queue.current.has(key)) return;
+      setGone((current) => new Set([...current, key]));
+      setQueued((current) => [...current, { key, label }]);
+      queue.current.set(key, { key, label, send, timer: setTimeout(() => fire(key), UNDO_MS) });
+    },
+    undo: (key: string) => {
+      const action = queue.current.get(key);
+      if (!action) return;
+      clearTimeout(action.timer);
+      forget(key);
+      bring(key);
+    },
+  };
+}
+
+/** What is waiting to be sent, each with its Undo. */
+export function UndoLines({
+  actions,
+}: {
+  readonly actions: ReturnType<typeof useUndoableActions>;
+}) {
+  if (actions.queued.length === 0) return null;
+  return (
+    <ul className="mt-2 border-t border-border pt-1">
+      {actions.queued.map((entry) => (
+        <li key={entry.key} className="flex items-center gap-2 py-0.5 text-xs">
+          <span className="min-w-0 flex-1 truncate text-muted-foreground">{entry.label}</span>
+          <Button size="xs" variant="ghost-muted" onClick={() => actions.undo(entry.key)}>
+            <RotateCcwIcon />
+            Undo
+          </Button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Brad's decisions on Needs you rows: approve, not yet, or one of the options. */
+export function useDecide(summary: OrchestratorSummary, refresh: () => void) {
+  const decide = useAtomCommand(decideProjectRequest, "Decide");
+  return async (
+    issue: ProjectIssue,
+    decision: "approve" | "not-yet" | "option" | "answer",
+    extra: { readonly option?: string; readonly answer?: string; readonly reason?: string },
+  ) => {
+    const result = await decide({
+      environmentId: summary.root.environmentId,
+      input: {
+        threadId: summary.root.id,
+        reference: `${issue.repository}#${issue.number}`,
+        decision,
+        ...extra,
+      },
+    });
+    refresh();
+    return result._tag === "Success";
+  };
+}
 
 /** Opens a thread of the project, coming back to the project page afterwards. */
 export function useOpenThread(summary: OrchestratorSummary) {
@@ -332,11 +449,35 @@ function NeedsYouRowBody({
   issue,
   request,
   group,
+  decision = null,
 }: {
   readonly issue: ProjectIssue;
   readonly request: ProjectRequest | null;
   readonly group: NeedsYouItem["group"];
+  readonly decision?: NeedsYouDecision | null;
 }) {
+  if (decision) {
+    return (
+      <span className="min-w-0 flex-1">
+        <span className="line-clamp-2 text-sm">{issue.title}</span>
+        {decision.summary ? (
+          <span className="mt-1 line-clamp-2 block text-sm text-foreground/85">
+            {decision.summary}
+          </span>
+        ) : null}
+        {decision.recommendation ? (
+          <span className="mt-0.5 block text-xs text-foreground/90">
+            Recommended: {decision.recommendation}
+          </span>
+        ) : null}
+        {decision.options.map((option) => (
+          <span key={option.label} className="block truncate text-xs text-muted-foreground">
+            {option.label}: {option.text}
+          </span>
+        ))}
+      </span>
+    );
+  }
   // A ready comment is the agent's answer or summary; otherwise the thread's reply
   // to this very question.
   const ready = request?.stage === "ready" || request === null;
@@ -382,32 +523,76 @@ export function NeedsYouIssueGroups({
   summary,
   items,
   settle,
+  refresh,
 }: {
   readonly summary: OrchestratorSummary;
   readonly items: ReadonlyArray<NeedsYouItem>;
   readonly settle: SettleControls;
+  readonly refresh: () => void;
 }) {
   const openThread = useOpenThread(summary);
+  const actions = useUndoableActions();
+  const decide = useDecide(summary, refresh);
   return (
     <>
       {FOR_YOU_GROUPS.map(({ group, title }) => {
-        const groupItems = items.filter((item) => item.group === group);
+        const groupItems = items.filter(
+          (item) => item.group === group && !actions.isGone(issueKey(item.issue)),
+        );
         if (groupItems.length === 0) return null;
         return (
           <div key={group} className="mb-3 last:mb-0">
             <GroupTitle title={title} count={groupItems.length} />
             <ul className="divide-y divide-border">
-              {groupItems.map(({ issue, request }) => {
+              {groupItems.map((item) => {
+                const { issue, request } = item;
+                const key = issueKey(issue);
                 const threadId = threadOf(issue, request);
+                const decision = needsYouDecision(item);
                 return (
                   <ClickableRow
-                    key={issueKey(issue)}
+                    key={key}
                     label={`Open the thread for ${issue.title}`}
                     onOpen={threadId ? () => openThread(threadId) : null}
                     className="items-start py-2"
                   >
-                    <NeedsYouRowBody issue={issue} request={request} group={group} />
-                    <SettleButton issues={[issue]} settle={settle} />
+                    <NeedsYouRowBody
+                      issue={issue}
+                      request={request}
+                      group={group}
+                      decision={decision}
+                    />
+                    {decision ? (
+                      <DecisionActions
+                        decision={decision}
+                        onDecide={(kind, extra) =>
+                          actions.run(
+                            key,
+                            kind === "approve"
+                              ? "Approved"
+                              : kind === "not-yet"
+                                ? "Not yet"
+                                : (extra.option ?? "Chosen"),
+                            () => decide(issue, kind, extra),
+                          )
+                        }
+                      />
+                    ) : (
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        disabled={settle.isBusy(issue)}
+                        onClick={() =>
+                          actions.run(key, "Settled", async () => {
+                            await settle.settle([issue]);
+                            return true;
+                          })
+                        }
+                      >
+                        <CheckIcon />
+                        Settle
+                      </Button>
+                    )}
                   </ClickableRow>
                 );
               })}
@@ -415,7 +600,60 @@ export function NeedsYouIssueGroups({
           </div>
         );
       })}
+      <UndoLines actions={actions} />
     </>
+  );
+}
+
+/** Approve, Not yet (with an optional one-line reason) and a button per option. */
+function DecisionActions({
+  decision,
+  onDecide,
+}: {
+  readonly decision: NeedsYouDecision;
+  readonly onDecide: (
+    kind: "approve" | "not-yet" | "option",
+    extra: { readonly option?: string; readonly reason?: string },
+  ) => void;
+}) {
+  const [reason, setReason] = useState("");
+  return (
+    <span className="flex w-52 shrink-0 flex-col gap-1">
+      <span className="flex flex-wrap gap-1">
+        {decision.options.length === 0 ? (
+          <Button size="xs" variant="outline" onClick={() => onDecide("approve", {})}>
+            <CheckIcon />
+            Approve
+          </Button>
+        ) : (
+          decision.options.map((option) => (
+            <Button
+              key={option.label}
+              size="xs"
+              variant="outline"
+              onClick={() => onDecide("option", { option: `${option.label}: ${option.text}` })}
+            >
+              {option.label}
+            </Button>
+          ))
+        )}
+        <Button
+          size="xs"
+          variant="ghost-muted"
+          onClick={() => onDecide("not-yet", reason.trim() ? { reason: reason.trim() } : {})}
+        >
+          Not yet
+        </Button>
+      </span>
+      <Input
+        size="sm"
+        value={reason}
+        maxLength={500}
+        placeholder="Reason (optional)"
+        aria-label="Reason for not yet"
+        onChange={(event) => setReason(event.target.value)}
+      />
+    </span>
   );
 }
 
