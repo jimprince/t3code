@@ -1,0 +1,4 @@
+id = "project-workstreams"
+category = "feature"
+functionality = "projects"
+text = "The project Dashboard now has a Workstreams block under the health line: one line per active epic with its milestone, how many tasks are done, the agents working on it, the next step and a Blocked marker. Click a line to open the epic."
