@@ -15,6 +15,15 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { ProjectQueryState } from "./ProjectQueryState";
+import {
+  countStatuses,
+  formatStatusCounts,
+  STAGE_STATUS,
+  TASK_STATUS_LABEL,
+  type StatusCounts,
+  type TaskStatus,
+} from "./projectRequests.logic";
+import { useTaskStatuses } from "./ProjectRequestsSection";
 import { columnOf, moveInput, roadmapColumns, type RoadmapColumn } from "./projectRoadmap.logic";
 
 const DRAG_TYPE = "application/x-t3-roadmap-item";
@@ -155,12 +164,42 @@ function VersionTitle({
   );
 }
 
-const STAGE_WORD: Record<string, string> = {
-  "in-progress": "working",
-  ready: "ready",
-  "awaiting-release": "waiting for release",
-  "needs-test": "shipped, test it",
+const STATUS_TONE: Record<TaskStatus, string> = {
+  complete: "bg-foreground/70",
+  "for-review": "bg-warning",
+  active: "bg-info",
+  pending: "bg-muted-foreground/25",
 };
+
+/**
+ * How far along a version is: "63 · 12 complete · 3 active · 2 for review · 46 pending"
+ * and a thin static bar in the same order.
+ */
+function VersionProgress({ counts }: { readonly counts: StatusCounts }) {
+  if (counts.total === 0) return null;
+  const parts: ReadonlyArray<[TaskStatus, number]> = [
+    ["complete", counts.complete],
+    ["for-review", counts.forReview],
+    ["active", counts.active],
+    ["pending", counts.pending],
+  ];
+  return (
+    <div className="mb-2">
+      <p className="text-xs text-muted-foreground">{formatStatusCounts(counts)}</p>
+      <div className="mt-1 flex h-1 overflow-hidden rounded-full bg-muted">
+        {parts.map(([status, value]) =>
+          value > 0 ? (
+            <span
+              key={status}
+              className={STATUS_TONE[status]}
+              style={{ width: `${(value / counts.total) * 100}%` }}
+            />
+          ) : null,
+        )}
+      </div>
+    </div>
+  );
+}
 
 /**
  * The Roadmap tab: the next version first, filled automatically with the first
@@ -176,6 +215,13 @@ export function ProjectRoadmapWidget({ summary }: { readonly summary: Orchestrat
   const [newVersion, setNewVersion] = useState("");
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const columns = useMemo(() => (roadmap.data ? roadmapColumns(roadmap.data) : []), [roadmap.data]);
+  const { statuses } = useTaskStatuses(summary);
+  const repository = roadmap.data?.tracker?.repository;
+  // The same status as the Tasks board and Needs you; the stage only when the
+  // task is not in the issue list yet.
+  const statusOf = (item: ProjectRoadmapItem): TaskStatus =>
+    statuses.get(`${repository}#${item.number}`) ??
+    (item.stage ? STAGE_STATUS[item.stage] : "pending");
 
   if (!roadmap.data) {
     return <ProjectQueryState what="roadmap" error={roadmap.error} onRetry={roadmap.refresh} />;
@@ -246,6 +292,11 @@ export function ProjectRoadmapWidget({ summary }: { readonly summary: Orchestrat
                 }).then(() => roadmap.refresh())
               }
             />
+            {column.target.kind === "later" ? null : (
+              <VersionProgress
+                counts={countStatuses(column.items.map(statusOf), column.completeCount)}
+              />
+            )}
             <ul>
               {column.items.map((item) => (
                 <li
@@ -267,9 +318,7 @@ export function ProjectRoadmapWidget({ summary }: { readonly summary: Orchestrat
                       {item.title}
                     </a>
                     <span className="text-xs text-muted-foreground">
-                      #{item.number}
-                      {item.isRequest ? " · request" : ""}
-                      {item.stage && STAGE_WORD[item.stage] ? ` · ${STAGE_WORD[item.stage]}` : ""}
+                      {TASK_STATUS_LABEL[statusOf(item)]}
                     </span>
                   </span>
                   <Menu>
