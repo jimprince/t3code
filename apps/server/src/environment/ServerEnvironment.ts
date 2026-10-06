@@ -241,6 +241,7 @@ export const make = Effect.gen(function* () {
       threadPinning: true,
       threadPinReorder: true,
       threadActiveReorder: true,
+      threadOrderReset: true,
       threadAutoSettleOptOut: true,
       threadSubscriptions: true,
       threadTitleRegeneration: true,
