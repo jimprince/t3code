@@ -40,5 +40,3 @@ export function groupSupervisionChildInputAttention(
   }
   return groups;
 }
-
-/** Existing sidebar consumers share the organizational traversal. */
