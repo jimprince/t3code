@@ -5,6 +5,7 @@ import {
   mapRouteEnvironment,
   parentInputRoute,
 } from "./parentRouting.js";
+import { withInputReminder, inputNotificationStillCurrent } from "./inputReminders.js";
 import * as NodeCrypto from "node:crypto";
 
 import { RemoteEnvironmentClient } from "./client.js";
@@ -537,6 +538,14 @@ export async function detectAttentionEvents(
           if (observed) observed.errorEventKey = route.errorEventKey;
         }
       }
+      notification = withInputReminder(
+        notification,
+        notifications,
+        currentState.subscriptions.find(
+          (route) =>
+            sameNotificationRoute(route, notification, currentState),
+        ),
+      );
       const existing =
         notifications.find((candidate) => candidate.eventKey === notification.eventKey) ??
         notifications.find(
@@ -835,6 +844,30 @@ export async function deliverPendingNotifications(
           });
           if (persisted) delivered.push(persisted);
           continue;
+        }
+        if (notification.pendingInputRequestKey) {
+          const source = await clientFactory(
+            requireEnvironment(state, notification.sourceEnvironment),
+          ).findThread(notification.sourceThreadId);
+          if (
+            (notification.isChildInput && !matchesCurrentParent(source, notification, state)) ||
+            !inputNotificationStillCurrent(notification, source, state) ||
+            (notification.reminderOfEventKey && subscription?.inputReminderMinutes === 0)
+          ) {
+            result = {
+              ...notification,
+              status: "superseded",
+              updatedAt: attemptedAt,
+              lastError: "Child input request is no longer actionable or reminders are disabled.",
+              nextAttemptAt: null,
+            };
+            const persisted = await finalizeNotificationAttempt({
+              notification: result,
+              claimId: notification.deliveryClaimId ?? null,
+            });
+            if (persisted) delivered.push(persisted);
+            continue;
+          }
         }
         const subscriberClient = clientFactory(subscriberEnvironment);
         const subscriberThread = await subscriberClient.findThread(notification.subscriberThreadId);
