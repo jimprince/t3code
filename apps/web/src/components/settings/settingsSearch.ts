@@ -313,6 +313,22 @@ export const SETTINGS_SEARCH_ITEMS = [
     scope: "project-defaults",
   },
   {
+    id: "settle-completed-workers",
+    title: "Settle completed workers",
+    to: "/settings/general",
+    searchTerms: ["agent subthread completion project default"],
+    requiresThreadAutoSettlement: true,
+    scope: "project-defaults",
+  },
+  {
+    id: "archive-settled-subthreads",
+    title: "Archive settled workers",
+    to: "/settings/general",
+    searchTerms: ["agent worker archive days retention"],
+    requiresThreadAutoSettlement: true,
+    scope: "project-defaults",
+  },
+  {
     id: "auto-settle-merged-threads",
     title: "Auto-settle merged threads",
     to: "/settings/general",
