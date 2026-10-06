@@ -78,19 +78,19 @@ it("cuts cached unavailable parents and keeps reachable descendants", () => {
     {
       id: ThreadId.make("parent"),
       environmentId: "offline",
-      archivedAt: null,
+      archivedAt: null, projectId: "project",
       forkMetadataAvailable: false,
     },
     {
       id: ThreadId.make("child"),
       environmentId: "online",
-      archivedAt: null,
+      archivedAt: null, projectId: "project",
       forkMetadataAvailable: true,
     },
     {
       id: ThreadId.make("grandchild"),
       environmentId: "online",
-      archivedAt: null,
+      archivedAt: null, projectId: "project",
       forkMetadataAvailable: true,
     },
   ];
