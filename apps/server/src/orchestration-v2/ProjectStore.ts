@@ -1,3 +1,4 @@
+import { PermanentAgent } from "@t3tools/contracts";
 import {
   type ApplicationProjectEvent,
   IsoDateTime,
@@ -32,6 +33,7 @@ export class ProjectStoreV2Error extends Schema.TaggedError<ProjectStoreV2Error>
 
 /** One row of `projection_projects`, the durable project read model. */
 export const ProjectRow = Schema.Struct({
+  permanentAgent: Schema.optional(Schema.NullOr(PermanentAgent)),
   kind: Schema.optional(Schema.Literals(["workspace", "chat"])),
   projectId: ProjectId,
   title: Schema.String,
@@ -50,6 +52,7 @@ export type ProjectRow = typeof ProjectRow.Type;
 
 const ProjectDbRow = Schema.Struct({
   ...ProjectRow.fields,
+  permanentAgent: Schema.optional(Schema.NullOr(Schema.fromJsonString(PermanentAgent))),
   defaultModelSelection: Schema.NullOr(Schema.fromJsonString(ModelSelection)),
   autoPull: Schema.BooleanFromBit,
   projectIcon: Schema.NullOr(Schema.fromJsonString(StoredProjectIcon)),
@@ -59,6 +62,7 @@ const ProjectDbRow = Schema.Struct({
 /** Shell fields without workspace-derived enrichment such as repository identity. */
 function toShell(row: ProjectRow): OrchestrationProjectShell {
   return {
+    permanentAgent: row.permanentAgent ?? null,
     id: row.projectId,
     kind: row.kind ?? "workspace",
     title: row.title,
@@ -120,6 +124,7 @@ export const make = Effect.gen(function* () {
     execute: (request) => sql`
       SELECT
         COALESCE((SELECT kind FROM fork_project_kinds WHERE project_id = projection_projects.project_id), 'workspace') AS "kind",
+        permanent_agent_json AS "permanentAgent",
         project_id AS "projectId",
         title,
         workspace_root AS "workspaceRoot",
@@ -150,6 +155,7 @@ export const make = Effect.gen(function* () {
       Effect.flatMap(
         (encoded) => sql`
           INSERT INTO projection_projects (
+            permanent_agent_json,
             project_id,
             title,
             workspace_root,
@@ -164,6 +170,7 @@ export const make = Effect.gen(function* () {
             deleted_at
           )
           VALUES (
+            ${encoded.permanentAgent ?? null},
             ${encoded.projectId},
             ${encoded.title},
             ${encoded.workspaceRoot},
@@ -179,6 +186,7 @@ export const make = Effect.gen(function* () {
           )
           ON CONFLICT (project_id)
           DO UPDATE SET
+            permanent_agent_json = excluded.permanent_agent_json,
             title = excluded.title,
             workspace_root = excluded.workspace_root,
             default_model_selection_json = excluded.default_model_selection_json,
@@ -254,6 +262,7 @@ export const make = Effect.gen(function* () {
       const payload = event.payload;
       yield* upsertRow({
         ...row,
+        ...(payload.permanentAgent === undefined ? {} : { permanentAgent: payload.permanentAgent }),
         ...(payload.title === undefined ? {} : { title: payload.title }),
         ...(payload.workspaceRoot === undefined ? {} : { workspaceRoot: payload.workspaceRoot }),
         ...(payload.defaultModelSelection === undefined
