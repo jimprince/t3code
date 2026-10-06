@@ -2217,7 +2217,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
       );
       assert.isDefined(harness.runtime.unloadThread);
       yield* harness.runtime.unloadThread!({ providerThread: harness.providerThread });
-      assert.deepEqual(requests, ["initialize", "thread/start", "thread/unsubscribe"]);
+      assert.deepEqual(requests, ["initialize", "thread/start", "thread/goal/get", "thread/unsubscribe"]);
     }).pipe(
       Effect.scoped,
       Effect.provide(
