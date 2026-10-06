@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# This gate runs on the complete unstamped candidate before main is published.
+# No package-wide baseline exemptions: failures stop promotion.
+head="$(git rev-parse HEAD)"
+tree="$(git rev-parse 'HEAD^{tree}')"
+scripts/ci/check-stgit-stack
+bun scripts/ci/check-fork-docs.ts
+bun scripts/ci/check-fork-release-notes.ts
+
+# Pre-check the two failures candidate CI rejects most often (Knip and
+# formatting), so they cost seconds here instead of a candidate CI round trip.
+# This is a droppable pre-check; candidate CI remains the authoritative gate.
+if [[ ! -d node_modules ]]; then vp install --frozen-lockfile; fi
+vp run knip:check
+published_main="refs/remotes/${STGIT_REMOTE:-origin}/main"
+git rev-parse --verify --quiet "$published_main" >/dev/null ||
+  { echo "Cannot find $published_main to select changed files for the format check." >&2; exit 1; }
+changed=()
+while IFS= read -r -d '' file; do changed+=("$file"); done < <(
+  git diff --name-only -z --diff-filter=ACMR "$published_main" HEAD
+)
+# An empty list would make `vp fmt` check the whole worktree, so skip it.
+if [[ ${#changed[@]} -gt 0 ]]; then vp fmt --check --no-error-on-unmatched-pattern -- "${changed[@]}"; fi
+
+scripts/ci/stage-ci-candidate
+export CI_CANDIDATE_SHA="$head"
+# Resolve evidence against the remote the candidate was staged on. A bare
+# `gh repo view` prefers an `upstream` remote, which the replay driver adds, so
+# a host-side gate would otherwise look for the candidate in upstream's repo.
+export GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$(gh repo view "$(git remote get-url "${STGIT_REMOTE:-origin}")" --json nameWithOwner --jq .nameWithOwner)}"
+bun scripts/ci/reuse-release-ci.ts --candidate --wait
+if [[ "$(git rev-parse HEAD)" != "$head" || "$(git write-tree)" != "$tree" || -n "$(git status --porcelain)" ]]; then
+  echo 'Verification changed the candidate; fold changes into their owning patches and reverify.' >&2
+  exit 1
+fi
