@@ -1,0 +1,181 @@
+import { describe, expect, it } from "vite-plus/test";
+
+import {
+  applyLayoutOps,
+  defaultProjectLayoutTabs,
+  legacyWidgetOrder,
+  legacyWidgetOrderOps,
+  normalizeWidgetConfig,
+  type ProjectLayoutTab,
+} from "./projectLayout.ts";
+
+const ids = (tabs: ReadonlyArray<ProjectLayoutTab>) =>
+  tabs.map((tab) => [tab.id, tab.widgets.map((widget) => widget.id)]);
+
+const applied = (
+  tabs: ReadonlyArray<ProjectLayoutTab>,
+  ops: Parameters<typeof applyLayoutOps>[1],
+) => {
+  const result = applyLayoutOps(tabs, ops);
+  if ("error" in result) throw new Error(result.error);
+  return result.tabs;
+};
+
+describe("default layout", () => {
+  it("is today's page: Dashboard in the default order, Roadmap and Issues", () => {
+    const tabs = defaultProjectLayoutTabs(null);
+    expect(tabs.map((tab) => tab.title)).toEqual(["Dashboard", "Roadmap", "Tasks"]);
+    expect(tabs[0]!.widgets.map((widget) => widget.type)).toEqual([
+      "requests",
+      "needs-you",
+      "release",
+      "maintenance",
+      "roadmap-summary",
+      "working",
+      "blocked",
+      "done",
+      "issues-summary",
+      "prs",
+      "canvas-slot",
+      "automations",
+    ]);
+    expect(tabs[0]!.widgets[0]!.config).toEqual({ includeLater: false });
+    expect(tabs[2]!.widgets[0]!.config).toEqual({ pendingPreview: 10 });
+  });
+
+  it("migrates a saved widget order, canvases included, and maps back for the CLI", () => {
+    const tabs = defaultProjectLayoutTabs(["release", "canvas:fork-health", "roadmap", "gone"]);
+    expect(tabs[0]!.widgets.map((widget) => [widget.id, widget.type, widget.config])).toEqual([
+      ["release", "release", {}],
+      ["canvas-fork-health", "canvas", { canvasId: "fork-health" }],
+      ["roadmap-summary", "roadmap-summary", {}],
+    ]);
+    expect(legacyWidgetOrder(tabs)).toEqual(["release", "canvas:fork-health", "roadmap"]);
+  });
+});
+
+describe("layout ops", () => {
+  const base = defaultProjectLayoutTabs(["requests", "release"]);
+
+  it("adds, renames, moves and removes tabs and widgets by id", () => {
+    const tabs = applied(base, [
+      { op: "addTab", tab: { title: "Health checks" } },
+      {
+        op: "addWidget",
+        tabId: "health-checks",
+        widget: { type: "markdown", config: { text: "Hi" } },
+      },
+      { op: "moveWidget", widgetId: "release", tabId: "health-checks", index: 0 },
+      { op: "renameTab", tabId: "health-checks", title: "Health" },
+      { op: "moveTab", tabId: "health-checks", index: 1 },
+      { op: "removeTab", tabId: "issues" },
+    ]);
+    expect(ids(tabs)).toEqual([
+      ["dashboard", ["requests"]],
+      ["health-checks", ["release", "markdown"]],
+      ["roadmap", ["roadmap-board"]],
+    ]);
+    expect(tabs[1]!.title).toBe("Health");
+  });
+
+  it("merges settings, retitles and resizes a widget, and checks its settings", () => {
+    const tabs = applied(base, [
+      { op: "setWidgetConfig", widgetId: "requests", config: { includeLater: true } },
+      { op: "setWidgetTitle", widgetId: "requests", title: "Asks" },
+      { op: "setWidgetSize", widgetId: "requests", size: "medium" },
+    ]);
+    expect(tabs[0]!.widgets[0]).toEqual({
+      id: "requests",
+      type: "requests",
+      title: "Asks",
+      size: "medium",
+      config: { includeLater: true },
+    });
+    expect(
+      applyLayoutOps(base, [
+        { op: "setWidgetConfig", widgetId: "requests", config: { includeLater: "yes" } },
+      ]),
+    ).toHaveProperty("error");
+    expect(
+      applyLayoutOps(base, [
+        { op: "setWidgetConfig", widgetId: "issues-board", config: { pendingPreview: 0 } },
+      ]),
+    ).toHaveProperty("error");
+  });
+
+  it("fails the whole batch when a target is gone or a rule breaks", () => {
+    expect(applyLayoutOps(base, [{ op: "removeWidget", widgetId: "nope" }])).toHaveProperty(
+      "error",
+    );
+    expect(
+      applyLayoutOps(base, [{ op: "addWidget", tabId: "dashboard", widget: { type: "chart" } }]),
+    ).toHaveProperty("error");
+    expect(
+      applyLayoutOps(base, [{ op: "addWidget", tabId: "dashboard", widget: { type: "canvas" } }]),
+    ).toHaveProperty("error");
+    const oneTab = applied(base, [
+      { op: "removeTab", tabId: "roadmap" },
+      { op: "removeTab", tabId: "issues" },
+    ]);
+    expect(applyLayoutOps(oneTab, [{ op: "removeTab", tabId: "dashboard" }])).toHaveProperty(
+      "error",
+    );
+    expect(
+      applyLayoutOps(base, [
+        {
+          op: "addWidget",
+          tabId: "dashboard",
+          widget: {
+            type: "links",
+            config: { items: [{ label: "x", url: "javascript:alert(1)" }] },
+          },
+        },
+      ]),
+    ).toHaveProperty("error");
+  });
+
+  it("gives new widgets unique ids and replaces a whole layout", () => {
+    const tabs = applied(base, [
+      { op: "addWidget", tabId: "dashboard", widget: { type: "requests" } },
+      {
+        op: "addWidget",
+        tabId: "dashboard",
+        widget: { type: "canvas", config: { canvasId: "funnel" } },
+      },
+    ]);
+    expect(tabs[0]!.widgets.map((widget) => widget.id)).toEqual([
+      "requests",
+      "release",
+      "requests-2",
+      "canvas-funnel",
+    ]);
+    const replaced = applied(base, [
+      { op: "replaceLayout", tabs: [{ title: "Only", widgets: [{ type: "needs-you" }] }] },
+    ]);
+    expect(ids(replaced)).toEqual([["only", ["needs-you"]]]);
+  });
+
+  it("sets the first tab from the CLI's widget order, keeping widget ids and settings", () => {
+    const configured = applied(base, [
+      { op: "setWidgetConfig", widgetId: "requests", config: { includeLater: true } },
+    ]);
+    const tabs = applied(
+      configured,
+      legacyWidgetOrderOps(configured, ["release", "requests", "prs"]),
+    );
+    expect(tabs[0]!.widgets.map((widget) => [widget.id, widget.config])).toEqual([
+      ["release", {}],
+      ["requests", { includeLater: true }],
+      ["prs", {}],
+    ]);
+  });
+});
+
+describe("widget settings", () => {
+  it("fills defaults and drops unknown keys", () => {
+    expect(normalizeWidgetConfig("issues-board", { other: 1 })).toEqual({
+      config: { pendingPreview: 10 },
+    });
+    expect(normalizeWidgetConfig("unknown", {})).toHaveProperty("error");
+  });
+});
