@@ -3,6 +3,7 @@ import type {
   OrchestrationV2SearchThreadResult,
   OrchestrationV2ThreadHistoryPage,
 } from "@t3tools/contracts";
+import { interruptedSessionEvents } from "../forkThreads/InterruptedSession.ts";
 import { normalizeThreadIssueKey, threadIssueKeysEqual } from "@t3tools/shared/threadIssues";
 import {
   assertRootSlot,
@@ -8800,21 +8801,19 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           [
             "runs",
             "attempts",
-            "nodes",
-            "subagents",
-            "runtimeRequests",
             "turnItems",
             "providerThreads",
+            "providerTurns",
+            "providerSessions",
+            "nodes",
           ],
           {
             turnItemTypes: [
               "command_execution",
               "dynamic_tool",
               "subagent",
-              "assistant_message",
-              "reasoning",
+              "run_interrupt_request",
             ],
-            turnItemStatuses: ["pending", "running", "waiting"],
           },
         ),
         projectionStore.getProviderControlContext(command.threadId, {
@@ -8830,31 +8829,68 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         (attempt) => attempt.id === stopped.providerTurn?.runAttemptId,
       )?.runId;
       const stoppedRun = projection.runs.find((run) => run.id === stoppedRunId);
-      if (
-        stoppedRun === undefined ||
-        (["preparing", "starting", "running"].includes(stoppedRun.status) &&
-          stoppedRun.activeAttemptId !== stopped.providerTurn?.runAttemptId)
-      )
-        return;
       const now = yield* DateTime.now;
-      if (stopped.providerTurn !== undefined && stoppedRun.status === "running") {
-        const output = yield* projectionStore
-          .getThreadRecords(command.threadId, ["messages"], {
-            messageRunIds: [stoppedRun.id],
-            messageRoles: ["assistant"],
-          })
-          .pipe(mapDispatchError(command));
-        yield* settleInterruptedRun({
-          command,
-          projection: { ...projection, messages: output.messages },
-          providerTurn: stopped.providerTurn,
-          events,
-          effects,
-          now,
-        });
+      const reconciled = interruptedSessionEvents({
+        acknowledgeOnly: command.interruptAcknowledged === true,
+        projection,
+        providerThreadId: command.providerThreadId,
+        providerTurnId: command.providerTurnId,
+        commandId: command.commandId,
+        now,
+        resultItemId:
+          stoppedRun === undefined
+            ? undefined
+            : idAllocator.derive.runSignalTurnItem({
+                runId: stoppedRun.id,
+                signal: "interrupt-result",
+              }),
+      });
+      if (reconciled.length > 0)
+        yield* Ref.update(events, (existing) => [...existing, ...reconciled]);
+      if (command.interruptAcknowledged) {
+        // The receipt and delayed fallback commit atomically. The existing exact-run
+        // guard is checked again when this replay-safe effect becomes claimable.
+        yield* Ref.update(effects, (existing) => [
+          ...existing,
+          {
+            id: `effect:interrupt-settle:${command.commandId}`,
+            commandId: CommandId.make(`command:interrupt-settle:${command.commandId}`),
+            threadId: command.threadId,
+            availableAt: DateTime.add(now, { milliseconds: 10_000 }),
+            request: {
+              type: "provider-turn.interrupt-settle",
+              providerThreadId: command.providerThreadId,
+              providerTurnId: command.providerTurnId,
+            },
+          } satisfies PendingOrchestrationEffectV2,
+        ]);
+      }
+      if (command.interruptAcknowledged) return;
+      const root = projection.nodes.find((node) => node.id === stoppedRun?.rootNodeId);
+      const checkpointScopeId = root?.checkpointScopeId;
+      if (
+        checkpointScopeId != null &&
+        stoppedRun &&
+        reconciled.some((event) => event.type === "run.updated")
+      ) {
+        yield* Ref.update(effects, (existing) => [
+          ...existing,
+          {
+            id: `effect:checkpoint.capture:${stoppedRun.id}`,
+            commandId: CommandId.make(`command:effect:checkpoint.capture:${stoppedRun.id}`),
+            threadId: command.threadId,
+            request: {
+              type: "checkpoint.capture",
+              runId: stoppedRun.id,
+              scopeId: checkpointScopeId,
+            },
+          } satisfies PendingOrchestrationEffectV2,
+        ]);
       }
       // A new turn may have started since Stop; its work is not this Stop's.
       if (
+        stoppedRun === undefined ||
+        stoppedRun.activeAttemptId !== stopped.providerTurn?.runAttemptId ||
         projection.runs.some(
           (run) =>
             run.id !== stoppedRun.id &&
@@ -8869,7 +8905,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         projection,
         stoppedProviderThreadId: command.providerThreadId,
         throughRunOrdinal: stoppedRun.ordinal,
-        now,
+        now: yield* DateTime.now,
       });
     });
 
