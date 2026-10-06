@@ -1,7 +1,9 @@
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
+import type { ProjectCanvasPage } from "@t3tools/contracts";
 import { ArrowDownIcon, ArrowUpIcon, SlidersHorizontalIcon } from "lucide-react";
 import { Fragment, useMemo, useState, type ReactNode } from "react";
 
+import { projectCanvasQuery } from "../../state/projectCanvas";
 import {
   projectDashboardQuery,
   setProjectDashboardTracker,
@@ -13,16 +15,35 @@ import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
 import { Dialog, DialogFooter, DialogHeader, DialogPopup, DialogTitle } from "../ui/dialog";
 import { Input } from "../ui/input";
+import { ProjectCanvasError, ProjectCanvasWidget } from "./ProjectCanvasWidget";
 import { requestsByWorker } from "./projectRequests.logic";
 import { useProjectRequests } from "./ProjectRequestsSection";
 import {
+  canvasWidgetId,
+  isCanvasWidget,
   moveChoice,
   savedOrder,
   visibleWidgets,
   widgetChoices,
+  type CanvasWidgetId,
+  type DashboardWidgetId,
   type ProjectWidgetId,
   type WidgetChoice,
 } from "./projectWidgets.logic";
+
+/** Consecutive canvases share a grid row by size; every other widget stands alone. */
+function groupCanvases(order: ReadonlyArray<DashboardWidgetId>) {
+  const groups: Array<ReadonlyArray<DashboardWidgetId>> = [];
+  for (const id of order) {
+    const last = groups.at(-1);
+    if (last && isCanvasWidget(id) && isCanvasWidget(last[0]!)) {
+      groups[groups.length - 1] = [...last, id];
+    } else {
+      groups.push([id]);
+    }
+  }
+  return groups;
+}
 
 /** "for: <request>" under a worker row: which of Brad's asks the worker serves. */
 export function WorkerRequestTag({
@@ -63,14 +84,29 @@ export function ProjectWidgetList({
   );
   const saveWidgets = useAtomCommand(setProjectDashboardWidgets, "Save widgets");
   const saveTracker = useAtomCommand(setProjectDashboardTracker, "Save tracker repository");
+  const canvas = useEnvironmentQuery(
+    projectCanvasQuery({ environmentId, input: { threadId: summary.root.id } }),
+  );
+  const canvasPages = useMemo(
+    () =>
+      new Map<string, ProjectCanvasPage>(
+        (canvas.data?.canvases ?? []).map((page) => [canvasWidgetId(page.id), page]),
+      ),
+    [canvas.data],
+  );
+  const canvasInfo = useMemo(
+    () => [...canvasPages].map(([id, page]) => ({ id: id as CanvasWidgetId, title: page.title })),
+    [canvasPages],
+  );
+  const canvasNow = canvas.dataUpdatedAt ?? 0;
   const saved = dashboard.data?.widgets ?? null;
-  const order = visibleWidgets(saved);
+  const order = visibleWidgets(saved, canvasInfo);
   const [editing, setEditing] = useState(false);
   const [choices, setChoices] = useState<WidgetChoice[]>([]);
   const [tracker, setTracker] = useState("");
 
   const open = () => {
-    setChoices(widgetChoices(saved));
+    setChoices(widgetChoices(saved, canvasInfo));
     setTracker(dashboard.data?.tracker ?? "");
     setEditing(true);
   };
@@ -99,9 +135,27 @@ export function ProjectWidgetList({
           Customize
         </Button>
       </div>
-      {order.map((id) => (
-        <Fragment key={id}>{views[id] ?? null}</Fragment>
-      ))}
+      {groupCanvases(order).map((group) => {
+        if (!isCanvasWidget(group[0]!)) {
+          const id = group[0] as ProjectWidgetId;
+          return (
+            <Fragment key={id}>
+              {id === "canvas" && canvas.data ? <ProjectCanvasError canvas={canvas.data} /> : null}
+              {views[id] ?? null}
+            </Fragment>
+          );
+        }
+        return (
+          <div key={group.join(",")} className="grid grid-cols-6 gap-4 border-t border-border pt-4">
+            {group.map((id) => {
+              const page = canvasPages.get(id);
+              return page ? (
+                <ProjectCanvasWidget key={id} summary={summary} canvas={page} now={canvasNow} />
+              ) : null;
+            })}
+          </div>
+        );
+      })}
       <Dialog open={editing} onOpenChange={setEditing}>
         <DialogPopup>
           <DialogHeader>
