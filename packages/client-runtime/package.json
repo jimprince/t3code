@@ -35,6 +35,10 @@
       "types": "./src/linkify.ts",
       "default": "./src/linkify.ts"
     },
+    "./decision-context": {
+      "types": "./src/decisionContext.ts",
+      "default": "./src/decisionContext.ts"
+    },
     "./pending-requests": {
       "types": "./src/pendingRequests.ts",
       "default": "./src/pendingRequests.ts"
