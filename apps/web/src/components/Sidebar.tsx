@@ -1,17 +1,34 @@
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { planSupervisionMove } from "@t3tools/client-runtime/state/fork-thread-ordering";
-import { supervision as forkSupervision, useSupervisionReadyHosts, useSupervisionMetadata } from "../state/forkSupervision";
+import {
+  supervision as forkSupervision,
+  useSupervisionReadyHosts,
+  useSupervisionMetadata,
+} from "../state/forkSupervision";
 import { useSupervisionForest } from "../state/forkSupervision";
-import { supervisionRoots } from "@t3tools/client-runtime/state/forkNesting";
+import { supervisionIsActive, supervisionRoots } from "@t3tools/client-runtime/state/fork-nesting";
 import { useSupervisionDrag } from "./sidebar/useSupervisionDrag";
-import { SupervisionThreadRows, useSupervisionSidebar } from "./sidebar/SupervisionThreadRows";
+import { useSupervisionSidebar } from "./sidebar/SupervisionThreadRows";
+import { SupervisionGroupRow } from "./sidebar/SupervisionGroupRow";
+import { SidebarNestedThreadToggle } from "./sidebar/SidebarNestedThreadToggle";
+import {
+  flattenSupervisionChildren,
+  supervisionProjectLabel,
+} from "./sidebar/nestedThreadVisibility.logic";
 import { groupChildInputAttention } from "@t3tools/client-runtime/child-attention";
 import { SidebarChildInputAttention } from "./sidebar/SidebarChildInputAttention";
 import {
   newForkCommandId,
+  readForkNestingSupported,
   readForkOrderResetSupported,
   resetForkThreadOrder,
 } from "./chat/forkThreadCommands";
+import {
+  isThreadNestingMenuId,
+  resolveThreadNestingMenuState,
+  withThreadNestingMenuItems,
+} from "./threadNestingMenu.logic";
+import { useThreadNestingActions } from "../hooks/useThreadNesting";
 import { SidebarProjectSelection, useSidebarProjectSelection } from "./SidebarProjectSelection";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "./ThreadHoverCard";
 import { CollapsibleSectionHeader } from "./ui/collapsible-section-header";
@@ -82,6 +99,7 @@ import {
   CircleCheckIcon,
   CircleDashedIcon,
   ClockIcon,
+  CornerDownRightIcon,
   EyeIcon,
   FolderIcon,
   GitBranchIcon,
@@ -228,6 +246,7 @@ import {
   createSidebarCollisionDetection,
   createSidebarSortingStrategy,
   restrictBelowSidebarLabel,
+  SIDEBAR_NESTED_INDENT_PX,
 } from "./Sidebar.drag";
 import { SidebarDragLifecycle, SidebarPointerSensor } from "./Sidebar.pointer";
 import { createSidebarListMotion } from "./Sidebar.motion";
@@ -1136,6 +1155,14 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   onAcknowledgeWoke: (threadRef: ScopedThreadRef, visitedAt: string) => void;
   onFileDropThreads?: ((threadRef: ScopedThreadRef, files: File[]) => void) | undefined;
   waitingInputChildren?: ReadonlyArray<EnvironmentThreadShell>;
+  nestedDepth?: number;
+  nestedChildCount?: number;
+  nestedActiveCount?: number;
+  nestedChildrenExpanded?: boolean;
+  onToggleNestedChildren?: (threadKey: string) => void;
+  nestedProjectDisplayName?: string | null;
+  nestDropTarget?: boolean;
+  supervising?: boolean;
   changeRequestSnapshot: ThreadChangeRequestSnapshot | null;
   onChangeRequestSnapshot: (
     threadKey: string,
@@ -1172,6 +1199,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     [thread.environmentId, thread.id],
   );
   const threadKey = scopedThreadKey(threadRef);
+  const nestedDepth = props.nestedDepth ?? 0;
+  const nestedSubRow = nestedDepth > 0;
   const { leaseLiveStatus, rowRef } = useSidebarRowSubscriptionLease(props.isActive);
   const isRegeneratingTitle = thread.titleRegeneration != null;
   const localLastVisitedAt = useUiStateStore((state) => state.threadLastVisitedAtById[threadKey]);
@@ -1295,19 +1324,25 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                     icon: "failed" as const,
                     className: "text-error",
                   }
-                : isWoke
+                : props.supervising
                   ? {
-                      label: "Woke",
-                      icon: "woke" as const,
-                      className: "text-warning",
+                      label: "Supervising",
+                      icon: "supervising" as const,
+                      className: "text-info",
                     }
-                  : isUnread
+                  : isWoke
                     ? {
-                        label: "Done",
-                        icon: "done" as const,
-                        className: "text-success",
+                        label: "Woke",
+                        icon: "woke" as const,
+                        className: "text-warning",
                       }
-                    : null;
+                    : isUnread
+                      ? {
+                          label: "Done",
+                          icon: "done" as const,
+                          className: "text-success",
+                        }
+                      : null;
   const isWokeStatus = topStatus?.icon === "woke";
 
   const branchMismatch = resolveLocalCheckoutBranchMismatch({
@@ -1559,21 +1594,20 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // dnd-kit props for the row root. Same bag on both variants: every row in
   // the list translates around the gap as the drag passes it.
   const sortable = props.sortable;
-  const sortableRootProps = sortable
+  const sortableStyle = sortable
     ? {
-        ref: sortable.setNodeRef,
-        style: {
-          transform: CSS.Translate.toString(sortable.transform),
-          transition: sortable.transition,
-          // A zero-height boundary also makes dnd-kit scale the source to
-          // zero. Only projected peers use scaleY as a visibility sentinel.
-          visibility:
-            !sortable.isDragging && sortable.transform?.scaleY === 0
-              ? ("hidden" as const)
-              : undefined,
-        },
-        ...sortable.listeners,
+        transform: CSS.Translate.toString(sortable.transform),
+        transition: sortable.transition,
+        // A zero-height boundary also makes dnd-kit scale the source to
+        // zero. Only projected peers use scaleY as a visibility sentinel.
+        visibility:
+          !sortable.isDragging && sortable.transform?.scaleY === 0
+            ? ("hidden" as const)
+            : undefined,
       }
+    : undefined;
+  const sortableRootProps = sortable
+    ? { ref: sortable.setNodeRef, style: sortableStyle, ...sortable.listeners }
     : {};
   // Sweeps reuse the corresponding row-drop action badge.
   const destinationVerb = sortable?.isDragging
@@ -1648,7 +1682,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     <>
       {titleText}
       <SidebarChildInputAttention
-        children={props.waitingInputChildren ?? []}
+        children={props.waitingInputChildren ?? EMPTY_THREADS}
         onOpen={(child) => onThreadActivate(scopeThreadRef(child.environmentId, child.id))}
       />
     </>
@@ -1747,18 +1781,71 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     )
   ) : null;
 
+  const nestedChildrenToggle =
+    (props.nestedChildCount ?? 0) > 0 ? (
+      <SidebarNestedThreadToggle
+        count={props.nestedChildCount!}
+        activeCount={props.nestedActiveCount ?? 0}
+        expanded={props.nestedChildrenExpanded ?? false}
+        onToggle={() => props.onToggleNestedChildren?.(threadKey)}
+      />
+    ) : null;
+  const nestedProjectName =
+    nestedSubRow && props.nestedProjectDisplayName ? (
+      <span className="inline-flex max-w-20 shrink-0 items-center gap-1 truncate text-2xs text-muted-foreground">
+        <FolderIcon aria-hidden className="size-3 shrink-0" />
+        <span className="truncate">{props.nestedProjectDisplayName}</span>
+      </span>
+    ) : null;
+  const nestedRowStyle = nestedSubRow
+    ? {
+        ...sortableStyle,
+        paddingInlineStart: nestedDepth * SIDEBAR_NESTED_INDENT_PX,
+      }
+    : undefined;
+  const nestedRowChrome = (
+    <>
+      {props.nestDropTarget ? (
+        <span
+          aria-hidden
+          data-testid="sidebar-nest-drop-marker"
+          className="pointer-events-none absolute bottom-0 z-30 h-px bg-primary"
+          style={{
+            insetInlineStart: (nestedDepth + 1) * SIDEBAR_NESTED_INDENT_PX,
+            insetInlineEnd: 0,
+          }}
+        />
+      ) : null}
+      {nestedSubRow ? (
+        <CornerDownRightIcon
+          aria-hidden
+          className="absolute top-3 size-3 text-muted-foreground"
+          style={{ insetInlineStart: (nestedDepth - 1) * SIDEBAR_NESTED_INDENT_PX + 2 }}
+        />
+      ) : null}
+    </>
+  );
+  const nestedRowClassName = cn(
+    (nestedSubRow || props.nestDropTarget) && "relative",
+    props.nestDropTarget && "bg-primary/10 ring-1 ring-inset ring-primary",
+  );
+
   if (variant === "slim") {
     return (
       <li
         data-thread-item={threadKey}
+        data-nest-drop-target={props.nestDropTarget || undefined}
         {...sortableRootProps}
+        {...(nestedRowStyle ? { style: nestedRowStyle } : {})}
         {...(fileDropHandlers ?? {})}
         className={cn(
           // Matches the h-9 row so unrendered rows never shift the list when they paint.
           "list-none [content-visibility:auto] [contain-intrinsic-size:auto_36px]",
+          nestedRowClassName,
           sortable?.isDragging && "relative z-20",
         )}
       >
+        {nestedRowChrome}
         <Tooltip disabled={sortable?.isDragging}>
           <TooltipTrigger
             render={
@@ -1781,18 +1868,25 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
             {accessibleTitle}
             {/* Settled history recedes: dimmed favicon at rest, restored on
               hover so the tail stays scannable when you're hunting. */}
-            <span
-              className={cn(
-                "shrink-0 transition-opacity",
-                (!props.isActive || variantAction === "unsettle") &&
-                  "opacity-40 grayscale group-focus-within/sidebar-row:opacity-100 group-focus-within/sidebar-row:grayscale-0 group-hover/sidebar-row:opacity-100 group-hover/sidebar-row:grayscale-0",
-              )}
-            >
-              {props.project ? <ProjectFavicon project={props.project} className="size-4" /> : null}
-            </span>
+            {nestedSubRow ? (
+              nestedProjectName
+            ) : (
+              <span
+                className={cn(
+                  "shrink-0 transition-opacity",
+                  (!props.isActive || variantAction === "unsettle") &&
+                    "opacity-40 grayscale group-focus-within/sidebar-row:opacity-100 group-focus-within/sidebar-row:grayscale-0 group-hover/sidebar-row:opacity-100 group-hover/sidebar-row:grayscale-0",
+                )}
+              >
+                {props.project ? (
+                  <ProjectFavicon project={props.project} className="size-4" />
+                ) : null}
+              </span>
+            )}
             {draftIndicator}
             {title}
             {pinIndicator}
+            {nestedChildrenToggle}
             {terminalStatusIcon}
             {isRegeneratingTitle ? (
               <span role="status" className="sr-only">
@@ -1916,14 +2010,18 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   return (
     <li
       data-thread-item={threadKey}
+      data-nest-drop-target={props.nestDropTarget || undefined}
       {...sortableRootProps}
+      {...(nestedRowStyle ? { style: nestedRowStyle } : {})}
       {...(fileDropHandlers ?? {})}
       className={cn(
         // Matches the h-[4.875rem] content box; the py-0.5 padding is added on top.
         "list-none py-0.5 [content-visibility:auto] [contain-intrinsic-size:auto_78px]",
+        nestedRowClassName,
         sortable?.isDragging && "relative z-20",
       )}
     >
+      {nestedRowChrome}
       <Tooltip disabled={snoozeMenuOpen || sortable?.isDragging}>
         <TooltipTrigger
           render={
@@ -1947,22 +2045,36 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
           <div className="relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)">
             <div className="flex h-5 min-w-0 items-center gap-1.5">
               {draftIndicator}
-              {props.project ? (
-                <ProjectFavicon project={props.project} className="size-4 shrink-0" />
-              ) : null}
-              {props.projectDisplayName ? (
-                <span
-                  className={cn(
-                    "min-w-0 flex-1 truncate text-secondary-label text-xs",
-                    shouldRecede ? "font-normal" : "font-medium",
-                  )}
-                >
-                  {props.projectDisplayName}
-                </span>
+              {nestedSubRow ? (
+                props.nestedProjectDisplayName ? (
+                  <span className="inline-flex min-w-0 flex-1 items-center gap-1 text-2xs text-muted-foreground">
+                    <FolderIcon aria-hidden className="size-3 shrink-0" />
+                    <span className="truncate">{props.nestedProjectDisplayName}</span>
+                  </span>
+                ) : (
+                  <span className="flex-1" />
+                )
               ) : (
-                <span className="flex-1" />
+                <>
+                  {props.project ? (
+                    <ProjectFavicon project={props.project} className="size-4 shrink-0" />
+                  ) : null}
+                  {props.projectDisplayName ? (
+                    <span
+                      className={cn(
+                        "min-w-0 flex-1 truncate text-secondary-label text-xs",
+                        shouldRecede ? "font-normal" : "font-medium",
+                      )}
+                    >
+                      {props.projectDisplayName}
+                    </span>
+                  ) : (
+                    <span className="flex-1" />
+                  )}
+                </>
               )}
               {pinIndicator}
+              {nestedChildrenToggle}
               {/* The visible state owns this slot's width: status at rest,
                   actions on hover/keyboard focus or while the popover is open. Keeping
                   the hidden state out of flow lets the project label reclaim
@@ -2018,6 +2130,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                         >
                           {topStatus.icon === "working" ? (
                             <CircleDashedIcon aria-hidden className="size-4 shrink-0" />
+                          ) : topStatus.icon === "supervising" ? (
+                            <EyeIcon aria-hidden className="size-4 shrink-0" />
                           ) : topStatus.icon === "input" ? (
                             <MessageCircleQuestionIcon aria-hidden className="size-4 shrink-0" />
                           ) : topStatus.icon === "approval" ? (
@@ -2339,7 +2453,11 @@ export default function Sidebar() {
   const threads = useThreadShells();
 
   const attentionForest = useSupervisionForest();
-  const childInputAttention = useMemo(() => groupChildInputAttention([...attentionForest.byKey.values()], attentionForest.parentByKey), [threads, attentionForest]);
+  const childInputAttention = useMemo(
+    () =>
+      groupChildInputAttention([...attentionForest.byKey.values()], attentionForest.parentByKey),
+    [attentionForest],
+  );
   const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
@@ -2365,6 +2483,7 @@ export default function Sidebar() {
     deleteThread,
   } = useThreadActions();
   const resetOrder = useAtomCommand(resetForkThreadOrder);
+  const { runNestingMenuAction } = useThreadNestingActions();
   const orderMetadata = useSupervisionMetadata();
   const orderReadyHosts = useSupervisionReadyHosts();
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
@@ -2624,7 +2743,16 @@ export default function Sidebar() {
         override holds until all of them appear in canonical state. */
     readonly assignedKeys: ReadonlyMap<string, string>;
   } | null>(null);
-  const supervision = useSupervisionSidebar(threads.filter(thread => scopedProjectKeys === null || scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`)), routeThreadKey);
+  const supervisedThreads = useMemo(
+    () =>
+      threads.filter(
+        (thread) =>
+          scopedProjectKeys === null ||
+          scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`),
+      ),
+    [threads, scopedProjectKeys],
+  );
+  const supervision = useSupervisionSidebar(supervisedThreads, routeThreadKey);
   const supervisionDrag = useSupervisionDrag(supervision.forest);
   const {
     pinnedThreads,
@@ -3699,23 +3827,34 @@ export default function Sidebar() {
     const settledRows = rowsOf(renderedSettledThreads, "settled");
     items.push({ kind: "marker", marker: "settled-placeholder" });
     items.push(...settledRows);
-    const appendChildren = (key: string): SidebarListItem[] =>
-      (supervision.forest.children.get(key) ?? []).flatMap((child) => {
-        const childKey = scopedThreadKey(scopeThreadRef(child.environmentId, child.id));
-        return [
-          {
-            kind: "thread" as const,
-            key: childKey,
-            section: child.pinnedAt !== null ? ("pinned" as const) : ("active" as const),
-          },
-          ...appendChildren(childKey),
-        ];
-      });
-    return items.flatMap((item) =>
-      item.kind === "thread" ? [item, ...appendChildren(item.key)] : [item],
-    );
+    return items.flatMap((item) => {
+      const root = item.kind === "thread" ? supervision.forest.byKey.get(item.key) : undefined;
+      if (item.kind !== "thread" || !root) return [item];
+      const nested = flattenSupervisionChildren({
+        root,
+        children: supervision.forest.children,
+        activeCounts: supervision.forest.activeCounts,
+        visiblePaths: supervision.paths,
+        expandedParents: supervision.expandedParents,
+        expandedGroups: supervision.expandedGroups,
+      }).flatMap((row): SidebarListItem[] =>
+        row.kind === "thread"
+          ? [
+              {
+                kind: "thread",
+                key: row.key,
+                section: row.thread.pinnedAt !== null ? "pinned" : "active",
+              },
+            ]
+          : [],
+      );
+      return [item, ...nested];
+    });
   }, [
     supervision.forest,
+    supervision.paths,
+    supervision.expandedParents,
+    supervision.expandedGroups,
     activeThreads,
     pinnedThreads,
     renderedSettledThreads,
@@ -4451,41 +4590,77 @@ export default function Sidebar() {
                 projectRef.projectId === thread.projectId,
             ),
           ) ?? null;
+        const nestingState = resolveThreadNestingMenuState({
+          thread,
+          forest: appAtomRegistry.get(forkSupervision.forest),
+          supported: readForkNestingSupported(thread.environmentId),
+        });
         const clicked = await settlePromise(() =>
           api.contextMenu.show(
-            buildThreadActionMenuItems({
-              branch: thread.branch ?? null,
-              projectFilter: threadFilterGroup
-                ? {
-                    label: threadFilterGroup.displayName,
-                    isActive: isolatedProjectKey === threadFilterGroup.projectKey,
-                  }
-                : null,
-              isPinned,
-              isSettled,
-              autoSettleEnabled: thread.autoSettleDisabledAt == null,
-              isSnoozed,
-              canSnoozeNow: canSnooze(thread, { now: new Date().toISOString() }),
-              isRegeneratingTitle,
-              isRunning: !threadRuntimeCanArchive(thread.runtime),
-              supports: {
-                settlement: supportsSettlement,
-                autoSettleOptOut: supportsAutoSettleOptOut,
-                snooze: supportsSnooze,
-                pinning: supportsPinning,
-                orderReset: readForkOrderResetSupported(thread.environmentId),
-                titleRegeneration: supportsTitleRegeneration,
-              },
-              move: (isPinned ? serverConfigs.get(thread.environmentId)?.environment.capabilities.threadPinReorder : serverConfigs.get(thread.environmentId)?.environment.capabilities.threadActiveReorder) === true && (isPinned || !isSettled) ? {
-                up: planSupervisionMove(threads, orderMetadata, thread, "up", orderReadyHosts) !== null,
-                down: planSupervisionMove(threads, orderMetadata, thread, "down", orderReadyHosts) !== null,
-              } : undefined,
-              snoozePresets,
-            }),
+            withThreadNestingMenuItems(
+              buildThreadActionMenuItems({
+                branch: thread.branch ?? null,
+                projectFilter: threadFilterGroup
+                  ? {
+                      label: threadFilterGroup.displayName,
+                      isActive: isolatedProjectKey === threadFilterGroup.projectKey,
+                    }
+                  : null,
+                isPinned,
+                isSettled,
+                autoSettleEnabled: thread.autoSettleDisabledAt == null,
+                isSnoozed,
+                canSnoozeNow: canSnooze(thread, { now: new Date().toISOString() }),
+                isRegeneratingTitle,
+                isRunning: !threadRuntimeCanArchive(thread.runtime),
+                supports: {
+                  settlement: supportsSettlement,
+                  autoSettleOptOut: supportsAutoSettleOptOut,
+                  snooze: supportsSnooze,
+                  pinning: supportsPinning,
+                  orderReset: readForkOrderResetSupported(thread.environmentId),
+                  titleRegeneration: supportsTitleRegeneration,
+                },
+                orderIsManual: (isPinned ? thread.pinOrderKey : thread.activeOrderKey) != null,
+                move:
+                  (isPinned
+                    ? serverConfigs.get(thread.environmentId)?.environment.capabilities
+                        .threadPinReorder
+                    : serverConfigs.get(thread.environmentId)?.environment.capabilities
+                        .threadActiveReorder) === true &&
+                  (isPinned || !isSettled)
+                    ? {
+                        up:
+                          planSupervisionMove(
+                            threads,
+                            orderMetadata,
+                            thread,
+                            "up",
+                            orderReadyHosts,
+                          ) !== null,
+                        down:
+                          planSupervisionMove(
+                            threads,
+                            orderMetadata,
+                            thread,
+                            "down",
+                            orderReadyHosts,
+                          ) !== null,
+                      }
+                    : undefined,
+
+                snoozePresets,
+              }),
+              nestingState,
+            ),
             position,
           ),
         );
         if (clicked._tag === "Failure") return;
+        if (isThreadNestingMenuId(clicked.value)) {
+          await runNestingMenuAction(threadRef, clicked.value, nestingState);
+          return;
+        }
         if (clicked.value?.startsWith("snooze:")) {
           const preset =
             clicked.value === "snooze:custom"
@@ -4497,10 +4672,24 @@ export default function Sidebar() {
         switch (clicked.value) {
           case "move-up":
           case "move-down": {
-            const assignments = planSupervisionMove(threads, orderMetadata, thread, clicked.value === "move-up" ? "up" : "down", appAtomRegistry.get(forkSupervision.readyHosts));
+            const assignments = planSupervisionMove(
+              threads,
+              orderMetadata,
+              thread,
+              clicked.value === "move-up" ? "up" : "down",
+              appAtomRegistry.get(forkSupervision.readyHosts),
+            );
+
             for (const assignment of assignments ?? []) {
-              const moved = threads.find(row => scopedThreadKey(scopeThreadRef(row.environmentId, row.id)) === assignment.id);
-              if (moved) await (isPinned ? reorderPinnedThread : reorderActiveThread)(scopeThreadRef(moved.environmentId, moved.id), assignment.orderKey);
+              const moved = threads.find(
+                (row) =>
+                  scopedThreadKey(scopeThreadRef(row.environmentId, row.id)) === assignment.id,
+              );
+              if (moved)
+                await (isPinned ? reorderPinnedThread : reorderActiveThread)(
+                  scopeThreadRef(moved.environmentId, moved.id),
+                  assignment.orderKey,
+                );
             }
             return;
           }
@@ -4708,6 +4897,7 @@ export default function Sidebar() {
       markThreadUnread,
       openProjectSettings,
       resetOrder,
+      runNestingMenuAction,
       orderMetadata,
       orderReadyHosts,
       threads,
@@ -4967,7 +5157,7 @@ export default function Sidebar() {
               >
                 <SidebarDragLifecycle onUnmount={cancelThreadDrag} />
                 {supervisionDrag.intent.kind === "nest" ? (
-                  <div role="status">
+                  <div role="status" className="sr-only">
                     Nest under{" "}
                     {supervision.forest.byKey.get(supervisionDrag.intent.parentKey)?.title}
                   </div>
@@ -4994,6 +5184,7 @@ export default function Sidebar() {
                         thread: EnvironmentThreadShell,
                         section: SidebarSection,
                         sortable?: SortableThreadRowBag,
+                        nested?: { depth: number; projectDisplayName: string | null },
                       ) => {
                         const threadKey = scopedThreadKey(
                           scopeThreadRef(thread.environmentId, thread.id),
@@ -5011,9 +5202,27 @@ export default function Sidebar() {
                             // Fade between card and compact rows while the outer
                             // sortable wrapper keeps its identity during a drag.
                             key={`${threadKey}:${rowVariant}`}
-                            waitingInputChildren={childInputAttention.get(
-                              `${thread.environmentId}:${thread.id}`,
-                            ) ?? []}
+                            waitingInputChildren={
+                              childInputAttention.get(`${thread.environmentId}:${thread.id}`) ??
+                              EMPTY_THREADS
+                            }
+                            nestedDepth={nested?.depth ?? 0}
+                            nestedProjectDisplayName={nested?.projectDisplayName ?? null}
+                            nestedChildCount={
+                              supervision.forest.children.get(threadKey)?.length ?? 0
+                            }
+                            nestedActiveCount={supervision.forest.activeCounts.get(threadKey) ?? 0}
+                            nestedChildrenExpanded={supervision.expandedParents.has(threadKey)}
+                            onToggleNestedChildren={supervision.toggleParent}
+                            nestDropTarget={
+                              supervisionDrag.intent.kind === "nest" &&
+                              supervisionDrag.intent.parentKey === threadKey
+                            }
+                            supervising={
+                              thread.settledOverride !== "settled" &&
+                              !supervisionIsActive(thread) &&
+                              (supervision.forest.activeCounts.get(threadKey) ?? 0) > 0
+                            }
                             thread={thread}
                             variant={rowVariant}
                             // Snoozed rows wake, settled rows un-settle, and cards settle.
@@ -5114,6 +5323,7 @@ export default function Sidebar() {
                       const renderThreadRow = (
                         thread: EnvironmentThreadShell,
                         section: SidebarSection,
+                        nested?: { depth: number; projectDisplayName: string | null },
                       ) => {
                         const threadKey = scopedThreadKey(
                           scopeThreadRef(thread.environmentId, thread.id),
@@ -5131,7 +5341,7 @@ export default function Sidebar() {
                               optimisticDrop !== null
                             }
                           >
-                            {(bag) => renderThreadRowInner(thread, section, bag)}
+                            {(bag) => renderThreadRowInner(thread, section, bag, nested)}
                           </SortableThreadRow>
                         );
                       };
@@ -5149,26 +5359,49 @@ export default function Sidebar() {
                       ];
                       for (const item of sidebarListItems) {
                         if (item.kind === "thread") {
+                          const root = threadByKey.get(item.key)!;
                           if (supervision.forest.parentByKey.has(item.key)) continue;
-                          items.push(
-                            <SupervisionThreadRows
-                              key={item.key}
-                              thread={threadByKey.get(item.key)!}
-                              supervision={supervision}
-                              renderRow={(child) =>
-                                renderThreadRow(
-                                  child,
-                                  child.pinnedAt !== null
-                                    ? "pinned"
-                                    : child.settledOverride === "settled"
-                                      ? "settled"
-                                      : "active",
-                                )
-                              }
-                            >
-                              {renderThreadRow(threadByKey.get(item.key)!, item.section)}
-                            </SupervisionThreadRows>,
-                          );
+                          items.push(renderThreadRow(root, item.section));
+                          for (const row of flattenSupervisionChildren({
+                            root,
+                            children: supervision.forest.children,
+                            activeCounts: supervision.forest.activeCounts,
+                            visiblePaths: supervision.paths,
+                            expandedParents: supervision.expandedParents,
+                            expandedGroups: supervision.expandedGroups,
+                          })) {
+                            if (row.kind === "group") {
+                              items.push(
+                                <SupervisionGroupRow
+                                  key={row.key}
+                                  label={row.label}
+                                  kind={row.groupKind}
+                                  depth={row.depth}
+                                  expanded={row.expanded}
+                                  onToggle={() => supervision.toggleGroup(row.key)}
+                                />,
+                              );
+                              continue;
+                            }
+                            items.push(
+                              renderThreadRow(
+                                row.thread,
+                                row.thread.pinnedAt !== null
+                                  ? "pinned"
+                                  : row.thread.settledOverride === "settled"
+                                    ? "settled"
+                                    : "active",
+                                {
+                                  depth: row.depth,
+                                  projectDisplayName: supervisionProjectLabel(
+                                    row.thread,
+                                    row.parent,
+                                    supervision.projectTitles,
+                                  ),
+                                },
+                              ),
+                            );
+                          }
                           continue;
                         }
                         switch (item.marker) {
