@@ -1,4 +1,4 @@
-import { useSupervisionForest } from "../../state/forkSupervision";
+import { useSupervisionMetadata } from "../../state/forkSupervision";
 import { useProjects } from "../../state/entities";
 import { SupervisionGroupRow } from "./SupervisionGroupRow";
 import { groupQuietChildren, supervisionProjectLabel } from "./nestedThreadVisibility.logic";
@@ -23,7 +23,8 @@ export function useSupervisionSidebar(
 ) {
   const projects = useProjects();
   const projectTitles = useMemo(() => new Map(projects.map(project => [`${project.environmentId}:${project.id}`, project.title])), [projects]);
-  const forest = useSupervisionForest();
+  const metadata = useSupervisionMetadata();
+  const forest = useMemo(() => supervisionForest(threads, metadata), [threads, metadata]);
   const paths = useMemo(() => supervisionVisiblePaths(forest, openedKey), [forest, openedKey]);
   return { forest, paths, projectTitles };
 }
