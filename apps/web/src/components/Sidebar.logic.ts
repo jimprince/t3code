@@ -746,23 +746,7 @@ export function useThreadJumpHintVisibility(): {
   };
 }
 
-/**
- * Effective visited watermark for a thread. Servers with visited tracking
- * project `lastVisitedAt` on the shell and are authoritative — that value is
- * shared across every device connected to the environment. Pre-tracking
- * servers omit the field, and the browser's locally persisted watermark keeps
- * working as before.
- */
-export function resolveThreadLastVisitedAt(
-  serverLastVisitedAt: string | null | undefined,
-  localLastVisitedAt: string | undefined,
-): string | undefined {
-  // When the server tracks visits it is authoritative — including explicit
-  // rewinds from mark-unread, which a newer browser-local watermark must not
-  // mask. The local value only carries servers without visited tracking.
-  if (serverLastVisitedAt === undefined) return localLastVisitedAt;
-  return serverLastVisitedAt ?? undefined;
-}
+export { resolveThreadLastVisitedAt } from "@t3tools/client-runtime/state/orchestrators";
 
 export function hasUnseenCompletion(thread: ThreadStatusInput): boolean {
   if (!thread.latestRun?.completedAt) return false;
