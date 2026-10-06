@@ -8250,7 +8250,10 @@ export default function ChatView(props: ChatViewProps) {
     canFork: canForkThread,
     isWorking,
   });
-  forkMenuStateRef.current = { messages: timelineMessages, canFork: canForkThread, isWorking };
+  // Committed, not assigned during render: the resolver only runs from a context-menu event.
+  useLayoutEffect(() => {
+    forkMenuStateRef.current = { messages: timelineMessages, canFork: canForkThread, isWorking };
+  }, [timelineMessages, canForkThread, isWorking]);
   const resolveMessageForkMenu = useMemo(
     () => createMessageForkMenuResolver(() => forkMenuStateRef.current),
     [],
@@ -8258,7 +8261,7 @@ export default function ChatView(props: ChatViewProps) {
   const forkMessage = useRef(
     async (_messageId: MessageId, _workspaceMode: MessageForkWorkspaceMode) => {},
   );
-  forkMessage.current = async (messageId: MessageId, workspaceMode: MessageForkWorkspaceMode) => {
+  const runForkMessage = async (messageId: MessageId, workspaceMode: MessageForkWorkspaceMode) => {
     if (!canForkThread || !activeThread || activeEnvironmentUnavailable || isForkingThread) return;
     const plan = resolveMessageForkPlan(timelineMessages, messageId);
     if (plan === null) return;
@@ -8358,6 +8361,9 @@ export default function ChatView(props: ChatViewProps) {
       setIsForkingThread(false);
     }
   };
+  useLayoutEffect(() => {
+    forkMessage.current = runForkMessage;
+  });
   const onForkMessage = useCallback(
     (messageId: MessageId, workspaceMode: MessageForkWorkspaceMode) =>
       forkMessage.current(messageId, workspaceMode),
