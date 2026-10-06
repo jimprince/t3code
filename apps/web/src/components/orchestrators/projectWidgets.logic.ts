@@ -24,29 +24,74 @@ export const DEFAULT_WIDGET_ORDER: ReadonlyArray<ProjectWidgetId> = PROJECT_WIDG
 ).map((widget) => widget.id);
 const ALL_WIDGETS: ReadonlyArray<ProjectWidgetId> = PROJECT_WIDGETS.map((widget) => widget.id);
 
-/** The widgets to render: the saved order (unknown ids dropped), or the default. */
-export function visibleWidgets(saved: ReadonlyArray<string> | null): ProjectWidgetId[] {
-  if (saved === null) return [...DEFAULT_WIDGET_ORDER];
-  return saved.filter((id): id is ProjectWidgetId => KNOWN.has(id));
+/** A canvas widget from the orchestrator's manifest, ordered like any other widget. */
+export type CanvasWidgetId = `canvas:${string}`;
+export type DashboardWidgetId = ProjectWidgetId | CanvasWidgetId;
+
+export interface CanvasWidgetInfo {
+  readonly id: CanvasWidgetId;
+  readonly title: string;
+}
+
+export const canvasWidgetId = (id: string): CanvasWidgetId => `canvas:${id}`;
+
+export const isCanvasWidget = (id: string): id is CanvasWidgetId => id.startsWith("canvas:");
+
+/**
+ * The widgets to render: the saved order (unknown ids dropped), or the default.
+ * `canvas` stands for the manifest's canvases not placed on their own, in
+ * manifest order; with no canvases it stays, so the page can say why.
+ */
+export function visibleWidgets(
+  saved: ReadonlyArray<string> | null,
+  canvases: ReadonlyArray<CanvasWidgetInfo> = [],
+): DashboardWidgetId[] {
+  const base: ReadonlyArray<string> = saved ?? DEFAULT_WIDGET_ORDER;
+  const canvasIds = new Set<string>(canvases.map((canvas) => canvas.id));
+  const placed = new Set(base.filter((id) => canvasIds.has(id)));
+  const result: DashboardWidgetId[] = [];
+  for (const id of base) {
+    if (id === "canvas" && canvases.length > 0) {
+      result.push(
+        ...canvases.map((canvas) => canvas.id).filter((canvasId) => !placed.has(canvasId)),
+      );
+    } else if (KNOWN.has(id)) {
+      result.push(id as ProjectWidgetId);
+    } else if (canvasIds.has(id)) {
+      result.push(id as CanvasWidgetId);
+    }
+  }
+  return [...new Set(result)];
 }
 
 export interface WidgetChoice {
-  readonly id: ProjectWidgetId;
+  readonly id: DashboardWidgetId;
   readonly title: string;
   readonly visible: boolean;
 }
 
-/** The Customize list: visible widgets in order, then hidden ones in default order. */
-export function widgetChoices(saved: ReadonlyArray<string> | null): WidgetChoice[] {
-  const visible = visibleWidgets(saved);
-  const titleOf = new Map(PROJECT_WIDGETS.map((widget) => [widget.id, widget.title]));
+/**
+ * The Customize list: visible widgets in order, then hidden ones in default
+ * order. Canvases are listed one by one, so saving places each explicitly and a
+ * canvas added to the manifest later starts hidden, like any new widget.
+ */
+export function widgetChoices(
+  saved: ReadonlyArray<string> | null,
+  canvases: ReadonlyArray<CanvasWidgetInfo> = [],
+): WidgetChoice[] {
+  const visible = visibleWidgets(saved, canvases);
+  const titleOf = new Map<string, string>([
+    ...PROJECT_WIDGETS.map((widget): [string, string] => [widget.id, widget.title]),
+    ...canvases.map((canvas): [string, string] => [canvas.id, canvas.title]),
+  ]);
+  const all: DashboardWidgetId[] = ALL_WIDGETS.flatMap((id) =>
+    id === "canvas" && canvases.length > 0 ? canvases.map((canvas) => canvas.id) : [id],
+  );
   return [
     ...visible.map((id) => ({ id, title: titleOf.get(id)!, visible: true })),
-    ...ALL_WIDGETS.filter((id) => !visible.includes(id)).map((id) => ({
-      id,
-      title: titleOf.get(id)!,
-      visible: false,
-    })),
+    ...all
+      .filter((id) => !visible.includes(id))
+      .map((id) => ({ id, title: titleOf.get(id)!, visible: false })),
   ];
 }
 
@@ -63,5 +108,5 @@ export function moveChoice(
   return next;
 }
 
-export const savedOrder = (choices: ReadonlyArray<WidgetChoice>): ProjectWidgetId[] =>
+export const savedOrder = (choices: ReadonlyArray<WidgetChoice>): DashboardWidgetId[] =>
   choices.filter((choice) => choice.visible).map((choice) => choice.id);
