@@ -81,3 +81,5 @@ export * from "./projectIssues.ts";
 export * from "./projectDashboard.ts";
 export * from "./projectRoadmap.ts";
 export * from "./projectCanvas.ts";
+
+export * from "./automations.ts";
