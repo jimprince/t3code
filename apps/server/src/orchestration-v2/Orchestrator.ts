@@ -5,6 +5,7 @@ import { initializeMetadata, listMetadata } from "../forkThreads/MetadataStore.t
 import { readWorkerMetadata } from "../forkThreads/WorkerLifecycleMetadata.ts";
 import { archiveEligible } from "../forkThreads/ArchiveDeadlines.ts";
 import { completionEligible } from "../forkThreads/WorkerLifecyclePolicy.ts";
+import { pinnedReorderUpdatedAt } from "../forkThreads/ThreadOrderReset.ts";
 import { synchronizedLegacyPullRequest } from "../sourceControl/forkPullRequestUrl.ts";
 import {
   latestExecutedRun,
@@ -2387,9 +2388,13 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
         ),
       );
-      const organization = new Map((yield* listMetadata(sql).pipe(
-        Effect.mapError(cause => new OrchestratorProjectionError({ threadId: command.threadId, cause })),
-      )).map(row => [row.threadId, row]));
+      const organization = new Map(
+        (yield* listMetadata(sql).pipe(
+          Effect.mapError(
+            (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
+          ),
+        )).map((row) => [row.threadId, row]),
+      );
       const current = active.threads.find((entry) => entry.id === thread.id);
       if (
         !current ||
@@ -2845,11 +2850,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           // Idempotent by re-emission (see thread.settle): a duplicate drop on
           // the same slot keeps the existing updatedAt so it projects as a
           // no-op.
-          const keyUnchanged = thread.pinOrderKey === command.orderKey;
           return {
             ...thread,
             pinOrderKey: command.orderKey,
-            updatedAt: keyUnchanged ? thread.updatedAt : now,
+            updatedAt: pinnedReorderUpdatedAt(thread, command.orderKey, now),
           };
         }
         case "thread.active.reorder": {
@@ -9626,13 +9630,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
             ),
           );
-          if (
-            !completionEligible(
-              current,
-              command.completionRunId,
-              metadata,
-            )
-          )
+          if (!completionEligible(current, command.completionRunId, metadata))
             return yield* new OrchestratorDispatchError({
               commandId: command.commandId,
               commandType: command.type,
