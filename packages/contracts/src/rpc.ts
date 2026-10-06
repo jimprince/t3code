@@ -77,6 +77,12 @@ import {
   ProjectRoadmapSaveVersionInput,
 } from "./projectRoadmap.ts";
 import {
+  ProjectCanvas,
+  ProjectCanvasActionInput,
+  ProjectCanvasError,
+  ProjectCanvasReadInput,
+} from "./projectCanvas.ts";
+import {
   CodexAuthCallbackInput,
   CodexAuthCallbackState,
   ProviderAuthCancelInput,
@@ -609,6 +615,8 @@ export const WS_METHODS = {
   projectRoadmapGet: "projectRoadmap.get",
   projectRoadmapMove: "projectRoadmap.move",
   projectRoadmapSaveVersion: "projectRoadmap.saveVersion",
+  projectCanvasRead: "projectCanvas.read",
+  projectCanvasAction: "projectCanvas.action",
 
   // Source control methods
   sourceControlLookupRepository: "sourceControl.lookupRepository",
@@ -1061,6 +1069,18 @@ const WsProjectRoadmapSaveVersionRpc = Rpc.make(WS_METHODS.projectRoadmapSaveVer
   payload: ProjectRoadmapSaveVersionInput,
   success: ProjectRoadmap,
   error: projectRoadmapError,
+});
+
+const WsProjectCanvasReadRpc = Rpc.make(WS_METHODS.projectCanvasRead, {
+  payload: ProjectCanvasReadInput,
+  success: ProjectCanvas,
+  error: Schema.Union([ProjectCanvasError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectCanvasActionRpc = Rpc.make(WS_METHODS.projectCanvasAction, {
+  payload: ProjectCanvasActionInput,
+  success: Schema.Void,
+  error: EnvironmentAuthorizationError,
 });
 
 const WsProjectRequestsListRpc = Rpc.make(WS_METHODS.projectRequestsList, {
@@ -2084,6 +2104,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectRoadmapGetRpc,
   WsProjectRoadmapMoveRpc,
   WsProjectRoadmapSaveVersionRpc,
+  WsProjectCanvasReadRpc,
+  WsProjectCanvasActionRpc,
   WsSourceControlLookupRepositoryRpc,
   WsSourceControlCloneRepositoryRpc,
   WsSourceControlPublishRepositoryRpc,
