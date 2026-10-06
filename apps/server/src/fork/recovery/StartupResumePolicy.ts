@@ -39,6 +39,7 @@ export const layer = Layer.effect(
               effect.request.type.startsWith("provider-turn.") ||
               effect.request.type === "provider-runtime.continue" ||
               effect.request.type === "provider-thread.rollback" ||
+              effect.request.type === "provider-thread.conversation-rewind" ||
               effect.request.type === "thread-title.generate" ||
               effect.request.type === "runtime-request.respond";
             return (
