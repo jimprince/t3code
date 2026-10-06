@@ -1200,3 +1200,18 @@ id = "v2-port-2689"
 date = "2026-10-05"
 decided = "reconcile-smaller"
 rationale = "Use native queued-run steerNext and its validation and in-flight guards from the empty composer. No browser-local queue is restored."
+
+[[patch]]
+name = "fork-restart-when-idle"
+subject = "feat(desktop): restart for updates when local agents finish"
+class = "product"
+purpose = "Let the desktop restart button wait until agents hosted by this desktop app finish, then restart into the downloaded update without interrupting their work."
+retire_when = "Upstream offers a deferred restart that waits for local agent work, or the fork stops wanting it."
+depends_on = []
+roles = []
+note = "Idle means no desktop-hosted thread (primary or desktop-local secondary) is running, starting, background-working, monitoring, or holding non-held queued messages, for 15 seconds. Pending approvals and questions deliberately do not block by owner decision: they can wait indefinitely, and the thread survives while the stale prompt is released. Remote environments are ignored because a desktop restart does not stop them. The schedule is in-memory and the watcher is mounted at AppRoot; the rules live in apps/web/src/components/sidebar/desktopIdleRestart.logic.ts."
+
+[[patch.decision]]
+id = "v2-port-2689-m2"
+decision = "reconcile-smaller"
+note = "Hosted V2 runtime and server-owned queue selectors gate restart; the install boundary re-reads live atoms and reserves the prepared version natively."
