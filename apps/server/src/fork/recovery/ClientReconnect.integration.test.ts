@@ -22,7 +22,7 @@ it.live.each([undefined, 999])(
   "retains the persisted event between snapshot and live subscription (cursor %s)",
   (afterSequence) => {
     const persistence = SqlitePersistenceMemory;
-    const store = OrchestrationEventStoreLive.pipe(Layer.provide(persistence));
+    const store = OrchestrationEventStoreLive.pipe(Layer.provideMerge(persistence));
     return Effect.gen(function* () {
       const events = yield* OrchestrationEventStore;
       const now = yield* DateTime.now;
