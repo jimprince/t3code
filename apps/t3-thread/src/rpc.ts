@@ -12,6 +12,7 @@ import {
 } from "./contracts.js";
 
 const RPC_METHODS = {
+  sessionReconcile: "fork.session.reconcile",
   threadIssuesLink: "threadIssues.link",
   threadIssuesUnlink: "threadIssues.unlink",
   automationsList: "automations.list",
