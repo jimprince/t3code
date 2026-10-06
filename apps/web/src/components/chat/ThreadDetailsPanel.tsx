@@ -1,3 +1,5 @@
+import { SupervisionWorkerRow } from "./SupervisionRows";
+import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { ForkSupervisionControl } from "./ForkSupervisionControl";
 import type {
   EditorId,
@@ -182,6 +184,12 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
               <ForkSupervisionControl
                 environmentId={props.environmentId}
                 threadId={props.threadId}
+                renderWorkerRow={(child) => (
+                  <SupervisionWorkerRow
+                    key={scopedThreadKey(scopeThreadRef(child.environmentId, child.id))}
+                    child={child}
+                  />
+                )}
               />
               <ThreadRelationshipsPanel
                 environmentId={props.environmentId}
