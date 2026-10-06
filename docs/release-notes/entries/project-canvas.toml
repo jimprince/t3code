@@ -1,0 +1,4 @@
+id = "project-canvas"
+category = "feature"
+functionality = "projects"
+text = "Orchestrators can show their own pages on the project Dashboard, such as sim counts, charts, screenshots or a design funnel, as sandboxed canvas widgets in small, medium or full width. A canvas can offer buttons that open threads, issues or known links, or send a message to the orchestrator after you confirm the exact text."
