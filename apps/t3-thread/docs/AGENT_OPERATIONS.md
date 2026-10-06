@@ -1055,3 +1055,72 @@ t3-thread roadmap version "$T3_THREAD_ID" fork.26
 
 `request shipped --release fork.24` closes that release's milestone, so the next open version
 becomes the next release.
+
+## Project canvas
+
+An orchestrator can show its own page on the project's Dashboard: write a static
+`.t3/dashboard/index.html` (plus its CSS, images, JSON or scripts in the same folder) in the
+project workspace. The server reads it and inlines those local files; the page shows in a
+sandboxed frame with no access to T3, so it cannot fetch from the network or T3. Start from
+the template and style kit in `docs/user/project-canvas/` (dark, true black, dense, white text,
+minimal copy, no decorative chrome, no continuously repainting animation). The page header shows
+"updated X ago" from the file times, so regenerate the whole folder whenever the numbers change,
+for example from a project automation that runs a script every 15 minutes. Keep it under 4 MB.
+
+Several canvases: list them in `.t3/dashboard/widgets.json`, each its own Dashboard widget.
+
+```json
+{
+  "widgets": [
+    { "id": "status", "title": "Status", "path": "index.html", "size": "full" },
+    { "id": "funnel", "title": "Funnel", "path": "funnel/index.html", "size": "medium" }
+  ]
+}
+```
+
+- `id`: 1-30 lowercase letters, digits or dashes, unique; the widget id is `canvas:<id>`, so
+  `t3-thread dashboard set <thread> --widgets requests,canvas:funnel,release,...` places it.
+  `canvas` in a widget list stands for every canvas not placed on its own.
+- `path`: a `.html` file relative to `.t3/dashboard`; its images, CSS and JSON must sit in the
+  page's own folder (for example `funnel/thumbs/42.png`), served read-only and inlined.
+- `size`: `small` (a third of the width, 220 px tall), `medium` (half, 320 px) or `full`
+  (420 px). Neighbouring small and medium canvases share a row. All sizes resize vertically.
+- At most 8 canvases, 4 MB each. With a manifest, it is the whole list; without one,
+  `index.html` is the single canvas. An invalid manifest shows one line naming the problem.
+  Write files atomically (temp file, then rename).
+
+Canvases stay sandboxed, but may ask the T3 page to act through the action bridge:
+`window.parent.postMessage({ type: "t3-canvas", id, intent, ... }, "*")`, where `intent` is
+
+- `send` `{ text }`: sends the text to the project's orchestrator through the normal send path
+  (so the request ledger captures it). T3 first shows Brad the exact text with Send and Cancel.
+- `open-thread` `{ threadId }`: a thread in this project tree.
+- `open-issue` `{ url }`: an issue page on a known host.
+- `open-url` `{ url }`: http(s) on a known host only: github.com, the configured Gitea web
+  origins, and the hosts of the project's issues and pull requests.
+
+T3 accepts messages only from that canvas's own frame, allows 5 intents per 10 seconds per
+canvas, logs every intent and outcome on the server (`project canvas action`), and answers with
+`{ type: "t3-canvas-result", id, ok, reason }`. Anything else is refused. A canvas cannot read
+T3 data; put what it needs in the generated page. Example card with Advance and Feedback
+buttons: `docs/user/project-canvas/funnel/index.html`:
+
+```html
+<button id="advance">Advance</button>
+<script>
+  document.getElementById("advance").onclick = () =>
+    window.parent.postMessage(
+      {
+        type: "t3-canvas",
+        id: "1",
+        intent: "send",
+        text: "Advance #42 Bracket v2 from render to print.",
+      },
+      "*",
+    );
+  window.addEventListener("message", (event) => {
+    if (event.data?.type === "t3-canvas-result")
+      console.log(event.data.ok ? "sent" : event.data.reason);
+  });
+</script>
+```
