@@ -13,7 +13,8 @@ export const readForkThreadMetadata = (sql: SqlClient.SqlClient) =>
       remote_parent_json?: string | null;
       settle_on_complete?: number | null;
     }>`SELECT t.* FROM projection_threads t LEFT JOIN fork_thread_metadata m ON m.thread_id = t.thread_id WHERE m.thread_id IS NULL`;
-    if (!columns.some((column) => column.name === "settle_on_complete")) return { rows, policies: [] };
+    if (!columns.some((column) => column.name === "settle_on_complete"))
+      return { rows, policies: [] };
     const policies = yield* sql<{
       thread_id: string;
       settle_on_complete: number | null;

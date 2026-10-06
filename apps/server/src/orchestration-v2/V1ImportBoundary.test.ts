@@ -21,7 +21,6 @@ const legacyReaders = [
  * list short; new V1 reads belong in the importer.
  */
 const legacyReaderFiles: Record<string, string> = {
-
   "forkLegacy/AttachmentImport.ts": "attachment recovery used only by the V1 importer",
   // Provider history for settings migration reads V1 thread sessions once at load.
   "serverSettings.ts": "one-time provider history for settings migration",
