@@ -12,6 +12,8 @@ export interface DashboardFile {
    * the last one current. Raw JSON; the layout service decodes it.
    */
   readonly layouts: Readonly<Record<string, { readonly history: ReadonlyArray<unknown> }>>;
+  /** Health line per orchestrator (root) thread. Raw JSON; the service decodes it. */
+  readonly health: Readonly<Record<string, unknown>>;
 }
 
 export const EMPTY_DASHBOARD_FILE: DashboardFile = {
@@ -19,6 +21,7 @@ export const EMPTY_DASHBOARD_FILE: DashboardFile = {
   dashboards: {},
   trackers: {},
   layouts: {},
+  health: {},
 };
 
 export function parseDashboardFile(contents: string | null): DashboardFile {
@@ -31,6 +34,7 @@ export function parseDashboardFile(contents: string | null): DashboardFile {
       dashboards: value.dashboards && typeof value.dashboards === "object" ? value.dashboards : {},
       trackers: value.trackers && typeof value.trackers === "object" ? value.trackers : {},
       layouts: value.layouts && typeof value.layouts === "object" ? value.layouts : {},
+      health: value.health && typeof value.health === "object" ? value.health : {},
     };
   } catch {
     return EMPTY_DASHBOARD_FILE;
