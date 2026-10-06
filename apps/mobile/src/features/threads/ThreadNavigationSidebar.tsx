@@ -65,6 +65,7 @@ import {
   ThreadListV2WorkingShelfHeader,
 } from "./thread-list-v2-items";
 import { useThreadRowProviderInstanceResolver } from "./thread-provider-instance";
+import { useForkOrderHosts } from "./fork/orderReset";
 import {
   buildThreadListV2Items,
   getThreadListV2OrderedSection,
@@ -329,6 +330,7 @@ function ThreadNavigationSidebarPane(
     titleRegenerationEnvironmentIds,
   } = listEnvironments;
   const resolveProviderInstance = useThreadRowProviderInstanceResolver(providersByEnvironmentId);
+  const orderHosts = useForkOrderHosts();
   const pendingOrder = usePendingThreadOrder(nowMinute, snoozeWakeTick);
   // Up/down menu availability for every card, computed once per section per
   // rebuild (see computeThreadMoveAvailability): per-thread planner calls made
@@ -747,6 +749,8 @@ function ThreadNavigationSidebarPane(
               }
               canMoveUp={item.canMoveUp}
               canMoveDown={item.canMoveDown}
+              orderMetadataReady={orderHosts.ready.has(thread.environmentId)}
+              orderResetSupported={orderHosts.resetSupported.has(thread.environmentId)}
               onSnoozeThread={snoozeThread}
               onUnsnoozeThread={unsnoozeThread}
               onUnsettleThread={unsettleThread}
@@ -801,6 +805,7 @@ function ThreadNavigationSidebarPane(
       }
     },
     [
+      orderHosts,
       archiveThread,
       activeReorderEnvironmentIds,
       confirmDeletePendingTask,
