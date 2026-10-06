@@ -1,6 +1,8 @@
 import { ThreadFindTimelineContext } from "./ThreadFindProvider";
 import { shouldPreserveAssistantLineBreaks } from "@t3tools/shared/markdownPipeline";
 import { MarkdownFindContext, useFindRevealRef } from "./markdownFindContext";
+import { useOrchestratorFocus } from "./OrchestratorFocus";
+
 import { ComputerUseAppIcon } from "~/components/Icons";
 import { useChatCanvas } from "./ChatCanvasContext";
 import { WorkLogBlock, WorkLogButton, WorkLogDetails, WorkLogList, WorkLogRow } from "./WorkLog";
@@ -356,6 +358,7 @@ interface TimelineRowSharedState {
   openPullRequest: (event: MouseEvent<HTMLElement>, url: string) => void;
   onToggleWorkGroup: (groupId: string, anchorKey: string) => void;
   onToggleWorkEntry: (anchorKey: string, collapsed: boolean) => void;
+  onToggleBackgroundFold: (runId: string) => void;
   onCancelWorktreeSetup: (() => void) | null;
   retryableWorkspacePreparationRunIds: ReadonlySet<RunId>;
   onRetryWorkspacePreparation: ((runId: RunId) => void) | null;
@@ -918,7 +921,13 @@ const ConversationTimeline = memo(function ConversationTimeline({
     supportsConversationRollback,
     worktreeSetup,
   ]);
-  const rows = useStableRows(rawRows, listIdentityKey);
+  const focus = useOrchestratorFocus({
+    threadKey: routeThreadKey,
+    entries: timelineEntries,
+    rows: rawRows,
+    liveRunId: runningRunId,
+  });
+  const rows = useStableRows(focus.rows, listIdentityKey);
   // Run status/timestamps churn on every stream event; the shared row context
   // must not change with them or every timeline row re-renders per event.
   const runs = useStableHandoffRuns(runsProp);
@@ -1330,6 +1339,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
       onToggleAttemptFold,
       onToggleWorkGroup,
       onToggleWorkEntry: suspendEndScrollMaintenanceForDisclosure,
+      onToggleBackgroundFold: focus.toggleFold,
       onCancelWorktreeSetup: onCancelWorktreeSetup ?? null,
       retryableWorkspacePreparationRunIds,
       onRetryWorkspacePreparation: onRetryWorkspacePreparation ?? null,
@@ -1368,6 +1378,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
       onToggleAttemptFold,
       onToggleWorkGroup,
       suspendEndScrollMaintenanceForDisclosure,
+      focus.toggleFold,
       onCancelWorktreeSetup,
       retryableWorkspacePreparationRunIds,
       onRetryWorkspacePreparation,
@@ -1566,9 +1577,13 @@ const ConversationTimeline = memo(function ConversationTimeline({
     <MarkdownFindContext value={findActive}>
       <TimelineRowCtx value={sharedState}>
         <TimelineRowActivityCtx value={activityState}>
+          <div className="flex h-full min-h-0 flex-col">
+            {/* Outside the list, so the Brad view toggle and the needs-you count stay on screen. */}
+            {focus.control}
           <TooltipScrollDismissArea
             ref={setTimelineViewportElement}
-            className="relative h-full min-h-0"
+            className="relative min-h-0 flex-1"
+
             data-assistant-citation-viewport="true"
           >
             {onCiteAssistantText && citationThreadRef ? (
@@ -1593,6 +1608,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
               dataVersion={readyCitationRequest?.key ?? listIdentityKey}
               {...(alwaysRender ? { alwaysRender } : {})}
               onLoad={handleListLoad}
+
               {...(anchoredEndSpace ? { anchoredEndSpace } : {})}
               contentInsetEndAdjustment={anchoredEndSpace ? contentInsetEndAdjustment : 0}
               maintainScrollAtEnd={
@@ -1601,6 +1617,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
                 anchoredEndSpace ||
                 !liveFollowEnabled ||
                 fullscreenAppRowId !== null ||
+
                 disclosureToggleSettling
                   ? false
                   : isWorking && !prefersReducedMotion && settlingListIdentity === null
@@ -1609,6 +1626,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
               }
               maintainVisibleContentPosition={
                 findActive ||
+
                 citationPositioning ||
                 (restoringThreadPosition && rememberedPosition?.atEnd === false)
                   ? false
@@ -1640,9 +1658,11 @@ const ConversationTimeline = memo(function ConversationTimeline({
               }}
             />
           </TooltipScrollDismissArea>
+          </div>
         </TimelineRowActivityCtx>
       </TimelineRowCtx>
     </MarkdownFindContext>
+
   );
 });
 
@@ -2018,7 +2038,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
         // they sit closer to the work that follows them.
         isWorkLogRow || isSubagentGroup
           ? undefined
-          : row.kind === "turn-fold" || row.kind === "working"
+          : row.kind === "turn-fold" || row.kind === "background-fold" || row.kind === "working"
             ? "pb-1.5"
             : (row.kind === "message" &&
                   row.message.role === "assistant" &&
@@ -2067,6 +2087,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
         </WorkLogBlock>
       ) : null}
       {row.kind === "turn-fold" ? <TurnFoldTimelineRow row={row} /> : null}
+      {row.kind === "background-fold" ? <BackgroundFoldTimelineRow row={row} /> : null}
       {row.kind === "attempt-fold" ? <AttemptFoldTimelineRow row={row} /> : null}
       {row.kind === "context-compaction" ? <ContextCompactionTimelineRow row={row} /> : null}
       {row.kind === "message" && row.message.role === "user" ? <UserTimelineRow row={row} /> : null}
@@ -2721,6 +2742,41 @@ function TurnFoldTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "turn-
         createdAt={row.createdAt}
         timestampFormat={ctx.timestampFormat}
         className="ms-auto"
+      />
+    </div>
+  );
+}
+
+/** Brad view: a run of worker turns, folded to its count, senders and latest line. */
+function BackgroundFoldTimelineRow({
+  row,
+}: {
+  row: Extract<TimelineRow, { kind: "background-fold" }>;
+}) {
+  const ctx = use(TimelineRowCtx);
+  const { run } = row;
+  const count = `${run.turnCount} background ${run.turnCount === 1 ? "turn" : "turns"}`;
+
+  return (
+    <div className="group/timeline-row relative flex min-w-0 items-center gap-2 border-y border-border/60 py-1 pe-0.5">
+      <button
+        type="button"
+        aria-expanded={row.expanded}
+        data-scroll-anchor-ignore
+        onClick={() => ctx.onToggleBackgroundFold(run.id)}
+        className="flex min-w-0 flex-1 cursor-pointer select-none items-center gap-2 rounded-md px-1 text-start text-sm leading-relaxed text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+      >
+        <MorphIcon className="size-3.5 shrink-0" icon={row.expanded ? ChevronDown : ChevronRight} />
+        <span className="shrink-0 text-foreground tabular-nums">{count}</span>
+        {run.senderLabels.length > 0 ? (
+          <span className="shrink-0">with {run.senderLabels.join(", ")}</span>
+        ) : null}
+        {run.lastLine ? <span className="min-w-0 truncate opacity-70">{run.lastLine}</span> : null}
+      </button>
+      <TimelineRowTimestamp
+        createdAt={run.endedAt}
+        timestampFormat={ctx.timestampFormat}
+        className="ms-auto shrink-0"
       />
     </div>
   );

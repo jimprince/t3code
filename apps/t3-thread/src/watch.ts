@@ -9,6 +9,7 @@ import {
 } from "./parentRouting.js";
 import { observeInactivity, inactivityStillCurrent } from "./inactivity.js";
 import { withInputReminder, inputNotificationStillCurrent } from "./inputReminders.js";
+import { notificationOrigin } from "./focusNotifications.js";
 import * as NodeCrypto from "node:crypto";
 
 import { RemoteEnvironmentClient } from "./client.js";
@@ -69,6 +70,7 @@ export interface WatchClient {
     threadId: string;
     text: string;
     queueWhileRunning?: boolean;
+    origin?: import("@t3tools/shared/messageOrigin").MessageOrigin | null;
   }): Promise<unknown>;
 }
 
@@ -583,7 +585,10 @@ async function scanAttentionState(
         subscription.errorEventKey = detected.eventKey;
       }
       detected.isChildInput = isChildInput;
-      detected.subscriberEnvironmentId = mapRouteEnvironment(state, subscription).subscriberEnvironmentId;
+      detected.subscriberEnvironmentId = mapRouteEnvironment(
+        state,
+        subscription,
+      ).subscriberEnvironmentId;
       scanned.push(detected);
     }
   }
@@ -1258,6 +1263,7 @@ export async function deliverPendingNotifications(
           await subscriberClient.sendMessage({
             threadId: notification.subscriberThreadId,
             text: buildNotificationMessage(notification, includeOnboarding),
+            origin: notificationOrigin(notification),
             queueWhileRunning: false,
           });
           result = {
