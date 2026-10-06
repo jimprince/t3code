@@ -157,7 +157,7 @@ it.effect(
         },
       ] as const;
       // Load CLI under its own workspace boundary, rather than server compiler policy.
-      const cliModulePath = "../../../t3-thread/src/client.ts";
+      const cliModulePath = new URL("../../../t3-thread/src/client.ts", import.meta.url).href;
       const cliModule = (yield* Effect.promise(() => import(cliModulePath))) as {
         RemoteEnvironmentClient: new (
           environment: (typeof cliArguments)[0],
