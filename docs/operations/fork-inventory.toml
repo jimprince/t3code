@@ -1682,3 +1682,19 @@ id = "v2-port-m3-issues"
 date = "2026-10-06"
 decided = "rebuild-on-v2"
 rationale = "Issue links use native V2 thread metadata events, commands and projections, retaining link/unlink/sync RPCs and CLI. Historical main-ledger ID60 remains immutable in ForkV2Ledger; V1 issue rows are read only by the legacy importer, once per missing issues field. An explicit empty V2 array always wins on restart."
+
+[[patch]]
+name = "fork-orchestrators-view"
+subject = "feat(web): add orchestrators view"
+class = "product"
+purpose = "Collect orchestrated projects and actionable standalone roots into a shared sidebar view and derive a focused needs-you, working, blocked, completed, request, link and automation page from live state."
+retire_when = "Upstream provides an equivalent cross-project overview derived from nested thread state."
+depends_on = ["fork-sidebar-agent-visibility", "fork-gitea-issue-links"]
+roles = []
+note = "A project is a non-archived top-level thread with at least one non-archived child. Counts and sections traverse descendants cycle-safely at every depth without a persisted summary. Blocked includes session or turn errors and output beginning with Blocked, but excludes interrupted turns because interruption is normal orchestrator steering. Projects mode also keeps an expanded, project-grouped list of standalone roots with actionable status, because most direct work starts outside orchestrator trees. Project and standalone rows sort by stable status buckets, debouncing promotion so live activity timestamps cannot make rows dance. When Projects is enabled, the Threads tab excludes whole project trees, including their pins; disabling Projects restores the unchanged full thread list. Web and desktop provide the full page, including compact provider-instance and model identity on active rows, the normal attachment-capable composer, a remembered live orchestrator chat panel without the full-width timeline marker rail, editable title and optional scope, and the root project's automations. Threads, full-width pull-request details and embedded issue pages opened from a project carry device history state for a project-only Back control. Mobile provides a read-only project list with the same project icon and opens the root thread. Done-since-last-visit timestamps and panel visibility stay per device in local storage. A thread's Back to project button uses the project page recorded in navigation state, else the orchestrator tree that contains the thread (ProjectReturnButton), so a thread loaded directly has one too (brad/t3code-fork#193)."
+
+[[patch.decision]]
+id = "v2-port-m3-orchestrators"
+date = "2026-10-06"
+decided = "rebuild-on-v2"
+rationale = "Orchestrator summaries join organizational parents and scope from the nesting sidecar, never native execution lineage. Shipped fork-ledger ID11 stays registered as historical schema only; fresh V2 scope writes use the existing metadata service. Web/mobile rendering is carried by the Claude UI lane."
