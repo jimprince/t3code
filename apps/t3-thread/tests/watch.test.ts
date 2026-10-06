@@ -3,6 +3,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 
+import { projection, item } from "./v2-fixture.js";
 import { RemoteEnvironmentClient } from "../src/client.js";
 import { loadState, saveState } from "../src/state.js";
 import { buildSubscriptionRecord } from "../src/state.js";
@@ -72,10 +73,30 @@ function makeSubscription(overrides: Partial<SavedSubscription> = {}): SavedSubs
 
 function makeThread(overrides: Partial<OrchestrationThread> = {}): OrchestrationThread {
   return {
+    get projection() {
+      const questions = this.activities.filter(
+        (activity) => activity.kind === "user-input.requested" && activity.payload?.questions,
+      );
+      if (!questions.length) return undefined;
+      return projection({
+        turnItems: questions.map((activity) =>
+          item("user_input_request", activity.createdAt, {
+            requestId: activity.payload.requestId,
+            questions: activity.payload.questions.map(
+              (question: { id: string; question: string; options: Array<{ label: string }> }) => ({
+                ...question,
+                header: "Question",
+                options: question.options.map((option) => ({ ...option, description: "Choice" })),
+              }),
+            ),
+          }),
+        ),
+      });
+    },
     get runtimeRequests() {
       const pending = new Map<string, { id: string; kind: string; status: "pending" }>();
       for (const activity of this.activities) {
-        const id = String(activity.payload.requestId);
+        const id = String(activity.payload?.requestId);
         if (activity.kind.endsWith(".requested"))
           pending.set(id, {
             id,
@@ -1289,4 +1310,107 @@ it("keeps completion receipts and error episodes separate for identical thread I
     expect((await loadState()).notifications).toHaveLength(2);
     expect(new Set((await loadState()).notifications.map(n => n.sourceEnvironment))).toEqual(new Set(["dev-vm", "other"]));
   });
+});
+
+describe("child input reminders", () => {
+  const start = Date.parse("2026-10-01T00:00:00Z");
+  const waiting = () =>
+    makeThread({
+      parentThreadId: "thread-coordinator-a",
+      activities: [
+        {
+          kind: "user-input.requested",
+          createdAt: new Date(start).toISOString(),
+          payload: {
+            requestId: "question-1",
+            questions: [
+              {
+                id: "direction",
+                question: "Which gripper should I use?",
+                options: [{ label: "Soft" }],
+              },
+            ],
+          },
+        },
+      ],
+    });
+  it("reminds once after 20 minutes with the pending question and survives restart", async () => {
+    await withTempState(async () => {
+      const { clientFactory, sentMessages } = createClientFactory({ sourceThread: waiting() });
+      let clock = start;
+      const now = () => new Date(clock).toISOString();
+      await detectAttentionEvents({ clientFactory, now });
+      await deliverPendingNotifications({ clientFactory, now });
+      expect(sentMessages[0]?.text).toContain("Which gripper should I use?");
+      clock += 19 * 60_000;
+      await detectAttentionEvents({ clientFactory, now });
+      await deliverPendingNotifications({ clientFactory, now });
+      expect(sentMessages).toHaveLength(1);
+      clock += 60_000;
+      await detectAttentionEvents({ clientFactory, now });
+      await deliverPendingNotifications({ clientFactory, now });
+      expect(sentMessages).toHaveLength(2);
+      expect(sentMessages[1]?.text).toContain("Reminder");
+      expect(sentMessages[1]?.text).toContain("Which gripper should I use?");
+      expect(sentMessages[1]?.text).not.toContain("Thread communication quick start");
+      await detectAttentionEvents({ clientFactory, now });
+      await deliverPendingNotifications({ clientFactory, now });
+      expect(sentMessages).toHaveLength(2);
+      // New client/watcher, same persisted history.
+      const restarted = createClientFactory({ sourceThread: waiting() });
+      clock += 20 * 60_000;
+      await detectAttentionEvents({ clientFactory: restarted.clientFactory, now });
+      await deliverPendingNotifications({ clientFactory: restarted.clientFactory, now });
+      expect(restarted.sentMessages).toHaveLength(0);
+    });
+  });
+  it.each([0, 10])(
+    "respects a configured %s-minute interval without suppressing initial input",
+    async (minutes) => {
+      await withTempState(async () => {
+        const persisted = await loadState();
+        await saveState({
+          ...persisted,
+          subscriptions: persisted.subscriptions.map((route) => ({
+            ...route,
+            level: "none",
+            inputReminderMinutes: minutes,
+          })),
+        });
+        const factory = createClientFactory({ sourceThread: waiting() });
+        let clock = start;
+        const now = () => new Date(clock).toISOString();
+        await detectAttentionEvents({ clientFactory: factory.clientFactory, now });
+        await deliverPendingNotifications({ clientFactory: factory.clientFactory, now });
+        expect(factory.sentMessages).toHaveLength(1);
+        clock += 10 * 60_000;
+        await detectAttentionEvents({ clientFactory: factory.clientFactory, now });
+        await deliverPendingNotifications({ clientFactory: factory.clientFactory, now });
+        expect(factory.sentMessages).toHaveLength(minutes === 0 ? 1 : 2);
+      });
+    },
+  );
+  it.each(["answered", "settled", "archived", "unnested"])(
+    "cancels an already detected reminder when the child is %s",
+    async (change) => {
+      await withTempState(async () => {
+        let clock = start;
+        const now = () => new Date(clock).toISOString();
+        const first = createClientFactory({ sourceThread: waiting() });
+        await detectAttentionEvents({ clientFactory: first.clientFactory, now });
+        await deliverPendingNotifications({ clientFactory: first.clientFactory, now });
+        clock += 20 * 60_000;
+        await detectAttentionEvents({ clientFactory: first.clientFactory, now });
+        const changed = waiting();
+        if (change === "answered") changed.activities = [];
+        if (change === "settled") changed.settledOverride = "settled";
+        if (change === "archived") changed.archivedAt = now();
+        if (change === "unnested") changed.parentThreadId = null;
+        const next = createClientFactory({ sourceThread: changed });
+        await deliverPendingNotifications({ clientFactory: next.clientFactory, now });
+        expect(next.sentMessages).toEqual([]);
+        expect((await loadState()).notifications.at(-1)?.status).toBe("superseded");
+      });
+    },
+  );
 });
