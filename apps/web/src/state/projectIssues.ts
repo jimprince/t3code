@@ -20,3 +20,9 @@ export const settleProjectRequest = createEnvironmentRpcCommand(connectionAtomRu
   label: "environment-data:project-requests:settle",
   tag: WS_METHODS.projectRequestsSettle,
 });
+
+/** The New request box marks its message as an explicit request before sending it. */
+export const submitProjectRequest = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "environment-data:project-requests:submit",
+  tag: WS_METHODS.projectRequestsSubmit,
+});
