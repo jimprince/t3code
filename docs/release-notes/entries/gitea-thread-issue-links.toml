@@ -1,0 +1,4 @@
+id = "gitea-thread-issue-links"
+category = "feature"
+functionality = "threads"
+text = "Link Gitea issues to threads and open their status badges from the sidebar or thread header."
