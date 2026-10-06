@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "64ec229b0bf0846463540283939bd36a8c682488",
-  "head": "82cfca2432dcf64960cf63f8c92f26754e2ef87e",
+  "prev": "54b01bbebab7b223d76b92295bda90702bcd689e",
+  "head": "19ae7452a2c5414f651d5088e390931e34920f51",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -28,12 +28,12 @@
     "fork-orcaslicer-handoff",
     "fork-3mf-preview",
     "fork-step-preview",
-    "fork-t3-thread-prebuilt"
-  ],
-  "unapplied": [
+    "fork-t3-thread-prebuilt",
     "fork-embedded-pages",
     "fork-sandbox-session-recovery",
-    "fork-thread-client-recovery",
+    "fork-thread-client-recovery"
+  ],
+  "unapplied": [
     "fork-conversation-fork",
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
@@ -128,7 +128,7 @@
       "oid": "dc99bd0ac57507bb9ab87f4f036790711281764e"
     },
     "fork-embedded-pages": {
-      "oid": "9fed6bed3ad578cdf2d62774aa0c4b2783b73305"
+      "oid": "b23f5d29b1c5e346b8e964aa4c89d94963ae0342"
     },
     "fork-enter-sends-queued": {
       "oid": "d851478183b81565100c8b76fd0976f9b41f5775"
@@ -263,7 +263,7 @@
       "oid": "1eff394be63e032bea3ec7090753040a7678d77d"
     },
     "fork-sandbox-session-recovery": {
-      "oid": "3a0f2e6542c4f076fc5bbcbe720d7d022fbb7fc0"
+      "oid": "2fb4238c3864e72e54fe5fccbd39c6f1b8136c5e"
     },
     "fork-scripts-automations": {
       "oid": "7a30d59c9b3dd2e5f02ac78802f4bc7560142d4a"
@@ -290,7 +290,7 @@
       "oid": "82cfca2432dcf64960cf63f8c92f26754e2ef87e"
     },
     "fork-thread-client-recovery": {
-      "oid": "2b6286cc12db002fd7737a821a541a995c725c4a"
+      "oid": "19ae7452a2c5414f651d5088e390931e34920f51"
     },
     "fork-thread-history-compatibility": {
       "oid": "fefa86f42a7a4aae270598719920fd6e74a7b855"
