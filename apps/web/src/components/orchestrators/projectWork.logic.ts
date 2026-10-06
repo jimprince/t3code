@@ -142,10 +142,11 @@ export function deriveBlocked(input: {
         key: `blocked-by:${issueKey(issue)}`,
         kind: "blocked-by",
         title: issue.title,
-        cause: `Blocked by ${blockers.map((blocker) => `#${blocker.number}`).join(", ")}`,
+        // Named by title: the row says what it waits on, not an issue number.
+        cause: `Blocked by ${blockers.map((blocker) => blocker.title).join(", ")}`,
         owner,
-        next: `Finish #${first.number}`,
-        action: { label: `Open #${first.number}`, url: first.url },
+        next: null,
+        action: { label: "Open blocker", url: first.url },
       });
       continue;
     }
