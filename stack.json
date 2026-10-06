@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "4db098b72b42d7e56827774a1aeb7caa253ae172",
-  "head": "d44c7bfe3a4e8aba836f12bc8cb7773065ccf2cf",
+  "prev": "2c4929b4315f854732328e72db2e12831a957a6b",
+  "head": "368d3516295c5d8420dc001368d324f729431c65",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -23,14 +23,14 @@
     "fork-desktop-delivery",
     "fork-mobile-delivery",
     "fork-gitea-pr-browser",
-    "fork-auth-session-refresh"
-  ],
-  "unapplied": [
+    "fork-auth-session-refresh",
     "fork-inline-3d-objects",
     "fork-orcaslicer-handoff",
     "fork-3mf-preview",
     "fork-step-preview",
-    "fork-t3-thread-prebuilt",
+    "fork-t3-thread-prebuilt"
+  ],
+  "unapplied": [
     "fork-embedded-pages",
     "fork-sandbox-session-recovery",
     "fork-thread-client-recovery",
@@ -86,7 +86,7 @@
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
-      "oid": "687453f8eda47267d16de2f42fd0e922a553c5d4"
+      "oid": "ec839e78b6eff2ee14b73e178ecaf6a15cc3040b"
     },
     "fork-agent-panel-thread-details": {
       "oid": "a3dc42737257cb33831541ff06d2de0192433813"
@@ -155,7 +155,7 @@
       "oid": "d7792d25626704fb169bdc3bade1c14823b23344"
     },
     "fork-inline-3d-objects": {
-      "oid": "f7a03c054e17a93b140690e605db701dc257120b"
+      "oid": "08a4a466bfa21512c585412751d3e609bacf4eae"
     },
     "fork-interrupted-turn-rewind": {
       "oid": "d2632aadcb88fc240e62ae6e96a435cbb213dfd6"
@@ -179,7 +179,7 @@
       "oid": "ed5483647974f6a17a903825115edef03a81cd9d"
     },
     "fork-orcaslicer-handoff": {
-      "oid": "5bfaa741136f5e615b48d6edadc8cd9d7f89ab67"
+      "oid": "8dbb85915bbcd8be9fc5579ac95dc0868122c414"
     },
     "fork-orchestrator-focus": {
       "oid": "92cb59dd97150f3203dcde5ac3ebe39321fbe1d2"
@@ -281,13 +281,13 @@
       "oid": "3c0308091b5b5cd900dc5186198679e32e2efe98"
     },
     "fork-step-preview": {
-      "oid": "1b2ef3f74125f6160bcc18467510d5b9bb1221f0"
+      "oid": "28422db35bbf505fb6551cb1adf97c56e45f08f7"
     },
     "fork-subthread-lifecycle": {
       "oid": "c97f6cdc0e21603de2e570d7aa33ffa8cadff867"
     },
     "fork-t3-thread-prebuilt": {
-      "oid": "24638b0153c810066fbc85c369df4c079f668270"
+      "oid": "368d3516295c5d8420dc001368d324f729431c65"
     },
     "fork-thread-client-recovery": {
       "oid": "2b6286cc12db002fd7737a821a541a995c725c4a"
