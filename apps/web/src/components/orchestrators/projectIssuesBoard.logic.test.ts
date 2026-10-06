@@ -25,7 +25,7 @@ function issue(number: number, overrides: Partial<ProjectIssue> = {}): ProjectIs
 }
 
 describe("groupProjectIssues", () => {
-  it("sorts tasks into the four status lanes from the shared statuses, and folds backlog", () => {
+  it("sorts tasks into the four status lanes from the shared statuses, and folds Later", () => {
     const { lanes, backlog } = groupProjectIssues(
       [
         issue(1, { status: "needs-review" }),
@@ -34,6 +34,7 @@ describe("groupProjectIssues", () => {
         issue(4, { status: "backlog" }),
         issue(5, { status: "done", closedAt: "2026-10-02T00:00:00.000Z" }),
         issue(6, { status: "archived" }),
+        issue(7, { labels: ["parked"] }),
         issue(8),
       ],
       new Map([
@@ -49,7 +50,9 @@ describe("groupProjectIssues", () => {
     expect(lanes["for-review"].map((item) => item.number)).toEqual([1, 8]);
     expect(lanes.active.map((item) => item.number)).toEqual([2]);
     expect(lanes.pending.map((item) => item.number)).toEqual([3]);
-    expect(backlog.map((item) => item.number)).toEqual([4]);
+    // Backlog and the roadmap's Later (parked) fold the same way, so the Dashboard's
+    // Pending count (Later left out) matches the board's Pending lane.
+    expect(backlog.map((item) => item.number)).toEqual([4, 7]);
     expect(lanes.complete.map((item) => item.number)).toEqual([5]);
   });
 
