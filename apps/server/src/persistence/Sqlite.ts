@@ -1,3 +1,5 @@
+import * as Migrator from "effect/sql/Migrator";
+import { initializeMetadata } from "../forkThreads/MetadataStore.ts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as FileSystem from "effect/FileSystem";
@@ -25,6 +27,19 @@ const layerSetup = Layer.effectDiscard(
     yield* sql.unsafe(`PRAGMA journal_size_limit = ${WAL_SIZE_LIMIT_BYTES};`);
     yield* runMigrations();
     yield* runForkMigrations();
+    // Import sidecar metadata once per persistence environment.
+    yield* initializeMetadata(sql).pipe(
+      Effect.catchTags({
+        SchemaError: (cause) =>
+          Effect.fail(
+            new Migrator.MigrationError({
+              kind: "ImportError",
+              message: "Failed to import fork thread metadata.",
+              cause,
+            }),
+          ),
+      }),
+    );
   }),
 );
 
