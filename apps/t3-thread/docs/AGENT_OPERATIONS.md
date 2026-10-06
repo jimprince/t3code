@@ -1042,9 +1042,25 @@ the same on the Tasks board, the Roadmap and in Needs you: Pending, Active (mark
 or a worker thread linked to it is working), For review (waiting on Brad, shipped work to test
 included) or Complete (closed). Use these words when you report to him.
 
-A project page (the orchestrator's dashboard) is an ordered list of widgets: requests, needs-you,
-release, roadmap, working, blocked, done, new-request, issues, prs, canvas, automations. Brad
-changes it with Customize; an orchestrator can set it for him:
+A project page has a layout: tabs (Dashboard, Roadmap and Tasks to start), each an ordered list of
+widgets. It is one document per project, shared by every client, and changes show everywhere at
+once. Brad edits it with Edit layout (drag tabs and widgets, add, remove, resize, settings). When
+he asks you to change it ("add a Roadmap tab", "don't show Later on the Dashboard", "put the
+funnel canvas next to Release"), the project's orchestrator uses the T3 MCP tools; workers can
+read the layout and its history but not change it:
+
+- `project_layout_get`: the layout, its revision, and every widget type you can add with its
+  settings (for example `includeLater` on requests, `pendingPreview` on the Tasks board,
+  `canvasId` on a canvas, `text` on a note, `items` on links).
+- `project_layout_update { baseRevision, ops, reason }`: ops such as `addTab`, `renameTab`,
+  `moveTab`, `removeTab`, `addWidget`, `moveWidget`, `removeWidget`, `setWidgetConfig`,
+  `setWidgetTitle`, `setWidgetSize` (small, medium, full) and `replaceLayout`. Ops address tabs
+  and widgets by id; if one fails nothing changes and the error carries the current layout.
+  Always give a short reason: it is kept with the revision in `project_layout_history`.
+- `project_layout_history` and `project_layout_revert { revision }` (0 is the default layout).
+
+The CLI still sets the first tab's widgets by their older ids (requests, needs-you, release,
+maintenance, roadmap, working, blocked, done, new-request, issues, prs, canvas, automations):
 
 ```bash
 t3-thread dashboard show "$T3_THREAD_ID"

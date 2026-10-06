@@ -6,17 +6,12 @@ import {
 
 import { connectionAtomRuntime } from "../connection/runtime";
 
-/** A project page's widget order and Gitea tracker repository. */
+/** A project's Gitea tracker repository (the widget order lives in the project layout). */
 export const projectDashboardQuery = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
   label: "environment-data:project-dashboard:get",
   tag: WS_METHODS.projectDashboardGet,
   staleTimeMs: 30_000,
   idleTtlMs: 0,
-});
-
-export const setProjectDashboardWidgets = createEnvironmentRpcCommand(connectionAtomRuntime, {
-  label: "environment-data:project-dashboard:set-widgets",
-  tag: WS_METHODS.projectDashboardSetWidgets,
 });
 
 export const setProjectDashboardTracker = createEnvironmentRpcCommand(connectionAtomRuntime, {
