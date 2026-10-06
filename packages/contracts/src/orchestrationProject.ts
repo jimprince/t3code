@@ -1,3 +1,4 @@
+import { PermanentAgent } from "./namedAgents.ts";
 import * as Schema from "effect/Schema";
 
 import { IsoDateTime, ProjectId, TrimmedNonEmptyString } from "./baseSchemas.ts";
@@ -7,6 +8,7 @@ import { ProjectScript, ReceivedProjectIcon } from "./project.ts";
 
 /** Project summary shared by the V2 shell and application project APIs. */
 export const OrchestrationProjectShell = Schema.Struct({
+  permanentAgent: Schema.optional(Schema.NullOr(PermanentAgent)),
   kind: Schema.optional(Schema.Literals(["workspace", "chat"])),
   id: ProjectId,
   title: TrimmedNonEmptyString,
