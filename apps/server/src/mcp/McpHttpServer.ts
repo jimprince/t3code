@@ -33,6 +33,8 @@ import {
 import { PullRequestsToolkitHandlersLive } from "./toolkits/pullRequests/handlers.ts";
 import { PullRequestsToolkit } from "./toolkits/pullRequests/tools.ts";
 import { ThreadIssuesToolkitHandlersLive } from "./toolkits/issues/handlers.ts";
+import { DecisionsToolkitHandlersLive } from "./toolkits/decisions/handlers.ts";
+import { DecisionsToolkit } from "./toolkits/decisions/tools.ts";
 import { ThreadIssuesToolkit } from "./toolkits/issues/tools.ts";
 import { ProjectLayoutToolkitHandlersLive } from "./toolkits/projectLayout/handlers.ts";
 import { ProjectLayoutToolkit } from "./toolkits/projectLayout/tools.ts";
@@ -655,6 +657,10 @@ const ThreadIssuesToolkitRegistrationLive = McpServer.toolkit(ThreadIssuesToolki
   Layer.provide(ThreadIssuesToolkitHandlersLive),
 );
 
+const DecisionsToolkitRegistrationLive = McpServer.toolkit(DecisionsToolkit).pipe(
+  Layer.provide(DecisionsToolkitHandlersLive),
+);
+
 const ProjectLayoutToolkitRegistrationLive = McpServer.toolkit(ProjectLayoutToolkit).pipe(
   Layer.provide(ProjectLayoutToolkitHandlersLive),
 );
@@ -683,6 +689,7 @@ export const layer = Layer.mergeAll(
   PreviewToolkitRegistrationLive,
   PullRequestsToolkitRegistrationLive,
   ThreadIssuesToolkitRegistrationLive,
+  DecisionsToolkitRegistrationLive,
   ProjectLayoutToolkitRegistrationLive,
   DeviceToolkitRegistrationLive,
 ).pipe(Layer.provideMerge(McpTransportLive));
