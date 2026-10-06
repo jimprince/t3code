@@ -48,6 +48,7 @@ export interface ExecutionEnvironmentDescriptor {
     threadNesting?: boolean;
     remoteThreadNesting?: boolean;
     threadIssues?: boolean;
+    projectItemTypes?: boolean;
   };
 }
 

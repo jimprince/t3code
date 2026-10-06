@@ -248,6 +248,7 @@ export const make = Effect.gen(function* () {
       threadIssues: true,
       projectIssues: true,
       projectIssueDetail: true,
+      projectItemTypes: true,
       environmentIcon: true,
       projectCloneTracking: true,
       projectLayout: true,
