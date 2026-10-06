@@ -135,6 +135,7 @@ export interface EnvironmentThreadShell {
   readonly activeOrderKey: string | null;
   /** Moves on every fork sidecar nesting write; `undefined` means the server predates it. */
   readonly forkMetadataRevision?: number;
+  readonly subproject?: "auto" | "on" | "off";
   readonly issues?: ReadonlyArray<import("@t3tools/contracts").ThreadIssueLink>;
   readonly pullRequests: ReadonlyArray<import("@t3tools/contracts").ThreadPullRequestLink>;
   readonly linkedPullRequest?: ThreadLinkedPullRequest | null;
