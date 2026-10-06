@@ -6,6 +6,8 @@ import type { MouseEvent } from "react";
 import { useEmbeddedPages } from "./embeddedPages/useEmbeddedPages";
 import { InlineButton } from "./ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import type { ProjectReturnLocation } from "./orchestrators/projectNavigation";
+import { projectReturnState } from "./orchestrators/projectNavigation";
 
 const STATUS_BOARD_ORIGIN = "https://control.bradleyprince.com:8450";
 
@@ -38,7 +40,13 @@ export function resolveThreadIssueBadgeTarget(
   };
 }
 
-export function ThreadIssueBadges({ issues }: { readonly issues: readonly ThreadIssueLink[] }) {
+export function ThreadIssueBadges({
+  issues,
+  projectReturn,
+}: {
+  readonly issues: readonly ThreadIssueLink[];
+  readonly projectReturn?: ProjectReturnLocation;
+}) {
   const pages = useEmbeddedPages();
   const navigate = useNavigate();
   return issues.map((issue) => {
@@ -54,6 +62,7 @@ export function ThreadIssueBadges({ issues }: { readonly issues: readonly Thread
           to: "/embedded/$pageId",
           params: { pageId: target.pageId },
           search: { repo: target.repo, issue: target.issue },
+          ...(projectReturn ? { state: projectReturnState(projectReturn) } : {}),
         });
       }
     };
