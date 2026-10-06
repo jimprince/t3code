@@ -165,6 +165,12 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   threadIssues: Schema.optionalKey(Schema.Boolean),
   /** Server lists a project tree's Gitea issues for the project board. */
   projectIssues: Schema.optionalKey(Schema.Boolean),
+  /** Server understands projectIssues.get, which the task panel reads. Absent on
+      older servers, where the panel shows the task from the issue list instead. */
+  projectIssueDetail: Schema.optionalKey(Schema.Boolean),
+  /** Server accepts the question, task and epic request kinds. Absent on older servers,
+      which only know the earlier kinds, so the CLI files a request under one of those. */
+  projectItemTypes: Schema.optionalKey(Schema.Boolean),
   pullRequestStackActions: Schema.optionalKey(Schema.Boolean),
   /** The update path clients should offer for this server. Absent on
       servers that must be relaunched manually (dev checkouts, Windows
