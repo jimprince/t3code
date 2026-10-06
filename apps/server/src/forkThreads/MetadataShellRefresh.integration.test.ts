@@ -14,6 +14,7 @@ import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterReg
 import { makeOrchestratorV2ReplayLayerWithRegistry } from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
 import { makeNestingService } from "./NestingService.ts";
 
+const decodeCliMetadata = Schema.decodeUnknownSync(ForkThreadMetadataUpdate);
 const database = SqlitePersistenceMemory;
 const runtime = makeOrchestratorV2ReplayLayerWithRegistry(
   { name: "fork-metadata-shell-refresh" },
@@ -106,6 +107,9 @@ it.effect(
         1,
       );
       const cliRequests: ForkThreadMetadataUpdate[] = [];
+      let receiveRpc!: (value: ForkThreadMetadataUpdate) => void;
+      let finishRpc!: (value: ForkThreadMetadata) => void;
+      let cliResponse!: Promise<ForkThreadMetadata>;
       const cliArguments = [
         {
           name: "cli-refresh",
@@ -128,9 +132,12 @@ it.effect(
           rpcFactory: () => ({
             request: async <T>(method: string, payload: unknown): Promise<T> => {
               assert.equal(method, "threadMetadataUpdate");
-              const value = Schema.decodeUnknownSync(ForkThreadMetadataUpdate)(payload);
+              const value = decodeCliMetadata(payload);
               cliRequests.push(value);
-              return (await Effect.runPromise(service.update(value))) as T;
+              return (await new Promise<ForkThreadMetadata>((resolve) => {
+                finishRpc = resolve;
+                receiveRpc(value);
+              })) as T;
             },
             subscribeShellSnapshot: async <T>(): Promise<T> => {
               throw new Error("Unused snapshot");
@@ -156,7 +163,16 @@ it.effect(
         };
       };
       const cli = new cliModule.RemoteEnvironmentClient(...cliArguments);
-      const cliResult = yield* Effect.tryPromise(() => cli.setThreadParent(threadId, parentId));
+      const cliRequest = yield* Effect.callback<ForkThreadMetadataUpdate, Error>((resume) => {
+        receiveRpc = (value) => resume(Effect.succeed(value));
+        cliResponse = cli.setThreadParent(threadId, parentId);
+        void cliResponse.catch((cause) =>
+          resume(Effect.fail(new Error("CLI update failed", { cause }))),
+        );
+      });
+      // The test fiber services the real CLI request, then releases its RPC response.
+      finishRpc(yield* service.update(cliRequest));
+      const cliResult = yield* Effect.tryPromise(() => cliResponse);
       assert.equal(cliResult.parentThreadId, parentId);
       assert.equal(cliRequests.length, 1);
       const cliRefresh = yield* Stream.runCollect(
