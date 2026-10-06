@@ -48,7 +48,10 @@ describe("worker completion creation", () => {
         return { sequence: 1 };
       });
       const client = new RemoteEnvironmentClient(environment, {
-        descriptorFactory: async () => ({ ...await descriptorFixture(environment)(), capabilities: { threadNesting: true } }),
+        descriptorFactory: async () => ({
+          ...(await descriptorFixture(environment)()),
+          capabilities: { threadNesting: true },
+        }),
         rpcFactory: () => ({
           request,
           dispose: vi.fn(async () => undefined),

@@ -243,7 +243,10 @@ it.effect(
         },
       });
       const retentionShell = (yield* store.getThreadShell(threadId))!;
-      assert.equal(archiveDeadline(retentionShell, 7), DateTime.toEpochMillis(now) + 7 * 86_400_000);
+      assert.equal(
+        archiveDeadline(retentionShell, 7),
+        DateTime.toEpochMillis(now) + 7 * 86_400_000,
+      );
       yield* Effect.scoped(
         Effect.gen(function* () {
           const first = yield* WorkerLifecycle.WorkerLifecycle;
