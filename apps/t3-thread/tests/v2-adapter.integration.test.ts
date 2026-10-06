@@ -1,3 +1,5 @@
+import { drainQueuedSends } from "../src/sendQueue.js";
+import { loadState, saveState } from "../src/state.js";
 import { createServer } from "node:net";
 import { spawn, execFileSync } from "node:child_process";
 import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
@@ -178,6 +180,8 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
       name: "fixture",
       ...resolvePairingTarget({ pairingUrl }),
     });
+    const operatorState = await loadState();
+    await saveState({ ...operatorState, environments: [paired] });
     const client = new RemoteEnvironmentClient(paired);
     expect((await client.describe()).orchestrationProtocolVersion).toBe(2);
     const project =
@@ -291,6 +295,44 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
     );
     const queued = await client.sendMessage({ threadId: created.threadId, text: "Follow-up" });
     expect(queued.queued).toBe(true);
+    const sender = { source: "thread-send", fromThreadId: "sender" };
+    const first = await client.sendMessage({
+      threadId: created.threadId,
+      text: "status 1",
+      origin: sender,
+      senderEnvironment: "one",
+      coalesceKey: "status",
+    });
+    const ordinary = await client.sendMessage({
+      threadId: created.threadId,
+      text: "ordinary instruction",
+      origin: sender,
+      senderEnvironment: "one",
+    });
+    const foreign = await client.sendMessage({
+      threadId: created.threadId,
+      text: "foreign status",
+      origin: sender,
+      senderEnvironment: "two",
+      coalesceKey: "status",
+    });
+    const latest = await client.sendMessage({
+      threadId: created.threadId,
+      text: "status 2",
+      origin: sender,
+      senderEnvironment: "one",
+      coalesceKey: "status",
+    });
+    expect(first.queued && ordinary.queued && foreign.queued && latest.queued).toBe(true);
+    const queuedState = await loadState();
+    expect(queuedState.queuedSends.find((record) => record.text === "status 1")?.status).toBe(
+      "cancelled",
+    );
+    expect(
+      queuedState.queuedSends
+        .filter((record) => record.status === "queued")
+        .map((record) => record.text),
+    ).toEqual(["Follow-up", "ordinary instruction", "foreign status", "status 2"]);
     expect(await client.setThreadPinned(created.threadId, true)).toMatchObject({ pinned: true });
     expect(await client.setThreadPinned(created.threadId, false)).toMatchObject({ pinned: false });
     const interrupted = rpc.waitForThreadEvent(created.threadId, (item) =>
@@ -302,6 +344,25 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
     );
     await client.interrupt(created.threadId);
     await interrupted;
+    const drained = await drainQueuedSends({ clientFactory: () => client });
+    expect(drained[0]?.lastError).toBeNull();
+    expect(drained.map((record) => [record.text, record.status])).toEqual([
+      ["Follow-up", "dispatched"],
+    ]);
+    const delivered = rpc.waitForThreadEvent(created.threadId, (item) =>
+      item.kind === "snapshot"
+        ? item.projection.messages.some((message) => message.text === "Follow-up")
+        : item.kind === "event" &&
+          item.event.type === "message.updated" &&
+          item.event.payload.text === "Follow-up",
+    );
+    await delivered;
+    expect(
+      (await client.findThread(created.threadId)).messages.some(
+        (message) => message.text === "status 1",
+      ),
+    ).toBe(false);
+    await client.interrupt(created.threadId);
     expect(await client.settleThread(created.threadId)).toMatchObject({
       settledOverride: "settled",
     });
@@ -325,8 +386,9 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
         executionParentThreadId: null,
         session: null,
       });
-      const shellRefresh = rpc.waitForThreadEvent(child.threadId, item =>
-        item.kind === "event" && item.event.type === "thread.metadata-updated",
+      const shellRefresh = rpc.waitForThreadEvent(
+        child.threadId,
+        (item) => item.kind === "event" && item.event.type === "thread.metadata-updated",
       );
       await client.setThreadParent(child.threadId, null);
       await shellRefresh;
