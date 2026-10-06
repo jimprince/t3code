@@ -4,6 +4,7 @@ import { BrowserProfileReporter } from "./browser/BrowserProfileReporter";
 import { ElectronBrowserHost } from "./browser/ElectronBrowserHost";
 import { QuitHoldOverlay } from "./components/QuitHoldOverlay";
 import { DesktopIdleRestartWatcher } from "./components/sidebar/desktopIdleRestart";
+import { DesktopOvernightUpdateWatcher } from "./components/sidebar/desktopOvernightUpdate";
 import { AppAtomRegistryProvider } from "./rpc/atomRegistry";
 import type { AppRouter } from "./router";
 
@@ -20,6 +21,7 @@ export function AppRoot({ router }: { readonly router: AppRouter }) {
       <BrowserProfileReporter />
       <QuitHoldOverlay />
       <DesktopIdleRestartWatcher />
+      <DesktopOvernightUpdateWatcher />
     </AppAtomRegistryProvider>
   );
 }
