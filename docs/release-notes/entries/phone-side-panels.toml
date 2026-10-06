@@ -1,0 +1,4 @@
+id = "phone-side-panels"
+category = "fix"
+functionality = "projects"
+text = "On a phone, the task panel and the orchestrator chat panel now fill the screen instead of running off its edge, so their text is readable and the close button stays visible."
