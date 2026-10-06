@@ -201,7 +201,22 @@ export function resolveCallerEndpointFromLocalContext(
   threadId: string,
   callerEnvironment: CallerEnvironmentMetadata | null = null,
 ): SubscriptionEndpoint | null {
-  const savedAgent = findAgentByThreadId(state, threadId);
+  // A paired caller descriptor disambiguates cached aliases with colliding UUIDs.
+  const savedEnvironment = callerEnvironment
+    ? (state.environments.find(
+        (environment) => environment.environmentId === callerEnvironment.environmentId,
+      ) ??
+      state.environments.find(
+        (environment) =>
+          environment.name === callerEnvironment.environmentName ||
+          environment.label === callerEnvironment.environmentName,
+      ))
+    : undefined;
+  const savedAgent = state.agents.find(
+    (agent) =>
+      agent.threadId === threadId &&
+      (!savedEnvironment || agent.environment === savedEnvironment.name),
+  );
   if (savedAgent) {
     return {
       threadId: savedAgent.threadId,
@@ -209,17 +224,7 @@ export function resolveCallerEndpointFromLocalContext(
       environment: savedAgent.environment,
     };
   }
-
-  if (!callerEnvironment) {
-    return null;
-  }
-
-  const savedEnvironment = state.environments.find(
-    (environment) =>
-      environment.environmentId === callerEnvironment.environmentId ||
-      environment.name === callerEnvironment.environmentName ||
-      environment.label === callerEnvironment.environmentName,
-  );
+  if (!callerEnvironment) return null;
 
   return {
     threadId,
