@@ -121,6 +121,61 @@ deploy() {
   fi
 }
 
+# Restart only the dedicated user service, after verification and promotion but
+# before removing its old runtime. Other hosts retain on-demand watcher behavior.
+user_systemctl() {
+  local runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+  env XDG_RUNTIME_DIR="$runtime_dir"     DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$runtime_dir/bus}"     systemctl --user "$@"
+}
+
+verify_managed_watcher() {
+  local pid lease_file
+  pid="$(user_systemctl show t3-thread-watcher.service --property=MainPID --value)"
+  lease_file="${T3_AGENT_STATE_FILE:-$HOME/.config/t3-remote-agents/state.json}"
+  node - "${lease_file%/*}/watch.pid" "$pid" "$SNAP_ROOT/current/apps/t3-thread" <<'NODE'
+const fs = require('node:fs/promises');
+const [leasePath, pid, runtime] = process.argv.slice(2);
+async function verify() {
+  if (!/^[1-9][0-9]*$/.test(pid)) throw new Error('Managed watcher has no live PID');
+  const expectedCwd = await fs.realpath(runtime);
+  const deadline = Date.now() + 5000;
+  do {
+    try {
+      const lease = JSON.parse(await fs.readFile(leasePath, 'utf8'));
+      const stat = await fs.readFile(`/proc/${pid}/stat`, 'utf8');
+      const start = stat.slice(stat.lastIndexOf(')') + 2).trim().split(/\s+/)[19];
+      const boot = (await fs.readFile('/proc/sys/kernel/random/boot_id', 'utf8')).trim();
+      const cwd = await fs.readlink(`/proc/${pid}/cwd`);
+      if (lease.pid === Number(pid) && lease.startTime === start && lease.bootId === boot && cwd === expectedCwd) return;
+    } catch { /* The user service can become active before its lease is claimed. */ }
+    await new Promise(resolve => setTimeout(resolve, 100));
+  } while (Date.now() < deadline);
+  throw new Error('Managed watcher does not own the live lease in the promoted runtime');
+}
+verify().catch(error => { console.error(error.message); process.exitCode = 1; });
+NODE
+}
+
+restart_managed_watcher() {
+  local unit=t3-thread-watcher.service load_state
+  load_state="$(user_systemctl show "$unit" --property=LoadState --value 2>/dev/null || true)"
+  if [ "$load_state" != loaded ]; then
+    if [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/$unit" ]; then
+      echo "t3-thread-deploy: cannot load configured user $unit; previous snapshots retained." >&2
+      return 1
+    fi
+    return 0
+  fi
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo "  would restart and verify: user $unit"
+  else
+    user_systemctl restart "$unit" && user_systemctl is-active --quiet "$unit" && verify_managed_watcher || {
+      echo "t3-thread-deploy: watcher restart failed; current is promoted, previous snapshots retained. Repair the user service or repoint current before pruning." >&2
+      return 1
+    }
+  fi
+}
+
 prune() {
   local current_target
   current_target="$(readlink "$SNAP_ROOT/current" 2>/dev/null || true)"
@@ -145,5 +200,8 @@ prune() {
   return 0
 }
 
-[ "$PRUNE_ONLY" -eq 1 ] || deploy
+if [ "$PRUNE_ONLY" -eq 0 ]; then
+  deploy
+  restart_managed_watcher
+fi
 prune
