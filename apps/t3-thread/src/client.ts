@@ -1180,6 +1180,19 @@ export class RemoteEnvironmentClient {
     }
   }
 
+  /** Request ledger: requests are Gitea issues labeled `ask` in the project's tracker. */
+  async projectRequest<T>(
+    method: "projectRequestsCreate" | "projectRequestsUpdate" | "projectRequestsList",
+    input: Record<string, unknown>,
+  ): Promise<T> {
+    const rpc = await this.openRpc();
+    try {
+      return await rpc.request<T>(method, input);
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
   async settleThread(threadId: string, options: { self?: boolean } = {}) {
     if (threadId === resolveCallerThreadId() && !options.self) {
       throw new Error(
