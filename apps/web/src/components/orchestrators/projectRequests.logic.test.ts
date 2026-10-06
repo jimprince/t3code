@@ -11,6 +11,7 @@ import {
   nextReleaseRequests,
   requestKind,
   requestsByWorker,
+  sentRequestStatus,
   taskKind,
 } from "./projectRequests.logic";
 
@@ -337,5 +338,24 @@ describe("saved for later", () => {
     const items = deriveProjectRequests([parked, started], [thread()], tree, NOW, "root");
     expect(items.map((item) => item.issue.number)).toEqual([2]);
     expect(countParked([parked, started], "root")).toBe(1);
+  });
+});
+
+describe("sent from the request box", () => {
+  const filed = (number: number, messageId: string) =>
+    request(number, {
+      requestSource: { threadId: "root" as never, rootThreadId: "root" as never, messageId },
+    });
+
+  it("links every request the ledger filed for the message", () => {
+    const status = sentRequestStatus("m1", [filed(4, "m1"), filed(5, "m2"), filed(6, "m1")], []);
+    expect(status.state === "tracked" && status.issues.map((issue) => issue.number)).toEqual([
+      4, 6,
+    ]);
+  });
+
+  it("says pending filing while Gitea is down, and nothing more before filing", () => {
+    expect(sentRequestStatus("m1", [], [{ messageId: "m1" }])).toEqual({ state: "pending" });
+    expect(sentRequestStatus("m1", [filed(5, "m2")], [])).toEqual({ state: "filing" });
   });
 });
