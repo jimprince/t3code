@@ -44,6 +44,12 @@ in a new thread's model picker to add or remove them. A regular click returns to
 single model. Choose a base branch and send. Each selection starts a separate thread
 and worktree while you stay in the new thread composer. This requires a Git project.
 
+## Delegated workers
+
+Delegated workers nest under the thread that assigned their task and appear in its Agents panel. They start unpinned and settle after successful completion once their own workers finish. A pin or an automatic-settlement opt-out keeps a worker active. Failed or interrupted work stays available for review. Mark a nested thread as a subproject when it needs its own Projects entry.
+
+Agents can move existing threads with `t3_thread_organize`: use `nest` with a `parentThreadId`, or `unnest` to make the thread independent.
+
 ## Pin and reorder threads
 
 Pin a thread from its menu to keep it above your active work.
@@ -63,7 +69,8 @@ files directly; see [Attach files](./composer.md#attach-files).
 On web and desktop, pinning or unpinning a thread keeps the sidebar at your current
 scroll position instead of following the thread to its new place in the list.
 
-Pinning does not prevent automatic settlement. Settling a thread removes its pin.
+Pinned threads are protected from automatic settlement and archive. Manually
+settling a thread removes its pin.
 
 On web and desktop, drag a thread between sections to change its state. Drag a thread up into
 the pinned section to pin it at the spot you drop it; drag a pinned thread down into the active
