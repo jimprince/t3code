@@ -16,7 +16,10 @@ import * as Schema from "effect/Schema";
 
 import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
-import { findRootThreadId } from "../projectIssues/projectIssues.logic.ts";
+import {
+  findProjectRootThreadId,
+  resolveProjectTracker,
+} from "../projectIssues/projectIssues.logic.ts";
 import { legacyWidgetOrder, widgetOrderOps } from "@t3tools/contracts";
 import type * as ProjectLayoutService from "../projectLayout/ProjectLayoutService.ts";
 import { normalizeWidgets, resolveTrackerSetting } from "./projectDashboard.logic.ts";
@@ -38,21 +41,28 @@ export const make = (
     const snapshots = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
     const settings = yield* ServerSettingsService;
 
-    /** Any thread's orchestrator (root) thread and that thread's T3 project. */
+    /** Any thread's project root (top-level or subproject) thread and that thread's T3 project. */
     const resolveRoot = (threadId: ThreadId) =>
       Effect.gen(function* () {
         const snapshot = yield* snapshots
           .getShellSnapshot()
           .pipe(Effect.mapError(() => fail("Could not read threads.")));
-        const rootThreadId = findRootThreadId(snapshot.threads, threadId);
+        const rootThreadId = findProjectRootThreadId(snapshot.threads, threadId);
         const root = snapshot.threads.find((thread) => thread.id === rootThreadId);
         if (!root) return yield* fail(`Thread '${threadId}' was not found.`);
-        return { rootThreadId: root.id, rootProjectId: root.projectId };
+        // A subproject keeps its own tracker under its thread id; a top-level
+        // project keeps it under the T3 project id, as before.
+        return {
+          rootThreadId: root.id,
+          rootProjectId: root.projectId,
+          trackerKey: root.parentThreadId ? root.id : root.projectId,
+          threads: snapshot.threads,
+        };
       });
 
     const get = (input: ProjectDashboardGetInput) =>
       Effect.gen(function* () {
-        const { rootThreadId, rootProjectId } = yield* resolveRoot(input.threadId);
+        const { rootThreadId, rootProjectId, threads } = yield* resolveRoot(input.threadId);
         const file = yield* store.read;
         const layout = yield* layouts
           .get(rootThreadId)
@@ -64,7 +74,7 @@ export const make = (
             layout.revision > 0
               ? legacyWidgetOrder(layout.tabs)
               : (file.dashboards[rootThreadId]?.widgets ?? null),
-          tracker: file.trackers[rootProjectId] ?? null,
+          tracker: resolveProjectTracker(file.trackers, threads, rootThreadId),
           health: Option.getOrNull(decodeHealth(file.health[rootThreadId])),
         } satisfies ProjectDashboard;
       });
@@ -93,7 +103,7 @@ export const make = (
 
     const setTracker = (input: ProjectDashboardSetTrackerInput) =>
       Effect.gen(function* () {
-        const { rootProjectId } = yield* resolveRoot(input.threadId);
+        const { trackerKey } = yield* resolveRoot(input.threadId);
         if (input.tracker !== null) {
           const config = yield* settings.getSettings.pipe(
             Effect.mapError(() => fail("Could not read configured Gitea connections.")),
@@ -107,8 +117,8 @@ export const make = (
         yield* store
           .modify((file) => {
             const trackers = { ...file.trackers };
-            if (input.tracker === null) delete trackers[rootProjectId];
-            else trackers[rootProjectId] = input.tracker.trim();
+            if (input.tracker === null) delete trackers[trackerKey];
+            else trackers[trackerKey] = input.tracker.trim();
             return { ...file, trackers };
           })
           .pipe(Effect.mapError(() => fail("Could not save the tracker repository.")));
