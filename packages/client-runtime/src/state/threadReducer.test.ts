@@ -363,6 +363,29 @@ describe("applyThreadDetailEvent", () => {
     });
   });
 
+  describe("thread.subproject-set", () => {
+    it("stores the subproject mode", () => {
+      const result = applyThreadDetailEvent(baseThread, {
+        ...baseEventFields,
+        sequence: 9,
+        occurredAt: "2026-04-01T07:00:00.000Z",
+        aggregateKind: "thread",
+        aggregateId: ThreadId.make("thread-1"),
+        type: "thread.subproject-set",
+        payload: {
+          threadId: ThreadId.make("thread-1"),
+          mode: "on",
+          source: "user",
+          updatedAt: "2026-04-01T07:00:00.000Z",
+        },
+      });
+      expect(result.kind).toBe("updated");
+      if (result.kind === "updated") {
+        expect(result.thread.subproject).toBe("on");
+      }
+    });
+  });
+
   describe("thread.meta-updated", () => {
     it.each(["f", null] as const)(
       "updates the active key to %s without activity",
