@@ -1,10 +1,12 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Result from "effect/Result";
+import * as Scope from "effect/Scope";
 import * as Schema from "effect/Schema";
 import { createModelSelection } from "@t3tools/shared/model";
 import { afterEach, expect, vi } from "vite-plus/test";
@@ -216,6 +218,24 @@ it.layer(CodexTextGenerationTestLayer)("CodexTextGeneration", (it) => {
           "Failed to write temp file in /nonexistent/t3code-temp-test",
         );
         expect(error.detail).toContain("NotFound");
+      }),
+    ),
+  );
+  // fork.29 dev VM (#144): the request ledger's detached split inherited a closed
+  // request scope, so the temp folder was removed as soon as it was made.
+  it.effect("writes its temp files even when the caller's scope is already closed", () =>
+    withFakeCodexEnv({ output: JSON.stringify({ title: "Scoped title" }) }, (textGeneration) =>
+      Effect.gen(function* () {
+        const closed = yield* Scope.make();
+        yield* Scope.close(closed, Exit.void);
+        const result = yield* textGeneration
+          .generateThreadTitle({
+            cwd: process.cwd(),
+            message: "Describe this change",
+            modelSelection: createModelSelection(ProviderInstanceId.make("codex"), "gpt-5.6-luna"),
+          })
+          .pipe(Effect.provideService(Scope.Scope, closed));
+        expect(result.title).toBe("Scoped title");
       }),
     ),
   );
