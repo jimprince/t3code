@@ -15,8 +15,6 @@ const RPC_METHODS = {
   threadMetadataList: "fork.threads.metadata.list",
   threadMetadataUpdate: "fork.threads.metadata.update",
   threadOrderReset: "fork.threads.order.reset",
-  forkMetadataList: "fork.threads.metadata.list",
-  forkMetadataUpdate: "fork.threads.metadata.update",
   projectsMutate: "projects.mutate",
   launchThread: ORCHESTRATION_V2_WS_METHODS.launchThread,
   serverGetConfig: WS_SERVER_GET_CONFIG_METHOD,

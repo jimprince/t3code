@@ -1036,15 +1036,6 @@ for (const operation of ["pin", "unpin"] as const) {
     });
 }
 
-agent.command("nest").argument("<name>").requiredOption("--parent <parent>", "supervising thread").action(async (name, options) => {
-  const { agent: savedAgent, client } = await withAgent(name);
-  const state = await loadState();
-  printJson(await client.nestThread(savedAgent.threadId, resolveParentThreadId(state, options.parent, savedAgent.environment)));
-});
-agent.command("unnest").argument("<name>").action(async name => {
-  const { agent: savedAgent, client } = await withAgent(name);
-  printJson(await client.nestThread(savedAgent.threadId, null));
-});
 
 agent
   .command("order")
