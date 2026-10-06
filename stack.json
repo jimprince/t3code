@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "dc2064257e33a7f719bcabe7bf10b94f978daa2e",
-  "head": "3bf41afaba7fca173f45ce9320b6eed8fd7dac0c",
+  "prev": "4192175bcbe08131df98c6c7962abc3104fa0a36",
+  "head": "dc1fcc04a60317583d256446359ea020ba5832c4",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -290,7 +290,7 @@
       "oid": "82cfca2432dcf64960cf63f8c92f26754e2ef87e"
     },
     "fork-thread-client-recovery": {
-      "oid": "3bf41afaba7fca173f45ce9320b6eed8fd7dac0c"
+      "oid": "dc1fcc04a60317583d256446359ea020ba5832c4"
     },
     "fork-thread-history-compatibility": {
       "oid": "fefa86f42a7a4aae270598719920fd6e74a7b855"
