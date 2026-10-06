@@ -581,7 +581,7 @@ export const make = Effect.gen(function* () {
       for (const providerThread of projection.providerThreads ?? []) {
         const needsIdle = providerThread.status === "active";
         const needsRosterClear = providerThreadHasPendingBackgroundTasks(providerThread);
-        if (!needsIdle && !needsRosterClear) {
+        if (!needsIdle && !needsRosterClear && providerThread.codexNativeGoal == null) {
           continue;
         }
         if (providerThread.ownerNodeId === null) {
@@ -601,6 +601,7 @@ export const make = Effect.gen(function* () {
           payload: {
             ...providerThread,
             status: needsIdle ? "idle" : providerThread.status,
+            codexNativeGoal: null,
             pendingBackgroundTasks: [],
             updatedAt: now,
           },
@@ -741,7 +742,8 @@ export const make = Effect.gen(function* () {
           ),
         );
         const enabled =
-          allowAutomaticResume && continueAfterRestart !== null &&
+          allowAutomaticResume &&
+          continueAfterRestart !== null &&
           resolveProjectSettings(continueAfterRestart, projection.thread.projectId).settings
             .continueThreadsAfterServerUpdate;
         const result = yield* reconcileProjection(projection, trigger, enabled);

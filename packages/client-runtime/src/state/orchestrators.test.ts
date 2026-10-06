@@ -438,6 +438,30 @@ describe("lastActivityAt", () => {
   });
 });
 
+describe("active Codex goal", () => {
+  const goal = { objective: "Ship it", status: "active" as const };
+  it("keeps a goal-running worker working between turns, but not over a failed run", () => {
+    const between = thread("goal-between", null, { codexNativeGoal: goal });
+    expect(isThreadWorking(between)).toBe(true);
+    const groups = buildStandaloneThreadGroups([between], [project("project-a")], {});
+    expect(groups[0]?.threads[0]?.status).toBe("working");
+    const failed = thread("goal-failed", null, {
+      codexNativeGoal: goal,
+      session: {
+        threadId: "goal-failed" as EnvironmentThreadShell["id"],
+        status: "error",
+        providerName: "codex",
+        runtimeMode: "full-access",
+        activeTurnId: null,
+        updatedAt: "2026-10-01T03:00:00.000Z",
+        lastError: "boom",
+      },
+    });
+    expect(isThreadWorking(failed)).toBe(false);
+    expect(buildStandaloneThreadGroups([failed], [project("project-a")], {})).toHaveLength(0);
+  });
+});
+
 describe("isThreadWorking", () => {
   it("is false for a dev server or monitor and true for an active run or subagent", () => {
     const devServer = thread("dev-server", null, {

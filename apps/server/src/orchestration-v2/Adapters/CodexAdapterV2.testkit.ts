@@ -64,6 +64,11 @@ export function withCodexReplayChildMetadata(
   );
   return {
     ...client,
+    // Recorded transcripts predate the read-only native goal query.
+    request: ((method, params) =>
+      method === "thread/goal/get"
+        ? Effect.succeed({ goal: null })
+        : client.request(method, params)) as CodexClient.CodexAppServerClient["Service"]["request"],
     raw: {
       ...client.raw,
       request: (method, params) =>
