@@ -135,3 +135,27 @@ export function parseRequestReference(
     ? { repository: path[1]!.toLowerCase(), number: Number(path[2]) }
     : null;
 }
+
+/** The progress line a stage change posts when the agent gave no text of its own. */
+export function progressLineFor(
+  status:
+    | "pending"
+    | "in-progress"
+    | "needs-review"
+    | "awaiting-release"
+    | "needs-test"
+    | undefined,
+): string | null {
+  switch (status) {
+    case "in-progress":
+      return "Progress: started";
+    case "needs-review":
+      return "Progress: ready for review";
+    case "awaiting-release":
+      return "Progress: built and handed over for the next release";
+    case "pending":
+      return "Progress: back to requested";
+    default:
+      return null;
+  }
+}
