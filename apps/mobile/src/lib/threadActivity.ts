@@ -52,6 +52,7 @@ import type {
   ScheduledTaskId,
   TurnItemId,
 } from "@t3tools/contracts";
+import type { BackgroundRun } from "@t3tools/client-runtime/backgroundTurns";
 import { RunId, ThreadId } from "@t3tools/contracts";
 import {
   classifyToolActivity,
@@ -223,6 +224,14 @@ type ThreadFeedEntryContent =
       readonly createdAt: string;
       readonly runId: RunId;
       readonly label: string;
+      readonly expanded: boolean;
+    }
+  | {
+      /** Brad view: a run of worker turns folded to one row. */
+      readonly type: "background-fold";
+      readonly id: string;
+      readonly createdAt: string;
+      readonly run: BackgroundRun;
       readonly expanded: boolean;
     }
   | {
@@ -1233,7 +1242,10 @@ export function deriveThreadFeedPresentation(
 ): ThreadFeedEntry[] {
   const retainedFeed = feed.filter(
     (entry) =>
-      entry.type !== "run-fold" && entry.type !== "work-toggle" && entry.type !== "thinking",
+      entry.type !== "run-fold" &&
+      entry.type !== "work-toggle" &&
+      entry.type !== "thinking" &&
+      entry.type !== "background-fold",
   );
   const sourceFeed = retainedFeed.map((entry, index) =>
     settleSupersededReasoning(entry, index === retainedFeed.length - 1),
