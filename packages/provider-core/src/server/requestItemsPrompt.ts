@@ -14,7 +14,7 @@ Set bug to true only for a task about something broken or behaving wrongly that 
 
 Return no items when the message only acknowledges, approves, continues, nudges, answers the agent's own question, gives feedback without a new ask, or asks for status ("do it", "continue", "yes", "looks good", "how is it going?", "where are we?", "did it work?", "check again").
 
-title: the request in the person's own words, at most 90 characters; keep a question as a question.
+title: a short deliverable title for a project board, under 70 characters, not the person's words (those are kept separately). A task is an imperative naming what gets delivered ("Troubleshoot the T3 orchestrator's stalled workers", "Add a dark mode toggle to settings"); an epic names the plan the same way; a question is a crisp question ("Why did the nightly deploy fail?"). Never start with "Can you", "Could you", "Please", "I want", "Let's", a greeting or a filler word, and give a task no trailing period or question mark.
 excerpt: the exact sentence or sentences of the message that make this request.
 existing: when open issues are listed below, the number of the one this request continues, refines, follows up on or repeats (most messages in an ongoing conversation continue its current issue), or null only for a genuinely new piece of work none of them covers.
 Never invent requests or split one request into its steps.`;
