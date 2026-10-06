@@ -14,7 +14,11 @@ import { formatGeneratedBranchName, sanitizeFeatureBranchName } from "@t3tools/s
 import { extractJsonObject } from "@t3tools/shared/schemaJson";
 
 import { buildRequestItemsPrompt } from "./requestItemsPrompt.ts";
-export { buildRequestItemsPrompt, type RequestKind } from "./requestItemsPrompt.ts";
+export {
+  buildRequestItemsPrompt,
+  type RequestKind,
+  type RequestCandidate,
+} from "./requestItemsPrompt.ts";
 import type { ProviderTextGeneration } from "./textGeneration.ts";
 import {
   buildBranchNamePrompt,
@@ -150,9 +154,15 @@ export function fromRunner(name: string, run: Runner): ProviderTextGeneration {
     };
   });
 
-  const generateRequestItems: NonNullable<ProviderTextGeneration["generateRequestItems"]> = Effect.fn(`${name}.generateRequestItems`)(function* (input) {
-    return yield* run({ operation: "generateRequestItems", cwd: input.cwd, modelSelection: input.modelSelection, ...buildRequestItemsPrompt(input) });
-  });
+  const generateRequestItems: NonNullable<ProviderTextGeneration["generateRequestItems"]> =
+    Effect.fn(`${name}.generateRequestItems`)(function* (input) {
+      return yield* run({
+        operation: "generateRequestItems",
+        cwd: input.cwd,
+        modelSelection: input.modelSelection,
+        ...buildRequestItemsPrompt(input),
+      });
+    });
 
   return {
     generateRequestItems,
