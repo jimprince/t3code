@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "9c57256fa750cbf0af7c6d92e426f4be752b3a89",
-  "head": "aa2d90bf8e91692e9010c65c5ecef19eefbcedb2",
+  "prev": "01a2e0b02885f8ae0eb37b033ed8f82ff43a5987",
+  "head": "4a031a38ad84fa32352af3318be40b307d824ec7",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -28,7 +28,9 @@
     "fork-orcaslicer-handoff",
     "fork-3mf-preview",
     "fork-step-preview",
-    "fork-t3-thread-prebuilt",
+    "fork-t3-thread-prebuilt"
+  ],
+  "unapplied": [
     "fork-embedded-pages",
     "fork-sandbox-session-recovery",
     "fork-thread-client-recovery",
@@ -100,9 +102,7 @@
     "fork-page-agent-tray",
     "fork-release-publication",
     "fork-maintenance-automation",
-    "fork-antigravity-errors"
-  ],
-  "unapplied": [
+    "fork-antigravity-errors",
     "fork-conversation-fork",
     "fork-thread-transfer",
     "fork-thread-history-compatibility"
