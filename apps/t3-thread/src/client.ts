@@ -1201,7 +1201,12 @@ export class RemoteEnvironmentClient {
 
   /** Request ledger: requests are Gitea issues labeled `ask` in the project's tracker. */
   async projectRequest<T>(
-    method: "projectRequestsCreate" | "projectRequestsUpdate" | "projectRequestsList",
+    method:
+      | "projectRequestsCreate"
+      | "projectRequestsUpdate"
+      | "projectRequestsList"
+      | "projectRequestsDecide"
+      | "projectRequestsDiscuss",
     input: Record<string, unknown>,
   ): Promise<T> {
     const rpc = await this.openRpc();
