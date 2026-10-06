@@ -1,3 +1,5 @@
+import { listMetadata, readMetadata } from "../forkThreads/MetadataStore.ts";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 import {
   CommandId,
   type RunId,
@@ -591,6 +593,8 @@ function listItemFromShell(shell: OrchestrationV2ThreadShell): OrchestratorMcpTh
     interactionMode: shell.interactionMode,
     linkedPullRequest: shell.linkedPullRequest ?? null,
     ...threadSettlement(shell),
+    pinned: shell.pinnedAt != null,
+    pinnedAt: shell.pinnedAt == null ? null : DateTime.formatIso(shell.pinnedAt),
     parentThreadId: shell.lineage.parentThreadId,
     relationshipToParent: shell.lineage.relationshipToParent,
     itemCount: shell.visibleItemCount,
@@ -629,6 +633,9 @@ function threadDetail(
           },
     branch: projection.thread.branch,
     worktreePath: projection.thread.worktreePath,
+    pinned: projection.thread.pinnedAt != null,
+    pinnedAt:
+      projection.thread.pinnedAt == null ? null : DateTime.formatIso(projection.thread.pinnedAt),
     parentThreadId: projection.thread.lineage.parentThreadId,
     relationshipToParent: projection.thread.lineage.relationshipToParent,
     queueHeld: projection.runs.some((run) => run.status === "queued" && run.queueHeld === true),
@@ -765,6 +772,7 @@ function timelineItem(input: {
 }
 
 const make = Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient;
   const crypto = yield* Crypto.Crypto;
   const threadManagement = yield* ThreadManagementService.ThreadManagementService;
   const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
@@ -1894,10 +1902,19 @@ const make = Effect.gen(function* () {
         const limit = input.limit ?? DEFAULT_THREAD_LIST_LIMIT;
         const page = filtered.slice(cursor, cursor + limit);
         const nextCursor = cursor + page.length < filtered.length ? cursor + page.length : null;
+        const metadata = new Map(
+          (yield* listMetadata(sql).pipe(Effect.mapError(threadManagementFailure))).map((row) => [
+            row.threadId,
+            row,
+          ]),
+        );
         return {
           projectId,
           currentThreadId: parent?.thread.id ?? null,
-          threads: page.map(listItemFromShell),
+          threads: page.map((shell) => ({
+            ...listItemFromShell(shell),
+            organization: metadata.get(shell.id) ?? null,
+          })),
           nextCursor,
           total: filtered.length,
         } satisfies OrchestratorMcpThreadListResult;
@@ -1977,7 +1994,13 @@ const make = Effect.gen(function* () {
           }
         }
         return {
-          thread: threadDetail(target, timeline.totalItems),
+          thread: {
+            ...threadDetail(target, timeline.totalItems),
+            organization:
+              (yield* readMetadata(sql, target.thread.id).pipe(
+                Effect.mapError(threadManagementFailure),
+              )) ?? null,
+          },
           recentRuns: target.runs
             .toSorted((left, right) => right.ordinal - left.ordinal)
             .slice(0, input.runLimit ?? DEFAULT_THREAD_RUN_LIMIT)
@@ -2114,6 +2137,7 @@ const make = Effect.gen(function* () {
 export const layer: Layer.Layer<
   OrchestratorMcpService,
   never,
+  | SqlClient.SqlClient
   | Crypto.Crypto
   | ThreadManagementService.ThreadManagementService
   | ProviderRegistry.ProviderRegistry
