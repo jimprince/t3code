@@ -9,6 +9,7 @@ import {
   ProviderInstanceId,
   ProviderSessionId,
   ThreadId,
+  isPageAgentThreadId,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -454,8 +455,9 @@ export const layerWithOptions = (
                 // the credential it started with, so a thread that detaches and
                 // re-attaches across a workspace handoff must come back to the
                 // same token or the process's tool calls fail auth.
-                const { browser: browserToolsAvailable, device: deviceToolsAvailable } =
+                const { browser, device: deviceToolsAvailable } =
                   yield* agentAccessSettings(threadId);
+                const browserToolsAvailable = browser || isPageAgentThreadId(threadId);
                 const capabilities = new Set<
                   import("../mcp/McpInvocationContext.ts").McpCapability
                 >(["orchestration", "worktree", "pull-requests"]);
