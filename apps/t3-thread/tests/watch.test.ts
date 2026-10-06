@@ -1291,25 +1291,38 @@ describe("notification preferences", () => {
   });
 });
 
-
 it("keeps completion receipts and error episodes separate for identical thread IDs on two hosts", async () => {
-  for (const state of ["completed", "error"] as const) await withTempState(async () => {
-    const saved = await loadState();
-    await saveState({ ...saved,
-      environments: [...saved.environments, makeEnvironment({ name: "other", environmentId: "env-2" })],
-      agents: [...saved.agents, makeAgent({ name: "other-worker", environment: "other" })],
-      subscriptions: [...saved.subscriptions, makeSubscription({ sourceEnvironment: "other", subscriberEnvironment: "other", sourceAgentName: "other-worker" })],
+  for (const state of ["completed", "error"] as const)
+    await withTempState(async () => {
+      const saved = await loadState();
+      await saveState({
+        ...saved,
+        environments: [
+          ...saved.environments,
+          makeEnvironment({ name: "other", environmentId: "env-2" }),
+        ],
+        agents: [...saved.agents, makeAgent({ name: "other-worker", environment: "other" })],
+        subscriptions: [
+          ...saved.subscriptions,
+          makeSubscription({
+            sourceEnvironment: "other",
+            subscriberEnvironment: "other",
+            sourceAgentName: "other-worker",
+          }),
+        ],
+      });
+      const sourceThread = makeThread();
+      sourceThread.latestTurn!.state = state;
+      const { clientFactory, sentMessages } = createClientFactory({ sourceThread });
+      await detectAttentionEvents({ clientFactory });
+      await deliverPendingNotifications({ clientFactory });
+      expect(sentMessages).toHaveLength(2);
+      await detectAttentionEvents({ clientFactory });
+      expect((await loadState()).notifications).toHaveLength(2);
+      expect(new Set((await loadState()).notifications.map((n) => n.sourceEnvironment))).toEqual(
+        new Set(["dev-vm", "other"]),
+      );
     });
-    const sourceThread = makeThread();
-    sourceThread.latestTurn!.state = state;
-    const { clientFactory, sentMessages } = createClientFactory({ sourceThread });
-    await detectAttentionEvents({ clientFactory });
-    await deliverPendingNotifications({ clientFactory });
-    expect(sentMessages).toHaveLength(2);
-    await detectAttentionEvents({ clientFactory });
-    expect((await loadState()).notifications).toHaveLength(2);
-    expect(new Set((await loadState()).notifications.map(n => n.sourceEnvironment))).toEqual(new Set(["dev-vm", "other"]));
-  });
 });
 
 describe("child input reminders", () => {
