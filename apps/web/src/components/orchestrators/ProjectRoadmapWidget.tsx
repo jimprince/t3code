@@ -79,7 +79,7 @@ export function SaveForLater({
       input: {
         threadId: summary.root.id,
         title: title.slice(0, 200),
-        kind: "change",
+        kind: "task",
         detail: title,
         park: true,
       },
