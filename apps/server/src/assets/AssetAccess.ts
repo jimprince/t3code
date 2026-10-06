@@ -7,6 +7,7 @@ import type { AssetResource } from "@t3tools/contracts";
 import {
   AssetAttachmentNotFoundError,
   AssetGitHubMediaUrlValidationError,
+  AssetGiteaMediaUrlValidationError,
   AssetPreviewTypeValidationError,
   AssetPreviewSizeValidationError,
   AssetProjectFaviconInspectionError,
@@ -173,6 +174,14 @@ const AssetClaimsSchema = Schema.Union([
     cwd: Schema.String,
     expiresAt: Schema.Number,
   }),
+  Schema.Struct({
+    version: Schema.Literal(1),
+    kind: Schema.Literal("gitea-media"),
+    /** Narrowed to an upload on this instance at mint time; its token is looked up when served. */
+    url: Schema.String,
+    instanceId: Schema.String,
+    expiresAt: Schema.Number,
+  }),
 ]);
 type AssetClaims = typeof AssetClaimsSchema.Type;
 
@@ -200,6 +209,12 @@ export type ResolvedAsset =
       readonly cwd: string;
       /** When the signed URL that granted this stops working, which bounds how long a client
           may keep the bytes it fetched with it. */
+      readonly expiresAt: number;
+    }
+  | {
+      readonly kind: "gitea-media";
+      readonly url: string;
+      readonly instanceId: string;
       readonly expiresAt: number;
     };
 
@@ -494,6 +509,8 @@ export const issueAssetUrl = Effect.fn("AssetAccess.issueAssetUrl")(function* (i
   readonly projectFaviconPath?: string;
   /** The project's clone has not landed, so its icon is reported missing without a lookup. */
   readonly projectCheckoutPending?: boolean;
+  /** A `gitea-media` resource already matched to a configured instance (giteaMediaFetchTarget). */
+  readonly giteaMedia?: { readonly instanceId: string; readonly url: string } | null;
 }) {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -806,6 +823,20 @@ export const issueAssetUrl = Effect.fn("AssetAccess.issueAssetUrl")(function* (i
       fileName = githubMediaFileName(fetchUrl);
       break;
     }
+    case "gitea-media": {
+      if (!input.giteaMedia) {
+        return yield* new AssetGiteaMediaUrlValidationError({});
+      }
+      claims = {
+        version: 1,
+        kind: "gitea-media",
+        url: input.giteaMedia.url,
+        instanceId: input.giteaMedia.instanceId,
+        expiresAt,
+      };
+      fileName = new URL(input.giteaMedia.url).pathname.split("/").pop() || "gitea-media";
+      break;
+    }
   }
 
   const secretStore = yield* ServerSecretStore.ServerSecretStore;
@@ -919,6 +950,15 @@ export const resolveAsset = Effect.fn("AssetAccess.resolveAsset")(function* (
     return faviconPath === claims.filePath
       ? ({ kind: "file", path: faviconPath } satisfies ResolvedAsset)
       : null;
+  }
+
+  if (claims.kind === "gitea-media") {
+    return {
+      kind: "gitea-media",
+      url: claims.url,
+      instanceId: claims.instanceId,
+      expiresAt: claims.expiresAt,
+    } satisfies ResolvedAsset;
   }
 
   if (claims.kind === "github-media") {
