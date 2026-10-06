@@ -1,0 +1,4 @@
+id = "settled-worker-completion-notified"
+category = "fix"
+functionality = "worker notifications"
+text = "A worker that settles itself right after its final turn now still notifies its parent of that completion instead of finishing silently."
