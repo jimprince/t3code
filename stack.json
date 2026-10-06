@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "c4673d9246082191b20d8a1e5cf28fc91c5e508b",
-  "head": "ca10b0f1813471d5bc97726b9be6c028c2a47886",
+  "prev": "c5c624e5c147defdfb554b1ccd6a29bafbd235ee",
+  "head": "c001a66167f6f5ba3232ca2a454f1003de228e2f",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -55,7 +55,9 @@
     "fork-interrupted-turn-rewind",
     "fork-agent-thread-ordering",
     "fork-cross-environment-nesting",
-    "fork-queue-coalesced-notes",
+    "fork-queue-coalesced-notes"
+  ],
+  "unapplied": [
     "fork-standing-agent-autosettle",
     "fork-queue-idle-dispatch",
     "fork-textgen-tempfile-cause",
@@ -105,7 +107,6 @@
     "fork-thread-transfer",
     "fork-thread-history-compatibility"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
