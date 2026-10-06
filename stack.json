@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "acfeaf2aef43cf55e6c9d145bc2d068b5c9f79cf",
-  "head": "a5eae925016ce9224269725d593daf33e8587e23",
+  "prev": "c843819f2bbf8d630e9794a15481246f5429ba84",
+  "head": "89b018329811d21aff97077aa3aae8f383e590a8",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -47,7 +47,8 @@
     "fork-child-input-attention",
     "fork-agent-panel-thread-details",
     "fork-sidebar-drag-to-nest",
-    "fork-worker-inactivity"
+    "fork-worker-inactivity",
+    "fork-thread-titles"
   ],
   "unapplied": [
     "fork-conversation-fork",
@@ -293,6 +294,9 @@
     },
     "fork-thread-history-compatibility": {
       "oid": "fefa86f42a7a4aae270598719920fd6e74a7b855"
+    },
+    "fork-thread-titles": {
+      "oid": "89b018329811d21aff97077aa3aae8f383e590a8"
     },
     "fork-thread-transfer": {
       "oid": "4be4b00bc64a98f742365ae62f07f3274c00308f"
