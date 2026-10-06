@@ -37,13 +37,19 @@ export const resolveUserDataPath = Effect.fn("desktop.userData.resolveUserDataPa
     readonly appDataDirectory: string;
     readonly isDevelopment: boolean;
     readonly platform: NodeJS.Platform;
-    readonly forkIdentity?: { readonly current: string; readonly legacy: string; readonly fallback: string };
+    readonly forkIdentity?: {
+      readonly current: string;
+      readonly legacy: string;
+      readonly fallback: string;
+    };
   }) {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const names = input.forkIdentity ?? (input.isDevelopment
-      ? { current: "t3code-dev", legacy: "T3 Code (Dev)" }
-      : { current: "t3code-v2", legacy: "T3 Code (Alpha)" });
+    const names =
+      input.forkIdentity ??
+      (input.isDevelopment
+        ? { current: "t3code-dev", legacy: "T3 Code (Dev)" }
+        : { current: "t3code-v2", legacy: "T3 Code (Alpha)" });
     const destinationPath = path.join(input.appDataDirectory, names.current);
     const legacyPath = path.join(input.appDataDirectory, names.legacy);
     const inspect = (resourcePath: string) =>

@@ -39,7 +39,11 @@ const makeScenario = () => {
     layer: layer.pipe(
       Layer.provideMerge(Layer.succeed(ElectronApp.ElectronApp, electronApp)),
       Layer.provideMerge(Layer.succeed(DesktopWindow.DesktopWindow, desktopWindow)),
-      Layer.provide(Layer.succeed(DesktopEnvironment.DesktopEnvironment, { isDevelopment: false } as DesktopEnvironment.DesktopEnvironment["Service"])),
+      Layer.provide(
+        Layer.succeed(DesktopEnvironment.DesktopEnvironment, {
+          isDevelopment: false,
+        } as DesktopEnvironment.DesktopEnvironment["Service"]),
+      ),
     ),
   };
 };
@@ -95,7 +99,9 @@ describe("DesktopDeepLink", () => {
             assert.equal(scenario.openThread.mock.calls.length, 0);
 
             yield* deepLink.flush;
-            assert.deepEqual(scenario.openThread.mock.calls, [[`t3code://app/${environmentId}/${threadId}`]]);
+            assert.deepEqual(scenario.openThread.mock.calls, [
+              [`t3code://app/${environmentId}/${threadId}`],
+            ]);
           }).pipe(Effect.provide(scenario.layer)),
         );
       } finally {

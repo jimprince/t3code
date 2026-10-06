@@ -32,7 +32,6 @@ export class DesktopLegacyLocalStorage extends Context.Service<
 
 const MARKER_FILE_NAME = "v1-local-storage-imported";
 
-
 const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const fs = yield* FileSystem.FileSystem;

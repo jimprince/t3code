@@ -42,8 +42,14 @@ export function parseDesktopThreadDeepLink(rawUrl: string): DesktopThreadDeepLin
 }
 
 /** Canonical V2 route, passed through native origin validation and readiness. */
-export function buildDesktopThreadNavigationUrl(link: DesktopThreadDeepLink, isDevelopment: boolean): string {
-  return new URL(`${link.environmentId}/${link.threadId}`, ElectronProtocol.getDesktopUrl(isDevelopment)).href;
+export function buildDesktopThreadNavigationUrl(
+  link: DesktopThreadDeepLink,
+  isDevelopment: boolean,
+): string {
+  return new URL(
+    `${link.environmentId}/${link.threadId}`,
+    ElectronProtocol.getDesktopUrl(isDevelopment),
+  ).href;
 }
 
 export function findDesktopThreadDeepLink(argv: readonly string[]): DesktopThreadDeepLink | null {
@@ -70,7 +76,9 @@ const make = Effect.gen(function* () {
   const pending = yield* Ref.make<readonly DesktopThreadDeepLink[]>([]);
 
   const open = (link: DesktopThreadDeepLink) =>
-    desktopWindow.navigateMain(buildDesktopThreadNavigationUrl(link, environment.isDevelopment)).pipe(Effect.catch(() => Effect.void));
+    desktopWindow
+      .navigateMain(buildDesktopThreadNavigationUrl(link, environment.isDevelopment))
+      .pipe(Effect.catch(() => Effect.void));
   const accept = (link: DesktopThreadDeepLink) =>
     Ref.get(ready).pipe(
       Effect.flatMap((isReady) =>
@@ -79,7 +87,6 @@ const make = Effect.gen(function* () {
           : Ref.update(pending, (links) => [...links, link]).pipe(Effect.as(true)),
       ),
     );
-
 
   return DesktopDeepLink.of({
     configure: Effect.gen(function* () {

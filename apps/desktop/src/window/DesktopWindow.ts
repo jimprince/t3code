@@ -219,8 +219,12 @@ export function isSameOriginRendererNavigation(input: {
   try {
     const app = new URL(input.applicationUrl);
     const target = new URL(input.navigationUrl);
-    return app.protocol === target.protocol && app.host === target.host &&
-      target.username === "" && target.password === "";
+    return (
+      app.protocol === target.protocol &&
+      app.host === target.host &&
+      target.username === "" &&
+      target.password === ""
+    );
   } catch {
     return false;
   }
@@ -964,7 +968,13 @@ export const make = Effect.gen(function* () {
     ensureMain,
     revealOrCreateMain,
     navigateMain: Effect.fn("desktop.window.navigateMain")(function* (url) {
-      if (!isSameOriginRendererNavigation({ applicationUrl: getDesktopUrl(environment.isDevelopment), navigationUrl: url })) return false;
+      if (
+        !isSameOriginRendererNavigation({
+          applicationUrl: getDesktopUrl(environment.isDevelopment),
+          navigationUrl: url,
+        })
+      )
+        return false;
       if (yield* waitingForBackend) {
         yield* Ref.set(pendingNavigation, url);
         return true;

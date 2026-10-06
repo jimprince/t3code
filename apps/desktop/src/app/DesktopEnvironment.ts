@@ -178,8 +178,10 @@ const make = Effect.fn("desktop.environment.make")(function* (
   const baseDir = resolveDesktopBaseDir({
     homeDirectory,
     joinPath: path.join,
-    t3Home: Option.isNone(config.t3Home) && input.desktopFlavor === "dev" && !isDevelopment
-      ? Option.some(path.join(homeDirectory, ".t3-fork-dev")) : config.t3Home,
+    t3Home:
+      Option.isNone(config.t3Home) && input.desktopFlavor === "dev" && !isDevelopment
+        ? Option.some(path.join(homeDirectory, ".t3-fork-dev"))
+        : config.t3Home,
   });
   const rootDir = path.resolve(input.dirname, "../../..");
   const appRoot = input.isPackaged ? input.appPath : rootDir;
