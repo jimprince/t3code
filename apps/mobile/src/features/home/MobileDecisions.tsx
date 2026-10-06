@@ -10,13 +10,17 @@ import {
   type DecisionPick,
 } from "@t3tools/client-runtime/decision-answer";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import type { ProjectIssue } from "@t3tools/contracts";
+import type { ProjectIssue, ThreadId } from "@t3tools/contracts";
 import { useMemo, useState } from "react";
 import { Pressable, TextInput, View } from "react-native";
 
 import { AppText as Text } from "../../components/AppText";
 import { MobileLinkifiedText } from "./MobileLinkifiedText";
-import { mobileDecideProjectRequest, mobileProjectIssues } from "../../state/projectRequests";
+import {
+  mobileDecideProjectRequest,
+  mobileDiscussProjectRequest,
+  mobileProjectIssues,
+} from "../../state/projectRequests";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 
@@ -33,6 +37,8 @@ function DecisionCard({
   onSend,
   onRetry,
   onDrop,
+  discussing,
+  onDiscuss,
 }: {
   readonly issue: ProjectIssue;
   /** Who the answer goes to, in words. */
@@ -43,6 +49,8 @@ function DecisionCard({
   readonly onRetry: () => void;
   /** Gives up on a failed answer and shows the options again. */
   readonly onDrop: () => void;
+  readonly discussing: boolean;
+  readonly onDiscuss: () => void;
 }) {
   const decision = issue.decision!;
   const open = decision.options.length === 0;
@@ -172,6 +180,16 @@ function DecisionCard({
                 <Text className="text-xs text-foreground-muted">Add note</Text>
               </Pressable>
             )}
+            <Pressable
+              accessibilityRole="button"
+              disabled={discussing}
+              onPress={onDiscuss}
+              className="min-h-11 justify-center"
+            >
+              <Text className="text-xs text-foreground-muted">
+                {discussing ? "Opening..." : "Discuss"}
+              </Text>
+            </Pressable>
             <Text className="flex-1 text-xs text-foreground-muted">For {waiting}</Text>
           </View>
         </>
@@ -185,9 +203,16 @@ function DecisionCard({
  * option, Other... or type an answer, optionally add a note, and Send. The answer is
  * commented on the issue and sent to the waiting thread; the card shows the answer
  * until a list read after it was sent no longer has the issue, and a failure stays on
- * the card with the server's reason and Retry.
+ * the card with the server's reason and Retry. Discuss
+ * opens a thread to talk it through first.
  */
-export function MobileDecisions({ summary }: { readonly summary: OrchestratorSummary }) {
+export function MobileDecisions({
+  summary,
+  onOpenThread,
+}: {
+  readonly summary: OrchestratorSummary;
+  readonly onOpenThread: (threadId: ThreadId) => void;
+}) {
   const query = useEnvironmentQuery(
     mobileProjectIssues({
       environmentId: summary.root.environmentId,
@@ -195,6 +220,21 @@ export function MobileDecisions({ summary }: { readonly summary: OrchestratorSum
     }),
   );
   const decide = useAtomCommand(mobileDecideProjectRequest, "Decide");
+  const discuss = useAtomCommand(mobileDiscussProjectRequest, "Discuss");
+  const [discussing, setDiscussing] = useState<string | null>(null);
+  const startDiscussion = async (issue: ProjectIssue) => {
+    if (discussing !== null) return;
+    setDiscussing(issueKey(issue));
+    try {
+      const result = await discuss({
+        environmentId: summary.root.environmentId,
+        input: { threadId: summary.root.id, reference: issueKey(issue) },
+      });
+      if (result._tag === "Success") onOpenThread(result.value.threadId);
+    } finally {
+      setDiscussing(null);
+    }
+  };
   const [answers, setAnswers] = useState<ReadonlyMap<string, DecisionAnswerRecord<ProjectIssue>>>(
     new Map(),
   );
@@ -266,6 +306,8 @@ export function MobileDecisions({ summary }: { readonly summary: OrchestratorSum
             onSend={(answered, input) => void send({ issue, answered, input })}
             onRetry={() => answer && void send(answer)}
             onDrop={() => record(issueKey(issue), null)}
+            discussing={discussing === issueKey(issue)}
+            onDiscuss={() => void startDiscussion(issue)}
           />
         );
       })}
