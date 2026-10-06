@@ -10,6 +10,9 @@ export type ThreadActionMenuId =
   | "new-thread-on-branch"
   | "filter-by-project"
   | "project-settings"
+  | "order-reset"
+  | "move-up"
+  | "move-down"
   | "pin"
   | "unpin"
   | "settle"
@@ -89,12 +92,14 @@ export interface ThreadActionMenuState {
   readonly isRegeneratingTitle: boolean;
   /** Archive rejects a thread with an attached provider, so disable it here rather than let the action fail. */
   readonly isRunning: boolean;
+  readonly move?: { readonly up: boolean; readonly down: boolean } | undefined;
   readonly supports: {
     readonly settlement: boolean;
     /** Server understands thread.auto-settle.set. */
     readonly autoSettleOptOut: boolean;
     readonly snooze: boolean;
     readonly pinning: boolean;
+    readonly orderReset?: boolean;
     readonly titleRegeneration: boolean;
   };
   readonly snoozePresets: ReadonlyArray<SnoozePreset>;
@@ -123,6 +128,20 @@ export function buildThreadActionMenuItems(
           state.isPinned
             ? { id: "unpin" as const, label: "Unpin thread", icon: "pin-off" }
             : { id: "pin" as const, label: "Pin thread", icon: "pin" },
+        ]
+      : []),
+    ...(state.supports.orderReset === true && (state.isPinned || !state.isSettled)
+      ? [{ id: "order-reset" as const, label: "Return to automatic order", icon: "list" }]
+      : []),
+    ...(state.move
+      ? [
+          { id: "move-up" as const, label: "Move up", icon: "arrow-up", disabled: !state.move.up },
+          {
+            id: "move-down" as const,
+            label: "Move down",
+            icon: "arrow-down",
+            disabled: !state.move.down,
+          },
         ]
       : []),
     // Both lifecycle actions stay available on pinned threads: settling
