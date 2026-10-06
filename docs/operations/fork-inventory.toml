@@ -1801,3 +1801,13 @@ retire_when = "Upstream provides configurable project dashboards with request tr
 depends_on = ["fork-request-ledger", "fork-orchestrators-view"]
 roles = []
 note = "Widget order (per orchestrator root thread) and tracker repositories (per T3 project) live in <stateDir>/project-dashboards.json, written atomically under a process-wide lock and read on demand, behind projectDashboard.get/setWidgets/setTracker and t3-thread dashboard set and project tracker set. Widget ids are open strings so later concerns (roadmap, canvas) add widgets without a schema change; clients drop unknown ids and default to requests, needs-you, release, roadmap, working, blocked, done, new-request, issues, prs, canvas, automations. A configured tracker (owner/repo on the first Gitea instance, or a repository URL) wins over the git remote in ProjectIssuesService.repositoryForProject, so the ledger, board and capture all use it. The Release widget has no store: next release is stage awaiting-release, shipped is stage needs-test grouped by milestone with the posted test step. Mobile shows read-only request and release lines under each project."
+
+[[patch]]
+name = "fork-project-roadmap"
+subject = "feat(projects): roadmap of versions as Gitea milestones"
+class = "product"
+purpose = "Plan a project's versions on its project page: Later plus one column per open Gitea milestone on the tracker repository, with drag or a Move to menu, add and rename versions, and Save for later for ideas that should not wake the orchestrator."
+retire_when = "Upstream or another fork concern provides milestone planning for projects."
+depends_on = ["fork-project-dashboard-widgets", "fork-request-ledger"]
+roles = []
+note = "No new store: versions are open milestones on the tracker resolved by the ledger, items are the tracker's open issues and requests, and an item whose milestone is closed (a shipped release) is off the roadmap. Roadmap order is due date then creation; the first version is the next release and its items join the Release widget's Next release list. request shipped closes its release milestone. Save for later files a request through projectRequests.create without messaging the orchestrator. CLI: t3-thread roadmap list|move|version."
