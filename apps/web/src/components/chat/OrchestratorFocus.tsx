@@ -1,7 +1,8 @@
+import { useSupervisionForest } from "../../state/forkSupervision";
 import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
 import { useMemo, useState } from "react";
 import { useThreadShells, useThreadProjection } from "../../state/entities";
-import { supervisionForest, supervisionKey } from "@t3tools/client-runtime/state/forkNesting";
+import { supervisionThreadKey } from "@t3tools/client-runtime/state/fork-nesting";
 import {
   deriveBackgroundTraffic,
   resolveBackgroundFolds,
@@ -69,7 +70,7 @@ export function useOrchestratorFocus(input: {
 }) {
   const shells = useThreadShells();
   const projection = useThreadProjection(parseScopedThreadKey(input.threadKey))?.projection;
-  const forest = useMemo(() => supervisionForest(shells), [shells]);
+  const forest = useSupervisionForest();
   const [allTraffic, setAllTraffic] = useState(false);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const traffic = useMemo(() => {
@@ -77,7 +78,7 @@ export function useOrchestratorFocus(input: {
     const pending = [input.threadKey];
     while (pending.length) {
       for (const child of forest.children.get(pending.pop()!) ?? []) {
-        const key = supervisionKey(child);
+        const key = supervisionThreadKey(child);
         descendants.add(child.id);
         pending.push(key);
       }
