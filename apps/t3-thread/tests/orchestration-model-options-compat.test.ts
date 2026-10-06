@@ -195,7 +195,7 @@ describe("V2 orchestration model option compatibility", () => {
       event: { type: "thread.archived" },
     });
   });
-  // M3 obligation: fork-thread-goals must port goal recovery into the V2 projection and legacy history view.
+  // M3 obligation: fork-codex-goal-visibility must port goal recovery into the V2 projection and legacy history view.
   it.skip("preserves historical goals and both attachment generations while defaulting lifecycle", () => {
     const parsed = decodeThreadStreamItem({
       kind: "snapshot",
@@ -283,5 +283,4 @@ describe("V2 orchestration model option compatibility", () => {
       fileAttachments: [{ id: "legacy-file", path: "/tmp/t3-file-attachments/legacy.txt" }],
     });
   });
-
 });
