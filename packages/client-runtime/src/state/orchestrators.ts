@@ -27,13 +27,15 @@ const threadActivityKey = supervisionThreadKey;
 const ACTIVE_RUNTIME_STATUSES = ["preparing", "starting", "running", "waiting", "queued"];
 
 /**
- * Working in the board's sense: an active run, or work the thread itself launched that is still
- * going (subagents, background tasks). Dev servers and monitors do not count; they only watch.
+ * Working in the board's sense: an active run or Codex goal, or work the thread itself launched
+ * that is still going (subagents, background tasks). Dev servers and monitors do not count; they only watch.
  */
 export function isThreadWorking(
-  thread: Pick<EnvironmentThreadShell, "runtime" | "pendingBackgroundTasks">,
+  thread: Pick<EnvironmentThreadShell, "runtime" | "pendingBackgroundTasks" | "codexNativeGoal">,
 ): boolean {
   if (ACTIVE_RUNTIME_STATUSES.includes(thread.runtime?.status ?? "idle")) return true;
+  if (thread.codexNativeGoal?.status === "active" && thread.runtime?.status !== "failed")
+    return true;
   return thread.pendingBackgroundTasks.some(
     (task) => task.kind !== "command" && task.kind !== "monitor",
   );
