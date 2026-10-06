@@ -1,4 +1,10 @@
-import { ProjectId, ThreadId, type Automation, type AutomationRun } from "@t3tools/contracts";
+import {
+  ProjectId,
+  ThreadId,
+  type Automation,
+  type AutomationResultMode,
+  type AutomationRun,
+} from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 import {
   belongsToRoot,
@@ -38,6 +44,22 @@ describe("project automation panel logic", () => {
         actions: [{ type: "agent", script: "review", target: { kind: "new-thread" } }],
       }),
     ).toBeNull();
+  });
+
+  it("keeps a rule's result mode through an edit, and leaves an unset one unset", () => {
+    for (const resultMode of ["review", "file-only", "file-and-settle", "act"]) {
+      const action = {
+        ...automation.actions[0]!,
+        resultMode: resultMode as AutomationResultMode,
+      };
+      const draft = toDraft({ ...automation, actions: [action] })!;
+      expect(draft.resultMode).toBe(resultMode);
+      expect(fromDraft(draft, automation.projectId).actions).toEqual([action]);
+    }
+    expect(toDraft(automation)!.resultMode).toBeUndefined();
+    expect(fromDraft(toDraft(automation)!, automation.projectId).actions).toEqual(
+      automation.actions,
+    );
   });
 
   // 2026-10-06T01:00Z is Mon 19:00 MDT in Denver.

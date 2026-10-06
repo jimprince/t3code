@@ -5,6 +5,7 @@ import {
 import {
   AutomationDefinition,
   type Automation,
+  type AutomationResultMode,
   type EnvironmentId,
   type ProjectId,
   type ThreadId,
@@ -37,6 +38,7 @@ import {
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
+import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
 import { Textarea } from "../ui/textarea";
 import {
@@ -49,6 +51,15 @@ import {
 } from "./projectAutomations.logic";
 
 const decodeDefinition = Schema.decodeOption(AutomationDefinition);
+
+/** What a rule does with its agent's result; unset sends the prompt as written. */
+const RESULT_MODES = {
+  unset: "Unset (send the prompt as written)",
+  review: "Review (file nothing, thread stays open)",
+  "file-only": "File only",
+  "file-and-settle": "File and settle",
+  act: "Act (no filing or settling instructions)",
+} as const;
 type Props = { environmentId: EnvironmentId; projectId: ProjectId; rootThreadId?: ThreadId };
 
 /** A project-scoped editor shared by project settings and the orchestrator Projects page. */
@@ -292,7 +303,7 @@ export function ProjectAutomationsPanel({ environmentId, projectId, rootThreadId
       </AlertDialog>
       {editing ? (
         <form
-          className="grid max-w-2xl gap-2"
+          className="grid max-w-2xl grid-cols-[minmax(0,1fr)] gap-2"
           onSubmit={(event) => {
             event.preventDefault();
             void onSave();
@@ -427,6 +438,29 @@ export function ProjectAutomationsPanel({ environmentId, projectId, rootThreadId
               </option>
             ))}
           </select>
+          <Select
+            value={editing.resultMode ?? "unset"}
+            items={RESULT_MODES}
+            onValueChange={(next) => {
+              const { resultMode: _ignored, ...rest } = editing;
+              setEditing(
+                next === null || next === "unset"
+                  ? rest
+                  : { ...rest, resultMode: next as AutomationResultMode },
+              );
+            }}
+          >
+            <SelectTrigger aria-label="Result mode">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup>
+              {Object.entries(RESULT_MODES).map(([mode, label]) => (
+                <SelectItem key={mode} value={mode}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
           <div className="flex gap-2">
             <Button size="sm" disabled={pending} type="submit">
               Save
