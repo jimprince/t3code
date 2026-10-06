@@ -13,13 +13,13 @@ import type * as SqlClient from "effect/unstable/sql/SqlClient";
 import { initializeMetadata, listMetadata, writeMetadata, metadataJson } from "./MetadataStore.ts";
 
 type NestingShell = Pick<OrchestrationV2ThreadShell, "id" | "projectId" | "archivedAt">;
-/** Only the supervision sidecar changes. Native runs, lineage and workspaces remain owned by V2. */
+/** Commit supervision metadata before publishing a replay-safe native shell refresh. */
 export const makeNestingService = <E, R, DispatchError = never, DispatchContext = never>(
   sql: SqlClient.SqlClient,
   getShell: (id: ThreadId) => Effect.Effect<NestingShell | null, E, R>,
   refreshShell: (
     command: Extract<OrchestrationV2ServerCommand, { type: "thread.metadata.update" }>,
-  ) => Effect.Effect<unknown, DispatchError, DispatchContext> = () => Effect.void,
+  ) => Effect.Effect<unknown, DispatchError, DispatchContext>,
 ) =>
   Effect.gen(function* () {
     yield* initializeMetadata(sql);

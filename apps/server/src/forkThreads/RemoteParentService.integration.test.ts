@@ -17,7 +17,7 @@ it.effect(
             ? { id, projectId: ProjectId.make("child-project"), archivedAt: null }
             : null,
         );
-      const service = yield* makeNestingService(sql, getShell);
+      const service = yield* makeNestingService(sql, getShell, () => Effect.void);
       const input = {
         threadId: id,
         commandId: CommandId.make("remote"),
@@ -26,7 +26,7 @@ it.effect(
       };
       yield* validateRemoteParent("child-host", input);
       yield* service.update(input);
-      const restart = yield* makeNestingService(sql, getShell);
+      const restart = yield* makeNestingService(sql, getShell, () => Effect.void);
       assert.deepStrictEqual((yield* restart.list())[0]?.remoteParent, input.remoteParent);
       assert.equal(
         (yield* Effect.exit(validateRemoteParent("parent-host", input)))._tag,

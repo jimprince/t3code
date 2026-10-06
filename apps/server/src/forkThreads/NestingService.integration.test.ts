@@ -23,10 +23,10 @@ it.effect("reparent, unnest and receipts survive restart without changing native
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const getShell = (threadId: ThreadId) => Effect.succeed(shells.get(threadId) ?? null);
-    const service = yield* makeNestingService(sql, getShell);
+    const service = yield* makeNestingService(sql, getShell, () => Effect.void);
     yield* service.update(input("child", "parent"));
     yield* service.update(input("grandchild", "child"));
-    const restart = yield* makeNestingService(sql, getShell);
+    const restart = yield* makeNestingService(sql, getShell, () => Effect.void);
     assert.equal(
       (yield* restart.list()).find((row) => row.threadId === id("grandchild"))?.parentThreadId,
       id("child"),
@@ -56,12 +56,10 @@ it.effect("legacy edges import once, including missing parents and nulls", () =>
 
     // Only fields required by the retained V1 table are populated through the fixture test below.
     const service = yield* makeNestingService(sql, (threadId) =>
-      Effect.succeed(shells.get(threadId) ?? null),
-    );
+      Effect.succeed(shells.get(threadId) ?? null), () => Effect.void);
     yield* service.update(input("child", "parent", "import-edit"));
     const restart = yield* makeNestingService(sql, (threadId) =>
-      Effect.succeed(shells.get(threadId) ?? null),
-    );
+      Effect.succeed(shells.get(threadId) ?? null), () => Effect.void);
     assert.equal(
       (yield* restart.list()).find((row) => row.threadId === id("child"))?.parentThreadId,
       id("parent"),
@@ -87,8 +85,7 @@ it.effect(
         modelSelection: "worker-default",
       };
       const service = yield* makeNestingService(sql, (threadId) =>
-        Effect.succeed(threadId === parent.id ? parent : threadId === child.id ? child : null),
-      );
+        Effect.succeed(threadId === parent.id ? parent : threadId === child.id ? child : null), () => Effect.void);
       yield* service.update(input("worker", "supervisor", "cross-project"));
       parent.archivedAt = DateTime.makeUnsafe(0);
       assert.equal(
@@ -159,7 +156,7 @@ it.effect(
         input("native-parent", "native-grandchild", "native-cycle"),
       ])
         assert.equal((yield* Effect.exit(service.update(edge)))._tag, "Failure");
-      const restart = yield* makeNestingService(sql, management.getThreadShell);
+      const restart = yield* makeNestingService(sql, management.getThreadShell, () => Effect.void);
       assert.equal(
         (yield* restart.list()).find((row) => row.threadId === id("native-child"))?.parentThreadId,
         id("native-parent"),
