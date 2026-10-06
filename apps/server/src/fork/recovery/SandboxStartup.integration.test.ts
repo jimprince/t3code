@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect } from "vite-plus/test";
+import { it } from "@effect/vitest";
 import { CommandId, ThreadId } from "@t3tools/contracts";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
@@ -27,9 +28,9 @@ const effect = (
     lastError: null,
   }) as OrchestrationEffectV2;
 
-for (const disabled of [undefined, "0", "1"]) {
-  describe(`startup guard=${disabled ?? "absent"}`, () => {
-    it("withholds copied automatic work only in sandbox and permits new explicit turns", async () => {
+describe.each([undefined, "0", "1"])("startup guard=%s", (disabled) => {
+  it.effect("withholds copied automatic work only in sandbox and permits new explicit turns", () =>
+    Effect.gen(function* () {
       const executed: string[] = [];
       const base = Layer.succeed(EffectWorker.OrchestrationEffectExecutorV2, {
         execute: (effect) =>
@@ -48,41 +49,39 @@ for (const disabled of [undefined, "0", "1"]) {
           ),
         ),
       );
-      await Effect.runPromise(
-        Effect.gen(function* () {
-          const executor = yield* EffectWorker.OrchestrationEffectExecutorV2;
-          const policy = yield* Policy.StartupResumePolicy;
-          for (const type of [
-            "provider-runtime.continue",
-            "provider-turn.start",
-            "provider-turn.restart",
-            "thread-title.generate",
-            "provider-thread.rollback",
-          ] as const) {
-            yield* executor.execute(effect(type));
-          }
-          yield* executor.execute(effect("attachment.cleanup"));
-          expect(executed).toEqual(
-            disabled === "1"
-              ? ["attachment.cleanup"]
-              : [
-                  "provider-runtime.continue",
-                  "provider-turn.start",
-                  "provider-turn.restart",
-                  "thread-title.generate",
-                  "provider-thread.rollback",
-                  "attachment.cleanup",
-                ],
-          );
-          yield* policy.markCommandReady;
-          yield* executor.execute(effect("provider-runtime.continue", "2099-01-01T00:00:00Z"));
-          yield* executor.execute(effect("provider-turn.start", "2099-01-01T00:00:00Z"));
-          expect(executed.at(-1)).toBe("provider-turn.start");
-          expect(executed.filter((type) => type === "provider-runtime.continue")).toHaveLength(
-            disabled === "1" ? 0 : 2,
-          );
-        }).pipe(Effect.provide(layer), Effect.scoped),
-      );
-    });
-  });
-}
+      yield* Effect.gen(function* () {
+        const executor = yield* EffectWorker.OrchestrationEffectExecutorV2;
+        const policy = yield* Policy.StartupResumePolicy;
+        for (const type of [
+          "provider-runtime.continue",
+          "provider-turn.start",
+          "provider-turn.restart",
+          "thread-title.generate",
+          "provider-thread.rollback",
+        ] as const) {
+          yield* executor.execute(effect(type));
+        }
+        yield* executor.execute(effect("attachment.cleanup"));
+        expect(executed).toEqual(
+          disabled === "1"
+            ? ["attachment.cleanup"]
+            : [
+                "provider-runtime.continue",
+                "provider-turn.start",
+                "provider-turn.restart",
+                "thread-title.generate",
+                "provider-thread.rollback",
+                "attachment.cleanup",
+              ],
+        );
+        yield* policy.markCommandReady;
+        yield* executor.execute(effect("provider-runtime.continue", "2099-01-01T00:00:00Z"));
+        yield* executor.execute(effect("provider-turn.start", "2099-01-01T00:00:00Z"));
+        expect(executed.at(-1)).toBe("provider-turn.start");
+        expect(executed.filter((type) => type === "provider-runtime.continue")).toHaveLength(
+          disabled === "1" ? 0 : 2,
+        );
+      }).pipe(Effect.provide(layer), Effect.scoped);
+    }),
+  );
+});
