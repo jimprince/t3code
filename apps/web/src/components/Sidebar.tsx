@@ -4853,6 +4853,14 @@ export default function Sidebar() {
             copyThreadIdToClipboard(thread.id, { threadId: thread.id });
             return;
           case "move-to-machine": {
+            const moveKey = scopedThreadKey(threadRef);
+            // Checked before the target pick and the confirm, so a second move never asks first.
+            const alreadyMoving = () => {
+              if (!movingThreadKeys.current.has(moveKey)) return false;
+              toastManager.add({ type: "info", title: "Already moving this thread" });
+              return true;
+            };
+            if (alreadyMoving()) return;
             const targetChoice =
               moveTargets.length === 1
                 ? { _tag: "Success" as const, value: moveTargets[0]!.physicalProjectKey }
@@ -4880,8 +4888,8 @@ export default function Sidebar() {
               api.dialogs.confirm(confirmLines.join("\n")),
             );
             if (confirmed._tag === "Failure" || !confirmed.value) return;
-            const moveKey = scopedThreadKey(threadRef);
-            if (movingThreadKeys.current.has(moveKey)) return;
+            // Another move can start while the pick and confirm are open.
+            if (alreadyMoving()) return;
             movingThreadKeys.current.add(moveKey);
 
             const progressToastId = toastManager.add({
