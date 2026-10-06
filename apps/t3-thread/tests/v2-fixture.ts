@@ -1,4 +1,4 @@
-import { OrchestrationV2ThreadProjection } from "@t3tools/contracts";
+import { OrchestrationV2ThreadProjection, OrchestrationV2ThreadShell } from "@t3tools/contracts";
 import { Schema } from "effect";
 
 export const at = (minutes = 0) =>
@@ -104,3 +104,25 @@ export const item = (
   streaming: true,
   ...fields,
 });
+
+/** Native V2 shell, including required execution and settlement fields. */
+export function shell(overrides: Record<string, unknown> = {}) {
+  return Schema.decodeUnknownSync(OrchestrationV2ThreadShell)({
+    ...projection().thread,
+    latestRunId: null,
+    activeRunId: null,
+    status: "idle",
+    pendingRuntimeRequest: null,
+    latestVisibleMessage: null,
+    latestUserMessageAt: null,
+    hasActionableProposedPlan: false,
+    itemCount: 0,
+    visibleItemCount: 0,
+    ...overrides,
+  });
+}
+export function shellSnapshot(threads: ReturnType<typeof shell>[]) {
+  return { kind: "snapshot" as const, snapshot: {
+    schemaVersion: 2, snapshotSequence: 1, projects: [], threads, archivedThreads: [],
+  }};
+}
