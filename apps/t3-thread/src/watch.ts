@@ -355,22 +355,12 @@ async function scanAttentionState(
       ) {
         continue;
       }
-      const existing =
-        state.notifications.find((notification) => {
-          return (
-            sameNotificationRoute(notification, subscription, state) &&
-            notification.latestAssistantMessageId === overview.latestAssistantMessageId &&
-            notification.latestTurnId === (sourceThread.latestTurn?.turnId ?? null) &&
-            notification.sourceState === overview.state
-          );
-        }) ?? null;
       const detected = buildNotificationRecord({
         sourceAgent,
         subscription,
         overview,
         thread: sourceThread,
         now: now(),
-        existing,
       });
       if (overview.state === "error") {
         const episode = state.notifications.find(
@@ -570,7 +560,6 @@ export async function detectAttentionEvents(
         };
       }
       const merged = mergeDetectedNotification(
-        existing,
         existing ? { ...notification, eventKey: existing.eventKey } : notification,
       );
       notifications = upsertNotification(notifications, merged);
