@@ -43,6 +43,9 @@ const RPC_METHODS = {
   projectRequestsCreate: "projectRequests.create",
   projectRequestsUpdate: "projectRequests.update",
   projectRequestsList: "projectRequests.list",
+  projectDashboardGet: "projectDashboard.get",
+  projectDashboardSetWidgets: "projectDashboard.setWidgets",
+  projectDashboardSetTracker: "projectDashboard.setTracker",
 } as const;
 
 const makeT3RpcClient = RpcClient.make(WsRpcGroup);
