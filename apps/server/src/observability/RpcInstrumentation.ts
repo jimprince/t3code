@@ -15,6 +15,7 @@ type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
  * prefix. Adding an RPC to `WsRpcGroup` without a label is a type error.
  */
 const RPC_AGGREGATES = {
+  "fork.threads.order.reset": "threads",
   "fork.threads.supervision.drop": "threads",
   "fork.threads.metadata.list": "threads",
   "fork.threads.metadata.update": "threads",
