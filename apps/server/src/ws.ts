@@ -24,6 +24,7 @@ import { subscribeChatGptHandoff } from "./provider/CodexChatGptHandoff.ts";
 import { subscribeCodexAuthCallback } from "./provider/CodexAuthCallback.ts";
 import {
   DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL,
+  AssetGiteaMediaUrlValidationError,
   AuthAccessStreamError,
   type AuthAccessStreamEvent,
   type AuthEnvironmentScope,
@@ -138,6 +139,7 @@ import * as DeviceService from "./device/DeviceService.ts";
 import { remoteSshDeviceHosts } from "./device/localSshDeviceHost.ts";
 import * as PreviewManager from "./preview/Manager.ts";
 import { issueAssetUrl } from "./assets/AssetAccess.ts";
+import { giteaMediaFetchTarget } from "./assets/GiteaMediaFetch.ts";
 import { deletePendingAttachment, issueAttachmentUploadUrl } from "./assets/AttachmentUpload.ts";
 import * as PortScanner from "./preview/PortScanner.ts";
 import * as WorkspaceEntries from "./workspace/WorkspaceEntries.ts";
@@ -3787,6 +3789,15 @@ const makeWsRpcLayer = (
                 (input.resource._tag === "media-file" && path.isAbsolute(input.resource.path))
               ) {
                 return yield* issueAssetUrl({ resource: input.resource });
+              }
+              if (input.resource._tag === "gitea-media") {
+                const settings = yield* serverSettings.getSettings.pipe(
+                  Effect.mapError(() => new AssetGiteaMediaUrlValidationError({})),
+                );
+                return yield* issueAssetUrl({
+                  resource: input.resource,
+                  giteaMedia: giteaMediaFetchTarget(input.resource.url, settings.giteaInstances),
+                });
               }
               if (input.resource._tag === "draft-workspace-file") {
                 // A project draft names its workspace directly; there is no
