@@ -174,6 +174,7 @@ export const make = Effect.gen(function* () {
     enrichment: ProjectEnrichmentService.ProjectEnrichment | null,
   ): Project => ({
     permanentAgent: row.permanentAgent ?? null,
+    automations: row.automations ?? [],
     id: row.projectId,
     kind: row.kind ?? "workspace",
     title: row.title,
@@ -413,6 +414,7 @@ export const make = Effect.gen(function* () {
         type: "project.meta.update",
         commandId: input.commandId,
         projectId: input.projectId,
+        ...(input.automations === undefined ? {} : { automations: input.automations }),
         ...(input.permanentAgent === undefined ? {} : { permanentAgent: input.permanentAgent }),
         ...(input.title === undefined ? {} : { title: input.title }),
         ...(workspaceRoot === previousRoot ? {} : { workspaceRoot }),
