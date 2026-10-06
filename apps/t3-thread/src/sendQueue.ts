@@ -38,6 +38,15 @@ export const MAX_DISPATCH_ATTEMPTS = 5;
 /** A claim older than this is assumed to belong to a watcher that died mid-dispatch. */
 const DISPATCH_CLAIM_TIMEOUT_MS = 120_000;
 
+/** Longest a drain waits on one environment read before treating it as unreachable. */
+const THREAD_READ_TIMEOUT_MS = 30_000;
+
+/** Shorter than the claim timeout, so a hung dispatch fails before its claim is taken over. */
+const DISPATCH_TIMEOUT_MS = 60_000;
+
+/** Heads are independent threads, so a pass reads and dispatches them in parallel. */
+const DRAIN_CONCURRENCY = 8;
+
 /** Thread states that mean the turn boundary has not arrived yet. */
 const IN_FLIGHT_STATES = new Set(["running", "starting"]);
 
@@ -343,15 +352,41 @@ async function retireQueueForThread(input: {
   });
 }
 
+function withTimeout<T>(operation: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} timed out after ${ms / 1000}s.`)), ms);
+  });
+  return Promise.race([operation, timeout]).finally(() => clearTimeout(timer));
+}
+
+async function mapConcurrent<T>(
+  items: readonly T[],
+  limit: number,
+  run: (item: T) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (next < items.length) await run(items[next++]!);
+    }),
+  );
+}
+
 /**
  * One drain pass. Dispatches at most one queued send per thread, because dispatching
  * starts a turn and the rest of that thread's queue must wait for the next boundary.
+ *
+ * A pass is cheap and bounded: the watcher runs it on its own cadence, independent of
+ * the much slower attention scan, so an idle target picks up its queue within one
+ * poll interval instead of waiting for a full scan of every saved agent.
  */
 export async function drainQueuedSends(options: {
   clientFactory: QueueClientFactory;
   env?: string;
   now?: () => string;
   maxAttempts?: number;
+  readTimeoutMs?: number;
 }): Promise<SavedQueuedSend[]> {
   const now = options.now ?? nowIso;
   const maxAttempts = options.maxAttempts ?? MAX_DISPATCH_ATTEMPTS;
@@ -359,7 +394,7 @@ export async function drainQueuedSends(options: {
   const heads = nextPerThread(state, options.env, Date.parse(now()));
   const settled: SavedQueuedSend[] = [];
 
-  for (const head of heads) {
+  await mapConcurrent(heads, DRAIN_CONCURRENCY, async (head) => {
     const attemptedAt = now();
 
     let environment: SavedEnvironment;
@@ -373,25 +408,29 @@ export async function drainQueuedSends(options: {
           now: attemptedAt,
         })),
       );
-      continue;
+      return;
     }
 
     const client = options.clientFactory(environment);
 
     let thread: OrchestrationThread;
     try {
-      thread = await client.findThread(head.threadId);
+      thread = await withTimeout(
+        client.findThread(head.threadId),
+        options.readTimeoutMs ?? THREAD_READ_TIMEOUT_MS,
+        "Reading the target thread",
+      );
     } catch (error) {
-      // The thread may just be unreachable right now; keep the send queued and
-      // retry until the attempt budget is spent.
-      const failed = await recordAttemptFailure({
+      // An unreachable server (a restart, a sleeping laptop) says nothing about the
+      // message, so it must not spend the attempt budget: five failed passes are
+      // seconds apart and would drop the whole queue during an ordinary restart.
+      const noted = await recordUnreachable({
         queued: head,
         attemptedAt,
-        maxAttempts,
         error: error instanceof Error ? error.message : String(error),
       });
-      if (failed) settled.push(failed);
-      continue;
+      if (noted) settled.push(noted);
+      return;
     }
 
     if (thread.archivedAt || thread.deletedAt) {
@@ -402,7 +441,7 @@ export async function drainQueuedSends(options: {
           now: attemptedAt,
         })),
       );
-      continue;
+      return;
     }
 
     const quota = threadQuotaBlock(thread);
@@ -417,27 +456,31 @@ export async function drainQueuedSends(options: {
       (thread.settledOverride === "settled" ||
         (quota && (quota.resetsAt === null || quota.resetsAt > Date.parse(attemptedAt))))
     ) {
-      continue;
+      return;
     }
 
     if (IN_FLIGHT_STATES.has(classifyThread(thread).state)) {
       // Not a turn boundary yet. Leave the record untouched so its attempt budget
       // is only spent on real dispatch failures.
-      continue;
+      return;
     }
 
     const claimed = await claimQueuedSend(head, attemptedAt);
-    if (!claimed) continue;
+    if (!claimed) return;
 
     let result: SavedQueuedSend;
     try {
-      await client.sendMessage({
-        commandId: `fork:queued-send:${claimed.id}`,
-        threadId: claimed.threadId,
-        text: claimed.text,
-        origin: claimed.origin ?? null,
-        queueWhileRunning: false,
-      });
+      await withTimeout(
+        client.sendMessage({
+          commandId: `fork:queued-send:${claimed.id}`,
+          threadId: claimed.threadId,
+          text: claimed.text,
+          origin: claimed.origin ?? null,
+          queueWhileRunning: false,
+        }),
+        DISPATCH_TIMEOUT_MS,
+        "Dispatching the queued send",
+      );
       result = {
         ...claimed,
         status: "dispatched",
@@ -458,28 +501,28 @@ export async function drainQueuedSends(options: {
 
     const persisted = await finalizeQueuedSend(result, claimed.dispatchClaimId);
     if (persisted) settled.push(persisted);
-  }
+  });
 
-  return settled;
+  return settled.sort((left, right) => left.sequence - right.sequence);
 }
 
-async function recordAttemptFailure(input: {
+/** Record why a head could not be read, without spending its attempt budget. */
+async function recordUnreachable(input: {
   queued: SavedQueuedSend;
   attemptedAt: string;
-  maxAttempts: number;
   error: string;
 }): Promise<SavedQueuedSend | null> {
   return updateState(async (state) => {
     const current = state.queuedSends.find((candidate) => candidate.id === input.queued.id) ?? null;
-    if (!current || !OPEN_STATUSES.has(current.status)) {
+    // Skip the rewrite while the reason is unchanged: state.json is large and every
+    // pass would otherwise rewrite it for each unreachable head.
+    if (!current || !OPEN_STATUSES.has(current.status) || current.lastError === input.error) {
       return { state, result: null };
     }
 
-    const attempts = current.attempts + 1;
     const next: SavedQueuedSend = {
       ...current,
-      status: attempts >= input.maxAttempts ? "undeliverable" : "queued",
-      attempts,
+      status: "queued",
       updatedAt: input.attemptedAt,
       lastAttemptedAt: input.attemptedAt,
       lastError: input.error,
@@ -491,4 +534,42 @@ async function recordAttemptFailure(input: {
       result: next,
     };
   });
+}
+
+/**
+ * Drain every `intervalMs`, separately from the watcher's attention scan. The scan
+ * reads every saved agent and takes minutes on a busy machine; chained behind it,
+ * an idle target waited a whole scan before its queue moved.
+ */
+export function startQueueDrainLoop(options: {
+  clientFactory: QueueClientFactory;
+  env?: string;
+  intervalMs: number;
+  report?: (report: { queuedSendResults: SavedQueuedSend[] } | { drainError: string }) => void;
+}): { stop: () => Promise<void> } {
+  let stopped = false;
+  let wake: () => void = () => {};
+  const loop = (async () => {
+    while (!stopped) {
+      try {
+        const results = await drainQueuedSends(options);
+        if (results.length > 0) options.report?.({ queuedSendResults: results });
+      } catch (error) {
+        // One failed pass must not end the loop; the next tick retries.
+        options.report?.({ drainError: error instanceof Error ? error.message : String(error) });
+      }
+      if (stopped) break;
+      await new Promise<void>((resolve) => {
+        wake = resolve;
+        setTimeout(resolve, options.intervalMs).unref();
+      });
+    }
+  })();
+  return {
+    stop: async () => {
+      stopped = true;
+      wake();
+      await loop;
+    },
+  };
 }
