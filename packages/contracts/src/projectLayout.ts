@@ -705,25 +705,45 @@ export function legacyWidgetOrder(tabs: ReadonlyArray<ProjectLayoutTab>): string
   });
 }
 
-/** Ops that make the first tab show these older widget ids, in order (the CLI's `dashboard set`). */
-export function legacyWidgetOrderOps(
+/**
+ * A widget id of `dashboard set --widgets`: an older id (`roadmap`), `canvas:<id>`,
+ * or any registered widget type (`decisions`, `markdown`, ...). Null when it is none.
+ */
+function widgetDraftForId(id: string): WidgetDraftValue | null {
+  return legacyWidget(id) ?? (findWidgetType(id) ? { type: id } : null);
+}
+
+/**
+ * Ops that make the first tab show these widget ids, in order (the CLI's
+ * `dashboard set`). Ids that name no widget are an error: dropping one silently
+ * hid widgets the caller believed it had added.
+ */
+export function widgetOrderOps(
   tabs: ReadonlyArray<ProjectLayoutTab>,
   order: ReadonlyArray<string>,
-): ProjectLayoutOp[] {
+): { ops: ProjectLayoutOp[] } | { error: string } {
+  const unknown = order.filter((id) => widgetDraftForId(id) === null);
+  if (unknown.length > 0) {
+    return {
+      error: `Unknown widget id${unknown.length > 1 ? "s" : ""}: ${unknown.join(", ")}. Use an older id, canvas:<id>, or one of: ${PROJECT_WIDGET_TYPES.map((entry) => entry.type).join(", ")}.`,
+    };
+  }
   const first = tabs[0];
-  if (!first) return [];
+  if (!first) return { ops: [] };
   const ops: ProjectLayoutOp[] = first.widgets.map((widget) => ({
     op: "removeWidget" as const,
     widgetId: widget.id,
   }));
-  for (const legacyId of order) {
-    const draft = legacyWidget(legacyId);
-    if (!draft) continue;
+  const reused = new Set<string>();
+  for (const id of order) {
+    const draft = widgetDraftForId(id)!;
     const existing = first.widgets.find(
       (widget) =>
+        !reused.has(widget.id) &&
         widget.type === draft.type &&
         (draft.type !== "canvas" || widget.config.canvasId === draft.config?.canvasId),
     );
+    if (existing) reused.add(existing.id);
     ops.push({
       op: "addWidget",
       tabId: first.id,
@@ -738,5 +758,5 @@ export function legacyWidgetOrderOps(
         : draft,
     });
   }
-  return ops;
+  return { ops };
 }
