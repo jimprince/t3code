@@ -1,0 +1,4 @@
+id = "antigravity-transport-details"
+category = "fix"
+functionality = "providers"
+text = "Antigravity now shows the reason for native connection and cancellation failures instead of a generic protocol error."
