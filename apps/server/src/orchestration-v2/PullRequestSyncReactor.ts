@@ -27,6 +27,8 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
 import * as PullRequestService from "../pullRequest/PullRequestService.ts";
+import { ProviderRefinementScope } from "../sourceControl/ForkProviderRefinementCache.ts";
+import { BackgroundProcessWork } from "../fork/process/LaunchBudget.ts";
 import { forkParked } from "../serverActivation.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
@@ -326,6 +328,9 @@ export const make = Effect.gen(function* () {
       // As wide as one batched summary read, so the sweep's reads on a host arrive together and
       // GitHub answers them in one request rather than one `gh pr view` apiece.
       { concurrency: 25, discard: true },
+    ).pipe(
+      Effect.provideService(ProviderRefinementScope, new Map()),
+      Effect.provideService(BackgroundProcessWork, true),
     );
   });
 
