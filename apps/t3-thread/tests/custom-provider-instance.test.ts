@@ -1,42 +1,18 @@
+import { shell, shellSnapshot } from "./v2-fixture.js";
 import { describe, expect, it } from "vite-plus/test";
 
 import { decodeServerProvider, decodeShellSnapshotItem } from "../src/contracts.js";
 
 const CUSTOM_INSTANCE_ID = "claudeAgent_ucalgary";
 
-function shellThread(instanceId: string) {
-  return {
-    id: "thread-1",
-    projectId: "project-1",
-    title: "custom instance thread",
-    modelSelection: { instanceId, model: "claude-opus-5" },
-    runtimeMode: "full-access",
-    branch: null,
-    worktreePath: null,
-    latestTurn: null,
-    createdAt: "2026-09-03T00:00:00.000Z",
-    updatedAt: "2026-09-03T00:00:00.000Z",
-    session: null,
-    latestUserMessageAt: null,
-    hasPendingApprovals: false,
-    hasPendingUserInput: false,
-    hasActionableProposedPlan: false,
-  };
-}
-
 // Custom provider instance ids (`claudeAgent_ucalgary`) are first-class in T3 Code
 // and must not be rejected by the operator CLI's snapshot contracts.
 describe("custom provider instance ids", () => {
   it("decodes a shell snapshot thread selecting a custom provider instance", async () => {
-    const item = decodeShellSnapshotItem({
-      kind: "snapshot",
-      snapshot: {
-        snapshotSequence: 0,
-        projects: [],
-        threads: [shellThread(CUSTOM_INSTANCE_ID)],
-        updatedAt: "2026-09-03T00:00:00.000Z",
-      },
-    });
+    const item = decodeShellSnapshotItem(shellSnapshot([shell({
+      providerInstanceId: CUSTOM_INSTANCE_ID,
+      modelSelection: { instanceId: CUSTOM_INSTANCE_ID, model: "claude-opus-5" },
+    })]));
 
     expect(item.kind).toBe("snapshot");
     if (item.kind !== "snapshot") {
