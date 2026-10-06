@@ -1,0 +1,50 @@
+name = "fork-thread-history-compatibility"
+subject = "fix(threads): preserve historical goal data without goal automation"
+class = "divergence"
+purpose = "Keep existing thread snapshots, event replay and transferred history readable after retiring fork features; migrate legacy sidebar ordering events once to upstream metadata events. No goal creation, evaluation or automatic continuation remains."
+retire_when = "Support for databases and transferred histories containing legacy goal records has explicitly ended or those records have been losslessly migrated."
+depends_on = ["fork-thread-client-recovery", "fork-thread-transfer"]
+roles = []
+note = "Brad approved removing goals on 2026-09-05. Retain historical goal schema, projection and import compatibility; numbered migrations remain in the migration ledger. Migration 5 converts sidebar-reordered/orderKey to meta-updated/activeOrderKey transactionally without changing event identity or sequence. ID 4 remains reserved for the previously shipped sidebar-order column migration. Thread transfer bundles contain snapshots, not raw ordering events. Packaged upgrade fixtures freeze released 1293 and 1400 schemas with synthetic sidebar, goal and legacy attachment events; verify replay, preserved IDs and migration ledgers, projections and restart before release. Recent retirement review: sidebar data now migrates through 5; goals keep historical schemas and projection support; file handoffs retain compatibility under their own concern."
+
+[[decision]]
+id = "legacy-event-thread-index"
+date = "2026-10-08"
+decided = "narrow"
+rationale = "History probes, counts, pages and transfer reads seek aggregate_kind/thread plus stream_id. Unary plus on the integer application_event_version disqualifies the low-selectivity version index without a new index migration or a named-index hint; older schemas without these columns remain readable. Full V1 scans blocked server heartbeats for 20–31 seconds on large histories."
+
+[[decision]]
+id = "v2-stable-history-paging"
+date = "2026-10-06"
+decided = "adapt"
+rationale = "Page retained legacy tables by created_at and rowid, or rowid when no timestamp exists; event history retains sequence order. Deterministic ties prevent page boundaries from depending on SQLite query plans."
+
+[[decision]]
+id = "v2-read-only-history"
+date = "2026-10-06"
+decided = "adapt"
+rationale = "Brad approved a read-only view of historical tools, goals, checkpoints and diffs. Historical rows remain unchanged; only native V2 checkpoints can restore files. Migration IDs remain fixed and UI is handed to the Claude lane."
+
+[[decision]]
+id = "v2-import-retired-sidebar-order"
+date = "2026-10-06"
+decided = "adapt"
+rationale = "V2 imports persisted V1 projections without replaying canonicalized sidebar events. Capture source ordering semantics before upgrade: use sidebar_order_key only if active_order_key was absent or the source fork ledger lacked migration 5. Modern null active keys retain automatic ordering despite stale sidebar keys. The import receipt makes this a one-time read; subsequent native clears and historical event identity/sequence remain intact."
+
+[[decision]]
+id = "upstream-thread-repository-list-removal"
+date = "2026-09-20"
+decided = "narrow"
+rationale = "Upstream removed the thread repository's listByProjectId and deleteById queries. Retire historical goal decoding from the deleted list query while preserving goal compatibility in the surviving upsert and getById paths."
+
+[[decision]]
+id = "gitmanager-faketextgeneration"
+date = "2026-07-28"
+decided = "retire"
+rationale = "Upstream replaced the duplicate hand-written interface with TextGeneration['Service']; keep the upstream type alias and do not restore the redundant interface."
+
+[[decision]]
+id = "catchup-2908-historical-ledger-gate"
+date = "2026-10-10"
+decided = "adapt"
+rationale = "Preserve frozen M4 main ledger 60 and fork ledger 1–3,5–15, then require current startup to append immutable main 61–66 with exact names and fork 16/17. Upstream webhook/relay/MCP/window-index additions (#15085, #15487, #16236, #17029) retain the existing +6 remap to 63–66; recovery17 stays owned by fork-admin-thread-recovery. The headless idle-check guide now selects statev2.sqlite as the production updater does, with legacy state.sqlite only as an explicit pre-cutover override. No fixture or shipped identity is renumbered; composed historical startup/restart CI remains required."
