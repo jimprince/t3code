@@ -1,3 +1,6 @@
+export type QueuedSendOrigin = import("@t3tools/shared/messageOrigin").MessageOrigin & {
+  senderEnvironment?: string;
+};
 import type {
   OrchestrationV2RuntimeRequest,
   OrchestrationV2ThreadProjection,
@@ -344,7 +347,6 @@ export type QueuedSendStatus =
  * watcher drains the queue at the next turn boundary.
  */
 export interface SavedQueuedSend {
-  origin?: import("@t3tools/shared/messageOrigin").MessageOrigin | null;
   id: string;
   /** Monotonic per state file. Defines FIFO dispatch order within a thread. */
   sequence: number;
@@ -352,6 +354,10 @@ export interface SavedQueuedSend {
   agentName: string | null;
   environment: string;
   text: string;
+  /** Sender recorded at enqueue time; absent on sends queued by older CLIs. */
+  origin?: QueuedSendOrigin | null;
+  /** Opt-in: a newer open send with the same key, sender and target replaces this one. */
+  coalesceKey?: string;
   status: QueuedSendStatus;
   /** Turn that was running when the send was accepted, for operator diagnostics. */
   queuedDuringTurnId: string | null;
