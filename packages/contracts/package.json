@@ -23,6 +23,10 @@
       "types": "./src/orchestrationV2.ts",
       "import": "./src/orchestrationV2.ts"
     },
+    "./automations": {
+      "types": "./src/automations.ts",
+      "import": "./src/automations.ts"
+    },
     "./projectAutomations": {
       "types": "./src/projectAutomations.ts",
       "import": "./src/projectAutomations.ts"
