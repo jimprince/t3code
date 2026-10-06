@@ -25,6 +25,7 @@ import {
 } from "./projectRequests.logic";
 import { useTaskStatuses } from "./ProjectRequestsSection";
 import { TaskTitle } from "./TaskLink";
+import { epicPhase, formatEpicProgress } from "./projectHorizon.logic";
 import { columnOf, moveInput, roadmapColumns, type RoadmapColumn } from "./projectRoadmap.logic";
 
 const DRAG_TYPE = "application/x-t3-roadmap-item";
@@ -224,6 +225,14 @@ export function ProjectRoadmapWidget({ summary }: { readonly summary: Orchestrat
   const statusOf = (item: ProjectRoadmapItem): TaskStatus =>
     statuses.get(`${repository}#${item.number}`) ??
     (item.stage ? STAGE_STATUS[item.stage] : "pending");
+  // An epic reads "1 of 4 · Building" where a task reads its status.
+  const statusText = (item: ProjectRoadmapItem) =>
+    item.epic
+      ? formatEpicProgress(
+          item.epic,
+          epicPhase(item.epic, (number) => statuses.get(`${repository}#${number}`) ?? "pending"),
+        )
+      : TASK_STATUS_LABEL[statusOf(item)];
 
   if (!roadmap.data) {
     return <ProjectQueryState what="roadmap" error={roadmap.error} onRetry={roadmap.refresh} />;
@@ -323,9 +332,7 @@ export function ProjectRoadmapWidget({ summary }: { readonly summary: Orchestrat
                     >
                       {item.title}
                     </TaskTitle>
-                    <span className="text-xs text-muted-foreground">
-                      {TASK_STATUS_LABEL[statusOf(item)]}
-                    </span>
+                    <span className="text-xs text-muted-foreground">{statusText(item)}</span>
                   </span>
                   <Menu>
                     <MenuTrigger
