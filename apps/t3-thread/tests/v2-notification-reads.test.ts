@@ -64,6 +64,22 @@ function projection(runs: OrchestrationV2Run[], planStatus?: string) {
   } as unknown as OrchestrationV2ThreadProjection;
 }
 describe("native V2 notification reads", () => {
+  it("round-trips native auto-settle timestamps in detail and shell reads", () => {
+    for (const disabledAt of [date, null]) {
+      const source = projection([run("finished", 1, "completed")]);
+      source.thread.autoSettleDisabledAt = disabledAt;
+      const expected = disabledAt === null ? null : DateTime.formatIso(disabledAt);
+      expect(threadDetail(source).autoSettleDisabledAt).toBe(expected);
+      expect(
+        threadShell({
+          ...source.thread,
+          latestRunId: "finished",
+          status: "completed",
+          pendingRuntimeRequest: null,
+        } as Parameters<typeof threadShell>[0]).autoSettleDisabledAt,
+      ).toBe(expected);
+    }
+  });
   it("never groups execution descendants without organizational metadata", () => {
     const source = projection([run("finished", 1, "completed")]);
     const detail = threadDetail(source);
