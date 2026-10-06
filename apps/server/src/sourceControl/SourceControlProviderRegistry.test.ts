@@ -10,6 +10,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import { ChildProcessSpawner } from "effect/process";
+import { TestClock } from "effect/testing";
 import { VcsRepositoryDetectionError } from "@t3tools/contracts";
 
 import * as ServerConfig from "../config.ts";
@@ -31,6 +32,101 @@ import * as SourceControlProviderRegistry from "./SourceControlProviderRegistry.
 import * as ServerSourceControlHost from "./ServerSourceControlHost.ts";
 
 const TEST_EPOCH = DateTime.makeUnsafe("1970-01-01T00:00:00.000Z");
+
+it.effect("retains one discovery per remote for a whole sweep, even after the shared TTL", () =>
+  Effect.gen(function* () {
+    let attempts = 0;
+    const registry = yield* makeRegistry({
+      remotes: [],
+      process: {
+        run: () =>
+          Effect.sync(() => {
+            attempts++;
+            return processOutput(
+              "self-hosted.test\n  ✓ Logged in to self-hosted.test as gitlab-user\n",
+            );
+          }),
+      },
+    });
+    const input = {
+      cwd: "/repo",
+      context: {
+        provider: {
+          kind: "unknown" as const,
+          name: "self-hosted.test",
+          baseUrl: "https://self-hosted.test",
+        },
+        remoteName: "origin",
+        remoteUrl: "https://self-hosted.test/team/repo.git",
+      },
+    };
+    yield* Effect.gen(function* () {
+      const handle = yield* registry.resolveHandle(input);
+      assert.strictEqual(handle.context?.provider.kind, "gitlab");
+      const initial = attempts;
+      yield* TestClock.adjust("6 seconds");
+      yield* registry.resolveHandle(input);
+      assert.strictEqual(attempts, initial);
+      yield* registry.resolveHandle({
+        ...input,
+        context: { ...input.context, remoteUrl: "https://self-hosted.test/team/other.git" },
+      });
+      assert.strictEqual(attempts, initial * 2);
+    }).pipe(
+      Effect.provideService(SourceControlProviderRegistry.ProviderRefinementScope, new Map()),
+    );
+  }),
+);
+
+it.effect(
+  "single-flights explicit remote refinements, caches unresolved providers, and separates targets",
+  () =>
+    Effect.gen(function* () {
+      let attempts = 0;
+      const registry = yield* makeRegistry({
+        remotes: [],
+        process: {
+          run: () =>
+            Effect.sync(() => {
+              attempts++;
+              return processOutput("");
+            }),
+        },
+      });
+      const input = {
+        cwd: "/repo",
+        context: {
+          provider: {
+            kind: "unknown" as const,
+            name: "self-hosted.test",
+            baseUrl: "https://self-hosted.test",
+          },
+          remoteName: "origin",
+          remoteUrl: "https://self-hosted.test/team/repo.git",
+        },
+      };
+      const handles = yield* Effect.all(
+        Array.from({ length: 20 }, () => registry.resolveHandle(input)),
+        { concurrency: "unbounded" },
+      );
+      assert.isTrue(handles.every((handle) => handle.context?.provider.kind === "unknown"));
+      const firstAttempts = attempts;
+      assert.strictEqual(firstAttempts, 1);
+      yield* registry.resolveHandle(input);
+      assert.strictEqual(attempts, firstAttempts);
+      yield* TestClock.adjust("5 seconds");
+      yield* registry.resolveHandle(input);
+      assert.strictEqual(attempts, firstAttempts);
+      yield* registry.resolveHandle({
+        ...input,
+        context: { ...input.context, requestedHost: "other.test" },
+      });
+      assert.strictEqual(attempts, firstAttempts * 2);
+      yield* TestClock.adjust("11 seconds");
+      yield* registry.resolveHandle(input);
+      assert.strictEqual(attempts, firstAttempts * 3);
+    }),
+);
 
 const processOutput = (
   stdout: string,
@@ -537,4 +633,48 @@ it.effect("rechecks configured instances for cached contexts without restarting"
     assert.strictEqual((yield* registry.resolve({ cwd: "/repo" })).kind, "unknown");
     assert.strictEqual((yield* registry.resolve({ cwd: "/initial-configured" })).kind, "unknown");
   }).pipe(Effect.provide(ServerSettings.layerTest())),
+);
+
+it.effect("recognizes recovered GitHub credentials before the unsupported badge lifetime", () =>
+  Effect.gen(function* () {
+    let available = false;
+    let credentialReads = 0;
+    const registry = yield* makeRegistry({
+      remotes: [],
+      githubApi: {
+        credential: (host) => {
+          credentialReads++;
+          return available
+            ? Effect.succeed({ token: Redacted.make("new-token"), fingerprint: host })
+            : Effect.fail(new GitHubCredentials.GitHubNotSignedInError({ host }));
+        },
+      },
+    });
+    const input = {
+      cwd: "/repo",
+      context: {
+        provider: {
+          kind: "unknown" as const,
+          name: "code.example.test",
+          baseUrl: "https://code.example.test",
+        },
+        remoteName: "origin",
+        remoteUrl: "git@code.example.test:team/repo.git",
+      },
+    };
+    assert.equal((yield* registry.resolveHandle(input)).provider.kind, "unknown");
+    available = true;
+    assert.equal((yield* registry.resolveHandle(input)).provider.kind, "unknown");
+    assert.equal(credentialReads, 1);
+    yield* TestClock.adjust("11 seconds");
+    yield* Effect.gen(function* () {
+      assert.equal((yield* registry.resolveHandle(input)).provider.kind, "github");
+      assert.equal(credentialReads, 2);
+      yield* TestClock.adjust("6 seconds");
+      assert.equal((yield* registry.resolveHandle(input)).provider.kind, "github");
+      assert.equal(credentialReads, 2);
+    }).pipe(
+      Effect.provideService(SourceControlProviderRegistry.ProviderRefinementScope, new Map()),
+    );
+  }),
 );
