@@ -1291,25 +1291,38 @@ describe("notification preferences", () => {
   });
 });
 
-
 it("keeps completion receipts and error episodes separate for identical thread IDs on two hosts", async () => {
-  for (const state of ["completed", "error"] as const) await withTempState(async () => {
-    const saved = await loadState();
-    await saveState({ ...saved,
-      environments: [...saved.environments, makeEnvironment({ name: "other", environmentId: "env-2" })],
-      agents: [...saved.agents, makeAgent({ name: "other-worker", environment: "other" })],
-      subscriptions: [...saved.subscriptions, makeSubscription({ sourceEnvironment: "other", subscriberEnvironment: "other", sourceAgentName: "other-worker" })],
+  for (const state of ["completed", "error"] as const)
+    await withTempState(async () => {
+      const saved = await loadState();
+      await saveState({
+        ...saved,
+        environments: [
+          ...saved.environments,
+          makeEnvironment({ name: "other", environmentId: "env-2" }),
+        ],
+        agents: [...saved.agents, makeAgent({ name: "other-worker", environment: "other" })],
+        subscriptions: [
+          ...saved.subscriptions,
+          makeSubscription({
+            sourceEnvironment: "other",
+            subscriberEnvironment: "other",
+            sourceAgentName: "other-worker",
+          }),
+        ],
+      });
+      const sourceThread = makeThread();
+      sourceThread.latestTurn!.state = state;
+      const { clientFactory, sentMessages } = createClientFactory({ sourceThread });
+      await detectAttentionEvents({ clientFactory });
+      await deliverPendingNotifications({ clientFactory });
+      expect(sentMessages).toHaveLength(2);
+      await detectAttentionEvents({ clientFactory });
+      expect((await loadState()).notifications).toHaveLength(2);
+      expect(new Set((await loadState()).notifications.map((n) => n.sourceEnvironment))).toEqual(
+        new Set(["dev-vm", "other"]),
+      );
     });
-    const sourceThread = makeThread();
-    sourceThread.latestTurn!.state = state;
-    const { clientFactory, sentMessages } = createClientFactory({ sourceThread });
-    await detectAttentionEvents({ clientFactory });
-    await deliverPendingNotifications({ clientFactory });
-    expect(sentMessages).toHaveLength(2);
-    await detectAttentionEvents({ clientFactory });
-    expect((await loadState()).notifications).toHaveLength(2);
-    expect(new Set((await loadState()).notifications.map(n => n.sourceEnvironment))).toEqual(new Set(["dev-vm", "other"]));
-  });
 });
 
 describe("child input reminders", () => {
@@ -1410,6 +1423,300 @@ describe("child input reminders", () => {
         await deliverPendingNotifications({ clientFactory: next.clientFactory, now });
         expect(next.sentMessages).toEqual([]);
         expect((await loadState()).notifications.at(-1)?.status).toBe("superseded");
+      });
+    },
+  );
+});
+
+describe("opt-in active-worker inactivity", () => {
+  const at = (minute: number) =>
+    new Date(Date.parse("2026-10-02T12:00:00Z") + minute * 60_000).toISOString();
+  function runningThread() {
+    return makeThread({
+      messages: [],
+      latestTurn: {
+        turnId: "assigned-turn",
+        state: "running",
+        requestedAt: at(0),
+        startedAt: at(0),
+        completedAt: null,
+        assistantMessageId: null,
+      },
+      session: {
+        threadId: "thread-worker-a",
+        status: "running",
+        providerName: "codex",
+        runtimeMode: "full-access",
+        activeTurnId: "assigned-turn",
+        lastError: null,
+        updatedAt: at(0),
+      },
+    });
+  }
+  async function monitor(thread: OrchestrationThread, minutes = 15) {
+    const state = await loadState();
+    state.subscriptions[0]!.level = "attention";
+    state.subscriptions[0]!.inactivityMinutes = minutes;
+    await saveState(state);
+    const transport = createClientFactory({ sourceThread: thread });
+    async function scan(minute: number) {
+      return detectAttentionEvents({
+        clientFactory: transport.clientFactory,
+        now: () => at(minute),
+      });
+    }
+    return { ...transport, scan };
+  }
+  it("delivers one attention alert per silence episode across restart and rearms after tool progress", async () => {
+    await withTempState(async () => {
+      const thread = runningThread();
+      const { scan, clientFactory, sentMessages } = await monitor(thread);
+      for (let minute = 0; minute < 15; minute++) expect(await scan(minute)).toEqual([]);
+      expect((await scan(15))[0]?.sourceState).toBe("inactive");
+      await deliverPendingNotifications({ clientFactory, now: () => at(15) });
+      expect(sentMessages).toHaveLength(1);
+      expect(sentMessages[0]!.text).toContain(
+        "No observable provider, tool, or reasoning progress for 15 minutes",
+      );
+      // A new detector loads the persisted observation and delivered episode.
+      await detectAttentionEvents({
+        clientFactory: createClientFactory({ sourceThread: thread }).clientFactory,
+        now: () => at(16),
+      });
+      await deliverPendingNotifications({ clientFactory, now: () => at(16) });
+      expect(sentMessages).toHaveLength(1);
+      thread.activities.push({
+        id: "tool-update",
+        kind: "tool.progress",
+        turnId: "assigned-turn",
+        createdAt: at(17),
+        payload: {},
+      });
+      for (let minute = 17; minute < 32; minute++) expect(await scan(minute)).toEqual([]);
+      await scan(32);
+      await deliverPendingNotifications({ clientFactory, now: () => at(32) });
+      expect(sentMessages).toHaveLength(2);
+      expect(
+        (await loadState()).notifications.filter((n) => n.sourceState === "inactive"),
+      ).toHaveLength(2);
+    });
+  });
+  it.each([
+    "tool.started",
+    "tool.updated",
+    "tool.progress",
+    "tool.completed",
+    "task.progress",
+    "reasoning",
+    "assistant",
+  ])("counts current-turn %s evidence while prose is absent", async (kind) => {
+    await withTempState(async () => {
+      const thread = runningThread();
+      const { scan } = await monitor(thread);
+      for (let minute = 0; minute <= 20; minute++) {
+        if (kind === "reasoning" || kind === "assistant")
+          thread.messages = [
+            {
+              id: "stream",
+              role: kind,
+              text: "progress",
+              turnId: "assigned-turn",
+              streaming: true,
+              createdAt: at(0),
+              updatedAt: at(minute),
+            },
+          ];
+        else
+          thread.activities.push({
+            id: `event-${minute}`,
+            kind,
+            turnId: "assigned-turn",
+            createdAt: at(minute),
+            payload: {},
+          });
+        expect(await scan(minute)).toEqual([]);
+      }
+    });
+  });
+  it.each([
+    "completed",
+    "idle",
+    "archived",
+    "settled",
+    "input",
+    "approval",
+    "plan",
+    "quota",
+    "stopped",
+    "disabled",
+    "none",
+  ])("does not flag %s workers and preserves required escalations", async (state) => {
+    await withTempState(async () => {
+      const thread = runningThread();
+      if (state === "completed") thread.latestTurn!.state = "completed";
+      if (state === "idle") {
+        thread.latestTurn = null;
+        thread.session = null;
+      }
+      if (state === "stopped") thread.session!.status = "stopped";
+      if (state === "archived") thread.archivedAt = at(0);
+      if (state === "settled") thread.settledOverride = "settled";
+      if (["input", "approval"].includes(state))
+        thread.activities.push({
+          kind: state === "input" ? "user-input.requested" : "approval.requested",
+          turnId: "assigned-turn",
+          createdAt: at(0),
+          payload: {
+            requestId: "request-1",
+            questions: [{ id: "q", question: "Which approach?", options: [] }],
+          },
+        });
+      if (state === "plan")
+        thread.proposedPlans.push({
+          id: "plan",
+          turnId: "assigned-turn",
+          planMarkdown: "plan",
+          implementedAt: null,
+          createdAt: at(0),
+          updatedAt: at(0),
+        });
+      if (state === "quota")
+        thread.activities.push({
+          kind: "runtime.warning",
+          turnId: "assigned-turn",
+          createdAt: at(0),
+          payload: { detail: { rateLimitType: "session", status: "rejected" } },
+        });
+      const { scan } = await monitor(thread, state === "disabled" ? 0 : 15);
+      if (state === "none") {
+        const saved = await loadState();
+        saved.subscriptions[0]!.level = "none";
+        await saveState(saved);
+      }
+      for (let minute = 0; minute <= 20; minute++) {
+        const events = await scan(minute);
+        expect(events.some((n) => n.sourceState === "inactive")).toBe(false);
+        if (["input", "approval", "plan"].includes(state)) expect(events).toHaveLength(1);
+      }
+    });
+  });
+  it("starts a new observation window after an outage instead of asserting a stall", async () => {
+    await withTempState(async () => {
+      const thread = runningThread();
+      const { scan } = await monitor(thread);
+      for (let minute = 0; minute <= 14; minute++) await scan(minute);
+      await detectAttentionEvents({
+        clientFactory: () => ({
+          findThread: async () => {
+            throw new Error("network unavailable");
+          },
+          sendMessage: async () => {},
+        }),
+        now: () => at(15),
+      });
+      expect((await loadState()).subscriptions[0]!.inactivityObservation).toBeNull();
+      expect(await scan(30)).toEqual([]);
+      for (let minute = 31; minute < 45; minute++) expect(await scan(minute)).toEqual([]);
+      expect((await scan(45))[0]?.sourceState).toBe("inactive");
+    });
+  });
+  it("keeps an opted-in watcher awake on unknown liveness without creating an alert", async () => {
+    await withTempState(async () => {
+      await monitor(runningThread());
+      const state = await loadState();
+      const clientFactory: WatchClientFactory = () => ({
+        findThread: async () => {
+          throw new Error("network unavailable");
+        },
+        sendMessage: async () => {},
+      });
+      expect(await hasActiveWork({ clientFactory })).toBe(true);
+      expect(await scanAttentionNotifications(state, { clientFactory })).toEqual([]);
+      state.subscriptions[0]!.inactivityMinutes = 0;
+      await saveState(state);
+      expect(await hasActiveWork({ clientFactory })).toBe(false);
+    });
+  });
+  it("metadata, stale-turn activity and an open silent tool do not mask silence", async () => {
+    await withTempState(async () => {
+      const thread = runningThread();
+      thread.activities.push({ kind: "tool.started", turnId: "assigned-turn", createdAt: at(0) });
+      const { scan } = await monitor(thread);
+      for (let minute = 0; minute <= 15; minute++) {
+        thread.updatedAt = at(minute);
+        thread.session!.updatedAt = at(minute);
+        thread.activities.push(
+          { kind: "tool.progress", turnId: "old-turn", createdAt: at(minute) },
+          {
+            kind: "runtime.warning",
+            turnId: "assigned-turn",
+            createdAt: at(minute),
+            payload: { message: "poll" },
+          },
+        );
+        const events = await scan(minute);
+        expect(events).toHaveLength(minute === 15 ? 1 : 0);
+      }
+    });
+  });
+  it("new assignments rearm and long watcher pauses do not count as observed silence", async () => {
+    await withTempState(async () => {
+      const thread = runningThread();
+      const { scan, clientFactory, sentMessages } = await monitor(thread);
+      await scan(0);
+      expect(await scan(10)).toEqual([]);
+      for (let minute = 11; minute <= 25; minute++) await scan(minute);
+      await deliverPendingNotifications({ clientFactory, now: () => at(25) });
+      expect(sentMessages).toHaveLength(1);
+      thread.latestTurn!.turnId = "next-assignment";
+      thread.latestTurn!.startedAt = at(26);
+      for (let minute = 26; minute <= 41; minute++) await scan(minute);
+      await deliverPendingNotifications({ clientFactory, now: () => at(41) });
+      expect(sentMessages).toHaveLength(2);
+    });
+  });
+  it.each(["progress", "completed", "quota", "disabled", "network"])(
+    "revalidates %s before delivering a delayed alert",
+    async (change) => {
+      await withTempState(async () => {
+        const thread = runningThread();
+        const { scan, clientFactory, sentMessages } = await monitor(thread);
+        for (let minute = 0; minute <= 15; minute++) await scan(minute);
+        if (change === "progress")
+          thread.activities.push({
+            kind: "tool.completed",
+            turnId: "assigned-turn",
+            createdAt: at(16),
+          });
+        if (change === "completed") thread.latestTurn!.state = "completed";
+        if (change === "quota")
+          thread.activities.push({
+            kind: "runtime.warning",
+            turnId: "assigned-turn",
+            createdAt: at(16),
+            payload: { detail: { rateLimitType: "session", status: "rejected" } },
+          });
+        if (change === "disabled") {
+          const state = await loadState();
+          state.subscriptions[0]!.inactivityMinutes = 0;
+          await saveState(state);
+        }
+        const transport: WatchClientFactory =
+          change === "network"
+            ? () => ({
+                findThread: async () => {
+                  throw new Error("network unavailable");
+                },
+                sendMessage: async () => {
+                  throw new Error("must not send");
+                },
+              })
+            : clientFactory;
+        await deliverPendingNotifications({ clientFactory: transport, now: () => at(16) });
+        expect(sentMessages).toHaveLength(0);
+        expect((await loadState()).notifications[0]?.status).toBe(
+          change === "network" ? "delivery-failed" : "superseded",
+        );
       });
     },
   );
