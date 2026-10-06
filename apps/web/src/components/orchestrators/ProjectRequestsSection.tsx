@@ -1,11 +1,10 @@
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import type { EnvironmentId, ProjectIssue, ProjectRequestStage } from "@t3tools/contracts";
+import type { ProjectIssue, ProjectRequestStage } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { CheckIcon, RotateCcwIcon } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
-import { useThreadProjection } from "../../state/entities";
 import { projectIssuesQuery, settleProjectRequest } from "../../state/projectIssues";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -15,6 +14,7 @@ import { projectReturnState } from "./projectNavigation";
 import { formatIssueAge } from "./projectIssuesBoard.logic";
 import { useNextReleaseItems } from "./ProjectRoadmapWidget";
 import {
+  answerSentences,
   deriveCompleted,
   deriveMaintenance,
   deriveNeedsYou,
@@ -25,13 +25,10 @@ import {
   latestProgressLine,
   nextReleaseRequests,
   requestsOfSettledThreads,
-  taskKind,
   type CompletedTask,
   type NeedsYouItem,
   type ProjectRequest,
 } from "./projectRequests.logic";
-
-const EXCERPT_LINES = 4;
 
 /** One word per status, the same everywhere on the page. */
 const STAGE_LABEL: Record<ProjectRequestStage, string> = {
@@ -42,17 +39,6 @@ const STAGE_LABEL: Record<ProjectRequestStage, string> = {
   "needs-test": "shipped, test it",
   settled: "settled",
 };
-
-function excerpt(text: string): string {
-  return text
-    .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/\*\*|__|`/g, "")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .slice(0, EXCERPT_LINES)
-    .join("\n");
-}
 
 /**
  * The project's requests, issues and queued filings from one shared query: the
@@ -174,33 +160,6 @@ export function ClickableRow({
     </li>
   );
 }
-
-/** The thread's newest reply, for a request whose thread answered before the agent marked it. */
-function ThreadReply({
-  environmentId,
-  request,
-}: {
-  readonly environmentId: EnvironmentId;
-  readonly request: ProjectRequest;
-}) {
-  const detail = useThreadProjection(
-    request.thread ? scopeThreadRef(environmentId, request.thread.id) : null,
-  )?.projection;
-  const reply = useMemo(
-    () =>
-      detail?.messages.findLast(
-        (message) => message.role === "assistant" && message.text.trim().length > 0,
-      )?.text ?? null,
-    [detail],
-  );
-  return reply ? <Excerpt text={reply} /> : null;
-}
-
-const Excerpt = ({ text }: { readonly text: string }) => (
-  <p className="mt-1 line-clamp-4 text-xs whitespace-pre-line text-muted-foreground">
-    {excerpt(text)}
-  </p>
-);
 
 /** "-> worker, worker": who is on a request. */
 function ServedBy({ request }: { readonly request: ProjectRequest }) {
@@ -327,6 +286,69 @@ function CompactRow({
   );
 }
 
+/** "07:12" today, "Oct 4, 07:12" before: when a question was asked or answered. */
+function clockTime(iso: string): string {
+  const date = new Date(iso);
+  const time = date.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  return date.toDateString() === new Date().toDateString()
+    ? time
+    : `${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}, ${time}`;
+}
+
+/**
+ * The body of a Needs you row, answer first: an answered question shows its own
+ * answer in a few whole sentences with when it was asked and answered; work for
+ * review shows the agent's summary; shipped work shows its test step. No meta line.
+ */
+function NeedsYouRowBody({
+  issue,
+  request,
+  group,
+}: {
+  readonly issue: ProjectIssue;
+  readonly request: ProjectRequest | null;
+  readonly group: NeedsYouItem["group"];
+}) {
+  // A ready comment is the agent's answer or summary; otherwise the thread's reply
+  // to this very question.
+  const ready = request?.stage === "ready" || request === null;
+  const answer =
+    ready && issue.latestComment
+      ? { text: issue.latestComment.body, at: issue.latestComment.createdAt }
+      : issue.answer
+        ? { text: issue.answer.text, at: issue.answer.answeredAt }
+        : null;
+  return (
+    <span className="min-w-0 flex-1">
+      <span className="line-clamp-2 text-sm">{issue.title}</span>
+      {group === "test" ? (
+        <span className="mt-1 block text-xs text-foreground/90">
+          {request?.testStep ? `Test: ${request.testStep}` : "No test step posted"}
+          {issue.milestone ? (
+            <span className="text-muted-foreground"> · shipped in {issue.milestone.title}</span>
+          ) : null}
+        </span>
+      ) : answer ? (
+        <>
+          <span className="mt-1 block text-sm text-foreground/85">
+            {answerSentences(answer.text.replace(/^\s*(progress|test):\s*/i, ""))}
+          </span>
+          {group === "answers" ? (
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              Asked {clockTime(issue.answer?.askedAt ?? issue.createdAt)} · As of{" "}
+              {clockTime(answer.at)}
+            </span>
+          ) : null}
+        </>
+      ) : null}
+    </span>
+  );
+}
+
 /**
  * Brad's part of Needs you: requests in his groups (answers, review, approve,
  * shipped to test) and any other issue marked for his review or test, each with
@@ -341,7 +363,6 @@ export function NeedsYouIssueGroups({
   readonly items: ReadonlyArray<NeedsYouItem>;
   readonly settle: SettleControls;
 }) {
-  const environmentId = summary.root.environmentId;
   const openThread = useOpenThread(summary);
   return (
     <>
@@ -361,24 +382,7 @@ export function NeedsYouIssueGroups({
                     onOpen={threadId ? () => openThread(threadId) : null}
                     className="items-start py-2"
                   >
-                    <span className="min-w-0 flex-1">
-                      <IssueLink issue={issue} />
-                      <span className="text-xs text-muted-foreground">
-                        {request ? STAGE_LABEL[request.stage] : "review"}
-                        {` · ${request?.kind ?? taskKind(issue.labels) ?? "issue"}`}
-                        {request?.stage === "needs-test" && issue.milestone
-                          ? ` · shipped in ${issue.milestone.title}`
-                          : ""}
-                        {request?.replied ? " · thread replied" : ""}
-                      </span>
-                      {request?.testStep ? (
-                        <p className="mt-1 text-xs text-foreground/90">Test: {request.testStep}</p>
-                      ) : issue.latestComment ? (
-                        <Excerpt text={issue.latestComment.body} />
-                      ) : request?.replied ? (
-                        <ThreadReply environmentId={environmentId} request={request} />
-                      ) : null}
-                    </span>
+                    <NeedsYouRowBody issue={issue} request={request} group={group} />
                     <SettleButton issues={[issue]} settle={settle} />
                   </ClickableRow>
                 );
