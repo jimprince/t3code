@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# GitHub's push path filter can include replayed history after a force push.
+# Only the net packaged-source change should start a fork-only nightly.
+needed=true
+if [[ "${GITHUB_EVENT_NAME:-}" == push ]]; then
+  before="${PUSH_BEFORE:-}"
+  after="${PUSH_AFTER:-}"
+  if [[ "$before" =~ ^[0-9a-f]{40}$ && "$after" =~ ^[0-9a-f]{40}$ && "$before" != 0000000000000000000000000000000000000000 ]]; then
+    if ! git cat-file -e "${before}^{commit}" 2>/dev/null; then
+      git fetch --no-tags origin "$before" || true
+    fi
+    if git cat-file -e "${before}^{commit}" 2>/dev/null && git cat-file -e "${after}^{commit}" 2>/dev/null; then
+      if git diff --quiet "$before" "$after" -- \
+        apps/desktop apps/server apps/web assets packages \
+        scripts/build-desktop-artifact.ts scripts/build-headless-artifact.ts \
+        scripts/lib/brand-assets.ts package.json pnpm-lock.yaml pnpm-workspace.yaml; then
+        needed=false
+      fi
+    fi
+  fi
+fi
+# Unknown history and manual dispatch retain the existing release path.
+echo "needed=$needed" >> "${GITHUB_OUTPUT:?GITHUB_OUTPUT is required}"
+if [[ "$needed" == false ]]; then
+  echo 'No packaged-source changes between the push trees; skipping nightly replay.'
+else
+  echo 'Packaged source changed, history is unavailable, or dispatch was manual; checking nightly release.'
+fi
