@@ -59,6 +59,7 @@ export const ProjectCanvasIntent = Schema.Literals([
   "open-thread",
   "open-issue",
   "open-url",
+  "resize",
 ]);
 export type ProjectCanvasIntent = typeof ProjectCanvasIntent.Type;
 
