@@ -361,7 +361,7 @@ purpose = "Provide server-owned General Chat projects: the project kind contract
 retire_when = "Upstream ships an equivalent repository-independent chat project kind."
 depends_on = ["fork-thread-client-recovery"]
 roles = []
-note = "Reorganized 2026-09-06 from fork-general-chat-projects. Upstream ordering fixtures include the owning project required by General Chat metadata guards."
+note = "Reorganized 2026-09-06 from fork-general-chat-projects. Upstream ordering fixtures include the owning project required by General Chat metadata guards. Copied-state tests use T3_LIFECYCLE_FIXTURES, preserve the shipped migration ledger through the production runner, and create scoped disposable copies before writes."
 
 [[patch.decision]]
 id = "v2-port-2689"
