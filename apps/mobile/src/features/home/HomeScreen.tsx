@@ -280,7 +280,7 @@ function MobileOrchestratorList({
               ) : null}
               <Text
                 className="min-w-0 flex-1 text-sm font-t3-medium text-foreground"
-                numberOfLines={1}
+                numberOfLines={2}
               >
                 {summary.root.title}
               </Text>
@@ -302,18 +302,20 @@ function MobileOrchestratorList({
                 )}
               >
                 {summary.status === "supervising"
-                  ? "◌ Supervising"
+                  ? "Supervising"
                   : summary.status === "working"
-                    ? "◌ Working"
+                    ? "Working"
                     : summary.status === "approval"
                       ? "Needs approval"
                       : summary.status === "input"
                         ? "Needs input"
                         : "Idle"}
               </Text>
-              <Text className="text-xs text-foreground-muted">
-                {summary.activeWorkerCount} active
-              </Text>
+              {summary.activeWorkerCount > 0 ? (
+                <Text className="text-xs text-foreground-muted">
+                  {summary.activeWorkerCount} working
+                </Text>
+              ) : null}
             </View>
             {summary.projects.length > 0 ? (
               <Text className="mt-1 text-xs text-foreground-muted" numberOfLines={1}>
