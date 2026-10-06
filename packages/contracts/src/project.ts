@@ -1,3 +1,4 @@
+import { PermanentAgent } from "./namedAgents.ts";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 import { RepositoryIdentity, ThreadEnvMode } from "./environment.ts";
@@ -161,6 +162,7 @@ export const ReceivedProjectIcon = ForwardCompatibleUnion(projectIconMembers, "k
 );
 
 export const Project = Schema.Struct({
+  permanentAgent: Schema.optional(Schema.NullOr(PermanentAgent)),
   kind: Schema.optional(Schema.Literals(["workspace", "chat"])),
   id: ProjectId,
   title: TrimmedNonEmptyString,
@@ -205,6 +207,7 @@ export const ProjectCreatePayload = Schema.Struct({
 export type ProjectCreatePayload = typeof ProjectCreatePayload.Type;
 
 export const ProjectUpdatePayload = Schema.Struct({
+  permanentAgent: Schema.optional(Schema.NullOr(PermanentAgent)),
   title: Schema.optional(TrimmedNonEmptyString),
   workspaceRoot: Schema.optional(TrimmedNonEmptyString),
   defaultModelSelection: Schema.optional(Schema.NullOr(ModelSelection)),
