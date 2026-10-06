@@ -239,6 +239,7 @@ import * as RequestLedger from "./projectIssues/RequestLedger.ts";
 import * as ProjectDashboardService from "./projectDashboard/ProjectDashboardService.ts";
 import * as ProjectDashboardStore from "./projectDashboard/ProjectDashboardStore.ts";
 import * as ProjectRoadmapService from "./projectRoadmap/ProjectRoadmapService.ts";
+import * as ProjectCanvasService from "./projectCanvas/ProjectCanvasService.ts";
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as AzureDevOpsCli from "./sourceControl/AzureDevOpsCli.ts";
@@ -1332,6 +1333,7 @@ const makeWsRpcLayer = (
       const withPullRequestViewer = pullRequests.withRoutingCredential;
       const projectIssues = yield* ProjectIssuesService.make;
       const requestLedger = yield* RequestLedger.make({ projectIssues, threadIssues });
+      const projectCanvas = yield* ProjectCanvasService.make;
       const projectRoadmap = yield* ProjectRoadmapService.make({
         ledger: requestLedger,
         projectIssues,
@@ -2738,6 +2740,14 @@ const makeWsRpcLayer = (
         [WS_METHODS.projectRequestsUpdate]: (input) =>
           observeRpcEffect(WS_METHODS.projectRequestsUpdate, requestLedger.update(input), {
             "rpc.aggregate": "project-issues",
+          }),
+        [WS_METHODS.projectCanvasRead]: (input) =>
+          observeRpcEffect(WS_METHODS.projectCanvasRead, projectCanvas.read(input), {
+            "rpc.aggregate": "project-canvas",
+          }),
+        [WS_METHODS.projectCanvasAction]: (input) =>
+          observeRpcEffect(WS_METHODS.projectCanvasAction, projectCanvas.logAction(input), {
+            "rpc.aggregate": "project-canvas",
           }),
         [WS_METHODS.projectRoadmapGet]: (input) =>
           observeRpcEffect(WS_METHODS.projectRoadmapGet, projectRoadmap.get(input), {
