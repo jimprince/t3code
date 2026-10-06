@@ -581,6 +581,8 @@ export class RemoteEnvironmentClient {
     baseBranch?: string;
     initialMessage?: string;
     workerContext?: WorkerContext;
+    parentThreadId?: string | null;
+    settleOnComplete?: boolean;
     pin?: boolean;
     parentThreadId?: string;
     remoteParent?: { environmentId: string; threadId: string };
@@ -619,13 +621,47 @@ export class RemoteEnvironmentClient {
           buildModelSelection({ providerModels }) ??
           DEFAULT_MODEL_SELECTION);
 
+    const config = await this.getServerConfig().catch(() => null);
+    const settleOnComplete =
+      input.settleOnComplete ??
+      config?.settings.projectSettingsOverrides[project.id]?.subthreadSettleOnComplete ??
+      config?.settings.subthreadSettleOnComplete ??
+      true;
     const threadId = NodeCrypto.randomUUID();
     const runtimeMode = input.runtimeMode ?? "full-access";
     const interactionMode = input.interactionMode ?? "default";
     const createdAt = nowIso();
     const rpc = await this.openRpc();
     try {
+      // Claim an empty thread first so parenting and policy exist before any provider turn.
       await rpc.request("launchThread", {
+        commandId: NodeCrypto.randomUUID(),
+        threadId,
+        projectId: project.id,
+        title,
+        generateTitle: false,
+        modelSelection: wireModel(modelSelection),
+        runtimeMode,
+        interactionMode,
+        workspaceStrategy: input.branch
+          ? { type: "worktree", branch: input.branch, baseRef: input.baseBranch ?? "main" }
+          : { type: "root" },
+      });
+      // One metadata write between the empty claim and the first turn: organizational
+      // parent (local or remote) and completion policy land before the worker starts.
+      await rpc.request("threadMetadataUpdate", {
+        commandId: NodeCrypto.randomUUID(),
+        threadId,
+        settleOnComplete,
+        ...(input.parentThreadId || input.remoteParent
+          ? {
+              parentThreadId: input.parentThreadId ?? null,
+              remoteParent: input.remoteParent ?? null,
+            }
+          : {}),
+      });
+      await rpc.request("launchThread", {
+        reuseExistingThread: true,
         commandId: NodeCrypto.randomUUID(),
         threadId,
         projectId: project.id,
@@ -658,20 +694,6 @@ export class RemoteEnvironmentClient {
       await rpc.dispose();
     }
 
-    if (input.parentThreadId || input.remoteParent) {
-      try {
-        await this.setThreadParent(
-          threadId,
-          input.parentThreadId ?? null,
-          input.remoteParent ?? null,
-        );
-      } catch (error) {
-        throw new Error(
-          `Worker '${threadId}' was created but nesting failed. Attach that thread instead of retrying creation.`,
-          { cause: error },
-        );
-      }
-    }
     const pinState = input.pin ? await this.setThreadPinned(threadId, true) : null;
     return {
       threadId,
