@@ -3,6 +3,10 @@ import type { ThreadMoveDestination } from "../threads/threadOrder";
 import { computeThreadMoveAvailability } from "../threads/threadOrder";
 import { LegendList, type LegendListRef } from "@legendapp/list/react-native";
 import {
+  buildOrchestratorSummaries,
+  type OrchestratorSummary,
+} from "@t3tools/client-runtime/state/orchestrators";
+import {
   type EnvironmentProject,
   type EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/shell";
@@ -17,6 +21,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
+  Pressable,
+  ScrollView,
   View,
   type GestureResponderEvent,
   type NativeScrollEvent,
@@ -27,12 +33,16 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { cn } from "../../lib/cn";
 import { EmptyState } from "../../components/EmptyState";
+import { AppText as Text } from "../../components/AppText";
+import { SegmentedControl } from "../../components/SegmentedControl";
+import { ProjectFavicon } from "../../components/ProjectFavicon";
 import { MaterialFloatingActionButton } from "../../components/MaterialFloatingActionButton";
 import type { WorkspaceEnvironment, WorkspaceState } from "../../state/workspaceModel";
 import type { SavedRemoteConnection } from "../../lib/connection";
 import { scopedProjectKey } from "../../lib/scopedEntities";
 import { NATIVE_LIQUID_GLASS_SUPPORTED } from "../../native/native-glass";
 import { useThreadSearch } from "../../state/queries";
+import { useSupervisionMetadata } from "../../state/forkSupervision";
 import { useThreadJumpShortcuts } from "../keyboard/threadKeyboardShortcuts";
 import { usePendingThreadOrder } from "../../state/thread-order";
 import { threadListEnvironmentsAtom } from "../../state/server";
@@ -220,9 +230,110 @@ function HomeTopContentSpacer() {
   return <View className="h-4" />;
 }
 
+function MobileOrchestratorList({
+  summaries,
+  onSelectThread,
+}: {
+  readonly summaries: readonly OrchestratorSummary[];
+  readonly onSelectThread: (thread: EnvironmentThreadShell) => void;
+}) {
+  if (summaries.length === 0) {
+    return (
+      <View className="flex-1 items-center justify-center px-8">
+        <EmptyState
+          title="No projects"
+          detail="Projects appear when a top-level thread has workers."
+          variant={Platform.OS === "android" ? "plain" : undefined}
+        />
+      </View>
+    );
+  }
+  return (
+    <ScrollView className="flex-1" contentContainerClassName="px-3 pb-24">
+      {summaries.map((summary) => {
+        const project =
+          summary.projects.find(
+            (candidate) =>
+              candidate.environmentId === summary.root.environmentId &&
+              candidate.id === summary.root.projectId,
+          ) ?? summary.projects[0];
+        return (
+          <Pressable
+            key={`${summary.root.environmentId}:${summary.root.id}`}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${summary.root.title}`}
+            className="border-b border-border px-2 py-3 active:bg-card"
+            onPress={() => onSelectThread(summary.root)}
+          >
+            <View className="flex-row items-center gap-2">
+              {project ? (
+                <ProjectFavicon
+                  environmentId={project.environmentId}
+                  projectTitle={project.title}
+                  workspaceRoot={project.workspaceRoot}
+                  faviconPath={project.faviconPath}
+                  projectIcon={project.projectIcon}
+                  size={20}
+                />
+              ) : null}
+              <Text
+                className="min-w-0 flex-1 text-sm font-t3-medium text-foreground"
+                numberOfLines={1}
+              >
+                {summary.root.title}
+              </Text>
+              {summary.needsYou.length > 0 ? (
+                <Text className="text-xs text-warning-foreground">
+                  {summary.needsYou.length} need you
+                </Text>
+              ) : null}
+            </View>
+            <View className="mt-1.5 flex-row items-center gap-2">
+              <Text
+                className={cn(
+                  "text-xs",
+                  summary.status === "working" || summary.status === "supervising"
+                    ? "text-adaptive-sky-600-400"
+                    : summary.status === "approval" || summary.status === "input"
+                      ? "text-warning-foreground"
+                      : "text-foreground-muted",
+                )}
+              >
+                {summary.status === "supervising"
+                  ? "◌ Supervising"
+                  : summary.status === "working"
+                    ? "◌ Working"
+                    : summary.status === "approval"
+                      ? "Needs approval"
+                      : summary.status === "input"
+                        ? "Needs input"
+                        : "Idle"}
+              </Text>
+              <Text className="text-xs text-foreground-muted">
+                {summary.activeWorkerCount} active
+              </Text>
+            </View>
+            {summary.projects.length > 0 ? (
+              <Text className="mt-1 text-xs text-foreground-muted" numberOfLines={1}>
+                {summary.projects.map((project) => project.title).join(" · ")}
+              </Text>
+            ) : null}
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
 /* ─── Main screen ────────────────────────────────────────────────────── */
 
 export function HomeScreen(props: HomeScreenProps) {
+  const [homeMode, setHomeMode] = useState<"threads" | "orchestrators">("threads");
+  const supervisionMetadata = useSupervisionMetadata();
+  const orchestrators = useMemo(
+    () => buildOrchestratorSummaries(props.threads, props.projects, supervisionMetadata),
+    [props.projects, props.threads, supervisionMetadata],
+  );
   const queuedThreadKeys = useQueuedThreadKeys();
   const openSwipeableRef = useRef<SwipeableMethods | null>(null);
   const insets = useSafeAreaInsets();
@@ -949,7 +1060,7 @@ export function HomeScreen(props: HomeScreenProps) {
       />
     );
 
-  if (Platform.OS === "android" && threadListV2Items.length === 0) {
+  if (homeMode === "threads" && Platform.OS === "android" && threadListV2Items.length === 0) {
     return (
       <View className="flex-1 bg-header">
         <View
@@ -971,51 +1082,67 @@ export function HomeScreen(props: HomeScreenProps) {
             : "flex-1 bg-screen"
         }
       >
+        <View className="px-3 pt-2 pb-1">
+          <SegmentedControl
+            options={[
+              { value: "threads", label: "Threads" },
+              { value: "orchestrators", label: "Projects" },
+            ]}
+            selected={homeMode}
+            onSelect={setHomeMode}
+            size="compact"
+            role="tab"
+          />
+        </View>
         {/* Shared with the iPad sidebar: cells are reused across data
             rebuilds and `itemsAreEqual` keeps a minute tick (or an unrelated
             shell update) from re-rendering untouched rows. */}
-        <SwipeableScrollGateProvider enabled={swipeEnabled} activation={swipeRowActivation}>
-          <LegendList
-            ref={listRef}
-            onLoad={() => activateVisibleRows(threadListV2Items)}
-            onTouchStart={(event) => trackListTouches(event, true)}
-            onTouchEnd={(event) => trackListTouches(event, false)}
-            onTouchCancel={(event) => trackListTouches(event, false)}
-            data={threadListV2Items}
-            renderItem={renderV2Item}
-            keyExtractor={v2KeyExtractor}
-            getItemType={(item) => item.type}
-            itemsAreEqual={threadListV2ListItemsAreEqual}
-            estimatedItemSize={ESTIMATED_THREAD_LIST_V2_ROW_HEIGHT}
-            drawDistance={THREAD_LIST_V2_DRAW_DISTANCE}
-            recycleItems
-            extraData={v2ExtraData}
-            ListHeaderComponent={v2ListHeader}
-            ListFooterComponent={
-              settledShelfExpanded && threadListV2Layout.hiddenSettledCount > 0 ? (
-                <ThreadListV2ShowMoreRow
-                  hiddenCount={threadListV2Layout.hiddenSettledCount}
-                  onPress={showMoreSettled}
-                />
-              ) : null
-            }
-            ListEmptyComponent={v2ListEmpty}
-            style={{ flex: 1 }}
-            automaticallyAdjustsScrollIndicatorInsets={Platform.OS === "ios"}
-            contentInsetAdjustmentBehavior={Platform.OS === "ios" ? "automatic" : "never"}
-            showsVerticalScrollIndicator={false}
-            keyboardDismissMode="on-drag"
-            keyboardShouldPersistTaps="handled"
-            {...scrollGateHandlers}
-            scrollEventThrottle={16}
-            contentContainerStyle={{
-              paddingBottom:
-                Platform.OS === "ios"
-                  ? Math.max(insets.bottom, 24) + 96 + iosBottomToolbarClearance
-                  : Math.max(insets.bottom, 16) + (Platform.OS === "android" ? fabClearance : 88),
-            }}
-          />
-        </SwipeableScrollGateProvider>
+        {homeMode === "orchestrators" ? (
+          <MobileOrchestratorList summaries={orchestrators} onSelectThread={props.onSelectThread} />
+        ) : (
+          <SwipeableScrollGateProvider enabled={swipeEnabled} activation={swipeRowActivation}>
+            <LegendList
+              ref={listRef}
+              onLoad={() => activateVisibleRows(threadListV2Items)}
+              onTouchStart={(event) => trackListTouches(event, true)}
+              onTouchEnd={(event) => trackListTouches(event, false)}
+              onTouchCancel={(event) => trackListTouches(event, false)}
+              data={threadListV2Items}
+              renderItem={renderV2Item}
+              keyExtractor={v2KeyExtractor}
+              getItemType={(item) => item.type}
+              itemsAreEqual={threadListV2ListItemsAreEqual}
+              estimatedItemSize={ESTIMATED_THREAD_LIST_V2_ROW_HEIGHT}
+              drawDistance={THREAD_LIST_V2_DRAW_DISTANCE}
+              recycleItems
+              extraData={v2ExtraData}
+              ListHeaderComponent={v2ListHeader}
+              ListFooterComponent={
+                settledShelfExpanded && threadListV2Layout.hiddenSettledCount > 0 ? (
+                  <ThreadListV2ShowMoreRow
+                    hiddenCount={threadListV2Layout.hiddenSettledCount}
+                    onPress={showMoreSettled}
+                  />
+                ) : null
+              }
+              ListEmptyComponent={v2ListEmpty}
+              style={{ flex: 1 }}
+              automaticallyAdjustsScrollIndicatorInsets={Platform.OS === "ios"}
+              contentInsetAdjustmentBehavior={Platform.OS === "ios" ? "automatic" : "never"}
+              showsVerticalScrollIndicator={false}
+              keyboardDismissMode="on-drag"
+              keyboardShouldPersistTaps="handled"
+              {...scrollGateHandlers}
+              scrollEventThrottle={16}
+              contentContainerStyle={{
+                paddingBottom:
+                  Platform.OS === "ios"
+                    ? Math.max(insets.bottom, 24) + 96 + iosBottomToolbarClearance
+                    : Math.max(insets.bottom, 16) + (Platform.OS === "android" ? fabClearance : 88),
+              }}
+            />
+          </SwipeableScrollGateProvider>
+        )}
       </View>
     </View>
   );
