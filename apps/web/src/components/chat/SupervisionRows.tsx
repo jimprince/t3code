@@ -1,7 +1,6 @@
-import { useMemo } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { supervisionForest, supervisionKey } from "@t3tools/client-runtime/state/forkNesting";
-import { useThreadShells, useServerConfigs, useProjects } from "../../state/entities";
+import { supervisionThreadKey } from "@t3tools/client-runtime/state/fork-nesting";
+import { useServerConfigs, useProjects } from "../../state/entities";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 
@@ -28,7 +27,7 @@ export function SupervisionWorkerRow({ child }: { child: EnvironmentThreadShell 
   return (
     <button
       type="button"
-      key={supervisionKey(child)}
+      key={supervisionThreadKey(child)}
       className="flex w-full flex-col gap-1 px-2 py-1 text-left text-xs"
       onClick={() => {
         void navigate({
