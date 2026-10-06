@@ -131,6 +131,7 @@ export interface EnvironmentThreadShell {
   readonly activeOrderKey: string | null;
   /** Moves on every fork sidecar nesting write; `undefined` means the server predates it. */
   readonly forkMetadataRevision?: number;
+  readonly issues?: ReadonlyArray<import("@t3tools/contracts").ThreadIssueLink>;
   readonly pullRequests: ReadonlyArray<import("@t3tools/contracts").ThreadPullRequestLink>;
   readonly linkedPullRequest?: ThreadLinkedPullRequest | null;
   readonly branchPullRequest?: ThreadLinkedPullRequest | null;
@@ -236,6 +237,7 @@ export function presentThreadShell(
     interactionMode: thread.interactionMode,
     branch: thread.branch,
     worktreePath: thread.worktreePath,
+    ...(thread.issues === undefined ? {} : { issues: thread.issues }),
     pullRequests: threadPullRequestsOf(thread),
     linkedPullRequest: thread.linkedPullRequest ?? null,
     branchPullRequest: thread.branchPullRequest ?? null,
