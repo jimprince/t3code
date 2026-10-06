@@ -17,6 +17,7 @@ import {
   type ProjectIssueLaneStatus,
 } from "./projectIssuesBoard.logic";
 import { projectReturnState, type ProjectReturnLocation } from "./projectNavigation";
+import { taskKind } from "./projectRequests.logic";
 
 const DONE_PREVIEW = 8;
 
@@ -35,6 +36,7 @@ function IssueRow({
   const pages = useEmbeddedPages();
   const target = resolveThreadIssueBadgeTarget(pages, issue);
   const thread = issue.requestSource?.threadId ?? issue.linkedThreadIds[0];
+  const kind = taskKind(issue.labels);
   return (
     <li className="border-b border-border/60 py-1.5 last:border-b-0">
       {target.kind === "external" ? (
@@ -66,7 +68,11 @@ function IssueRow({
         <span className="truncate">
           {issue.repository.split("/")[1]}#{issue.number}
         </span>
-        {issue.isRequest ? <span className="text-foreground/70">request</span> : null}
+        {kind ? (
+          <span className="text-foreground/70">{kind}</span>
+        ) : issue.isRequest ? (
+          <span className="text-foreground/70">request</span>
+        ) : null}
         {issue.comments > 0 ? (
           <span className="inline-flex items-center gap-0.5 tabular-nums">
             <MessageSquareIcon className="size-3" />
