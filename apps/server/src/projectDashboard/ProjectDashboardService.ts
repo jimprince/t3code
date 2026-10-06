@@ -19,7 +19,7 @@ import { listMetadata } from "../forkThreads/MetadataStore.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
 import { findRootThreadId } from "../projectIssues/projectIssues.logic.ts";
-import { legacyWidgetOrder, legacyWidgetOrderOps } from "@t3tools/contracts";
+import { legacyWidgetOrder, widgetOrderOps } from "@t3tools/contracts";
 import type * as ProjectLayoutService from "../projectLayout/ProjectLayoutService.ts";
 import { normalizeWidgets, resolveTrackerSetting } from "./projectDashboard.logic.ts";
 import type { ProjectDashboardStore } from "./ProjectDashboardStore.ts";
@@ -89,18 +89,17 @@ export const make = (
           .get(rootThreadId)
           .pipe(Effect.mapError((error) => fail(error.message)));
         // `--reset` restores the default layout; an order replaces the first tab's widgets.
-        yield* (
-          input.widgets === null
-            ? layouts.revert({ threadId: rootThreadId, toRevision: 0 }, actor)
-            : layouts.apply(
-                {
-                  threadId: rootThreadId,
-                  baseRevision: layout.revision,
-                  ops: legacyWidgetOrderOps(layout.tabs, normalizeWidgets(input.widgets)),
-                },
-                actor,
-              )
-        ).pipe(Effect.mapError((error) => fail(error.message)));
+        if (input.widgets === null) {
+          yield* layouts
+            .revert({ threadId: rootThreadId, toRevision: 0 }, actor)
+            .pipe(Effect.mapError((error) => fail(error.message)));
+        } else {
+          const order = widgetOrderOps(layout.tabs, normalizeWidgets(input.widgets));
+          if ("error" in order) return yield* fail(order.error);
+          yield* layouts
+            .apply({ threadId: rootThreadId, baseRevision: layout.revision, ops: order.ops }, actor)
+            .pipe(Effect.mapError((error) => fail(error.message)));
+        }
         return yield* get(input);
       });
 
