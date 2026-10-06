@@ -919,6 +919,18 @@ describe("resolveSidebarThreadStatus", () => {
     ).toBe("approval");
   });
 
+  it("keeps active native goals working between turns, while retaining attention precedence", () => {
+    const goal = { ...idle, codexNativeGoal: { objective: "Ship it", status: "active" as const } };
+    expect(resolveSidebarThreadStatus(goal)).toBe("working");
+    expect(resolveSidebarThreadStatus({ ...goal, hasPendingUserInput: true })).toBe("input");
+    expect(
+      resolveSidebarThreadStatus({
+        ...goal,
+        codexNativeGoal: { ...goal.codexNativeGoal, status: "blocked" },
+      }),
+    ).toBe("ready");
+  });
+
   it("reports working for running and starting runtimes", () => {
     expect(resolveSidebarThreadStatus({ ...idle, runtime })).toBe("working");
     expect(
