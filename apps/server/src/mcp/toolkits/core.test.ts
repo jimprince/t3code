@@ -38,6 +38,7 @@ import * as ProviderRegistry from "../../provider/ProviderRegistry.ts";
 import * as SecretRequests from "../../secrets/SecretRequests.ts";
 import * as ScheduledTaskService from "../../scheduledTasks/ScheduledTaskService.ts";
 import * as McpHttpServer from "../McpHttpServer.ts";
+import * as SqlitePersistence from "../../persistence/Sqlite.ts";
 import * as McpInvocationContext from "../McpInvocationContext.ts";
 import * as McpToolAccessTestkit from "../McpToolAccess.testkit.ts";
 import { dispatchFailure } from "../threadAccess.ts";
@@ -73,6 +74,9 @@ const decodeMcpAttachmentInput = Schema.decodeUnknownEffect(McpAttachmentInput);
 // Registration asks for every service the thread tools declare; these cases call none that use them.
 const layerThreadToolkit = McpHttpServer.layerThreadToolkit.pipe(
   Layer.provide(Layer.mock(ThreadSearch.ThreadSearch)({})),
+  Layer.provide(Layer.mock(ProviderRegistry.ProviderRegistry)({})),
+  Layer.provide(Layer.mock(ServerConfig.ServerConfig)({})),
+  Layer.provide(SqlitePersistence.layerMemory),
   Layer.provide(Layer.mock(ScheduledTaskService.ScheduledTaskService)({})),
 );
 
@@ -163,6 +167,7 @@ it.effect("checks capability through the production registration", () =>
         Layer.provideMerge(McpServer.McpServer.layer),
         Layer.provide(NodeCrypto.layer),
         Layer.provide(McpToolAccessTestkit.liveThreadsLayer),
+        Layer.provideMerge(SqlitePersistence.layerMemory),
       ),
     ),
   ),
@@ -203,6 +208,7 @@ it.effect("returns a bounded public failure without serializing storage causes",
       layerThreadToolkit.pipe(
         Layer.provideMerge(McpServer.McpServer.layer),
         Layer.provide(NodeCrypto.layer),
+        Layer.provideMerge(SqlitePersistence.layerMemory),
         Layer.provide(
           Layer.mock(ThreadManagement.ThreadManagementService)({
             getThreadShell: () =>
@@ -521,6 +527,7 @@ it.effect("a read-only client reads threads and is refused every write before it
       layerThreadToolkit.pipe(
         Layer.provideMerge(McpServer.McpServer.layer),
         Layer.provide(NodeCrypto.layer),
+        Layer.provideMerge(SqlitePersistence.layerMemory),
         Layer.provide(
           Layer.mock(ThreadManagement.ThreadManagementService)({
             getThreadShell: () =>
@@ -574,6 +581,7 @@ it.effect("refuses act-as-caller tools to a client caller", () =>
       McpHttpServer.layerOrchestratorToolkit.pipe(
         Layer.provideMerge(McpServer.McpServer.layer),
         Layer.provide(NodeCrypto.layer),
+        Layer.provideMerge(SqlitePersistence.layerMemory),
         Layer.provide(Layer.mock(ThreadManagement.ThreadManagementService)({})),
         Layer.provide(Layer.mock(ProviderRegistry.ProviderRegistry)({})),
         Layer.provide(Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({})),
@@ -612,6 +620,7 @@ it.effect("a caller cannot rewrite a scheduled task that runs above its own mode
       McpHttpServer.layerOrchestratorToolkit.pipe(
         Layer.provideMerge(McpServer.McpServer.layer),
         Layer.provide(NodeCrypto.layer),
+        Layer.provideMerge(SqlitePersistence.layerMemory),
         Layer.provide(Layer.mock(ThreadManagement.ThreadManagementService)({})),
         Layer.provide(Layer.mock(ProviderRegistry.ProviderRegistry)({})),
         Layer.provide(Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({})),
@@ -678,6 +687,7 @@ it.effect("a caller cannot interrupt a thread that runs above its own modes", ()
       McpHttpServer.layerOrchestratorToolkit.pipe(
         Layer.provideMerge(McpServer.McpServer.layer),
         Layer.provide(NodeCrypto.layer),
+        Layer.provideMerge(SqlitePersistence.layerMemory),
         Layer.provide(
           Layer.mock(ThreadManagement.ThreadManagementService)({
             getThreadShell: () =>
