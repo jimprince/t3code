@@ -1,0 +1,4 @@
+id = "codex-extra-skill-roots"
+category = "feature"
+functionality = "codex"
+text = "Configure extra Codex skill folders for new sessions and the skill picker without changing your Codex home or login."
