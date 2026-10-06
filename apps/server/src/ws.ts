@@ -2850,6 +2850,12 @@ const makeWsRpcLayer = (
             projectDashboard.setTracker(input),
             { "rpc.aggregate": "project-dashboard" },
           ),
+        [WS_METHODS.projectDashboardSetHealth]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectDashboardSetHealth,
+            projectDashboard.setHealth(input),
+            { "rpc.aggregate": "project-dashboard" },
+          ),
         // Brad's edits from a client; the orchestrator edits through the MCP tools.
         [WS_METHODS.projectLayoutGet]: (input) =>
           observeRpcEffect(WS_METHODS.projectLayoutGet, projectLayout.get(input.threadId), {
