@@ -295,10 +295,17 @@ export function buildSubscriptionRecord(
     baselineTurnId?: string | null;
     level?: NotificationLevel;
     inputReminderMinutes?: number;
+    inactivityMinutes?: number;
   } = {},
 ): SavedSubscription {
   return {
     ...existing,
+    inactivityMinutes: options.inactivityMinutes ?? existing?.inactivityMinutes ?? 0,
+    inactivityObservation:
+      options.inactivityMinutes !== undefined &&
+      options.inactivityMinutes !== existing?.inactivityMinutes
+        ? null
+        : existing?.inactivityObservation,
     level: options.level ?? existing?.level ?? "all",
     inputReminderMinutes: options.inputReminderMinutes ?? existing?.inputReminderMinutes ?? 45,
     subscriberThreadId: caller.threadId,
