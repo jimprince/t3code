@@ -1,3 +1,4 @@
+import * as ForkWorkspace from "./forkThreads/ForkWorkspaceService.ts";
 import * as ThreadIssueService from "./forkThreads/ThreadIssueService.ts";
 import * as AutomationEngine from "./automations/AutomationEngine.ts";
 import { makeNamedAgents } from "./forkThreads/NamedAgents.ts";
@@ -3931,7 +3932,9 @@ const makeWsRpcLayer = (
             { "rpc.aggregate": "server" },
           ),
       });
+      const conversationFork = yield* ForkWorkspace.ForkWorkspaceService;
       const forkHandlers = WsForkRpcGroup.of({
+        "orchestration.forkThread": (input) => conversationFork.fork(input),
         [WS_METHODS.projectIssuesGet]: (input) =>
           observeRpcEffect(
             WS_METHODS.projectIssuesGet,
