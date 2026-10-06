@@ -1,0 +1,4 @@
+id = "agents-panel-settled-shelf"
+category = "feature"
+functionality = "threads"
+text = "The Agents panel lists nested threads and subagents together and folds settled threads, including automatically settled ones, and finished subagents into a collapsed Settled shelf; work that finishes while you watch stays in place until you reopen the panel."
