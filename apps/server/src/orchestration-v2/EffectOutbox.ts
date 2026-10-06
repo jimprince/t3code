@@ -47,6 +47,11 @@ export const OrchestrationEffectRequestV2 = Schema.Union([
     providerTurnId: ProviderTurnId,
   }),
   Schema.Struct({
+    type: Schema.Literal("provider-turn.interrupt-settle"),
+    providerThreadId: ProviderThreadId,
+    providerTurnId: ProviderTurnId,
+  }),
+  Schema.Struct({
     type: Schema.Literal("provider-turn.steer"),
     providerSessionId: ProviderSessionId,
     providerThreadId: ProviderThreadId,
@@ -115,6 +120,7 @@ export type OrchestrationEffectRequestV2 = typeof OrchestrationEffectRequestV2.T
 
 export const REPLAY_SAFE_EFFECT_TYPES_AFTER_PROCESS_LOSS = [
   "provider-runtime.continue",
+  "provider-turn.interrupt-settle",
   "provider-session.detach",
   "provider-thread.rollback",
   "provider-thread.conversation-rewind",
@@ -293,6 +299,8 @@ export const layer: Layer.Layer<EffectOutboxV2, never, SqlClient.SqlClient> = La
     // that skips restart continuations is not blocked by them either.
     // Title generation is correlated metadata work, so it has its own
     // per-thread lane and cannot delay provider lifecycle effects.
+    // Delayed interrupt fallback is also independent: native checkpoints and
+    // newer lifecycle work must progress during its grace period.
     const claimableCandidatePredicate = (
       availableBefore?: string,
       excludeRestartContinuations = false,
@@ -327,8 +335,13 @@ export const layer: Layer.Layer<EffectOutboxV2, never, SqlClient.SqlClient> = La
               )
               OR
               (
-                candidate.effect_type != 'thread-title.generate'
-                AND active.effect_type != 'thread-title.generate'
+                candidate.effect_type = 'provider-turn.interrupt-settle'
+                AND active.effect_type = 'provider-turn.interrupt-settle'
+              )
+              OR
+              (
+                candidate.effect_type NOT IN ('thread-title.generate', 'provider-turn.interrupt-settle')
+                AND active.effect_type NOT IN ('thread-title.generate', 'provider-turn.interrupt-settle')
               )
             )
         )
