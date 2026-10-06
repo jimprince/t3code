@@ -1,3 +1,4 @@
+import { ForkConversationRpc } from "./forkConversation.ts";
 import {
   OrchestrationV2SearchThreadError,
   OrchestrationV2SearchThreadInput,
@@ -2389,6 +2390,7 @@ export const WsCoreRpcGroup = RpcGroup.make(
 // Kept out of WsCoreRpcGroup: one more handler there makes the server's handler-service
 // types resolve to any in R.
 export const WsForkRpcGroup = RpcGroup.make(
+  ForkConversationRpc,
   WsProjectIssuesGetRpc,
   WsProjectRequestsSubmitRpc,
   WsProjectRequestsStartIntakeRpc,
