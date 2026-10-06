@@ -3204,9 +3204,11 @@ const makeWsRpcLayer = (
             { "rpc.aggregate": "project-roadmap" },
           ),
         [WS_METHODS.projectDashboardGet]: (input) =>
-          observeRpcEffect(WS_METHODS.projectDashboardGet, projectDashboard.get(input), {
-            "rpc.aggregate": "project-dashboard",
-          }),
+          observeRpcEffect(
+            WS_METHODS.projectDashboardGet,
+            projectDashboard.get(input).pipe(Effect.tap(() => pullRequestSync.refreshStale)),
+            { "rpc.aggregate": "project-dashboard" },
+          ),
         [WS_METHODS.projectDashboardSetWidgets]: (input) =>
           observeRpcEffect(
             WS_METHODS.projectDashboardSetWidgets,
