@@ -1,3 +1,4 @@
+import { interruptedSessionEvents } from "../forkThreads/InterruptedSession.ts";
 import { normalizeThreadIssueKey, threadIssueKeysEqual } from "@t3tools/shared/threadIssues";
 import {
   assertRootSlot,
@@ -8204,15 +8205,28 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       { readonly type: "thread.background-work.settle" }
     >,
     events: Ref.Ref<Array<OrchestrationV2DomainEvent>>,
+    effects: Ref.Ref<Array<PendingOrchestrationEffectV2>>,
   ) =>
     Effect.gen(function* () {
       const [projection, stopped] = yield* Effect.all([
         projectionStore.getThreadRecords(
           command.threadId,
-          ["runs", "attempts", "turnItems", "providerThreads"],
+          [
+            "runs",
+            "attempts",
+            "turnItems",
+            "providerThreads",
+            "providerTurns",
+            "providerSessions",
+            "nodes",
+          ],
           {
-            turnItemTypes: ["command_execution", "dynamic_tool", "subagent"],
-            turnItemStatuses: ["pending", "running", "waiting"],
+            turnItemTypes: [
+              "command_execution",
+              "dynamic_tool",
+              "subagent",
+              "run_interrupt_request",
+            ],
           },
         ),
         projectionStore.getProviderControlContext(command.threadId, {
@@ -8228,12 +8242,51 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         (attempt) => attempt.id === stopped.providerTurn?.runAttemptId,
       )?.runId;
       const stoppedRun = projection.runs.find((run) => run.id === stoppedRunId);
+      const now = yield* DateTime.now;
+      const reconciled = interruptedSessionEvents({
+        projection,
+        providerThreadId: command.providerThreadId,
+        providerTurnId: command.providerTurnId,
+        commandId: command.commandId,
+        now,
+        resultItemId:
+          stoppedRun === undefined
+            ? undefined
+            : idAllocator.derive.runSignalTurnItem({
+                runId: stoppedRun.id,
+                signal: "interrupt-result",
+              }),
+      });
+      if (reconciled.length > 0)
+        yield* Ref.update(events, (existing) => [...existing, ...reconciled]);
+      const root = projection.nodes.find((node) => node.id === stoppedRun?.rootNodeId);
+      const checkpointScopeId = root?.checkpointScopeId;
+      if (
+        checkpointScopeId != null &&
+        stoppedRun &&
+        reconciled.some((event) => event.type === "run.updated")
+      ) {
+        yield* Ref.update(effects, (existing) => [
+          ...existing,
+          {
+            id: `effect:checkpoint.capture:${stoppedRun.id}`,
+            commandId: CommandId.make(`command:effect:checkpoint.capture:${stoppedRun.id}`),
+            threadId: command.threadId,
+            request: {
+              type: "checkpoint.capture",
+              runId: stoppedRun.id,
+              scopeId: checkpointScopeId,
+            },
+          } satisfies PendingOrchestrationEffectV2,
+        ]);
+      }
       // A new turn may have started since Stop; its work is not this Stop's.
       if (
         stoppedRun === undefined ||
         projection.runs.some(
           (run) =>
-            run.status === "preparing" || run.status === "starting" || run.status === "running",
+            run.id !== stoppedRun.id &&
+            (run.status === "preparing" || run.status === "starting" || run.status === "running"),
         )
       ) {
         return;
@@ -10047,7 +10100,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         yield* dispatchCheckpointRollbackFail(command, events);
         break;
       case "thread.background-work.settle":
-        yield* dispatchBackgroundWorkSettle(command, events);
+        yield* dispatchBackgroundWorkSettle(command, events, effects);
         break;
       case "thread.fork":
         yield* dispatchThreadFork(command, events);
