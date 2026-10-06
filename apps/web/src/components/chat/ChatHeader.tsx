@@ -40,6 +40,7 @@ import {
 import { cn } from "~/lib/utils";
 import { useClientSettings } from "../../hooks/useSettings";
 import { ThreadIssueBadges } from "../ThreadIssueBadges";
+import { LegacyHistoryButton } from "./LegacyHistory";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
@@ -445,6 +446,9 @@ export const ChatHeader = memo(function ChatHeader({
           </WorkspaceBreadcrumbItem>
         ) : null}
       </WorkspaceBreadcrumb>
+      {isServerThread ? (
+        <LegacyHistoryButton environmentId={activeThreadEnvironmentId} threadId={activeThreadId} />
+      ) : null}
     </div>
   );
 });
