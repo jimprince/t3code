@@ -16,6 +16,7 @@ import { forkParked } from "../serverActivation.ts";
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import { archiveDeadline, archiveEligible, hasActiveWork } from "./ArchiveDeadlines.ts";
+import { hasLiveChildren } from "./WorkerLifecycleMetadata.ts";
 import { completionEligible } from "./WorkerLifecyclePolicy.ts";
 
 export class WorkerLifecycle extends Context.Service<
@@ -68,7 +69,10 @@ const make = Effect.gen(function* () {
           thread.latestRunId
         ) {
           const projection = yield* threads.getThreadProjection(thread.id);
-          if (completionEligible(projection, thread.latestRunId, metadata.get(thread.id))) {
+          if (
+            completionEligible(projection, thread.latestRunId, metadata.get(thread.id)) &&
+            !(yield* hasLiveChildren(sql, thread.id, threads.getThreadShell))
+          ) {
             yield* threads
               .dispatch({
                 type: "thread.auto-settle",
