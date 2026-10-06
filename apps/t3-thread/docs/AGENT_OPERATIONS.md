@@ -396,6 +396,10 @@ Queue rules:
   attempt budget; only a failed dispatch counts.
 - `interrupt` does not drop the queue: the held message dispatches at the
   boundary the interrupt creates. Use `dequeue` to drop it.
+- A worker whose latest turn already ended (interrupted or completed) but whose
+  session still reports `running` holds its queue and refuses `--no-queue`
+  sends. `t3-thread session reconcile <agent>` clears that session on the
+  server, with no restart; it refuses a session whose turn is still live.
 - A queued send is never delivered to an archived thread; archiving the target
   retires its queue as `undeliverable`.
 
