@@ -1,0 +1,4 @@
+id = "project-dashboard-single-snapshot"
+category = "performance"
+functionality = "projects"
+text = "Avoid rebuilding the thread snapshot when reading a project's dashboard layout."
