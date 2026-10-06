@@ -1,6 +1,0 @@
-Bottom: d4bae1fb747ba4b95cf3b1cd6945aadb3b19bcd1
-Top:    094941f89e32670c5c57468e49dd3cc3f4819312
-Author: User <user@example.com>
-Date:   2026-10-05 01:03:16 +0000
-
-ci: publish fork releases with version stamping and notes

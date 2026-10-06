@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "b8d70630aeaf129aa6be305838e52f14c5a300ef",
+  "prev": "940f16472318c7e13f5008db6805c88cc62f1968",
   "head": "2648ecbb0e74e5b4dac8cc9aafc12e532d42024f",
   "applied": [
     "fork-build-ci-compat",
@@ -103,7 +103,6 @@
     "fork-conversation-fork",
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
-    "fork-release-publication",
     "fork-maintenance-automation",
     "fork-antigravity-errors"
   ],
@@ -312,9 +311,6 @@
     },
     "fork-release-horizon": {
       "oid": "ea28716940a9376b6a16c0abefeecd59f3deb1ba"
-    },
-    "fork-release-publication": {
-      "oid": "09e3f234998283f5a249afc031eaa360e5495bff"
     },
     "fork-remote-file-downloads": {
       "oid": "05b9b6a418651ec972a18bf1cbe4bca9448cb3b6"
