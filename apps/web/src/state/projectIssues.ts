@@ -35,6 +35,12 @@ export const decideProjectRequest = createEnvironmentRpcCommand(connectionAtomRu
   tag: WS_METHODS.projectRequestsDecide,
 });
 
+/** Opens (or reuses) a thread to talk a decision through before answering it. */
+export const discussProjectRequest = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "environment-data:project-requests:discuss",
+  tag: WS_METHODS.projectRequestsDiscuss,
+});
+
 /** The New request box marks its message as an explicit request before sending it. */
 export const submitProjectRequest = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "environment-data:project-requests:submit",
