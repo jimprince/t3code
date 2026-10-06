@@ -1,3 +1,4 @@
+import { assertFixtureMigration16 } from "../persistence/fixtureMigration16.testkit.ts";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import { NodeServices } from "@effect/platform-node";
@@ -25,7 +26,7 @@ for (const name of ["dev-vm", "local-mbp", "synthetic-edges"])
           const sql = yield* SqlClient.SqlClient;
           const ledger = yield* sql`SELECT * FROM effect_sql_migrations ORDER BY migration_id`;
           const forkLedger =
-            yield* sql`SELECT * FROM effect_sql_fork_migrations ORDER BY migration_id`;
+            yield* sql`SELECT * FROM effect_sql_fork_migrations WHERE migration_id <= 15 ORDER BY migration_id`;
           const projects = yield* sql<{
             project_id: string;
             kind: string;
@@ -42,8 +43,7 @@ for (const name of ["dev-vm", "local-mbp", "synthetic-edges"])
           yield* sql`UPDATE projection_projects
             SET default_model_selection_json = json_set(default_model_selection_json, '$.instanceId', 'codex')
             WHERE default_model_selection_json IS NOT NULL`;
-          yield* runMigrations();
-          assert.deepStrictEqual(yield* runForkMigrations(), []);
+          yield* assertFixtureMigration16;
           const upgradedLedger =
             yield* sql`SELECT * FROM effect_sql_migrations ORDER BY migration_id`;
           assert.deepStrictEqual(upgradedLedger.slice(0, ledger.length), ledger);
@@ -57,6 +57,7 @@ for (const name of ["dev-vm", "local-mbp", "synthetic-edges"])
               projects.find((project) => project.project_id === shell.id)?.kind,
             );
           }
+          assert.deepStrictEqual(yield* runForkMigrations(), []);
           const restarted = yield* ProjectStore.make;
           assert.deepStrictEqual(yield* restarted.listShells(), shells);
           assert.deepStrictEqual(
@@ -64,7 +65,7 @@ for (const name of ["dev-vm", "local-mbp", "synthetic-edges"])
             upgradedLedger,
           );
           assert.deepStrictEqual(
-            yield* sql`SELECT * FROM effect_sql_fork_migrations ORDER BY migration_id`,
+            yield* sql`SELECT * FROM effect_sql_fork_migrations WHERE migration_id <= 15 ORDER BY migration_id`,
             forkLedger,
           );
           assert.deepStrictEqual(
