@@ -9,6 +9,7 @@ import {
   enqueueSend,
   hasQueuedWork,
   listQueuedSends,
+  startQueueDrainLoop,
   summarizeQueuedSends,
   type QueueClientFactory,
 } from "../src/sendQueue.js";
@@ -338,6 +339,140 @@ async function queueFrom(
     ...(coalesceKey ? { coalesceKey } : {}),
   });
 }
+
+describe("idle targets pick up their queue (#150)", () => {
+  const interruptedThread = () =>
+    makeThread({
+      latestTurn: {
+        turnId: "turn-2",
+        state: "interrupted",
+        requestedAt: "2026-09-05T00:00:03.000Z",
+        startedAt: "2026-09-05T00:00:03.000Z",
+        completedAt: "2026-09-05T00:00:04.000Z",
+        assistantMessageId: null,
+      },
+      session: {
+        threadId: "thread-worker-a",
+        status: "interrupted",
+        providerName: "codex",
+        runtimeMode: "full-access",
+        activeTurnId: null,
+        lastError: null,
+        updatedAt: "2026-09-05T00:00:04.000Z",
+      },
+    });
+
+  it("dispatches to a thread whose turn was interrupted", async () => {
+    await withTempState(async () => {
+      await queue("after the interrupt");
+      const { clientFactory, sent } = createClientFactory({ thread: interruptedThread });
+
+      await drainQueuedSends({ clientFactory, env: "dev-vm" });
+
+      expect(sent.map((message) => message.text)).toEqual(["after the interrupt"]);
+    });
+  });
+
+  it("dispatches to a thread whose session stopped, as after a server restart", async () => {
+    await withTempState(async () => {
+      await queue("after the restart");
+      const { clientFactory, sent } = createClientFactory({
+        thread: () =>
+          makeThread({
+            session: {
+              threadId: "thread-worker-a",
+              status: "stopped",
+              providerName: "codex",
+              runtimeMode: "full-access",
+              activeTurnId: null,
+              lastError: null,
+              updatedAt: "2026-09-05T00:00:04.000Z",
+            },
+          }),
+      });
+
+      await drainQueuedSends({ clientFactory, env: "dev-vm" });
+
+      expect(sent.map((message) => message.text)).toEqual(["after the restart"]);
+    });
+  });
+
+  it("keeps a send queued, without spending attempts, while the server is unreachable", async () => {
+    // REGRESSION: a server restart outlasts five 5s passes, which used to mark the
+    // whole queue undeliverable before the server was back.
+    await withTempState(async () => {
+      await queue("first");
+      let reachable = false;
+      const sent: string[] = [];
+      const clientFactory: QueueClientFactory = () => ({
+        async findThread() {
+          if (!reachable) throw new Error("Failed to reach the server (fetch failed).");
+          return makeThread();
+        },
+        async sendMessage(message) {
+          sent.push(message.text);
+          return { dispatched: true, queued: false };
+        },
+      });
+
+      for (let pass = 0; pass < 8; pass += 1) {
+        await drainQueuedSends({ clientFactory, env: "dev-vm", maxAttempts: 2 });
+      }
+      let state = await loadState();
+      expect(state.queuedSends[0]).toMatchObject({ status: "queued", attempts: 0 });
+      expect(state.queuedSends[0]?.lastError).toContain("fetch failed");
+
+      reachable = true;
+      await drainQueuedSends({ clientFactory, env: "dev-vm", maxAttempts: 2 });
+      state = await loadState();
+      expect(sent).toEqual(["first"]);
+      expect(state.queuedSends[0]?.status).toBe("dispatched");
+    });
+  });
+
+  it("does not let one hung or slow target hold up another thread's queue", async () => {
+    await withTempState(async () => {
+      await queue("stuck", "thread-hung");
+      await queue("ready", "thread-idle");
+      const sent: string[] = [];
+      const clientFactory: QueueClientFactory = () => ({
+        async findThread(threadId) {
+          if (threadId === "thread-hung") return new Promise<never>(() => {});
+          return makeThread({ id: threadId });
+        },
+        async sendMessage(message) {
+          sent.push(message.text);
+          return { dispatched: true, queued: false };
+        },
+      });
+
+      await drainQueuedSends({ clientFactory, env: "dev-vm", readTimeoutMs: 20 });
+
+      expect(sent).toEqual(["ready"]);
+      const state = await loadState();
+      expect(state.queuedSends.find((queued) => queued.text === "stuck")).toMatchObject({
+        status: "queued",
+        attempts: 0,
+      });
+    });
+  });
+
+  it("drains on its own cadence and stops cleanly", async () => {
+    await withTempState(async () => {
+      const { clientFactory, sent } = createClientFactory({});
+      const loop = startQueueDrainLoop({ clientFactory, env: "dev-vm", intervalMs: 10 });
+      try {
+        await queue("while the loop runs");
+        for (let waited = 0; sent.length === 0 && waited < 2_000; waited += 10) {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        expect(sent.map((message) => message.text)).toEqual(["while the loop runs"]);
+      } finally {
+        await loop.stop();
+      }
+    });
+  });
+});
 
 describe("coalesced status notes", () => {
   it("replaces the same sender's waiting note with the same key and keeps everything else", async () => {
