@@ -8,6 +8,15 @@ function record(value: unknown): Record<string, unknown> | null {
 export function threadQuotaBlock(thread: OrchestrationThread): { resetsAt: number | null } | null {
   const turn = thread.latestTurn;
   if (!turn || turn.state === "completed") return null;
+  if (thread.projection) {
+    const failure = thread.projection.turnItems
+      .filter((item) => item.runId === turn.turnId && item.type === "error")
+      .at(-1);
+    if (failure?.type !== "error" || failure.failure.class !== "usage_limit") return null;
+    const reset = Date.parse(failure.failure.resetAt ?? "");
+    const failedAt = Date.parse(turn.completedAt ?? thread.updatedAt);
+    return { resetsAt: Number.isFinite(reset) && reset > failedAt ? reset : null };
+  }
   const rejected = new Map<string, number | null>();
   let codedError = false;
   let legacyError = false;
