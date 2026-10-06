@@ -136,6 +136,6 @@ optional-service layer. Don't route around the layer with an imperative runtime.
 - Does any handler you touched do more than decode, call, and map errors?
 - Could an agent (MCP) or a scheduled task use this capability? If not, is that deliberate?
 - Did you extend the domain's existing service before adding a new one?
-- Did you run knip? A new export with no importer fails it.
+- Does the exact candidate have successful CI Knip evidence? A new export with no importer fails it. Use scoped local Knip only to diagnose a failure.
 - Does every directive you added that disables a lint, type-checker, or LSP diagnostic say why, in
   a `-- reason` suffix or a comment above it?
