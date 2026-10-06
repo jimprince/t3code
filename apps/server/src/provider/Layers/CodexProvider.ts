@@ -1,3 +1,4 @@
+import { applyCodexSkillExtraRoots, resolveCodexSkillExtraRoots } from "../CodexSkillExtraRoots.ts";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -366,6 +367,7 @@ export function buildCodexInitializeParams(): CodexSchema.V1InitializeParams {
 export const withCodexAppServerClient = Effect.fn("withCodexAppServerClient")(function* (input: {
   readonly binaryPath: string;
   readonly homePath?: string | undefined;
+  readonly skillExtraRoots?: ReadonlyArray<string> | undefined;
   readonly launchArgs?: string | undefined;
   readonly cwd: string;
   readonly environment?: NodeJS.ProcessEnv | undefined;
@@ -374,6 +376,7 @@ export const withCodexAppServerClient = Effect.fn("withCodexAppServerClient")(fu
   // so `CODEX_HOME=~/.codex_work` would reach codex verbatim and trip
   // "CODEX_HOME points to '~/.codex_work', but that path does not exist".
   // Expand here for parity with `CodexTextGeneration`.
+  const skillExtraRoots = yield* resolveCodexSkillExtraRoots(input.skillExtraRoots);
   const resolvedHomePath = input.homePath ? expandHomePath(input.homePath) : undefined;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const environment = {
@@ -410,12 +413,14 @@ export const withCodexAppServerClient = Effect.fn("withCodexAppServerClient")(fu
   );
   const initialize = yield* client.request("initialize", buildCodexInitializeParams());
   yield* client.notify("initialized", undefined);
+  yield* applyCodexSkillExtraRoots(client, skillExtraRoots);
   return { client, initialize };
 });
 
 const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(function* (input: {
   readonly binaryPath: string;
   readonly homePath?: string;
+  readonly skillExtraRoots?: ReadonlyArray<string>;
   readonly launchArgs?: string;
   readonly cwd: string;
   readonly customModels?: ReadonlyArray<CustomModelSetting>;
@@ -484,6 +489,7 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
 export const probeCodexSkillsForCwd = Effect.fn("probeCodexSkillsForCwd")(function* (input: {
   readonly binaryPath: string;
   readonly homePath?: string;
+  readonly skillExtraRoots?: ReadonlyArray<string>;
   readonly launchArgs?: string;
   readonly cwd: string;
   readonly environment?: NodeJS.ProcessEnv;
@@ -570,6 +576,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
   probe: (input: {
     readonly binaryPath: string;
     readonly homePath?: string;
+    readonly skillExtraRoots?: ReadonlyArray<string>;
     readonly launchArgs?: string;
     readonly cwd: string;
     readonly customModels: ReadonlyArray<CustomModelSetting>;
@@ -611,6 +618,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
   const probeResult = yield* probe({
     binaryPath: codexSettings.binaryPath,
     homePath: codexSettings.homePath,
+    skillExtraRoots: codexSettings.skillExtraRoots,
     launchArgs: resolveCodexLaunchArgs(codexSettings.launchArgs, resolvedEnvironment),
     cwd: process.cwd(),
     customModels: codexSettings.customModels,
