@@ -1,7 +1,7 @@
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
 import type { MessageId } from "@t3tools/contracts";
-import { XIcon } from "lucide-react";
-import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent } from "react";
+import { ArrowUpRightIcon, XIcon } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent } from "react";
 
 import type { ComposerImageAttachment } from "../../composerDraftStore";
 import { randomUUID } from "../../lib/utils";
@@ -9,7 +9,13 @@ import { saveRequestForLater } from "../../state/projectRoadmap";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
+import { sentRequestStatus } from "./projectRequests.logic";
+import { useProjectRequests } from "./ProjectRequestsSection";
 import { useSendToOrchestrator } from "./sendToOrchestrator";
+
+/** How long the sent line stays, and when to look again for the filed request. */
+const SENT_LINE_MS = 120_000;
+const FILING_CHECKS_MS = [3_000, 10_000, 30_000, 60_000];
 
 function imageAttachment(file: File): ComposerImageAttachment {
   return {
@@ -27,25 +33,33 @@ const imageFiles = (files: FileList | null | undefined) =>
   [...(files ?? [])].filter((file) => file.type.startsWith("image/"));
 
 /**
- * The project page's request box: Send gives the text (and pasted or dropped
- * images) verbatim to the project's orchestrator through the normal send path,
- * where the request ledger captures it; Save for later files it straight into
- * the roadmap's Later column without waking the orchestrator.
+ * The project page's request box, pinned at the top of the Dashboard: a support
+ * box where the work actually gets done. Send gives the text (and pasted or
+ * dropped images) verbatim to the project's orchestrator in the background,
+ * through the normal send path where the request ledger captures it, and says
+ * which request tracks it once filed. Save for later files it straight into the
+ * roadmap's Later column without waking the orchestrator. Open chat is explicit.
  */
 export function ProjectRequestBox({
   summary,
-  onSent,
+  onOpenChat,
 }: {
   readonly summary: OrchestratorSummary;
-  /** Called with the sent message so the page can open the chat on the reply. */
-  readonly onSent?: (messageId: MessageId) => void;
+  readonly onOpenChat: () => void;
 }) {
   const [text, setText] = useState("");
   const [images, setImages] = useState<ComposerImageAttachment[]>([]);
   const [status, setStatus] = useState<string | null>(null);
+  const [sent, setSent] = useState<{ messageId: MessageId; queued: boolean } | null>(null);
   const saveForLater = useAtomCommand(saveRequestForLater, "Save for later");
   const sendToOrchestrator = useSendToOrchestrator();
+  const { query, pending } = useProjectRequests(summary);
+  const sentStatus = useMemo(
+    () => (sent ? sentRequestStatus(sent.messageId, query.data?.issues ?? [], pending) : null),
+    [pending, query.data, sent],
+  );
   const statusTimer = useRef<number | null>(null);
+  const sentTimers = useRef<number[]>([]);
   const imagesRef = useRef(images);
   useEffect(() => {
     imagesRef.current = images;
@@ -56,6 +70,7 @@ export function ProjectRequestBox({
     () => () => {
       for (const image of imagesRef.current) URL.revokeObjectURL(image.previewUrl);
       if (statusTimer.current !== null) window.clearTimeout(statusTimer.current);
+      for (const timer of sentTimers.current) window.clearTimeout(timer);
     },
     [],
   );
@@ -75,10 +90,17 @@ export function ProjectRequestBox({
 
   const send = () => {
     if (!text.trim() && images.length === 0) return;
-    const sent = sendToOrchestrator(summary, text, images);
+    const result = sendToOrchestrator(summary, text, images);
     reset();
-    flash(sent.queued ? "Queued for the orchestrator" : "Sent");
-    onSent?.(sent.messageId);
+    setStatus(null);
+    setSent(result);
+    // The ledger files the request a few seconds after the send; look for it, then
+    // let the line go.
+    for (const timer of sentTimers.current) window.clearTimeout(timer);
+    sentTimers.current = [
+      ...FILING_CHECKS_MS.map((delay) => window.setTimeout(query.refresh, delay)),
+      window.setTimeout(() => setSent(null), SENT_LINE_MS),
+    ];
   };
 
   const saveLater = async () => {
@@ -163,12 +185,46 @@ export function ProjectRequestBox({
         >
           Save for later
         </Button>
-        {status ? (
-          <span role="status" className="text-xs text-muted-foreground">
-            {status}
-          </span>
-        ) : null}
+        <span role="status" className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+          {status ??
+            (sent && sentStatus ? <SentLine queued={sent.queued} status={sentStatus} /> : null)}
+        </span>
+        <Button size="xs" variant="ghost-muted" onClick={onOpenChat}>
+          Open chat
+          <ArrowUpRightIcon />
+        </Button>
       </div>
     </div>
+  );
+}
+
+/** "Sent to the orchestrator · tracked as request #N", or why there is no link yet. */
+function SentLine({
+  queued,
+  status,
+}: {
+  readonly queued: boolean;
+  readonly status: ReturnType<typeof sentRequestStatus>;
+}) {
+  const lead = queued ? "Queued for the orchestrator" : "Sent to the orchestrator";
+  if (status.state === "pending") return <>{lead} · pending filing</>;
+  if (status.state === "filing") return <>{lead}</>;
+  return (
+    <>
+      {lead} · tracked as{" "}
+      {status.issues.map((issue, index) => (
+        <span key={issue.url}>
+          {index > 0 ? ", " : ""}
+          <a
+            href={issue.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-foreground/90 hover:underline"
+          >
+            request #{issue.number}
+          </a>
+        </span>
+      ))}
+    </>
   );
 }
