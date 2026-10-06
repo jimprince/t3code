@@ -5,6 +5,7 @@ import type { WorktreeGcThread } from "./worktreeGc.js";
 import type { OrchestrationV2ShellSnapshot } from "@t3tools/contracts";
 import { makeMessageOriginContext, type MessageOrigin } from "@t3tools/shared/messageOrigin";
 import { planExplicitThreadOrder, sameThreadOrderGroup } from "./threadOrder.js";
+import type { QueuedSendOrigin } from "./types.js";
 import { refreshSavedEnvironmentSession } from "./sessionRefresh.js";
 import { pendingRequests, requirePendingRequest } from "./v2/requests.js";
 import { wrapWithPreamble, type WorkerContext } from "./thread-preamble.js";
@@ -60,7 +61,13 @@ type RpcFactory = (wsUrl: string) => RemoteRpcClient;
 /** Result of `RemoteEnvironmentClient.sendMessage`. Exactly one of the two shapes. */
 export type SendMessageOutcome =
   | { dispatched: true; queued: false }
-  | { dispatched: false; queued: true; queuedSendId: string; sequence: number };
+  | {
+      dispatched: false;
+      queued: true;
+      queuedSendId: string;
+      sequence: number;
+      supersededSendIds?: string[];
+    };
 
 function buildPlanImplementationPrompt(planMarkdown: string): string {
   return `PLEASE IMPLEMENT THIS PLAN:\n${planMarkdown.trim()}`;
@@ -754,12 +761,17 @@ export class RemoteEnvironmentClient {
    *   that need a mid-turn send to fail loudly instead of being held.
    */
   async sendMessage(input: {
+    commandId?: string;
     threadId: string;
     text: string;
     allowWhileRunning?: boolean;
     queueWhileRunning?: boolean;
     agentName?: string | null;
-    origin?: MessageOrigin | null;
+    /** Identifies the sender for local queue coalescing and summaries. */
+    origin?: QueuedSendOrigin | null;
+    /** Replace this sender's still-waiting queued send that carries the same key. */
+    coalesceKey?: string | null;
+    senderEnvironment?: string;
   }): Promise<SendMessageOutcome> {
     const thread = await this.findThread(input.threadId);
     if (thread.archivedAt || thread.deletedAt) {
@@ -774,11 +786,18 @@ export class RemoteEnvironmentClient {
         );
       }
 
-      const queued = await enqueueSend({
+      const { queued, superseded } = await enqueueSend({
         threadId: thread.id,
         agentName: input.agentName ?? null,
         environment: this.environment.name,
         text: input.text,
+        origin: input.origin
+          ? {
+              ...input.origin,
+              ...(input.senderEnvironment ? { senderEnvironment: input.senderEnvironment } : {}),
+            }
+          : null,
+        coalesceKey: input.coalesceKey ?? null,
         queuedDuringTurnId: thread.latestTurn?.turnId ?? null,
         origin: input.origin ?? null,
       });
@@ -787,6 +806,7 @@ export class RemoteEnvironmentClient {
         queued: true,
         queuedSendId: queued.id,
         sequence: queued.sequence,
+        ...(superseded.length > 0 ? { supersededSendIds: superseded.map(({ id }) => id) } : {}),
       };
     }
 
@@ -794,9 +814,11 @@ export class RemoteEnvironmentClient {
     try {
       await rpc.request("dispatchCommand", {
         type: "message.dispatch",
-        commandId: NodeCrypto.randomUUID(),
+        createdBy: "user",
+        creationSource: "server",
+        commandId: input.commandId ?? NodeCrypto.randomUUID(),
         threadId: thread.id,
-        messageId: NodeCrypto.randomUUID(),
+        messageId: input.commandId ? `${input.commandId}:message` : NodeCrypto.randomUUID(),
         text: input.text,
         attachments: [],
         ...(input.origin
@@ -854,6 +876,8 @@ export class RemoteEnvironmentClient {
         });
       await rpc.request("dispatchCommand", {
         type: "message.dispatch",
+        createdBy: "user",
+        creationSource: "server",
         commandId: NodeCrypto.randomUUID(),
         threadId: thread.id,
         messageId: NodeCrypto.randomUUID(),
