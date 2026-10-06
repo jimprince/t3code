@@ -17,6 +17,8 @@ export const REQUEST_LABEL = "ask";
 /** Request-ledger stage labels: handed over for the next release, and shipped and waiting for Brad's test. */
 export const AWAITING_RELEASE_LABEL = "awaiting-release";
 export const NEEDS_TEST_LABEL = "needs-test";
+/** An idea saved for later: on the roadmap, off the active request list until planned or started. */
+export const PARKED_LABEL = "parked";
 
 /**
  * Same derivation as the Agent Status Board's `/api/items`. The ledger's two
