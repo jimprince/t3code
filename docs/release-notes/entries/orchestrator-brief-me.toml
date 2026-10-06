@@ -1,0 +1,4 @@
+id = "orchestrator-brief-me"
+category = "feature"
+functionality = "orchestrator threads"
+text = "Brief me summarizes an orchestrator's worker traffic since your last message into what needs you, what finished, what is moving and what is blocked, without adding anything to the thread."
