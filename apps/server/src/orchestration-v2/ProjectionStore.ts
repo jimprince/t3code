@@ -580,7 +580,9 @@ function needsRecovery(
         ) ||
         projection.providerThreads.some(
           (thread) =>
-            thread.status === "active" || (thread.pendingBackgroundTasks?.length ?? 0) > 0,
+            thread.status === "active" ||
+            (thread.pendingBackgroundTasks?.length ?? 0) > 0 ||
+            thread.codexNativeGoal != null,
         ) ||
         projection.turnItems.some(
           (item) =>
@@ -1495,6 +1497,9 @@ export function threadShellFromProjection(
     hasActionableProposedPlan: projection.plans.some(
       (plan) => plan.kind === "proposed_plan" && plan.status === "active",
     ),
+    codexNativeGoal:
+      projection.providerThreads.find((p) => p.id === projection.thread.activeProviderThreadId)
+        ?.codexNativeGoal ?? null,
     pendingBackgroundTasks: [...pendingBackgroundTasks],
     providerInstanceHistory: providerInstanceHistoryForShell({
       threadId: projection.thread.id,
@@ -1590,6 +1595,7 @@ type ShellThreadState = {
   readonly latestUserMessageAt: DateTime.Utc | null;
   readonly latestUserAuthoredMessageAt: DateTime.Utc | null;
   readonly hasActionableProposedPlan: boolean;
+  readonly codexNativeGoal: OrchestrationV2ThreadShell["codexNativeGoal"];
   readonly pendingBackgroundTasks: OrchestrationV2ThreadShell["pendingBackgroundTasks"];
   readonly providerInstanceHistory: OrchestrationV2ThreadShell["providerInstanceHistory"];
   readonly goal: OrchestrationV2ThreadShell["goal"];
@@ -1760,6 +1766,7 @@ function shellFromState(input: {
     latestUserMessageAt: input.state.latestUserMessageAt,
     latestUserAuthoredMessageAt: input.state.latestUserAuthoredMessageAt,
     hasActionableProposedPlan: input.state.hasActionableProposedPlan,
+    codexNativeGoal: input.state.codexNativeGoal,
     pendingBackgroundTasks: input.state.pendingBackgroundTasks,
     providerInstanceHistory: input.state.providerInstanceHistory,
     goal: input.state.goal,
@@ -5699,6 +5706,10 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               ? null
               : DateTime.makeUnsafe(row.latest_user_authored_message_at),
           hasActionableProposedPlan: row.has_actionable_proposed_plan === 1,
+          codexNativeGoal:
+            (providerThreadsByThreadId.get(thread.id) ?? []).find(
+              (p) => p.id === thread.activeProviderThreadId,
+            )?.codexNativeGoal ?? null,
           pendingBackgroundTasks,
           providerInstanceHistory: providerInstanceHistoryForShell({
             threadId: thread.id,
