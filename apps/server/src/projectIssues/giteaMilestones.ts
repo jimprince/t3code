@@ -7,6 +7,7 @@ import * as GiteaApi from "../sourceControl/GiteaApi.ts";
 const GiteaMilestone = Schema.Struct({
   id: Schema.Number,
   title: Schema.String,
+  description: Schema.optional(Schema.NullOr(Schema.String)),
   state: Schema.optional(Schema.String),
   due_on: Schema.optional(Schema.NullOr(Schema.String)),
   open_issues: Schema.optional(Schema.Number),
