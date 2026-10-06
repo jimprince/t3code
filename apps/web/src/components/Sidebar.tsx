@@ -1,3 +1,4 @@
+import { useSupervisionForest } from "../state/forkSupervision";
 import { supervisionRoots } from "@t3tools/client-runtime/state/forkNesting";
 import { SupervisionThreadRows, useSupervisionSidebar } from "./sidebar/SupervisionThreadRows";
 import { groupChildInputAttention } from "@t3tools/client-runtime/child-attention";
@@ -2328,7 +2329,8 @@ export default function Sidebar() {
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const threads = useThreadShells();
 
-  const childInputAttention = useMemo(() => groupChildInputAttention(threads), [threads]);
+  const attentionForest = useSupervisionForest();
+  const childInputAttention = useMemo(() => groupChildInputAttention(threads, attentionForest.parentByKey), [threads, attentionForest]);
   const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
