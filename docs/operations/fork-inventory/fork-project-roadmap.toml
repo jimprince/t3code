@@ -1,0 +1,8 @@
+name = "fork-project-roadmap"
+subject = "feat(projects): roadmap of versions as Gitea milestones"
+class = "product"
+purpose = "Plan a project's versions on its project page: Later plus one column per open Gitea milestone on the tracker repository, with drag or a Move to menu, add and rename versions, and Save for later for ideas that should not wake the orchestrator."
+retire_when = "Upstream or another fork concern provides milestone planning for projects."
+depends_on = ["fork-project-dashboard-widgets", "fork-request-ledger"]
+roles = []
+note = "No new store: versions are open milestones on the tracker resolved by the ledger, items are the tracker's open issues and requests, and an item whose milestone is closed (a shipped release) is off the roadmap. Roadmap order is due date then creation; the first version is the next release and its items join the Release widget's Next release list. request shipped closes its release milestone. Save for later files a request through projectRequests.create without messaging the orchestrator. CLI: t3-thread roadmap list|move|version."
