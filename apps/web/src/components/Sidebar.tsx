@@ -2,6 +2,7 @@ import { type EnvironmentId } from "@t3tools/contracts";
 import { useSupervisionForest } from "../state/forkSupervision";
 
 import { supervisionRoots } from "@t3tools/client-runtime/state/forkNesting";
+import { useSupervisionDrag } from "./sidebar/useSupervisionDrag";
 import { SupervisionThreadRows, useSupervisionSidebar } from "./sidebar/SupervisionThreadRows";
 import { groupSupervisionChildInputAttention } from "@t3tools/client-runtime/child-attention";
 import { SidebarChildInputAttention } from "./sidebar/SidebarChildInputAttention";
@@ -2695,7 +2696,8 @@ export default function Sidebar() {
         override holds until all of them appear in canonical state. */
     readonly assignedKeys: ReadonlyMap<string, string>;
   } | null>(null);
-  const supervision = useSupervisionSidebar(threads, routeThreadKey);
+  const supervision = useSupervisionSidebar(threads.filter(thread => scopedProjectKeys === null || scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`)), routeThreadKey);
+  const supervisionDrag = useSupervisionDrag(supervision.forest);
   const {
     pinnedThreads,
     draggableThreadKeys,
@@ -2714,7 +2716,10 @@ export default function Sidebar() {
     const preciseNow = new Date().toISOString();
     // Subagent child threads live in the parent's Agents surface, not the
     // sidebar roster (v2 models them as real threads with lineage).
-    const visible = supervisionRoots(filterSidebarV2VisibleThreads(threads, scopedProjectKeys), supervision.forest);
+    const visible = supervisionRoots(
+      filterSidebarV2VisibleThreads(threads, scopedProjectKeys),
+      supervision.forest,
+    );
     inboxReturns.observe(workingShelfEnabled ? threads : null);
     const pinned: EnvironmentThreadShell[] = [];
     const active: EnvironmentThreadShell[] = [];
@@ -3020,12 +3025,16 @@ export default function Sidebar() {
   const threadByKey = useMemo(
     () =>
       new Map(
-        orderedThreads.map(
-          (thread) =>
-            [scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)), thread] as const,
-        ),
+        [...orderedThreads, ...supervision.forest.parentByKey.keys()]
+          .flatMap((value) =>
+            typeof value === "string" ? [supervision.forest.byKey.get(value)!] : [value],
+          )
+          .map(
+            (thread) =>
+              [scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)), thread] as const,
+          ),
       ),
-    [orderedThreads],
+    [orderedThreads, supervision.forest],
   );
   // Handlers read these through refs: depending on per-update Map/Set
   // identities would give every row a fresh callback prop on each shell
@@ -3467,7 +3476,10 @@ export default function Sidebar() {
       distance: SIDEBAR_DRAG_DISTANCE,
       onAttach: attachDragSensor,
       onFinish: finishThreadDrag,
-      onMove: moveThreadContextDrag,
+      onMove: (point) => {
+        supervisionDrag.pointer(point.x);
+        return moveThreadContextDrag(point);
+      },
       onDrop: dropThreadContextDrag,
     }),
   );
@@ -3483,8 +3495,19 @@ export default function Sidebar() {
     add(workingThreads, "working");
     add(snoozedThreads, "snoozed");
     add(settledThreads, "settled");
+    for (const key of supervision.forest.parentByKey.keys()) {
+      const t = supervision.forest.byKey.get(key)!;
+      map.set(key, t.pinnedAt !== null ? "pinned" : "active");
+    }
     return map;
-  }, [activeThreads, pinnedThreads, settledThreads, snoozedThreads, workingThreads]);
+  }, [
+    activeThreads,
+    pinnedThreads,
+    settledThreads,
+    snoozedThreads,
+    workingThreads,
+    supervision.forest,
+  ]);
   const sectionByThreadKeyRef = useRef(sectionByThreadKey);
   sectionByThreadKeyRef.current = sectionByThreadKey;
   // Drag a row action to apply it to the armed rows in the same section.
@@ -3750,8 +3773,23 @@ export default function Sidebar() {
     const settledRows = rowsOf(renderedSettledThreads, "settled");
     items.push({ kind: "marker", marker: "settled-placeholder" });
     items.push(...settledRows);
-    return items;
+    const appendChildren = (key: string): SidebarListItem[] =>
+      (supervision.forest.children.get(key) ?? []).flatMap((child) => {
+        const childKey = scopedThreadKey(scopeThreadRef(child.environmentId, child.id));
+        return [
+          {
+            kind: "thread" as const,
+            key: childKey,
+            section: child.pinnedAt !== null ? ("pinned" as const) : ("active" as const),
+          },
+          ...appendChildren(childKey),
+        ];
+      });
+    return items.flatMap((item) =>
+      item.kind === "thread" ? [item, ...appendChildren(item.key)] : [item],
+    );
   }, [
+    supervision.forest,
     activeThreads,
     pinnedThreads,
     renderedSettledThreads,
@@ -3885,6 +3923,8 @@ export default function Sidebar() {
     if (draggedThreadKey === undefined || draggedFromSection === undefined)
       return createSidebarCollisionDetection(() => true);
     const source = threadByKey.get(draggedThreadKey);
+    if (source && supervision.forest.parentByKey.has(draggedThreadKey))
+      return createSidebarCollisionDetection((id) => id !== draggedThreadKey);
     if (source === undefined) return createSidebarCollisionDetection(() => false);
     return createSidebarCollisionDetection(
       (id) => {
@@ -5036,11 +5076,23 @@ export default function Sidebar() {
                   restrictBelowPins,
                   restrictToFirstScrollableAncestor,
                 ]}
-                onDragStart={handleThreadDragStart}
+                onDragStart={(event) => {
+                  supervisionDrag.start(event);
+                  handleThreadDragStart(event);
+                }}
                 onDragOver={handleThreadDragOver}
-                onDragEnd={handleThreadDragEnd}
+                onDragMove={supervisionDrag.move}
+                onDragEnd={(event) => {
+                  if (!supervisionDrag.end(event, sidebarListItems)) handleThreadDragEnd(event);
+                }}
               >
                 <SidebarDragLifecycle onUnmount={cancelThreadDrag} />
+                {supervisionDrag.intent.kind === "nest" ? (
+                  <div role="status">
+                    Nest under{" "}
+                    {supervision.forest.byKey.get(supervisionDrag.intent.parentKey)?.title}
+                  </div>
+                ) : null}
                 <SortableContext items={sortableIds} strategy={sidebarSortingStrategy}>
                   <ul
                     ref={attachListMotionRef}
@@ -5197,7 +5249,8 @@ export default function Sidebar() {
                             disabled={
                               renamingThreadKey === threadKey ||
                               section === "working" ||
-                              !draggableThreadKeys.has(threadKey) ||
+                              (!draggableThreadKeys.has(threadKey) &&
+                                !supervision.forest.parentByKey.has(threadKey)) ||
                               optimisticDrop !== null
                             }
                           >
@@ -5219,7 +5272,26 @@ export default function Sidebar() {
                       ];
                       for (const item of sidebarListItems) {
                         if (item.kind === "thread") {
-                          items.push(<SupervisionThreadRows key={item.key} thread={threadByKey.get(item.key)!} supervision={supervision} renderRow={(child) => renderThreadRowInner(child, child.pinnedAt !== null ? "pinned" : child.settledOverride === "settled" ? "settled" : "active")}>{renderThreadRow(threadByKey.get(item.key)!, item.section)}</SupervisionThreadRows>);
+                          if (supervision.forest.parentByKey.has(item.key)) continue;
+                          items.push(
+                            <SupervisionThreadRows
+                              key={item.key}
+                              thread={threadByKey.get(item.key)!}
+                              supervision={supervision}
+                              renderRow={(child) =>
+                                renderThreadRow(
+                                  child,
+                                  child.pinnedAt !== null
+                                    ? "pinned"
+                                    : child.settledOverride === "settled"
+                                      ? "settled"
+                                      : "active",
+                                )
+                              }
+                            >
+                              {renderThreadRow(threadByKey.get(item.key)!, item.section)}
+                            </SupervisionThreadRows>,
+                          );
                           continue;
                         }
                         switch (item.marker) {
