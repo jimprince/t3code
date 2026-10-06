@@ -1,5 +1,5 @@
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
-import type { MessageId } from "@t3tools/contracts";
+import type { MessageId, ProjectRequestStartIntakeResult } from "@t3tools/contracts";
 import { XIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent } from "react";
 
@@ -15,8 +15,10 @@ import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { sentRequestStatus } from "./projectRequests.logic";
 import { useProjectRequests } from "./ProjectRequestsSection";
-import { failureReason, sendRequest } from "./sendOutcome.logic";
+import { attemptKey, failureReason, sendRequest, type SendAttempt } from "./sendOutcome.logic";
 import { useSendToOrchestrator, useSendToThread } from "./sendToOrchestrator";
+
+type IntakeThread = ProjectRequestStartIntakeResult;
 
 /** How long the sent line stays, and when to look again for the filed request. */
 const SENT_LINE_MS = 120_000;
@@ -53,6 +55,10 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
   const startIntake = useAtomCommand(startRequestIntake, { reportFailure: false });
   const archiveThread = useAtomCommand(threadEnvironment.archive, { reportFailure: false });
   const sending = useRef(false);
+  const [busy, setBusy] = useState(false);
+  // A failed send has already filed the request under its message id (and may have started an
+  // intake thread); a retry of the same text reuses both, so nothing is filed twice.
+  const failedAttempt = useRef<SendAttempt<IntakeThread> | null>(null);
   const [images, setImages] = useState<ComposerImageAttachment[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [sent, setSent] = useState<{
@@ -75,11 +81,28 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
   useEffect(() => {
     imagesRef.current = images;
   }, [images]);
+  const environmentId = summary.root.environmentId;
+  const abandonRef = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    abandonRef.current = () => {
+      const attempt = failedAttempt.current;
+      failedAttempt.current = null;
+      if (attempt?.intake) {
+        void archiveThread({ environmentId, input: { threadId: attempt.intake.threadId } });
+      }
+    };
+  });
+  // Clearing the box, or leaving the page, abandons a failed request: its intake thread goes.
+  const cleared = text.length === 0 && images.length === 0;
+  useEffect(() => {
+    if (cleared && !sending.current) abandonRef.current();
+  }, [cleared]);
 
   // Previews are object URLs; release them when the box goes away.
   useEffect(
     () => () => {
       for (const image of imagesRef.current) URL.revokeObjectURL(image.previewUrl);
+      abandonRef.current();
       if (statusTimer.current !== null) window.clearTimeout(statusTimer.current);
       for (const timer of sentTimers.current) window.clearTimeout(timer);
     },
@@ -92,7 +115,8 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
     statusTimer.current = window.setTimeout(() => setStatus(null), 3_000);
   };
   const addImages = (files: File[]) => {
-    if (files.length > 0) setImages((current) => [...current, ...files.map(imageAttachment)]);
+    if (files.length > 0 && !sending.current)
+      setImages((current) => [...current, ...files.map(imageAttachment)]);
   };
   const reset = () => {
     for (const image of imagesRef.current) URL.revokeObjectURL(image.previewUrl);
@@ -105,19 +129,27 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
     if ((!text.trim() && images.length === 0) || sending.current) return;
     const prompt = text;
     const attached = images;
-    const environmentId = summary.root.environmentId;
+    const key = attemptKey(
+      prompt,
+      attached.map((image) => image.id),
+    );
+    if (failedAttempt.current && failedAttempt.current.key !== key) abandonRef.current();
+    const previous = failedAttempt.current;
     // Image-only requests still need a message body, as in the chat composer.
     const messageText = prompt.trim() ? prompt : ATTACHMENT_ONLY_BOOTSTRAP_PROMPT;
     sending.current = true;
+    setBusy(true);
     setSent(null);
     setStatus("Starting triage...");
     // The text and images stay in the box until the server has taken the message, so
     // a failed send loses nothing. A short-lived intake thread triages the request
     // (type, title, roadmap, and then answer, catalog, start a worker or hand it
     // on), so the orchestrator is not woken for every request.
-    let result: Awaited<ReturnType<typeof sendRequest>>;
+    let result: Awaited<ReturnType<typeof sendRequest<IntakeThread>>>;
     try {
-      result = await sendRequest({
+      result = await sendRequest<IntakeThread>({
+        key,
+        previous,
         startIntake: () =>
           startIntake({
             environmentId,
@@ -125,7 +157,7 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
           }),
         // The request is marked explicit before its message is sent, so the ledger
         // files it as a new task instead of folding it into an existing one.
-        sendToIntake: (intake) =>
+        sendToIntake: (intake, messageId) =>
           sendToThread(
             { environmentId, threadId: intake.threadId },
             {
@@ -136,6 +168,7 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
             `${intake.brief}\n\n${messageText}`,
             attached,
             {
+              ...(messageId ? { messageId } : {}),
               beforeSend: (messageId) =>
                 submit({
                   environmentId,
@@ -144,25 +177,35 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
             },
           ),
         // A server without intake threads: the orchestrator gets it, as before.
-        sendToOrchestrator: () =>
-          sendToOrchestrator(summary, messageText, attached, (messageId) =>
-            submit({
-              environmentId,
-              input: { threadId: summary.root.id, messageId, text: messageText },
-            }),
+        sendToOrchestrator: (messageId) =>
+          sendToOrchestrator(
+            summary,
+            messageText,
+            attached,
+            (id) =>
+              submit({
+                environmentId,
+                input: { threadId: summary.root.id, messageId: id, text: messageText },
+              }),
+            messageId,
           ),
-        archiveIntake: (threadId) => archiveThread({ environmentId, input: { threadId } }),
       });
     } catch (error) {
-      result = { ok: false, reason: failureReason(error) };
+      // Nothing was filed or sent: the intake thread could not even be started.
+      setStatus(`Not sent: ${failureReason(error)}`);
+      setExpanded(true);
+      return;
     } finally {
       sending.current = false;
+      setBusy(false);
     }
     if (!result.ok) {
+      failedAttempt.current = result.attempt;
       setStatus(`Not sent: ${result.reason}`);
       setExpanded(true);
       return;
     }
+    failedAttempt.current = null;
     reset();
     setExpanded(false);
     setStatus(null);
@@ -224,6 +267,7 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
           aria-label="New request"
           value={text}
           rows={3}
+          disabled={busy}
           autoFocus
           placeholder="New request: ask the orchestrator, or save an idea for later"
           onBlur={() => setExpanded(false)}
@@ -257,6 +301,7 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
               <button
                 type="button"
                 aria-label={`Remove ${image.name}`}
+                disabled={busy}
                 className="absolute -top-1.5 -right-1.5 rounded-full bg-background p-0.5 text-muted-foreground hover:text-foreground"
                 onClick={() => {
                   URL.revokeObjectURL(image.previewUrl);
@@ -276,7 +321,7 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
               {/* Keep the box open while a button takes the click. */}
               <Button
                 size="xs"
-                disabled={!text.trim() && images.length === 0}
+                disabled={busy || (!text.trim() && images.length === 0)}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => void send()}
               >
@@ -285,7 +330,7 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
               <Button
                 size="xs"
                 variant="outline"
-                disabled={!text.trim() || images.length > 0}
+                disabled={busy || !text.trim() || images.length > 0}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => void saveLater()}
               >

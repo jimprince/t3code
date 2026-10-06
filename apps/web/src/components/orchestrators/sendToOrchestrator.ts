@@ -33,11 +33,13 @@ export function useSendToThread() {
       images: ComposerImageAttachment[],
       options: {
         readonly busy?: boolean;
+        /** Reuse the id of an earlier failed attempt, so a retry is the same message. */
+        readonly messageId?: MessageId;
         /** Runs with the message id before it is dispatched, such as marking it a request. */
         readonly beforeSend?: (messageId: MessageId) => Promise<unknown>;
       } = {},
     ): SendHandle => {
-      const messageId = newMessageId();
+      const messageId = options.messageId ?? newMessageId();
       const queued = options.busy === true;
       const done = (async (): Promise<SendOutcome> => {
         try {
@@ -92,6 +94,7 @@ export function useSendToOrchestrator() {
       images: ComposerImageAttachment[] = [],
       /** Runs with the message id before it is dispatched, such as marking it a request. */
       beforeSend?: (messageId: MessageId) => Promise<unknown>,
+      messageId?: MessageId,
     ): SendHandle =>
       sendToThread(
         { environmentId: summary.root.environmentId, threadId: summary.root.id },
@@ -101,6 +104,7 @@ export function useSendToOrchestrator() {
         {
           busy: threadRuntimeIsActive(summary.root.runtime),
           ...(beforeSend ? { beforeSend } : {}),
+          ...(messageId ? { messageId } : {}),
         },
       ),
     [sendToThread],

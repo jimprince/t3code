@@ -1,7 +1,13 @@
 import type { MessageId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { failureReason, sendRequest, type SendHandle, type SendOutcome } from "./sendOutcome.logic";
+import {
+  attemptKey,
+  failureReason,
+  sendRequest,
+  type SendHandle,
+  type SendOutcome,
+} from "./sendOutcome.logic";
 
 const intakeThread = { threadId: "intake-1" as ThreadId };
 const started = { _tag: "Success" as const, value: intakeThread };
@@ -25,64 +31,120 @@ describe("failureReason", () => {
   });
 });
 
+const KEY = attemptKey("fix the login page", []);
+
+describe("attemptKey", () => {
+  it("changes with the text or the images, so an edited request is a new one", () => {
+    expect(attemptKey("a", ["i1"])).toBe(attemptKey("a", ["i1"]));
+    expect(attemptKey("a", ["i1"])).not.toBe(attemptKey("b", ["i1"]));
+    expect(attemptKey("a", ["i1"])).not.toBe(attemptKey("a", ["i1", "i2"]));
+  });
+});
+
 describe("sendRequest", () => {
   it("reports the intake send once the server has taken it", async () => {
-    const archiveIntake = vi.fn(async () => undefined);
     const result = await sendRequest({
+      key: KEY,
       startIntake: async () => started,
       sendToIntake: () => handle({ ok: true }, true),
       sendToOrchestrator: () => {
         throw new Error("the orchestrator is not used");
       },
-      archiveIntake,
     });
     expect(result).toEqual({ ok: true, messageId: "m1", queued: true, intake: true });
-    expect(archiveIntake).not.toHaveBeenCalled();
   });
 
-  it("reports why a failed send did not go out and archives the intake thread it started", async () => {
-    const archiveIntake = vi.fn(async () => undefined);
+  it("reports why a failed send did not go out and hands back the attempt to retry", async () => {
     const result = await sendRequest({
+      key: KEY,
       startIntake: async () => started,
       sendToIntake: () => handle({ ok: false, reason: "environment is disconnected" }),
       sendToOrchestrator: () => handle({ ok: true }),
-      archiveIntake,
     });
-    expect(result).toEqual({ ok: false, reason: "environment is disconnected" });
-    expect(archiveIntake).toHaveBeenCalledExactlyOnceWith(intakeThread.threadId);
+    expect(result).toEqual({
+      ok: false,
+      reason: "environment is disconnected",
+      attempt: { key: KEY, messageId: "m1", intake: intakeThread },
+    });
   });
 
-  it("still reports the send failure when archiving the intake thread fails too", async () => {
-    const result = await sendRequest({
-      startIntake: async () => started,
-      sendToIntake: () => handle({ ok: false, reason: "dispatch rejected" }),
-      sendToOrchestrator: () => handle({ ok: true }),
-      archiveIntake: async () => {
-        throw new Error("archive failed");
+  it("files exactly one outbox entry when a failed send is retried", async () => {
+    // The outbox dedupes on message id, as the server's enqueue does.
+    const outbox = new Map<string, string>();
+    let nextId = 0;
+    const startIntake = vi.fn(async () => started);
+    const send = (messageId: MessageId | undefined, outcome: SendOutcome): SendHandle => {
+      const id = messageId ?? (`m${(nextId += 1)}` as MessageId);
+      outbox.set(id, "fix the login page");
+      return { messageId: id, queued: false, done: Promise.resolve(outcome) };
+    };
+    const deps = {
+      key: KEY,
+      startIntake,
+      sendToOrchestrator: () => {
+        throw new Error("the orchestrator is not used");
       },
+    };
+
+    const first = await sendRequest({
+      ...deps,
+      sendToIntake: (_intake: typeof intakeThread, messageId: MessageId | undefined) =>
+        send(messageId, { ok: false, reason: "offline" }),
     });
-    expect(result).toEqual({ ok: false, reason: "dispatch rejected" });
+    expect(first.ok).toBe(false);
+    if (first.ok) return;
+
+    const retry = await sendRequest({
+      ...deps,
+      previous: first.attempt,
+      sendToIntake: (_intake: typeof intakeThread, messageId: MessageId | undefined) =>
+        send(messageId, { ok: true }),
+    });
+    expect(retry).toMatchObject({ ok: true, messageId: first.attempt.messageId, intake: true });
+    expect(outbox.size).toBe(1);
+    expect(startIntake).toHaveBeenCalledTimes(1);
   });
 
   it("sends to the orchestrator when the server has no intake threads", async () => {
-    const archiveIntake = vi.fn(async () => undefined);
     const ok = await sendRequest({
+      key: KEY,
       startIntake: async () => ({ _tag: "Failure" as const }),
       sendToIntake: () => {
         throw new Error("no intake thread to send to");
       },
       sendToOrchestrator: () => handle({ ok: true }),
-      archiveIntake,
     });
     expect(ok).toEqual({ ok: true, messageId: "m1", queued: false, intake: false });
 
     const failed = await sendRequest({
+      key: KEY,
       startIntake: async () => ({ _tag: "Failure" as const }),
       sendToIntake: () => handle({ ok: true }),
       sendToOrchestrator: () => handle({ ok: false, reason: "offline" }),
-      archiveIntake,
     });
-    expect(failed).toEqual({ ok: false, reason: "offline" });
-    expect(archiveIntake).not.toHaveBeenCalled();
+    expect(failed).toEqual({
+      ok: false,
+      reason: "offline",
+      attempt: { key: KEY, messageId: "m1", intake: null },
+    });
+  });
+
+  it("retries an orchestrator send without asking for an intake thread again", async () => {
+    const startIntake = vi.fn(async () => ({ _tag: "Failure" as const }));
+    const sendToOrchestrator = vi.fn((messageId: MessageId | undefined) => {
+      expect(messageId).toBe("m1");
+      return handle({ ok: true });
+    });
+    const retry = await sendRequest({
+      key: KEY,
+      previous: { key: KEY, messageId: "m1" as MessageId, intake: null },
+      startIntake,
+      sendToIntake: () => {
+        throw new Error("no intake thread to send to");
+      },
+      sendToOrchestrator,
+    });
+    expect(retry).toMatchObject({ ok: true, intake: false });
+    expect(startIntake).not.toHaveBeenCalled();
   });
 });
