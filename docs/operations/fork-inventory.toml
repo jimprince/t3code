@@ -1177,3 +1177,25 @@ rationale = "Retain guarded local worktree retirement; the CLI adapter uses the 
 id = "v2-port-2689-m2"
 decision = "keep-on-top"
 note = "GC reads archived V2 shells and all live execution resources, preserving non-forced Git removal and environment identity validation."
+
+[[patch]]
+name = "fork-enter-sends-queued"
+subject = "feat(web): send the next queued message with Enter"
+class = "product"
+purpose = "Let Enter on an empty composer send the oldest queued message now through the existing Send now path, so Enter once queues and Enter again sends."
+retire_when = "Upstream sends the next queued message from an empty-composer Enter, or the fork stops wanting that shortcut."
+depends_on = []
+roles = []
+note = "Send now delivers the message into the running turn (steer); it does not stop the turn. A hard stop-then-send was deferred because Stop deliberately returns the queue to the composer. The decision lives in the additive apps/web/src/queuedRunEnter.ts; ChatView keeps only the call in onSend's empty-draft branch."
+
+[[patch.decision]]
+id = "upstream13764-empty-enter-drops-the-queued-send-guard"
+date = "2026-09-27"
+decided = "narrow"
+rationale = "Upstream moved queued sending into QueuedMessageSender/sendQueuedMessage, so the composer submit handler no longer receives a queuedMessage and can never itself be a queued send. Drop the helper's sendingQueuedMessage input and its case rather than feeding it a constant false; the remaining guards are the composer's own content and expired terminal contexts."
+
+[[patch.decision]]
+id = "v2-port-2689"
+date = "2026-10-05"
+decided = "reconcile-smaller"
+rationale = "Use native queued-run steerNext and its validation and in-flight guards from the empty composer. No browser-local queue is restored."
