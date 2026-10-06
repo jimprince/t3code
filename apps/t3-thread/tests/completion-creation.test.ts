@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vite-plus/test";
+import { descriptorFixture } from "./descriptor-fixture.js";
 import { RemoteEnvironmentClient } from "../src/client.js";
 import { decodeServerConfig } from "../src/contracts.js";
 import type { SavedEnvironment } from "../src/types.js";
@@ -47,6 +48,7 @@ describe("worker completion creation", () => {
         return { sequence: 1 };
       });
       const client = new RemoteEnvironmentClient(environment, {
+        descriptorFactory: async () => ({ ...await descriptorFixture(environment)(), capabilities: { threadNesting: true } }),
         rpcFactory: () => ({
           request,
           dispose: vi.fn(async () => undefined),
@@ -79,7 +81,7 @@ describe("worker completion creation", () => {
         settleOnComplete: explicit,
       });
       expect(request).toHaveBeenCalledWith(
-        "forkMetadataUpdate",
+        "threadMetadataUpdate",
         expect.objectContaining({ settleOnComplete: expected }),
       );
       for (const [method, payload] of request.mock.calls) {
