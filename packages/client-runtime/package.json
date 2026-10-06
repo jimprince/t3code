@@ -3,13 +3,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./fork/server-restart": {
-      "types": "./src/fork/serverRestart.ts",
-      "default": "./src/fork/serverRestart.ts"
-    },
-    "./fork/disconnected-composer": {
-      "types": "./src/fork/disconnectedComposer.ts",
-      "default": "./src/fork/disconnectedComposer.ts"
+    "./state/orchestrators": {
+      "types": "./src/state/orchestrators.ts",
+      "default": "./src/state/orchestrators.ts"
     },
     "./fork/desktop-work-state": {
       "types": "./src/fork/desktopWorkState.ts",
@@ -410,6 +406,14 @@
     "./state/fork-nesting-query": {
       "types": "./src/state/forkNestingQuery.ts",
       "default": "./src/state/forkNestingQuery.ts"
+    },
+    "./fork/server-restart": {
+      "types": "./src/fork/serverRestart.ts",
+      "default": "./src/fork/serverRestart.ts"
+    },
+    "./fork/disconnected-composer": {
+      "types": "./src/fork/disconnectedComposer.ts",
+      "default": "./src/fork/disconnectedComposer.ts"
     }
   },
   "scripts": {
