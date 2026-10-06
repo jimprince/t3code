@@ -5,41 +5,48 @@ import { useMemo, type ReactNode } from "react";
 import { projectRoadmapQuery } from "../../state/projectRoadmap";
 import { useEnvironmentQuery } from "../../state/query";
 import { Button } from "../ui/button";
+import { ProjectSection } from "./ProjectSection";
+import { TaskTitle } from "./TaskLink";
 import { groupProjectIssues, PROJECT_ISSUE_LANES } from "./projectIssuesBoard.logic";
 import { ProjectQueryState } from "./ProjectQueryState";
 import { deriveHorizon, formatEpicProgress } from "./projectHorizon.logic";
 import { TASK_STATUS_LABEL } from "./projectRequests.logic";
 import { useTaskStatuses } from "./ProjectRequestsSection";
 
+/** A Dashboard summary: its heading and an "Open …" link to the tab with the full view. */
 function SummaryLine({
   title,
+  openLabel,
   children,
   onOpen,
 }: {
   readonly title: string;
+  readonly openLabel: string;
   readonly children: ReactNode;
   readonly onOpen: (() => void) | null;
 }) {
   return (
-    <section className="flex items-center gap-3 border-t border-border pt-3 text-sm">
-      <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-        {title}
-      </h2>
-      <span className="min-w-0 flex-1 truncate text-foreground/90">{children}</span>
-      {onOpen ? (
-        <Button size="xs" variant="ghost-muted" onClick={onOpen}>
-          Open {title.toLowerCase()}
-          <ArrowRightIcon />
-        </Button>
-      ) : null}
-    </section>
+    <ProjectSection
+      title={title}
+      action={
+        onOpen ? (
+          <Button size="xs" variant="ghost-muted" onClick={onOpen}>
+            {openLabel}
+            <ArrowRightIcon />
+          </Button>
+        ) : null
+      }
+    >
+      <div className="text-sm text-foreground/90">{children}</div>
+    </ProjectSection>
   );
 }
 
 /**
  * Where we're going, on the Dashboard: the next release (its outcome, "N of M
- * done", the task to deliver next), its epics as "1 of 4 · Building", and
- * everything after it as one "Later (68)" line, linking to the Roadmap tab.
+ * complete", the task to deliver next), its epics not yet under way as
+ * "Planning" (Workstreams above shows the ones with work left), and everything
+ * after it as one "Later (68)" line, linking to the Roadmap tab.
  */
 export function ProjectRoadmapSummary({
   summary,
@@ -64,71 +71,63 @@ export function ProjectRoadmapSummary({
       (number) => statuses.get(`${tracker.repository}#${number}`) ?? "pending",
     );
   }, [roadmap.data, statuses, tracker]);
+  const title = "Where we're going";
   if (!roadmap.data) {
     return (
-      <SummaryLine title="Roadmap" onOpen={onOpen}>
+      <SummaryLine title={title} openLabel="Open roadmap" onOpen={onOpen}>
         <ProjectQueryState inline what="roadmap" error={roadmap.error} onRetry={roadmap.refresh} />
       </SummaryLine>
     );
   }
-  if (!horizon) {
+  if (!horizon || !tracker) {
     return (
-      <SummaryLine title="Roadmap" onOpen={onOpen}>
-        No tracker repository
+      <SummaryLine title={title} openLabel="Open roadmap" onOpen={onOpen}>
+        <span className="text-muted-foreground">No task repository yet. Set one under Edit.</span>
       </SummaryLine>
     );
   }
+  const task = (number: number) => ({ host: tracker.host, repository: tracker.repository, number });
+  // Epics with work left are Workstreams' rows; only the ones not under way are listed here.
+  const epics = horizon.epics.filter(({ item }) => (item.epic?.remaining.length ?? 0) === 0);
   return (
-    <section className="border-t border-border pt-3 text-sm">
-      <div className="flex items-center gap-3">
-        <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-          Where we're going
-        </h2>
-        <span className="min-w-0 flex-1" />
-        {onOpen ? (
-          <Button size="xs" variant="ghost-muted" onClick={onOpen}>
-            Open roadmap
-            <ArrowRightIcon />
-          </Button>
-        ) : null}
-      </div>
-      <ul className="mt-1 divide-y divide-border">
+    <SummaryLine title={title} openLabel="Open roadmap" onOpen={onOpen}>
+      <ul className="divide-y divide-border">
         <li className="flex items-baseline gap-3 py-1.5">
-          <span className="min-w-0 flex-1 truncate">
-            <span className="font-medium">{horizon.version ?? "Next release"}</span>
+          <span className="min-w-0 flex-1">
+            {horizon.version ?? "Next release"}
             {horizon.outcome ? (
-              <span className="text-foreground/80"> · {horizon.outcome}</span>
+              <span className="text-muted-foreground"> · {horizon.outcome}</span>
             ) : null}
           </span>
           <span className="shrink-0 tabular-nums text-muted-foreground">
-            {horizon.counts.complete} of {horizon.counts.total} done
+            {horizon.counts.complete} of {horizon.counts.total}{" "}
+            {TASK_STATUS_LABEL.complete.toLowerCase()}
           </span>
         </li>
         {horizon.next ? (
           <li className="flex items-baseline gap-3 py-1.5">
-            <span className="w-20 shrink-0 text-xs text-muted-foreground">
+            {/* A plain column, not StatusCell: this row has no meta line to carry it at phone width. */}
+            <span className="w-24 shrink-0 text-xs text-muted-foreground">
               {TASK_STATUS_LABEL[horizon.next.status]}
             </span>
-            <a
-              href={horizon.next.item.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="min-w-0 flex-1 truncate hover:underline"
+            <TaskTitle
+              task={task(horizon.next.item.number)}
+              url={horizon.next.item.url}
+              className="min-w-0 flex-1 hover:underline"
             >
               {horizon.next.item.title}
-            </a>
+            </TaskTitle>
           </li>
         ) : null}
-        {horizon.epics.map(({ item, phase }) => (
+        {epics.map(({ item, phase }) => (
           <li key={item.number} className="flex items-baseline gap-3 py-1.5">
-            <a
-              href={item.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="min-w-0 flex-1 truncate hover:underline"
+            <TaskTitle
+              task={task(item.number)}
+              url={item.url}
+              className="min-w-0 flex-1 hover:underline"
             >
               {item.title}
-            </a>
+            </TaskTitle>
             <span className="shrink-0 tabular-nums text-muted-foreground">
               {formatEpicProgress(item.epic!, phase)}
             </span>
@@ -138,7 +137,7 @@ export function ProjectRoadmapSummary({
           <li className="py-1.5 text-muted-foreground">Later ({horizon.later})</li>
         ) : null}
       </ul>
-    </section>
+    </SummaryLine>
   );
 }
 
@@ -160,14 +159,13 @@ export function ProjectIssuesSummary({
     const open = query.data.issues.filter(
       (issue) => includeLater || !issue.labels.some((label) => label.toLowerCase() === "parked"),
     );
-    const { lanes, backlog } = groupProjectIssues(open, statuses);
-    return [
-      ...PROJECT_ISSUE_LANES.map((lane) => `${lane.title}: ${lanes[lane.lane].length}`),
-      `Backlog: ${backlog.length}`,
-    ].join(" · ");
+    const { lanes } = groupProjectIssues(open, statuses);
+    return PROJECT_ISSUE_LANES.map((lane) => `${lane.title} ${lanes[lane.lane].length}`).join(
+      " · ",
+    );
   }, [includeLater, query.data, statuses]);
   return (
-    <SummaryLine title="Tasks" onOpen={onOpen}>
+    <SummaryLine title="Tasks" openLabel="Open tasks" onOpen={onOpen}>
       {text ?? (
         <ProjectQueryState inline what="tasks" error={query.error} onRetry={query.refresh} />
       )}
