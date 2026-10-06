@@ -590,7 +590,7 @@ export const make = Effect.gen(function* () {
       for (const providerThread of projection.providerThreads ?? []) {
         const needsIdle = providerThread.status === "active";
         const needsRosterClear = providerThreadHasPendingBackgroundTasks(providerThread);
-        if (!needsIdle && !needsRosterClear) {
+        if (!needsIdle && !needsRosterClear && providerThread.codexNativeGoal == null) {
           continue;
         }
         if (providerThread.ownerNodeId === null) {
@@ -610,6 +610,7 @@ export const make = Effect.gen(function* () {
           payload: {
             ...providerThread,
             status: needsIdle ? "idle" : providerThread.status,
+            codexNativeGoal: null,
             pendingBackgroundTasks: [],
             updatedAt: now,
           },
