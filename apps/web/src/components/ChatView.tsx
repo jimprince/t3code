@@ -394,6 +394,7 @@ import {
   reviewCommentContextLabel,
   terminalContextReference,
 } from "../lib/composerContextRecords";
+import { sendQueuedRunOnEmptyEnter } from "../queuedRunEnter";
 import { type ReviewCommentContext } from "../reviewCommentContext";
 import { environmentCatalog } from "../connection/catalog";
 import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
@@ -8735,7 +8736,7 @@ export default function ChatView(props: ChatViewProps) {
   };
 
   const onSend = async (
-    e?: { preventDefault: () => void },
+    e?: { preventDefault: () => void; repeat?: boolean },
     dispatchMode: ComposerDispatchMode = "auto",
     submissionIntent: ComposerSubmissionIntent = "foreground",
     directAnnotation?: {
@@ -9193,6 +9194,7 @@ export default function ChatView(props: ChatViewProps) {
       return;
     }
     if (!hasSendableContent) {
+      if (sendQueuedRunOnEmptyEnter({ hasSendableContent, expiredTerminalContextCount, repeat: e?.repeat ?? false }, queuedRunsControlRef.current)) return;
       if (expiredTerminalContextCount > 0) {
         const toastCopy = buildExpiredTerminalContextToastCopy(
           expiredTerminalContextCount,
