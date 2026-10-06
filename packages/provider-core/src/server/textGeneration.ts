@@ -6,7 +6,7 @@ import type {
 } from "@t3tools/contracts";
 import type * as Effect from "effect/Effect";
 
-import type { RequestKind } from "./requestItemsPrompt.ts";
+import type { RequestKind, RequestCandidate } from "./requestItemsPrompt.ts";
 import type { TextGenerationPolicy } from "./textGenerationPolicy.ts";
 
 export interface CommitMessageGenerationInput {
@@ -80,11 +80,12 @@ export interface RequestItemsGenerationInput {
   cwd: string;
   message: string;
   threadTitle?: string | undefined;
+  candidates?: ReadonlyArray<RequestCandidate> | undefined;
   modelSelection: ModelSelection;
 }
 
 export interface RequestItemsGenerationResult {
-  items: ReadonlyArray<{ title: string; kind: RequestKind; excerpt: string }>;
+  items: ReadonlyArray<{ title: string; kind: RequestKind; excerpt: string; existing: number | null }>;
 }
 
 /** Commit, change request, branch, and title generation backed by one provider instance. */

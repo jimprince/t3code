@@ -1,6 +1,6 @@
-import type { ProjectIssueRequestSource, ThreadId } from "@t3tools/contracts";
+import type { ProjectIssue, ProjectIssueRequestSource, ThreadId } from "@t3tools/contracts";
 
-import type { RequestKind } from "../textGeneration/RequestItemsPrompt.ts";
+import type { RequestCandidate, RequestKind } from "../textGeneration/RequestItemsPrompt.ts";
 import { formatRequestMarker } from "./projectIssues.logic.ts";
 
 /** Labels the ledger puts on a request issue: `ask` plus one kind label. */
@@ -161,4 +161,83 @@ export function progressLineFor(
     default:
       return null;
   }
+}
+
+const MAX_REQUEST_CANDIDATES = 40;
+
+/**
+ * Open issues a chat message may continue, newest activity first: the issues
+ * linked to its thread, then the project's other open requests (for dedupe).
+ */
+export function requestCandidates(
+  issues: ReadonlyArray<ProjectIssue>,
+  threadId: string,
+): RequestCandidate[] {
+  const open = issues
+    .filter((issue) => issue.closedAt === null && issue.status !== "done")
+    .filter((issue) => issue.status !== "archived")
+    .toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const inThread = open.filter((issue) => issue.linkedThreadIds.includes(threadId as ThreadId));
+  const requests = open.filter(
+    (issue) => issue.isRequest && !issue.linkedThreadIds.includes(threadId as ThreadId),
+  );
+  return [
+    ...inThread.map((issue) => ({ number: issue.number, title: issue.title, inThread: true })),
+    ...requests.map((issue) => ({ number: issue.number, title: issue.title, inThread: false })),
+  ].slice(0, MAX_REQUEST_CANDIDATES);
+}
+
+export type RequestItemPlan =
+  | { readonly action: "file" }
+  | { readonly action: "comment"; readonly number: number }
+  | { readonly action: "skip" };
+
+/**
+ * What one split item becomes. The New request box always files. A chat
+ * message's question is conversation and is skipped; anything else continues
+ * the open issue the split named (or, without a model, the thread's newest
+ * linked issue) as a comment; only genuinely new work becomes a new issue.
+ */
+export function planRequestItem(
+  item: { readonly kind: RequestKind; readonly existing?: number | null },
+  context: {
+    readonly explicit: boolean;
+    readonly candidates: ReadonlyArray<RequestCandidate>;
+    /** No model split the message: fall back to the thread's newest linked issue. */
+    readonly unsplit: boolean;
+  },
+): RequestItemPlan {
+  if (context.explicit) return { action: "file" };
+  if (item.kind === "question") return { action: "skip" };
+  const named = context.candidates.find((candidate) => candidate.number === item.existing);
+  if (named) return { action: "comment", number: named.number };
+  const threadIssue = context.unsplit
+    ? context.candidates.find((candidate) => candidate.inThread)
+    : undefined;
+  return threadIssue ? { action: "comment", number: threadIssue.number } : { action: "file" };
+}
+
+const FOLLOW_UP_MARKER = "t3-request-followup";
+
+/** A follow-up Brad sent in a thread, recorded on the issue it continues. */
+export function formatFollowUpComment(input: {
+  readonly excerpt: string;
+  readonly threadTitle: string;
+  readonly messageId: string;
+  readonly item: number;
+}): string {
+  const quoted = input.excerpt
+    .trim()
+    .split("\n")
+    .map((line) => `> ${line}`)
+    .join("\n");
+  const marker = JSON.stringify({ messageId: input.messageId, item: input.item });
+  return [
+    `Follow-up from Brad in **${input.threadTitle}**:`,
+    "",
+    quoted,
+    "",
+    `<!-- ${FOLLOW_UP_MARKER} ${marker} -->`,
+    "",
+  ].join("\n");
 }
