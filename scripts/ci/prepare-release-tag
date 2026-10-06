@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Creates a version-only release-preparation commit, tags it, and reports the
+# unchanged source SHA that `main` must be pushed at.
+#
+# Keep generated versions off main and preserve its verified lockfile so the
+# tagged child can reuse exact-source CI. Dependency resolution belongs before
+# source verification, including after upstream replay, never during tagging.
+#
+# Required env:
+#   RELEASE_TAG          e.g. v0.0.29-nightly.20260725.860-fork.1
+# Optional env:
+#   SYNC_SKIP_INSTALL=1  skip vp install/fmt (tests)
+#   SYNC_GIT_BIN         git binary path (bypass interactive wrappers)
+#
+# Outputs (appended to $GITHUB_OUTPUT when set):
+#   main_sha  SHA to push to main
+#   prep_sha  tagged commit
+#   tag       the created tag
+
+: "${RELEASE_TAG:?RELEASE_TAG is required}"
+
+# Resolve the sibling stamping script relative to this file's own location
+# (not $PWD): the target repo (or, in tests, a disposable fixture repo) is the
+# working directory the version manifests live in, but this script itself
+# lives in the real checkout, wherever that was invoked from.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+GIT_BIN="${SYNC_GIT_BIN:-$(command -v git)}"
+if [[ ! -x "$GIT_BIN" ]]; then
+  echo "git executable is unavailable: $GIT_BIN" >&2
+  exit 2
+fi
+
+git_cmd() {
+  "$GIT_BIN" "$@"
+}
+
+MANIFESTS=(
+  apps/server/package.json
+  apps/desktop/package.json
+  apps/web/package.json
+  packages/contracts/package.json
+)
+
+main_sha="$(git_cmd rev-parse HEAD)"
+version="${RELEASE_TAG#v}"
+
+if [[ "${SYNC_SKIP_INSTALL:-0}" != "1" ]]; then
+  vp install --frozen-lockfile --ignore-scripts
+fi
+
+node "$REPO_ROOT/scripts/update-release-package-versions.ts" "$version"
+
+if [[ "${SYNC_SKIP_INSTALL:-0}" != "1" ]]; then
+  vp fmt "${MANIFESTS[@]}"
+  vp install --frozen-lockfile --ignore-scripts
+fi
+
+if git_cmd diff --quiet -- "${MANIFESTS[@]}"; then
+  echo "Package versions already match $version; tagging main head."
+  prep_sha="$main_sha"
+else
+  git_cmd add -- "${MANIFESTS[@]}"
+  # This plain commit is sanctioned: it lives off the stack (tag-only, never
+  # pushed to main), so the stgit/adopt plain-commit guard must let it through.
+  T3_ALLOW_PLAIN_COMMIT=1 git_cmd commit -m "chore(release): prepare $RELEASE_TAG"
+  prep_sha="$(git_cmd rev-parse HEAD)"
+fi
+
+git_cmd tag -f "$RELEASE_TAG" "$prep_sha"
+
+if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+  {
+    echo "main_sha=$main_sha"
+    echo "prep_sha=$prep_sha"
+    echo "tag=$RELEASE_TAG"
+  } >> "$GITHUB_OUTPUT"
+fi
+
+echo "main stays at $main_sha"
+echo "tag $RELEASE_TAG -> $prep_sha"
