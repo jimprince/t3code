@@ -240,6 +240,7 @@ import * as RequestLedger from "./projectIssues/RequestLedger.ts";
 import * as ProjectDashboardService from "./projectDashboard/ProjectDashboardService.ts";
 import * as ProjectDashboardStore from "./projectDashboard/ProjectDashboardStore.ts";
 import * as ProjectLayoutService from "./projectLayout/ProjectLayoutService.ts";
+import * as RequestIntake from "./projectIssues/RequestIntake.ts";
 import * as ProjectRoadmapService from "./projectRoadmap/ProjectRoadmapService.ts";
 import * as ProjectCanvasService from "./projectCanvas/ProjectCanvasService.ts";
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
@@ -1337,6 +1338,9 @@ const makeWsRpcLayer = (
       const projectIssues = yield* ProjectIssuesService.make;
       const requestLedger = yield* RequestLedger.make({ projectIssues, threadIssues });
       const projectCanvas = yield* ProjectCanvasService.make;
+      const requestIntake = yield* RequestIntake.make({
+        providers: providerRegistry,
+      }).pipe(Effect.provideService(Crypto.Crypto, crypto));
       const projectRoadmap = yield* ProjectRoadmapService.make({
         ledger: requestLedger,
         projectIssues,
@@ -2790,6 +2794,10 @@ const makeWsRpcLayer = (
           ),
         [WS_METHODS.projectRequestsSettle]: (input) =>
           observeRpcEffect(WS_METHODS.projectRequestsSettle, requestLedger.settle(input), {
+            "rpc.aggregate": "project-issues",
+          }),
+        [WS_METHODS.projectRequestsStartIntake]: (input) =>
+          observeRpcEffect(WS_METHODS.projectRequestsStartIntake, requestIntake.start(input), {
             "rpc.aggregate": "project-issues",
           }),
         [WS_METHODS.projectRequestsSubmit]: (input) =>
