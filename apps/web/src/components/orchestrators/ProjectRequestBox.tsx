@@ -1,13 +1,15 @@
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
 import type { MessageId } from "@t3tools/contracts";
-import { ArrowUpRightIcon, XIcon } from "lucide-react";
+import { XIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent } from "react";
 
 import type { ComposerImageAttachment } from "../../composerDraftStore";
 import { randomUUID } from "../../lib/utils";
+import { submitProjectRequest } from "../../state/projectIssues";
 import { saveRequestForLater } from "../../state/projectRoadmap";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
+import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { sentRequestStatus } from "./projectRequests.logic";
 import { useProjectRequests } from "./ProjectRequestsSection";
@@ -33,21 +35,18 @@ const imageFiles = (files: FileList | null | undefined) =>
   [...(files ?? [])].filter((file) => file.type.startsWith("image/"));
 
 /**
- * The project page's request box, pinned at the top of the Dashboard: a support
- * box where the work actually gets done. Send gives the text (and pasted or
+ * The project page's New request box, above the tabs so every tab has it: a
+ * support box where the work actually gets done; it files a new request. Send gives the text (and pasted or
  * dropped images) verbatim to the project's orchestrator in the background,
  * through the normal send path where the request ledger captures it, and says
  * which request tracks it once filed. Save for later files it straight into the
- * roadmap's Later column without waking the orchestrator. Open chat is explicit.
+ * roadmap's Later column without waking the orchestrator. One line until focused;
+ * it folds back after sending, or on Escape when empty.
  */
-export function ProjectRequestBox({
-  summary,
-  onOpenChat,
-}: {
-  readonly summary: OrchestratorSummary;
-  readonly onOpenChat: () => void;
-}) {
+export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorSummary }) {
   const [text, setText] = useState("");
+  const [expanded, setExpanded] = useState(false);
+  const submit = useAtomCommand(submitProjectRequest, { reportFailure: false });
   const [images, setImages] = useState<ComposerImageAttachment[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [sent, setSent] = useState<{ messageId: MessageId; queued: boolean } | null>(null);
@@ -87,11 +86,21 @@ export function ProjectRequestBox({
     setText("");
     setImages([]);
   };
+  const open = expanded || text.length > 0 || images.length > 0;
 
   const send = () => {
     if (!text.trim() && images.length === 0) return;
-    const result = sendToOrchestrator(summary, text, images);
+    const prompt = text;
+    // Marked as an explicit request first, so the ledger files it as a new request
+    // instead of folding it into the thread's current issue.
+    const result = sendToOrchestrator(summary, prompt, images, (messageId) =>
+      submit({
+        environmentId: summary.root.environmentId,
+        input: { threadId: summary.root.id, messageId, text: prompt },
+      }),
+    );
     reset();
+    setExpanded(false);
     setStatus(null);
     setSent(result);
     // The ledger files the request a few seconds after the send; look for it, then
@@ -119,7 +128,7 @@ export function ProjectRequestBox({
 
   return (
     <div
-      className="mb-3 flex flex-col gap-2"
+      className="flex flex-col gap-2"
       onDragOver={(event: DragEvent) => {
         if (event.dataTransfer.types.includes("Files")) event.preventDefault();
       }}
@@ -130,25 +139,48 @@ export function ProjectRequestBox({
         addImages(files);
       }}
     >
-      <Textarea
-        aria-label="New request"
-        value={text}
-        rows={2}
-        placeholder="Ask the orchestrator, or save an idea for later"
-        onChange={(event) => setText(event.target.value)}
-        onPaste={(event: ClipboardEvent) => {
-          const files = imageFiles(event.clipboardData.files);
-          if (files.length === 0) return;
-          event.preventDefault();
-          addImages(files);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      {open ? null : (
+        // One line until used; focusing it opens the composer in its place.
+        <Input
+          aria-label="New request"
+          value=""
+          readOnly
+          placeholder="New request: ask the orchestrator, or save an idea for later"
+          onFocus={() => setExpanded(true)}
+          onPaste={(event: ClipboardEvent) => {
+            const files = imageFiles(event.clipboardData.files);
+            if (files.length === 0) return;
             event.preventDefault();
-            send();
-          }
-        }}
-      />
+            addImages(files);
+          }}
+        />
+      )}
+      {open ? (
+        <Textarea
+          aria-label="New request"
+          value={text}
+          rows={3}
+          autoFocus
+          placeholder="New request: ask the orchestrator, or save an idea for later"
+          onBlur={() => setExpanded(false)}
+          onChange={(event) => setText(event.target.value)}
+          onPaste={(event: ClipboardEvent) => {
+            const files = imageFiles(event.clipboardData.files);
+            if (files.length === 0) return;
+            event.preventDefault();
+            addImages(files);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+              event.preventDefault();
+              send();
+              event.currentTarget.blur();
+            } else if (event.key === "Escape" && !text && images.length === 0) {
+              event.currentTarget.blur();
+            }
+          }}
+        />
+      ) : null}
       {images.length > 0 ? (
         <ul className="flex flex-wrap gap-2">
           {images.map((image) => (
@@ -173,27 +205,36 @@ export function ProjectRequestBox({
           ))}
         </ul>
       ) : null}
-      <div className="flex items-center gap-2">
-        <Button size="xs" disabled={!text.trim() && images.length === 0} onClick={send}>
-          Send
-        </Button>
-        <Button
-          size="xs"
-          variant="outline"
-          disabled={!text.trim() || images.length > 0}
-          onClick={() => void saveLater()}
-        >
-          Save for later
-        </Button>
-        <span role="status" className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-          {status ??
-            (sent && sentStatus ? <SentLine queued={sent.queued} status={sentStatus} /> : null)}
-        </span>
-        <Button size="xs" variant="ghost-muted" onClick={onOpenChat}>
-          Open chat
-          <ArrowUpRightIcon />
-        </Button>
-      </div>
+      {open || status || sent ? (
+        <div className="flex items-center gap-2">
+          {open ? (
+            <>
+              {/* Keep the box open while a button takes the click. */}
+              <Button
+                size="xs"
+                disabled={!text.trim() && images.length === 0}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={send}
+              >
+                Send
+              </Button>
+              <Button
+                size="xs"
+                variant="outline"
+                disabled={!text.trim() || images.length > 0}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => void saveLater()}
+              >
+                Save for later
+              </Button>
+            </>
+          ) : null}
+          <span role="status" className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+            {status ??
+              (sent && sentStatus ? <SentLine queued={sent.queued} status={sentStatus} /> : null)}
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }
