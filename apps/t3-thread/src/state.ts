@@ -291,11 +291,16 @@ export function buildSubscriptionRecord(
   source: SubscriptionEndpoint,
   now: string,
   existing?: SavedSubscription | null,
-  options: { baselineTurnId?: string | null; level?: NotificationLevel } = {},
+  options: {
+    baselineTurnId?: string | null;
+    level?: NotificationLevel;
+    inputReminderMinutes?: number;
+  } = {},
 ): SavedSubscription {
   return {
     ...existing,
     level: options.level ?? existing?.level ?? "all",
+    inputReminderMinutes: options.inputReminderMinutes ?? existing?.inputReminderMinutes ?? 45,
     subscriberThreadId: caller.threadId,
     subscriberAgentName: caller.name,
     subscriberEnvironment: caller.environment,
