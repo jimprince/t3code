@@ -378,6 +378,14 @@
     "./device/duo-control": {
       "types": "./src/device/duoControl.ts",
       "default": "./src/device/duoControl.ts"
+    },
+    "./state/fork-nesting": {
+      "types": "./src/state/forkNesting.ts",
+      "default": "./src/state/forkNesting.ts"
+    },
+    "./state/fork-thread-ids": {
+      "types": "./src/state/forkThreadIds.ts",
+      "default": "./src/state/forkThreadIds.ts"
     }
   },
   "scripts": {
