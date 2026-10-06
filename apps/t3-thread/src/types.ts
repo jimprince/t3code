@@ -341,6 +341,7 @@ export type QueuedSendStatus =
  * watcher drains the queue at the next turn boundary.
  */
 export interface SavedQueuedSend {
+  origin?: import("@t3tools/shared/messageOrigin").MessageOrigin | null;
   id: string;
   /** Monotonic per state file. Defines FIFO dispatch order within a thread. */
   sequence: number;
