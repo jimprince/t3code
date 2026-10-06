@@ -94,3 +94,19 @@ export function decisionSendStrip(
         : `Not sent: ${state.error}`;
   return { text, undoable: false, retryable: state.phase === "failed" };
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Who a decision's answer goes to, in words: the waiting thread's title when it is
+ * one of the project's threads, the saved agent name as written, or "the
+ * orchestrator" for a thread id this page does not know. Never a raw id.
+ */
+export function waitingLabel(
+  waiting: string,
+  threads: ReadonlyArray<{ readonly id: string; readonly title: string }>,
+): string {
+  const thread = threads.find((candidate) => candidate.id === waiting);
+  if (thread) return thread.title;
+  return UUID.test(waiting) ? "the orchestrator" : waiting;
+}
