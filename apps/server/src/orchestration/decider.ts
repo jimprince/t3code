@@ -2325,6 +2325,51 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    case "thread.session.reconcile": {
+      const thread = yield* requireThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      const session = thread.session;
+      const latestTurn = thread.latestTurn;
+      // Only a session still claiming a turn that has already ended is stuck.
+      // Anything else is live provider state this command must not rewrite.
+      if (
+        !session ||
+        (session.status !== "running" && session.status !== "starting") ||
+        session.activeTurnId === null ||
+        latestTurn === null ||
+        latestTurn.turnId !== session.activeTurnId ||
+        latestTurn.state === "running"
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} has no session stuck on an ended turn (session ${session?.status ?? "none"}, latest turn ${latestTurn?.state ?? "none"})`,
+        });
+      }
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+          metadata: {},
+        })),
+        type: "thread.session-set",
+        payload: {
+          threadId: command.threadId,
+          session: {
+            ...session,
+            status: latestTurn.state === "error" ? "error" : "ready",
+            activeTurnId: null,
+            lastError: latestTurn.state === "error" ? session.lastError : null,
+            updatedAt: command.createdAt,
+          },
+        },
+      };
+    }
+
     case "thread.session.set": {
       const thread = yield* requireThread({
         readModel,
