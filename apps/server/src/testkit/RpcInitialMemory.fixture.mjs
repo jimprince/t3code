@@ -9,8 +9,8 @@ const count = Number(process.argv[4] ?? 4);
 const bytes = Number(process.argv[5] ?? 32768);
 const require = NodeModule.createRequire(root + "/apps/server/package.json");
 const load = (name) => import(NodeURL.pathToFileURL(require.resolve("effect/" + name)));
-const [Effect, Stream, Layer, Deferred, Fiber] = await Promise.all(
-  ["Effect", "Stream", "Layer", "Deferred", "Fiber"].map(load),
+const [Effect, Stream, Layer, Deferred, Fiber, Logger] = await Promise.all(
+  ["Effect", "Stream", "Layer", "Deferred", "Fiber", "Logger"].map(load),
 );
 const app = (file) => import(NodeURL.pathToFileURL(root + "/apps/server/src/" + file + ".ts"));
 const [Prefix, Ws, Threads, Events, Persistence] = await Promise.all([
@@ -127,6 +127,8 @@ const result = await Effect.runPromise(
     }
     for (const fiber of fibers) yield* Fiber.interrupt(fiber);
     return { checkpoints };
-  }),
+  }).pipe(
+    Effect.provide(Logger.layer([Logger.withConsoleError(Logger.formatLogFmt)])),
+  ),
 );
 console.log(JSON.stringify(result));
