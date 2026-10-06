@@ -62,15 +62,9 @@ describe("release CI reuse", () => {
     }
   });
 
-  for (const mutation of [
-    "dependency",
-    "lockfile",
-    "source",
-    "workflow",
-    "mode",
-    "wrong-version",
-  ]) {
-    it(`does not inherit parent CI after a ${mutation} change`, async () => {
+  it.each(["dependency", "lockfile", "source", "workflow", "mode", "wrong-version"])(
+    "does not inherit parent CI after a %s change",
+    async (mutation) => {
       const repo = createFixtureRepo();
       try {
         const source = seed(repo);
@@ -108,10 +102,10 @@ describe("release CI reuse", () => {
       } finally {
         repo.cleanup();
       }
-    });
-  }
+    },
+  );
 
-  for (const invalid of [
+  it.each([
     "failed",
     "cancelled",
     "pending",
@@ -124,41 +118,39 @@ describe("release CI reuse", () => {
     "missing-job",
     "skipped-job",
     "api-error",
-  ]) {
-    it(`runs release tests for ${invalid} CI evidence`, async () => {
-      const repo = createFixtureRepo();
-      try {
-        const source = seed(repo);
-        const run = runFor(source);
-        const evidence = jobEvidence();
-        if (invalid === "failed" || invalid === "cancelled") run.conclusion = invalid;
-        if (invalid === "pending") run.status = "in_progress";
-        if (invalid === "wrong-sha") run.head_sha = "0".repeat(40);
-        if (invalid === "wrong-event") run.event = "pull_request";
-        if (invalid === "wrong-branch") run.head_branch = "feature";
-        if (invalid === "wrong-workflow") run.path = ".github/workflows/unrelated.yml";
-        if (invalid === "wrong-repo") run.repository.full_name = "other/fork";
-        if (invalid === "missing-job") evidence.jobs.pop();
-        if (invalid === "skipped-job") evidence.jobs[1]!.conclusion = "skipped";
-        const result = await reuseReleaseCI({
-          repository,
-          ref: source,
-          version,
-          cwd: repo.dir,
-          maxWaitMs: 0,
-          query: (endpoint) => {
-            if (invalid === "api-error") throw new Error("API unavailable");
-            return endpoint.includes("workflows/ci.yml")
-              ? { workflow_runs: invalid === "missing" ? [] : [run] }
-              : evidence;
-          },
-        });
-        assert.isFalse(result.reused);
-      } finally {
-        repo.cleanup();
-      }
-    });
-  }
+  ])("runs release tests for %s CI evidence", async (invalid) => {
+    const repo = createFixtureRepo();
+    try {
+      const source = seed(repo);
+      const run = runFor(source);
+      const evidence = jobEvidence();
+      if (invalid === "failed" || invalid === "cancelled") run.conclusion = invalid;
+      if (invalid === "pending") run.status = "in_progress";
+      if (invalid === "wrong-sha") run.head_sha = "0".repeat(40);
+      if (invalid === "wrong-event") run.event = "pull_request";
+      if (invalid === "wrong-branch") run.head_branch = "feature";
+      if (invalid === "wrong-workflow") run.path = ".github/workflows/unrelated.yml";
+      if (invalid === "wrong-repo") run.repository.full_name = "other/fork";
+      if (invalid === "missing-job") evidence.jobs.pop();
+      if (invalid === "skipped-job") evidence.jobs[1]!.conclusion = "skipped";
+      const result = await reuseReleaseCI({
+        repository,
+        ref: source,
+        version,
+        cwd: repo.dir,
+        maxWaitMs: 0,
+        query: (endpoint) => {
+          if (invalid === "api-error") throw new Error("API unavailable");
+          return endpoint.includes("workflows/ci.yml")
+            ? { workflow_runs: invalid === "missing" ? [] : [run] }
+            : evidence;
+        },
+      });
+      assert.isFalse(result.reused);
+    } finally {
+      repo.cleanup();
+    }
+  });
 
   it("waits for the same-source CI to finish instead of duplicating its tests", async () => {
     const repo = createFixtureRepo();
