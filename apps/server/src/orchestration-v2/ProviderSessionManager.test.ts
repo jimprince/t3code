@@ -4603,3 +4603,38 @@ it.effect(
       assert.isFalse(denied?.capabilities?.has("device"));
     }),
 );
+
+it.effect("resource recovery refuses a session touched after preview's idle cutoff", () =>
+  Effect.gen(function* () {
+    const state = yield* Ref.make(emptyState);
+    yield* Effect.gen(function* () {
+      const manager = yield* ProviderSessionManager.ProviderSessionManagerV2;
+      const ids = yield* IdAllocator.IdAllocatorV2;
+      const sink = yield* EventSink.EventSinkV2;
+      const threadId = ThreadId.make("resource-cutoff");
+      const now = yield* DateTime.now;
+      const providerSessionId = yield* ids.allocate.providerSession({
+        threadId,
+        providerInstanceId: modelSelection.instanceId,
+      });
+      yield* sink.write({
+        events: [yield* makeThreadCreatedEvent({ idAllocator: ids, threadId, now })],
+      });
+      yield* manager.open({ threadId, providerSessionId, modelSelection, runtimePolicy });
+      yield* manager.release({
+        providerSessionId,
+        reason: "idle_timeout",
+        onlyIfIdleBeforeMs: DateTime.toEpochMillis(now) - 1,
+      });
+      assert.isTrue(Option.isSome(yield* manager.get(providerSessionId)));
+      assert.equal((yield* Ref.get(state)).closeCount, 0);
+      yield* manager.release({
+        providerSessionId,
+        reason: "idle_timeout",
+        onlyIfIdleBeforeMs: DateTime.toEpochMillis(now),
+      });
+      assert.isTrue(Option.isNone(yield* manager.get(providerSessionId)));
+      assert.equal((yield* Ref.get(state)).closeCount, 1);
+    }).pipe(Effect.provide(layerTest({ state, idleTimeoutMs: 60_000 })));
+  }),
+);
