@@ -12,7 +12,11 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 
-import { decideOrchestrationCommand } from "./decider.ts";
+import {
+  AUTO_PROMOTE_SUBPROJECTS,
+  decideOrchestrationCommand,
+  subprojectToPromote,
+} from "./decider.ts";
 import { projectEvent } from "./projector.ts";
 
 const NOW = "2026-01-01T00:00:00.000Z";
@@ -138,53 +142,34 @@ it.layer(NodeServices.layer)("thread subprojects", (it) => {
     }),
   );
 
-  it.effect("a nested thread under auto is promoted when it gets a child", () =>
+  it.effect("creating a child promotes nothing while auto-promotion is off", () =>
     Effect.gen(function* () {
+      // Inert until the subprojects UI ships (AUTO_PROMOTE_SUBPROJECTS).
+      expect(AUTO_PROMOTE_SUBPROJECTS).toBe(false);
       const model = readModel([thread(TOP), thread(MID, { parentThreadId: TOP })]);
       const events = yield* decide(createChild(MID), model);
-      expect(events.map((event) => event.type)).toEqual([
-        "thread.created",
-        "thread.subproject-set",
-      ]);
-      const promotion = events[1];
-      if (promotion?.type === "thread.subproject-set") {
-        expect(promotion.aggregateId).toBe(MID);
-        expect(promotion.payload).toMatchObject({ threadId: MID, mode: "on", source: "auto" });
-      }
-      const next = yield* decideAndProject(createChild(MID), model);
-      expect(modeOf(next, MID)).toBe("on");
-      expect(modeOf(next, CHILD)).toBeUndefined();
-    }),
-  );
-
-  it.effect("an explicit auto mode is promoted the same as an absent one", () =>
-    Effect.gen(function* () {
-      const model = readModel([
-        thread(TOP),
-        thread(MID, { parentThreadId: TOP, subproject: "auto" }),
-      ]);
-      expect(modeOf(yield* decideAndProject(createChild(MID), model), MID)).toBe("on");
-    }),
-  );
-
-  it.effect("off blocks promotion and on is left alone", () =>
-    Effect.gen(function* () {
-      for (const mode of ["off", "on"] as const) {
-        const model = readModel([
-          thread(TOP),
-          thread(MID, { parentThreadId: TOP, subproject: mode }),
-        ]);
-        const events = yield* decide(createChild(MID), model);
-        expect(events.map((event) => event.type)).toEqual(["thread.created"]);
-        expect(modeOf(yield* decideAndProject(createChild(MID), model), MID)).toBe(mode);
-      }
-    }),
-  );
-
-  it.effect("a top-level parent is never promoted", () =>
-    Effect.gen(function* () {
-      const events = yield* decide(createChild(TOP), readModel([thread(TOP)]));
       expect(events.map((event) => event.type)).toEqual(["thread.created"]);
+      expect(modeOf(yield* decideAndProject(createChild(MID), model), MID)).toBeUndefined();
     }),
   );
+
+  it("a nested thread on auto, absent or explicit, is the one a child would promote", () => {
+    for (const subproject of [undefined, "auto"] as const) {
+      const mid = thread(MID, { parentThreadId: TOP, ...(subproject ? { subproject } : {}) });
+      expect(subprojectToPromote(readModel([thread(TOP), mid]), MID)?.id).toBe(MID);
+    }
+  });
+
+  it("off blocks promotion and on is already promoted", () => {
+    for (const subproject of ["off", "on"] as const) {
+      const model = readModel([thread(TOP), thread(MID, { parentThreadId: TOP, subproject })]);
+      expect(subprojectToPromote(model, MID)).toBeUndefined();
+    }
+  });
+
+  it("a top-level parent or no parent is never promoted", () => {
+    const model = readModel([thread(TOP)]);
+    expect(subprojectToPromote(model, TOP)).toBeUndefined();
+    expect(subprojectToPromote(model, null)).toBeUndefined();
+  });
 });

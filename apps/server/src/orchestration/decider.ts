@@ -10,6 +10,7 @@ import {
   type OrchestrationEvent,
   type OrchestrationReadModel,
   type OrchestrationThread,
+  type ThreadId,
   type ThreadPullRequestKey,
   type ThreadPullRequestLink,
   type ThreadIssueKey,
@@ -224,6 +225,26 @@ const decideCommandSequence = Effect.fn("decideCommandSequence")(function* ({
 
   return plannedEvents;
 });
+
+/**
+ * Off until the subprojects UI ships: a promoted thread's page data would move off
+ * its parent's page with nowhere to show it. Explicit `thread.subproject.set` works.
+ */
+export const AUTO_PROMOTE_SUBPROJECTS = false;
+
+/**
+ * The parent a new child would promote to a subproject: a nested thread (never a
+ * top-level one) still on `auto`. `off` opts out; `on` is already promoted and sticky.
+ */
+export function subprojectToPromote(
+  readModel: OrchestrationReadModel,
+  parentThreadId: ThreadId | null,
+): OrchestrationThread | undefined {
+  if (parentThreadId === null) return undefined;
+  const parent = readModel.threads.find((candidate) => candidate.id === parentThreadId);
+  if (parent === undefined || (parent.parentThreadId ?? null) === null) return undefined;
+  return (parent.subproject ?? "auto") === "auto" ? parent : undefined;
+}
 
 export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand")(function* ({
   command,
@@ -575,19 +596,10 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         },
       };
       if (!isAgentRoot) {
-        // A nested thread that gets its first child becomes a subproject, unless
-        // the user opted it out. Sticky: later events never demote it.
-        const parent =
-          createParentThreadId === null
-            ? undefined
-            : readModel.threads.find((candidate) => candidate.id === createParentThreadId);
-        if (
-          parent === undefined ||
-          (parent.parentThreadId ?? null) === null ||
-          (parent.subproject ?? "auto") !== "auto"
-        ) {
-          return createdEvent;
-        }
+        const parent = AUTO_PROMOTE_SUBPROJECTS
+          ? subprojectToPromote(readModel, createParentThreadId)
+          : undefined;
+        if (parent === undefined) return createdEvent;
         return [
           createdEvent,
           {
