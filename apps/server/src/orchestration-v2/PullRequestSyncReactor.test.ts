@@ -28,6 +28,7 @@ import * as Layer from "effect/Layer";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import { TestClock } from "effect/testing";
+import { threadPullRequestKeysEqual } from "@t3tools/shared/threadPullRequests";
 
 import * as PullRequestService from "../pullRequest/PullRequestService.ts";
 import * as ServerActivation from "../serverActivation.ts";
@@ -706,6 +707,74 @@ describe("PullRequestSyncReactor", () => {
           yield* sweepAgain(fixture, reactor);
           assert.strictEqual((yield* Ref.get(fixture.summaryCalls)).length, 2);
           assert.strictEqual((yield* Ref.get(fixture.syncCommands)).at(-1)?.snapshot.state, "open");
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
+
+  it.effect(
+    "refreshes closed links when a page asks, at most once a minute, never merged ones",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* TestClock.setTime(Date.parse(NOW));
+          const state = yield* Ref.make<"closed" | "open">("closed");
+          const fixture = yield* makeHarness({
+            snapshot: makeSnapshot([
+              makeThread("closed", {
+                pullRequests: [makeLink(2, { state: "closed" }), makeLink(3, { state: "merged" })],
+              }),
+            ]),
+            summary: (input) =>
+              Ref.get(state).pipe(Effect.map((state) => makeSummary(input, { state }))),
+          });
+          yield* Effect.gen(function* () {
+            const reactor = yield* startAndSweep(fixture);
+            const readNumbers = () =>
+              Ref.get(fixture.summaryCalls).pipe(Effect.map((calls) => calls.map((c) => c.number)));
+            assert.deepStrictEqual(yield* readNumbers(), [2]);
+            yield* Ref.set(state, "open");
+            // Just read, so opening the page right away does not read it again.
+            yield* reactor.refreshStale;
+            yield* reactor.drain;
+            assert.deepStrictEqual(yield* readNumbers(), [2]);
+            yield* sweepAgain(fixture, reactor);
+            yield* reactor.refreshStale;
+            yield* reactor.drain;
+            assert.deepStrictEqual(yield* readNumbers(), [2, 2]);
+            assert.strictEqual(
+              (yield* Ref.get(fixture.syncCommands)).at(-1)?.snapshot.state,
+              "open",
+            );
+            yield* reactor.refreshStale;
+            yield* reactor.drain;
+            assert.deepStrictEqual(yield* readNumbers(), [2, 2]);
+          }).pipe(Effect.provide(fixture.layer));
+        }),
+      ),
+  );
+
+  it.effect("keeps the linked URL when the host reports the PR under another authority", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(NOW));
+        const link = makeLink(2, null, {
+          host: "git.example.com",
+          url: "https://git.example.com/owner/repository/pulls/2",
+        });
+        // Gitea's html_url uses its ROOT_URL, not the public alias the link was made with.
+        const rootUrl = "http://git.internal:3000/owner/repository/pulls/2";
+        assert.isFalse(threadPullRequestKeysEqual(link, { ...link, url: rootUrl }));
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([makeThread("alias", { pullRequests: [link] })]),
+          summary: (input) => Effect.succeed(makeSummary(input, { url: rootUrl })),
+        });
+        yield* Effect.gen(function* () {
+          yield* startAndSweep(fixture);
+          const [command] = yield* Ref.get(fixture.syncCommands);
+          assert.strictEqual(command?.url, link.url);
+          assert.isTrue(threadPullRequestKeysEqual(link, command!));
+          assert.strictEqual(command?.snapshot.title, "Pull request");
         }).pipe(Effect.provide(fixture.layer));
       }),
     ),
