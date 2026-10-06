@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "0b5de6a5be1782102cb66a2c9c41f6ee1854e2a4",
-  "head": "ecf4ff07dc2d508bbb06917dcaeb552b1b6208fb",
+  "prev": "ca902a9f955a5bf42e05a7ea89ff0a863b40bcc7",
+  "head": "1df165044932420dbca9cd2aaf909be841b77f64",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -74,7 +74,9 @@
     "fork-project-canvas",
     "fork-project-task-types",
     "fork-project-request-box-pinned",
-    "fork-scripts-automations",
+    "fork-scripts-automations"
+  ],
+  "unapplied": [
     "fork-request-followups",
     "fork-roadmap-next-later",
     "fork-project-page-usability",
@@ -96,9 +98,7 @@
     "fork-item-types",
     "fork-board-declutter",
     "fork-project-skew-gate",
-    "fork-request-titles"
-  ],
-  "unapplied": [
+    "fork-request-titles",
     "fork-page-agent-tray",
     "fork-release-publication",
     "fork-maintenance-automation",
