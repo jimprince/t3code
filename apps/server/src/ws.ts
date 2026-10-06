@@ -1,3 +1,4 @@
+import * as LegacyHistory from "./forkLegacy/HistoryReader.ts";
 import * as ThreadTransfer from "./forkThreads/TransferService.ts";
 import * as ForkWorkspace from "./forkThreads/ForkWorkspaceService.ts";
 import * as ThreadIssueService from "./forkThreads/ThreadIssueService.ts";
@@ -3935,7 +3936,9 @@ const makeWsRpcLayer = (
       });
       const conversationFork = yield* ForkWorkspace.ForkWorkspaceService;
       const threadTransfer = yield* ThreadTransfer.TransferService;
+      const legacyHistory = yield* LegacyHistory.HistoryReader;
       const forkHandlers = WsForkRpcGroup.of({
+        "orchestration.getLegacyHistory": (input) => legacyHistory.get(input),
         "orchestration.exportThread": (input) => threadTransfer.exportThread(input),
         "orchestration.importThread": (input) => threadTransfer.importThread(input),
         "orchestration.forkThread": (input) => conversationFork.fork(input),
