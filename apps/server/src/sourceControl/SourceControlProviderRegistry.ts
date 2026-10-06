@@ -1,6 +1,6 @@
 import * as GiteaSourceControlProvider from "./GiteaSourceControlProvider.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
-import type { GiteaInstanceConfig } from "@t3tools/contracts";
+import { type GiteaInstanceConfig } from "@t3tools/contracts";
 import * as Cache from "effect/Cache";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
@@ -28,6 +28,12 @@ import {
 import * as ServerConfig from "../config.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
+import {
+  makeRefinementCache,
+  providerRefinementGeneration,
+} from "./ForkProviderRefinementCache.ts";
+export { ProviderRefinementScope } from "./ForkProviderRefinementCache.ts";
+import { HostProcessEnvironment } from "@t3tools/shared/hostProcess";
 
 const PROVIDER_DETECTION_CACHE_CAPACITY = 2_048;
 const PROVIDER_DETECTION_CACHE_TTL = Duration.seconds(5);
@@ -206,8 +212,7 @@ export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWit
   function* (registrations: ReadonlyArray<SourceControlProviderRegistration>) {
     const config = yield* ServerConfig.ServerConfig;
     const settings = yield* ServerSettingsService;
-    const getInstances = settings.getSettings.pipe(
-      Effect.map((value) => value.giteaInstances),
+    const getProviderSettings = settings.getSettings.pipe(
       Effect.mapError(
         () =>
           new SourceControlProviderError({
@@ -218,6 +223,7 @@ export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWit
           }),
       ),
     );
+    const getInstances = getProviderSettings.pipe(Effect.map((value) => value.giteaInstances));
     const process = yield* VcsProcess.VcsProcess;
     const vcsRegistry = yield* VcsDriverRegistry.VcsDriverRegistry;
     const providers = new Map<
@@ -275,6 +281,10 @@ export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWit
       timeToLive: (exit) => (Exit.isSuccess(exit) ? PROVIDER_DETECTION_CACHE_TTL : Duration.zero),
     });
 
+    const refineCached = yield* makeRefinementCache((input) =>
+      refineUnknownRemoteProvider({ specs: discoverySpecs, process, ...input }),
+    );
+
     const configuredContext = (
       context: SourceControlProvider.SourceControlProviderContext | null,
       instances: ReadonlyArray<GiteaInstanceConfig>,
@@ -293,21 +303,23 @@ export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWit
     const resolveHandle: SourceControlProviderRegistry["Service"]["resolveHandle"] = Effect.fn(
       "SourceControlProviderRegistry.resolveHandle",
     )(function* (input) {
-      const instances = yield* getInstances;
+      const providerSettings = yield* getProviderSettings;
+      const instances = providerSettings.giteaInstances;
+      const environment = yield* HostProcessEnvironment;
+      const generation = providerRefinementGeneration([
+        providerSettings,
+        environment.PATH,
+        environment.PATHEXT,
+      ]);
       const cached =
         input.context === undefined
           ? yield* Cache.get(providerContextCache, input.cwd)
           : input.context;
-      const configured = configuredContext(cached, instances);
-      const context =
-        input.context === undefined && configured === cached
-          ? cached
-          : yield* refineUnknownRemoteProvider({
-              specs: discoverySpecs,
-              process,
-              cwd: input.cwd,
-              context: configured,
-            });
+      const explicitContext = configuredContext(cached, instances);
+      const refineExplicit = refineCached({ cwd: input.cwd, context: explicitContext, generation });
+      const resolved =
+        input.context === undefined && cached === explicitContext ? cached : yield* refineExplicit;
+      const context = configuredContext(resolved, instances);
       const kind = context?.provider.kind ?? "unknown";
       const provider = providers.get(kind) ?? unsupportedProvider(kind);
       return { provider: bindProviderContext(provider, context), context };
