@@ -560,6 +560,7 @@ export async function detectAttentionEvents(
         };
       }
       const merged = mergeDetectedNotification(
+        existing,
         existing ? { ...notification, eventKey: existing.eventKey } : notification,
       );
       notifications = upsertNotification(notifications, merged);
