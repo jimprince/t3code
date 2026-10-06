@@ -74,12 +74,17 @@ export function ProjectPullRequestsWidget({ summary }: { readonly summary: Orche
     [now, summary.descendants, summary.root],
   );
   const hidden = rows.filter((row) => row.group === "hidden");
+  const recent = rows.filter((row) => row.group === "recent");
+  const openCount = rows.length - hidden.length - recent.length;
   if (rows.length === 0) return null;
   return (
     <section className="border-t border-border pt-4">
+      {/* The count is open pull requests; merged or closed ones get one line of their own. */}
       <h2 className="mb-2 flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
         Pull requests
-        <span className="tabular-nums text-foreground/60">{rows.length - hidden.length}</span>
+        {openCount > 0 ? (
+          <span className="tabular-nums text-foreground/60">{openCount}</span>
+        ) : null}
       </h2>
       {GROUPS.map(({ group, title }) => {
         const items = rows.filter((row) => row.group === group);
