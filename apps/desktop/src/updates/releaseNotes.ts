@@ -16,8 +16,6 @@ function isElectronReleaseNoteInfo(value: unknown): value is ElectronReleaseNote
   );
 }
 
-const MAX_RELEASE_NOTE_GROUPS = 6;
-const MAX_RELEASE_NOTE_ITEMS_PER_GROUP = 8;
 const MAX_RELEASE_NOTE_ITEM_LENGTH = 220;
 
 const HTML_ENTITY_REPLACEMENTS: Readonly<Record<string, string>> = {
@@ -56,17 +54,25 @@ function decodeHtmlEntities(input: string): string {
   );
 }
 
-function stripMarkup(input: string): string {
+// Structural normalization only. Markdown link/bold syntax is stripped later,
+// per line, *after* isIgnoredReleaseNoteLine has had a chance to see the raw
+// URL — stripping links here first would turn a footer line like
+// "[Upstream compare](https://.../compare/...)" into the bare text
+// "Upstream compare", which no longer contains "/compare/" and would then
+// slip past the filter as a fake change.
+function stripHtml(input: string): string {
   return decodeHtmlEntities(
     input
       .replace(/<br\s*\/?>/gi, "\n")
       .replace(/<li\b[^>]*>/gi, "\n- ")
       .replace(/<h([1-6])\b[^>]*>/gi, (_, level: string) => `\n${"#".repeat(Number(level))} `)
       .replace(/<\/(?:p|div|li|h[1-6]|ul|ol|blockquote)>/gi, "\n")
-      .replace(/<[^>]*>/g, "")
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-      .replace(/\*\*([^*]+)\*\*/g, "$1"),
+      .replace(/<[^>]*>/g, ""),
   );
+}
+
+function stripInlineMarkup(input: string): string {
+  return input.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/\*\*([^*]+)\*\*/g, "$1");
 }
 
 function truncateReleaseNoteItem(item: string): string {
@@ -88,7 +94,10 @@ function isIgnoredReleaseNoteLine(line: string): boolean {
     normalized === "what's changed" ||
     normalized === "whats changed" ||
     normalized.startsWith("compare: ") ||
-    normalized.includes("/compare/")
+    normalized.includes("/compare/") ||
+    // The upstream/fork subject lists append a "- +N more ... changes"
+    // summary bullet once truncated; it is a footer, not a change.
+    /^\+\d+ more\b.*\bchanges?$/.test(normalized)
   );
 }
 
@@ -97,26 +106,35 @@ interface ExtractedReleaseNoteItems {
   readonly totalItems: number;
 }
 
+// Release note bodies are authored most-important-first (both our own
+// render-release-notes script and the fork's own change-entry sections put
+// the highest-priority content at the top). Every change is kept, in that
+// order, so the scrolling popup shows the full changelog top to bottom.
 function extractReleaseNoteItems(note: string | null | undefined): ExtractedReleaseNoteItems {
   if (!note) return { items: [], totalItems: 0 };
 
   const items: string[] = [];
   let totalItems = 0;
-  for (const rawLine of stripMarkup(note).split("\n")) {
-    const item = rawLine
+  for (const rawLine of stripHtml(note).split("\n")) {
+    const withoutPrefix = rawLine
       .trim()
       .replace(/^[-*]\s+/, "")
       .replace(/^\d+[.)]\s+/, "")
       .replace(/\s+/g, " ");
-    const normalized = normalizeReleaseNoteLine(item);
-    if (normalized === "new contributors" || normalized === "full changelog") break;
-    if (/^#{1,6}\s+/.test(item)) continue;
-    if (isIgnoredReleaseNoteLine(item)) continue;
+    const normalized = normalizeReleaseNoteLine(withoutPrefix);
+    // GitHub renders the footer's compare URL as bare "v1...v2" link text, so
+    // the line arrives as "Full Changelog: v1...v2" with no "/compare/" left.
+    if (normalized === "new contributors" || normalized.startsWith("full changelog")) break;
+    if (/^#{1,6}\s+/.test(withoutPrefix)) continue;
+    // Checked before the link/bold syntax is stripped, so a compare/changelog
+    // link's URL is still there to match against.
+    if (isIgnoredReleaseNoteLine(withoutPrefix)) continue;
+    const item = stripInlineMarkup(withoutPrefix).trim().replace(/\s+/g, " ");
+    if (!item) continue;
     totalItems += 1;
     items.push(truncateReleaseNoteItem(item));
-    if (items.length > MAX_RELEASE_NOTE_ITEMS_PER_GROUP) items.shift();
   }
-  return { items: items.toReversed(), totalItems };
+  return { items, totalItems };
 }
 
 interface NormalizedDesktopUpdateReleaseNotes {
@@ -158,8 +176,5 @@ export function normalizeDesktopUpdateReleaseNotes(
     ];
   });
 
-  return {
-    releaseNotes: normalizedNotes.slice(0, MAX_RELEASE_NOTE_GROUPS),
-    omittedReleaseCount: Math.max(0, normalizedNotes.length - MAX_RELEASE_NOTE_GROUPS),
-  };
+  return { releaseNotes: normalizedNotes, omittedReleaseCount: 0 };
 }
