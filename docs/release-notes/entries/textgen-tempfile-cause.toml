@@ -1,0 +1,4 @@
+id = "textgen-tempfile-cause"
+category = "fix"
+functionality = "projects"
+text = "When request splitting cannot write its temporary file, the server log now says why and where, instead of only 'Failed to write temp file'."
