@@ -1,6 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off - CI helper writes GitHub step outputs synchronously.
 // @effect-diagnostics globalConsole:off - CI helper reports to the workflow log.
-import { appendFileSync } from "node:fs";
+import * as NodeFS from "node:fs";
 
 export const requiredRelayConfig = [
   "CLOUDFLARE_ACCOUNT_ID",
@@ -33,6 +33,6 @@ export function relayConfigured(env: Readonly<Record<string, string | undefined>
 if (import.meta.main) {
   const configured = relayConfigured(process.env);
   if (!process.env.GITHUB_OUTPUT) throw new Error("GITHUB_OUTPUT is required");
-  appendFileSync(process.env.GITHUB_OUTPUT, `configured=${configured}\n`);
+  NodeFS.appendFileSync(process.env.GITHUB_OUTPUT, `configured=${configured}\n`);
   if (!configured) console.log("Relay deployment skipped: no production relay config.");
 }
