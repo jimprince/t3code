@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "e5aef4450c74f8e51ac056d991f6922b332f21c4",
+  "prev": "64c3b9a263c5954d49d3d4e6eb63b24909321c03",
   "head": "8a587af8eefeae0ba3eb161105bf1198854ea5e3",
   "applied": [
     "fork-build-ci-compat",
@@ -53,7 +53,6 @@
     "fork-release-publication",
     "fork-maintenance-automation",
     "fork-codex-goal-visibility",
-    "fork-agent-panel-thread-details",
     "fork-sidebar-drag-to-nest",
     "fork-worker-inactivity",
     "fork-thread-titles",
@@ -87,9 +86,6 @@
   "patches": {
     "fork-3mf-preview": {
       "oid": "ec839e78b6eff2ee14b73e178ecaf6a15cc3040b"
-    },
-    "fork-agent-panel-thread-details": {
-      "oid": "a3dc42737257cb33831541ff06d2de0192433813"
     },
     "fork-agent-thread-ordering": {
       "oid": "11c811005b965ad58e4fe5deaea3475c9d04766a"
