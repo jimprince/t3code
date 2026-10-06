@@ -13,6 +13,7 @@ import { Button } from "../ui/button";
 import { projectReturnState } from "./projectNavigation";
 import { formatIssueAge } from "./projectIssuesBoard.logic";
 import { useNextReleaseItems } from "./ProjectRoadmapWidget";
+import { TaskTitle } from "./TaskLink";
 import {
   answerSentences,
   deriveCompleted,
@@ -204,14 +205,13 @@ function LatestProgress({ request }: { readonly request: ProjectRequest }) {
 
 function IssueLink({ issue }: { readonly issue: ProjectIssue }) {
   return (
-    <a
-      href={issue.url}
-      target="_blank"
-      rel="noopener noreferrer"
+    <TaskTitle
+      task={{ host: issue.host, repository: issue.repository, number: issue.number }}
+      url={issue.url}
       className="line-clamp-2 text-sm hover:underline"
     >
       {issue.title}
-    </a>
+    </TaskTitle>
   );
 }
 
@@ -348,7 +348,7 @@ function NeedsYouRowBody({
         : null;
   return (
     <span className="min-w-0 flex-1">
-      <span className="line-clamp-2 text-sm">{issue.title}</span>
+      <IssueLink issue={issue} />
       {group === "test" ? (
         <span className="mt-1 block text-xs text-foreground/90">
           {request?.testStep ? `Test: ${request.testStep}` : "No test step posted"}
@@ -655,14 +655,17 @@ export function ProjectReleaseWidget({ summary }: { readonly summary: Orchestrat
                 <span className="w-28 shrink-0 text-xs text-muted-foreground">
                   {item.stage ? STAGE_LABEL[item.stage] : TASK_STATUS_LABEL.pending}
                 </span>
-                <a
-                  href={item.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <TaskTitle
+                  task={{
+                    host: nextVersion.tracker?.host ?? "",
+                    repository: nextVersion.tracker?.repository ?? "",
+                    number: item.number,
+                  }}
+                  url={item.url}
                   className="min-w-0 flex-1 truncate text-sm hover:underline"
                 >
                   {item.title}
-                </a>
+                </TaskTitle>
               </li>
             ))}
           </ul>
