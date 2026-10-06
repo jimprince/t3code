@@ -62,6 +62,8 @@ import {
   ProjectIssuesListResult,
   ProjectRequestCreateInput,
   ProjectRequestCreateResult,
+  ProjectRequestDecideInput,
+  ProjectRequestDecideResult,
   ProjectRequestRef,
   ProjectRequestSettleInput,
   ProjectRequestSubmitInput,
@@ -620,6 +622,7 @@ export const WS_METHODS = {
   projectIssuesList: "projectIssues.list",
   projectIssuesGet: "projectIssues.get",
   projectRequestsSettle: "projectRequests.settle",
+  projectRequestsDecide: "projectRequests.decide",
   projectRequestsSubmit: "projectRequests.submit",
   projectRequestsStartIntake: "projectRequests.startIntake",
   projectRequestsCreate: "projectRequests.create",
@@ -1050,6 +1053,12 @@ const WsProjectIssuesGetRpc = Rpc.make(WS_METHODS.projectIssuesGet, {
 const WsProjectRequestsSettleRpc = Rpc.make(WS_METHODS.projectRequestsSettle, {
   payload: ProjectRequestSettleInput,
   success: ProjectRequestSettleResult,
+  error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectRequestsDecideRpc = Rpc.make(WS_METHODS.projectRequestsDecide, {
+  payload: ProjectRequestDecideInput,
+  success: ProjectRequestDecideResult,
   error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
 });
 
@@ -2045,7 +2054,7 @@ const WsAutomationScriptsRunRpc = Rpc.make(WS_METHODS.automationScriptsRun, {
   error: automationError,
 });
 
-export const WsRpcGroup = RpcGroup.make(
+export const WsCoreRpcGroup = RpcGroup.make(
   WsAutomationsListRpc,
   WsAutomationsSaveRpc,
   WsAutomationsRemoveRpc,
@@ -2155,22 +2164,13 @@ export const WsRpcGroup = RpcGroup.make(
   WsThreadIssuesLinkRpc,
   WsThreadIssuesUnlinkRpc,
   WsProjectIssuesListRpc,
-  WsProjectIssuesGetRpc,
   WsProjectRequestsSettleRpc,
-  WsProjectRequestsSubmitRpc,
-  WsProjectRequestsStartIntakeRpc,
   WsProjectRequestsCreateRpc,
   WsProjectRequestsUpdateRpc,
   WsProjectRequestsListRpc,
   WsProjectDashboardGetRpc,
   WsProjectDashboardSetWidgetsRpc,
   WsProjectDashboardSetTrackerRpc,
-  WsProjectDashboardSetHealthRpc,
-  WsProjectLayoutGetRpc,
-  WsProjectLayoutApplyRpc,
-  WsProjectLayoutRevertRpc,
-  WsProjectLayoutHistoryRpc,
-  WsSubscribeProjectLayoutRpc,
   WsProjectRoadmapGetRpc,
   WsProjectRoadmapMoveRpc,
   WsProjectRoadmapSaveVersionRpc,
@@ -2264,3 +2264,20 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2SubscribeShellRpc,
   WsOrchestrationV2SubscribeThreadRpc,
 ).middleware(RpcScopeAuthorization);
+
+// Kept out of WsCoreRpcGroup: one more handler there makes the server's handler-service
+// types resolve to any in R.
+export const WsForkRpcGroup = RpcGroup.make(
+  WsProjectIssuesGetRpc,
+  WsProjectRequestsSubmitRpc,
+  WsProjectRequestsStartIntakeRpc,
+  WsProjectDashboardSetHealthRpc,
+  WsProjectLayoutGetRpc,
+  WsProjectLayoutApplyRpc,
+  WsProjectLayoutRevertRpc,
+  WsProjectLayoutHistoryRpc,
+  WsSubscribeProjectLayoutRpc,
+  WsProjectRequestsDecideRpc,
+).middleware(RpcScopeAuthorization);
+
+export const WsRpcGroup = WsCoreRpcGroup.merge(WsForkRpcGroup);
