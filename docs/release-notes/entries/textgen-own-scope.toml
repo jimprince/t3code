@@ -1,0 +1,4 @@
+id = "textgen-own-scope"
+category = "fix"
+functionality = "projects"
+text = "Requests captured from chat are split into separate items again; the splitter's temporary files were being deleted before it could use them, so every message was filed whole."
