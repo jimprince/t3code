@@ -220,11 +220,18 @@ export interface SavedAgent {
   lastSeenAssistantMessageId?: string | null;
 }
 
+export type NotificationLevel = "all" | "attention" | "none";
+
 export interface SavedSubscription {
   /** Implicit attention route maintained from organizational metadata. */
   nestingDerived?: boolean;
   subscriberEnvironmentId?: string;
   events?: "all" | "attention";
+  level?: NotificationLevel;
+  lastDirectMessageTurnId?: string | null;
+  errorEventKey?: string | null;
+  observedState?: AgentState;
+  observedReason?: string;
   subscriberThreadId: string;
   subscriberAgentName: string | null;
   subscriberEnvironment: string;
@@ -268,6 +275,9 @@ export interface SavedNotification {
   subscriberEnvironmentId?: string;
   /** An actionable input/approval for the current organizational parent. */
   isChildInput?: boolean;
+  completionDisposition?: "quiet" | "attention" | null;
+  occurrences?: number;
+  lastOccurrenceKey?: string;
   id: string;
   eventKey: string;
   subscriberThreadId: string;
@@ -282,6 +292,8 @@ export interface SavedNotification {
   latestTurnId: string | null;
   preview: string | null;
   status: SavedNotificationStatus;
+  /** Confirmed first-delivery guide; retained across routes and watcher restarts. */
+  onboardingDelivered?: boolean;
   createdAt: string;
   updatedAt: string;
   deliveredAt?: string | null;
