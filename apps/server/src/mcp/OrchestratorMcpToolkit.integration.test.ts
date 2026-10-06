@@ -1,3 +1,8 @@
+import * as SqlitePersistence from "../persistence/Sqlite.ts";
+import { listMetadata } from "../forkThreads/MetadataStore.ts";
+import * as SqlClient from "effect/sql/SqlClient";
+import * as WorkerLifecycle from "../forkThreads/WorkerLifecycle.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
 import { AjvJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/ajv";
@@ -682,6 +687,7 @@ describe("orchestrator MCP toolkit", () => {
             Layer.provide(layerProviderRegistry),
             Layer.provide(layerScheduledTaskStub),
             Layer.provide(Layer.mock(ThreadSearch.ThreadSearch)({})),
+            Layer.provideMerge(SqlitePersistence.layerMemory),
             Layer.provide(
               Layer.mock(ProjectService.ProjectService)({
                 getById: (id) =>
@@ -1724,6 +1730,7 @@ describe("orchestrator MCP toolkit", () => {
               .pipe(Effect.flip);
             expect(reused.message).toContain("already used");
 
+            yield* invoke("t3_thread_organize", { action: "pin" });
             const delegatedCall = yield* invoke("delegate_task", {
               task: delegatedPrompt,
               target: {
@@ -1741,6 +1748,28 @@ describe("orchestrator MCP toolkit", () => {
             const delegatedSource = yield* orchestrator.getThreadProjection(
               delegated.childThreadId,
             );
+            expect(delegatedSource.thread).toMatchObject({
+              pinnedAt: null,
+              pinOrderKey: null,
+              activeOrderKey: null,
+              autoSettleDisabledAt: null,
+            });
+            const sql = yield* SqlClient.SqlClient;
+            expect(
+              (yield* listMetadata(sql)).find((row) => row.threadId === delegated.childThreadId),
+            ).toMatchObject({ parentThreadId, subproject: "off", settleOnComplete: true });
+            yield* Effect.gen(function* () {
+              const lifecycle = yield* WorkerLifecycle.WorkerLifecycle;
+              yield* lifecycle.drain;
+            }).pipe(
+              Effect.provide(
+                WorkerLifecycle.layer.pipe(Layer.provide(ServerSettings.layerTest({}))),
+              ),
+            );
+            expect(
+              (yield* orchestrator.getThreadProjection(delegated.childThreadId)).thread
+                .settledOverride,
+            ).toBe("settled");
             expect(delegatedSource.messages[0]).toMatchObject({
               senderThreadId: parentThreadId,
             });
@@ -1982,6 +2011,93 @@ describe("orchestrator MCP toolkit", () => {
             // blocking delegate_task call above already returned the result.
             yield* expectOffersToStay(0);
 
+            const limitedId = ThreadId.make("thread:mcp-limited-nesting-child");
+            yield* orchestrator.dispatch({
+              type: "thread.create",
+              createdBy: "user",
+              creationSource: "web",
+              commandId: CommandId.make("limited-nesting-child:create"),
+              threadId: limitedId,
+              projectId,
+              title: "Limited child",
+              modelSelection: codexSelection,
+              runtimeMode: "approval-required",
+              interactionMode: "default",
+              branch: null,
+              worktreePath: cwd,
+            });
+            const parentDenied = yield* invokeAs(
+              {
+                ...invocation,
+                thread: undefined,
+                client: {
+                  sessionId: "limited-nesting-client",
+                  label: "Limited client",
+                  access: "approval-required",
+                },
+              },
+              "t3_thread_organize",
+              {
+                action: "nest",
+                threadId: limitedId,
+                parentThreadId,
+                clientRequestId: "limited-nest-parent",
+              },
+            );
+            expect(parentDenied.isError).toBe(true);
+            expect(declaredFailure(parentDenied)).toMatchObject({
+              _tag: "OrchestratorMcpFailure",
+              code: "runtime_mode_escalation_denied",
+            });
+            expect(
+              (yield* listMetadata(yield* SqlClient.SqlClient)).find(
+                (row) => row.threadId === limitedId,
+              ),
+            ).toBeUndefined();
+            yield* orchestrator.dispatch({
+              type: "thread.archive",
+              commandId: CommandId.make("limited-nesting-child:cleanup"),
+              threadId: limitedId,
+            });
+
+            const unnestInput = {
+              action: "unnest",
+              threadId: delegated.childThreadId,
+              clientRequestId: "delegate-unnest",
+            };
+            const unnested = yield* invoke("t3_thread_organize", unnestInput);
+            expect(unnested.isError).toBe(false);
+            expect(unnested.structuredContent).toMatchObject({
+              metadata: { parentThreadId: null },
+            });
+            const nested = yield* invoke("t3_thread_organize", {
+              action: "nest",
+              threadId: delegated.childThreadId,
+              parentThreadId,
+              clientRequestId: "delegate-nest",
+            });
+            expect(nested.isError).toBe(false);
+            const cycle = yield* invoke("t3_thread_organize", {
+              action: "nest",
+              parentThreadId: delegated.childThreadId,
+              clientRequestId: "delegate-cycle",
+            });
+            expect(cycle.isError).toBe(true);
+            expect(declaredFailure(cycle)).toMatchObject({
+              _tag: "OrchestratorMcpFailure",
+              code: "invalid_request",
+              message: expect.stringContaining("cycle"),
+            });
+            yield* invoke("t3_thread_organize", {
+              ...unnestInput,
+              clientRequestId: "delegate-final-unnest",
+            });
+            const readOrganization = yield* invoke("t3_thread_read", {
+              threadId: delegated.childThreadId,
+            });
+            expect(readOrganization.structuredContent).toMatchObject({
+              thread: { parentThreadId, organization: { parentThreadId: null }, pinned: false },
+            });
             const repeatedDelegatedCall = yield* invoke("delegate_task", {
               task: delegatedPrompt,
               target: {
@@ -1995,6 +2111,10 @@ describe("orchestrator MCP toolkit", () => {
               repeatedDelegatedCall.structuredContent,
             ).pipe(Effect.orDie);
             expect(repeatedDelegated.taskId).toBe(delegated.taskId);
+            expect(
+              (yield* listMetadata(sql)).find((row) => row.threadId === delegated.childThreadId)
+                ?.parentThreadId,
+            ).toBeNull();
             expect(
               (yield* orchestrator.getThreadProjection(parentThreadId)).subagents.filter(
                 (task) => task.id === delegated.taskId,
@@ -2270,7 +2390,11 @@ describe("orchestrator MCP toolkit", () => {
               settled: true,
               settledAt: "2026-01-01T00:00:00.000Z",
             });
-            const settledListCall = yield* invoke("t3_thread_list", { settled: true, limit: 100 });
+            const settledListCall = yield* invoke("t3_thread_list", {
+              settled: true,
+              includeSubagents: false,
+              limit: 100,
+            });
             const settledList = yield* decodeThreadListResult(
               settledListCall.structuredContent,
             ).pipe(Effect.orDie);
@@ -3865,6 +3989,7 @@ describe("orchestrator MCP toolkit", () => {
         const layerTest = McpHttpServer.layerOrchestratorToolkit.pipe(
           Layer.provideMerge(McpServer.McpServer.layer),
           Layer.provideMerge(layerOrchestration),
+          Layer.provideMerge(SqlitePersistence.layerMemory),
           Layer.provide(
             CodexOrchestratorReplayHarness.makeProviderAdapterRegistryLayer(transcript).pipe(
               Layer.provide(McpProviderSessions.layer),
