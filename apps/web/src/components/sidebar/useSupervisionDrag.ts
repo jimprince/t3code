@@ -1,3 +1,5 @@
+import * as Effect from "effect/Effect";
+import { supervision } from "../../state/forkSupervision";
 import { randomUUID } from "../../lib/utils";
 import { useRef, useState } from "react";
 import type { DragMoveEvent, DragEndEvent, DragStartEvent } from "@dnd-kit/core";
@@ -20,6 +22,8 @@ import {
 const dropCommand = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "supervision-drop",
   tag: "fork.threads.supervision.drop",
+  onSuccess: ({ environmentId }, registry) =>
+    Effect.sync(() => registry.refresh(supervision.query({ environmentId, input: {} }))),
 });
 export function useSupervisionDrag(forest: ReturnType<typeof supervisionForest>) {
   const commit = useAtomCommand(dropCommand);
