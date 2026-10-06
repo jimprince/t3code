@@ -1,0 +1,4 @@
+id = "sidebar-drag-nesting-intent"
+category = "fix"
+functionality = "thread organization"
+text = "Keep sidebar dragging in reorder mode unless you deliberately move right to nest the thread."
