@@ -67,4 +67,13 @@ describe("request outbox", () => {
     const legacy = [{ requestSource: { ...source, item: undefined } }];
     expect(isAlreadyFiled(legacy as never, "m-1", 0)).toBe(true);
   });
+
+  it("upgrades a not-yet-split capture to an explicit request, never the reverse", () => {
+    const captured = enqueue(EMPTY_OUTBOX, entry("m-1"));
+    const upgraded = enqueue(captured, { ...entry("m-1"), explicit: true });
+    expect(upgraded.entries).toEqual([{ ...entry("m-1"), explicit: true }]);
+    expect(enqueue(upgraded, entry("m-1"))).toBe(upgraded);
+    const split = { ...captured, entries: [{ ...entry("m-1"), items: [] }] };
+    expect(enqueue(split, { ...entry("m-1"), explicit: true })).toBe(split);
+  });
 });
