@@ -25,7 +25,7 @@ interface RowSource {
   ) => Effect.Effect<ReadonlyArray<Row>, SqlError.SqlError>;
 }
 
-export const legacyHistoryKeys = Object.keys(legacyHistoryTables) as ReadonlyArray<LegacyKey>;
+const legacyHistoryKeys = Object.keys(legacyHistoryTables) as ReadonlyArray<LegacyKey>;
 const sectionOrder: ReadonlyArray<LegacyHistorySection> = [
   "thread",
   "messages",
