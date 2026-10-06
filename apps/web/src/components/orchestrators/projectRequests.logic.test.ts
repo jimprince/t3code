@@ -98,6 +98,34 @@ describe("deriveProjectRequests", () => {
     expect(item).toMatchObject({ forYou: null, leftBehind: true });
   });
 
+  it("does not count a dev server or monitor as work in progress", () => {
+    const stale = {
+      createdAt: "2026-10-01T00:00:00.000Z",
+      updatedAt: "2026-10-01T00:00:00.000Z",
+    };
+    const idleWith = (kind: string) =>
+      thread({
+        pendingBackgroundTasks: [{ taskId: "t1", kind }],
+        latestRun: { status: "completed", completedAt: "2026-09-30T00:00:00.000Z" },
+      });
+    const [devServer] = deriveProjectRequests(
+      [request(1, stale)],
+      [idleWith("command")],
+      tree,
+      NOW,
+    );
+    expect(devServer?.leftBehind).toBe(true);
+    const [monitor] = deriveProjectRequests([request(1, stale)], [idleWith("monitor")], tree, NOW);
+    expect(monitor?.leftBehind).toBe(true);
+    const [subagent] = deriveProjectRequests(
+      [request(1, stale)],
+      [idleWith("subagent")],
+      tree,
+      NOW,
+    );
+    expect(subagent?.leftBehind).toBe(false);
+  });
+
   it("drops settled requests, plain issues and requests from other projects", () => {
     const items = deriveProjectRequests(
       [

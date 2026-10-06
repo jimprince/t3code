@@ -1,4 +1,4 @@
-import { threadRuntimeIsActive } from "@t3tools/client-runtime/state/models";
+import { isThreadWorking } from "@t3tools/client-runtime/state/orchestrators";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import type { ProjectIssue } from "@t3tools/contracts";
 
@@ -47,12 +47,8 @@ function groupForKind(kind: RequestKind): ForYouGroup {
   }
 }
 
-function isWorking(thread: EnvironmentThreadShell): boolean {
-  return threadRuntimeIsActive(thread.runtime) || thread.pendingBackgroundTasks.length > 0;
-}
-
 function repliedSince(thread: EnvironmentThreadShell | null, since: string): boolean {
-  if (!thread || isWorking(thread)) return false;
+  if (!thread || isThreadWorking(thread)) return false;
   const completedAt =
     thread.latestRun?.status === "completed" ? thread.latestRun.completedAt : null;
   return completedAt !== null && completedAt !== undefined && completedAt > since;
@@ -87,7 +83,7 @@ export function deriveProjectRequests(
     const leftBehind =
       forYou === null &&
       now - Date.parse(issue.updatedAt) > LEFT_BEHIND_MS &&
-      (thread === null || !isWorking(thread));
+      (thread === null || !isThreadWorking(thread));
     requests.push({ issue, kind, forYou, replied, leftBehind, thread });
   }
   return requests.toSorted((a, b) => a.issue.createdAt.localeCompare(b.issue.createdAt));
