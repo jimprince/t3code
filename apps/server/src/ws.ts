@@ -2519,6 +2519,7 @@ const layerWsRpc = (
               ),
           ),
         [WS_METHODS.projectIssuesList]: (input) => projectIssues.list(input).pipe(Effect.flatMap((result) => requestLedger.decorate(result, input.rootThreadId))),
+        [WS_METHODS.projectIssuesGet]: (input) => projectIssues.get(input).pipe(Effect.flatMap((result) => requestLedger.withAnswers([result.issue]).pipe(Effect.map(([issue]) => ({ ...result, issue: issue ?? result.issue }))))),
         [WS_METHODS.projectRequestsSettle]: (input) => requestLedger.settle(input),
         [WS_METHODS.projectRequestsStartIntake]: (input) => requestIntake.start(input),
         [WS_METHODS.projectRequestsSubmit]: (input) => requestLedger.submit(input),
