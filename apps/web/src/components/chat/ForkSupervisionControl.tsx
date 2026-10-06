@@ -1,3 +1,5 @@
+import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import type { ReactNode } from "react";
 import {
   sortPinnedThreadsByOrderKey,
   sortActiveThreadsByOrderKey,
@@ -37,6 +39,7 @@ const updateMetadata = createEnvironmentRpcCommand(connectionAtomRuntime, {
 export function ForkSupervisionControl(props: {
   environmentId: EnvironmentId;
   threadId: ThreadId;
+  renderWorkerRow?: (thread: EnvironmentThreadShell) => ReactNode;
 }) {
   const threads = useThreadShells();
   const projects = useProjects();
@@ -71,7 +74,7 @@ export function ForkSupervisionControl(props: {
       },
     });
   };
-  const renderRow = (thread: (typeof threads)[number]) => (
+  const renderRow = (thread: (typeof threads)[number]) => props.renderWorkerRow ? props.renderWorkerRow(thread) : (
     <button
       type="button"
       key={supervisionKey(thread.environmentId, thread.id)}
