@@ -130,6 +130,7 @@ export interface OrchestrationThread {
   updatedAt: string;
   archivedAt: string | null;
   settledOverride?: "settled" | "active" | null;
+  autoSettleDisabledAt?: string | null | undefined;
   pinnedAt?: string | null | undefined;
   pinOrderKey?: string | null | undefined;
   activeOrderKey?: string | null | undefined;
@@ -172,6 +173,7 @@ export interface OrchestrationThreadShell {
   updatedAt: string;
   archivedAt: string | null;
   settledOverride?: "settled" | "active" | null;
+  autoSettleDisabledAt?: string | null | undefined;
   pinnedAt?: string | null | undefined;
   pinOrderKey?: string | null | undefined;
   activeOrderKey?: string | null | undefined;
