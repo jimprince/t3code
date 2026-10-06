@@ -1969,6 +1969,25 @@ request
     );
   });
 
+request
+  .command("title")
+  .description(
+    'Retitle a task: an imperative for work ("Move the New request box to the top"), the question for a question',
+  )
+  .argument("<thread>", "saved agent name or raw thread UUID in the project")
+  .argument("<request>", "issue number in the project tracker, owner/repo#N, or issue URL")
+  .argument("<title>", "the new title")
+  .action(async (reference, requestReference, title) => {
+    const { agent: target, client } = await withAgent(reference);
+    printJson(
+      await client.projectRequest("projectRequestsUpdate", {
+        threadId: target.threadId,
+        reference: requestReference,
+        title,
+      }),
+    );
+  });
+
 const dashboard = agent
   .command("dashboard")
   .description("Show or change which widgets a project page shows, in order");
