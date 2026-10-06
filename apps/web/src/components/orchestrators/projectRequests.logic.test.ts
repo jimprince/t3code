@@ -2,7 +2,12 @@ import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell
 import type { ProjectIssue } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { deriveProjectRequests, requestKind } from "./projectRequests.logic";
+import {
+  deriveProjectRequests,
+  deriveRelease,
+  requestKind,
+  requestsByWorker,
+} from "./projectRequests.logic";
 
 const NOW = Date.parse("2026-10-04T12:00:00.000Z");
 
@@ -43,8 +48,8 @@ describe("deriveProjectRequests", () => {
   it("puts a request the agent marked ready in Brad's group for its kind", () => {
     const [question, plan] = deriveProjectRequests(
       [
-        request(1, { status: "needs-review" }),
-        request(2, { status: "needs-review", labels: ["ask", "ask:plan"] }),
+        request(1, { status: "needs-review", stage: "ready" }),
+        request(2, { status: "needs-review", stage: "ready", labels: ["ask", "ask:plan"] }),
       ],
       [thread()],
       tree,
@@ -147,5 +152,62 @@ describe("requestKind", () => {
   it("reads the kind label and defaults to deliverable", () => {
     expect(requestKind(["ask", "ask:test"])).toBe("test");
     expect(requestKind(["ask"])).toBe("deliverable");
+  });
+});
+
+describe("release stages", () => {
+  const shipped = (number: number, release: string, test: string) =>
+    request(number, {
+      status: "needs-review",
+      stage: "needs-test",
+      milestone: { id: number, title: release },
+      latestComment: {
+        author: "agent",
+        body: `Test: ${test}`,
+        createdAt: "2026-10-04T11:00:00.000Z",
+      },
+    });
+
+  it("keeps handed-over work out of Brad's groups and lists it for the next release", () => {
+    const items = deriveProjectRequests(
+      [
+        request(1, { stage: "awaiting-release", status: "in-progress" }),
+        shipped(2, "fork.24", "Open the Blocked list"),
+      ],
+      [thread()],
+      tree,
+      NOW,
+      "root",
+    );
+    expect(items.map((item) => [item.issue.number, item.forYou, item.testStep])).toEqual([
+      [1, null, null],
+      [2, "test", "Open the Blocked list"],
+    ]);
+    const release = deriveRelease(items);
+    expect(release.next.map((item) => item.issue.number)).toEqual([1]);
+    expect(release.shipped).toEqual([{ release: "fork.24", items: [items[1]] }]);
+  });
+
+  it("does not flag waiting-for-release work as left behind", () => {
+    const [item] = deriveProjectRequests(
+      [request(1, { stage: "awaiting-release", updatedAt: "2026-09-01T00:00:00.000Z" })],
+      [thread()],
+      tree,
+      NOW,
+    );
+    expect(item?.leftBehind).toBe(false);
+  });
+
+  it("maps each worker to the requests it serves, leaving out the orchestrator", () => {
+    const items = deriveProjectRequests(
+      [request(1, { stage: "in-progress", linkedThreadIds: ["root", "worker"] as never })],
+      [thread(), thread({ id: "root" })],
+      tree,
+      NOW,
+      "root",
+    );
+    const byWorker = requestsByWorker(items);
+    expect(byWorker.get("worker")?.map((item) => item.issue.number)).toEqual([1]);
+    expect(byWorker.has("root")).toBe(false);
   });
 });
