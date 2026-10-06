@@ -1415,3 +1415,19 @@ id = "v2-port-2689"
 date = "2026-10-05"
 decided = "reconcile-smaller"
 rationale = "Native pending runtime request ids drive operator reminders and additive child attention; never aggregate child attention into parent status."
+
+[[patch]]
+name = "fork-agent-panel-thread-details"
+subject = "feat(web): show detailed nested thread activity in Agents panel"
+class = "product"
+purpose = "Give nested worker rows output, state, model, provider, metrics, duration, activity and workspace context without full-history subscriptions."
+retire_when = "Upstream shows equivalent nested-worker details through bounded shell data."
+depends_on = ["fork-nested-threads", "fork-child-input-attention"]
+roles = []
+note = "Optional derived metadata preserves old-server compatibility. Ordinary top-level shells omit summaries, and nested output is bounded to its first 320 characters."
+
+[[patch.decision]]
+id = "v2-port-2689-m2"
+date = "2026-10-05"
+decided = "reconcile-smaller"
+rationale = "Port supervision UI to V2 shells behind fork-owned components; preserve native lineage and run state."
