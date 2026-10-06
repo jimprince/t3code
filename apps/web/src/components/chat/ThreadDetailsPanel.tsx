@@ -234,7 +234,12 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
               <ForkSupervisionControl
                 environmentId={props.environmentId}
                 threadId={props.threadId}
-                renderWorkerRow={(child) => <SupervisionWorkerRow key={scopedThreadKey(scopeThreadRef(child.environmentId, child.id))} child={child} />}
+                renderWorkerRow={(child) => (
+                  <SupervisionWorkerRow
+                    key={scopedThreadKey(scopeThreadRef(child.environmentId, child.id))}
+                    child={child}
+                  />
+                )}
               />
               <ThreadRelationshipsPanel
                 environmentId={props.environmentId}
