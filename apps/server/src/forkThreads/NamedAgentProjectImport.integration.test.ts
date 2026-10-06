@@ -34,7 +34,7 @@ it.effect("fresh databases register named-agent and project-automation migration
   }).pipe(Effect.provide(SqlitePersistenceMemory)),
 );
 
-const fixtures = process.env.T3_AUTOMATION_FIXTURES;
+const fixtures = process.env.T3_LIFECYCLE_FIXTURES;
 if (fixtures) {
   it.effect.each(["dev-vm", "local-mbp", "synthetic-edges", "dev-vm-real"])(
     "preserves named agents, legacy automation records and scripts from copied %s projects",
@@ -105,6 +105,8 @@ if (fixtures) {
         }).pipe(Effect.provide(database));
       }).pipe(Effect.provide(NodeServices.layer)),
   );
+} else {
+  it.effect.skip("copied-state fixtures require T3_LIFECYCLE_FIXTURES", () => Effect.void);
 }
 
 it.effect("native project edits retain named agents and automation records", () =>

@@ -1707,6 +1707,7 @@ purpose = "Persist project-owned timed prompts, recover scheduled runs after dow
 retire_when = "Upstream provides equivalent project-scoped timed automations with persisted runs and busy-target delivery."
 depends_on = ["fork-subthread-lifecycle", "fork-named-agents"]
 roles = []
+note = "Project import tests discover T3_LIFECYCLE_FIXTURES, explicitly skip when absent, and retain the full packaged VM case alongside all three small copied fixtures."
 
 [[patch.decision]]
 id = "v2-project-automation-cutover"
