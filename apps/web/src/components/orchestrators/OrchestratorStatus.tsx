@@ -15,12 +15,20 @@ const PRESENTATION: Record<
   ThreadDisplayStatus,
   { readonly label: string; readonly icon: LucideIcon; readonly className: string }
 > = {
-  approval: { label: "Needs approval", icon: ShieldQuestionIcon, className: "text-amber-500" },
-  input: { label: "Needs input", icon: MessageCircleQuestionIcon, className: "text-amber-500" },
-  working: { label: "Working", icon: CircleDashedIcon, className: "text-sky-500" },
-  supervising: { label: "Supervising", icon: CircleDashedIcon, className: "text-sky-500" },
-  monitoring: { label: "Monitoring", icon: EyeIcon, className: "text-violet-400" },
-  failed: { label: "Failed", icon: CircleAlertIcon, className: "text-red-500" },
+  approval: {
+    label: "Needs approval",
+    icon: ShieldQuestionIcon,
+    className: "text-warning-foreground",
+  },
+  input: {
+    label: "Needs input",
+    icon: MessageCircleQuestionIcon,
+    className: "text-warning-foreground",
+  },
+  working: { label: "Working", icon: CircleDashedIcon, className: "text-info" },
+  supervising: { label: "Supervising", icon: CircleDashedIcon, className: "text-info" },
+  monitoring: { label: "Monitoring", icon: EyeIcon, className: "text-info" },
+  failed: { label: "Failed", icon: CircleAlertIcon, className: "text-error" },
   ready: { label: "Idle", icon: CircleCheckIcon, className: "text-muted-foreground" },
 };
 
