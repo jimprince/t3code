@@ -46,6 +46,19 @@ export function resolveEmbeddedPageHost(
   return { kind: "iframe" };
 }
 
+/**
+ * The Agent Status Board address that carries an issue. The board routes `/`
+ * by exact match, so any query string on it answers `{"error":"not found"}`;
+ * its `/index` alias takes a query and serves the same page.
+ */
+export function statusBoardIssueUrl(pageUrl: string, repo: string, issue: string): string {
+  const url = new URL(pageUrl);
+  if (url.pathname === "/") url.pathname = "/index";
+  url.searchParams.set("repo", repo);
+  url.searchParams.set("issue", issue);
+  return url.toString();
+}
+
 export function findEmbeddedPage(
   pages: readonly EmbeddedPage[],
   pageId: string,
