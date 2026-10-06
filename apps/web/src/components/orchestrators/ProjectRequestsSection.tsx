@@ -1,8 +1,8 @@
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import type { EnvironmentId, ProjectRequestStage } from "@t3tools/contracts";
+import type { EnvironmentId, ProjectIssue, ProjectRequestStage } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowUpRightIcon, CheckIcon } from "lucide-react";
+import { CheckIcon, RotateCcwIcon } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
 import { useThreadProjection } from "../../state/entities";
@@ -11,29 +11,35 @@ import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { Button } from "../ui/button";
+import { projectReturnState } from "./projectNavigation";
 import { formatIssueAge } from "./projectIssuesBoard.logic";
 import { useNextReleaseItems } from "./ProjectRoadmapWidget";
 import {
   deriveCompleted,
   deriveMaintenance,
+  deriveNeedsYou,
   deriveProjectRequests,
   FOR_YOU_GROUPS,
   isMaintenanceWithAgents,
+  issueKey,
   latestProgressLine,
-  countParked,
   nextReleaseRequests,
+  requestsOfSettledThreads,
+  taskKind,
   type CompletedTask,
+  type NeedsYouItem,
   type ProjectRequest,
 } from "./projectRequests.logic";
 
 const EXCERPT_LINES = 4;
 
+/** One word per status, the same everywhere on the page. */
 const STAGE_LABEL: Record<ProjectRequestStage, string> = {
   requested: "requested",
-  "in-progress": "in progress",
+  "in-progress": "working",
   ready: "ready",
   "awaiting-release": "waiting for release",
-  "needs-test": "ready to test",
+  "needs-test": "shipped, test it",
   settled: "settled",
 };
 
@@ -50,7 +56,7 @@ function excerpt(text: string): string {
 
 /**
  * The project's requests, issues and queued filings from one shared query: the
- * Requests, Release and Roadmap widgets and the worker rows all read this.
+ * Needs you, Requests, Release and Roadmap widgets and the worker rows all read this.
  */
 export function useProjectRequests(summary: OrchestratorSummary) {
   const environmentId = summary.root.environmentId;
@@ -71,26 +77,102 @@ export function useProjectRequests(summary: OrchestratorSummary) {
   return { query, requests, now, pending: query.data?.pendingRequests ?? [] };
 }
 
-/** Settling is Brad's action only; this is the one place the page does it. */
-function useSettle(summary: OrchestratorSummary, refresh: () => void) {
-  const settle = useAtomCommand(settleProjectRequest, "Settle request");
-  const [settling, setSettling] = useState<string | null>(null);
-  const run = async (request: ProjectRequest) => {
-    const key = `${request.issue.repository}#${request.issue.number}`;
-    setSettling(key);
-    const result = await settle({
-      environmentId: summary.root.environmentId,
-      input: {
-        rootThreadId: summary.root.id,
-        host: request.issue.host,
-        repository: request.issue.repository,
-        number: request.issue.number,
-      },
-    });
-    setSettling(null);
-    if (result._tag === "Success") refresh();
+/** What waits on Brad: the same list for the Dashboard and the Issues board. */
+export function useNeedsYou(summary: OrchestratorSummary) {
+  const { query, requests } = useProjectRequests(summary);
+  const items = useMemo(
+    () => deriveNeedsYou(query.data?.issues ?? [], requests),
+    [query.data, requests],
+  );
+  return { items, query };
+}
+
+/**
+ * Settling and reopening are Brad's actions; every row offers them, so closing an
+ * item never means opening its thread. Several issues settle one after another.
+ */
+export function useSettle(summary: OrchestratorSummary, refresh: () => void) {
+  const settle = useAtomCommand(settleProjectRequest, "Settle");
+  const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
+  const run = async (issues: ReadonlyArray<ProjectIssue>, reopen: boolean) => {
+    const keys = issues.map(issueKey);
+    setBusy((current) => new Set([...current, ...keys]));
+    for (const issue of issues) {
+      await settle({
+        environmentId: summary.root.environmentId,
+        input: {
+          rootThreadId: summary.root.id,
+          host: issue.host,
+          repository: issue.repository,
+          number: issue.number,
+          ...(reopen ? { reopen: true } : {}),
+        },
+      });
+    }
+    setBusy((current) => new Set([...current].filter((key) => !keys.includes(key))));
+    refresh();
   };
-  return { settling, run };
+  return {
+    isBusy: (issue: ProjectIssue) => busy.has(issueKey(issue)),
+    settle: (issues: ReadonlyArray<ProjectIssue>) => run(issues, false),
+    reopen: (issue: ProjectIssue) => run([issue], true),
+  };
+}
+
+export type SettleControls = ReturnType<typeof useSettle>;
+
+/** Opens a thread of the project, coming back to the project page afterwards. */
+export function useOpenThread(summary: OrchestratorSummary) {
+  const navigate = useNavigate();
+  return (threadId: string) =>
+    void navigate({
+      to: "/$environmentId/$threadId",
+      params: buildThreadRouteParams(
+        scopeThreadRef(
+          summary.root.environmentId,
+          threadId as Parameters<typeof scopeThreadRef>[1],
+        ),
+      ),
+      state: projectReturnState({
+        environmentId: summary.root.environmentId,
+        threadId: summary.root.id,
+      }),
+    });
+}
+
+/**
+ * A list row that opens its thread when clicked anywhere: a stretched button
+ * under the content, with links and buttons inside the row still on top.
+ */
+export function ClickableRow({
+  label,
+  onOpen,
+  className = "",
+  children,
+}: {
+  readonly label: string;
+  /** Null when the row has no thread to open. */
+  readonly onOpen: (() => void) | null;
+  readonly className?: string;
+  readonly children: ReactNode;
+}) {
+  return (
+    <li className={`relative ${onOpen ? "rounded-sm hover:bg-muted/30" : ""}`}>
+      {onOpen ? (
+        <button
+          type="button"
+          aria-label={label}
+          className="absolute inset-0 z-0 cursor-pointer rounded-sm focus-visible:outline-2 focus-visible:outline-ring"
+          onClick={onOpen}
+        />
+      ) : null}
+      <div
+        className={`relative z-10 flex gap-3 ${onOpen ? "pointer-events-none [&_a]:pointer-events-auto [&_button]:pointer-events-auto" : ""} ${className}`}
+      >
+        {children}
+      </div>
+    </li>
+  );
 }
 
 /** The thread's newest reply, for a request whose thread answered before the agent marked it. */
@@ -120,33 +202,6 @@ const Excerpt = ({ text }: { readonly text: string }) => (
   </p>
 );
 
-function OpenThread({
-  environmentId,
-  threadId,
-}: {
-  readonly environmentId: EnvironmentId;
-  readonly threadId: string;
-}) {
-  const navigate = useNavigate();
-  return (
-    <Button
-      size="xs"
-      variant="ghost-muted"
-      onClick={() =>
-        void navigate({
-          to: "/$environmentId/$threadId",
-          params: buildThreadRouteParams(
-            scopeThreadRef(environmentId, threadId as Parameters<typeof scopeThreadRef>[1]),
-          ),
-        })
-      }
-    >
-      Open thread
-      <ArrowUpRightIcon />
-    </Button>
-  );
-}
-
 /** "-> worker, worker": who is on a request. */
 function ServedBy({ request }: { readonly request: ProjectRequest }) {
   if (request.servedBy.length === 0) return null;
@@ -164,35 +219,57 @@ function LatestProgress({ request }: { readonly request: ProjectRequest }) {
   return line ? <span className="truncate text-xs text-foreground/80">latest: {line}</span> : null;
 }
 
-function IssueLink({ request }: { readonly request: ProjectRequest }) {
+function IssueLink({ issue }: { readonly issue: ProjectIssue }) {
   return (
     <a
-      href={request.issue.url}
+      href={issue.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="block truncate text-sm hover:underline"
+      className="line-clamp-2 text-sm hover:underline"
     >
-      {request.issue.title}
+      {issue.title}
     </a>
   );
 }
 
-function SettleButton({
-  request,
+export function SettleButton({
+  issues,
   settle,
+  label = "Settle",
 }: {
-  readonly request: ProjectRequest;
-  readonly settle: ReturnType<typeof useSettle>;
+  readonly issues: ReadonlyArray<ProjectIssue>;
+  readonly settle: SettleControls;
+  readonly label?: string;
 }) {
   return (
     <Button
       size="xs"
       variant="outline"
-      disabled={settle.settling === `${request.issue.repository}#${request.issue.number}`}
-      onClick={() => void settle.run(request)}
+      disabled={issues.some(settle.isBusy)}
+      onClick={() => void settle.settle(issues)}
     >
       <CheckIcon />
-      Settle
+      {label}
+    </Button>
+  );
+}
+
+export function ReopenButton({
+  issue,
+  settle,
+}: {
+  readonly issue: ProjectIssue;
+  readonly settle: SettleControls;
+}) {
+  return (
+    <Button
+      size="xs"
+      variant="ghost-muted"
+      disabled={settle.isBusy(issue)}
+      onClick={() => void settle.reopen(issue)}
+    >
+      <RotateCcwIcon />
+      Reopen
     </Button>
   );
 }
@@ -210,24 +287,34 @@ const WidgetHeading = ({ title, count }: { readonly title: string; readonly coun
   </h2>
 );
 
+const threadOf = (issue: ProjectIssue, request: ProjectRequest | null) =>
+  request?.thread?.id ?? issue.requestSource?.threadId ?? issue.linkedThreadIds[0] ?? null;
+
 function CompactRow({
   request,
   now,
+  onOpen,
   children,
 }: {
   readonly request: ProjectRequest;
   readonly now: number;
+  readonly onOpen: ((threadId: string) => void) | null;
   readonly children?: ReactNode;
 }) {
+  const threadId = threadOf(request.issue, request);
   return (
-    <li className="flex items-center gap-3 py-1.5">
+    <ClickableRow
+      label={`Open the thread for ${request.issue.title}`}
+      onOpen={onOpen && threadId ? () => onOpen(threadId) : null}
+      className="items-center py-1.5"
+    >
       <span
         className={`w-28 shrink-0 text-xs ${request.leftBehind ? "text-warning-foreground" : "text-muted-foreground"}`}
       >
         {request.leftBehind ? "left behind" : STAGE_LABEL[request.stage]}
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
-        <IssueLink request={request} />
+        <IssueLink issue={request.issue} />
         <ServedBy request={request} />
         <LatestProgress request={request} />
       </span>
@@ -236,36 +323,107 @@ function CompactRow({
         {formatIssueAge(request.issue.createdAt, now)}
       </span>
       {children}
-    </li>
+    </ClickableRow>
   );
 }
 
 /**
- * The Requests widget: each of Brad's asks with its stage, grouped by what is
- * next and who owns it. His groups first, then work waiting for a release, then
- * work still with the agents (maintenance excepted).
+ * Brad's part of Needs you: requests in his groups (answers, review, approve,
+ * shipped to test) and any other issue marked for his review or test, each with
+ * its answer or test step and a Settle on the row.
+ */
+export function NeedsYouIssueGroups({
+  summary,
+  items,
+  settle,
+}: {
+  readonly summary: OrchestratorSummary;
+  readonly items: ReadonlyArray<NeedsYouItem>;
+  readonly settle: SettleControls;
+}) {
+  const environmentId = summary.root.environmentId;
+  const openThread = useOpenThread(summary);
+  return (
+    <>
+      {FOR_YOU_GROUPS.map(({ group, title }) => {
+        const groupItems = items.filter((item) => item.group === group);
+        if (groupItems.length === 0) return null;
+        return (
+          <div key={group} className="mb-3 last:mb-0">
+            <GroupTitle title={title} count={groupItems.length} />
+            <ul className="divide-y divide-border">
+              {groupItems.map(({ issue, request }) => {
+                const threadId = threadOf(issue, request);
+                return (
+                  <ClickableRow
+                    key={issueKey(issue)}
+                    label={`Open the thread for ${issue.title}`}
+                    onOpen={threadId ? () => openThread(threadId) : null}
+                    className="items-start py-2"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <IssueLink issue={issue} />
+                      <span className="text-xs text-muted-foreground">
+                        {request ? STAGE_LABEL[request.stage] : "review"}
+                        {` · ${request?.kind ?? taskKind(issue.labels) ?? "issue"}`}
+                        {request?.stage === "needs-test" && issue.milestone
+                          ? ` · shipped in ${issue.milestone.title}`
+                          : ""}
+                        {request?.replied ? " · thread replied" : ""}
+                      </span>
+                      {request?.testStep ? (
+                        <p className="mt-1 text-xs text-foreground/90">Test: {request.testStep}</p>
+                      ) : issue.latestComment ? (
+                        <Excerpt text={issue.latestComment.body} />
+                      ) : request?.replied ? (
+                        <ThreadReply environmentId={environmentId} request={request} />
+                      ) : null}
+                    </span>
+                    <SettleButton issues={[issue]} settle={settle} />
+                  </ClickableRow>
+                );
+              })}
+            </ul>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+/**
+ * The Requests widget: Brad's asks still with the agents or waiting for a
+ * release (what needs him is in Needs you). Requests whose thread he already
+ * settled, and threads with several open requests, settle in one click.
  */
 export function ProjectRequestsSection({ summary }: { readonly summary: OrchestratorSummary }) {
-  const environmentId = summary.root.environmentId;
   const { query, requests, now, pending } = useProjectRequests(summary);
   const settle = useSettle(summary, query.refresh);
-  const parked = countParked(query.data?.issues ?? [], summary.root.id);
-  // Maintenance still with the agents has its own widget below the releases.
-  const listed = requests.filter((request) => !isMaintenanceWithAgents(request));
-  if (listed.length === 0 && pending.length === 0 && parked === 0) return null;
-  const waitingForRelease = listed.filter((request) => request.stage === "awaiting-release");
-  const withAgents = listed.filter(
-    (request) => request.forYou === null && request.stage !== "awaiting-release",
+  const openThread = useOpenThread(summary);
+  // Needs you shows Brad's groups; Maintenance shows upkeep still with the agents.
+  const listed = requests.filter(
+    (request) => request.forYou === null && !isMaintenanceWithAgents(request),
   );
+  const settledThreads = requestsOfSettledThreads(listed);
+  const settledKeys = new Set(
+    settledThreads.flatMap((group) => group.requests.map((request) => issueKey(request.issue))),
+  );
+  const active = listed.filter((request) => !settledKeys.has(issueKey(request.issue)));
+  const waitingForRelease = active.filter((request) => request.stage === "awaiting-release");
+  const withAgents = active.filter((request) => request.stage !== "awaiting-release");
+  const byThread = new Map<string, { title: string; requests: ProjectRequest[] }>();
+  for (const request of withAgents) {
+    if (!request.thread || request.thread.id === summary.root.id) continue;
+    const entry = byThread.get(request.thread.id) ?? { title: request.thread.title, requests: [] };
+    entry.requests.push(request);
+    byThread.set(request.thread.id, entry);
+  }
+  const bulk = [...byThread.values()].filter((entry) => entry.requests.length > 1);
+  if (listed.length === 0 && pending.length === 0) return null;
 
   return (
     <section className="border-t border-border pt-4">
       <WidgetHeading title="Requests" count={listed.length + pending.length} />
-      {parked > 0 ? (
-        <p className="mb-2 text-xs text-muted-foreground">
-          {parked} {parked === 1 ? "idea" : "ideas"} saved for later on the Roadmap
-        </p>
-      ) : null}
       {pending.length > 0 ? (
         <div className="mb-3">
           <GroupTitle title="Pending filing" count={pending.length} />
@@ -288,56 +446,37 @@ export function ProjectRequestsSection({ summary }: { readonly summary: Orchestr
           </ul>
         </div>
       ) : null}
-      {FOR_YOU_GROUPS.map(({ group, title }) => {
-        const items = requests.filter((request) => request.forYou === group);
-        if (items.length === 0) return null;
-        return (
-          <div key={group} className="mb-3">
-            <GroupTitle title={title} count={items.length} />
-            <ul className="divide-y divide-border">
-              {items.map((request) => (
-                <li
-                  key={`${request.issue.repository}#${request.issue.number}`}
-                  className="flex items-start gap-3 py-2"
-                >
-                  <span className="min-w-0 flex-1">
-                    <IssueLink request={request} />
-                    <span className="text-xs text-muted-foreground">
-                      {STAGE_LABEL[request.stage]} · {request.kind}
-                      {request.stage === "needs-test" && request.issue.milestone
-                        ? ` · shipped in ${request.issue.milestone.title}`
-                        : ""}
-                      {request.replied ? " · thread replied" : ""}
-                    </span>
-                    {request.testStep ? (
-                      <p className="mt-1 text-xs text-foreground/90">Test: {request.testStep}</p>
-                    ) : request.issue.latestComment ? (
-                      <Excerpt text={request.issue.latestComment.body} />
-                    ) : request.replied ? (
-                      <ThreadReply environmentId={environmentId} request={request} />
-                    ) : null}
-                  </span>
-                  <span className="flex shrink-0 items-center gap-1">
-                    <SettleButton request={request} settle={settle} />
-                    {request.thread ? (
-                      <OpenThread environmentId={environmentId} threadId={request.thread.id} />
-                    ) : null}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        );
-      })}
+      {settledThreads.length > 0 ? (
+        <div className="mb-3">
+          <GroupTitle
+            title="From settled threads"
+            count={settledThreads.reduce((total, group) => total + group.requests.length, 0)}
+          />
+          <ul className="divide-y divide-border">
+            {settledThreads.map((group) => (
+              <li key={group.thread.id} className="flex items-center gap-3 py-1.5">
+                <span className="min-w-0 flex-1 truncate text-sm">{group.thread.title}</span>
+                <span className="text-xs text-muted-foreground">{group.requests.length} open</span>
+                <SettleButton
+                  issues={group.requests.map((request) => request.issue)}
+                  settle={settle}
+                  label="Settle all"
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {waitingForRelease.length > 0 ? (
         <div className="mb-3">
           <GroupTitle title="Waiting for release" count={waitingForRelease.length} />
           <ul className="divide-y divide-border">
             {waitingForRelease.map((request) => (
               <CompactRow
-                key={`${request.issue.repository}#${request.issue.number}`}
+                key={issueKey(request.issue)}
                 request={request}
                 now={now}
+                onOpen={openThread}
               />
             ))}
           </ul>
@@ -349,16 +488,34 @@ export function ProjectRequestsSection({ summary }: { readonly summary: Orchestr
           <ul className="divide-y divide-border">
             {withAgents.map((request) => (
               <CompactRow
-                key={`${request.issue.repository}#${request.issue.number}`}
+                key={issueKey(request.issue)}
                 request={request}
                 now={now}
+                onOpen={openThread}
               >
-                {request.thread ? (
-                  <OpenThread environmentId={environmentId} threadId={request.thread.id} />
-                ) : null}
+                <SettleButton issues={[request.issue]} settle={settle} />
               </CompactRow>
             ))}
           </ul>
+          {bulk.length > 0 ? (
+            <ul className="mt-2 flex flex-col gap-1">
+              {bulk.map((entry) => (
+                <li
+                  key={entry.title}
+                  className="flex items-center gap-2 text-xs text-muted-foreground"
+                >
+                  <span className="min-w-0 flex-1 truncate">
+                    {entry.requests.length} requests from {entry.title}
+                  </span>
+                  <SettleButton
+                    issues={entry.requests.map((request) => request.issue)}
+                    settle={settle}
+                    label="Settle all"
+                  />
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       ) : null}
     </section>
@@ -373,24 +530,17 @@ function CompletedRow({
 }: {
   readonly task: CompletedTask;
   readonly now: number;
-  readonly settle: ReturnType<typeof useSettle>;
+  readonly settle: SettleControls;
 }) {
   return (
     <li className="flex items-center gap-3 py-1.5">
       <span
         className={`w-28 shrink-0 text-xs ${task.toTest ? "text-foreground/90" : "text-muted-foreground"}`}
       >
-        {task.toTest ? "to test" : task.issue.isRequest ? "settled" : "closed"}
+        {task.toTest ? "shipped, test it" : task.issue.isRequest ? "settled" : "closed"}
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
-        <a
-          href={task.issue.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block truncate text-sm hover:underline"
-        >
-          {task.issue.title}
-        </a>
+        <IssueLink issue={task.issue} />
         {task.toTest ? (
           <span className="truncate text-xs text-foreground/90">
             {task.toTest.testStep ? `Test: ${task.toTest.testStep}` : "No test step posted"}
@@ -401,7 +551,11 @@ function CompletedRow({
       <span className="w-8 text-right text-xs tabular-nums text-muted-foreground">
         {formatIssueAge(task.issue.closedAt ?? task.issue.updatedAt, now)}
       </span>
-      {task.toTest ? <SettleButton request={task.toTest} settle={settle} /> : null}
+      {task.toTest ? (
+        <SettleButton issues={[task.issue]} settle={settle} />
+      ) : (
+        <ReopenButton issue={task.issue} settle={settle} />
+      )}
     </li>
   );
 }
@@ -409,7 +563,7 @@ function CompletedRow({
 /**
  * The Release widget, derived from stages and milestones: completed tasks by the
  * release that shipped them (shipped ones wait for Brad's test until he settles
- * them), then what the next release batch will carry.
+ * them; settled ones can be reopened), then what the next release will carry.
  */
 export function ProjectReleaseWidget({ summary }: { readonly summary: OrchestratorSummary }) {
   const { query, requests, now } = useProjectRequests(summary);
@@ -443,12 +597,7 @@ export function ProjectReleaseWidget({ summary }: { readonly summary: Orchestrat
           />
           <ul className="divide-y divide-border">
             {group.items.map((task) => (
-              <CompletedRow
-                key={`${task.issue.repository}#${task.issue.number}`}
-                task={task}
-                now={now}
-                settle={settle}
-              />
+              <CompletedRow key={issueKey(task.issue)} task={task} now={now} settle={settle} />
             ))}
           </ul>
         </div>
@@ -465,11 +614,7 @@ export function ProjectReleaseWidget({ summary }: { readonly summary: Orchestrat
           />
           <ul className="divide-y divide-border">
             {next.map((request) => (
-              <CompactRow
-                key={`${request.issue.repository}#${request.issue.number}`}
-                request={request}
-                now={now}
-              />
+              <CompactRow key={issueKey(request.issue)} request={request} now={now} onOpen={null} />
             ))}
             {versionOnly.map((item) => (
               <li key={item.number} className="flex items-center gap-3 py-1.5">
@@ -493,10 +638,38 @@ export function ProjectReleaseWidget({ summary }: { readonly summary: Orchestrat
   );
 }
 
+/**
+ * One line near the top of the project page: the version this server runs and
+ * where the next release stands.
+ */
+export function ProjectReleaseLine({
+  summary,
+  runningVersion,
+}: {
+  readonly summary: OrchestratorSummary;
+  readonly runningVersion: string | null;
+}) {
+  const { requests } = useProjectRequests(summary);
+  const nextVersion = useNextReleaseItems(summary);
+  const waiting = nextReleaseRequests(requests).length;
+  const toTest = requests.filter((request) => request.stage === "needs-test").length;
+  const running = runningVersion ? (/fork\.\d+/.exec(runningVersion)?.[0] ?? runningVersion) : null;
+  const versionTitle = nextVersion.version?.title ?? null;
+  const parts = [
+    running ? `Running ${running}` : null,
+    `Next release${
+      versionTitle && versionTitle.toLowerCase() !== "next release" ? ` ${versionTitle}` : ""
+    }: ${
+      waiting === 0 ? "nothing waiting" : `${waiting} waiting`
+    }${toTest > 0 ? `, ${toTest} shipped to test` : ""}`,
+  ].filter(Boolean);
+  return <span className="text-sm text-muted-foreground">{parts.join(" · ")}</span>;
+}
+
 /** Open maintenance tasks that do not need Brad: upkeep kept out of the Requests list. */
 export function ProjectMaintenanceWidget({ summary }: { readonly summary: OrchestratorSummary }) {
-  const environmentId = summary.root.environmentId;
   const { query, requests, now } = useProjectRequests(summary);
+  const openThread = useOpenThread(summary);
   const tasks = useMemo(
     () => deriveMaintenance(query.data?.issues ?? [], requests),
     [query.data, requests],
@@ -509,34 +682,32 @@ export function ProjectMaintenanceWidget({ summary }: { readonly summary: Orches
         {tasks.map((task) =>
           task.request ? (
             <CompactRow
-              key={`${task.issue.repository}#${task.issue.number}`}
+              key={issueKey(task.issue)}
               request={task.request}
               now={now}
-            >
-              {task.request.thread ? (
-                <OpenThread environmentId={environmentId} threadId={task.request.thread.id} />
-              ) : null}
-            </CompactRow>
+              onOpen={openThread}
+            />
           ) : (
-            <li
-              key={`${task.issue.repository}#${task.issue.number}`}
-              className="flex items-center gap-3 py-1.5"
+            <ClickableRow
+              key={issueKey(task.issue)}
+              label={`Open the thread for ${task.issue.title}`}
+              onOpen={
+                task.issue.linkedThreadIds[0]
+                  ? () => openThread(task.issue.linkedThreadIds[0]!)
+                  : null
+              }
+              className="items-center py-1.5"
             >
               <span className="w-28 shrink-0 text-xs text-muted-foreground">
-                {task.issue.status === "in-progress" ? "in progress" : "open"}
+                {task.issue.status === "in-progress" ? "working" : "open"}
               </span>
-              <a
-                href={task.issue.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="min-w-0 flex-1 truncate text-sm hover:underline"
-              >
-                {task.issue.title}
-              </a>
+              <span className="min-w-0 flex-1">
+                <IssueLink issue={task.issue} />
+              </span>
               <span className="w-8 text-right text-xs tabular-nums text-muted-foreground">
                 {formatIssueAge(task.issue.createdAt, now)}
               </span>
-            </li>
+            </ClickableRow>
           ),
         )}
       </ul>
