@@ -13,6 +13,9 @@ import {
   requestsByWorker,
   requestsOfSettledThreads,
   answerSentences,
+  countStatuses,
+  formatStatusCounts,
+  taskStatuses,
   sentRequestStatus,
   taskKind,
 } from "./projectRequests.logic";
@@ -436,5 +439,38 @@ describe("answer sentences", () => {
       answerSentences("**Yes.** It runs `nightly`. Then it posts.\n\nMore detail here. And more."),
     ).toBe("Yes. It runs nightly. Then it posts.");
     expect(answerSentences("Short answer without a period")).toBe("Short answer without a period");
+  });
+});
+
+describe("task status", () => {
+  it("is Complete, For review, Active or Pending from the same sources everywhere", () => {
+    const issues = [
+      request(1, { status: "done", closedAt: "2026-10-04T11:00:00.000Z" }),
+      request(2, { status: "needs-review", stage: "ready" }),
+      request(3, { stage: "in-progress", status: "in-progress" }),
+      request(4, { linkedThreadIds: ["worker"] as never }),
+      request(5, { linkedThreadIds: ["root"] as never }),
+    ];
+    const threads = [
+      thread({ id: "worker", runtime: { status: "running" } }),
+      thread({ id: "root", runtime: { status: "running" } }),
+    ];
+    const requests = deriveProjectRequests(issues, threads, tree, NOW, "root");
+    const statuses = taskStatuses(issues, deriveNeedsYou(issues, requests), threads, "root");
+    expect([...statuses.values()]).toEqual([
+      "complete",
+      "for-review",
+      "active",
+      // A working worker makes its task Active; the busy orchestrator alone does not.
+      "active",
+      "pending",
+    ]);
+  });
+
+  it("counts a version's progress, closed tasks included", () => {
+    const counts = countStatuses(["active", "pending", "pending", "for-review"], 12);
+    expect(formatStatusCounts(counts)).toBe(
+      "16 · 12 complete · 1 active · 1 for review · 2 pending",
+    );
   });
 });
