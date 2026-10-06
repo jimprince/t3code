@@ -1136,3 +1136,51 @@ buttons: `docs/user/project-canvas/funnel/index.html`:
   });
 </script>
 ```
+
+## Scripts and automations
+
+The server owns both; the CLI does not need to stay open. A **script** is a named prompt
+procedure in one project (`--project <id>`) or shared by every project (`--global`); a
+project script shadows a global one of the same name. An **automation** is an on/off rule:
+schedule triggers start agent turns from an inline prompt or a script.
+
+```bash
+t3-thread script add --env <name> --global --name review-prs --prompt-file review.md
+t3-thread script list --env <name> --project <id>          # project + global
+t3-thread script run review-prs --env <name> --project <id> [--thread <id>] [--mode file-only] [--dry-run]
+t3-thread script remove review-prs --env <name> --global  # refused while an automation uses it
+
+t3-thread automation add --env <name> --project <id> --name "PR review" --script review-prs \
+  --schedule weekdays --days mon-fri --time 09:00 --timezone America/Edmonton
+t3-thread automation add --env <name> --project <id> --name "Digest" --prompt "Summarize changes" \
+  --schedule cron --cron "*/30 9-17 * * 1-5" --timezone America/Toronto
+t3-thread automation add --env <name> --project <id> --name "CI fixer" --script fix-ci \
+  --on ci.failed --repository brad/t3code-fork
+t3-thread automation list --env <name> [--project <id>]
+t3-thread automation pause|resume|remove <automation-id> --env <name>
+t3-thread automation run-now <automation-id> --env <name> [--dry-run]
+t3-thread automation runs [<automation-id>] --env <name> [--project <id>] [--limit 20]
+```
+
+Events (`--on`) are `pull-request.opened`, `ci.failed`, `issue.labeled` (needs `--owner-thread`;
+its project's repositories are watched), `worker.blocked` (approval, input or session error in a
+project thread) and `release.published` (needs `--repository owner/name`); filter with
+`--repository`, `--label`, `--for-thread`. With `--on` there is no schedule unless `--schedule` is
+also given. Each new state fires once (run key `event:<kind>:<state>`); polled sources (labels,
+releases, every five minutes) treat their first sighting as a baseline. Schedules are `hourly`, `daily`, `weekly --day mon`, `weekdays --days mon-fri|mon,wed,fri`,
+`cron --cron '<5 fields>'`, or `manual` (run-now only). `script add` replaces a same-named
+script in the same scope. `--result-mode review|file-only|file-and-settle` on `script add` (or
+`--mode` on one `script run`, `--result-mode` on `automation add --script`) sets what a run does
+with its findings: review files nothing and leaves the thread open (default), file-only files
+each finding with `t3-thread request add`, file-and-settle also settles the run thread. The mode is
+appended to the run's prompt; inline-prompt automations are sent unchanged. Global starter scripts
+(code-quality, performance, dependencies, refactoring, ux-review, docs-currency,
+data-model-review, dead-code) are seeded once and then behave like any other script. Choose `--thread <id>` for an existing target, otherwise each run
+starts a fresh thread using project defaults; `--owner-thread <id>` nests fresh runs under an
+orchestrator and shows the rule on its Projects page.
+
+Each scheduled time runs at most once (runs are keyed by automation and slot). Queued runs wait
+for busy targets, archived targets fail, and restart coalesces missed occurrences within 24 hours.
+`runs` is the run log: trigger, every step with its thread, status and result. A dry run is
+recorded the same way but starts nothing. Run-now works while paused. V2 imports saved legacy project automation records once into the automation store.
+The V2 CLI uses the scripts and automation RPCs; update it with `t3-thread-deploy`.

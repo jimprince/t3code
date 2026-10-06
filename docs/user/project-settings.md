@@ -180,3 +180,58 @@ or local commits. It skips checkouts on another branch or without an upstream. I
 local work, resolve it yourself before automatic pulls can resume.
 
 For remote-based worktree creation, see [New worktrees from a remote branch](./worktrees.md).
+
+## Timed automations
+
+Add an automation from the project's Automations section. Choose hourly, daily,
+weekly, or selected days (for example weekdays), write the prompt, and choose a
+fresh thread for every run or an existing thread. Times use the saved timezone,
+even when you connect from another device. On a Projects page, the target
+defaults to that project's orchestrator.
+
+The server must be running. After downtime, it runs the latest missed occurrence
+once if it is within 24 hours; older occurrences are skipped. Each scheduled time
+runs at most once. A busy target waits until its next turn boundary. An archived
+or deleted target fails with a visible reason. Fresh threads use the project's
+default provider, model, and permissions. Pause, edit, delete, or run an
+automation immediately from the same section, and open recent runs to read their
+output. Pausing stops future schedules; an already queued run remains queued.
+Deleting removes the definition and skips runs that have not started.
+
+### Scripts
+
+A script is a named, reusable prompt, such as "review open pull requests", kept
+in one project or shared by all projects. Run one by hand, or have an automation
+run it on a schedule, with the `t3-thread script` and `t3-thread automation`
+commands. A project script replaces a shared script of the same name in that
+project. A run reads the script when it starts, so editing a script changes
+future runs only. Cron schedules, script automations and dry runs (record what a
+run would do without starting it) are available from the command line.
+
+Every project starts with shared quality scripts: code-quality, performance,
+dependencies, refactoring, ux-review, docs-currency, data-model-review and
+dead-code. Each reports findings with evidence and a suggested action, and
+proposes removals rather than making them.
+
+A script's result mode says what a run does with its findings. `review` (the
+default) files nothing and leaves the thread open so you can read it and tell the
+agent what to follow up. `file-only` files each finding as a request.
+`file-and-settle` files them and then settles the thread. Set the mode on the
+script, or override it for one run. Every run links to the thread it started.
+A paused timed automation also becomes a project script of the same name.
+
+### Event triggers
+
+An automation can also start when something happens, from `t3-thread automation
+add --on <event>`: a pull request is linked to a thread in the project
+(`pull-request.opened`), a linked pull request's checks start failing
+(`ci.failed`), an issue in the owning orchestrator's repositories gets a label
+(`issue.labeled`), a thread in the project waits for an approval or an answer or
+its session fails (`worker.blocked`), or a GitHub repository publishes a release
+(`release.published`, for example `pingdotgg/t3code`). Narrow a trigger with
+`--repository`, `--label` or `--for-thread`.
+
+Each new state fires once: a pull request whose checks keep failing does not
+start another run until they pass and fail again. Labels and releases are checked
+every five minutes, and ones that existed before the automation was watching do
+not fire. The run's prompt ends with what happened and a link to it.
