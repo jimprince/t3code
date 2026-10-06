@@ -1,3 +1,4 @@
+import { WsSessionReconcileRpc } from "@t3tools/contracts";
 import {
   Automation,
   AutomationDefinition,
@@ -238,6 +239,7 @@ const WsAutomationScriptsRunRpc = Rpc.make("automationScripts.run", {
 });
 
 export const WsRpcGroup = RpcGroup.make(
+  WsSessionReconcileRpc,
   WsAutomationsListRpc,
   WsAutomationsSaveRpc,
   WsAutomationsRemoveRpc,
