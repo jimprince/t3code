@@ -8,7 +8,7 @@ import {
   type GiteaInstanceConfig,
   CommandId,
   ProjectId,
-  type OrchestrationV2Command,
+
 } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
@@ -47,6 +47,8 @@ import { ServerSettingsService } from "../serverSettings.ts";
 import * as ProjectIssuesService from "./ProjectIssuesService.ts";
 import * as RequestLedger from "./RequestLedger.ts";
 
+type RecordedCommand = Parameters<ThreadManagement.ThreadManagementService["Service"]["dispatch"]>[0];
+
 const NOW = "2026-10-06T00:00:00.000Z";
 const REPO = "brad/t3code-fork";
 const ISSUE_URL = (number: number) => `http://git.home:3000/${REPO}/issues/${number}`;
@@ -84,7 +86,7 @@ interface ShellThread {
     number: number;
     url: string;
     linkedAt: string;
-    snapshot: { title: string; state: string; syncedAt: string };
+    snapshot: { title: string; state: "open" | "closed"; syncedAt: string };
   }>;
 }
 
@@ -170,7 +172,7 @@ const makeHarness = (options: {
     const threads = options.threads ?? baseThreads;
     const issues = [giteaIssue(4, decisionBody(options.waiting ?? "owner")), giteaIssue(7, "")];
     const writes: Array<{ method: string; path: string; body: unknown }> = [];
-    const commands: OrchestrationV2Command[] = [];
+    const commands: RecordedCommand[] = [];
     let uuid = 0;
     const json = (request: Parameters<Parameters<typeof HttpClient.make>[0]>[0], value: unknown) =>
       Effect.succeed(HttpClientResponse.fromWeb(request, new Response(JSON.stringify(value))));
@@ -312,16 +314,18 @@ const makeHarness = (options: {
             threadId: OWNER,
             providerSessionId: "session",
             providerInstanceId: ProviderInstanceId.make("claude"),
-          } as never,
+          },
           capabilities: new Set<McpInvocationContext.McpCapability>(["pull-requests"]),
           issuedAt: 1,
+          requestNamespace: "decision-tests",
+          client: undefined,
         }),
         Effect.provide(context),
       );
     return { ledger, callTool, writes, commands, parents: () => listMetadata(sql), management };
   });
 
-const turnStarts = (commands: ReadonlyArray<OrchestrationV2Command>) =>
+const turnStarts = (commands: ReadonlyArray<RecordedCommand>) =>
   commands.flatMap((command) =>
     command.type === "message.dispatch" ? [{ threadId: command.threadId, text: command.text }] : [],
   );
@@ -400,7 +404,7 @@ describe("discussing a decision", () => {
       yield* ledger.discuss({ threadId: ROOT, reference: `${REPO}#7` });
       expect(commands[0]).toMatchObject({ type: "thread.create" });
       expect(
-        (yield* parents()).find((row) => row.threadId === commands[0]!.threadId)?.parentThreadId,
+        (yield* parents()).find((row) => row.threadId === commands.find((command) => command.type === "thread.create")?.threadId)?.parentThreadId,
       ).toBe(WORKER);
       const [seed] = turnStarts(commands);
       expect(seed?.text).toContain("Option A: Rework the jaw now");
