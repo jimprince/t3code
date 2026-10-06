@@ -1,0 +1,4 @@
+id = "dashboard-polish"
+category = "fix"
+functionality = "projects"
+text = "The project page reads calmer and the same everywhere: one status word per row (Pending, Active, For review, Complete), titles and answers never cut off, no ids, paths or agent notes in rows, Settle only where you act (elsewhere in the row's menu), shipped work to test listed once, decision options as full rows, and rows that stay readable at phone width. Mobile project rows use the same status words and larger tap targets."
