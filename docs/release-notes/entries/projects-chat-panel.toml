@@ -1,0 +1,4 @@
+id = "projects-chat-panel"
+category = "feature"
+functionality = "projects"
+text = "Projects now show their icon and scope, support title and scope edits, accept image attachments in new requests, and keep the orchestrator conversation available in a remembered right-side panel with return navigation from opened threads."
