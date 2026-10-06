@@ -98,6 +98,11 @@ describe("buildThreadActionMenuItems", () => {
     expect(items[filterIndex + 1]?.id).toBe("auto-settle");
   });
 
+  it("offers a machine move only when another environment hosts the project", () => {
+    expect(ids(baseState)).not.toContain("move-to-machine");
+    expect(ids({ ...baseState, canMoveToMachine: true })).toContain("move-to-machine");
+  });
+
   it("includes branch items only for threads with a branch", () => {
     const withBranch = allIds({ ...baseState, branch: "feat/menu" });
     expect(withBranch).toContain("new-thread-on-branch");
