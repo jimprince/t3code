@@ -1,3 +1,4 @@
+import { PermanentAgent } from "./namedAgents.ts";
 import * as Schema from "effect/Schema";
 
 import {
@@ -60,6 +61,7 @@ export const ApplicationProjectCreatedPayload = Schema.Struct({
 export type ApplicationProjectCreatedPayload = typeof ApplicationProjectCreatedPayload.Type;
 
 export const ApplicationProjectMetaUpdatedPayload = Schema.Struct({
+  permanentAgent: Schema.optional(Schema.NullOr(PermanentAgent)),
   projectId: ProjectId,
   title: Schema.optional(TrimmedNonEmptyString),
   workspaceRoot: Schema.optional(TrimmedNonEmptyString),
