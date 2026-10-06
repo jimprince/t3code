@@ -3241,6 +3241,8 @@ const layerWsRpc = (
           projectLayout.history(input),
         [WS_METHODS.subscribeProjectLayout]: (input) =>
           projectLayout.stream(input.threadId),
+        [WS_METHODS.projectRequestsDiscuss]: (input) =>
+          requestLedger.discuss(input),
         [WS_METHODS.projectRequestsDecide]: (input) =>
           requestLedger.decide(input),
       });
