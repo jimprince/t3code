@@ -1,0 +1,4 @@
+id = "metadata-startup-once"
+category = "fix"
+functionality = "connections"
+text = "Server connections reuse initialized thread metadata, avoiding repeated legacy imports during reconnects."
