@@ -419,10 +419,6 @@
       "types": "./src/state/forkThreadIds.ts",
       "default": "./src/state/forkThreadIds.ts"
     },
-    "./state/forkNesting": {
-      "types": "./src/state/forkNesting.ts",
-      "default": "./src/state/forkNesting.ts"
-    },
     "./backgroundTurns": {
       "types": "./src/backgroundTurns.ts",
       "default": "./src/backgroundTurns.ts"
@@ -430,6 +426,10 @@
     "./state/fork-thread-ordering": {
       "types": "./src/state/forkThreadOrdering.ts",
       "default": "./src/state/forkThreadOrdering.ts"
+    },
+    "./state/fork-nesting-query": {
+      "types": "./src/state/forkNestingQuery.ts",
+      "default": "./src/state/forkNestingQuery.ts"
     }
   },
   "scripts": {
