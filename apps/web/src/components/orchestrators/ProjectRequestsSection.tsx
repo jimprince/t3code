@@ -14,23 +14,24 @@ import {
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { buildThreadRouteParams } from "../../threadRoutes";
-import { Button } from "../ui/button";
+import { Button, InlineButton } from "../ui/button";
 import { Input } from "../ui/input";
 import { projectReturnState } from "./projectNavigation";
 import { formatIssueAge } from "./projectIssuesBoard.logic";
 import { useNextReleaseItems } from "./ProjectRoadmapWidget";
 import { TaskTitle } from "./TaskLink";
 import { RequestKindTag } from "./RequestKindTag";
+import { GroupTitle, ProjectSection, RowMenu, StatusCell } from "./ProjectSection";
 import {
   answerSentences,
   deriveCompleted,
   deriveMaintenance,
   deriveNeedsYou,
   deriveProjectRequests,
-  FOR_YOU_GROUPS,
   isBug,
   isMaintenanceWithAgents,
   issueKey,
+  isNotAnswer,
   latestProgressLine,
   needsYouDecision,
   type NeedsYouDecision,
@@ -42,6 +43,7 @@ import {
   taskKind,
   taskStatuses,
   type CompletedTask,
+  type ForYouGroup,
   type NeedsYouItem,
   type ProjectRequest,
 } from "./projectRequests.logic";
@@ -316,21 +318,68 @@ export function ClickableRow({
   );
 }
 
-/** The newest progress line an agent recorded on the request's issue. */
-function LatestProgress({ request }: { readonly request: ProjectRequest }) {
-  const line = latestProgressLine(request.issue.latestComment?.body);
-  return line ? <span className="truncate text-xs text-foreground/80">{line}</span> : null;
-}
-
 function IssueLink({ issue }: { readonly issue: ProjectIssue }) {
   return (
     <TaskTitle
       task={{ host: issue.host, repository: issue.repository, number: issue.number }}
       url={issue.url}
-      className="line-clamp-2 text-sm hover:underline"
+      className="text-sm hover:underline"
     >
       {issue.title}
     </TaskTitle>
+  );
+}
+
+/**
+ * One task row: the status column, the title (wrapping, never cut) with an
+ * optional note under it, the type and age, and at most one action. Below `sm`
+ * the status, type and age move to a line under the title, so the title keeps
+ * the width.
+ */
+function TaskRow({
+  issue,
+  status,
+  statusTone = "muted",
+  kind,
+  bug,
+  age,
+  note = null,
+  onOpen = null,
+  action = null,
+}: {
+  readonly issue: ProjectIssue;
+  readonly status: string;
+  readonly statusTone?: "muted" | "strong" | "warning";
+  readonly kind: ProjectRequest["kind"] | null;
+  readonly bug: boolean;
+  readonly age: string;
+  /** The newest progress or test line, already cleaned. */
+  readonly note?: string | null;
+  readonly onOpen?: (() => void) | null;
+  readonly action?: ReactNode;
+}) {
+  return (
+    <ClickableRow
+      label={`Open the thread for ${issue.title}`}
+      onOpen={onOpen}
+      className="items-start py-1.5"
+    >
+      <StatusCell tone={statusTone}>{status}</StatusCell>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <IssueLink issue={issue} />
+        {note ? <span className="line-clamp-2 text-xs text-muted-foreground">{note}</span> : null}
+        <span className="text-xs text-muted-foreground sm:hidden">
+          {status}
+          {kind || bug ? " · " : ""}
+          <RequestKindTag kind={kind} bug={bug} /> · {age}
+        </span>
+      </span>
+      <span className="hidden shrink-0 items-baseline gap-3 pt-px sm:flex">
+        <RequestKindTag kind={kind} bug={bug} />
+        <span className="w-8 text-right text-xs tabular-nums text-muted-foreground">{age}</span>
+      </span>
+      {action ? <span className="shrink-0">{action}</span> : null}
+    </ClickableRow>
   );
 }
 
@@ -376,55 +425,47 @@ export function ReopenButton({
   );
 }
 
-const GroupTitle = ({ title, count }: { readonly title: string; readonly count: number }) => (
-  <h3 className="mb-1 text-xs text-foreground/80">
-    {title} <span className="tabular-nums text-muted-foreground">{count}</span>
-  </h3>
-);
-
-const WidgetHeading = ({ title, count }: { readonly title: string; readonly count: number }) => (
-  <h2 className="mb-2 flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-    {title}
-    <span className="tabular-nums text-foreground/60">{count}</span>
-  </h2>
-);
-
 const threadOf = (issue: ProjectIssue, request: ProjectRequest | null) =>
   request?.thread?.id ?? issue.requestSource?.threadId ?? issue.linkedThreadIds[0] ?? null;
 
+/** A request as a task row; its menu settles it when Brad is done with it. */
 function CompactRow({
   request,
   now,
   onOpen,
-  children,
+  settle = null,
 }: {
   readonly request: ProjectRequest;
   readonly now: number;
   readonly onOpen: ((threadId: string) => void) | null;
-  readonly children?: ReactNode;
+  readonly settle?: SettleControls | null;
 }) {
   const threadId = threadOf(request.issue, request);
   return (
-    <ClickableRow
-      label={`Open the thread for ${request.issue.title}`}
+    <TaskRow
+      issue={request.issue}
+      status={STAGE_LABEL[request.stage]}
+      statusTone={request.leftBehind ? "warning" : "muted"}
+      kind={request.kind}
+      bug={request.bug}
+      age={formatIssueAge(request.issue.createdAt, now)}
+      note={latestProgressLine(request.issue.latestComment?.body)}
       onOpen={onOpen && threadId ? () => onOpen(threadId) : null}
-      className="items-center py-1.5"
-    >
-      <span
-        className={`w-28 shrink-0 text-xs ${request.leftBehind ? "text-warning-foreground" : "text-muted-foreground"}`}
-      >
-        {request.leftBehind ? "left behind" : STAGE_LABEL[request.stage]}
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col">
-        <IssueLink issue={request.issue} />
-        <LatestProgress request={request} />
-      </span>
-      <RequestKindTag kind={request.kind} bug={request.bug} />
-      <span className="w-8 text-right text-xs tabular-nums text-muted-foreground">
-        {formatIssueAge(request.issue.createdAt, now)}
-      </span>
-      {children}
-    </ClickableRow>
+      action={
+        settle ? (
+          <RowMenu
+            label={request.issue.title}
+            items={[
+              {
+                label: "Settle",
+                disabled: settle.isBusy(request.issue),
+                onClick: () => void settle.settle([request.issue]),
+              },
+            ]}
+          />
+        ) : null
+      }
+    />
   );
 }
 
@@ -460,49 +501,47 @@ function NeedsYouRowBody({
   if (decision) {
     return (
       <span className="min-w-0 flex-1">
-        <span className="line-clamp-2 text-sm">{issue.title}</span>
+        <span className="text-sm">{issue.title}</span>
         {decision.summary ? (
-          <span className="mt-1 line-clamp-2 block text-sm text-foreground/85">
-            {decision.summary}
-          </span>
+          <span className="mt-1 block text-sm text-foreground/85">{decision.summary}</span>
         ) : null}
         {decision.recommendation ? (
           <span className="mt-0.5 block text-xs text-foreground/90">
             Recommended: {decision.recommendation}
           </span>
         ) : null}
-        {decision.options.map((option) => (
-          <span key={option.label} className="block truncate text-xs text-muted-foreground">
-            {option.label}: {option.text}
-          </span>
-        ))}
       </span>
     );
   }
   // A ready comment is the agent's answer or summary; otherwise the thread's reply
-  // to this very question.
+  // to this very question. Brad's own follow-ups and curator notes never are.
   const ready = request?.stage === "ready" || request === null;
+  const comment = issue.latestComment;
   const answer =
-    ready && issue.latestComment
-      ? { text: issue.latestComment.body, at: issue.latestComment.createdAt }
+    ready && comment && !isNotAnswer(comment.body)
+      ? { text: comment.body, at: comment.createdAt }
       : issue.answer
         ? { text: issue.answer.text, at: issue.answer.answeredAt }
         : null;
+  const kind = taskKind(issue.labels);
+  const bug = isBug(issue.labels);
   return (
     <span className="min-w-0 flex-1">
-      <IssueLink issue={issue} />
-      <RequestKindTag kind={taskKind(issue.labels)} bug={isBug(issue.labels)} />
+      <span className="flex flex-wrap items-baseline gap-x-2">
+        <IssueLink issue={issue} />
+        <RequestKindTag kind={kind} bug={bug} />
+        {group === "test" && issue.milestone ? (
+          <span className="text-xs text-muted-foreground">{issue.milestone.title}</span>
+        ) : null}
+      </span>
       {group === "test" ? (
-        <span className="mt-1 block text-xs text-foreground/90">
-          {request?.testStep ? `Test: ${request.testStep}` : "No test step posted"}
-          {issue.milestone ? (
-            <span className="text-muted-foreground"> · shipped in {issue.milestone.title}</span>
-          ) : null}
-        </span>
+        request?.testStep ? (
+          <span className="block text-xs text-foreground/85">Test: {request.testStep}</span>
+        ) : null
       ) : answer ? (
         <>
-          <span className="mt-1 block text-sm text-foreground/85">
-            {answerSentences(answer.text.replace(/^\s*(progress|test):\s*/i, ""))}
+          <span className="mt-0.5 block text-sm text-foreground/85">
+            {answerSentences(answer.text.replace(/^\s*(progress|test|answer):\s*/i, ""))}
           </span>
           {group === "answers" ? (
             <span className="mt-0.5 block text-xs text-muted-foreground">
@@ -516,10 +555,19 @@ function NeedsYouRowBody({
   );
 }
 
+/** Needs you's groups: answers to read, decisions to make, then work for review (shipped work to test included). */
+const NEEDS_YOU_GROUPS: ReadonlyArray<{
+  readonly title: string;
+  readonly groups: ReadonlyArray<ForYouGroup>;
+}> = [
+  { title: "Answers", groups: ["answers"] },
+  { title: "Decisions", groups: ["approve"] },
+  { title: TASK_STATUS_LABEL["for-review"], groups: ["review", "test"] },
+];
+
 /**
- * Brad's part of Needs you: requests in his groups (answers, review, approve,
- * shipped to test) and any other issue marked for his review or test, each with
- * its answer or test step and a Settle on the row.
+ * Brad's part of Needs you: requests in his groups and any other issue marked
+ * for his review or test, each with its answer or test step and a Settle on the row.
  */
 export function NeedsYouIssueGroups({
   summary,
@@ -537,13 +585,13 @@ export function NeedsYouIssueGroups({
   const decide = useDecide(summary, refresh);
   return (
     <>
-      {FOR_YOU_GROUPS.map(({ group, title }) => {
-        const groupItems = items.filter(
-          (item) => item.group === group && !actions.isGone(issueKey(item.issue)),
+      {NEEDS_YOU_GROUPS.map(({ title, groups }) => {
+        const groupItems = groups.flatMap((group) =>
+          items.filter((item) => item.group === group && !actions.isGone(issueKey(item.issue))),
         );
         if (groupItems.length === 0) return null;
         return (
-          <div key={group} className="mb-3 last:mb-0">
+          <div key={title} className="mb-3 last:mb-0">
             <GroupTitle title={title} count={groupItems.length} />
             <ul className="divide-y divide-border">
               {groupItems.map((item) => {
@@ -556,12 +604,13 @@ export function NeedsYouIssueGroups({
                     key={key}
                     label={`Open the thread for ${issue.title}`}
                     onOpen={threadId ? () => openThread(threadId) : null}
-                    className="items-start py-2"
+                    // A decision's buttons sit under its question, full width.
+                    className={decision ? "flex-col gap-2 py-1.5" : "items-start py-1.5"}
                   >
                     <NeedsYouRowBody
                       issue={issue}
                       request={request}
-                      group={group}
+                      group={item.group}
                       decision={decision}
                     />
                     {decision ? (
@@ -619,50 +668,61 @@ function DecisionActions({
   ) => void;
 }) {
   const [reason, setReason] = useState("");
+  const [reasonOpen, setReasonOpen] = useState(false);
   return (
-    <span className="flex w-52 shrink-0 flex-col gap-1">
-      <span className="flex flex-wrap gap-1">
-        {decision.options.length === 0 ? (
-          <Button size="xs" variant="outline" onClick={() => onDecide("approve", {})}>
-            <CheckIcon />
-            Approve
+    <span className="flex max-w-2xl flex-col gap-1">
+      {decision.options.length === 0 ? (
+        <Button size="sm-multiline" variant="outline" onClick={() => onDecide("approve", {})}>
+          <CheckIcon />
+          <span className="min-w-0 flex-1 text-left">Approve</span>
+        </Button>
+      ) : (
+        decision.options.map((option) => (
+          <Button
+            key={option.label}
+            size="sm-multiline"
+            variant="outline"
+            onClick={() => onDecide("option", { option: `${option.label}: ${option.text}` })}
+          >
+            <span className="min-w-0 flex-1 text-left">
+              {option.label}: {option.text}
+            </span>
           </Button>
-        ) : (
-          decision.options.map((option) => (
-            <Button
-              key={option.label}
-              size="xs"
-              variant="outline"
-              onClick={() => onDecide("option", { option: `${option.label}: ${option.text}` })}
-            >
-              {option.label}
-            </Button>
-          ))
-        )}
-        <Button
-          size="xs"
-          variant="ghost-muted"
+        ))
+      )}
+      <span className="flex items-center gap-3 text-xs">
+        <InlineButton
+          tone="muted"
           onClick={() => onDecide("not-yet", reason.trim() ? { reason: reason.trim() } : {})}
         >
           Not yet
-        </Button>
+        </InlineButton>
+        {reasonOpen ? null : (
+          <InlineButton tone="muted" onClick={() => setReasonOpen(true)}>
+            Add reason
+          </InlineButton>
+        )}
       </span>
-      <Input
-        size="sm"
-        value={reason}
-        maxLength={500}
-        placeholder="Reason (optional)"
-        aria-label="Reason for not yet"
-        onChange={(event) => setReason(event.target.value)}
-      />
+      {reasonOpen ? (
+        <Input
+          size="sm"
+          value={reason}
+          maxLength={500}
+          placeholder="Reason"
+          aria-label="Reason for not yet"
+          autoFocus
+          onChange={(event) => setReason(event.target.value)}
+        />
+      ) : null}
     </span>
   );
 }
 
 /**
- * The Requests widget: Brad's asks still with the agents or waiting for a
- * release (what needs him is in Needs you). Requests whose thread he already
- * settled, and threads with several open requests, settle in one click.
+ * The Requests widget: Brad's asks still with the agents (what needs him is in
+ * Needs you, what awaits a release is in Release). Requests whose thread he already settled, and
+ * threads with several open requests, settle in one click; any other request
+ * settles from its row menu.
  */
 export function ProjectRequestsSection({
   summary,
@@ -674,19 +734,21 @@ export function ProjectRequestsSection({
   const { query, requests, now, pending } = useProjectRequests(summary, includeLater);
   const settle = useSettle(summary, query.refresh);
   const openThread = useOpenThread(summary);
-  // Needs you shows Brad's groups; Maintenance shows upkeep still with the agents.
+  // Needs you shows Brad's groups, Release what awaits a release, and Maintenance
+  // upkeep still with the agents.
   const listed = requests.filter(
-    (request) => request.forYou === null && !isMaintenanceWithAgents(request),
+    (request) =>
+      request.forYou === null &&
+      request.stage !== "awaiting-release" &&
+      !isMaintenanceWithAgents(request),
   );
   const settledThreads = requestsOfSettledThreads(listed);
   const settledKeys = new Set(
     settledThreads.flatMap((group) => group.requests.map((request) => issueKey(request.issue))),
   );
-  const active = listed.filter((request) => !settledKeys.has(issueKey(request.issue)));
-  const waitingForRelease = active.filter((request) => request.stage === "awaiting-release");
-  const withAgents = active.filter((request) => request.stage !== "awaiting-release");
+  const open = listed.filter((request) => !settledKeys.has(issueKey(request.issue)));
   const byThread = new Map<string, { title: string; requests: ProjectRequest[] }>();
-  for (const request of withAgents) {
+  for (const request of open) {
     if (!request.thread || request.thread.id === summary.root.id) continue;
     const entry = byThread.get(request.thread.id) ?? { title: request.thread.title, requests: [] };
     entry.requests.push(request);
@@ -696,26 +758,20 @@ export function ProjectRequestsSection({
   if (listed.length === 0 && pending.length === 0) return null;
 
   return (
-    <section className="border-t border-border pt-4">
-      <WidgetHeading title="Requests" count={listed.length + pending.length} />
+    <ProjectSection title="Requests" count={listed.length + pending.length}>
       {pending.length > 0 ? (
         <div className="mb-3">
-          <GroupTitle title="Pending filing" count={pending.length} />
+          {/* Captured but not in the tracker yet; they file themselves once it answers. */}
+          <GroupTitle title="Not filed yet" count={pending.length} />
           <ul className="divide-y divide-border">
             {pending.map((item) => (
               <li
                 key={`${item.messageId}:${item.title}`}
-                className="flex items-center gap-3 py-1.5 text-muted-foreground"
+                className="flex items-start gap-3 py-1.5 text-muted-foreground"
               >
-                <span className="min-w-0 flex-1 truncate text-sm">{item.title}</span>
-                {item.kind ? (
-                  <RequestKindTag kind={item.kind} bug={item.bug === true} className="text-xs" />
-                ) : (
-                  <span className="text-xs">not split yet</span>
-                )}
-                <span className="shrink-0 text-xs">
-                  {item.attempts === 0 ? "filing" : `Gitea unreachable, retry ${item.attempts}`}
-                </span>
+                <StatusCell>{TASK_STATUS_LABEL.pending}</StatusCell>
+                <span className="min-w-0 flex-1 text-sm">{item.title}</span>
+                <RequestKindTag kind={item.kind ?? null} bug={item.bug === true} />
                 <span className="w-8 text-right text-xs tabular-nums">
                   {formatIssueAge(item.capturedAt, now)}
                 </span>
@@ -733,7 +789,7 @@ export function ProjectRequestsSection({
           <ul className="divide-y divide-border">
             {settledThreads.map((group) => (
               <li key={group.thread.id} className="flex items-center gap-3 py-1.5">
-                <span className="min-w-0 flex-1 truncate text-sm">{group.title}</span>
+                <span className="min-w-0 flex-1 text-sm">{group.title}</span>
                 <span className="text-xs text-muted-foreground">{group.requests.length} open</span>
                 <SettleButton
                   issues={group.requests.map((request) => request.issue)}
@@ -745,34 +801,18 @@ export function ProjectRequestsSection({
           </ul>
         </div>
       ) : null}
-      {waitingForRelease.length > 0 ? (
-        <div className="mb-3">
-          <GroupTitle title="Waiting for release" count={waitingForRelease.length} />
-          <ul className="divide-y divide-border">
-            {waitingForRelease.map((request) => (
-              <CompactRow
-                key={issueKey(request.issue)}
-                request={request}
-                now={now}
-                onOpen={openThread}
-              />
-            ))}
-          </ul>
-        </div>
-      ) : null}
-      {withAgents.length > 0 ? (
+      {open.length > 0 ? (
         <div>
-          <GroupTitle title="With agents" count={withAgents.length} />
+          <GroupTitle title="Open" count={open.length} />
           <ul className="divide-y divide-border">
-            {withAgents.map((request) => (
+            {open.map((request) => (
               <CompactRow
                 key={issueKey(request.issue)}
                 request={request}
                 now={now}
                 onOpen={openThread}
-              >
-                <SettleButton issues={[request.issue]} settle={settle} />
-              </CompactRow>
+                settle={settle}
+              />
             ))}
           </ul>
           {bulk.length > 0 ? (
@@ -782,7 +822,7 @@ export function ProjectRequestsSection({
                   key={entry.title}
                   className="flex items-center gap-2 text-xs text-muted-foreground"
                 >
-                  <span className="min-w-0 flex-1 truncate">
+                  <span className="min-w-0 flex-1">
                     {entry.requests.length} requests from {entry.title}
                   </span>
                   <SettleButton
@@ -796,69 +836,42 @@ export function ProjectRequestsSection({
           ) : null}
         </div>
       ) : null}
-    </section>
-  );
-}
-
-/** One completed task: shipped and waiting for Brad's test, or settled. */
-function CompletedRow({
-  task,
-  now,
-  settle,
-}: {
-  readonly task: CompletedTask;
-  readonly now: number;
-  readonly settle: SettleControls;
-}) {
-  return (
-    <li className="flex items-center gap-3 py-1.5">
-      <span
-        className={`w-28 shrink-0 text-xs ${task.toTest ? "text-foreground/90" : "text-muted-foreground"}`}
-      >
-        {task.toTest ? TASK_STATUS_LABEL["for-review"] : TASK_STATUS_LABEL.complete}
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col">
-        <IssueLink issue={task.issue} />
-        {task.toTest ? (
-          <span className="truncate text-xs text-foreground/90">
-            {task.toTest.testStep ? `Test: ${task.toTest.testStep}` : "No test step posted"}
-          </span>
-        ) : null}
-      </span>
-      <RequestKindTag kind={task.kind} bug={task.bug} />
-      <span className="w-8 text-right text-xs tabular-nums text-muted-foreground">
-        {formatIssueAge(task.issue.closedAt ?? task.issue.updatedAt, now)}
-      </span>
-      {task.toTest ? (
-        <SettleButton issues={[task.issue]} settle={settle} />
-      ) : (
-        <ReopenButton issue={task.issue} settle={settle} />
-      )}
-    </li>
+    </ProjectSection>
   );
 }
 
 /**
- * The Release widget, derived from stages and milestones: completed tasks by the
- * release that shipped them (shipped ones wait for Brad's test until he settles
- * them; settled ones can be reopened), then what is built and awaiting release.
- * The next release's own items live in "Where we're going".
+ * The Release widget: completed tasks by the release that shipped them (each can
+ * be reopened from its row menu), then what is built and awaiting release. Shipped
+ * work waiting for Brad's test is in Needs you, so it is not repeated here; the
+ * next release's own items live in "Where we're going".
  */
 export function ProjectReleaseWidget({ summary }: { readonly summary: OrchestratorSummary }) {
   const { query, requests, now } = useProjectRequests(summary);
   const settle = useSettle(summary, query.refresh);
   const completed = useMemo(() => {
     const threadIds = new Set([summary.root.id, ...summary.descendants.map((thread) => thread.id)]);
-    return deriveCompleted(query.data?.issues ?? [], requests, threadIds);
+    return deriveCompleted(query.data?.issues ?? [], requests, threadIds)
+      .map((group) => ({ ...group, items: group.items.filter((task) => task.toTest === null) }))
+      .filter((group) => group.items.length > 0);
   }, [query.data, requests, summary.descendants, summary.root.id]);
   const awaiting = useMemo(() => nextReleaseRequests(requests), [requests]);
   const completedCount = completed.reduce((total, group) => total + group.items.length, 0);
   if (awaiting.length === 0 && completedCount === 0) return null;
   return (
-    <section className="border-t border-border pt-4">
-      <WidgetHeading title="Release" count={awaiting.length + completedCount} />
+    <ProjectSection title="Release" count={awaiting.length + completedCount}>
+      {awaiting.length > 0 ? (
+        <div className="mb-3">
+          <GroupTitle title="Awaiting release" count={awaiting.length} />
+          <ul className="divide-y divide-border">
+            {awaiting.map((request) => (
+              <CompactRow key={issueKey(request.issue)} request={request} now={now} onOpen={null} />
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {completed.map((group) => (
-        <div key={group.release ?? ""} className="mb-3">
+        <div key={group.release ?? ""} className="mb-3 last:mb-0">
           <GroupTitle
             title={group.release ? `Completed in ${group.release}` : "Completed outside a release"}
             count={group.items.length}
@@ -870,23 +883,46 @@ export function ProjectReleaseWidget({ summary }: { readonly summary: Orchestrat
           </ul>
         </div>
       ))}
-      {awaiting.length > 0 ? (
-        <div className="mb-3">
-          <GroupTitle title="Awaiting release" count={awaiting.length} />
-          <ul className="divide-y divide-border">
-            {awaiting.map((request) => (
-              <CompactRow key={issueKey(request.issue)} request={request} now={now} onOpen={null} />
-            ))}
-          </ul>
-        </div>
-      ) : null}
-    </section>
+    </ProjectSection>
+  );
+}
+
+/** One completed task; Reopen is in its row menu. */
+function CompletedRow({
+  task,
+  now,
+  settle,
+}: {
+  readonly task: CompletedTask;
+  readonly now: number;
+  readonly settle: SettleControls;
+}) {
+  return (
+    <TaskRow
+      issue={task.issue}
+      status={TASK_STATUS_LABEL.complete}
+      kind={task.kind}
+      bug={task.bug}
+      age={formatIssueAge(task.issue.closedAt ?? task.issue.updatedAt, now)}
+      action={
+        <RowMenu
+          label={task.issue.title}
+          items={[
+            {
+              label: "Reopen",
+              disabled: settle.isBusy(task.issue),
+              onClick: () => void settle.reopen(task.issue),
+            },
+          ]}
+        />
+      }
+    />
   );
 }
 
 /**
  * One line near the top of the project page: the version this server runs and
- * where the next release stands.
+ * where the next release stands, in the page's status words.
  */
 export function ProjectReleaseLine({
   summary,
@@ -897,17 +933,19 @@ export function ProjectReleaseLine({
 }) {
   const { requests } = useProjectRequests(summary);
   const nextVersion = useNextReleaseItems(summary);
-  const waiting = nextReleaseRequests(requests).length;
+  const awaiting = nextReleaseRequests(requests).length;
   const toTest = requests.filter((request) => request.stage === "needs-test").length;
   const running = runningVersion ? (/fork\.\d+/.exec(runningVersion)?.[0] ?? runningVersion) : null;
   const versionTitle = nextVersion.version?.title ?? null;
+  const counts = [
+    awaiting > 0 ? `${awaiting} awaiting release` : null,
+    toTest > 0 ? `${toTest} ${TASK_STATUS_LABEL["for-review"].toLowerCase()}` : null,
+  ].filter(Boolean);
   const parts = [
     running ? `Running ${running}` : null,
     `Next release${
       versionTitle && versionTitle.toLowerCase() !== "next release" ? ` ${versionTitle}` : ""
-    }: ${
-      waiting === 0 ? "nothing waiting" : `${waiting} waiting`
-    }${toTest > 0 ? `, ${toTest} shipped to test` : ""}`,
+    }: ${counts.length > 0 ? counts.join(", ") : "nothing awaiting"}`,
   ].filter(Boolean);
   return <span className="text-sm text-muted-foreground">{parts.join(" · ")}</span>;
 }
@@ -928,42 +966,34 @@ export function ProjectMaintenanceWidget({
   );
   if (tasks.length === 0) return null;
   return (
-    <section className="border-t border-border pt-4">
-      <WidgetHeading title="Maintenance" count={tasks.length} />
+    <ProjectSection title="Maintenance" count={tasks.length}>
       <ul className="divide-y divide-border">
-        {tasks.map((task) =>
-          task.request ? (
-            <CompactRow
+        {tasks.map((task) => {
+          if (task.request) {
+            return (
+              <CompactRow
+                key={issueKey(task.issue)}
+                request={task.request}
+                now={now}
+                onOpen={openThread}
+              />
+            );
+          }
+          const threadId = task.issue.linkedThreadIds[0];
+          return (
+            <TaskRow
               key={issueKey(task.issue)}
-              request={task.request}
-              now={now}
-              onOpen={openThread}
+              issue={task.issue}
+              status={TASK_STATUS_LABEL[task.issue.status === "in-progress" ? "active" : "pending"]}
+              kind={null}
+              bug={false}
+              age={formatIssueAge(task.issue.createdAt, now)}
+              onOpen={threadId ? () => openThread(threadId) : null}
             />
-          ) : (
-            <ClickableRow
-              key={issueKey(task.issue)}
-              label={`Open the thread for ${task.issue.title}`}
-              onOpen={
-                task.issue.linkedThreadIds[0]
-                  ? () => openThread(task.issue.linkedThreadIds[0]!)
-                  : null
-              }
-              className="items-center py-1.5"
-            >
-              <span className="w-28 shrink-0 text-xs text-muted-foreground">
-                {TASK_STATUS_LABEL[task.issue.status === "in-progress" ? "active" : "pending"]}
-              </span>
-              <span className="min-w-0 flex-1">
-                <IssueLink issue={task.issue} />
-              </span>
-              <span className="w-8 text-right text-xs tabular-nums text-muted-foreground">
-                {formatIssueAge(task.issue.createdAt, now)}
-              </span>
-            </ClickableRow>
-          ),
-        )}
+          );
+        })}
       </ul>
-    </section>
+    </ProjectSection>
   );
 }
 
@@ -982,7 +1012,7 @@ export function WorkerRequestTag({
   );
   if (served.length === 0) return null;
   return (
-    <span className="mt-0.5 block truncate text-xs text-foreground/80">
+    <span className="mt-0.5 block text-xs text-muted-foreground">
       for: {served.map((request) => request.issue.title).join(" · ")}
     </span>
   );

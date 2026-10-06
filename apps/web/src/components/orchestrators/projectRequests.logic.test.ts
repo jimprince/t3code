@@ -297,6 +297,25 @@ describe("latestProgressLine", () => {
     );
     expect(latestProgressLine(null)).toBeNull();
   });
+
+  it("keeps paths, hashes and issue numbers out of the row", () => {
+    expect(
+      latestProgressLine(
+        "Progress: Fix built, unpublished: patch fork-project-skew-gate (0bd6f7eab) in ~/maintenance-work/task-panel-skew; ready for the fork.30 batch",
+      ),
+    ).toBe("Fix built, unpublished: patch fork-project-skew-gate; ready for the fork.30 batch");
+    expect(latestProgressLine("Progress: merged the fix (#139), faded 1234567 deadbeef")).toBe(
+      "merged the fix, faded deadbeef",
+    );
+  });
+
+  it("shows no curator notes, follow-ups or a bare start", () => {
+    expect(
+      latestProgressLine("Curator: typed as a bug task. Old labels kept as history."),
+    ).toBeNull();
+    expect(latestProgressLine("Follow-up from Brad in **T3 Orchestrator**:\nGo ahead")).toBeNull();
+    expect(latestProgressLine("Progress: started")).toBeNull();
+  });
 });
 
 describe("thread replied", () => {
