@@ -226,14 +226,7 @@ it.effect(
       const restored = yield* store.getThreadShell(threadId);
       assert.ok(restored);
       assert.equal(restored.archivedAt, null);
-      assert.equal(
-        archiveDeadline(restored, 7),
-        Math.max(
-          DateTime.toEpochMillis(restored.updatedAt),
-          DateTime.toEpochMillis(restored.settledAt!),
-        ) +
-          7 * 86_400_000,
-      );
+      assert.equal(archiveDeadline(restored, 7), null);
       const restoredThread = (yield* store.getThreadProjection(threadId)).thread;
       yield* store.apply({
         id: EventId.make("nested-retention"),
@@ -245,9 +238,12 @@ it.effect(
           lineage: childShell.lineage,
           pinnedAt: null,
           updatedAt: now,
+          settledOverride: "settled",
           settledAt: now,
         },
       });
+      const retentionShell = (yield* store.getThreadShell(threadId))!;
+      assert.equal(archiveDeadline(retentionShell, 7), DateTime.toEpochMillis(now) + 7 * 86_400_000);
       yield* Effect.scoped(
         Effect.gen(function* () {
           const first = yield* WorkerLifecycle.WorkerLifecycle;
