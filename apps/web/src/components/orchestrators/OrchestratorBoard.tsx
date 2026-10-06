@@ -474,9 +474,7 @@ function BuiltinWidget({
                 trailing={
                   <>
                     <time className="text-xs text-muted-foreground">
-                      {formatRelativeTimeLabel(
-                        item.thread.updatedAt,
-                      )}
+                      {formatRelativeTimeLabel(item.thread.updatedAt)}
                     </time>
                     <ThreadProviderModel
                       thread={item.thread}
