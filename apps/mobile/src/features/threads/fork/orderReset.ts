@@ -12,9 +12,10 @@ export const resetForkThreadOrder = createEnvironmentRpcCommand(connectionAtomRu
 
 export function useForkOrderResetSupported(environmentId: EnvironmentId) {
   const readyHosts = useSupervisionReadyHosts();
+  const configs = useAtomValue(environmentServerConfigsAtom);
   return (
     readyHosts.has(environmentId) &&
-    useAtomValue(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
+    configs.get(environmentId)?.environment.capabilities
       .threadOrderReset === true
   );
 }
