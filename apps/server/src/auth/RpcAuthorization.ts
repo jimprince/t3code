@@ -44,6 +44,8 @@ export const RPC_REQUIRED_SCOPES = {
   ...CLIENT_GUARDED_RPC_SCOPES,
   [WS_METHODS.serverPreviewRecovery]: AuthOrchestrationReadScope,
   [WS_METHODS.serverExecuteRecovery]: AuthOrchestrationOperateScope,
+  "fork.threads.metadata.list": AuthOrchestrationReadScope,
+  "fork.threads.metadata.update": AuthOrchestrationOperateScope,
   [WS_METHODS.serverThreadSubscriptions]: AuthOrchestrationReadScope,
   [WS_METHODS.serverUpdateThreadSubscriptions]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverRequestHeadlessUpdateCheck]: AuthOrchestrationOperateScope,
