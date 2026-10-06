@@ -1,0 +1,4 @@
+id = "desktop-rollback-copy-safety"
+category = "fix"
+functionality = "desktop updates"
+text = "Desktop updates retain rollback protection when stale backup cleanup fails and stop installation if protection cannot be prepared."
