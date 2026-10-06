@@ -23,7 +23,7 @@ function pr(
       baseBranch: "main",
       isDraft: false,
       updatedAt: "2026-10-05T10:00:00.000Z",
-      syncedAt: "2026-10-05T11:00:00.000Z",
+      syncedAt: "2026-10-05T11:50:00.000Z",
       ...snapshot,
     },
   } as ThreadPullRequestLink;
@@ -75,5 +75,68 @@ describe("project pull requests", () => {
       "root",
     );
     expect(rows.every((row) => !row.superseded)).toBe(true);
+  });
+
+  it("puts only open, clean pull requests that ask for a review in Needs you", () => {
+    const rows = derivePullRequestRows(
+      [
+        {
+          id: "worker-a",
+          pullRequests: [
+            pr(1, { reviewDecision: "review-required" }),
+            pr(2),
+            pr(3, { reviewDecision: "approved" }),
+            pr(4, { reviewDecision: "review-required", mergeability: "conflicting" }),
+            pr(5, { reviewDecision: "review-required", isDraft: true }),
+          ],
+        },
+      ],
+      NOW,
+    );
+    const group = Object.fromEntries(rows.map((row) => [row.link.number, row.group]));
+    expect(group).toEqual({ 1: "needs-you", 2: "open", 3: "open", 4: "open", 5: "open" });
+  });
+
+  it("does not call a pull request open when the host has not confirmed it lately", () => {
+    const rows = derivePullRequestRows(
+      [
+        {
+          id: "worker-a",
+          pullRequests: [
+            { ...pr(1), snapshot: null },
+            pr(2, { reviewDecision: "review-required", syncedAt: "2026-10-05T09:00:00.000Z" }),
+          ],
+        },
+      ],
+      NOW,
+    );
+    expect(rows.map((row) => [row.link.number, row.state, row.group]).toSorted()).toEqual([
+      [1, "unconfirmed", "open"],
+      [2, "unconfirmed", "open"],
+    ]);
+  });
+
+  it("moves a pull request out of Open and Needs you as soon as it is closed or merged", () => {
+    const closed = { closedAt: "2026-10-05T11:30:00.000Z" };
+    const rows = derivePullRequestRows(
+      [
+        {
+          id: "worker-a",
+          pullRequests: [
+            pr(1, {
+              state: "merged",
+              mergedAt: "2026-10-05T11:30:00.000Z",
+              reviewDecision: "review-required",
+            }),
+            pr(2, { state: "closed", ...closed, reviewDecision: "review-required" }),
+          ],
+        },
+      ],
+      NOW,
+    );
+    expect(rows.map((row) => [row.link.number, row.state, row.group])).toEqual([
+      [1, "merged", "recent"],
+      [2, "closed", "recent"],
+    ]);
   });
 });
