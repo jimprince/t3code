@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# One log receipt lets the controller correlate existing jobs without guessing
+# from timestamps or accepting a newer upstream that merely contains the target.
+base="${1:-}"
+source_sha="${2:-}"
+target="${3:-}"
+release_tag="${4:-}"
+upstream_url="${NIGHTLY_UPSTREAM_URL:-https://github.com/pingdotgg/t3code.git}"
+if [[ ! "$source_sha" =~ ^[0-9a-f]{40}$ ]]; then
+  echo 'Nightly delivery source must be an exact commit.' >&2
+  exit 1
+fi
+if [[ -n "$target" ]]; then
+  if [[ ! "$target" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-nightly\.[0-9]{8}\.[0-9]+$ ]]; then
+    echo 'Invalid upstream nightly target.' >&2
+    exit 1
+  fi
+  refs="$(git ls-remote --tags "$upstream_url" "refs/tags/$target" "refs/tags/$target^{}")"
+  resolved="$(awk '$2 ~ /\^\{\}$/ {print $1}' <<< "$refs")"
+  resolved="${resolved:-$(awk '$2 !~ /\^\{\}$/ {print $1}' <<< "$refs")}"
+  if [[ -n "$base" && "$base" != "$resolved" ]]; then
+    echo 'Nightly target moved away from the verified base.' >&2
+    exit 1
+  fi
+  base="$resolved"
+else
+  if [[ ! "$base" =~ ^[0-9a-f]{40}$ ]]; then exit 1; fi
+  refs="$(git ls-remote --tags "$upstream_url" 'refs/tags/v*')"
+  target="$(awk -v base="$base" '$1 == base {ref=$2; sub(/^refs\/tags\//, "", ref); sub(/\^\{\}$/, "", ref); print ref}' <<< "$refs" | sort -u | awk '/^v[0-9]+\.[0-9]+\.[0-9]+-nightly\.[0-9]{8}\.[0-9]+$/')"
+  # Stable stacks do not participate in nightly delivery.
+  if [[ -z "$target" ]]; then exit 0; fi
+fi
+if [[ ! "$base" =~ ^[0-9a-f]{40}$ || "$target" == *$'\n'* ]]; then
+  echo 'Nightly delivery requires one exact upstream target.' >&2
+  exit 1
+fi
+if [[ -n "$release_tag" ]] && { [[ "$release_tag" != "$target"-fork.* ]] || [[ ! "${release_tag#"$target"-fork.}" =~ ^[0-9]+$ ]]; }; then
+  echo 'Release tag does not match the nightly target.' >&2
+  exit 1
+fi
+receipt="$(jq -cn --arg target "$target" --arg targetSha "$base" --arg sourceSha "$source_sha" --arg releaseTag "$release_tag" '{channel:"nightly",target:$target,targetSha:$targetSha,sourceSha:$sourceSha} + if $releaseTag == "" then {} else {releaseTag:$releaseTag} end')"
+printf 'CI_REPAIR_BOT_NIGHTLY=%s\n' "$receipt"
