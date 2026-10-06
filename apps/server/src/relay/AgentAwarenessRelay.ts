@@ -6,6 +6,7 @@ import type {
   Project,
   ThreadId,
 } from "@t3tools/contracts";
+import { isPageAgentThreadId } from "@t3tools/contracts";
 import {
   RelayApi,
   type RelayAgentActivityPublishProofPayload,
@@ -665,7 +666,9 @@ export const make = Effect.gen(function* () {
 
   const worker = yield* makeAgentAwarenessPublishWorker(processThreadPublish);
   const enqueueThreadPublish = (threadId: ThreadId) =>
-    cancelPublishRetry(threadId).pipe(Effect.andThen(worker.enqueue(threadId)));
+    isPageAgentThreadId(threadId)
+      ? Effect.void
+      : cancelPublishRetry(threadId).pipe(Effect.andThen(worker.enqueue(threadId)));
   const publishThread: AgentAwarenessRelay["Service"]["publishThread"] = (threadId) =>
     enqueueThreadPublish(threadId).pipe(Effect.andThen(worker.drain));
 
