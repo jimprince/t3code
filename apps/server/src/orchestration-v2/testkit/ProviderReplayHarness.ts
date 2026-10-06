@@ -211,7 +211,10 @@ export function runOrchestratorV2ProviderReplayScenario<
     replayGate,
   });
 
-  return runOrchestratorV2Scenario(scenario, { replayGate }).pipe(Effect.provide(layer));
+  return runOrchestratorV2Scenario(scenario, {
+    replayGate,
+    afterSteps: Effect.promise(() => replayGate.drain()),
+  }).pipe(Effect.provide(layer));
 }
 
 export function makeOrchestratorV2ProviderReplayLayer<

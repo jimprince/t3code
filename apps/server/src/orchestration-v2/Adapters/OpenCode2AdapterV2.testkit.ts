@@ -15,6 +15,7 @@ import {
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientError from "effect/unstable/http/HttpClientError";
 import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
@@ -24,6 +25,7 @@ import * as ServerConfig from "../../config.ts";
 import * as OpenCode2Client from "../../provider/opencode2/OpenCode2Client.ts";
 import * as OpenCode2Server from "../../provider/opencode2/OpenCode2Server.ts";
 import * as IdAllocator from "../IdAllocator.ts";
+import type { ProviderAdapterV2SessionRuntime } from "../ProviderAdapter.ts";
 import * as ProviderAdapterRegistry from "../ProviderAdapterRegistry.ts";
 import type { ProviderReplayGate } from "../testkit/ProviderReplayGate.testkit.ts";
 import {
@@ -281,7 +283,57 @@ function makeRegistryLayer(
 ) {
   return Layer.unwrap(
     makeReplayAdapter(transcript, { external: true, ...options }).pipe(
-      Effect.map((adapter) => ProviderAdapterRegistry.makeLayer([adapter])),
+      Effect.map((adapter) =>
+        ProviderAdapterRegistry.makeLayer([
+          {
+            ...adapter,
+            openSession: (input) =>
+              adapter.openSession(input).pipe(
+                Effect.map((runtime) => {
+                  const active = new Set<string>();
+                  const stops = new Map<string, { promise: Promise<void>; resolve: () => void }>();
+                  options?.replayGate?.addDrain(async () => {
+                    await Promise.all([...stops.values()].map((stop) => stop.promise));
+                  });
+                  return {
+                    ...runtime,
+                    events: runtime.events.pipe(
+                      Stream.tap((event) =>
+                        Effect.sync(() => {
+                          if (event.type !== "provider_turn.updated") return;
+                          const turn = event.providerTurn;
+                          if (turn.status === "running") {
+                            active.add(turn.id);
+                          } else {
+                            active.delete(turn.id);
+                            stops.get(turn.id)?.resolve();
+                            stops.delete(turn.id);
+                          }
+                        }),
+                      ),
+                    ),
+                    // Stop acknowledgement settles the fork projection before the
+                    // native execution ends. Teardown must wait for that receipt.
+                    interruptTurn: (interruptInput) =>
+                      runtime.interruptTurn(interruptInput).pipe(
+                        Effect.tap(() =>
+                          Effect.sync(() => {
+                            const id = interruptInput.providerTurnId;
+                            if (!active.has(id) || stops.has(id)) return;
+                            let resolve = () => {};
+                            const promise = new Promise<void>((resume) => {
+                              resolve = resume;
+                            });
+                            stops.set(id, { promise, resolve });
+                          }),
+                        ),
+                      ),
+                  } satisfies ProviderAdapterV2SessionRuntime;
+                }),
+              ),
+          },
+        ]),
+      ),
     ),
   ).pipe(Layer.provide(Layer.mergeAll(replayServerConfig(transcript.scenario), IdAllocator.layer)));
 }
