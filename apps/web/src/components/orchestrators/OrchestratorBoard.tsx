@@ -50,6 +50,8 @@ import {
   revertProjectLayout,
   useProjectLayout,
 } from "../../state/projectLayout";
+import { projectDashboardQuery } from "../../state/projectDashboard";
+import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { randomUUID } from "../../lib/utils";
 import { buildThreadRouteParams } from "../../threadRoutes";
@@ -90,6 +92,7 @@ import { ProjectPullRequestsWidget } from "./ProjectPullRequestsWidget";
 import { ProjectRequestBox } from "./ProjectRequestBox";
 import { ProjectIssuesSummary, ProjectRoadmapSummary } from "./ProjectTabSummaries";
 import { resolveProjectTab, type ProjectTab } from "./projectTabs.logic";
+import { HEALTH_LABEL, isHealthStale, latestWorkChangeAt } from "./projectHealth.logic";
 import { projectReturnState } from "./projectNavigation";
 
 /**
@@ -622,6 +625,43 @@ function BuiltinWidget({
   }
 }
 
+const HEALTH_TONE = {
+  "on-track": "bg-success/12 text-success",
+  "at-risk": "bg-warning/12 text-warning",
+  "off-track": "bg-error/12 text-error",
+  "waiting-on-you": "bg-info/12 text-info",
+} as const;
+
+/**
+ * The orchestrator's one-line health status (`t3-thread project health set`): a
+ * chip, one sentence and when it was written. Older than a day, or older than
+ * the newest work change, it shows as stale.
+ */
+function ProjectHealthLine({ summary }: { readonly summary: OrchestratorSummary }) {
+  const dashboard = useEnvironmentQuery(
+    projectDashboardQuery({
+      environmentId: summary.root.environmentId,
+      input: { threadId: summary.root.id },
+    }),
+  );
+  const health = dashboard.data?.health ?? null;
+  if (health === null) return null;
+  const stale = isHealthStale(health, latestWorkChangeAt(summary), Date.now());
+  return (
+    <div className="flex min-w-0 items-center gap-2 text-sm">
+      <span
+        className={`shrink-0 rounded-sm px-1.5 py-0.5 text-xs font-medium ${HEALTH_TONE[health.status]}`}
+      >
+        {HEALTH_LABEL[health.status]}
+      </span>
+      <span className="min-w-0 truncate">{health.sentence}</span>
+      <span className={`shrink-0 text-xs ${stale ? "text-warning" : "text-muted-foreground"}`}>
+        {stale ? "stale, " : ""}as of {formatRelativeTimeLabel(health.updatedAt)}
+      </span>
+    </div>
+  );
+}
+
 export function OrchestratorBoard({
   environmentId,
   threadId,
@@ -886,6 +926,7 @@ export function OrchestratorBoard({
                 </span>
               </div>
 
+              <ProjectHealthLine summary={summary} />
               <ProjectReleaseLine
                 summary={summary}
                 runningVersion={
