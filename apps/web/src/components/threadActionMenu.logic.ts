@@ -10,6 +10,7 @@ export type ThreadActionMenuId =
   | "new-thread-on-branch"
   | "filter-by-project"
   | "project-settings"
+  | "order-reset"
   | "pin"
   | "unpin"
   | "settle"
@@ -95,6 +96,7 @@ export interface ThreadActionMenuState {
     readonly autoSettleOptOut: boolean;
     readonly snooze: boolean;
     readonly pinning: boolean;
+    readonly orderReset?: boolean;
     readonly titleRegeneration: boolean;
   };
   readonly snoozePresets: ReadonlyArray<SnoozePreset>;
@@ -124,6 +126,9 @@ export function buildThreadActionMenuItems(
             ? { id: "unpin" as const, label: "Unpin thread", icon: "pin-off" }
             : { id: "pin" as const, label: "Pin thread", icon: "pin" },
         ]
+      : []),
+    ...(state.supports.orderReset === true && (state.isPinned || !state.isSettled)
+      ? [{ id: "order-reset" as const, label: "Return to automatic order", icon: "list" }]
       : []),
     // Both lifecycle actions stay available on pinned threads: settling
     // clears the pin ("done" beats "keep on top"), and snoozing hides the
