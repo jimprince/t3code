@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { supervisionForest, supervisionKey } from "@t3tools/client-runtime/state/forkNesting";
 import { useThreadShells } from "../../state/entities";
-import { foldMobileBackgroundFeed } from "./backgroundFeed.logic";
+import { deriveMobileBackgroundFolds } from "./backgroundFeed.logic";
 import type { ThreadFeedEntry } from "../../lib/threadActivity";
 
 export function useMobileBackgroundFeed(input: {
@@ -27,41 +27,32 @@ export function useMobileBackgroundFeed(input: {
   }, [forest, input.rootKey]);
   const result = useMemo(
     () =>
-      foldMobileBackgroundFeed({
-        ...input,
+      deriveMobileBackgroundFolds({
+        feed: input.feed,
+        liveRunId: input.liveRunId,
         workerIds,
         expanded,
-        allTraffic,
         labelForThread: (id) => shells.find((t) => t.id === id)?.title,
       }),
-    [input.feed, input.liveRunId, workerIds, expanded, allTraffic, shells],
+    [input.feed, input.liveRunId, workerIds, expanded, shells],
   );
+  const toggleFold = useCallback((runId: string) => {
+    setExpanded((keys) => {
+      const next = new Set(keys);
+      if (next.has(runId)) next.delete(runId);
+      else next.add(runId);
+      return next;
+    });
+  }, []);
   const control = result.traffic.hasBackgroundTraffic ? (
-    <View>
+    <View className="flex-row items-center gap-2 px-2 py-1">
       <Pressable onPress={() => setAllTraffic((v) => !v)} accessibilityRole="button">
         <Text className="text-foreground text-xs">{allTraffic ? "Brad view" : "All traffic"}</Text>
       </Pressable>
-      {!allTraffic
-        ? result.traffic.runs.map((run) => (
-            <Pressable
-              key={run.id}
-              accessibilityRole="button"
-              onPress={() =>
-                setExpanded((keys) => {
-                  const next = new Set(keys);
-                  if (next.has(run.id)) next.delete(run.id);
-                  else next.add(run.id);
-                  return next;
-                })
-              }
-            >
-              <Text className="text-foreground text-xs">
-                {run.turnCount} worker turns · {run.lastLine}
-              </Text>
-            </Pressable>
-          ))
-        : null}
+      {result.traffic.attentionCount > 0 ? (
+        <Text className="text-foreground text-xs">{result.traffic.attentionCount} for you</Text>
+      ) : null}
     </View>
   ) : null;
-  return { ...result, control };
+  return { folds: allTraffic ? null : result.folds, control, toggleFold };
 }

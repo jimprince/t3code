@@ -480,7 +480,7 @@ type MessagesTimelineRowContent =
       id: string;
       createdAt: string;
       run: import("@t3tools/client-runtime/backgroundTurns").BackgroundRun;
-      onToggle: () => void;
+      expanded: boolean;
     }
   | {
       kind: "worktree-setup";
@@ -1986,7 +1986,7 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
 
   switch (a.kind) {
     case "background-fold":
-      return a.run === (b as typeof a).run && a.onToggle === (b as typeof a).onToggle;
+      return a.run === (b as typeof a).run && a.expanded === (b as typeof a).expanded;
     case "working":
       return a.createdAt === (b as typeof a).createdAt;
     case "thinking": {

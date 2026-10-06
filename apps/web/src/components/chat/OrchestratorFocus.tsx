@@ -1,18 +1,25 @@
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
-import { useMemo, useState } from "react";
+import { Atom } from "effect/unstable/reactivity";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useThreadShells, useThreadProjection } from "../../state/entities";
 import { supervisionForest, supervisionKey } from "@t3tools/client-runtime/state/forkNesting";
 import {
   deriveBackgroundTraffic,
   resolveBackgroundFolds,
+  stabilizeBackgroundTraffic,
+  type BackgroundTraffic,
 } from "@t3tools/client-runtime/backgroundTurns";
 import type { TimelineEntry } from "../../session-logic";
+import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import type { MessagesTimelineRow } from "./MessagesTimeline.logic";
+
+/** Threads showing all traffic this session. Brad view is the default everywhere. */
+const allTrafficAtom = Atom.family((_threadKey: string) => Atom.make(false).pipe(Atom.keepAlive));
 
 export function foldBackgroundRows(
   rows: ReadonlyArray<MessagesTimelineRow>,
   folds: ReturnType<typeof resolveBackgroundFolds>,
-  toggle: (id: string) => void,
 ): MessagesTimelineRow[] {
   const result: MessagesTimelineRow[] = [];
   for (const row of rows) {
@@ -24,7 +31,7 @@ export function foldBackgroundRows(
           id: run.id,
           createdAt: run.startedAt,
           run,
-          onToggle: () => toggle(run.id),
+          expanded: !folds.hiddenMessageIds.has(run.anchorMessageId),
         });
       if (folds.hiddenMessageIds.has(row.message.id)) continue;
     } else if (row.kind === "assistant-meta" && folds.hiddenMessageIds.has(row.message.id))
@@ -49,14 +56,33 @@ export function foldBackgroundRows(
   return result;
 }
 
-export function BackgroundFoldRow(
-  props: Extract<MessagesTimelineRow, { kind: "background-fold" }>,
-) {
+/** Brad view / All traffic switch and the needs-you count, above the timeline. */
+export function OrchestratorFocusBar(props: {
+  readonly traffic: BackgroundTraffic;
+  readonly allTraffic: boolean;
+  readonly onAllTrafficChange: (allTraffic: boolean) => void;
+}) {
+  if (!props.traffic.hasBackgroundTraffic) return null;
   return (
-    <button type="button" className="w-full py-2 text-left text-xs" onClick={props.onToggle}>
-      {props.run.turnCount} worker turns · {props.run.senderLabels.join(", ")}
-      {props.run.lastLine ? ` · ${props.run.lastLine}` : ""}
-    </button>
+    <div className="flex shrink-0 items-center gap-3 border-b border-border/60 px-4 py-1.5 text-xs">
+      <ToggleGroup
+        aria-label="Worker traffic"
+        variant="segmented"
+        value={[props.allTraffic ? "all" : "brad"]}
+        onValueChange={(value) => {
+          const next = value[0];
+          if (next === "all" || next === "brad") props.onAllTrafficChange(next === "all");
+        }}
+      >
+        <Toggle value="brad">Brad view</Toggle>
+        <Toggle value="all">All traffic</Toggle>
+      </ToggleGroup>
+      {props.traffic.attentionCount > 0 ? (
+        <span className="text-warning-foreground tabular-nums">
+          {props.traffic.attentionCount} for you
+        </span>
+      ) : null}
+    </div>
   );
 }
 
@@ -70,23 +96,40 @@ export function useOrchestratorFocus(input: {
   const shells = useThreadShells();
   const projection = useThreadProjection(parseScopedThreadKey(input.threadKey))?.projection;
   const forest = useMemo(() => supervisionForest(shells), [shells]);
-  const [allTraffic, setAllTraffic] = useState(false);
+  const allTraffic = useAtomValue(allTrafficAtom(input.threadKey));
+  const setAllTraffic = useAtomSet(allTrafficAtom(input.threadKey));
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
-  const traffic = useMemo(() => {
-    const descendants = new Set<string>();
+  // "id\ttitle" lines: a string keeps unrelated shell churn from re-deriving traffic.
+  const workerLines = useMemo(() => {
+    const lines: string[] = [];
     const pending = [input.threadKey];
     while (pending.length) {
       for (const child of forest.children.get(pending.pop()!) ?? []) {
-        const key = supervisionKey(child);
-        descendants.add(child.id);
-        pending.push(key);
+        lines.push(`${child.id}\t${child.title}`);
+        pending.push(supervisionKey(child));
       }
     }
+    return lines.join("\n");
+  }, [forest, input.threadKey]);
+  const workers = useMemo(() => {
+    const titles = new Map<string, string>();
+    for (const line of workerLines.length > 0 ? workerLines.split("\n") : []) {
+      const [id, title] = line.split("\t");
+      titles.set(id!, title ?? "");
+    }
+    return titles;
+  }, [workerLines]);
+  const previousRef = useRef<BackgroundTraffic | null>(null);
+  const traffic = useMemo(() => {
     const attention = new Set<string>();
-    for (const request of projection?.runtimeRequests ?? []) {
-      if (request.status === "pending") {
-        const node = projection?.nodes.find((node) => node.id === request.nodeId);
-        if (node?.runId) attention.add(node.runId);
+    const requests = (projection?.runtimeRequests ?? []).filter(
+      (request) => request.status === "pending",
+    );
+    if (requests.length > 0) {
+      const runIdByNode = new Map(projection?.nodes.map((node) => [node.id, node.runId]));
+      for (const request of requests) {
+        const runId = runIdByNode.get(request.nodeId);
+        if (runId) attention.add(runId);
       }
     }
     for (const run of projection?.runs ?? []) {
@@ -104,37 +147,42 @@ export function useOrchestratorFocus(input: {
       )
         attention.add(entry.entry.runId);
     }
-    return deriveBackgroundTraffic({
+    const next = deriveBackgroundTraffic({
       messages: input.entries.flatMap((entry) => (entry.kind === "message" ? [entry.message] : [])),
-      workerThreadIds: descendants,
+      workerThreadIds: new Set(workers.keys()),
       attentionTurnIds: attention,
       liveTurnId: input.liveRunId,
-      labelForThread: (id) => shells.find((t) => t.id === id)?.title,
+      labelForThread: (id) => workers.get(id) || undefined,
     });
-  }, [forest, input.entries, input.liveRunId, input.threadKey, shells, projection]);
-  const toggle = (id: string) =>
-    setExpanded((keys) => {
-      const next = new Set(keys);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    return stabilizeBackgroundTraffic(previousRef.current, next);
+  }, [workers, input.entries, input.liveRunId, projection]);
+  previousRef.current = traffic;
+  const toggleFold = useCallback(
+    (id: string) =>
+      setExpanded((keys) => {
+        const next = new Set(keys);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      }),
+    [],
+  );
   const rows = useMemo(
     () =>
       allTraffic
         ? [...input.rows]
-        : foldBackgroundRows(input.rows, resolveBackgroundFolds(traffic.runs, expanded), toggle),
+        : foldBackgroundRows(input.rows, resolveBackgroundFolds(traffic.runs, expanded)),
     [allTraffic, input.rows, traffic, expanded],
   );
-  const control = traffic.hasBackgroundTraffic ? (
-    <button
-      type="button"
-      aria-pressed={allTraffic}
-      onClick={() => setAllTraffic((value) => !value)}
-    >
-      {allTraffic ? "Brad view" : "All traffic"}
-      {traffic.attentionCount > 0 ? ` · ${traffic.attentionCount} need attention` : ""}
-    </button>
-  ) : null;
-  return { rows, control };
+  const control = useMemo(
+    () => (
+      <OrchestratorFocusBar
+        traffic={traffic}
+        allTraffic={allTraffic}
+        onAllTrafficChange={setAllTraffic}
+      />
+    ),
+    [traffic, allTraffic, setAllTraffic],
+  );
+  return { rows, control, toggleFold };
 }

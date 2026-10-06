@@ -48,16 +48,13 @@ it("folds settled worker messages and work reversibly without hiding subsequent 
         assistantCopyStreaming: false,
       }) as MessagesTimelineRow,
   );
-  const folded = foldBackgroundRows(
-    rows,
-    resolveBackgroundFolds(traffic.runs, new Set()),
-    () => {},
-  );
+  const folded = foldBackgroundRows(rows, resolveBackgroundFolds(traffic.runs, new Set()));
   expect(folded.map((row) => row.kind)).toEqual(["background-fold"]);
+  expect(folded[0]).toMatchObject({ kind: "background-fold", expanded: false });
   const expanded = foldBackgroundRows(
     rows,
     resolveBackgroundFolds(traffic.runs, new Set([traffic.runs[0]!.id])),
-    () => {},
   );
+  expect(expanded[0]).toMatchObject({ kind: "background-fold", expanded: true });
   expect(expanded.filter((row) => row.kind === "message").map((row) => row.id)).toEqual(["u", "a"]);
 });

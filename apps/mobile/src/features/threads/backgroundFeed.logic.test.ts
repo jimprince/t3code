@@ -1,8 +1,8 @@
 import { expect, it } from "vite-plus/test";
 import { MessageId, RunId, ThreadId } from "@t3tools/contracts";
 import type { ThreadFeedEntry } from "../../lib/threadActivity";
-import { foldMobileBackgroundFeed } from "./backgroundFeed.logic";
-it("restores worker messages with All traffic and keeps live/unanswered traffic", () => {
+import { applyBackgroundFolds, deriveMobileBackgroundFolds } from "./backgroundFeed.logic";
+it("folds worker traffic to one row, expands it, and keeps live traffic visible", () => {
   const feed = [
     {
       type: "message",
@@ -45,9 +45,21 @@ it("restores worker messages with All traffic and keeps live/unanswered traffic"
     workerIds: new Set(["child"]),
     liveRunId: null,
     expanded: new Set<string>(),
-    allTraffic: false,
   };
-  expect(foldMobileBackgroundFeed(input).feed).toEqual([]);
-  expect(foldMobileBackgroundFeed({ ...input, allTraffic: true }).feed).toBe(feed);
-  expect(foldMobileBackgroundFeed({ ...input, liveRunId: "r" }).feed).toEqual(feed);
+  const collapsed = applyBackgroundFolds(feed, deriveMobileBackgroundFolds(input).folds);
+  expect(collapsed.map((entry) => entry.type)).toEqual(["background-fold"]);
+  const [fold] = collapsed;
+  expect(fold?.type === "background-fold" && fold.expanded).toBe(false);
+  expect(applyBackgroundFolds(feed, null)).toBe(feed);
+  expect(
+    applyBackgroundFolds(feed, deriveMobileBackgroundFolds({ ...input, liveRunId: "r" }).folds).map(
+      (entry) => entry.type,
+    ),
+  ).toEqual(["message", "message"]);
+  const runId = deriveMobileBackgroundFolds(input).traffic.runs[0]!.id;
+  const expanded = applyBackgroundFolds(
+    feed,
+    deriveMobileBackgroundFolds({ ...input, expanded: new Set([runId]) }).folds,
+  );
+  expect(expanded.map((entry) => entry.type)).toEqual(["background-fold", "message", "message"]);
 });

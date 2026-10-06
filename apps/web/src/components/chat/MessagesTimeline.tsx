@@ -1,4 +1,4 @@
-import { useOrchestratorFocus, BackgroundFoldRow } from "./OrchestratorFocus";
+import { useOrchestratorFocus } from "./OrchestratorFocus";
 import { ComputerUseAppIcon } from "~/components/Icons";
 import { useChatCanvas } from "./ChatCanvasContext";
 import { WorkLogBlock, WorkLogButton, WorkLogDetails, WorkLogList, WorkLogRow } from "./WorkLog";
@@ -332,6 +332,7 @@ interface TimelineRowSharedState {
   openPullRequest: (event: MouseEvent<HTMLElement>, url: string) => void;
   onToggleWorkGroup: (groupId: string, anchorKey: string) => void;
   onToggleWorkEntry: (anchorKey: string, collapsed: boolean) => void;
+  onToggleBackgroundFold: (runId: string) => void;
   onCancelWorktreeSetup: (() => void) | null;
   retryableWorkspacePreparationRunIds: ReadonlySet<RunId>;
   onRetryWorkspacePreparation: ((runId: RunId) => void) | null;
@@ -1185,6 +1186,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onToggleAttemptFold,
       onToggleWorkGroup,
       onToggleWorkEntry: suspendEndScrollMaintenanceForDisclosure,
+      onToggleBackgroundFold: focus.toggleFold,
       onCancelWorktreeSetup: onCancelWorktreeSetup ?? null,
       retryableWorkspacePreparationRunIds,
       onRetryWorkspacePreparation: onRetryWorkspacePreparation ?? null,
@@ -1220,6 +1222,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onToggleAttemptFold,
       onToggleWorkGroup,
       suspendEndScrollMaintenanceForDisclosure,
+      focus.toggleFold,
       onCancelWorktreeSetup,
       retryableWorkspacePreparationRunIds,
       onRetryWorkspacePreparation,
@@ -1763,7 +1766,6 @@ type TimelineWorkEntry = Extract<MessagesTimelineRow, { kind: "work" }>["grouped
 type TimelineRow = MessagesTimelineRow;
 
 const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: TimelineRow }) {
-  if (row.kind === "background-fold") return <BackgroundFoldRow {...row} />;
   const isExpandedToolGroup = row.kind === "work" && row.isExpandedToolGroup;
   const isSubagentGroup = row.kind === "event" && row.projectedItem.item.type === "subagent";
   const isWorkLogRow =
@@ -1782,7 +1784,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
         // they sit closer to the work that follows them.
         isWorkLogRow || isSubagentGroup
           ? undefined
-          : row.kind === "turn-fold" || row.kind === "working"
+          : row.kind === "turn-fold" || row.kind === "background-fold" || row.kind === "working"
             ? "pb-1.5"
             : (row.kind === "message" &&
                   row.message.role === "assistant" &&
@@ -1829,6 +1831,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
         </WorkLogBlock>
       ) : null}
       {row.kind === "turn-fold" ? <TurnFoldTimelineRow row={row} /> : null}
+      {row.kind === "background-fold" ? <BackgroundFoldTimelineRow row={row} /> : null}
       {row.kind === "attempt-fold" ? <AttemptFoldTimelineRow row={row} /> : null}
       {row.kind === "context-compaction" ? <ContextCompactionTimelineRow row={row} /> : null}
       {row.kind === "message" && row.message.role === "user" ? <UserTimelineRow row={row} /> : null}
@@ -2479,6 +2482,41 @@ function TurnFoldTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "turn-
         createdAt={row.createdAt}
         timestampFormat={ctx.timestampFormat}
         className="ms-auto"
+      />
+    </div>
+  );
+}
+
+/** Brad view: a run of worker turns, folded to its count, senders and latest line. */
+function BackgroundFoldTimelineRow({
+  row,
+}: {
+  row: Extract<TimelineRow, { kind: "background-fold" }>;
+}) {
+  const ctx = use(TimelineRowCtx);
+  const { run } = row;
+  const count = `${run.turnCount} background ${run.turnCount === 1 ? "turn" : "turns"}`;
+
+  return (
+    <div className="group/timeline-row relative flex min-w-0 items-center gap-2 border-y border-border/60 py-1 pe-0.5">
+      <button
+        type="button"
+        aria-expanded={row.expanded}
+        data-scroll-anchor-ignore
+        onClick={() => ctx.onToggleBackgroundFold(run.id)}
+        className="flex min-w-0 flex-1 cursor-pointer select-none items-center gap-2 rounded-md px-1 text-start text-sm leading-relaxed text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+      >
+        <MorphIcon className="size-3.5 shrink-0" icon={row.expanded ? ChevronDown : ChevronRight} />
+        <span className="shrink-0 text-foreground tabular-nums">{count}</span>
+        {run.senderLabels.length > 0 ? (
+          <span className="shrink-0">with {run.senderLabels.join(", ")}</span>
+        ) : null}
+        {run.lastLine ? <span className="min-w-0 truncate opacity-70">{run.lastLine}</span> : null}
+      </button>
+      <TimelineRowTimestamp
+        createdAt={run.endedAt}
+        timestampFormat={ctx.timestampFormat}
+        className="ms-auto shrink-0"
       />
     </div>
   );
