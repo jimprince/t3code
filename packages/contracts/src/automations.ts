@@ -90,10 +90,16 @@ export type AutomationAgentTarget = typeof AutomationAgentTarget.Type;
 
 /**
  * What a script run does with its findings. `review` files nothing and leaves the thread open for
- * Brad to read; `file-only` files findings as requests; `file-and-settle` also settles the thread.
- * The mode is spelled out at the end of the run's prompt.
+ * Brad to read; `file-only` files findings as requests; `file-and-settle` also settles the thread;
+ * `act` adds no filing or settling instructions, for a run whose job is to act directly. The mode
+ * is spelled out at the end of the run's prompt.
  */
-export const AutomationResultMode = Schema.Literals(["review", "file-only", "file-and-settle"]);
+export const AutomationResultMode = Schema.Literals([
+  "review",
+  "file-only",
+  "file-and-settle",
+  "act",
+]);
 export type AutomationResultMode = typeof AutomationResultMode.Type;
 
 /** Start an agent turn from a saved script or an inline prompt. */

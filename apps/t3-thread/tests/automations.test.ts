@@ -2,14 +2,19 @@ import { Command } from "commander";
 import { describe, expect, it } from "vite-plus/test";
 import { parseDays, registerAutomationCommands } from "../src/automations.js";
 
-function harness(scripts: Array<{ id: string; name: string; projectId: string | null }> = []) {
+function harness(
+  scripts: Array<{ id: string; name: string; projectId: string | null }> = [],
+  automations: Array<Record<string, unknown>> = [],
+) {
   const calls: Array<{ method: string; input: Record<string, unknown> }> = [];
   const program = new Command().exitOverride();
   registerAutomationCommands(program, {
     client: async () => ({
       automationRpc: async <T>(method: string, input: Record<string, unknown>) => {
         calls.push({ method, input });
-        return (method === "automationScriptsList" ? { scripts } : {}) as T;
+        if (method === "automationScriptsList") return { scripts } as T;
+        if (method === "automationsList") return { automations } as T;
+        return {} as T;
       },
     }),
     print: () => {},
@@ -21,7 +26,7 @@ function harness(scripts: Array<{ id: string; name: string; projectId: string | 
 }
 
 describe("automation operator commands", () => {
-  it("adds a weekly prompt to an existing thread with a saved timezone", async () => {
+  it("adds a weekly prompt to an existing thread with a saved timezone, defaulting to act", async () => {
     const h = harness();
     await h.run([
       "automation",
@@ -63,12 +68,52 @@ describe("automation operator commands", () => {
             {
               type: "agent",
               prompt: "Summarize",
+              resultMode: "act",
               target: { kind: "existing-thread", threadId: "root" },
             },
           ],
         }),
       },
     ]);
+  });
+
+  it("leaves a new-thread automation with no default result mode", async () => {
+    const h = harness();
+    await h.run([
+      "automation",
+      "add",
+      "--project",
+      "project-1",
+      "--name",
+      "Digest",
+      "--prompt",
+      "Summarize",
+    ]);
+    const [call] = h.calls;
+    expect(call?.input.actions).toEqual([
+      { type: "agent", prompt: "Summarize", target: { kind: "new-thread" } },
+    ]);
+  });
+
+  it("honors an explicit --result-mode over the --thread default", async () => {
+    const h = harness();
+    await h.run([
+      "automation",
+      "add",
+      "--project",
+      "project-1",
+      "--name",
+      "Digest",
+      "--prompt",
+      "Summarize",
+      "--thread",
+      "root",
+      "--result-mode",
+      "review",
+    ]);
+    expect(h.calls[0]?.input).toMatchObject({
+      actions: [{ type: "agent", prompt: "Summarize", resultMode: "review" }],
+    });
   });
 
   it("schedules a saved script on weekdays", async () => {
@@ -138,6 +183,55 @@ describe("automation operator commands", () => {
     expect(parseDays("mon,wed,fri")).toEqual([1, 3, 5]);
     expect(parseDays("fri-mon")).toEqual([0, 1, 5, 6]);
     expect(() => parseDays("funday")).toThrow();
+  });
+
+  it("changes an existing automation's result mode on every action", async () => {
+    const existing = {
+      id: "a1",
+      projectId: "project-1",
+      name: "Digest",
+      enabled: true,
+      triggers: [{ type: "schedule", schedule: { kind: "daily", time: "09:00", timeZone: "UTC" } }],
+      actions: [
+        {
+          type: "agent",
+          prompt: "Summarize",
+          resultMode: "review",
+          target: { kind: "new-thread" },
+        },
+      ],
+      nextRunAt: null,
+      createdAt: "2026-10-01T00:00:00.000Z",
+      updatedAt: "2026-10-01T00:00:00.000Z",
+    };
+    const h = harness([], [existing]);
+    await h.run(["automation", "edit", "a1", "--result-mode", "act"]);
+    expect(h.calls).toEqual([
+      { method: "automationsList", input: {} },
+      {
+        method: "automationsSave",
+        input: expect.objectContaining({
+          id: "a1",
+          projectId: "project-1",
+          name: "Digest",
+          actions: [
+            {
+              type: "agent",
+              prompt: "Summarize",
+              resultMode: "act",
+              target: { kind: "new-thread" },
+            },
+          ],
+        }),
+      },
+    ]);
+  });
+
+  it("rejects editing an automation that does not exist", async () => {
+    const h = harness();
+    await expect(h.run(["automation", "edit", "missing", "--result-mode", "act"])).rejects.toThrow(
+      /No automation/,
+    );
   });
 
   it.each([

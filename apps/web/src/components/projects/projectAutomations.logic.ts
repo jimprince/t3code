@@ -2,6 +2,7 @@ import type {
   Automation,
   AutomationAgentTarget,
   AutomationDefinition,
+  AutomationResultMode,
   AutomationRun,
   AutomationTrigger,
   AutomationSchedule,
@@ -28,6 +29,7 @@ export interface AutomationDraft {
   readonly schedule: AutomationSchedule;
   readonly prompt: string;
   readonly target: AutomationAgentTarget;
+  readonly resultMode?: AutomationResultMode;
 }
 
 /** Null when the rule has more than the panel can edit (several triggers or actions, a script). */
@@ -51,6 +53,7 @@ export function toDraft(automation: Automation): AutomationDraft | null {
     schedule: trigger.schedule,
     prompt: action.prompt,
     target: action.target,
+    ...(action.resultMode ? { resultMode: action.resultMode } : {}),
   };
 }
 
@@ -62,7 +65,14 @@ export function fromDraft(draft: AutomationDraft, projectId: ProjectId): Automat
     enabled: draft.enabled,
     ...(draft.ownerThreadId ? { ownerThreadId: draft.ownerThreadId } : {}),
     triggers: [{ type: "schedule", schedule: draft.schedule }],
-    actions: [{ type: "agent", prompt: draft.prompt, target: draft.target }],
+    actions: [
+      {
+        type: "agent",
+        prompt: draft.prompt,
+        target: draft.target,
+        ...(draft.resultMode ? { resultMode: draft.resultMode } : {}),
+      },
+    ],
   };
 }
 
