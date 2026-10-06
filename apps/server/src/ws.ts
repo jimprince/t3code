@@ -1,5 +1,6 @@
 import { resourceRecoveryHandlers } from "./resourceRecoveryRpc.ts";
 import { makeMetadataHandlers } from "./forkThreads/MetadataRpc.ts";
+import { makeSupervisionDragHandlers } from "./forkThreads/SupervisionDrag.ts";
 import { withWorkerSummaries } from "./forkThreads/WorkerSummaryService.ts";
 import { threadSubscriptionHandlers } from "./threadSubscriptionHandlers.ts";
 import { makeWorkspaceUploadHandlers } from "./workspace/WorkspaceUploadRpc.ts";
@@ -3083,6 +3084,7 @@ const makeWsRpcLayer = (
             { "rpc.aggregate": "workspace" },
           ),
         ...(yield* makeWorkspaceUploadHandlers),
+        ...(yield* makeSupervisionDragHandlers),
         [WS_METHODS.projectsWriteFile]: (input) =>
           observeRpcEffect(
             WS_METHODS.projectsWriteFile,
