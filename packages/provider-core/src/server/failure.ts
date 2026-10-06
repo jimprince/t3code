@@ -35,6 +35,7 @@ const DEFAULT_PROVIDER_FAILURE_MESSAGE = "Provider turn failed.";
 function causeMessage(cause: unknown): string | undefined {
   const seen = new Set<unknown>();
   let message: string | undefined;
+  let antigravity = false;
   for (let depth = 0; depth < 16 && cause != null && !seen.has(cause); depth++) {
     seen.add(cause);
     try {
@@ -43,7 +44,13 @@ function causeMessage(cause: unknown): string | undefined {
         continue;
       }
       if (typeof cause !== "object") break;
+      antigravity ||= (cause as Record<string, unknown>).driver === "antigravity";
       switch ((cause as Record<string, unknown>)._tag) {
+        case "AcpTransportError": {
+          const detail = antigravity ? stringField(cause, "detail")?.trim() : undefined;
+          if (detail) return detail;
+          break;
+        }
         case "ContextHandoffBudgetError":
           return new ContextHandoffBudgetError().message;
         case "ClaudeBackgroundWorkBlocksQueryReplacementError":
@@ -75,7 +82,7 @@ function causeMessage(cause: unknown): string | undefined {
   return message;
 }
 
-function stringField(value: unknown, key: "message" | "code"): string | undefined {
+function stringField(value: unknown, key: "message" | "code" | "detail"): string | undefined {
   if (typeof value !== "object" || value === null) return undefined;
   try {
     const candidate = (value as Record<string, unknown>)[key];
