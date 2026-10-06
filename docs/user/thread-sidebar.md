@@ -152,6 +152,19 @@ On web and desktop, press a thread's **Settle** button and drag up or down to
 settle every thread in that section between it and the one you release on.
 The **Un-settle** and **Wake** buttons work the same way in their sections.
 Press `Escape` while dragging to cancel.
+Agent-created workers settle when a turn completes without pending input or approvals.
+UI-created top-level threads keep their usual settlement rules. Change the project default
+with **Settle completed workers** in **Thread behavior**; a worker can override it at creation.
+The thread's **Auto-settle behavior: Disabled** overrides completion settlement too.
+A follow-up resumes a settled worker automatically.
+
+Settled subthreads archive after seven days by default. **Archive settled subthreads**
+and its days setting can be changed per environment or project in **Thread behavior**.
+Disable the setting to retain them indefinitely. Restoring a settled thread or making
+a later change starts a fresh archive recovery window. Pinned threads, threads with automatic
+settlement disabled, and threads with active descendants never auto-archive. Restore a
+conversation through the existing archive; worktree cleanup may separately reclaim its
+checkout after the recovery window.
 
 By default, environments settle inactive threads after three days and settle
 threads whose pull request merged. A closed pull request can also settle an idle
@@ -230,6 +243,58 @@ thread asks for it.
 Expand a tool call in the conversation to see its full command and output.
 Summaries shorten shell wrappers and can still describe the latest call after it
 finishes; the call's own result shows its status.
+
+### Nest threads under an orchestrator
+
+A thread can live under another thread instead of in the sidebar. Nested threads
+appear in the parent's **Agents** panel alongside its subagents, in the order
+they started, with their status; click one to open it. While a nested thread is
+open, it shows in the sidebar under its parent, and the header breadcrumb names
+the parent; click it to go back. Agents that start worker threads with
+`t3-thread` nest them under their own thread by default.
+
+Settled work folds into a collapsed **Settled** shelf at the bottom of the
+Agents panel: nested threads that are settled, including by automatic
+settlement, and subagents or workflows that have finished. Something that
+finishes while you are watching stays where it is until you next open the
+panel. A `t3-thread` worker settles after a completed turn by default when
+no input or approval is pending. Its parent can send a follow-up to resume it.
+
+To nest a thread yourself, open its menu in the sidebar and choose **Nest
+under…**. To bring one back, choose **Move to sidebar** from its row in the
+Agents panel or from the thread's own menu. **New thread under this one** in a
+thread's menu starts a thread that is nested from the start.
+
+On web and desktop, dragging a sidebar thread reorders it by default. While the
+pointer is over another thread row, move right by one child indent to nest it.
+The highlighted parent and indented marker show a nesting drop; move back left
+to restore the full-width reorder marker. Nesting preserves the dragged thread's
+pin state. Dropping into the top-level **Pinned** or active section moves a nested
+thread back to the sidebar and pins or unpins it to match that section. Nested
+threads can also be reordered among siblings with the same pin state.
+
+Nesting can continue through multiple levels within an environment and can span
+projects. A child keeps its own repository, worktree, branch, and model defaults.
+Cross-project children appear under their parent in the sidebar with their project
+label when its agent list is expanded. Project filters apply to each thread's own project. If the parent is hidden,
+filtered out, archived, or removed, the child appears at top level in its own
+project. Removing the parent's project does not delete children from other projects.
+Pin a nested thread from its sidebar menu to keep it visible under its parent when
+the parent is collapsed and first among its siblings when expanded. It stays out of
+the top-level **Pinned** section; unpin it to restore normal collapse behavior.
+Archiving or settling a parent does not archive or settle its children. An idle
+parent shows **Supervising** while any descendant is working or needs input; its
+separate child-attention marker still identifies questions that need an answer.
+Settled parents keep their settled presentation. An orchestrating agent is expected
+to answer its workers itself and ask you only when it cannot. Nesting is not
+available in the mobile app yet; mobile lists every thread and uses the same
+**Supervising** status for an idle parent with active descendants.
+
+Nested threads in the Agents panel show their latest output, model and effort,
+provider pool, tokens and tools when available, turn duration, last activity and
+workspace. A project badge identifies workers in a different project. Token
+counts labeled `ctx tok` describe occupied context when the provider does not
+report a cumulative processed-token count.
 
 ## Snooze until later
 
