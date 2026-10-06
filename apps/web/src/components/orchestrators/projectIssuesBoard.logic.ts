@@ -14,7 +14,7 @@ export type ProjectIssueLane = TaskStatus;
 
 export interface ProjectIssueLanes {
   readonly lanes: Record<ProjectIssueLane, ProjectIssue[]>;
-  /** Pending issues parked in Backlog; shown folded under Pending. */
+  /** Pending issues set aside for later (Backlog, or the roadmap's Later); folded under Pending. */
   readonly backlog: ProjectIssue[];
 }
 
@@ -43,7 +43,9 @@ export function groupProjectIssues(
         : issue.status === "in-progress"
           ? "active"
           : "pending");
-    if (status === "pending" && issue.status === "backlog") backlog.push(issue);
+    const later =
+      issue.status === "backlog" || issue.labels.some((label) => label.toLowerCase() === "parked");
+    if (status === "pending" && later) backlog.push(issue);
     else lanes[status].push(issue);
   }
   const oldestFirst = (a: ProjectIssue, b: ProjectIssue) => a.updatedAt.localeCompare(b.updatedAt);
