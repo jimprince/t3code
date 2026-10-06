@@ -1,8 +1,10 @@
-import { useMemo } from "react";
+import { useSupervisionForest } from "../../state/forkSupervision";
 import { useNavigate } from "@tanstack/react-router";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import { supervisionForest, supervisionKey } from "@t3tools/client-runtime/state/forkNesting";
-import { useThreadShells, useServerConfigs, useProjects } from "../../state/entities";
+import {
+  supervisionThreadKey,
+} from "@t3tools/client-runtime/state/fork-nesting";
+import { useServerConfigs, useProjects } from "../../state/entities";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
@@ -11,8 +13,7 @@ import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell
 
 /** Organizational workers are distinct from native fork/subagent Lineage. */
 export function SupervisionRows(props: { environmentId: EnvironmentId; threadId: ThreadId }) {
-  const shells = useThreadShells();
-  const forest = useMemo(() => supervisionForest(shells), [shells]);
+  const forest = useSupervisionForest();
   const children = (forest.children.get(`${props.environmentId}:${props.threadId}`) ?? []).toSorted(
     (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
   );
@@ -20,7 +21,7 @@ export function SupervisionRows(props: { environmentId: EnvironmentId; threadId:
   return (
     <ThreadDetailsSection headingId="supervision-heading" title="Supervision">
       {children.map((child) => (
-        <SupervisionWorkerRow key={supervisionKey(child)} child={child} />
+        <SupervisionWorkerRow key={supervisionThreadKey(child)} child={child} />
       ))}
     </ThreadDetailsSection>
   );
@@ -47,7 +48,7 @@ export function SupervisionWorkerRow({ child }: { child: EnvironmentThreadShell 
   return (
     <button
       type="button"
-      key={supervisionKey(child)}
+      key={supervisionThreadKey(child)}
       className="flex w-full flex-col gap-1 px-2 py-1 text-left text-xs"
       onClick={() => {
         void navigate({
