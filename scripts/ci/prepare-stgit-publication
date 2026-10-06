@@ -17,9 +17,16 @@ context="$(scripts/ci/check-stgit-stack --format=json)"
 refs="$("$GIT_BIN" ls-remote --refs "$remote" refs/heads/main refs/stacks/stgit/adopt 'refs/patches/stgit/adopt/*')"
 local_stack="$("$GIT_BIN" rev-parse refs/stacks/stgit/adopt)"
 lease_file="$("$GIT_BIN" rev-parse --git-path stgit-publication-lease.json)"
-bun - "$context" "$refs" "$local_stack" "$remote" "$lease_file" <<'JS'
-const [contextRaw, refsRaw, localStack, remote, path] = process.argv.slice(2);
-const context = JSON.parse(contextRaw);
+# The context outgrows Linux's 128 KiB per-argument limit, so hand it over in files.
+inputs="$(mktemp -d)"
+trap 'rm -rf "$inputs"' EXIT
+printf '%s' "$context" >"$inputs/context.json"
+printf '%s' "$refs" >"$inputs/refs.txt"
+bun - "$inputs/context.json" "$inputs/refs.txt" "$local_stack" "$remote" "$lease_file" <<'JS'
+const [contextPath, refsPath, localStack, remote, path] = process.argv.slice(2);
+const fs = await import('node:fs');
+const context = JSON.parse(fs.readFileSync(contextPath, 'utf8'));
+const refsRaw = fs.readFileSync(refsPath, 'utf8');
 const refs = Object.fromEntries(refsRaw.split('\n').filter(Boolean).map(line => {
   const [oid, ref] = line.split('\t'); return [ref, oid];
 }));
@@ -27,7 +34,6 @@ const main = refs['refs/heads/main'];
 const stack = refs['refs/stacks/stgit/adopt'];
 const patches = Object.fromEntries(Object.entries(refs).filter(([ref]) => ref.startsWith('refs/patches/stgit/adopt/')).sort());
 const value = {remote, main, stack, patches};
-const fs = await import('node:fs');
 const {isDeepStrictEqual} = await import('node:util');
 if (fs.existsSync(path)) {
   if (!isDeepStrictEqual(JSON.parse(fs.readFileSync(path, 'utf8')), value))

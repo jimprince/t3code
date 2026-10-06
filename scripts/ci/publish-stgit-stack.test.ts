@@ -346,6 +346,48 @@ printf '%s\\n' '${JSON.stringify({ head: fixture.head, patches: fixture.patches.
     }
   });
 
+  it("captures leases when the stack context is larger than one process argument", () => {
+    const fixture = seedPublication();
+    try {
+      fixture.repo.git("push", "origin", `${fixture.head}:refs/heads/main`);
+      const context = JSON.stringify({
+        head: fixture.head,
+        patches: fixture.patches.map(([name, oid]) => ({ name, oid })),
+      });
+      // Linux caps one argv string at 128 KiB; a full stack's inventory notes exceed it.
+      fixture.repo.writeFile(
+        "scripts/ci/check-stgit-stack",
+        `#!/usr/bin/env bash
+printf '%s' '${context.slice(0, -1)},"notes":"'
+head -c 200000 /dev/zero | tr '\\0' x
+printf '"}\\n'
+`,
+      );
+      fixture.repo.git("update-index", "--assume-unchanged", "scripts/ci/check-stgit-stack");
+      const result = NodeChildProcess.spawnSync(
+        NodePath.join(repoRoot, "scripts/ci/prepare-stgit-publication"),
+        ["--format=json"],
+        {
+          cwd: fixture.repo.dir,
+          encoding: "utf8",
+          env: { ...process.env, SYNC_GIT_BIN: "/usr/bin/git" },
+        },
+      );
+      assert.strictEqual(result.status, 0, result.stderr);
+      assert.isAbove(result.stdout.length, 200_000);
+      const lease = JSON.parse(
+        NodeFS.readFileSync(
+          NodePath.join(fixture.repo.dir, ".git/stgit-publication-lease.json"),
+          "utf8",
+        ),
+      );
+      assert.strictEqual(lease.main, fixture.head);
+    } finally {
+      fixture.repo.cleanup();
+      NodeFS.rmSync(fixture.remote, { recursive: true, force: true });
+    }
+  });
+
   it("plans obsolete-ref deletion without mutating the remote in check mode", () => {
     const fixture = seedPublication();
     try {

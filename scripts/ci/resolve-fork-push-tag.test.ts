@@ -8,13 +8,19 @@ import { createFixtureRepo, type FixtureRepo } from "./lib/git-fixture.ts";
 
 const script = NodePath.resolve(import.meta.dirname, "resolve-fork-push-tag");
 
-function run(repo: FixtureRepo, stackBase?: string, upstreamUrl = repo.dir, expectedTag = "") {
+function run(
+  repo: FixtureRepo,
+  stackBase?: string,
+  upstreamUrl = repo.dir,
+  expectedTag = "",
+  scriptPath = script,
+) {
   const output = NodePath.join(
     NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-fork-tag-output-")),
     "output",
   );
   const args = [...(stackBase ? ["--stack-base", stackBase] : []), "--upstream-url", upstreamUrl];
-  const result = NodeChildProcess.spawnSync(script, args, {
+  const result = NodeChildProcess.spawnSync(scriptPath, args, {
     cwd: repo.dir,
     encoding: "utf8",
     env: {
@@ -143,6 +149,46 @@ describe("fork-push release tag selection", () => {
       assert.equal(result.values.reason, "already-released");
     } finally {
       repo.cleanup();
+    }
+  });
+
+  it("reads a stack context larger than one process argument", () => {
+    const repo = createFixtureRepo();
+    const scripts = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-fork-tag-scripts-"));
+    try {
+      const base = repo.git("rev-parse", "HEAD");
+      const tag = "v1.2.3-nightly.20260920.2005";
+      repo.git("tag", tag, base);
+      addCommit(repo, "fork repair");
+      for (const name of ["resolve-fork-push-tag", "list-release-tags-at-head"]) {
+        NodeFS.copyFileSync(
+          NodePath.join(NodePath.dirname(script), name),
+          NodePath.join(scripts, name),
+        );
+      }
+      // Linux caps one argv string at 128 KiB; a full stack's inventory notes exceed it.
+      const context = JSON.stringify({ contract: "t3code.stgit-stack-context", version: 1, base });
+      NodeFS.writeFileSync(
+        NodePath.join(scripts, "check-stgit-stack"),
+        `#!/usr/bin/env bash
+printf '%s' '${context.slice(0, -1)},"notes":"'
+head -c 200000 /dev/zero | tr '\\0' x
+printf '"}\\n'
+`,
+        { mode: 0o755 },
+      );
+      const result = run(
+        repo,
+        undefined,
+        repo.dir,
+        tag,
+        NodePath.join(scripts, "resolve-fork-push-tag"),
+      );
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.values.tag, `${tag}-fork.1`);
+    } finally {
+      repo.cleanup();
+      NodeFS.rmSync(scripts, { recursive: true, force: true });
     }
   });
 });

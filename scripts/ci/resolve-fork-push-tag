@@ -45,12 +45,13 @@ fi
 
 if [[ -z "$stack_base" ]]; then
   stack_context="$($script_dir/check-stgit-stack --format=json)"
+  # Read the context on stdin: it outgrows Linux's 128 KiB per-argument limit.
   stack_base="$(node -e '
-    const value = JSON.parse(process.argv[1]);
+    const value = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
     if (value.contract !== "t3code.stgit-stack-context" || value.version !== 1 ||
         typeof value.base !== "string" || !/^[0-9a-f]{40}$/.test(value.base)) process.exit(1);
     process.stdout.write(value.base);
-  ' "$stack_context")"
+  ' <<<"$stack_context")"
 fi
 
 if [[ ! "$stack_base" =~ ^[0-9a-f]{40}$ ]] ||
