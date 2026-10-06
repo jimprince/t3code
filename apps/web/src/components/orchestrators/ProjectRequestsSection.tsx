@@ -1,7 +1,7 @@
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import type { ProjectIssue, ProjectRequestStage } from "@t3tools/contracts";
+import type { EnvironmentId, ProjectIssue, ProjectRequestStage } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { CheckIcon, RotateCcwIcon } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -18,6 +18,7 @@ import { buildThreadRouteParams } from "../../threadRoutes";
 import { Button, InlineButton } from "../ui/button";
 import { Input } from "../ui/input";
 import { LinkifiedText, OptionLinks } from "./LinkifiedText";
+import { DecisionContext } from "./DecisionContext";
 import { projectReturnState } from "./projectNavigation";
 import { formatIssueAge } from "./projectIssuesBoard.logic";
 import { useNextReleaseItems } from "./ProjectRoadmapWidget";
@@ -516,11 +517,13 @@ function clockTime(iso: string): string {
  * review shows the agent's summary; shipped work shows its test step. No meta line.
  */
 function NeedsYouRowBody({
+  environmentId,
   issue,
   request,
   group,
   decision = null,
 }: {
+  readonly environmentId: EnvironmentId;
   readonly issue: ProjectIssue;
   readonly request: ProjectRequest | null;
   readonly group: NeedsYouItem["group"];
@@ -530,10 +533,13 @@ function NeedsYouRowBody({
     return (
       <span className="min-w-0 flex-1">
         <span className="text-sm">{issue.title}</span>
-        {decision.summary ? (
-          <span className="mt-1 block text-sm wrap-anywhere text-foreground/85">
-            <LinkifiedText text={decision.summary} />
-          </span>
+        {decision.detail ? (
+          <DecisionContext
+            environmentId={environmentId}
+            text={decision.detail}
+            summary={decision.summary}
+            issueUrl={issue.url}
+          />
         ) : null}
         {decision.recommendation ? (
           <span className="mt-0.5 block text-xs wrap-anywhere text-foreground/90">
@@ -639,6 +645,7 @@ export function NeedsYouIssueGroups({
                     className={decision ? "flex-col gap-2 py-1.5" : "items-start py-1.5"}
                   >
                     <NeedsYouRowBody
+                      environmentId={summary.root.environmentId}
                       issue={issue}
                       request={request}
                       group={item.group}
