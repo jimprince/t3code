@@ -202,4 +202,27 @@ describe("V2 organizational nesting", () => {
       expect.objectContaining({ threadId: "child" }),
     );
   });
+import { expect, it } from "vite-plus/test";
+import { selectThreadChildren } from "../src/status.js";
+import type { OrchestrationThreadShell } from "../src/types.js";
+const row = (
+  id: string,
+  parentThreadId: string | null,
+  remoteParent?: { environmentId: string; threadId: string },
+) => ({ id, parentThreadId, remoteParent }) as OrchestrationThreadShell;
+it("remote child selection disambiguates colliding parent IDs and follows only local descendants", () => {
+  const rows = [
+    row("local-child", "parent"),
+    row("remote-child", null, { environmentId: "remote", threadId: "parent" }),
+    row("remote-grandchild", "remote-child"),
+  ];
+  expect(selectThreadChildren(rows, "parent", true, "remote").map((t) => t.id)).toEqual([
+    "remote-child",
+    "remote-grandchild",
+  ]);
+  expect(selectThreadChildren(rows, "parent", true).map((t) => t.id)).toEqual(["local-child"]);
+});
+it("cyclic legacy links terminate", () => {
+  const rows = [row("a", "b"), row("b", "a")];
+  expect(selectThreadChildren(rows, "a", true).map((t) => t.id)).toEqual(["b"]);
 });
