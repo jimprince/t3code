@@ -31,7 +31,7 @@ export function OptionLinks({ text }: { readonly text: string }) {
   const links = useMemo(() => textLinks(text), [text]);
   if (links.length === 0) return null;
   return (
-    <span className="flex flex-wrap gap-x-3 pl-2 text-xs text-muted-foreground">
+    <span className="flex flex-wrap gap-x-3 pl-2 text-xs wrap-anywhere text-muted-foreground">
       {links.map((url) => (
         <a key={url} href={url} target="_blank" rel="noreferrer" className={LINK_CLASS}>
           {shortUrl(url)}

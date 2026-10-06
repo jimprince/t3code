@@ -137,7 +137,7 @@ function DecisionAnswer({
                   variant="outline"
                   onClick={() => answer({ kind: "option", option: option.text })}
                 >
-                  <span className="min-w-0 flex-1 text-left">{option.text}</span>
+                  <span className="min-w-0 flex-1 text-left wrap-anywhere">{option.text}</span>
                   {option.recommended ? (
                     <span className="shrink-0 text-xs font-normal text-muted-foreground">
                       Recommended
@@ -255,7 +255,7 @@ export function ProjectDecisionsWidget({ summary }: { readonly summary: Orchestr
               <span>
                 <span className="block text-sm">{issue.title}</span>
                 {decision.context ? (
-                  <span className="mt-1 block text-sm whitespace-pre-line text-foreground/85">
+                  <span className="mt-1 block text-sm whitespace-pre-line wrap-anywhere text-foreground/85">
                     <LinkifiedText text={decision.context} />
                   </span>
                 ) : null}

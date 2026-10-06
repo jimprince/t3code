@@ -490,12 +490,12 @@ function NeedsYouRowBody({
       <span className="min-w-0 flex-1">
         <span className="text-sm">{issue.title}</span>
         {decision.summary ? (
-          <span className="mt-1 block text-sm text-foreground/85">
+          <span className="mt-1 block text-sm wrap-anywhere text-foreground/85">
             <LinkifiedText text={decision.summary} />
           </span>
         ) : null}
         {decision.recommendation ? (
-          <span className="mt-0.5 block text-xs text-foreground/90">
+          <span className="mt-0.5 block text-xs wrap-anywhere text-foreground/90">
             Recommended: <LinkifiedText text={decision.recommendation} />
           </span>
         ) : null}
@@ -673,7 +673,7 @@ function DecisionActions({
               variant="outline"
               onClick={() => onDecide("option", { option: `${option.label}: ${option.text}` })}
             >
-              <span className="min-w-0 flex-1 text-left">
+              <span className="min-w-0 flex-1 text-left wrap-anywhere">
                 {option.label}: {option.text}
               </span>
             </Button>
