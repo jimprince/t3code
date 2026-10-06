@@ -76,7 +76,7 @@ import { PROJECT_TABS, resolveProjectTab, type ProjectTab } from "./projectTabs.
 import type { ProjectWidgetId } from "./projectWidgets.logic";
 import { projectReturnState } from "./projectNavigation";
 
-/** Dashboard | Issues | Roadmap, with the tab's own actions (Customize) at the right. */
+/** Dashboard | Roadmap | Tasks, with the tab's own actions (Customize) at the right. */
 function ProjectTabBar({
   tab,
   onSelect,
