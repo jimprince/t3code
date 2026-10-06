@@ -144,6 +144,77 @@ async function withAgent(agentName: string): Promise<{
   };
 }
 
+/** Resolves parent ownership without writing to the parent's server. */
+async function resolveParentLink(
+  state: Awaited<ReturnType<typeof loadState>>,
+  reference: string,
+  childEnvironment: string,
+): Promise<{
+  parentThreadId: string | null;
+  remoteParent?: { environmentId: string; threadId: string };
+  parentEnvironmentName?: string;
+  identity: ThreadIdentity;
+}> {
+  const callerMetadata =
+    reference === resolveCallerThreadId() ? resolveCallerEnvironmentMetadata() : null;
+  const callerEnvironment = callerMetadata
+    ? state.environments.find(
+        (environment) => environment.environmentId === callerMetadata.environmentId,
+      )
+    : null;
+  if (callerMetadata && !callerEnvironment)
+    throw new Error(
+      "The calling environment is not paired; pair its stable descriptor before nesting.",
+    );
+  if (
+    !callerMetadata &&
+    !state.agents.some((agent) => agent.name === reference) &&
+    new Set(
+      state.agents
+        .filter((agent) => agent.threadId === reference)
+        .map((agent) => agent.environment),
+    ).size > 1
+  ) {
+    throw new Error("Parent UUID belongs to multiple environments; use its saved agent name.");
+  }
+  const caller = callerEnvironment
+    ? {
+        threadId: reference,
+        name:
+          state.agents.find(
+            (agent) => agent.threadId === reference && agent.environment === callerEnvironment.name,
+          )?.name ?? null,
+        environment: callerEnvironment.name,
+      }
+    : reference === resolveCallerThreadId()
+      ? resolveCallerEndpointFromLocalContext(state, reference)
+      : null;
+  const target =
+    caller ??
+    (await resolveAgentTarget(state, reference, {
+      preferredEnvironment: childEnvironment,
+      requireUniqueRemoteMatch: true,
+      clientFactory: (name) => new RemoteEnvironmentClient(requireEnvironment(state, name)),
+    }));
+  const parentEnvironment = requireEnvironment(state, target.environment);
+  const savedParent = state.agents.find(
+    (agent) => agent.threadId === target.threadId && agent.environment === target.environment,
+  );
+  const identity = {
+    threadId: target.threadId,
+    name: savedParent?.name ?? null,
+    environment: target.environment,
+    title: savedParent?.title,
+  };
+  if (target.environment === childEnvironment) return { parentThreadId: target.threadId, identity };
+  return {
+    parentThreadId: null,
+    remoteParent: { environmentId: parentEnvironment.environmentId, threadId: target.threadId },
+    parentEnvironmentName: target.environment,
+    identity,
+  };
+}
+
 function toSubscriptionEndpoint(agent: SavedAgent): SubscriptionEndpoint {
   return {
     threadId: agent.threadId,
@@ -276,6 +347,8 @@ const AGENT_COMMAND_ALIASES = new Set([
   "nest",
   "unnest",
   "rename",
+  "nest",
+  "unnest",
   "attach",
   "list",
   "archive",
@@ -824,7 +897,8 @@ agent
     // `options.preamble` is false only when `--no-preamble` was passed (Commander convention).
     const initialMessage = options.message;
     const created = await client.createAgentThread({
-      parentThreadId: options.topLevel ? null : options.parent ? resolveParentThreadId(state, options.parent, environment.name) : (resolveCallerThreadId(process.env) ?? null),
+      parentThreadId: parentLink?.parentThreadId ?? null,
+      remoteParent: parentLink?.remoteParent,
       pin: options.pin === true,
       settleOnComplete: options.settleOnComplete,
       projectId: options.project,
