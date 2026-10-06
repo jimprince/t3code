@@ -58,6 +58,9 @@ const clientSettings: ClientSettings = {
   showSkillsInSlashMenu: false,
   persistComposerContextStrip: true,
   providerModelPreferences: {},
+  sidebarAutoSettleAfterDays: 3,
+  sidebarAutoSettleOnMerge: true,
+  sidebarHiddenProjectKeys: ["environment-1:/tmp/project-b"],
   sidebarProjectGroupingMode: "repository_path",
   sidebarProjectGroupingOverrides: {
     "environment-1:/tmp/project-a": "separate",
