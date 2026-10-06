@@ -10,6 +10,7 @@
     "./fork/thread-recovery": {
       "types": "./src/fork/threadRecovery.ts",
       "default": "./src/fork/threadRecovery.ts"
+    },
     "./child-attention": {
       "types": "./src/childAttention.ts",
       "default": "./src/childAttention.ts"
