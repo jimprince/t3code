@@ -97,6 +97,10 @@ export const make = (deps: {
           reference.number,
           milestoneId,
         ).pipe(Effect.mapError((error) => fail(error.detail)));
+        // Planning an idea into a version takes it off the shelf.
+        if (milestoneId !== null) {
+          yield* deps.ledger.unpark(target, reference.number).pipe(Effect.ignore);
+        }
         deps.projectIssues.invalidate(target);
         return yield* get(input);
       });

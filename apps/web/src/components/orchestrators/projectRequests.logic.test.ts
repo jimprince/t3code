@@ -5,6 +5,8 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   deriveProjectRequests,
   deriveRelease,
+  latestProgressLine,
+  countParked,
   requestKind,
   requestsByWorker,
 } from "./projectRequests.logic";
@@ -209,5 +211,65 @@ describe("release stages", () => {
     const byWorker = requestsByWorker(items);
     expect(byWorker.get("worker")?.map((item) => item.issue.number)).toEqual([1]);
     expect(byWorker.has("root")).toBe(false);
+  });
+});
+
+describe("latestProgressLine", () => {
+  it("shows the first line without its prefix or markdown", () => {
+    expect(latestProgressLine("Progress: **blocked** on the jaw pull force\nmore")).toBe(
+      "blocked on the jaw pull force",
+    );
+    expect(latestProgressLine("<!-- marker -->\nTest: open the Blocked list")).toBe(
+      "open the Blocked list",
+    );
+    expect(latestProgressLine(null)).toBeNull();
+  });
+});
+
+describe("thread replied", () => {
+  const replied = thread({
+    latestRun: { status: "completed", completedAt: "2026-10-04T11:00:00.000Z" },
+  });
+
+  it("ignores replies once a request is in progress, and the orchestrator's replies to non-questions", () => {
+    const items = deriveProjectRequests(
+      [
+        request(1, { stage: "in-progress", labels: ["ask", "ask:change"] }),
+        request(2, {
+          labels: ["ask", "ask:change"],
+          requestSource: {
+            threadId: "root" as never,
+            rootThreadId: "root" as never,
+            messageId: "m",
+          },
+        }),
+        request(3, {
+          requestSource: {
+            threadId: "root" as never,
+            rootThreadId: "root" as never,
+            messageId: "m",
+          },
+        }),
+      ],
+      [replied, { ...replied, id: "root" } as never],
+      tree,
+      NOW,
+      "root",
+    );
+    expect(items.map((item) => [item.issue.number, item.forYou])).toEqual([
+      [1, null],
+      [2, null],
+      [3, "answers"],
+    ]);
+  });
+});
+
+describe("saved for later", () => {
+  it("keeps parked ideas off the request list until they are started", () => {
+    const parked = request(1, { labels: ["ask", "ask:change", "parked"] });
+    const started = request(2, { labels: ["ask", "ask:change", "parked"], stage: "in-progress" });
+    const items = deriveProjectRequests([parked, started], [thread()], tree, NOW, "root");
+    expect(items.map((item) => item.issue.number)).toEqual([2]);
+    expect(countParked([parked, started], "root")).toBe(1);
   });
 });
