@@ -21,7 +21,6 @@ import { isCheckpointRestoreIsolated } from "./CheckpointRestoreSafety.ts";
 import * as CheckpointService from "./CheckpointService.ts";
 import * as CheckpointRollbackService from "./CheckpointRollbackService.ts";
 import * as ThreadCommandExecutor from "./ThreadCommandExecutor.ts";
-import * as KeyedLock from "@t3tools/shared/KeyedLock";
 import * as EventSink from "./EventSink.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProjectionStore from "./ProjectionStore.ts";
@@ -359,14 +358,6 @@ it.effect.each([
   const scopeId = CheckpointScopeId.make("rewind-scope");
   const calls: string[] = [];
   let lockedThreads = Effect.succeed<ReadonlyArray<ThreadId>>([]);
-  const layerThreadCommands = Layer.effect(
-    ThreadCommandExecutor.ThreadCommandExecutor,
-    Effect.tap(KeyedLock.make<ThreadId>(), (lock) =>
-      Effect.sync(() => {
-        lockedThreads = lock.activeKeys;
-      }),
-    ),
-  );
   const providerThread = {
     id: providerThreadId,
     providerSessionId,
@@ -405,7 +396,6 @@ it.effect.each([
   const layerTest = layerCheckpointRollbackService.pipe(
     Layer.provide(
       Layer.mergeAll(
-        layerThreadCommands,
         Layer.mock(CheckpointService.CheckpointServiceV2)({
           restore: () =>
             Effect.sync(() => {
@@ -469,8 +459,10 @@ it.effect.each([
         Layer.mock(RuntimePolicy.RuntimePolicyV2)({ resolve: () => Effect.succeed({} as never) }),
       ),
     ),
+    Layer.provideMerge(ThreadCommandExecutor.layer),
   );
   return Effect.gen(function* () {
+    lockedThreads = (yield* ThreadCommandExecutor.ThreadCommandExecutor).activeKeys;
     const service = yield* CheckpointRollbackService.CheckpointRollbackServiceV2;
     if (restoreFiles && shared !== "none") {
       const error = yield* Effect.flip(
