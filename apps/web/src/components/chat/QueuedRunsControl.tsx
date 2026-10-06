@@ -1,3 +1,4 @@
+import { promoteQueuedRunOnce } from "../../queuedRunPromotion";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { deriveThreadQueueWorkflowState } from "@t3tools/client-runtime/state/thread-workflows";
 import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
@@ -189,20 +190,19 @@ export function QueuedRunsControl({
   };
 
   const steerInFlightRef = useRef(false);
-  const steer = async (queuedRunId: RunId) => {
-    if (activeRun === null || !workflow?.canPromoteToSteer || steerInFlightRef.current) return;
-    steerInFlightRef.current = true;
-    setBusyRunId(queuedRunId);
-    try {
-      await promote({
-        environmentId: props.environmentId,
-        input: { threadId: props.threadId, queuedRunId, targetRunId: activeRun.id },
-      });
-    } finally {
-      steerInFlightRef.current = false;
-      setBusyRunId(null);
-    }
-  };
+  const steer = (queuedRunId: RunId) =>
+    promoteQueuedRunOnce({
+      queuedRunId,
+      targetRunId: activeRun?.id ?? null,
+      canPromote: workflow?.canPromoteToSteer === true,
+      inFlight: steerInFlightRef,
+      busy: setBusyRunId,
+      promote: (input) =>
+        promote({
+          environmentId: props.environmentId,
+          input: { threadId: props.threadId, ...input },
+        }),
+    });
 
   useImperativeHandle(ref, () => ({
     steerNext(repeat) {
