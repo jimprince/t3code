@@ -1,0 +1,4 @@
+id = "project-issues-board"
+category = "feature"
+functionality = "projects"
+text = "See every Gitea issue across a project's repositories on its project page, in the same Needs your review, In progress, Pending and Done lanes as the Agent Status Board."
