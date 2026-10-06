@@ -1,4 +1,23 @@
 import {
+  Automation,
+  AutomationDefinition,
+  AutomationError,
+  AutomationIdInput,
+  AutomationRun,
+  AutomationRunInput,
+  AutomationRunsInput,
+  AutomationRunsResult,
+  AutomationScript,
+  AutomationScriptDefinition,
+  AutomationScriptIdInput,
+  AutomationScriptRunInput,
+  AutomationScriptsListInput,
+  AutomationScriptsListResult,
+  AutomationSetEnabledInput,
+  AutomationsListInput,
+  AutomationsListResult,
+} from "@t3tools/contracts/automations";
+import {
   ThreadIssueReferenceInput,
   ThreadIssueLinkResult,
   ThreadIssueUnlinkResult,
@@ -153,7 +172,70 @@ const namedAgentRpcs = [
     error: Schema.Union([NamedAgentError, EnvironmentAuthorizationError]),
   }),
 ];
+// Scripts and automation rules (apps/server/src/automations).
+const automationError = Schema.Union([AutomationError, EnvironmentAuthorizationError]);
+const WsAutomationsListRpc = Rpc.make("automations.list", {
+  payload: AutomationsListInput,
+  success: AutomationsListResult,
+  error: automationError,
+});
+const WsAutomationsSaveRpc = Rpc.make("automations.save", {
+  payload: AutomationDefinition,
+  success: Automation,
+  error: automationError,
+});
+const WsAutomationsRemoveRpc = Rpc.make("automations.remove", {
+  payload: AutomationIdInput,
+  success: Schema.Void,
+  error: automationError,
+});
+const WsAutomationsSetEnabledRpc = Rpc.make("automations.setEnabled", {
+  payload: AutomationSetEnabledInput,
+  success: Automation,
+  error: automationError,
+});
+const WsAutomationsRunRpc = Rpc.make("automations.run", {
+  payload: AutomationRunInput,
+  success: AutomationRun,
+  error: automationError,
+});
+const WsAutomationsRunsRpc = Rpc.make("automations.runs", {
+  payload: AutomationRunsInput,
+  success: AutomationRunsResult,
+  error: automationError,
+});
+const WsAutomationScriptsListRpc = Rpc.make("automationScripts.list", {
+  payload: AutomationScriptsListInput,
+  success: AutomationScriptsListResult,
+  error: automationError,
+});
+const WsAutomationScriptsSaveRpc = Rpc.make("automationScripts.save", {
+  payload: AutomationScriptDefinition,
+  success: AutomationScript,
+  error: automationError,
+});
+const WsAutomationScriptsRemoveRpc = Rpc.make("automationScripts.remove", {
+  payload: AutomationScriptIdInput,
+  success: Schema.Void,
+  error: automationError,
+});
+const WsAutomationScriptsRunRpc = Rpc.make("automationScripts.run", {
+  payload: AutomationScriptRunInput,
+  success: AutomationRun,
+  error: automationError,
+});
+
 export const WsRpcGroup = RpcGroup.make(
+  WsAutomationsListRpc,
+  WsAutomationsSaveRpc,
+  WsAutomationsRemoveRpc,
+  WsAutomationsSetEnabledRpc,
+  WsAutomationsRunRpc,
+  WsAutomationsRunsRpc,
+  WsAutomationScriptsListRpc,
+  WsAutomationScriptsSaveRpc,
+  WsAutomationScriptsRemoveRpc,
+  WsAutomationScriptsRunRpc,
   ...namedAgentRpcs,
   ...NestingRpcs,
   Rpc.make("threadIssues.link", {
