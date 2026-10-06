@@ -1,3 +1,4 @@
+import { useMobileBackgroundFeed } from "./backgroundFeed";
 import { ThreadContextDivider } from "./thread-context-divider";
 import { ThreadHandoffRow } from "./thread-handoff-row";
 import {
@@ -2614,11 +2615,16 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     reportHeaderMaterialVisibility(false);
   }, [feedThreadKey, reportHeaderMaterialVisibility]);
 
+  const background = useMobileBackgroundFeed({
+    feed: props.feed,
+    rootKey: `${props.environmentId}:${props.threadId}`,
+    liveRunId: unsettledTurnId,
+  });
   const presentedFeed = useMemo(
     () =>
       appendPendingThreadMessages(
         deriveThreadFeedPresentation(
-          props.feed,
+          background.feed,
           props.latestRun,
           expandedTurnIds,
           new Set(
@@ -2638,6 +2644,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       expandedWorkGroups,
       props.activeWorkStartedAt,
       props.runlessWorkActive,
+      background.feed,
       props.feed,
       props.latestRun,
     ],
@@ -3136,6 +3143,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
                 {setupAnchorIndex < 0 && props.worktreeSetup ? (
                   <WorktreeSetupCard key={props.threadId} {...props.worktreeSetup} />
                 ) : null}
+                {background.control}
                 {props.historyControls ? (
                   <ThreadFeedLoadEarlierControl {...props.historyControls} />
                 ) : null}
