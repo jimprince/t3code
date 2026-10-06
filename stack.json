@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "e4c70cd6a46ad288a619173bee3a587840e8e7e2",
-  "head": "22a0f8019c16513d3c98e2002724f8fa7360a5b7",
+  "prev": "c486e7ee01ca207568ffc4fba2d3147bc78a0685",
+  "head": "904ee7ed5d51a2ee91c42ff9a8b8d5ec4115fc56",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -24,7 +24,9 @@
     "fork-mobile-delivery",
     "fork-gitea-pr-browser",
     "fork-auth-session-refresh",
-    "fork-inline-3d-objects",
+    "fork-inline-3d-objects"
+  ],
+  "unapplied": [
     "fork-orcaslicer-handoff",
     "fork-3mf-preview",
     "fork-step-preview",
@@ -113,7 +115,6 @@
     "fork-decision-context-media",
     "fork-subprojects-server"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
