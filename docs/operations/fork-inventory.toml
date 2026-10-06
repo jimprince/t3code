@@ -1476,3 +1476,18 @@ depends_on = []
 roles = []
 
 # v2-port-2689-m2: latest terminal fallback, native ready checkpoint path, durable conversation-only baseline without filesystem restore.
+
+[[patch]]
+name = "fork-agent-thread-ordering"
+subject = "feat(threads): let agents control sidebar order"
+class = "product"
+purpose = "Share persisted pinned and active sibling order between agents and every client, with row-menu movement and an explicit return to automatic placement."
+retire_when = "Upstream exposes server-owned thread order to automation and offers equivalent move and reset controls on every client."
+depends_on = ["fork-worker-operations"]
+roles = []
+note = "The existing pinOrderKey and activeOrderKey remain the only stored order state. fork.threads.order.reset clears the current section key with the native nullable reorder command and receipt, preserving activity timestamps. Legacy sidebar event migration 5 remains registered. Pinned rows sort manually first and new pins land at the top. Active rows remain recency-first until explicitly moved, then join the manual run. Nested rows use the same rule within their direct sibling bucket."
+
+[[patch.decision]]
+id = "v2-port-2689-m2"
+decision = "reconcile-smaller"
+note = "V2 supervision metadata is separate from native execution lineage; retained behavior and import coverage are recorded in the nesting lane report."
