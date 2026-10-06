@@ -2,6 +2,11 @@ import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestr
 import {
   decisionAnswerInput,
   decisionSendStrip,
+  keptDecisionAnswers,
+  sentDelivery,
+  type DecisionAnswerInput,
+  type DecisionAnswerRecord,
+  type DecisionDelivery,
   type DecisionPick,
 } from "@t3tools/client-runtime/decision-answer";
 import type { ProjectIssue } from "@t3tools/contracts";
@@ -15,41 +20,46 @@ import { formatIssueAge } from "./projectIssuesBoard.logic";
 import { issueKey } from "./projectRequests.logic";
 import { useDecide, useProjectRequests, useUndoableActions } from "./ProjectRequestsSection";
 
-/** How long "Sent" stays on a decision before its row leaves. */
-const SENT_LINGER_MS = 1500;
-
-type SendPhase = "held" | "sending" | "sent";
-
 const pickText = (pick: DecisionPick) => (pick.kind === "option" ? pick.option : pick.text);
 
 const linkButton = "text-xs text-muted-foreground underline-offset-2 hover:underline";
 
+/** An answered card: what was picked and where the answer is, until the card leaves. */
+interface AnsweredState {
+  readonly answered: string;
+  readonly state: "held" | DecisionDelivery;
+}
+
 /**
- * One decision's answer controls. Options send on click, then the row shows a strip
- * (held with Undo, sending, Sent). A note can be added before picking or, until the
- * hold ends, after: it is read when the answer is sent.
+ * One decision's answer controls. Options send on click; from then on the row shows
+ * the answer with its status (held with Undo, sending, sent, or failed with Retry)
+ * and never the options again unless the answer is dropped. A note can be added
+ * before picking or, until the hold ends, after: it is read when the answer is sent.
  */
 function DecisionAnswer({
   decision,
-  phase,
+  answered,
   onAnswer,
   onUndo,
+  onRetry,
+  onDrop,
 }: {
   readonly decision: NonNullable<ProjectIssue["decision"]>;
-  readonly phase: SendPhase | null;
+  readonly answered: AnsweredState | null;
   readonly onAnswer: (pick: DecisionPick, readNote: () => string) => void;
   readonly onUndo: () => void;
+  readonly onRetry: () => void;
+  /** Gives up on a failed answer and shows the options again. */
+  readonly onDrop: () => void;
 }) {
   const [note, setNote] = useState("");
   const [noteOpen, setNoteOpen] = useState(false);
   const [text, setText] = useState("");
   const [otherOpen, setOtherOpen] = useState(false);
-  const [picked, setPicked] = useState("");
   const noteRef = useRef("");
   const open = decision.options.length === 0;
   const answer = (pick: DecisionPick) => {
     if (!decisionAnswerInput(pick, "")) return;
-    setPicked(pickText(pick).trim());
     onAnswer(pick, () => noteRef.current);
   };
   const changeNote = (value: string) => {
@@ -72,12 +82,12 @@ function DecisionAnswer({
       Add note
     </button>
   );
-  if (phase) {
-    const strip = decisionSendStrip(phase, decision.waiting);
+  if (answered) {
+    const strip = decisionSendStrip(answered.state, decision.waiting);
     return (
       <span className="flex w-60 shrink-0 flex-col gap-1">
         <span className="flex items-center gap-2 text-xs">
-          <span className="min-w-0 flex-1 truncate text-foreground">{strip.text}</span>
+          <span className="min-w-0 flex-1 truncate text-foreground">{answered.answered}</span>
           {strip.undoable ? (
             <Button size="xs" variant="ghost-muted" onClick={onUndo}>
               <RotateCcwIcon />
@@ -85,8 +95,24 @@ function DecisionAnswer({
             </Button>
           ) : null}
         </span>
-        <span className="line-clamp-1 text-xs text-muted-foreground">{picked}</span>
-        {phase === "held" ? (
+        <span
+          role={strip.retryable ? "alert" : "status"}
+          className={`text-xs ${strip.retryable ? "text-destructive" : "text-muted-foreground"}`}
+        >
+          {strip.text}
+        </span>
+        {strip.retryable ? (
+          <span className="flex gap-1">
+            <Button size="xs" variant="outline" onClick={onRetry}>
+              <RotateCcwIcon />
+              Retry
+            </Button>
+            <Button size="xs" variant="ghost-muted" onClick={onDrop}>
+              Choose again
+            </Button>
+          </span>
+        ) : null}
+        {answered.state === "held" ? (
           <>
             {noteField}
             {noteLink}
@@ -182,54 +208,74 @@ function DecisionAnswer({
 
 /**
  * Decisions waiting on Brad: open `needs-brad` issues in the fixed decision format.
- * Picking an option (or Other...) holds the answer for a few seconds with Undo while
- * the row shows where it is going, then comments it on the issue and sends it to the
- * waiting thread; the row reads Sent before it leaves.
+ * Picking an option (or Other...) holds the answer for a few seconds with Undo, then
+ * comments it on the issue and sends it to the waiting thread. The row keeps showing
+ * the answer until a list read after it was sent no longer has the issue; a failure
+ * stays on the row with the server's reason and Retry.
  */
 export function ProjectDecisionsWidget({ summary }: { readonly summary: OrchestratorSummary }) {
   const { query, now } = useProjectRequests(summary);
   const actions = useUndoableActions();
   const decide = useDecide(summary, query.refresh);
   const decisions = useMemo(() => deriveDecisions(query.data?.issues ?? []), [query.data]);
-  const [flight, setFlight] = useState<
-    ReadonlyMap<string, { readonly phase: "sending" | "sent"; readonly issue: ProjectIssue }>
-  >(new Map());
-  const setPhase = (
-    key: string,
-    entry: { phase: "sending" | "sent"; issue: ProjectIssue } | null,
-  ) =>
-    setFlight((current) => {
+  const live = useMemo(() => new Set(decisions.map(issueKey)), [decisions]);
+  const [answers, setAnswers] = useState<ReadonlyMap<string, DecisionAnswerRecord<ProjectIssue>>>(
+    new Map(),
+  );
+  // Answers whose card has left are forgotten on each new list read, so a question
+  // asked again shows its options.
+  const [prunedAt, setPrunedAt] = useState(now);
+  if (prunedAt !== now) {
+    setPrunedAt(now);
+    setAnswers((current) => keptDecisionAnswers(current, live, now));
+  }
+  const kept = keptDecisionAnswers(answers, live, now);
+  const record = (key: string, entry: DecisionAnswerRecord<ProjectIssue> | null) =>
+    setAnswers((current) => {
       const next = new Map(current);
       if (entry) next.set(key, entry);
       else next.delete(key);
       return next;
     });
-  const heldKeys = new Set(actions.queued.map((entry) => entry.key));
-  const live = new Set(decisions.map(issueKey));
+  const send = async (key: string, entry: Omit<DecisionAnswerRecord<ProjectIssue>, "delivery">) => {
+    record(key, { ...entry, delivery: { phase: "sending" } });
+    const { input } = entry;
+    const outcome = await decide(entry.issue, input.decision, {
+      ...(input.option ? { option: input.option } : {}),
+      ...(input.answer ? { answer: input.answer } : {}),
+      ...(input.reason ? { reason: input.reason } : {}),
+    });
+    record(key, {
+      ...entry,
+      delivery: outcome.sent
+        ? sentDelivery(outcome.notified)
+        : { phase: "failed", error: outcome.error },
+    });
+  };
+  const held = new Map(actions.queued.map((entry) => [entry.key, entry.label]));
   const shown = [
     ...decisions,
-    ...[...flight].filter(([key]) => !live.has(key)).map(([, entry]) => entry.issue),
+    ...[...kept].filter(([key]) => !live.has(key)).map(([, entry]) => entry.issue),
   ].toSorted((a, b) => a.createdAt.localeCompare(b.createdAt));
-  const phaseOf = (key: string): SendPhase | null =>
-    heldKeys.has(key) ? "held" : (flight.get(key)?.phase ?? null);
-  const answer = (issue: ProjectIssue, key: string, pick: DecisionPick, readNote: () => string) =>
-    actions.run(key, `Answered: ${pickText(pick)}`, async () => {
-      const input = decisionAnswerInput(pick, readNote());
+  const answeredOf = (key: string): AnsweredState | null => {
+    const label = held.get(key);
+    if (label) return { answered: label, state: "held" };
+    const entry = kept.get(key);
+    return entry ? { answered: entry.answered, state: entry.delivery } : null;
+  };
+  const answer = (issue: ProjectIssue, key: string, pick: DecisionPick, readNote: () => string) => {
+    const answered = `Answered: ${pickText(pick).trim()}`;
+    actions.run(key, answered, async () => {
+      const input: DecisionAnswerInput | null = decisionAnswerInput(pick, readNote());
       if (!input) return false;
-      setPhase(key, { phase: "sending", issue });
-      const sent = await decide(issue, input.decision, {
-        ...(input.option ? { option: input.option } : {}),
-        ...(input.answer ? { answer: input.answer } : {}),
-        ...(input.reason ? { reason: input.reason } : {}),
-      });
-      if (!sent) {
-        setPhase(key, null);
-        return false;
-      }
-      setPhase(key, { phase: "sent", issue });
-      setTimeout(() => setPhase(key, null), SENT_LINGER_MS);
+      await send(key, { issue, answered, input });
       return true;
     });
+  };
+  const retry = (key: string) => {
+    const entry = kept.get(key);
+    if (entry) void send(key, entry);
+  };
   return (
     <section className="border-t border-border pt-4 first:border-t-0 first:pt-0">
       <h2 className="mb-2 flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
@@ -266,9 +312,11 @@ export function ProjectDecisionsWidget({ summary }: { readonly summary: Orchestr
                 </span>
                 <DecisionAnswer
                   decision={decision}
-                  phase={phaseOf(key)}
+                  answered={answeredOf(key)}
                   onAnswer={(pick, readNote) => answer(issue, key, pick, readNote)}
                   onUndo={() => actions.undo(key)}
+                  onRetry={() => retry(key)}
+                  onDrop={() => record(key, null)}
                 />
               </li>
             );
