@@ -9,7 +9,10 @@ import type { EnvironmentThreadShell } from "./models.ts";
 import { supervisionForest } from "./forkNesting.ts";
 import { createEnvironmentRpcQueryAtomFamily, followStreamInEnvironment } from "./runtime.ts";
 
-export function supervisionMetadataReady<A, E>(connected: boolean, result: AsyncResult.AsyncResult<A, E>) {
+export function supervisionMetadataReady<A, E>(
+  connected: boolean,
+  result: AsyncResult.AsyncResult<A, E>,
+) {
   return connected && AsyncResult.isSuccess(result) && !result.waiting;
 }
 
@@ -26,19 +29,38 @@ export function createSupervisionAtoms<R, ER>(
     tag: "fork.threads.metadata.list",
     refreshTrigger: ({ environmentId }) => hostShells(environmentId),
   });
-  const connected = Atom.family((environmentId: EnvironmentId) => runtime.atom(
-    followStreamInEnvironment(environmentId, Stream.unwrap(EnvironmentSupervisor.EnvironmentSupervisor.pipe(
-      Effect.map(supervisor => SubscriptionRef.changes(supervisor.state).pipe(Stream.map(state => state.phase === "connected"))),
-    ))),
-  ));
-  const readyHosts = Atom.make(get => new Set([...new Set(get(shells).map(thread => thread.environmentId))].filter(environmentId => {
-    const state = get(connected(environmentId));
-    const result = get(query({environmentId, input: {}}));
-    return supervisionMetadataReady(AsyncResult.isSuccess(state) && state.value, result);
-  })));
-  const joinedShells = Atom.make(get => {
+  const connected = Atom.family((environmentId: EnvironmentId) =>
+    runtime.atom(
+      followStreamInEnvironment(
+        environmentId,
+        Stream.unwrap(
+          EnvironmentSupervisor.EnvironmentSupervisor.pipe(
+            Effect.map((supervisor) =>
+              SubscriptionRef.changes(supervisor.state).pipe(
+                Stream.map((state) => state.phase === "connected"),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  const readyHosts = Atom.make(
+    (get) =>
+      new Set(
+        [...new Set(get(shells).map((thread) => thread.environmentId))].filter((environmentId) => {
+          const state = get(connected(environmentId));
+          const result = get(query({ environmentId, input: {} }));
+          return supervisionMetadataReady(AsyncResult.isSuccess(state) && state.value, result);
+        }),
+      ),
+  );
+  const joinedShells = Atom.make((get) => {
     const ready = get(readyHosts);
-    return get(shells).map(thread => ({...thread, forkMetadataAvailable: ready.has(thread.environmentId)}));
+    return get(shells).map((thread) => ({
+      ...thread,
+      forkMetadataAvailable: ready.has(thread.environmentId),
+    }));
   });
   const metadata = Atom.make((get) => {
     const environments = new Set(get(shells).map((thread) => thread.environmentId));

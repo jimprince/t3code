@@ -75,13 +75,37 @@ it("scopes colliding IDs, restores remote nesting after reconnect and rejects cr
 
 it("cuts cached unavailable parents and keeps reachable descendants", () => {
   const threads = [
-    { id: ThreadId.make("parent"), environmentId: "offline", archivedAt: null, forkMetadataAvailable: false },
-    { id: ThreadId.make("child"), environmentId: "online", archivedAt: null, forkMetadataAvailable: true },
-    { id: ThreadId.make("grandchild"), environmentId: "online", archivedAt: null, forkMetadataAvailable: true },
+    {
+      id: ThreadId.make("parent"),
+      environmentId: "offline",
+      archivedAt: null,
+      forkMetadataAvailable: false,
+    },
+    {
+      id: ThreadId.make("child"),
+      environmentId: "online",
+      archivedAt: null,
+      forkMetadataAvailable: true,
+    },
+    {
+      id: ThreadId.make("grandchild"),
+      environmentId: "online",
+      archivedAt: null,
+      forkMetadataAvailable: true,
+    },
   ];
   const parents = connectedSupervisionParents(threads, [
-    { threadId: ThreadId.make("child"), environmentId: "online", parentThreadId: null, remoteParent: { environmentId: "offline", threadId: ThreadId.make("parent") } },
-    { threadId: ThreadId.make("grandchild"), environmentId: "online", parentThreadId: ThreadId.make("child") },
+    {
+      threadId: ThreadId.make("child"),
+      environmentId: "online",
+      parentThreadId: null,
+      remoteParent: { environmentId: "offline", threadId: ThreadId.make("parent") },
+    },
+    {
+      threadId: ThreadId.make("grandchild"),
+      environmentId: "online",
+      parentThreadId: ThreadId.make("child"),
+    },
   ]);
   expect(parents.get("online:child")).toBeNull();
   expect(parents.get("online:grandchild")).toBe("online:child");

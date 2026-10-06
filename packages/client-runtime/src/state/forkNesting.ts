@@ -91,7 +91,9 @@ export function connectedSupervisionParents(
   metadata: readonly ScopedSupervisionMetadata[],
 ) {
   const visible = new Set(
-    threads.filter((t) => t.archivedAt === null && t.forkMetadataAvailable !== false).map((t) => supervisionKey(t.environmentId, t.id)),
+    threads
+      .filter((t) => t.archivedAt === null && t.forkMetadataAvailable !== false)
+      .map((t) => supervisionKey(t.environmentId, t.id)),
   );
   const raw = new Map(
     metadata.map((row) => [

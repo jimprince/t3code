@@ -1,6 +1,10 @@
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { planSupervisionMove } from "@t3tools/client-runtime/state/fork-thread-ordering";
-import { supervision as forkSupervision, useSupervisionReadyHosts, useSupervisionMetadata } from "../state/forkSupervision";
+import {
+  supervision as forkSupervision,
+  useSupervisionReadyHosts,
+  useSupervisionMetadata,
+} from "../state/forkSupervision";
 import { useSupervisionForest } from "../state/forkSupervision";
 import { supervisionRoots } from "@t3tools/client-runtime/state/fork-nesting";
 import { useSupervisionDrag } from "./sidebar/useSupervisionDrag";
@@ -2336,7 +2340,8 @@ export default function Sidebar() {
 
   const attentionForest = useSupervisionForest();
   const childInputAttention = useMemo(
-    () => groupChildInputAttention([...attentionForest.byKey.values()], attentionForest.parentByKey),
+    () =>
+      groupChildInputAttention([...attentionForest.byKey.values()], attentionForest.parentByKey),
     [attentionForest],
   );
   const router = useRouter();
@@ -4480,14 +4485,37 @@ export default function Sidebar() {
                 snooze: supportsSnooze,
                 pinning: supportsPinning,
                 orderReset:
-                  orderReadyHosts.has(thread.environmentId) && serverConfigs.get(thread.environmentId)?.environment.capabilities
+                  orderReadyHosts.has(thread.environmentId) &&
+                  serverConfigs.get(thread.environmentId)?.environment.capabilities
                     .threadOrderReset === true,
                 titleRegeneration: supportsTitleRegeneration,
               },
-              move: (isPinned ? serverConfigs.get(thread.environmentId)?.environment.capabilities.threadPinReorder : serverConfigs.get(thread.environmentId)?.environment.capabilities.threadActiveReorder) === true && (isPinned || !isSettled) ? {
-                up: planSupervisionMove(threads, orderMetadata, thread, "up", orderReadyHosts) !== null,
-                down: planSupervisionMove(threads, orderMetadata, thread, "down", orderReadyHosts) !== null,
-              } : undefined,
+              move:
+                (isPinned
+                  ? serverConfigs.get(thread.environmentId)?.environment.capabilities
+                      .threadPinReorder
+                  : serverConfigs.get(thread.environmentId)?.environment.capabilities
+                      .threadActiveReorder) === true &&
+                (isPinned || !isSettled)
+                  ? {
+                      up:
+                        planSupervisionMove(
+                          threads,
+                          orderMetadata,
+                          thread,
+                          "up",
+                          orderReadyHosts,
+                        ) !== null,
+                      down:
+                        planSupervisionMove(
+                          threads,
+                          orderMetadata,
+                          thread,
+                          "down",
+                          orderReadyHosts,
+                        ) !== null,
+                    }
+                  : undefined,
 
               snoozePresets,
             }),
@@ -4506,7 +4534,13 @@ export default function Sidebar() {
         switch (clicked.value) {
           case "move-up":
           case "move-down": {
-            const assignments = planSupervisionMove(threads, orderMetadata, thread, clicked.value === "move-up" ? "up" : "down", appAtomRegistry.get(forkSupervision.readyHosts));
+            const assignments = planSupervisionMove(
+              threads,
+              orderMetadata,
+              thread,
+              clicked.value === "move-up" ? "up" : "down",
+              appAtomRegistry.get(forkSupervision.readyHosts),
+            );
 
             for (const assignment of assignments ?? []) {
               const moved = threads.find(
