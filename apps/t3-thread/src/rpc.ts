@@ -29,6 +29,9 @@ const RPC_METHODS = {
   getFullThreadDiff: ORCHESTRATION_V2_WS_METHODS.getFullThreadDiff,
   subscribeShell: ORCHESTRATION_V2_WS_METHODS.subscribeShell,
   subscribeThread: ORCHESTRATION_V2_WS_METHODS.subscribeThread,
+  projectRequestsCreate: "projectRequests.create",
+  projectRequestsUpdate: "projectRequests.update",
+  projectRequestsList: "projectRequests.list",
 } as const;
 
 const makeT3RpcClient = RpcClient.make(WsRpcGroup);
