@@ -155,7 +155,7 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
     const title = detail.split("\n")[0]!.slice(0, 200);
     const result = await saveForLater({
       environmentId: summary.root.environmentId,
-      input: { threadId: summary.root.id, title, kind: "change", detail, park: true },
+      input: { threadId: summary.root.id, title, kind: "task", detail, park: true },
     });
     if (result._tag === "Success") {
       reset();
