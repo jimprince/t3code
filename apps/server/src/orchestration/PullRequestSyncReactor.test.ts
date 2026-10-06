@@ -844,6 +844,48 @@ describe("PullRequestSyncReactor", () => {
     ),
   );
 
+  it.effect(
+    "refreshes closed links when a page asks, at most once a minute, never merged ones",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* TestClock.setTime(Date.parse(NOW));
+          const state = yield* Ref.make<"closed" | "open">("closed");
+          const fixture = yield* makeHarness({
+            snapshot: makeSnapshot([
+              makeThread("closed", {
+                pullRequests: [makeLink(2, { state: "closed" }), makeLink(3, { state: "merged" })],
+              }),
+            ]),
+            summary: (input) =>
+              Ref.get(state).pipe(Effect.map((state) => makeSummary(input, { state }))),
+          });
+          yield* Effect.gen(function* () {
+            const reactor = yield* startAndSweep(fixture);
+            const readNumbers = () =>
+              Ref.get(fixture.summaryCalls).pipe(Effect.map((calls) => calls.map((c) => c.number)));
+            assert.deepStrictEqual(yield* readNumbers(), [2]);
+            yield* Ref.set(state, "open");
+            // Just read, so opening the page right away does not read it again.
+            yield* reactor.refreshStale;
+            yield* reactor.drain;
+            assert.deepStrictEqual(yield* readNumbers(), [2]);
+            yield* sweepAgain(fixture, reactor);
+            yield* reactor.refreshStale;
+            yield* reactor.drain;
+            assert.deepStrictEqual(yield* readNumbers(), [2, 2]);
+            assert.strictEqual(
+              (yield* Ref.get(fixture.syncCommands)).at(-1)?.snapshot.state,
+              "open",
+            );
+            yield* reactor.refreshStale;
+            yield* reactor.drain;
+            assert.deepStrictEqual(yield* readNumbers(), [2, 2]);
+          }).pipe(Effect.provide(fixture.layer));
+        }),
+      ),
+  );
+
   it.effect("preserves a refresh requested while an older host read is in flight", () =>
     Effect.scoped(
       Effect.gen(function* () {
