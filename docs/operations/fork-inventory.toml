@@ -1743,3 +1743,20 @@ id = "v2-native-named-agent-ownership"
 date = "2026-10-06"
 decided = "adapt"
 rationale = "Native first-message admission and restore receipts share a database ownership lock with naming and organizational unnesting. Empty claims occupy no root slot. The M2 creation path remains empty claim, one sidecar metadata write, then provider-starting reuse launch; admission reads that sidecar parenting. Handover archives the idle predecessor in the same native event batch."
+
+[[patch]]
+name = "fork-project-automations"
+subject = "feat(projects): run timed project automations"
+class = "product"
+purpose = "Persist project-owned timed prompts, recover scheduled runs after downtime, queue busy thread targets, and expose automation management and run results to clients."
+retire_when = "Upstream provides equivalent project-scoped timed automations with persisted runs and busy-target delivery."
+depends_on = ["fork-subthread-lifecycle", "fork-named-agents"]
+roles = []
+note = "Project import tests discover T3_LIFECYCLE_FIXTURES, explicitly skip when absent, and retain the full packaged VM case alongside all three small copied fixtures."
+
+[[patch.decision]]
+id = "v2-project-automation-cutover"
+date = "2026-10-06"
+decided = "adapt"
+rationale = "Keep original project automation records and migration 10 on the native project store. The later scripts concern imports them once into AutomationStore and owns the sole scheduler, preserving the final V1 stack behavior without a second scheduler."
+
