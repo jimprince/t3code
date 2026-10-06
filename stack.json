@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "7a1b50c7b51d41c0e6e8f03b2285db69c33b8fcb",
-  "head": "5ae07e397e90662ff8af652ce4a9476ad5d778e0",
+  "prev": "cc9173de3072143fd8ff3a8d9106a1f2e9ab1ebe",
+  "head": "9b2e359b1c1403faca60c2603faba57b44c017b7",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -97,13 +97,13 @@
     "fork-board-declutter",
     "fork-project-skew-gate",
     "fork-request-titles",
-    "fork-page-agent-tray"
-  ],
-  "unapplied": [
+    "fork-page-agent-tray",
     "fork-release-publication",
     "fork-maintenance-automation",
     "fork-antigravity-errors",
-    "fork-conversation-fork",
+    "fork-conversation-fork"
+  ],
+  "unapplied": [
     "fork-thread-transfer",
     "fork-thread-history-compatibility"
   ],
@@ -119,7 +119,7 @@
       "oid": "27edbf4a89265a89d80694363c8316a316033c29"
     },
     "fork-antigravity-errors": {
-      "oid": "412652656ee06d71a854c56067f7e647df21c07d"
+      "oid": "f4972f9291d942a67205c9ced91c70d876e0c5ea"
     },
     "fork-attachment-compatibility": {
       "oid": "de68c3eee816dac200eb425abd44d0624b1e82cc"
@@ -152,7 +152,7 @@
       "oid": "343e87a5c3ff6bdec05427a83238d67470eab02a"
     },
     "fork-conversation-fork": {
-      "oid": "b2ab4d146a944f285dc753d11b56dd97323d106a"
+      "oid": "9b2e359b1c1403faca60c2603faba57b44c017b7"
     },
     "fork-cross-environment-nesting": {
       "oid": "da91be40e94db7bfc18e33ba14cc3a5a9239a38d"
@@ -209,7 +209,7 @@
       "oid": "618b4a993cae1977c5af51332f484b0caf91d346"
     },
     "fork-maintenance-automation": {
-      "oid": "a4213304082b9b622b7ab5b1f84f5d642ca8c6f3"
+      "oid": "e94ee0d91b3097ce85eaabb559794a023756368c"
     },
     "fork-mobile-delivery": {
       "oid": "f3495f992c21a8c2dff22f514693400c74314390"
@@ -314,7 +314,7 @@
       "oid": "1551b3793f4572afbab92b48bff6380651a7ba79"
     },
     "fork-release-publication": {
-      "oid": "f12c0340bd092458cddaed1cee909c02c6581ae8"
+      "oid": "7fd537b82ba7497988f50671ad8980a90dad4ce3"
     },
     "fork-remote-file-downloads": {
       "oid": "05b9b6a418651ec972a18bf1cbe4bca9448cb3b6"
