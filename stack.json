@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "458c4eacdc110a4080300bf323a7cebb6d711b36",
+  "prev": "0142566556dd20995ca8bf59f90c8fba170b86b4",
   "head": "359ca06f62dd30a007c56a179f2b5ae2fcf7a93f",
   "applied": [
     "fork-build-ci-compat",
@@ -84,7 +84,6 @@
     "fork-maintenance-automation",
     "fork-page-agent-tray",
     "fork-antigravity-errors",
-    "fork-request-followups",
     "fork-roadmap-next-later",
     "fork-project-page-usability"
   ],
@@ -254,9 +253,6 @@
     },
     "fork-remote-file-downloads": {
       "oid": "a9c9de0459585fff6c0df386534673b4579edcfb"
-    },
-    "fork-request-followups": {
-      "oid": "ed18526cf519df20e46efaf94be7677d6dc049f2"
     },
     "fork-request-ledger": {
       "oid": "54550a489b2bc534ed04062fa0730d7df5ae0841"
