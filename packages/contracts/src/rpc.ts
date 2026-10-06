@@ -1,3 +1,4 @@
+import { ThreadTransferRpcs } from "./threadTransfer.ts";
 import { ForkConversationRpc } from "./forkConversation.ts";
 import {
   OrchestrationV2SearchThreadError,
@@ -2391,6 +2392,7 @@ export const WsForkRpcGroup = RpcGroup.make(
   WsProjectCanvasReadRpc,
   WsProjectCanvasActionRpc,
   ForkConversationRpc,
+  ...ThreadTransferRpcs,
   WsProjectIssuesGetRpc,
   WsProjectRequestsSubmitRpc,
   WsProjectRequestsStartIntakeRpc,
