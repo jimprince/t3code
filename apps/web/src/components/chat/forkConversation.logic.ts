@@ -56,6 +56,31 @@ export function resolveMessageForkPlan(
   return null;
 }
 
+export interface MessageForkMenuState {
+  readonly anchor: MessageForkAnchor | undefined;
+  readonly disabled: boolean;
+}
+
+/**
+ * Resolves the fork menu for one clicked message from the latest thread state. The plan is
+ * computed on the click, not per streamed update, so the timeline never rebuilds it.
+ */
+export function createMessageForkMenuResolver(
+  readState: () => {
+    readonly messages: ReadonlyArray<ChatMessage>;
+    readonly canFork: boolean;
+    readonly isWorking: boolean;
+  },
+): (messageId: MessageId) => MessageForkMenuState {
+  return (messageId) => {
+    const state = readState();
+    const anchor = state.canFork
+      ? (resolveMessageForkPlan(state.messages, messageId)?.anchor ?? undefined)
+      : undefined;
+    return { anchor, disabled: anchor === undefined || state.isWorking };
+  };
+}
+
 type MessageForkContextMenuAction = "fork" | "fork-current" | "fork-new-worktree";
 
 export function buildMessageForkContextMenuItems(input: {

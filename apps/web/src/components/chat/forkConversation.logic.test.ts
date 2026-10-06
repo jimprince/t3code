@@ -4,6 +4,7 @@ import { describe, expect, it } from "vite-plus/test";
 import type { ChatAttachment, ChatMessage } from "../../types";
 import {
   buildMessageForkContextMenuItems,
+  createMessageForkMenuResolver,
   resolveMessageForkPlan,
   shouldClaimMessageForkContextMenu,
 } from "./forkConversation.logic";
@@ -124,5 +125,38 @@ describe("shouldClaimMessageForkContextMenu", () => {
   it("only claims the menu when a local api exists", () => {
     expect(shouldClaimMessageForkContextMenu(undefined)).toBe(false);
     expect(shouldClaimMessageForkContextMenu({})).toBe(true);
+  });
+});
+
+describe("createMessageForkMenuResolver", () => {
+  const thread = [message("u1", "user", "run-1"), message("a1", "assistant", "run-1")];
+
+  it("reads the thread state on the click, not on every streamed update", () => {
+    let reads = 0;
+    let state = { messages: thread, canFork: true, isWorking: false };
+    const resolve = createMessageForkMenuResolver(() => {
+      reads += 1;
+      return state;
+    });
+    for (let token = 0; token < 500; token += 1) {
+      state = {
+        ...state,
+        messages: [...thread, message("a2", "assistant", "run-2", { text: "t".repeat(token) })],
+      };
+    }
+    expect(reads).toBe(0);
+    expect(resolve("a2" as MessageId)).toEqual({ anchor: "here", disabled: false });
+    expect(reads).toBe(1);
+  });
+
+  it("disables the menu while working, when forking is unavailable, or when no cut exists", () => {
+    const resolveWith = (canFork: boolean, isWorking: boolean) =>
+      createMessageForkMenuResolver(() => ({ messages: thread, canFork, isWorking }));
+    expect(resolveWith(true, true)("a1" as MessageId).disabled).toBe(true);
+    expect(resolveWith(false, false)("a1" as MessageId)).toEqual({
+      anchor: undefined,
+      disabled: true,
+    });
+    expect(resolveWith(true, false)("u1" as MessageId).disabled).toBe(true);
   });
 });

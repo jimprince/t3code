@@ -183,7 +183,7 @@ import { MessageCopyButton } from "./MessageCopyButton";
 import {
   buildMessageForkContextMenuItems,
   shouldClaimMessageForkContextMenu,
-  type MessageForkAnchor,
+  type MessageForkMenuState,
   type MessageForkWorkspaceMode,
 } from "./forkConversation.logic";
 import { readLocalApi } from "../../localApi";
@@ -321,7 +321,7 @@ interface TimelineRowSharedState {
   onUseArtifactTemplate: (template: CodexArtifactTemplate) => void;
   onRunShellCommand: ((command: string) => void) | undefined;
   onForkMessage: ((messageId: MessageId, workspaceMode: MessageForkWorkspaceMode) => void) | null;
-  messageForkAnchors: ReadonlyMap<MessageId, MessageForkAnchor>;
+  resolveMessageForkMenu: ((messageId: MessageId) => MessageForkMenuState) | null;
   canForkToNewWorktree: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   displayThreadKey?: string;
@@ -473,7 +473,7 @@ interface MessagesTimelineProps {
   onUseArtifactTemplate?: (template: CodexArtifactTemplate) => void;
   onRunShellCommand?: (command: string) => void;
   onForkMessage?: (messageId: MessageId, workspaceMode: MessageForkWorkspaceMode) => void;
-  messageForkAnchors?: ReadonlyMap<MessageId, MessageForkAnchor>;
+  resolveMessageForkMenu?: (messageId: MessageId) => MessageForkMenuState;
   canForkToNewWorktree?: boolean;
   isRevertingCheckpoint: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
@@ -552,7 +552,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   onUseArtifactTemplate = NOOP_USE_ARTIFACT_TEMPLATE,
   onRunShellCommand,
   onForkMessage,
-  messageForkAnchors = EMPTY_MESSAGE_FORK_ANCHORS,
+  resolveMessageForkMenu,
   canForkToNewWorktree = false,
   isRevertingCheckpoint,
   onImageExpand,
@@ -1194,7 +1194,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onRevertToTurnCount,
       onRunShellCommand,
       onForkMessage: onForkMessage ?? null,
-      messageForkAnchors,
+      resolveMessageForkMenu: resolveMessageForkMenu ?? null,
       canForkToNewWorktree,
       onImageExpand,
       onFileOpen,
@@ -1233,7 +1233,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onRevertToTurnCount,
       onRunShellCommand,
       onForkMessage,
-      messageForkAnchors,
+      resolveMessageForkMenu,
       canForkToNewWorktree,
       onImageExpand,
       onFileOpen,
@@ -1822,22 +1822,24 @@ function TimelineMinimapNavigationButton({
 type TimelineWorkEntry = Extract<MessagesTimelineRow, { kind: "work" }>["groupedEntries"][number];
 type TimelineRow = MessagesTimelineRow;
 
-const EMPTY_MESSAGE_FORK_ANCHORS: ReadonlyMap<MessageId, MessageForkAnchor> = new Map();
-
 const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: TimelineRow }) {
   const forkCtx = use(TimelineRowCtx);
-  const forkActivity = use(TimelineRowActivityCtx);
   const handleMessageContextMenu = useCallback(
     async (event: MouseEvent<HTMLDivElement>) => {
-      if (row.kind !== "message" || forkCtx.onForkMessage === null) return;
+      if (
+        row.kind !== "message" ||
+        forkCtx.onForkMessage === null ||
+        forkCtx.resolveMessageForkMenu === null
+      )
+        return;
       const api = readLocalApi();
       if (!shouldClaimMessageForkContextMenu(api) || !api) return;
       event.preventDefault();
       event.stopPropagation();
-      const anchor = forkCtx.messageForkAnchors.get(row.message.id);
+      const { anchor, disabled } = forkCtx.resolveMessageForkMenu(row.message.id);
       const clicked = await api.contextMenu.show(
         buildMessageForkContextMenuItems({
-          disabled: anchor === undefined || forkActivity.isWorking || row.message.streaming,
+          disabled: disabled || row.message.streaming,
           canForkToNewWorktree: forkCtx.canForkToNewWorktree,
           ...(anchor === undefined ? {} : { anchor }),
         }),
@@ -1849,7 +1851,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
         forkCtx.onForkMessage(row.message.id, "new-worktree");
       }
     },
-    [forkActivity.isWorking, forkCtx, row],
+    [forkCtx, row],
   );
   const isExpandedToolGroup = row.kind === "work" && row.isExpandedToolGroup;
   const isSubagentGroup = row.kind === "event" && row.projectedItem.item.type === "subagent";

@@ -2272,6 +2272,12 @@ roles = []
 note = "Reorganized 2026-09-06 from fork-thread-fork."
 
 [[patch.decision]]
+id = "two-fork-entry-points"
+date = "2026-10-06"
+decided = "adapt"
+rationale = "Upstream's assistant-message fork button and the fork's message context menu both stay: the button forks a whole assistant turn, the menu forks from any message with a worktree choice. Fork titles use upstream's 'title fork' form."
+
+[[patch.decision]]
 id = "v2-turn-boundary-workspace"
 date = "2026-10-06"
 decided = "adapt"
