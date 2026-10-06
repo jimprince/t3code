@@ -416,6 +416,7 @@ export function makeOrchestratorV2ReplayLayerWithRegistry<Error>(
         CommandPolicy.layer,
         contextHandoffServiceProvided,
         persistenceLayer,
+        databaseLayer,
         providedRegistryLayer,
         continuationRequestsLayer,
         runtimeLayer,
