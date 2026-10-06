@@ -1313,7 +1313,7 @@ describe("child input reminders", () => {
         },
       ],
     });
-  it("reminds after 45 minutes with the pending question, then waits another interval and survives restart", async () => {
+  it("reminds once after 20 minutes with the pending question and survives restart", async () => {
     await withTempState(async () => {
       const { clientFactory, sentMessages } = createClientFactory({ sourceThread: waiting() });
       let clock = start;
@@ -1321,7 +1321,7 @@ describe("child input reminders", () => {
       await detectAttentionEvents({ clientFactory, now });
       await deliverPendingNotifications({ clientFactory, now });
       expect(sentMessages[0]?.text).toContain("Which gripper should I use?");
-      clock += 44 * 60_000;
+      clock += 19 * 60_000;
       await detectAttentionEvents({ clientFactory, now });
       await deliverPendingNotifications({ clientFactory, now });
       expect(sentMessages).toHaveLength(1);
@@ -1337,11 +1337,10 @@ describe("child input reminders", () => {
       expect(sentMessages).toHaveLength(2);
       // New client/watcher, same persisted history.
       const restarted = createClientFactory({ sourceThread: waiting() });
-      clock += 45 * 60_000;
+      clock += 20 * 60_000;
       await detectAttentionEvents({ clientFactory: restarted.clientFactory, now });
       await deliverPendingNotifications({ clientFactory: restarted.clientFactory, now });
-      expect(restarted.sentMessages).toHaveLength(1);
-      expect(restarted.sentMessages[0]?.text).toContain("Reminder");
+      expect(restarted.sentMessages).toHaveLength(0);
     });
   });
   it.each([0, 10])(
@@ -1379,7 +1378,7 @@ describe("child input reminders", () => {
         const first = createClientFactory({ sourceThread: waiting() });
         await detectAttentionEvents({ clientFactory: first.clientFactory, now });
         await deliverPendingNotifications({ clientFactory: first.clientFactory, now });
-        clock += 45 * 60_000;
+        clock += 20 * 60_000;
         await detectAttentionEvents({ clientFactory: first.clientFactory, now });
         const changed = waiting();
         if (change === "answered") changed.activities = [];
