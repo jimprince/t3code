@@ -1,4 +1,5 @@
 import {
+  DesktopIdleUpdateInstallOptionsSchema,
   DesktopUpdateActionResultSchema,
   DesktopUpdateChannelSchema,
   DesktopUpdateCheckResultSchema,
@@ -53,11 +54,13 @@ export const downloadUpdate = DesktopIpc.makeIpcMethod({
 
 export const installUpdate = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.UPDATE_INSTALL_CHANNEL,
-  payload: Schema.Union([Schema.Void, Schema.Struct({ expectedVersion: Schema.String })]),
+  payload: Schema.UndefinedOr(DesktopIdleUpdateInstallOptionsSchema),
   result: DesktopUpdateActionResultSchema,
   handler: Effect.fn("desktop.ipc.updates.install")(function* (options) {
     const updates = yield* DesktopUpdates.DesktopUpdates;
-    return options === undefined ? yield* updates.install : yield* updates.installPrepared(options.expectedVersion);
+    return yield* options === undefined
+      ? updates.install
+      : updates.installPrepared(options.expectedVersion, options.minimumSystemIdleSeconds);
   }),
 });
 
