@@ -1,0 +1,4 @@
+id = "automations-widget-readability"
+category = "feature"
+functionality = "projects"
+text = "The Automations list is easier to scan: each rule shows its name, then its schedule or event, when it runs next, where it runs and how its last run went, with an on/off switch and its actions in a menu. Deleting asks first."
