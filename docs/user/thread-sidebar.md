@@ -301,3 +301,21 @@ A parent's status describes its own work and requests. A separate sub-agent inpu
 marker counts waiting, unsettled children; select it to expand the children and
 open the first waiting child. Answering, settling or archiving a child clears its
 marker. Child work remains visible through the active sub-agent count.
+## Supervising workers
+
+Use the Workers section in thread details to choose a parent or return a thread
+ to the top level. Workers keep their own project, model and workspace. Settling
+ or archiving a supervisor does not settle or archive its workers; a worker with
+ an unavailable parent stays reachable in its own project. Mobile project lists
+ remain flat.
+
+The operator CLI nests new workers under the caller by default. Use `create
+--parent <thread>` to select a supervisor, `--top-level` to create independently,
+`nest <worker> --parent <thread>` to move one, or `unnest <worker>` to remove the
+link. A parent on another paired environment stores its link only on the child
+host; reconnecting restores the combined tree.
+
+Use `rename <thread> --title <text>` to change a title without starting a turn.
+`--scope <text>` sets a shared scope and `--clear-scope` clears it. Explicit
+creation titles survive automatic generation. Return to automatic order clears
+only the row's current pinned or active order key.
