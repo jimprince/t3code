@@ -11,6 +11,7 @@ import * as Option from "effect/Option";
 import * as DesktopBackendPool from "../backend/DesktopBackendPool.ts";
 import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
+import * as ElectronPowerMonitor from "../electron/ElectronPowerMonitor.ts";
 import * as ElectronUpdater from "../electron/ElectronUpdater.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
@@ -24,6 +25,7 @@ import * as DesktopUpdates from "./DesktopUpdates.ts";
 export const flushCallbacks = Effect.yieldNow;
 
 export interface UpdatesHarnessOptions {
+  readonly systemIdleTime?: Effect.Effect<number>;
   readonly checkForUpdates?: Effect.Effect<
     void,
     ElectronUpdater.ElectronUpdaterCheckForUpdatesError
@@ -237,6 +239,11 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
   });
 
   const layer = DesktopUpdates.layer.pipe(
+    Layer.provide(
+      Layer.mock(ElectronPowerMonitor.ElectronPowerMonitor, {
+        getSystemIdleTime: options.systemIdleTime ?? Effect.succeed(0),
+      }),
+    ),
     Layer.provide(fileSystemLayer),
     Layer.provideMerge(updaterLayer),
     Layer.provideMerge(windowLayer),
