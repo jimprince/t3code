@@ -225,6 +225,7 @@ export const launchThread = Effect.fn("ThreadMessageIntake.launchThread")(functi
         // also wraps post-message projection reads, so its tag alone is not proof.
         const notAccepted =
           error.operation === "resolve-project" ||
+          error.operation === "nest-thread" ||
           error.operation === "read-receipt" ||
           ((error.operation === "create-thread" || error.operation === "dispatch-message") &&
             isOrchestratorError(error.cause) &&
