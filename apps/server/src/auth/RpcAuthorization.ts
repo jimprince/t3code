@@ -164,6 +164,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.projectDashboardGet]: AuthOrchestrationReadScope,
   [WS_METHODS.projectDashboardSetWidgets]: AuthOrchestrationOperateScope,
   [WS_METHODS.projectDashboardSetTracker]: AuthOrchestrationOperateScope,
+  [WS_METHODS.projectDashboardSetHealth]: AuthOrchestrationOperateScope,
   [WS_METHODS.projectLayoutGet]: AuthOrchestrationReadScope,
   [WS_METHODS.projectLayoutHistory]: AuthOrchestrationReadScope,
   [WS_METHODS.subscribeProjectLayout]: AuthOrchestrationReadScope,
