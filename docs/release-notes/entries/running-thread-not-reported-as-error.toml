@@ -1,0 +1,4 @@
+id = "running-thread-not-reported-as-error"
+category = "fix"
+functionality = "worker supervision"
+text = "A thread that is actively running no longer shows as errored because an earlier turn failed, and a failed turn with no recorded detail now says so instead of a bare \"turn failed\"."
