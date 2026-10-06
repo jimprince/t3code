@@ -81,7 +81,7 @@ export function createOptimisticThreadLifecycle(
             update.sequence = result.value.sequence;
             registry.update(pending, (current) => [...current]);
             const reconcile = (snapshot: OrchestrationV2ShellSnapshot | null) => {
-              if (snapshot === null || snapshot.snapshotSequence >= result.value.sequence) {
+              if (snapshot !== null && snapshot.snapshotSequence >= result.value.sequence) {
                 remove();
                 unsubscribe();
               }
