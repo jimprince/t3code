@@ -12,10 +12,12 @@ import {
   projectIssuesQuery,
   settleProjectRequest,
 } from "../../state/projectIssues";
+import { waitForThreadShell } from "../../state/entities";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { Button, InlineButton } from "../ui/button";
+import { toastManager } from "../ui/toast";
 import { Input } from "../ui/input";
 import { LinkifiedText, OptionLinks } from "./LinkifiedText";
 import { projectReturnState } from "./projectNavigation";
@@ -275,17 +277,32 @@ export function useDiscuss(summary: OrchestratorSummary) {
   const discuss = useAtomCommand(discussProjectRequest, "Discuss");
   const openThread = useOpenThread(summary);
   const [pending, setPending] = useState<string | null>(null);
+  // A ref, not `pending`: a second click in the same frame still sees the old state.
+  const inFlight = useRef(false);
   const start = async (issue: ProjectIssue) => {
     const key = issueKey(issue);
-    if (pending !== null) return;
+    if (inFlight.current) return;
+    inFlight.current = true;
     setPending(key);
     try {
       const result = await discuss({
         environmentId: summary.root.environmentId,
         input: { threadId: summary.root.id, reference: key },
       });
-      if (result._tag === "Success") openThread(result.value.threadId);
+      if (result._tag !== "Success") return;
+      // The route treats a server thread whose shell has not arrived as missing and leaves it.
+      const ref = scopeThreadRef(summary.root.environmentId, result.value.threadId);
+      if (await waitForThreadShell(ref)) {
+        openThread(result.value.threadId);
+      } else {
+        toastManager.add({
+          type: "error",
+          title: "Could not open the discussion",
+          description: "It was created; open it from the sidebar.",
+        });
+      }
     } finally {
+      inFlight.current = false;
       setPending(null);
     }
   };
