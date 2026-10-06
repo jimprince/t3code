@@ -8,6 +8,7 @@ import {
   findRootThreadId,
   formatRequestMarker,
   giteaRepositoryForIdentity,
+  isPartOf,
   parseRequestMarker,
   workspaceRepositoryName,
 } from "./projectIssues.logic.ts";
@@ -47,6 +48,20 @@ describe("request stages", () => {
   it("puts the release stages in the board lane of whoever acts next", () => {
     expect(deriveProjectIssueStatus("open", ["needs-test"])).toBe("needs-review");
     expect(deriveProjectIssueStatus("open", ["awaiting-release"])).toBe("in-progress");
+  });
+});
+
+describe("isPartOf", () => {
+  it("matches a body that opens with Part of #N, any case", () => {
+    expect(isPartOf("Part of #109\n\nDetails", 109)).toBe(true);
+    expect(isPartOf("  part of #109", 109)).toBe(true);
+  });
+
+  it("ignores other parents, mentions further down and longer numbers", () => {
+    expect(isPartOf("Part of #110", 109)).toBe(false);
+    expect(isPartOf("Part of #1090", 109)).toBe(false);
+    expect(isPartOf("Details\nPart of #109", 109)).toBe(false);
+    expect(isPartOf(null, 109)).toBe(false);
   });
 });
 
