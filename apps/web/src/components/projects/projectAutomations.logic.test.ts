@@ -1,10 +1,10 @@
-import { ProjectId, ThreadId, type Automation } from "@t3tools/contracts";
+import { ProjectId, ThreadId, type Automation, type AutomationRun } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 import {
-  automationSummary,
   belongsToRoot,
   fromDraft,
-  scheduleLabel,
+  ruleLine,
+  shortDuration,
   toDraft,
 } from "./projectAutomations.logic";
 
@@ -40,22 +40,89 @@ describe("project automation panel logic", () => {
     ).toBeNull();
   });
 
-  it("labels weekday schedules compactly", () => {
-    const base = { kind: "weekdays", time: "09:00", timeZone: "UTC" } as const;
-    expect(scheduleLabel({ ...base, days: [5, 1, 2, 3, 4] })).toBe("Weekdays at 09:00");
-    expect(scheduleLabel({ ...base, days: [1, 3] })).toBe("Mon, Wed at 09:00");
+  // 2026-10-06T01:00Z is Mon 19:00 MDT in Denver.
+  const now = Date.parse("2026-10-06T01:00:00.000Z");
+  const nightly: Automation = {
+    ...automation,
+    name: "Daily orchestrators' meeting (overnight)",
+    triggers: [
+      { type: "schedule", schedule: { kind: "daily", time: "01:00", timeZone: "America/Denver" } },
+    ],
+    nextRunAt: "2026-10-06T07:00:00.000Z",
+  };
+  const run = (status: AutomationRun["status"], finishedAt: string): AutomationRun => ({
+    id: "r",
+    automationId: "a",
+    projectId: automation.projectId,
+    name: "Digest",
+    dedupeKey: "k",
+    trigger: { kind: "manual" },
+    dryRun: false,
+    status,
+    result: null,
+    steps: [],
+    createdAt: finishedAt,
+    finishedAt,
   });
 
-  it("summarizes event triggers and keeps them out of the schedule editor", () => {
+  it("reads a scheduled rule as schedule, relative next run with a short date, and target", () => {
+    expect(ruleLine({ automation: nightly, now, target: "Ops room", lastRun: undefined })).toEqual({
+      summary: "Daily 01:00 MDT · next in 6h (Tue 01:00) · runs in: Ops room",
+      last: null,
+    });
+  });
+
+  it("leaves out a target that repeats the name and reports the last run", () => {
+    expect(
+      ruleLine({
+        automation: nightly,
+        now,
+        target: "Daily orchestrators' meeting",
+        lastRun: run("completed", "2026-10-05T23:00:00.000Z"),
+      }),
+    ).toEqual({
+      summary: "Daily 01:00 MDT · next in 6h (Tue 01:00)",
+      last: "last: ok 2h ago",
+    });
+  });
+
+  it("reads event, paused and weekday rules", () => {
     const onCi: Automation = {
       ...automation,
+      nextRunAt: null,
+      triggers: [{ type: "event", event: "ci.failed", filter: { repository: "jimprince/t3code" } }],
+    };
+    expect(
+      ruleLine({ automation: onCi, now, target: "new thread", lastRun: undefined }).summary,
+    ).toBe("On ci.failed · jimprince/t3code · runs in: new thread");
+    expect(toDraft(onCi)).toBeNull();
+    const weekdays: Automation = {
+      ...nightly,
+      enabled: false,
       triggers: [
-        { type: "event", event: "ci.failed", filter: { repository: "brad/t3code-fork" } },
-        ...automation.triggers,
+        {
+          type: "schedule",
+          schedule: { kind: "weekdays", time: "09:00", days: [5, 1, 2, 3, 4], timeZone: "UTC" },
+        },
       ],
     };
-    expect(automationSummary(onCi)).toBe("When checks fail (brad/t3code-fork) or Daily at 03:00");
-    expect(toDraft({ ...onCi, triggers: [onCi.triggers[0]!] })).toBeNull();
+    expect(
+      ruleLine({
+        automation: weekdays,
+        now,
+        target: null,
+        lastRun: run("failed", "2026-10-06T00:59:40.000Z"),
+      }),
+    ).toEqual({ summary: "Weekdays 09:00 UTC · paused", last: "last: failed just now" });
+  });
+
+  it("rounds durations to one unit", () => {
+    expect([20_000, 45 * 60_000, 4.6 * 3_600_000, 50 * 3_600_000].map(shortDuration)).toEqual([
+      "<1m",
+      "45m",
+      "5h",
+      "2d",
+    ]);
   });
 
   it("scopes rules to an orchestrator page", () => {

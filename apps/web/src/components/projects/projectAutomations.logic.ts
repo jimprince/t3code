@@ -2,7 +2,7 @@ import type {
   Automation,
   AutomationAgentTarget,
   AutomationDefinition,
-  AutomationEventKind,
+  AutomationRun,
   AutomationTrigger,
   AutomationSchedule,
   ProjectId,
@@ -66,42 +66,118 @@ export function fromDraft(draft: AutomationDraft, projectId: ProjectId): Automat
   };
 }
 
-export function scheduleLabel(schedule: AutomationSchedule): string {
-  switch (schedule.kind) {
-    case "hourly":
-      return "Every hour";
-    case "daily":
-      return `Daily at ${schedule.time}`;
-    case "weekly":
-      return `${DAY_NAMES[schedule.day]} at ${schedule.time}`;
-    case "weekdays": {
-      const days = [...schedule.days].sort((a, b) => a - b);
-      const weekdays = days.join(",") === "1,2,3,4,5";
-      return `${weekdays ? "Weekdays" : days.map((day) => DAY_NAMES[day]?.slice(0, 3)).join(", ")} at ${schedule.time}`;
-    }
-    case "cron":
-      return `Cron ${schedule.expression}`;
-  }
+const SHORT_DAYS = DAY_NAMES.map((day) => day.slice(0, 3));
+
+/** A compact duration: "<1m", "45m", "5h", "3d". */
+export function shortDuration(ms: number): string {
+  const minutes = Math.round(Math.abs(ms) / 60_000);
+  if (minutes < 1) return "<1m";
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours}h`;
+  return `${Math.round(hours / 24)}d`;
 }
 
-const EVENT_LABELS: Record<AutomationEventKind, string> = {
-  "pull-request.opened": "When a pull request is linked",
-  "ci.failed": "When checks fail",
-  "issue.labeled": "When an issue is labeled",
-  "worker.blocked": "When a worker is blocked",
-  "release.published": "On a new release",
+function parts(at: number, timeZone: string) {
+  const values = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+      timeZoneName: "short",
+    })
+      .formatToParts(at)
+      .map((part) => [part.type, part.value]),
+  );
+  return {
+    weekday: values.weekday ?? "",
+    time: `${values.hour}:${values.minute}`,
+    zone: values.timeZoneName ?? "",
+  };
+}
+
+/** "Daily 01:00 MDT"; the zone abbreviation is the one in force at `at`. */
+function scheduleText(schedule: AutomationSchedule, at: number): string {
+  if (schedule.kind === "hourly") return "Hourly";
+  const zone = parts(at, schedule.timeZone).zone;
+  if (schedule.kind === "cron") return `Cron ${schedule.expression} ${zone}`;
+  const when =
+    schedule.kind === "daily"
+      ? "Daily"
+      : schedule.kind === "weekly"
+        ? SHORT_DAYS[schedule.day]
+        : [...schedule.days].sort((a, b) => a - b).join(",") === "1,2,3,4,5"
+          ? "Weekdays"
+          : [...schedule.days]
+              .sort((a, b) => a - b)
+              .map((day) => SHORT_DAYS[day])
+              .join(", ");
+  return `${when} ${schedule.time} ${zone}`;
+}
+
+/** "On ci.failed · jimprince/t3code" for event rules, the schedule otherwise. */
+function triggerText(trigger: AutomationTrigger, at: number): string {
+  if (trigger.type === "schedule") return scheduleText(trigger.schedule, at);
+  const filter = trigger.filter ?? {};
+  return [`On ${trigger.event}`, filter.repository, filter.label].filter(Boolean).join(" · ");
+}
+
+const RUN_WORDS: Record<AutomationRun["status"], string> = {
+  completed: "ok",
+  failed: "failed",
+  skipped: "skipped",
+  running: "running",
+  queued: "queued",
 };
 
-function triggerLabel(trigger: AutomationTrigger): string {
-  if (trigger.type === "schedule") return scheduleLabel(trigger.schedule);
-  const filter = trigger.filter ?? {};
-  const scope = [filter.label, filter.repository].filter(Boolean).join(" in ");
-  return `${EVENT_LABELS[trigger.event]}${scope ? ` (${scope})` : ""}`;
-}
+const normalize = (value: string) => value.trim().toLowerCase();
 
-export function automationSummary(automation: Automation): string {
-  const labels = automation.triggers.map(triggerLabel);
-  return labels.length === 0 ? "Manual only" : labels.join(" or ");
+/**
+ * The muted second line of a rule: triggers, the next run as relative time plus a short date,
+ * where it runs (left out when that repeats the name), and the newest run's result and age.
+ */
+export function ruleLine(input: {
+  readonly automation: Automation;
+  readonly now: number;
+  /** Where its agent turns go, as the user knows it ("new thread", a thread title). */
+  readonly target: string | null;
+  readonly lastRun: AutomationRun | undefined;
+}): { readonly summary: string; readonly last: string | null } {
+  const { automation, now, target, lastRun } = input;
+  const next = automation.nextRunAt === null ? null : Date.parse(automation.nextRunAt);
+  const timeZone = automation.triggers.flatMap((trigger) =>
+    trigger.type === "schedule" ? [trigger.schedule.timeZone] : [],
+  )[0];
+  const triggers = automation.triggers.map((trigger) => triggerText(trigger, next ?? now));
+  const nextText = !automation.enabled
+    ? "paused"
+    : next === null
+      ? null
+      : next <= now
+        ? "due now"
+        : `next in ${shortDuration(next - now)}${
+            timeZone ? ` (${parts(next, timeZone).weekday} ${parts(next, timeZone).time})` : ""
+          }`;
+  const repeatsName =
+    target !== null &&
+    (normalize(automation.name).includes(normalize(target)) ||
+      normalize(target).includes(normalize(automation.name)));
+  const summary = [
+    triggers.length === 0 ? "Manual only" : triggers.join(" or "),
+    nextText,
+    target !== null && !repeatsName ? `runs in: ${target}` : null,
+  ]
+    .filter((part): part is string => part !== null)
+    .join(" · ");
+  if (lastRun === undefined) return { summary, last: null };
+  const at = Date.parse(lastRun.finishedAt ?? lastRun.steps[0]?.startedAt ?? lastRun.createdAt);
+  const age = now - at < 60_000 ? "just now" : `${shortDuration(now - at)} ago`;
+  return {
+    summary,
+    last: `last: ${lastRun.dryRun ? "dry run" : RUN_WORDS[lastRun.status]} ${age}`,
+  };
 }
 
 /**

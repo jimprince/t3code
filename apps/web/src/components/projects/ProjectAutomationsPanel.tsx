@@ -4,11 +4,13 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import {
   AutomationDefinition,
+  type Automation,
   type EnvironmentId,
   type ProjectId,
   type ThreadId,
 } from "@t3tools/contracts";
 import { Link } from "@tanstack/react-router";
+import { MoreHorizontalIcon } from "lucide-react";
 import * as Schema from "effect/Schema";
 import { useState } from "react";
 import { randomUUID } from "../../lib/utils";
@@ -23,14 +25,25 @@ import {
 import { useThreadShells } from "../../state/entities";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "../ui/alert-dialog";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
+import { Switch } from "../ui/switch";
 import { Textarea } from "../ui/textarea";
 import {
-  automationSummary,
   belongsToRoot,
   DAY_NAMES,
   fromDraft,
+  ruleLine,
   toDraft,
   type AutomationDraft,
 } from "./projectAutomations.logic";
@@ -54,6 +67,11 @@ export function ProjectAutomationsPanel({ environmentId, projectId, rootThreadId
   const [editing, setEditing] = useState<AutomationDraft | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<Automation | null>(null);
+  const [showingRuns, setShowingRuns] = useState<ReadonlySet<string>>(() => new Set());
+  // Relative times use the newest refresh (every 15-30 s while open); rules render only once
+  // the list has loaded, so a timestamp is always present.
+  const now = Math.max(list.dataUpdatedAt ?? 0, runLog.dataUpdatedAt ?? 0);
   const automations = (list.data?.automations ?? []).filter((automation) =>
     belongsToRoot(automation, rootThreadId),
   );
@@ -115,102 +133,163 @@ export function ProjectAutomationsPanel({ environmentId, projectId, rootThreadId
       </div>
       {automations.map((automation) => {
         const draft = toDraft(automation);
-        const first = automation.triggers[0];
-        const timeZone = first?.type === "schedule" ? first.schedule.timeZone : undefined;
         const target = automation.actions[0]?.target;
+        const ruleRuns = runs.filter((entry) => entry.automationId === automation.id);
+        const line = ruleLine({
+          automation,
+          now,
+          target:
+            target === undefined || target.kind === "new-thread"
+              ? "new thread"
+              : target.threadId === rootThreadId
+                ? "orchestrator"
+                : (threads.find((thread) => thread.id === target.threadId)?.title ??
+                  "existing thread"),
+          lastRun: ruleRuns[0],
+        });
+        const lastThreadId = ruleRuns[0]?.steps[0]?.threadId;
+        const expanded = showingRuns.has(automation.id);
         return (
           <div key={automation.id} className="space-y-1">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-              <span className="font-medium">{automation.name}</span>
-              <span>
-                {automationSummary(automation)}
-                {timeZone ? ` (${timeZone})` : ""}
-              </span>
-              <span>
-                {!automation.enabled
-                  ? "Paused"
-                  : automation.nextRunAt
-                    ? `Next ${new Date(automation.nextRunAt).toLocaleString()}`
-                    : null}
-              </span>
-              <span>
-                {target === undefined || target.kind === "new-thread"
-                  ? "New thread each run"
-                  : target.threadId === rootThreadId
-                    ? "Orchestrator"
-                    : (threads.find((thread) => thread.id === target.threadId)?.title ??
-                      "Existing thread")}
-              </span>
-              <label className="flex items-center gap-1">
-                <input
-                  aria-label={`Enable ${automation.name}`}
-                  type="checkbox"
-                  checked={automation.enabled}
-                  disabled={pending}
-                  onChange={() =>
-                    void send(() =>
-                      toggle({
-                        environmentId,
-                        input: { automationId: automation.id, enabled: !automation.enabled },
-                      }),
-                    )
+            <div className="flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium">{automation.name}</div>
+                <div className="truncate text-xs text-muted-foreground">
+                  {line.summary}
+                  {line.last ? " · " : null}
+                  {line.last &&
+                  lastThreadId &&
+                  threads.some((thread) => thread.id === lastThreadId) ? (
+                    <Link
+                      to="/$environmentId/$threadId"
+                      params={{ environmentId, threadId: lastThreadId }}
+                    >
+                      {line.last}
+                    </Link>
+                  ) : (
+                    line.last
+                  )}
+                </div>
+              </div>
+              <Switch
+                size="sm"
+                aria-label={`Enable ${automation.name}`}
+                checked={automation.enabled}
+                disabled={pending}
+                onCheckedChange={(enabled) =>
+                  void send(() =>
+                    toggle({ environmentId, input: { automationId: automation.id, enabled } }),
+                  )
+                }
+              />
+              <Menu>
+                <MenuTrigger
+                  render={
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      aria-label={`Actions for ${automation.name}`}
+                      disabled={pending}
+                    />
                   }
-                />
-                Enabled
-              </label>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={pending || draft === null}
-                title={draft === null ? "Edit this rule with t3-thread automation" : undefined}
-                onClick={() => setEditing(draft)}
-              >
-                Edit
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={pending}
-                onClick={() =>
-                  void send(() => run({ environmentId, input: { automationId: automation.id } }))
-                }
-              >
-                Run now
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={pending}
-                onClick={() =>
-                  void send(() => remove({ environmentId, input: { automationId: automation.id } }))
-                }
-              >
-                Delete
-              </Button>
+                >
+                  <MoreHorizontalIcon />
+                </MenuTrigger>
+                <MenuPopup align="end">
+                  <MenuItem
+                    disabled={draft === null}
+                    title={draft === null ? "Edit this rule with t3-thread automation" : undefined}
+                    onClick={() => setEditing(draft)}
+                  >
+                    Edit
+                  </MenuItem>
+                  <MenuItem
+                    onClick={() =>
+                      void send(() =>
+                        run({ environmentId, input: { automationId: automation.id } }),
+                      )
+                    }
+                  >
+                    Run now
+                  </MenuItem>
+                  <MenuItem
+                    disabled={ruleRuns.length === 0}
+                    onClick={() =>
+                      setShowingRuns((current) => {
+                        const next = new Set(current);
+                        if (!next.delete(automation.id)) next.add(automation.id);
+                        return next;
+                      })
+                    }
+                  >
+                    {expanded ? "Hide recent runs" : "Recent runs"}
+                  </MenuItem>
+                  <MenuSeparator />
+                  <MenuItem variant="destructive" onClick={() => setDeleting(automation)}>
+                    Delete
+                  </MenuItem>
+                </MenuPopup>
+              </Menu>
             </div>
-            {runs
-              .filter((entry) => entry.automationId === automation.id)
-              .slice(0, 5)
-              .map((entry) => {
-                const threadId = entry.steps[0]?.threadId;
-                return (
-                  <div key={entry.id} className="flex flex-wrap gap-x-3 text-xs">
-                    <time>
-                      {new Date(entry.steps[0]?.startedAt ?? entry.createdAt).toLocaleString()}
-                    </time>
-                    <span>{entry.dryRun ? `dry run` : entry.status}</span>
-                    {threadId && threads.some((thread) => thread.id === threadId) ? (
-                      <Link to="/$environmentId/$threadId" params={{ environmentId, threadId }}>
-                        Open thread
-                      </Link>
-                    ) : null}
-                    {entry.result ? <span>{entry.result}</span> : null}
-                  </div>
-                );
-              })}
+            {expanded
+              ? ruleRuns.slice(0, 5).map((entry) => {
+                  const threadId = entry.steps[0]?.threadId;
+                  return (
+                    <div
+                      key={entry.id}
+                      className="flex flex-wrap gap-x-3 text-xs text-muted-foreground"
+                    >
+                      <time>
+                        {new Date(entry.steps[0]?.startedAt ?? entry.createdAt).toLocaleString()}
+                      </time>
+                      <span>{entry.dryRun ? `dry run` : entry.status}</span>
+                      {threadId && threads.some((thread) => thread.id === threadId) ? (
+                        <Link to="/$environmentId/$threadId" params={{ environmentId, threadId }}>
+                          Open thread
+                        </Link>
+                      ) : null}
+                      {entry.result ? <span>{entry.result}</span> : null}
+                    </div>
+                  );
+                })
+              : null}
           </div>
         );
       })}
+      <AlertDialog
+        open={deleting !== null}
+        onOpenChange={(open) => {
+          if (!open && !pending) setDeleting(null);
+        }}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {deleting?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              It stops running. Runs that have not started are skipped; past runs and their threads
+              stay.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose disabled={pending} render={<Button variant="outline" />}>
+              Cancel
+            </AlertDialogClose>
+            <Button
+              variant="destructive"
+              disabled={pending}
+              onClick={() => {
+                if (!deleting) return;
+                const automationId = deleting.id;
+                void send(() => remove({ environmentId, input: { automationId } })).then((ok) => {
+                  if (ok) setDeleting(null);
+                });
+              }}
+            >
+              Delete
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
       {editing ? (
         <form
           className="grid max-w-2xl gap-2"
