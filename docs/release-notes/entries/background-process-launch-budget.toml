@@ -1,0 +1,4 @@
+id = "background-process-launch-budget"
+category = "performance"
+functionality = "source-control"
+text = "Reduce background process bursts by sharing repository discovery, backing off missing hosting tools, and pacing pull-request and Git refreshes."
