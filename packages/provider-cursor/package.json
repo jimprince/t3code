@@ -45,8 +45,8 @@
     }
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "test": "vp test run --config ../../vite.config.ts --dir ."
+    "typecheck": "node ../../scripts/ci/heavy-gate.ts tsc --noEmit",
+    "test": "node ../../scripts/ci/heavy-gate.ts vp test run --config ../../vite.config.ts --dir ."
   },
   "dependencies": {
     "@cursor/sdk": "1.0.35",
