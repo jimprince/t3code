@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "7bee40cb008d9d288ea843ea65dd23a263e52306",
-  "head": "fca3e9fc1f0c1d1f945bac127fb66cd969aa5fee",
+  "prev": "188a86c6e8ea783d7aabe72d1bb6f2ff68e83e4b",
+  "head": "fbb9a2518fcfbbc24a9f0228fac7ba4cdb1d8489",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -92,13 +92,13 @@
     "fork-canvas-resize",
     "fork-pr-widget-refresh",
     "fork-decisions-other",
-    "fork-cli-project-layout"
-  ],
-  "unapplied": [
+    "fork-cli-project-layout",
     "fork-item-types",
     "fork-board-declutter",
     "fork-project-skew-gate",
-    "fork-request-titles",
+    "fork-request-titles"
+  ],
+  "unapplied": [
     "fork-page-agent-tray",
     "fork-release-publication",
     "fork-maintenance-automation",
@@ -131,7 +131,7 @@
       "oid": "25dec1cc533c5c414ae6f629ff323da5cc902026"
     },
     "fork-board-declutter": {
-      "oid": "d45eaa89de7104e0a9aa1d87d55279a498e861de"
+      "oid": "9ad88e650642d6850e35bcecaf7919da2dccb647"
     },
     "fork-bounded-diagnostics": {
       "oid": "6159bfd9df2d3adb59559e42318faa843b8bcff8"
@@ -203,7 +203,7 @@
       "oid": "6115c48f39a196fce611953b6e1a6b8d7c35be49"
     },
     "fork-item-types": {
-      "oid": "31be018a2a43f919086678055dd2e852fc4d0a56"
+      "oid": "fe7a83470438624518e99903b5abc3eb183ae518"
     },
     "fork-launch-health": {
       "oid": "f9317c40051518ec379ccedaaa19b816d67dd07b"
@@ -287,7 +287,7 @@
       "oid": "c87531ea679b84d2b79e7c642554fe5975082ba6"
     },
     "fork-project-skew-gate": {
-      "oid": "90ed649910efeb7d84fdf25c40f2e8fb0ffd8a78"
+      "oid": "17c53d0e6be379eb2e39af004924e6bbe326bb1d"
     },
     "fork-project-task-status": {
       "oid": "95af78256a71367d8fe905bce45b34fe3c07c423"
@@ -332,7 +332,7 @@
       "oid": "efd8d2635b33329b901a71728cdbff8da25aa745"
     },
     "fork-request-titles": {
-      "oid": "ecf4ff07dc2d508bbb06917dcaeb552b1b6208fb"
+      "oid": "fbb9a2518fcfbbc24a9f0228fac7ba4cdb1d8489"
     },
     "fork-resource-recovery": {
       "oid": "158af81bcf57731fc6fa4d87b39228aff623eeeb"
