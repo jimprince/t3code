@@ -228,6 +228,7 @@ describe("worker creation supervision", () => {
       vi.stubEnv("T3_ENVIRONMENT_NAME", "local");
       vi.resetModules();
       const { RemoteEnvironmentClient } = await import("../src/client.js");
+      vi.spyOn(RemoteEnvironmentClient.prototype, "supportsThreadNesting").mockResolvedValue(true);
       const create = vi
         .spyOn(RemoteEnvironmentClient.prototype, "createAgentThread")
         .mockResolvedValue({
