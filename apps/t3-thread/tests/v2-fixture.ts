@@ -1,10 +1,15 @@
 import { OrchestrationV2ThreadProjection, OrchestrationV2ThreadShell } from "@t3tools/contracts";
 import { Schema } from "effect";
 
+const decodeProjection = Schema.decodeUnknownSync(
+  Schema.toCodecJson(OrchestrationV2ThreadProjection),
+);
+const decodeShell = Schema.decodeUnknownSync(OrchestrationV2ThreadShell);
+
 export const at = (minutes = 0) =>
   new Date(Date.parse("2026-10-05T00:00:00Z") + minutes * 60_000).toISOString();
 export function projection(overrides: Record<string, unknown> = {}) {
-  return Schema.decodeUnknownSync(Schema.toCodecJson(OrchestrationV2ThreadProjection))({
+  return decodeProjection({
     thread: {
       id: "worker",
       projectId: "project",
@@ -107,7 +112,7 @@ export const item = (
 
 /** Native V2 shell, including required execution and settlement fields. */
 export function shell(overrides: Record<string, unknown> = {}) {
-  return Schema.decodeUnknownSync(OrchestrationV2ThreadShell)({
+  return decodeShell({
     ...projection().thread,
     latestRunId: null,
     activeRunId: null,
