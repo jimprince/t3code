@@ -105,3 +105,19 @@ In an existing Codex thread, send `/feedback` with an optional description, for
 example `/feedback The agent stopped before finishing the tests`. This uploads
 the conversation and Codex logs to OpenAI. The returned thread ID can be shared
 with OpenAI support.
+
+## Extra skill folders
+
+For a Codex instance, set `skillExtraRoots` to an array of skill folder paths in
+`providerInstances.<instance-id>.config` in the environment's `settings.json`.
+Use absolute paths on that environment's machine, or paths starting with `~/`.
+For example: `"skillExtraRoots": ["/srv/team-skills", "~/personal-skills"]`.
+This advanced setting is not shown in the provider form.
+
+New sessions and refreshed skill pickers use those folders without changing the
+Codex home or login. Running sessions keep their current skill scope. Setting
+an empty array restores default discovery for subsequent processes; saved skill
+paths are retained. If Codex does not support extra roots, T3 Code logs a warning
+and continues with native skill discovery. Other configuration errors follow the
+normal provider error path. Skill entries retain their names and absolute paths,
+including duplicates; select the intended path when names repeat.
