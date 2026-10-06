@@ -1,3 +1,4 @@
+import { assertFixtureMigration16 } from "../persistence/fixtureMigration16.testkit.ts";
 import { assert, it } from "@effect/vitest";
 import { NodeServices } from "@effect/platform-node";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
@@ -62,11 +63,10 @@ if (fixtures) {
               sql`SELECT * FROM automation_runs ORDER BY run_id`,
               sql`SELECT * FROM automation_source_state ORDER BY state_key`,
               sql`SELECT * FROM projection_projects ORDER BY project_id`,
-              sql`SELECT * FROM effect_sql_fork_migrations ORDER BY migration_id`,
+              sql`SELECT * FROM effect_sql_fork_migrations WHERE migration_id <= 15 ORDER BY migration_id`,
             ]);
           const before = yield* snapshot();
-          yield* runMigrations();
-          assert.deepEqual(yield* runForkMigrations(), []);
+          yield* assertFixtureMigration16;
           assert.deepEqual(yield* snapshot(), before);
           // SQLite, not an in-memory registry, enforces run deduplication after cutover.
           const indexes = yield* sql<{
