@@ -1,6 +1,7 @@
+import { supervisionMoveAvailability } from "@t3tools/client-runtime/state/fork-thread-ordering";
+import { useSupervisionMetadata } from "../../state/forkSupervision";
 import { useAndroidControlSizing } from "../../components/useAndroidControlSizing";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
-import { computeThreadMoveAvailability } from "./threadOrder";
 import type {
   EnvironmentProject,
   EnvironmentThreadShell,
@@ -138,6 +139,7 @@ function ThreadNavigationSidebarPane(
   const { fabClearance } = useAndroidControlSizing();
   const projects = useProjects();
   const threads = useNavigationThreadShells();
+  const orderMetadata = useSupervisionMetadata();
   const { environments: workspaceEnvironments, state: catalogState } = useWorkspaceState();
   const { savedConnectionsById } = useSavedRemoteConnections();
   const searchInputRef = useRef<TextInputInstance>(null);
@@ -331,29 +333,30 @@ function ThreadNavigationSidebarPane(
   // rebuild (see computeThreadMoveAvailability): per-thread planner calls made
   // list construction quadratic, and this list rebuilds on every minute tick.
   const threadMoveAvailability = useMemo(() => {
-    const sectionAvailability = (section: "pinned" | "active") =>
-      computeThreadMoveAvailability({
-        allThreads: threads,
+    const sectionAvailability = (section: "pinned" | "active") => {
+      const environments =
+        section === "pinned" ? pinReorderEnvironmentIds : activeReorderEnvironmentIds;
+      const ordered = getThreadListV2OrderedSection({
+        threads,
         section,
         pendingOrder,
-        reorderableEnvironmentIds:
-          section === "pinned" ? pinReorderEnvironmentIds : activeReorderEnvironmentIds,
-        ordered: getThreadListV2OrderedSection({
-          threads,
-          section,
-          pendingOrder,
-          now: new Date().toISOString(),
-          settlementEnvironmentIds,
-          snoozeEnvironmentIds,
-          queuedThreadKeys,
-        }),
+        now: new Date().toISOString(),
+        settlementEnvironmentIds,
+        snoozeEnvironmentIds,
+        queuedThreadKeys,
       });
+      return supervisionMoveAvailability(
+        ordered.filter((thread) => environments.has(thread.environmentId)),
+        orderMetadata,
+      );
+    };
     // The Working beta orders the inbox by time, so only pins can move.
     return new Map([
       ...sectionAvailability("pinned"),
       ...(workingShelfEnabled ? [] : sectionAvailability("active")),
     ]);
   }, [
+    orderMetadata,
     workingShelfEnabled,
     pinReorderEnvironmentIds,
     activeReorderEnvironmentIds,
@@ -387,6 +390,7 @@ function ThreadNavigationSidebarPane(
       selectedThreadKey: props.selectedThreadKey ?? null,
     });
   }, [
+    orderMetadata,
     workingShelfEnabled,
     workingShelfExpanded,
     pendingOrder,
