@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Fails closed on invalid docs/release-notes/entries/*.toml files. Run this in
+# CI before a change entry can be merged; see
+# docs/release-notes/entries/README.md for the format.
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+exec bun "$script_dir/check-fork-release-notes.ts" "$@"
