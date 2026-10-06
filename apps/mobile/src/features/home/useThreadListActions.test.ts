@@ -1,4 +1,5 @@
 import { makeThreadShellFixture } from "../../test-fixtures";
+import { scopedThreadKey } from "../../lib/scopedEntities";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import {
   AuthOrchestrationOperateScope,
@@ -65,6 +66,10 @@ vi.mock("../../state/server", () => ({
     updateThreadSubscriptions: async () => AsyncResult.success(undefined),
   },
 }));
+// Keep supervision at its atom boundary; its runtime loads native Expo modules.
+vi.mock("../../state/forkSupervision", () => ({
+  supervision: { readyHosts: "supervision-ready-hosts", metadata: "supervision-metadata" },
+}));
 vi.mock("../../state/atom-registry", () => ({
   appAtomRegistry: {
     set: (_atom: string, value: boolean) => {
@@ -75,24 +80,28 @@ vi.mock("../../state/atom-registry", () => ({
         ? state.dropBusy
         : atom === "thread-shells"
           ? state.shells
-          : atom === "queued-thread-keys"
-            ? new Set<string>()
-            : new Map(
-                [...state.scopes.keys()].map((environmentId) => [
-                  environmentId,
-                  {
-                    environment: {
-                      capabilities: {
-                        threadSettlement: true,
-                        threadSnooze: true,
-                        threadPinning: true,
-                        threadPinReorder: true,
-                        threadTitleRegeneration: true,
+          : atom === "supervision-ready-hosts"
+            ? new Set(state.scopes.keys())
+            : atom === "supervision-metadata"
+              ? []
+              : atom === "queued-thread-keys"
+                ? new Set<string>()
+                : new Map(
+                    [...state.scopes.keys()].map((environmentId) => [
+                      environmentId,
+                      {
+                        environment: {
+                          capabilities: {
+                            threadSettlement: true,
+                            threadSnooze: true,
+                            threadPinning: true,
+                            threadPinReorder: true,
+                            threadTitleRegeneration: true,
+                          },
+                        },
                       },
-                    },
-                  },
-                ]),
-              ),
+                    ]),
+                  ),
   },
 }));
 vi.mock("../../state/use-atom-command", () => ({
@@ -295,7 +304,12 @@ describe("pinned thread operation permissions", () => {
       }),
     ];
 
-    expect(await useThreadListActions().moveThread(moved, "up")).toBe(false);
+    expect(
+      await useThreadListActions().moveThread(moved, {
+        targetId: scopedThreadKey(otherEnvironmentId, ThreadId.make("other-thread")),
+        placement: "before",
+      }),
+    ).toBe(false);
     expect(state.requests).toEqual([]);
   });
 
@@ -311,7 +325,14 @@ describe("pinned thread operation permissions", () => {
       }),
     ];
 
-    expect(await useThreadListActions().moveThread(moved, "up")).toBe(true);
+    expect(await useThreadListActions().moveThread(moved, "up")).toBe(false);
+    expect(state.requests).toEqual([]);
+    expect(
+      await useThreadListActions().moveThread(moved, {
+        targetId: scopedThreadKey(otherEnvironmentId, ThreadId.make("other-thread")),
+        placement: "before",
+      }),
+    ).toBe(true);
     expect(state.requests).toEqual([
       expect.objectContaining({ action: "reorderPin", environmentId: primaryEnvironmentId }),
     ]);
