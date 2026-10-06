@@ -1,4 +1,4 @@
-import type { ProjectIssue, ThreadId } from "@t3tools/contracts";
+import { normalizeRequestKind, type ProjectIssue, type ThreadId } from "@t3tools/contracts";
 
 import type { RequestKind } from "../textGeneration/RequestItemsPrompt.ts";
 
@@ -17,6 +17,8 @@ export interface OutboxEntry {
   readonly items: ReadonlyArray<{
     title: string;
     kind: RequestKind;
+    /** A task tagged `bug`. */
+    bug?: boolean;
     excerpt: string;
     /** Saved for later: filed with the parked label, off the active request list. */
     parked?: boolean;
@@ -48,11 +50,24 @@ export function parseOutbox(contents: string | null): Outbox {
   try {
     const value = JSON.parse(contents) as Partial<Outbox>;
     return value?.version === 1 && Array.isArray(value.entries)
-      ? { version: 1, entries: value.entries }
+      ? { version: 1, entries: value.entries.map(normalizeEntryKinds) }
       : EMPTY_OUTBOX;
   } catch {
     return EMPTY_OUTBOX;
   }
+}
+
+/** Entries written before the three item types carry an earlier kind; read it as its current one. */
+function normalizeEntryKinds(entry: OutboxEntry): OutboxEntry {
+  if (!entry.items) return entry;
+  return {
+    ...entry,
+    items: entry.items.map((item) => {
+      const kind = normalizeRequestKind(item.kind);
+      const bug = item.bug || (item.kind as string) === "bug";
+      return { ...item, kind, ...(bug ? { bug: true } : {}) };
+    }),
+  };
 }
 
 /**
