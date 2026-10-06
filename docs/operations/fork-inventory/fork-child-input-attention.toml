@@ -1,0 +1,14 @@
+name = "fork-child-input-attention"
+subject = "feat(threads): separate child input attention from parent status"
+class = "product"
+purpose = "Keep parent status independent, expose waiting child input, and remind subscribed parents while questions remain pending."
+retire_when = "Upstream provides independent parent status, child attention navigation and configurable unanswered-question reminders."
+depends_on = ["fork-notification-preferences", "fork-sidebar-agent-visibility"]
+roles = []
+note = "Replaces sidebar child-state rollup with separate child input markers. Input counts recurse through every reachable descendant, so both roots and collapsed nested parents state how many sub-agents need input. Reminders use existing direct-caller subscriptions and confirmed-delivery history, with no new polling process."
+
+[[decision]]
+id = "v2-port-2689"
+date = "2026-10-05"
+decided = "reconcile-smaller"
+rationale = "Native pending runtime request ids drive operator reminders and additive child attention; never aggregate child attention into parent status."
