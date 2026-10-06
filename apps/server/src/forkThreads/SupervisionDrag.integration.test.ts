@@ -28,7 +28,7 @@ it.effect(
       yield* drop(input);
       yield* drop(input);
       expect((yield* listMetadata(sql)).find((t) => t.threadId === a)?.parentThreadId).toBe(b);
-      expect(commands.map((c) => c.commandId)).toEqual(["nest:parent:shell-refresh", "nest:parent:shell-refresh"]);
+      expect(commands.map((c) => c.commandId)).toEqual(["nest:shell-refresh", "nest:shell-refresh"]);
       const cycle = yield* Effect.result(
         drop({ commandId: CommandId.make("cycle"), threadId: b, parentThreadId: a }),
       );
