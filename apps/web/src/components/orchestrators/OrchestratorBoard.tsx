@@ -5,11 +5,20 @@ import {
   type OrchestratorThreadShell,
 } from "@t3tools/client-runtime/state/orchestrators";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { CommandId, type EnvironmentId, type ThreadId } from "@t3tools/contracts";
+import {
+  applyLayoutOps,
+  CommandId,
+  type EnvironmentId,
+  type ProjectLayoutOp,
+  type ProjectLayoutTab,
+  type ProjectLayoutWidget,
+  type ThreadId,
+} from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import * as Schema from "effect/Schema";
 import {
@@ -17,6 +26,7 @@ import {
   CircleAlertIcon,
   MessageSquareIcon,
   PencilIcon,
+  PlusIcon,
   SlidersHorizontalIcon,
   UsersIcon,
   XIcon,
@@ -34,6 +44,7 @@ import {
 import { updateProjectScopeCommand } from "../../state/forkProjectScope";
 import { useSupervisionReadyHosts } from "../../state/forkSupervision";
 import { threadEnvironment } from "../../state/threads";
+import { applyProjectLayout, useProjectLayout } from "../../state/projectLayout";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { randomUUID } from "../../lib/utils";
 import { buildThreadRouteParams } from "../../threadRoutes";
@@ -66,45 +77,135 @@ import {
   useNeedsYou,
   useOpenThread,
   useSettle,
+  WorkerRequestTag,
 } from "./ProjectRequestsSection";
-import { ProjectWidgetList, WorkerRequestTag } from "./ProjectWidgetList";
+import { ProjectLayoutTabView, TAB_DRAG_TYPE, WIDGET_DRAG_TYPE } from "./ProjectLayoutView";
 import { ProjectRoadmapWidget, SaveForLater } from "./ProjectRoadmapWidget";
 import { ProjectPullRequestsWidget } from "./ProjectPullRequestsWidget";
 import { ProjectRequestBox } from "./ProjectRequestBox";
 import { ProjectIssuesSummary, ProjectRoadmapSummary } from "./ProjectTabSummaries";
-import { PROJECT_TABS, resolveProjectTab, type ProjectTab } from "./projectTabs.logic";
-import type { ProjectWidgetId } from "./projectWidgets.logic";
+import { resolveProjectTab, type ProjectTab } from "./projectTabs.logic";
 import { projectReturnState } from "./projectNavigation";
 
-/** Dashboard | Roadmap | Tasks, with the tab's own actions (Customize) at the right. */
+/**
+ * The layout's tabs, with the page's actions (Edit layout) at the right. In edit
+ * mode tabs can be dragged, renamed, removed and added, and a widget dropped on
+ * a tab moves to its end.
+ */
 function ProjectTabBar({
+  tabs,
   tab,
   onSelect,
   actions,
+  editing,
+  onApply,
 }: {
+  readonly tabs: ReadonlyArray<ProjectLayoutTab>;
   readonly tab: ProjectTab;
   readonly onSelect: (tab: ProjectTab) => void;
   readonly actions?: ReactNode;
+  readonly editing: boolean;
+  readonly onApply: (ops: ProjectLayoutOp[]) => void;
 }) {
+  const [newTab, setNewTab] = useState("");
   return (
     <div className="flex items-end gap-4 border-b border-border">
-      <div role="tablist" aria-label="Project views" className="flex gap-4">
-        {PROJECT_TABS.map((item) => (
-          <button
+      <div role="tablist" aria-label="Project views" className="flex flex-wrap gap-4">
+        {tabs.map((item, index) => (
+          <div
             key={item.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === item.id}
-            className={`-mb-px border-b-2 px-0.5 pb-2 text-sm ${
-              tab === item.id
-                ? "border-foreground text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => onSelect(item.id)}
+            className="flex items-center gap-1"
+            draggable={editing}
+            onDragStart={(event) => {
+              event.dataTransfer.setData(TAB_DRAG_TYPE, item.id);
+              event.dataTransfer.effectAllowed = "move";
+            }}
+            onDragOver={(event) => {
+              const types = event.dataTransfer.types;
+              if (editing && (types.includes(TAB_DRAG_TYPE) || types.includes(WIDGET_DRAG_TYPE))) {
+                event.preventDefault();
+              }
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              const movedTab = event.dataTransfer.getData(TAB_DRAG_TYPE);
+              const movedWidget = event.dataTransfer.getData(WIDGET_DRAG_TYPE);
+              if (movedTab && movedTab !== item.id) {
+                onApply([{ op: "moveTab", tabId: movedTab, index }]);
+              } else if (movedWidget) {
+                onApply([
+                  {
+                    op: "moveWidget",
+                    widgetId: movedWidget,
+                    tabId: item.id,
+                    index: item.widgets.length,
+                  },
+                ]);
+              }
+            }}
           >
-            {item.title}
-          </button>
+            {editing && tab === item.id ? (
+              <Input
+                aria-label={`Rename ${item.title}`}
+                className="-mb-px h-7 w-32"
+                defaultValue={item.title}
+                onBlur={(event) => {
+                  const title = event.target.value.trim();
+                  if (title && title !== item.title) {
+                    onApply([{ op: "renameTab", tabId: item.id, title }]);
+                  }
+                }}
+              />
+            ) : (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === item.id}
+                className={`-mb-px border-b-2 px-0.5 pb-2 text-sm ${
+                  tab === item.id
+                    ? "border-foreground text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                } ${editing ? "cursor-grab" : ""}`}
+                onClick={() => onSelect(item.id)}
+              >
+                {item.title}
+              </button>
+            )}
+            {editing && tabs.length > 1 ? (
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                aria-label={`Remove the ${item.title} tab`}
+                onClick={() => onApply([{ op: "removeTab", tabId: item.id }])}
+              >
+                <XIcon />
+              </Button>
+            ) : null}
+          </div>
         ))}
+        {editing ? (
+          <form
+            className="flex items-center gap-1 pb-1"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const title = newTab.trim();
+              if (!title) return;
+              onApply([{ op: "addTab", tab: { title } }]);
+              setNewTab("");
+            }}
+          >
+            <Input
+              aria-label="New tab"
+              className="h-7 w-28"
+              placeholder="New tab"
+              value={newTab}
+              onChange={(event) => setNewTab(event.target.value)}
+            />
+            <Button size="icon-xs" variant="ghost" type="submit" aria-label="Add tab">
+              <PlusIcon />
+            </Button>
+          </form>
+        ) : null}
       </div>
       <div className="ml-auto pb-1">{actions}</div>
     </div>
@@ -268,6 +369,198 @@ function WorkerRow({
   );
 }
 
+interface BoardPage {
+  readonly summary: OrchestratorSummary;
+  readonly done: ReturnType<typeof orchestratorDoneSince>;
+  readonly providerEntriesFor: (
+    thread: EnvironmentThreadShell,
+  ) => ReadonlyMap<string, ProviderInstanceEntry>;
+  readonly selectTab: (tab: ProjectTab) => void;
+  readonly roadmapTab: string | null;
+  readonly tasksTab: string | null;
+  readonly chatOpen: boolean;
+  readonly setChatOpen: (open: boolean) => void;
+  readonly rootRef: ReturnType<typeof scopeThreadRef>;
+  readonly revealSentMessage: (messageId: import("@t3tools/contracts").MessageId) => void;
+}
+
+/** A built-in widget of the layout, by type, with its settings. */
+function BuiltinWidget({
+  widget,
+  page,
+}: {
+  readonly widget: ProjectLayoutWidget;
+  readonly page: BoardPage;
+}) {
+  const {
+    summary,
+    done,
+    providerEntriesFor,
+    selectTab,
+    roadmapTab,
+    tasksTab,
+    chatOpen,
+    setChatOpen,
+    rootRef,
+    revealSentMessage,
+  } = page;
+  switch (widget.type) {
+    case "requests":
+      return (
+        <ProjectRequestsSection
+          summary={summary}
+          includeLater={widget.config.includeLater === true}
+        />
+      );
+    case "release":
+      return <ProjectReleaseWidget summary={summary} />;
+    case "maintenance":
+      return (
+        <ProjectMaintenanceWidget
+          summary={summary}
+          includeLater={widget.config.includeLater === true}
+        />
+      );
+    case "roadmap-summary":
+      return (
+        <ProjectRoadmapSummary
+          summary={summary}
+          onOpen={roadmapTab ? () => selectTab(roadmapTab) : null}
+        />
+      );
+    case "roadmap-board":
+      return <ProjectRoadmapWidget summary={summary} />;
+    case "issues-board":
+      return (
+        <ProjectIssuesBoard
+          summary={summary}
+          pendingPreview={Number(widget.config.pendingPreview ?? 10)}
+        />
+      );
+    case "needs-you":
+      return <ProjectNeedsYouWidget summary={summary} providerEntriesFor={providerEntriesFor} />;
+    case "working":
+      return summary.working.length > 0 ? (
+        <BoardSection title="Working" count={summary.working.length}>
+          <ul className="divide-y divide-border">
+            {summary.working.map((item) => (
+              <WorkerRow
+                key={item.thread.id}
+                summary={summary}
+                thread={item.thread}
+                latestLine={item.latestLine}
+                trailing={
+                  <ThreadProviderModel
+                    thread={item.thread}
+                    entries={providerEntriesFor(item.thread)}
+                  />
+                }
+              />
+            ))}
+          </ul>
+        </BoardSection>
+      ) : null;
+    case "blocked":
+      return summary.blocked.length > 0 ? (
+        <BoardSection title="Blocked" count={summary.blocked.length}>
+          <ul className="divide-y divide-border">
+            {summary.blocked.map((item) => (
+              <WorkerRow
+                key={item.thread.id}
+                summary={summary}
+                thread={item.thread}
+                latestLine={item.latestLine}
+                tone="error"
+                trailing={
+                  <>
+                    <time className="text-xs text-muted-foreground">
+                      {formatRelativeTimeLabel(
+                        item.thread.updatedAt,
+                      )}
+                    </time>
+                    <ThreadProviderModel
+                      thread={item.thread}
+                      entries={providerEntriesFor(item.thread)}
+                    />
+                  </>
+                }
+              />
+            ))}
+          </ul>
+        </BoardSection>
+      ) : null;
+    case "done":
+      return done.length > 0 ? (
+        <BoardSection title="Done since your last visit" count={done.length}>
+          <ul className="divide-y divide-border">
+            {done.map((item) => (
+              <WorkerRow
+                key={item.thread.id}
+                summary={summary}
+                thread={item.thread}
+                trailing={
+                  <time className="text-xs text-muted-foreground" dateTime={item.completedAt}>
+                    {formatRelativeTimeLabel(item.completedAt)}
+                  </time>
+                }
+              />
+            ))}
+          </ul>
+        </BoardSection>
+      ) : null;
+    case "composer":
+      return (
+        <BoardSection title="New request">
+          {chatOpen ? (
+            <Button size="sm" variant="outline" onClick={() => setChatOpen(true)}>
+              Continue in orchestrator chat
+              <MessageSquareIcon />
+            </Button>
+          ) : (
+            <div className="relative h-44 overflow-hidden">
+              <ChatView
+                routeKind="server"
+                environmentId={rootRef.environmentId}
+                threadId={rootRef.threadId}
+                presentation="project-request"
+                onMessageSent={revealSentMessage}
+              />
+            </div>
+          )}
+          <div className="mt-2">
+            <SaveForLater summary={summary} />
+          </div>
+        </BoardSection>
+      );
+    case "issues-summary":
+      return (
+        <ProjectIssuesSummary
+          summary={summary}
+          onOpen={tasksTab ? () => selectTab(tasksTab) : null}
+          includeLater={widget.config.includeLater === true}
+        />
+      );
+    case "prs":
+      return <ProjectPullRequestsWidget summary={summary} />;
+    // The panel is shared with project settings; here its heading matches the
+    // page's other widget headings.
+    case "automations":
+      return (
+        <div className="border-t border-border pt-4 [&_h2]:font-semibold [&_h2]:tracking-wide [&_h2]:text-muted-foreground">
+          <ProjectAutomationsSlot
+            project={{
+              environmentId: summary.root.environmentId,
+              rootThreadId: summary.root.id,
+              rootProjectId: summary.root.projectId,
+            }}
+          />
+        </div>
+      );
+    default:
+      return null;
+  }
+}
+
 export function OrchestratorBoard({
   environmentId,
   threadId,
@@ -285,7 +578,50 @@ export function OrchestratorBoard({
     "dashboard",
     Schema.String,
   );
-  const tab = resolveProjectTab(tabFromUrl, rememberedTab);
+  const layoutState = useProjectLayout(environmentId, threadId);
+  const applyLayout = useAtomCommand(applyProjectLayout, "Change layout");
+  const [editingLayout, setEditingLayout] = useState(false);
+  // An edit shows at once; the server's next revision replaces it.
+  const [optimistic, setOptimistic] = useState<{
+    readonly base: number;
+    readonly tabs: ReadonlyArray<ProjectLayoutTab>;
+  } | null>(null);
+  const layoutTabs =
+    optimistic && optimistic.base === layoutState.layout.revision
+      ? optimistic.tabs
+      : layoutState.layout.tabs;
+  const tab = resolveProjectTab(
+    tabFromUrl,
+    rememberedTab,
+    layoutTabs.map((item) => item.id),
+  );
+  const changeLayout = (ops: ProjectLayoutOp[]) => {
+    if (!layoutState.live) {
+      toastManager.add({
+        type: "error",
+        title: "This server cannot save layouts",
+        description: "Update the server to edit the project layout.",
+      });
+      return;
+    }
+    const next = applyLayoutOps(layoutTabs, ops);
+    if ("error" in next) {
+      toastManager.add({
+        type: "error",
+        title: "Could not change the layout",
+        description: next.error,
+      });
+      return;
+    }
+    const base = layoutState.layout.revision;
+    setOptimistic({ base, tabs: next.tabs });
+    void applyLayout({
+      environmentId,
+      input: { threadId, baseRevision: base, ops },
+    }).then((result) => {
+      if (result._tag === "Failure") setOptimistic(null);
+    });
+  };
   const selectTab = (next: ProjectTab) => {
     setRememberedTab(next);
     onTabChange?.(next);
@@ -309,7 +645,6 @@ export function OrchestratorBoard({
     import("@t3tools/contracts").MessageId | null
   >(null);
   const [editing, setEditing] = useState(false);
-  const [customizing, setCustomizing] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editScope, setEditScope] = useState("");
   const supervisionReadyHosts = useSupervisionReadyHosts();
@@ -414,121 +749,23 @@ export function OrchestratorBoard({
     setChatOpen(true);
   };
 
-  const widgetViews: Partial<Record<ProjectWidgetId, ReactNode>> = {
-    requests: <ProjectRequestsSection summary={summary} />,
-    release: <ProjectReleaseWidget summary={summary} />,
-    maintenance: <ProjectMaintenanceWidget summary={summary} />,
-    roadmap: <ProjectRoadmapSummary summary={summary} onOpen={() => selectTab("roadmap")} />,
-    "needs-you": (
-      <ProjectNeedsYouWidget summary={summary} providerEntriesFor={providerEntriesFor} />
-    ),
-    working:
-      summary.working.length > 0 ? (
-        <BoardSection title="Working" count={summary.working.length}>
-          <ul className="divide-y divide-border">
-            {summary.working.map((item) => (
-              <WorkerRow
-                key={item.thread.id}
-                summary={summary}
-                thread={item.thread}
-                latestLine={item.latestLine}
-                trailing={
-                  <ThreadProviderModel
-                    thread={item.thread}
-                    entries={providerEntriesFor(item.thread)}
-                  />
-                }
-              />
-            ))}
-          </ul>
-        </BoardSection>
-      ) : null,
-    blocked:
-      summary.blocked.length > 0 ? (
-        <BoardSection title="Blocked" count={summary.blocked.length}>
-          <ul className="divide-y divide-border">
-            {summary.blocked.map((item) => (
-              <WorkerRow
-                key={item.thread.id}
-                summary={summary}
-                thread={item.thread}
-                latestLine={item.latestLine}
-                tone="error"
-                trailing={
-                  <>
-                    <time className="text-xs text-muted-foreground">
-                      {formatRelativeTimeLabel(
-                        item.thread.updatedAt,
-                      )}
-                    </time>
-                    <ThreadProviderModel
-                      thread={item.thread}
-                      entries={providerEntriesFor(item.thread)}
-                    />
-                  </>
-                }
-              />
-            ))}
-          </ul>
-        </BoardSection>
-      ) : null,
-    done:
-      done.length > 0 ? (
-        <BoardSection title="Done since your last visit" count={done.length}>
-          <ul className="divide-y divide-border">
-            {done.map((item) => (
-              <WorkerRow
-                key={item.thread.id}
-                summary={summary}
-                thread={item.thread}
-                trailing={
-                  <time className="text-xs text-muted-foreground" dateTime={item.completedAt}>
-                    {formatRelativeTimeLabel(item.completedAt)}
-                  </time>
-                }
-              />
-            ))}
-          </ul>
-        </BoardSection>
-      ) : null,
-    "new-request": (
-      <BoardSection title="New request">
-        {chatOpen ? (
-          <Button size="sm" variant="outline" onClick={() => setChatOpen(true)}>
-            Continue in orchestrator chat
-            <MessageSquareIcon />
-          </Button>
-        ) : (
-          <div className="relative h-44 overflow-hidden">
-            <ChatView
-              routeKind="server"
-              environmentId={rootRef.environmentId}
-              threadId={rootRef.threadId}
-              presentation="project-request"
-              onMessageSent={revealSentMessage}
-            />
-          </div>
-        )}
-        <div className="mt-2">
-          <SaveForLater summary={summary} />
-        </div>
-      </BoardSection>
-    ),
-    issues: <ProjectIssuesSummary summary={summary} onOpen={() => selectTab("issues")} />,
-    prs: <ProjectPullRequestsWidget summary={summary} />,
-    // The panel is shared with project settings; here its heading matches the
-    // page's other widget headings.
-    automations: (
-      <div className="border-t border-border pt-4 [&_h2]:font-semibold [&_h2]:tracking-wide [&_h2]:text-muted-foreground">
-        <ProjectAutomationsSlot
-          project={{
-            environmentId: summary.root.environmentId,
-            rootThreadId: summary.root.id,
-            rootProjectId: summary.root.projectId,
-          }}
-        />
-      </div>
-    ),
+  const activeTab = layoutTabs.find((item) => item.id === tab) ?? layoutTabs[0] ?? null;
+  /** The tab holding a board, for the Dashboard's summary lines to open. */
+  const tabWith = (type: string) =>
+    layoutTabs.find((item) => item.widgets.some((widget) => widget.type === type))?.id ?? null;
+  const roadmapTab = tabWith("roadmap-board");
+  const tasksTab = tabWith("issues-board");
+  const page: BoardPage = {
+    summary,
+    done,
+    providerEntriesFor,
+    selectTab,
+    roadmapTab,
+    tasksTab,
+    chatOpen,
+    setChatOpen,
+    rootRef,
+    revealSentMessage,
   };
 
   return (
@@ -596,29 +833,41 @@ export function OrchestratorBoard({
               {/* On every tab, above the tabs: one line until it is used. */}
               <ProjectRequestBox summary={summary} />
               <ProjectTabBar
+                tabs={layoutTabs}
                 tab={tab}
                 onSelect={selectTab}
+                editing={editingLayout}
+                onApply={changeLayout}
                 actions={
-                  tab === "dashboard" ? (
-                    <Button size="xs" variant="ghost-muted" onClick={() => setCustomizing(true)}>
+                  layoutState.live ? (
+                    <Button
+                      size="xs"
+                      variant={editingLayout ? "default" : "ghost-muted"}
+                      onClick={() => setEditingLayout((value) => !value)}
+                    >
                       <SlidersHorizontalIcon />
-                      Customize
+                      {editingLayout ? "Done" : "Edit layout"}
                     </Button>
                   ) : null
                 }
               />
-              {tab === "roadmap" ? (
-                <ProjectRoadmapWidget summary={summary} />
-              ) : tab === "issues" ? (
-                <ProjectIssuesBoard summary={summary} />
-              ) : (
-                <ProjectWidgetList
+              {activeTab ? (
+                <ProjectLayoutTabView
                   summary={summary}
-                  views={widgetViews}
-                  customizing={customizing}
-                  onCustomizingChange={setCustomizing}
+                  tabs={layoutTabs}
+                  tab={activeTab}
+                  editing={editingLayout}
+                  builtins={
+                    new Map(
+                      activeTab.widgets.map((widget) => [
+                        widget.id,
+                        <BuiltinWidget key={widget.id} widget={widget} page={page} />,
+                      ]),
+                    )
+                  }
+                  onApply={changeLayout}
                 />
-              )}
+              ) : null}
             </WorkspacePageContainer>
           </div>
           {chatOpen ? (
