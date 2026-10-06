@@ -1198,7 +1198,8 @@ Several canvases: list them in `.t3/dashboard/widgets.json`, each its own Dashbo
 - `path`: a `.html` file relative to `.t3/dashboard`; its images, CSS and JSON must sit in the
   page's own folder (for example `funnel/thumbs/42.png`), served read-only and inlined.
 - `size`: `small` (a third of the width, 220 px tall), `medium` (half, 320 px) or `full`
-  (420 px). Neighbouring small and medium canvases share a row. All sizes resize vertically.
+  (420 px). Neighbouring small and medium canvases share a row. All sizes resize vertically, and
+  a canvas can set its own height with the `resize` intent below.
 - At most 8 canvases, 4 MB each. With a manifest, it is the whole list; without one,
   `index.html` is the single canvas. An invalid manifest shows one line naming the problem.
   Write files atomically (temp file, then rename).
@@ -1212,8 +1213,15 @@ Canvases stay sandboxed, but may ask the T3 page to act through the action bridg
 - `open-issue` `{ url }`: an issue page on a known host.
 - `open-url` `{ url }`: http(s) on a known host only: github.com, the configured Gitea web
   origins, and the hosts of the project's issues and pull requests.
+- `resize` `{ height }`: sets the frame's height in pixels (a whole number, clamped to 40-600).
+  The size presets are only the default until a resize arrives; T3 remembers the last height per
+  device and canvas and applies it before the page loads, so a collapsed page stays collapsed
+  after a reload (resize to the preferred height to reset it). It has its own limit of 10 per
+  10 seconds per canvas (the latest height wins), is not logged, and does not use up the 5
+  intents below. Collapsible section:
+  `` `details.ontoggle = () => parent.postMessage({ type: "t3-canvas", intent: "resize", height: details.open ? 420 : 60 }, "*")` ``.
 
-T3 accepts messages only from that canvas's own frame, allows 5 intents per 10 seconds per
+T3 accepts messages only from that canvas's own frame, allows 5 other intents per 10 seconds per
 canvas, logs every intent and outcome on the server (`project canvas action`), and answers with
 `{ type: "t3-canvas-result", id, ok, reason }`. Anything else is refused. A canvas cannot read
 T3 data; put what it needs in the generated page. Example card with Advance and Feedback
