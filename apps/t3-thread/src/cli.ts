@@ -1746,6 +1746,9 @@ agent
           threadId: savedAgent.threadId,
           text: messageParts.join(" ").trim(),
           queueWhileRunning: options.queue,
+          origin: process.env.T3_THREAD_ID
+            ? { source: "thread-send", fromThreadId: process.env.T3_THREAD_ID }
+            : null,
           agentName: saved ? savedAgent.name : null,
         }),
     });
