@@ -1,0 +1,8 @@
+name = "fork-projects-pinned"
+subject = "feat(projects): pinned top-level threads are projects, listed first"
+class = "product"
+purpose = "Show the chief of staff at the top of the Projects and Threads sidebars with its own project page, like the T3 Orchestrator, without nesting the other orchestrators under it (Brad, 2026-10-05)."
+retire_when = "Upstream or another fork concern provides explicit project ordering."
+depends_on = ["fork-orchestrators-view"]
+roles = []
+note = "buildOrchestratorSummaries and threadsVisibleInThreadsMode treat a pinned top-level thread as a project root even without workers; sortOrchestratorSummariesForSidebar puts pinned projects first in pin order, then the rest by bucket. threadsVisibleInThreadsMode keeps a pinned project root's own row (not its descendants) in the Threads sidebar, so one pin order (pinOrderKey) tops both lists; Brad asked for the chief of staff at the top of both (2026-10-05). No new setting: the chief of staff (ff38df95, already pinned on dev-vm) appears first; t3-thread move --top orders pins. On dev-vm only T3 Orchestrator, Deployment Orchestrator and Chief of Staff are pinned top-level threads. Integration fork.6: adapted replay to preserve UI theme/owner notes alongside BE authoritative contract and helpers. Fork.6 integration: adapt: union inventory, retain earlier integrated owner notes and later stanza (docs/operations/fork-inventory.toml). Retire/narrow/relocate do not apply to these retained UI behaviors or inventory insertions."
