@@ -1,11 +1,13 @@
 {
   "version": 5,
-  "prev": "6270515bdc840239f64ff56da424f2ed288e9603",
-  "head": "5411d84b5205385052bb099c1ecab435dd1ed05b",
+  "prev": "75292e68ff01b510dbd888213be19c343207681f",
+  "head": "648dcae08555340fc37ac30abebf69ca5430d9c9",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
-    "fork-provider-turn-safety",
+    "fork-provider-turn-safety"
+  ],
+  "unapplied": [
     "fork-bounded-diagnostics",
     "fork-general-chat",
     "fork-project-selection",
@@ -113,7 +115,6 @@
     "fork-decision-context-media",
     "fork-subprojects-server"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
