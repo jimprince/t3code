@@ -1,0 +1,4 @@
+id = "overnight-desktop-updates"
+category = "feature"
+functionality = "desktop updates"
+text = "The macOS app installs updates overnight once agents on it are idle, and restores the previous version if an update fails to start."
