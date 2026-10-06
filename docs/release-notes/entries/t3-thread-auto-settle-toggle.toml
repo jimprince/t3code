@@ -1,0 +1,4 @@
+id = "t3-thread-auto-settle-toggle"
+category = "feature"
+functionality = "worker operations"
+text = "Turn automatic settlement off or on for an existing thread from the CLI with `t3-thread auto-settle <thread> --off|--on`."
