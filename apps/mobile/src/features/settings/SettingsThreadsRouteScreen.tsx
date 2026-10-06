@@ -132,12 +132,16 @@ function AutoSettleSettingsRows() {
     projectSelected &&
     syncTargets.some(
       (target) =>
+        target.sources.subthreadSettleOnComplete === "project" ||
+        target.sources.settledSubthreadArchiveAfterDays === "project" ||
         target.sources.sidebarAutoSettleOnMerge === "project" ||
         target.sources.sidebarAutoSettleAfterDays === "project",
     );
   const clearProjectOverrides = () => {
     if (writeInFlight.current) return;
     const writes = planMobileScopedSettingsClear(syncTargets, [
+      "subthreadSettleOnComplete",
+      "settledSubthreadArchiveAfterDays",
       "sidebarAutoSettleOnMerge",
       "sidebarAutoSettleAfterDays",
     ]);
@@ -188,6 +192,33 @@ function AutoSettleSettingsRows() {
         </SettingsSection>
       ) : null}
       <SettingsSection title="Auto-settle">
+        <SettingsSwitchRow
+          icon="checkmark.circle"
+          label="Settle completed workers"
+          value={referenceSettings.subthreadSettleOnComplete}
+          disabled={disabled}
+          onValueChange={(value) => writeToAll({ subthreadSettleOnComplete: value })}
+        />
+        <SettingsSwitchRow
+          icon="archivebox"
+          label="Archive settled workers"
+          value={referenceSettings.settledSubthreadArchiveAfterDays !== null}
+          disabled={disabled}
+          onValueChange={(value) =>
+            writeToAll({ settledSubthreadArchiveAfterDays: value ? 7 : null })
+          }
+        />
+        {referenceSettings.settledSubthreadArchiveAfterDays !== null ? (
+          <View className="flex-row items-center gap-4 px-4 py-4 android:min-h-14 android:py-3">
+            <View className="w-[22px] android:w-6" />
+            <Text className="flex-1 text-foreground text-lg android:text-base">Archive days</Text>
+            <AutoSettleDaysField
+              value={referenceSettings.settledSubthreadArchiveAfterDays}
+              disabled={disabled}
+              onValueChange={(value) => writeToAll({ settledSubthreadArchiveAfterDays: value })}
+            />
+          </View>
+        ) : null}
         <SettingsSwitchRow
           icon="arrow.triangle.branch"
           label="Auto-settle merged threads"

@@ -1,6 +1,7 @@
 import { limitRecoveryCommand } from "./UsageLimitRecoveryWorker.ts";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { assert, it } from "@effect/vitest";
 import { vi } from "vite-plus/test";
 import {
@@ -25,6 +26,7 @@ import {
   ProviderThreadId,
   ProviderTurnId,
   RunId,
+  ScheduledTaskId,
   ThreadId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -77,6 +79,12 @@ import { shellStreamItemFromThreadShell } from "./ShellStream.ts";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
 import * as ThreadCommandExecutor from "./ThreadCommandExecutor.ts";
+import * as ThreadLaunchService from "./ThreadLaunchService.ts";
+import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
+import * as Scheduler from "../scheduling/Scheduler.ts";
+import * as Schema from "effect/Schema";
+
+const isOrchestratorDispatchError = Schema.is(Orchestrator.OrchestratorDispatchError);
 
 const PlatformTestLayer = Layer.merge(
   NodeServices.layer,
@@ -232,6 +240,171 @@ const TestLayer = Layer.mergeAll(
   Layer.provide(ProjectServiceTestLayer),
   Layer.provide(PlatformTestLayer),
 );
+
+let scheduledPoll: Effect.Effect<void> | undefined;
+const ScheduledTaskClockLayer = Layer.succeed(Scheduler.Scheduler, {
+  register: <E, R>(_name: string, work: Effect.Effect<void, E, R>) =>
+    Effect.context<R>().pipe(
+      Effect.map((context) => {
+        scheduledPoll = work.pipe(Effect.provideContext(context), Effect.orDie);
+      }),
+    ),
+});
+
+const ScheduledTaskTestLayer = ScheduledTaskService.layer.pipe(
+  Layer.provide(NodeCrypto.layer),
+  Layer.provide(ScheduledTaskClockLayer),
+  Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
+  Layer.provide(ThreadManagementService.layer.pipe(Layer.provide(LegacyV1ThreadImporter.layer))),
+  Layer.provideMerge(TestLayer),
+  Layer.provide(SqlitePersistenceMemory),
+);
+
+it.layer(ScheduledTaskTestLayer)("scheduled settlement admission", (it) => {
+  it.effect(
+    "records a settled occurrence as skipped and delivers the next after explicit reopen",
+    () =>
+      Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const schedules = yield* ScheduledTaskService.ScheduledTaskService;
+        const projectId = ProjectId.make("scheduled-skip-project");
+        const threadId = ThreadId.make("scheduled-skip-thread");
+        yield* seedProject({
+          projectId,
+          title: "Scheduled checks",
+          workspaceRoot: "/tmp/scheduled-skip",
+          defaultModelSelection: null,
+          createdAt: "2026-10-10T00:00:00.000Z",
+        });
+        yield* orchestrator.dispatch({
+          type: "thread.create",
+          createdBy: "user",
+          creationSource: "web",
+          commandId: CommandId.make("scheduled-skip-create"),
+          threadId,
+          projectId,
+          title: "Check-in",
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: "/tmp/scheduled-skip",
+        });
+        yield* orchestrator.dispatch({
+          type: "thread.settle",
+          commandId: CommandId.make("scheduled-skip-settle"),
+          threadId,
+        });
+        const { task } = yield* schedules.upsert({
+          id: ScheduledTaskId.make("scheduled-skip-task"),
+          title: "Watchdog check-in",
+          prompt: "Check the build.",
+          enabled: true,
+          schedule: { type: "interval", everyMs: 1800000 },
+          projectId,
+          threadId,
+          workspaceStrategy: { type: "root" },
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          createdBy: "agent",
+          creationSource: "mcp",
+        });
+        const before = yield* orchestrator.getThreadProjection(threadId);
+        assert.isDefined(scheduledPoll);
+        if (scheduledPoll === undefined) return yield* Effect.die("Missing schedule source");
+        yield* TestClock.adjust("30 minutes");
+        yield* scheduledPoll;
+        const skipped = { task: (yield* schedules.list()).tasks[0]! };
+        assert.equal(skipped.task.lastRunStatus, "skipped");
+        assert.isNull(skipped.task.lastRunError);
+        assert.equal(skipped.task.runCount, 1);
+        assert.isTrue(
+          Date.parse(skipped.task.nextRunAt ?? "") > Date.parse(skipped.task.lastRunAt ?? ""),
+        );
+        assert.equal((yield* schedules.list()).tasks[0]?.lastRunStatus, "skipped");
+        const after = yield* orchestrator.getThreadProjection(threadId);
+        assert.deepEqual(after.thread, before.thread);
+        assert.lengthOf(after.runs, 0);
+        assert.lengthOf(after.messages, 0);
+
+        yield* orchestrator.dispatch({
+          type: "thread.unsettle",
+          commandId: CommandId.make("scheduled-skip-reopen"),
+          threadId,
+          reason: "user",
+        });
+        // Advance the occurrence key; no sleeps or retries are required.
+        yield* TestClock.adjust("30 minutes");
+        yield* scheduledPoll;
+        const delivered = { task: (yield* schedules.list()).tasks[0]! };
+        assert.equal(delivered.task.lastRunStatus, "succeeded");
+        assert.equal(delivered.task.runCount, 2);
+        const active = yield* orchestrator.getThreadProjection(threadId);
+        assert.equal(active.thread.settledOverride, "active");
+        assert.lengthOf(active.runs, 1);
+        assert.equal(active.messages[0]?.scheduledTaskId, task.id);
+      }),
+  );
+
+  // Run now is an explicit action: like a user send it reopens the thread.
+  it.effect("reopens a settled thread for a manual run", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const schedules = yield* ScheduledTaskService.ScheduledTaskService;
+      const projectId = ProjectId.make("scheduled-manual-project");
+      const threadId = ThreadId.make("scheduled-manual-thread");
+      yield* seedProject({
+        projectId,
+        title: "Manual checks",
+        workspaceRoot: "/tmp/scheduled-manual",
+        defaultModelSelection: null,
+        createdAt: "2026-10-10T00:00:00.000Z",
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        createdBy: "user",
+        creationSource: "web",
+        commandId: CommandId.make("scheduled-manual-create"),
+        threadId,
+        projectId,
+        title: "Check-in",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: "/tmp/scheduled-manual",
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.settle",
+        commandId: CommandId.make("scheduled-manual-settle"),
+        threadId,
+      });
+      const { task } = yield* schedules.upsert({
+        id: ScheduledTaskId.make("scheduled-manual-task"),
+        title: "Watchdog check-in",
+        prompt: "Check the build.",
+        enabled: true,
+        schedule: { type: "interval", everyMs: 1800000 },
+        projectId,
+        threadId,
+        workspaceStrategy: { type: "root" },
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        createdBy: "user",
+        creationSource: "web",
+      });
+
+      const ran = yield* schedules.runNow({ id: task.id });
+      assert.equal(ran.task.lastRunStatus, "succeeded");
+      const reopened = yield* orchestrator.getThreadProjection(threadId);
+      assert.notEqual(reopened.thread.settledOverride, "settled");
+      assert.lengthOf(reopened.runs, 1);
+      assert.equal(reopened.messages[0]?.scheduledTaskId, task.id);
+    }),
+  );
+});
 
 const LegacyImportTestLayer = OrchestrationV2LayerLive.pipe(
   Layer.provide(McpSessionRegistryTestkit.layer),
@@ -1625,6 +1798,134 @@ it.layer(LegacyImportTestLayer)("OrchestrationV2 legacy import", (it) => {
 });
 
 it.layer(TestLayer)("OrchestrationV2LayerLive lifecycle", (it) => {
+  it.effect("a delivered message preserves an explicit keep-active override", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const threadId = ThreadId.make("delivery-preserves-active");
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        createdBy: "user",
+        creationSource: "web",
+        commandId: CommandId.make("delivery-preserves-active-create"),
+        threadId,
+        projectId: ProjectId.make("delivery-preserves-active-project"),
+        title: "Day planner",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: "/tmp/delivery-preserves-active",
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.unsettle",
+        commandId: CommandId.make("delivery-preserves-active-unsettle"),
+        threadId,
+        reason: "user",
+      });
+      const active = yield* orchestrator.getThreadProjection(threadId);
+      yield* orchestrator.dispatch({
+        type: "message.dispatch",
+        createdBy: "agent",
+        creationSource: "mcp",
+        commandId: CommandId.make("delivery-preserves-active-handoff"),
+        threadId,
+        messageId: MessageId.make("delivery-preserves-active-handoff"),
+        senderThreadId: ThreadId.make("day-planner-worker"),
+        text: "The plan is ready.",
+        attachments: [],
+        dispatchMode: { type: "queue_after_active" },
+      });
+      const delivered = yield* orchestrator.getThreadProjection(threadId);
+      assert.equal(delivered.thread.settledOverride, "active");
+      assert.deepEqual(delivered.thread.unsettledAt, active.thread.unsettledAt);
+      assert.lengthOf(delivered.runs, 1);
+    }),
+  );
+
+  const scheduledSettlementCase = (createdBy: "user" | "agent") =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const outbox = yield* EffectOutbox.EffectOutboxV2;
+      const threadId = ThreadId.make(`scheduled-settlement-${createdBy}`);
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        createdBy: "user",
+        creationSource: "web",
+        commandId: CommandId.make(`scheduled-settlement-create-${createdBy}`),
+        threadId,
+        projectId: ProjectId.make(`scheduled-settlement-project-${createdBy}`),
+        title: "Scheduled check-in",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: "/tmp/scheduled-settlement",
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.settle",
+        commandId: CommandId.make(`scheduled-settlement-settle-${createdBy}`),
+        threadId,
+      });
+      const settled = yield* orchestrator.getThreadProjection(threadId);
+      const scheduled = {
+        type: "message.dispatch" as const,
+        createdBy,
+        creationSource: "mcp" as const,
+        commandId: CommandId.make(`scheduled-settlement-fire-${createdBy}`),
+        threadId,
+        messageId: MessageId.make(`scheduled-settlement-fire-${createdBy}`),
+        scheduledTaskId: ScheduledTaskId.make(`scheduled-task-${createdBy}`),
+        text: "Check the watchdog build.",
+        attachments: [],
+        dispatchMode: { type: "queue_after_active" as const },
+      };
+      const failure = yield* orchestrator
+        .dispatch(scheduled)
+        .pipe(Effect.match({ onFailure: (error) => error, onSuccess: () => null }));
+      assert.instanceOf(failure, Orchestrator.OrchestratorDispatchError);
+      assert.isTrue(
+        isOrchestratorDispatchError(failure) && failure.reasonCode === "thread_settled",
+      );
+      const after = yield* orchestrator.getThreadProjection(threadId);
+      assert.deepEqual(after.thread, settled.thread);
+      assert.lengthOf(after.runs, 0);
+      assert.lengthOf(after.messages, 0);
+      assert.lengthOf(yield* outbox.listByCommandId(scheduled.commandId), 0);
+
+      // A direct user follow-up still reopens the thread, even if it had a schedule.
+      yield* orchestrator.dispatch({
+        ...scheduled,
+        commandId: CommandId.make(`scheduled-settlement-user-${createdBy}`),
+        messageId: MessageId.make(`scheduled-settlement-user-${createdBy}`),
+        scheduledTaskId: undefined,
+        createdBy: "user",
+        creationSource: "web",
+        dispatchMode: { type: "start_immediately" },
+      });
+      const reopened = yield* orchestrator.getThreadProjection(threadId);
+      assert.isNull(reopened.thread.settledAt);
+      assert.lengthOf(reopened.runs, 1);
+      assert.equal(reopened.runs[0]?.status, "starting");
+
+      // Subsequent scheduled messages deliver normally to that active thread.
+      yield* orchestrator.dispatch({
+        ...scheduled,
+        commandId: CommandId.make(`scheduled-settlement-next-${createdBy}`),
+        messageId: MessageId.make(`scheduled-settlement-next-${createdBy}`),
+      });
+      const active = yield* orchestrator.getThreadProjection(threadId);
+      assert.lengthOf(active.runs, 2);
+      assert.equal(active.runs[1]?.status, "queued");
+      assert.equal(active.messages[1]?.scheduledTaskId, scheduled.scheduledTaskId);
+    });
+
+  it.effect("scheduled prompts created by user preserve settlement until reopening", () =>
+    scheduledSettlementCase("user"),
+  );
+  it.effect("scheduled prompts created by agent preserve settlement until reopening", () =>
+    scheduledSettlementCase("agent"),
+  );
+
   it.effect("applies lifecycle commands idempotently and emits archive/removal shell deltas", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;
