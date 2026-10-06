@@ -4408,6 +4408,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       return navigatePromptHistory(key === "ArrowUp" ? "backward" : "forward", event);
     }
     if (submissionIntent) {
+      if (event.repeat) return true;
       submitComposer(
         undefined,
         resolveComposerDispatchMode({
