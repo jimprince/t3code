@@ -637,6 +637,39 @@ worktree
 
 const project = program.command("project").description("Manage T3 Code projects");
 
+const projectHealth = project
+  .command("health")
+  .description(
+    "The project's health line, first on its page: on-track, at-risk, off-track or waiting-on-you, plus one sentence",
+  );
+
+projectHealth
+  .command("show")
+  .argument("<thread>", "saved agent name or raw thread UUID in the project")
+  .action(async (reference) => {
+    const { agent: target, client } = await withAgent(reference);
+    const result = await client.projectDashboard<{ health?: unknown }>("projectDashboardGet", {
+      threadId: target.threadId,
+    });
+    printJson({ health: result.health ?? null });
+  });
+
+projectHealth
+  .command("set")
+  .argument("<thread>", "saved agent name or raw thread UUID in the project")
+  .argument("<status>", "on-track, at-risk, off-track or waiting-on-you")
+  .argument("<sentence>", "one sentence: where the project stands and why")
+  .action(async (reference, status, sentence) => {
+    const { agent: target, client } = await withAgent(reference);
+    printJson(
+      await client.projectDashboard("projectDashboardSetHealth", {
+        threadId: target.threadId,
+        status,
+        sentence,
+      }),
+    );
+  });
+
 const projectTracker = project
   .command("tracker")
   .description(
