@@ -1,0 +1,4 @@
+id = "release-notes-feature-summaries"
+category = "feature"
+functionality = "release notes"
+text = "Updates now describe new fork features, fixes, and removals separately from upstream changes."

@@ -1,0 +1,187 @@
+[
+  {
+    "type": "project.created",
+    "payload": {
+      "projectId": "upgrade-project",
+      "title": "Historical workspace",
+      "kind": "workspace",
+      "workspaceRoot": "WORKSPACE",
+      "defaultModelSelection": null,
+      "scripts": [],
+      "createdAt": "2026-09-01T00:00:00.000Z",
+      "updatedAt": "2026-09-01T00:00:00.000Z"
+    }
+  },
+  {
+    "type": "thread.created",
+    "payload": {
+      "threadId": "upgrade-ordered",
+      "projectId": "upgrade-project",
+      "title": "Historical ordered",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5-codex"
+      },
+      "runtimeMode": "full-access",
+      "interactionMode": "default",
+      "branch": null,
+      "worktreePath": null,
+      "createdAt": "2026-09-01T00:00:00.000Z",
+      "updatedAt": "2026-09-01T00:00:00.000Z"
+    }
+  },
+  {
+    "type": "thread.goal-set",
+    "payload": {
+      "threadId": "upgrade-ordered",
+      "goal": {
+        "goal": "Preserve historical goal",
+        "status": "active",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z",
+        "achievedAt": null,
+        "lastEvaluatedAt": null,
+        "lastReason": null,
+        "lastTurnId": null,
+        "continuationCount": 0
+      }
+    }
+  },
+  {
+    "type": "thread.goal-evaluated",
+    "payload": {
+      "threadId": "upgrade-ordered",
+      "turnId": "historic-turn",
+      "achieved": true,
+      "reason": "Previously completed",
+      "continuationRequested": false,
+      "evaluatedAt": "2026-09-01T00:00:00.000Z",
+      "updatedAt": "2026-09-01T00:00:00.000Z"
+    }
+  },
+  {
+    "type": "thread.sidebar-reordered",
+    "payload": {
+      "threadId": "upgrade-ordered",
+      "orderKey": "a0",
+      "updatedAt": "2026-09-01T00:00:00.000Z"
+    }
+  },
+  {
+    "type": "thread.message-sent",
+    "payload": {
+      "threadId": "upgrade-ordered",
+      "messageId": "message-ordered",
+      "role": "assistant",
+      "text": "Historical conversation survives the upgrade.",
+      "turnId": null,
+      "streaming": false,
+      "createdAt": "2026-09-01T00:00:00.000Z",
+      "updatedAt": "2026-09-01T00:00:00.000Z",
+      "fileAttachments": [
+        {
+          "type": "file",
+          "id": "legacy-file",
+          "name": "notes.txt",
+          "mimeType": "text/plain",
+          "sizeBytes": 12,
+          "path": "/tmp/historical-notes.txt"
+        }
+      ]
+    }
+  },
+  {
+    "type": "thread.created",
+    "payload": {
+      "threadId": "upgrade-cleared",
+      "projectId": "upgrade-project",
+      "title": "Historical cleared",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5-codex"
+      },
+      "runtimeMode": "full-access",
+      "interactionMode": "default",
+      "branch": null,
+      "worktreePath": null,
+      "createdAt": "2026-09-01T00:00:00.000Z",
+      "updatedAt": "2026-09-01T00:00:00.000Z"
+    }
+  },
+  {
+    "type": "thread.goal-set",
+    "payload": {
+      "threadId": "upgrade-cleared",
+      "goal": {
+        "goal": "Preserve historical goal",
+        "status": "active",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z",
+        "achievedAt": null,
+        "lastEvaluatedAt": null,
+        "lastReason": null,
+        "lastTurnId": null,
+        "continuationCount": 0
+      }
+    }
+  },
+  {
+    "type": "thread.goal-evaluated",
+    "payload": {
+      "threadId": "upgrade-cleared",
+      "turnId": "historic-turn",
+      "achieved": true,
+      "reason": "Previously completed",
+      "continuationRequested": false,
+      "evaluatedAt": "2026-09-01T00:00:00.000Z",
+      "updatedAt": "2026-09-01T00:00:00.000Z"
+    }
+  },
+  {
+    "type": "thread.goal-cleared",
+    "payload": {
+      "threadId": "upgrade-cleared",
+      "clearedAt": "2026-09-01T00:00:00.000Z",
+      "updatedAt": "2026-09-01T00:00:00.000Z"
+    }
+  },
+  {
+    "type": "thread.sidebar-reordered",
+    "payload": {
+      "threadId": "upgrade-cleared",
+      "orderKey": "a1",
+      "updatedAt": "2026-09-01T00:00:00.000Z"
+    }
+  },
+  {
+    "type": "thread.sidebar-reordered",
+    "payload": {
+      "threadId": "upgrade-cleared",
+      "orderKey": null,
+      "updatedAt": "2026-09-01T00:00:00.000Z"
+    }
+  },
+  {
+    "type": "thread.message-sent",
+    "payload": {
+      "threadId": "upgrade-cleared",
+      "messageId": "message-cleared",
+      "role": "assistant",
+      "text": "Historical conversation survives the upgrade.",
+      "turnId": null,
+      "streaming": false,
+      "createdAt": "2026-09-01T00:00:00.000Z",
+      "updatedAt": "2026-09-01T00:00:00.000Z",
+      "fileAttachments": [
+        {
+          "type": "file",
+          "id": "legacy-file",
+          "name": "notes.txt",
+          "mimeType": "text/plain",
+          "sizeBytes": 12,
+          "path": "/tmp/historical-notes.txt"
+        }
+      ]
+    }
+  }
+]
