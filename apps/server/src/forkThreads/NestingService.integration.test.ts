@@ -34,3 +34,15 @@ it.effect("legacy edges import once, including missing parents and nulls", () =>
   const restart = yield* makeNestingService(sql, threadId => Effect.succeed(shells.get(threadId) ?? null));
   assert.equal((yield* restart.list()).find(row => row.threadId === id("child"))?.parentThreadId, id("parent"));
 }).pipe(Effect.provide(SqlitePersistenceMemory)));
+
+it.effect("CLI-originated sidecar writes dispatch a stable native shell refresh after persistence", () => Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  const events: string[] = [];
+  const service = yield* makeNestingService(sql, threadId => Effect.succeed(shells.get(threadId) ?? null), command => Effect.gen(function* () {
+    const rows = yield* sql<{ payload: string }>`SELECT payload FROM fork_thread_metadata WHERE thread_id = ${command.threadId}`;
+    assert.equal(JSON.parse(rows[0]!.payload).parentThreadId, "parent");
+    events.push(`${command.type}:${command.commandId}`);
+  }));
+  yield* service.update(input("child", "parent", "cli-nest"));
+  assert.deepEqual(events, ["thread.metadata.update:cli-nest:shell-refresh"]);
+}).pipe(Effect.provide(SqlitePersistenceMemory)));

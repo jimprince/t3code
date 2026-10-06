@@ -7,7 +7,7 @@ import { makeNestingService } from "./NestingService.ts";
 export const makeMetadataHandlers = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const management = yield* ThreadManagement.ThreadManagementService;
-  const service = yield* makeNestingService(sql, management.getThreadShell).pipe(Effect.orDie);
+  const service = yield* makeNestingService(sql, management.getThreadShell, management.dispatch).pipe(Effect.orDie);
   const mapError = (cause: unknown) => cause instanceof ForkThreadMetadataError ? cause : new ForkThreadMetadataError({ message: String(cause) });
   return {
     "fork.threads.metadata.list": () => service.list().pipe(Effect.mapError(mapError)),

@@ -1,4 +1,4 @@
-import { ForkThreadMetadataError, ForkThreadMetadata, type ForkThreadMetadataUpdate, type OrchestrationV2ThreadShell, type ThreadId } from "@t3tools/contracts";
+import { CommandId, type OrchestrationV2ServerCommand, ForkThreadMetadataError, ForkThreadMetadata, type ForkThreadMetadataUpdate, type OrchestrationV2ThreadShell, type ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type * as SqlClient from "effect/unstable/sql/SqlClient";
@@ -6,7 +6,7 @@ import { initializeMetadata, listMetadata, writeMetadata } from "./MetadataStore
 
 type NestingShell = Pick<OrchestrationV2ThreadShell, "id" | "projectId" | "archivedAt">;
 /** Only the supervision sidecar changes. Native runs, lineage and workspaces remain owned by V2. */
-export const makeNestingService = <E, R>(sql: SqlClient.SqlClient, getShell: (id: ThreadId) => Effect.Effect<NestingShell | null, E, R>) => Effect.gen(function* () {
+export const makeNestingService = <E, R>(sql: SqlClient.SqlClient, getShell: (id: ThreadId) => Effect.Effect<NestingShell | null, E, R>, refreshShell: (command: Extract<OrchestrationV2ServerCommand, { type: "thread.metadata.update" }>) => Effect.Effect<unknown, E, R> = () => Effect.void) => Effect.gen(function* () {
   yield* initializeMetadata(sql);
   const list = () => listMetadata(sql);
   const update = (input: ForkThreadMetadataUpdate) => sql.withTransaction(Effect.gen(function* () {
@@ -34,6 +34,10 @@ export const makeNestingService = <E, R>(sql: SqlClient.SqlClient, getShell: (id
     yield* writeMetadata(sql, value);
     yield* sql`INSERT INTO fork_thread_metadata_receipts (command_id, payload) VALUES (${input.commandId}, ${JSON.stringify(value)})`;
     return value;
-  }));
+  })).pipe(Effect.tap(() => refreshShell({
+    type: "thread.metadata.update",
+    commandId: CommandId.make(`${input.commandId}:shell-refresh`),
+    threadId: input.threadId,
+  })));
   return { list, update };
 });
