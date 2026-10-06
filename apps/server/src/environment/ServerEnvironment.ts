@@ -239,6 +239,7 @@ export const make = Effect.gen(function* () {
       threadAutoSettleOptOut: true,
       threadSubscriptions: true,
       threadNesting: true,
+      threadSubprojects: true,
       remoteThreadNesting: true,
       backgroundWorkResume: true,
       threadTitleRegeneration: true,
