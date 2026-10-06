@@ -11,6 +11,10 @@
       "types": "./src/fork/disconnectedComposer.ts",
       "default": "./src/fork/disconnectedComposer.ts"
     },
+    "./fork/desktop-work-state": {
+      "types": "./src/fork/desktopWorkState.ts",
+      "default": "./src/fork/desktopWorkState.ts"
+    },
     "./fork/thread-recovery": {
       "types": "./src/fork/threadRecovery.ts",
       "default": "./src/fork/threadRecovery.ts"
