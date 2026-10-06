@@ -3,6 +3,7 @@ import type {
   HostPowerSnapshot,
   ResourceMonitorSnapshotEvent,
   ResourceTelemetryHealth,
+  ProcessLaunchHealth,
   ResourceTelemetryHistoryInput,
   ResourceTelemetryProcessIdentity,
   ResourceTelemetryRetryResult,
@@ -18,9 +19,15 @@ import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
+import * as Schedule from "effect/Schedule";
+import * as Clock from "effect/Clock";
 import * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
+
+import { ServerSettingsService } from "../serverSettings.ts";
+import { ProcessLaunchHealthEvaluator } from "./ProcessLaunchHealth.ts";
+import { processLaunchesLastMinute } from "../processLaunchDiagnostics.ts";
 
 import * as DesktopTelemetryReceiver from "./DesktopTelemetryReceiver.ts";
 import {
@@ -108,8 +115,10 @@ function buildHealth(input: {
   readonly native: NativeTelemetryClient.NativeTelemetryClientHealth;
   readonly desktop: DesktopTelemetryReceiver.DesktopTelemetryReceiverHealth;
   readonly nativeSnapshot: Option.Option<ResourceMonitorSnapshotEvent>;
+  readonly processLaunch?: ProcessLaunchHealth | undefined;
 }): ResourceTelemetryHealth {
   return {
+    ...(input.processLaunch ? { processLaunch: input.processLaunch } : {}),
     native: {
       status: input.native.status,
       lastSampleAt: input.native.lastSampleAt,
@@ -144,6 +153,9 @@ function buildHealth(input: {
 
 /** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.fn("resourceTelemetry.resourceTelemetry.make")(function* () {
+  const settingsService = yield* ServerSettingsService;
+  const launchHealthEvaluator = new ProcessLaunchHealthEvaluator();
+  let processLaunch: ProcessLaunchHealth | undefined;
   const nativeClient = yield* NativeTelemetryClient.NativeTelemetryClient;
   const desktopReceiver = yield* DesktopTelemetryReceiver.DesktopTelemetryReceiver;
   const attribution = yield* ResourceAttribution.ResourceAttribution;
@@ -193,6 +205,7 @@ export const make = Effect.fn("resourceTelemetry.resourceTelemetry.make")(functi
     speedLimitPercent: Option.flatMap(initialDesktop, (desktop) => desktop.speedLimitPercent),
     attribution: initialAttribution,
     health: buildHealth({
+      processLaunch,
       native: initialNativeHealth,
       desktop: initialDesktopHealth,
       nativeSnapshot: Option.none(),
@@ -222,6 +235,7 @@ export const make = Effect.fn("resourceTelemetry.resourceTelemetry.make")(functi
       const snapshot: ResourceTelemetrySnapshot = {
         ...current.latest,
         health: buildHealth({
+          processLaunch,
           native: nativeHealth,
           desktop: desktopHealth,
           nativeSnapshot: current.nativeSnapshot,
@@ -309,6 +323,7 @@ export const make = Effect.fn("resourceTelemetry.resourceTelemetry.make")(functi
           }),
           attribution: attributionSnapshot,
           health: buildHealth({
+            processLaunch,
             native: nativeHealth,
             desktop: desktopHealth,
             nativeSnapshot,
@@ -439,6 +454,7 @@ export const make = Effect.fn("resourceTelemetry.resourceTelemetry.make")(functi
         desktopSnapshot: current.desktopSnapshot,
         snapshots: Result.isSuccess(historyResult) ? historyResult.success : [],
         health: buildHealth({
+          processLaunch,
           native: nativeHealth,
           desktop: desktopHealth,
           nativeSnapshot: current.nativeSnapshot,
@@ -463,6 +479,47 @@ export const make = Effect.fn("resourceTelemetry.resourceTelemetry.make")(functi
           cause,
         }),
     ),
+  );
+
+  // Request a sample from the existing helper without enabling high-frequency streaming.
+  // This runs even when no client has Diagnostics open and adds no sampling subprocess.
+  const sampleLaunchHealth = Effect.gen(function* () {
+    const settings = yield* settingsService.getSettings;
+    const native = yield* Effect.result(nativeClient.sampleNow);
+    const nowMs = yield* Clock.currentTimeMillis;
+    const at = yield* DateTime.now;
+    const sample = Result.isSuccess(native) ? (native.success.snapshot.syspolicyd ?? null) : null;
+    const freshSample =
+      sample && Math.abs(DateTime.toEpochMillis(at) - sample.sampledAtUnixMs) <= 90_000
+        ? sample
+        : null;
+    const rates = Object.values(processLaunchesLastMinute(nowMs)).reduce(
+      (total, count) => ({
+        attemptsPerMinute: total.attemptsPerMinute + count.attempted,
+        failuresPerMinute: total.failuresPerMinute + count.failed,
+      }),
+      { attemptsPerMinute: 0, failuresPerMinute: 0 },
+    );
+    processLaunch = launchHealthEvaluator.evaluate({
+      nowMs,
+      sampledAtUnixMs: DateTime.toEpochMillis(at),
+      syspolicyd: freshSample,
+      ...rates,
+      settings: settings.processLaunchWarnings,
+    });
+    yield* Effect.logInfo("Process launch health sample", processLaunch);
+    for (const warning of processLaunch.warnings) yield* Effect.logWarning(warning);
+    if (Result.isSuccess(native)) yield* ingestNative(native.success);
+    yield* refreshHealth;
+  }).pipe(
+    Effect.catch((cause) =>
+      Effect.logWarning("Process launch health sampling unavailable", { cause: cause.message }),
+    ),
+  );
+  yield* sampleLaunchHealth.pipe(
+    Effect.repeat(Schedule.spaced("1 minute")),
+    Effect.delay("1 minute"),
+    Effect.forkScoped,
   );
 
   const validateProcessIdentity: ResourceTelemetry["Service"]["validateProcessIdentity"] = (
