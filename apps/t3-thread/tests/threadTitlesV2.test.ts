@@ -25,11 +25,18 @@ function harness() {
   const commands: string[] = [];
   const launches: Array<typeof OrchestrationV2ThreadLaunchInput.Type> = [];
   const client = new RemoteEnvironmentClient(environment, {
+    descriptorFactory: async () => ({
+      environmentId: environment.environmentId,
+      label: environment.label,
+      platform: { os: "linux", arch: "x64" },
+      serverVersion: "test",
+      capabilities: { threadNesting: true },
+    }),
     rpcFactory: () => ({
       request: async <T>(method: string, input: unknown): Promise<T> => {
-        if (method === "forkMetadataList")
+        if (method === "threadMetadataList")
           return [{ threadId: "thread", parentThreadId, scope }] as T;
-        if (method === "forkMetadataUpdate") {
+        if (method === "threadMetadataUpdate") {
           const value = Schema.decodeUnknownSync(ForkThreadMetadataUpdate)(input);
           if (value.scope !== undefined) scope = value.scope;
           if (value.parentThreadId !== undefined) parentThreadId = value.parentThreadId;
@@ -94,16 +101,16 @@ describe("V2 worker titles", () => {
       },
     });
     expect(h.launches[0]).toMatchObject({ title: "Chosen", generateTitle: false });
-    expect(h.launches[0]?.initialMessage?.text).toContain(
+    expect(h.launches[1]?.initialMessage?.text).toContain(
       'parent_send_command: "t3-thread send supervisor ..."',
     );
-    expect(h.launches[0]?.initialMessage?.text).toContain('parent_environment: "other"');
+    expect(h.launches[1]?.initialMessage?.text).toContain('parent_environment: "other"');
   });
   it("nest and unnest read the organizational parent instead of execution lineage", async () => {
     const h = harness();
-    await h.client.nestThread("thread", "parent");
+    await h.client.setThreadParent("thread", "parent");
     expect((await h.client.findThread("thread")).parentThreadId).toBe("parent");
-    await h.client.nestThread("thread", null);
+    await h.client.setThreadParent("thread", null);
     expect((await h.client.findThread("thread")).parentThreadId).toBeNull();
   });
 });
