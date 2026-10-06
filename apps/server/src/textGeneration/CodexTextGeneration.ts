@@ -1,3 +1,4 @@
+import * as NodeOS from "node:os";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
@@ -93,7 +94,9 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
           (cause) =>
             new TextGenerationError({
               operation,
-              detail: `Failed to write temp file`,
+              detail: `Failed to write temp file in ${NodeOS.tmpdir()}: ${
+                (cause as { message?: string }).message ?? String(cause)
+              }`,
               cause,
             }),
         ),
