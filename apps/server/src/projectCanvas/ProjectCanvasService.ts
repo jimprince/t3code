@@ -17,7 +17,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { listMetadata } from "../forkThreads/MetadataStore.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
-import { findRootThreadId } from "../projectIssues/projectIssues.logic.ts";
+import { findProjectRootThreadId } from "../projectIssues/projectIssues.logic.ts";
 import {
   CANVAS_DIR,
   CANVAS_MANIFEST,
@@ -115,13 +115,14 @@ export const make = Effect.gen(function* () {
       const parents = new Map(
         (yield* listMetadata(sql).pipe(
           Effect.mapError(() => fail("Could not read thread parents.")),
-        )).map((row) => [row.threadId, row.parentThreadId]),
+        )).map((row) => [row.threadId, row]),
       );
       const threads = [...snapshot.threads, ...snapshot.archivedThreads].map((thread) => ({
         ...thread,
-        parentThreadId: parents.get(thread.id) ?? null,
+        parentThreadId: parents.get(thread.id)?.parentThreadId ?? null,
+        subproject: parents.get(thread.id)?.subproject ?? "auto",
       }));
-      const rootThreadId = findRootThreadId(threads, input.threadId);
+      const rootThreadId = findProjectRootThreadId(threads, input.threadId);
       const root = threads.find((thread) => thread.id === rootThreadId);
       const project = root
         ? Option.getOrNull(

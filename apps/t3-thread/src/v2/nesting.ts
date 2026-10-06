@@ -6,6 +6,7 @@ import * as Rpc from "effect/unstable/rpc/Rpc";
 const RemoteParent = Schema.Struct({ environmentId: Schema.String, threadId: ThreadId });
 export const ThreadMetadata = Schema.Struct({
   threadId: ThreadId,
+  subproject: Schema.optionalKey(Schema.NullOr(Schema.Literals(["auto", "on", "off"]))),
   parentThreadId: Schema.NullOr(ThreadId),
   scope: Schema.optionalKey(Schema.NullOr(Schema.String)),
   remoteParent: Schema.optionalKey(Schema.NullOr(RemoteParent)),
@@ -15,6 +16,7 @@ export type ThreadMetadata = typeof ThreadMetadata.Type;
 export const ThreadMetadataUpdate = Schema.Struct({
   commandId: CommandId,
   threadId: ThreadId,
+  subproject: Schema.optionalKey(Schema.NullOr(Schema.Literals(["auto", "on", "off"]))),
   parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
   scope: Schema.optional(Schema.NullOr(Schema.String)),
   remoteParent: Schema.optional(Schema.NullOr(RemoteParent)),
@@ -53,6 +55,7 @@ export function withThreadMetadata<T extends { id: string; parentThreadId?: stri
         parentThreadId: metadata.parentThreadId,
         remoteParent: metadata.remoteParent ?? null,
         scope: metadata.scope ?? null,
+        subproject: metadata.subproject ?? "auto",
       }
     : thread;
 }
