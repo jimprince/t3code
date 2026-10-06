@@ -87,7 +87,13 @@ export const ScheduledTaskUpsertSchedule = Schema.Union([
 });
 export type ScheduledTaskUpsertSchedule = typeof ScheduledTaskUpsertSchedule.Type;
 
-export const ScheduledTaskRunStatus = Schema.Literals(["never", "running", "succeeded", "failed"]);
+export const ScheduledTaskRunStatus = Schema.Literals([
+  "never",
+  "running",
+  "succeeded",
+  "failed",
+  "skipped",
+]);
 export type ScheduledTaskRunStatus = typeof ScheduledTaskRunStatus.Type;
 
 export const ScheduledTask = Schema.Struct({
