@@ -1,0 +1,4 @@
+id = "new-thread-shows-its-reply"
+category = "fix"
+functionality = "web chat"
+text = "A thread started from a new-thread draft now shows its reply as it streams in, without reloading the page."

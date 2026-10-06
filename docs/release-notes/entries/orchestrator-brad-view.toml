@@ -1,0 +1,4 @@
+id = "orchestrator-brad-view"
+category = "feature"
+functionality = "orchestrator threads"
+text = "Orchestrator threads fold routine worker traffic into one row per run, keeping your conversation and anything that asks for you visible, with an All traffic switch to show everything."
