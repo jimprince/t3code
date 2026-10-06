@@ -122,7 +122,14 @@ export function shell(overrides: Record<string, unknown> = {}) {
   });
 }
 export function shellSnapshot(threads: ReturnType<typeof shell>[]) {
-  return { kind: "snapshot" as const, snapshot: {
-    schemaVersion: 2, snapshotSequence: 1, projects: [], threads, archivedThreads: [],
-  }};
+  return {
+    kind: "snapshot" as const,
+    snapshot: {
+      schemaVersion: 2,
+      snapshotSequence: 1,
+      projects: [],
+      threads,
+      archivedThreads: [],
+    },
+  };
 }
