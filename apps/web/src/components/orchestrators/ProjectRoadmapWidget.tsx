@@ -63,6 +63,7 @@ export function SaveForLater({
         title: title.slice(0, 200),
         kind: "change",
         detail: title,
+        park: true,
       },
     });
     setBusy(false);
