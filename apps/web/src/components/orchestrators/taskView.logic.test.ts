@@ -5,6 +5,8 @@ import type { TaskStatus } from "./projectRequests.logic";
 import {
   deriveTaskView,
   encodeTaskRef,
+  findListedIssue,
+  olderServerTaskNote,
   parseTaskRef,
   pickAnswer,
   taskViewStatus,
@@ -126,5 +128,34 @@ describe("deriveTaskView", () => {
       statuses,
     );
     expect(view.progress).toBeNull();
+  });
+});
+
+describe("task panel on an older server", () => {
+  it("finds the listed issue by host, repository and number", () => {
+    const listed = [
+      issue(7),
+      issue(8, { repository: "brad/other" }),
+      issue(8, { host: "other.example" }),
+      issue(8),
+    ];
+    expect(
+      findListedIssue(listed, { host: "git.example", repository: "brad/printcell", number: 8 }),
+    ).toBe(listed[3]);
+    expect(
+      findListedIssue(listed, { host: "git.example", repository: "brad/printcell", number: 9 }),
+    ).toBeNull();
+  });
+
+  it("names the fork release the server runs", () => {
+    expect(olderServerTaskNote("0.0.45-nightly.20261002.2572-fork.26")).toBe(
+      "This server is older (fork.26); update it to see full task details.",
+    );
+    expect(olderServerTaskNote("0.0.45")).toBe(
+      "This server is older (0.0.45); update it to see full task details.",
+    );
+    expect(olderServerTaskNote(null)).toBe(
+      "This server is older; update it to see full task details.",
+    );
   });
 });
