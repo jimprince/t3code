@@ -1,0 +1,24 @@
+name = "fork-cross-environment-nesting"
+subject = "feat(threads): nest workers across environments"
+class = "product"
+purpose = "Store remote parent links on child environments and merge connected thread trees in clients and the operator CLI."
+retire_when = "Upstream supports environment-scoped thread parent links, client tree merging, and remote nesting through its operator interface."
+depends_on = ["fork-cross-project-thread-nesting", "fork-worker-operations"]
+roles = []
+note = "Remote parents are optional metadata, persisted only by the child server. Disconnected, archived, missing, or cyclic parents do not hide the child. Servers do not traverse or mutate remote descendants; client presentation combines connected environments. Fork migration 12 reserves the nullable JSON column independently of the V1 core replacement. Copied-state metadata tests discover all three packaged fixtures through T3_LIFECYCLE_FIXTURES and create scoped copies before writes, with explicit skips when absent."
+
+[[decision]]
+id = "v2-port-m2-uifix"
+decision = "keep-on-top"
+note = "Nesting entry points keep V1 parity: thread menus, the command palette and the details panel. A nested draft keeps its parent intent for the session and attaches it through the sidecar after the first send succeeds, since V2 bootstrap has no parent field. The shared query refreshes when the host's thread set or a thread's forkMetadataRevision changes, never on status or timestamp churn and never on a timer. Every sidecar write, including the CLI, agents and other devices, dispatches the native shell refresh with bumpForkMetadataRevision, which is the only shell field that separates a nesting write from other activity; servers without it fall back to the thread set alone. Header menus omit Move up/down because the order depends on sidebar sorting."
+
+[[decision]]
+id = "v2-port-2689-m2"
+decision = "keep-on-top"
+note = "V2 supervision metadata is separate from native execution lineage; retained behavior and import coverage are recorded in the nesting lane report. Runtime V1 reads are confined to fork-owned legacy readers. ForkMigrations is allowed alongside upstream Migrations solely for shipped schema history: migrations 006 and 012 must preserve idempotent V1 parent-column upgrades."
+
+[[decision]]
+id = "catchup-2908-native-supervision-status"
+date = "2026-10-10"
+decided = "adapt"
+rationale = "Keep one ready/reset host snapshot per native list and compose upstream status presentation (#16733, #17231, #17268, #17648) with Supervising precedence for ready parents and active worker-count copy. Preserve selected native colors/icons and cross-environment nesting behavior. Web Sidebar/header/palette/draft/notification entry points retain granular orchestration mutation guards (#9786–#9791, #10298), current thread-find/rich-composer state and parent-suppressed sound. Static prop/branch/consumer review plus parser/formatter checks passed; composed CI and integrated native verification remain required."

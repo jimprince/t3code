@@ -264,3 +264,4 @@ export function createSidebarSortingStrategy(input: {
       : (transforms[args.index] ?? stationary);
   };
 }
+export const SIDEBAR_NESTED_INDENT_PX = 12;
