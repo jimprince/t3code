@@ -1,0 +1,4 @@
+id = "storage-cleanup-single-snapshot"
+category = "performance"
+functionality = "storage"
+text = "Avoid redundant archive reads during storage cleanup while including archived worktrees in cleanup checks."
