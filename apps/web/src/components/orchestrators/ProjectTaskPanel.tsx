@@ -1,8 +1,10 @@
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
+import type { ProjectIssue } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { ExternalLinkIcon, XIcon } from "lucide-react";
 import { use, useMemo, useState } from "react";
 
+import { useServerConfigs } from "../../state/entities";
 import { projectIssueQuery } from "../../state/projectIssues";
 import { useEnvironmentQuery } from "../../state/query";
 import { resolveThreadIssueBadgeTarget } from "../ThreadIssueBadges";
@@ -11,7 +13,7 @@ import { Button } from "../ui/button";
 import { formatIssueAge } from "./projectIssuesBoard.logic";
 import { projectReturnState } from "./projectNavigation";
 import { ProjectQueryState } from "./ProjectQueryState";
-import { TASK_STATUS_LABEL } from "./projectRequests.logic";
+import { TASK_STATUS_LABEL, type TaskStatus } from "./projectRequests.logic";
 import {
   ReopenButton,
   SettleButton,
@@ -20,7 +22,13 @@ import {
   useTaskStatuses,
 } from "./ProjectRequestsSection";
 import { OpenTaskContext } from "./TaskLink";
-import { deriveTaskView, type TaskRef } from "./taskView.logic";
+import {
+  deriveTaskView,
+  findListedIssue,
+  olderServerTaskNote,
+  taskViewStatus,
+  type TaskRef,
+} from "./taskView.logic";
 
 const hiddenMarkers = (text: string) => text.replace(/<!--[\s\S]*?-->/g, "").trim();
 
@@ -41,12 +49,19 @@ export function ProjectTaskPanel({
   const navigate = useNavigate();
   const pages = useEmbeddedPages();
   const { statuses, query: list } = useTaskStatuses(summary);
+  const environment = useServerConfigs().get(summary.root.environmentId)?.environment;
+  // A server without projectIssues.get would only answer the request with an error; until the
+  // server config arrives the panel just loads.
+  const detailed = environment?.capabilities.projectIssueDetail === true;
   const query = useEnvironmentQuery(
-    projectIssueQuery({
-      environmentId: summary.root.environmentId,
-      input: { rootThreadId: summary.root.id, ...task },
-    }),
+    detailed
+      ? projectIssueQuery({
+          environmentId: summary.root.environmentId,
+          input: { rootThreadId: summary.root.id, ...task },
+        })
+      : null,
   );
+  const listedIssue = list.data ? findListedIssue(list.data.issues, task) : null;
   const refresh = () => {
     query.refresh();
     list.refresh();
@@ -75,7 +90,17 @@ export function ProjectTaskPanel({
         </Button>
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-3">
-        {!view || !query.data ? (
+        {environment && !detailed ? (
+          <OlderServerTask
+            issue={listedIssue}
+            status={listedIssue ? taskViewStatus(listedIssue, statuses) : null}
+            settle={settle}
+            note={olderServerTaskNote(environment.serverVersion)}
+            listLoaded={list.data !== null}
+            listError={list.error}
+            onRetry={list.refresh}
+          />
+        ) : !view || !query.data ? (
           <ProjectQueryState what="task" error={query.error} onRetry={refresh} />
         ) : (
           <>
@@ -225,5 +250,63 @@ export function ProjectTaskPanel({
         )}
       </div>
     </aside>
+  );
+}
+
+/**
+ * The task from the issue list the page already holds, for a server that cannot send
+ * the whole task: its title and status, Settle or Reopen, and the link to Gitea.
+ */
+function OlderServerTask({
+  issue,
+  status,
+  settle,
+  note,
+  listLoaded,
+  listError,
+  onRetry,
+}: {
+  readonly issue: ProjectIssue | null;
+  readonly status: TaskStatus | null;
+  readonly settle: ReturnType<typeof useSettle>;
+  readonly note: string;
+  readonly listLoaded: boolean;
+  readonly listError: string | null;
+  readonly onRetry: () => void;
+}) {
+  return (
+    <>
+      {issue && status ? (
+        <>
+          <div className="flex flex-col gap-1">
+            <h2 className="text-base font-medium">{issue.title}</h2>
+            <p className="text-xs text-muted-foreground">{TASK_STATUS_LABEL[status]}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {status === "complete" ? (
+              <ReopenButton issue={issue} settle={settle} />
+            ) : (
+              <SettleButton issues={[issue]} settle={settle} />
+            )}
+          </div>
+          <a
+            href={issue.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            Open in Gitea
+            <ExternalLinkIcon className="size-3" />
+          </a>
+        </>
+      ) : listLoaded ? (
+        <p className="text-sm text-muted-foreground">
+          The project's task list does not include it.
+        </p>
+      ) : (
+        <ProjectQueryState what="task" error={listError} onRetry={onRetry} />
+      )}
+      <p className="text-xs text-muted-foreground">{note}</p>
+    </>
   );
 }
