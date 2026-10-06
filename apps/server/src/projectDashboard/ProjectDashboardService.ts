@@ -13,13 +13,22 @@ import { listMetadata } from "../forkThreads/MetadataStore.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
 import { findRootThreadId } from "../projectIssues/projectIssues.logic.ts";
+import { legacyWidgetOrder, legacyWidgetOrderOps } from "@t3tools/contracts";
+import type * as ProjectLayoutService from "../projectLayout/ProjectLayoutService.ts";
 import { normalizeWidgets, resolveTrackerSetting } from "./projectDashboard.logic.ts";
 import type { ProjectDashboardStore } from "./ProjectDashboardStore.ts";
 
 const fail = (message: string) => new ProjectDashboardError({ message });
 
-/** Reads and writes a project page's widget order and its Gitea tracker repository. */
-export const make = (store: ProjectDashboardStore) =>
+/**
+ * Reads and writes a project page's Gitea tracker repository, and its first tab's
+ * widget order for older clients and the CLI's `dashboard show|set`: the order
+ * lives in the project layout now.
+ */
+export const make = (
+  store: ProjectDashboardStore,
+  layouts: ProjectLayoutService.ProjectLayoutService["Service"],
+) =>
   Effect.gen(function* () {
     const engine = yield* ThreadManagement.ThreadManagementService;
     const sql = yield* SqlClient.SqlClient;
@@ -50,10 +59,16 @@ export const make = (store: ProjectDashboardStore) =>
       Effect.gen(function* () {
         const { rootThreadId, rootProjectId } = yield* resolveRoot(input.threadId);
         const file = yield* store.read;
+        const layout = yield* layouts
+          .get(rootThreadId)
+          .pipe(Effect.mapError((error) => fail(error.message)));
         return {
           rootThreadId,
           rootProjectId,
-          widgets: file.dashboards[rootThreadId]?.widgets ?? null,
+          widgets:
+            layout.revision > 0
+              ? legacyWidgetOrder(layout.tabs)
+              : (file.dashboards[rootThreadId]?.widgets ?? null),
           tracker: file.trackers[rootProjectId] ?? null,
         } satisfies ProjectDashboard;
       });
@@ -61,14 +76,23 @@ export const make = (store: ProjectDashboardStore) =>
     const setWidgets = (input: ProjectDashboardSetWidgetsInput) =>
       Effect.gen(function* () {
         const { rootThreadId } = yield* resolveRoot(input.threadId);
-        yield* store
-          .modify((file) => {
-            const dashboards = { ...file.dashboards };
-            if (input.widgets === null) delete dashboards[rootThreadId];
-            else dashboards[rootThreadId] = { widgets: normalizeWidgets(input.widgets) };
-            return { ...file, dashboards };
-          })
-          .pipe(Effect.mapError(() => fail("Could not save the dashboard.")));
+        const actor = { kind: "user" as const, threadId: null, reason: "dashboard set" };
+        const layout = yield* layouts
+          .get(rootThreadId)
+          .pipe(Effect.mapError((error) => fail(error.message)));
+        // `--reset` restores the default layout; an order replaces the first tab's widgets.
+        yield* (
+          input.widgets === null
+            ? layouts.revert({ threadId: rootThreadId, toRevision: 0 }, actor)
+            : layouts.apply(
+                {
+                  threadId: rootThreadId,
+                  baseRevision: layout.revision,
+                  ops: legacyWidgetOrderOps(layout.tabs, normalizeWidgets(input.widgets)),
+                },
+                actor,
+              )
+        ).pipe(Effect.mapError((error) => fail(error.message)));
         return yield* get(input);
       });
 
