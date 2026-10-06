@@ -23,7 +23,7 @@ export function findVersion(
 }
 
 /**
- * The tracker's open requests and issues, each in its open version or Later.
+ * The tracker's open requests and issues, each in its open version or unversioned.
  * An item whose milestone is closed (a shipped release) is not on the roadmap.
  */
 export function roadmapItems(
@@ -49,5 +49,6 @@ export function roadmapItems(
       isRequest: issue.isRequest,
       stage: issue.stage ?? null,
       versionId: issue.milestone?.id ?? null,
+      parked: issue.labels.some((label) => label.toLowerCase() === "parked"),
     }));
 }
