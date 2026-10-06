@@ -323,6 +323,26 @@ before changing `current`; the wrapper still accepts `T3_THREAD_REPO` and
 `T3_THREAD_NODE_BIN`. Updating the wrapper alone leaves old snapshots without a
 stamp unable to run until they are explicitly built or redeployed.
 
+When a Linux user `t3-thread-watcher.service` is loaded, deployment restarts it
+through the user bus after promoting the verified snapshot and before pruning.
+The service must run the shared wrapper, which follows `current`. A restart or
+service-health failure stops pruning and retains the previous runtime; repair
+the unit or atomically repoint `current` to the retained snapshot and restart
+only the watcher. `--dry-run` and `--prune-only` never restart it. An installed
+unit with an unavailable user bus fails closed. Hosts without this managed unit
+keep on-demand watcher behavior; explicitly stop/relaunch an unmanaged watcher
+before deploying or pruning its runtime. Never delete routing state or leases.
+
+For a persistent Linux watcher, use a user unit enabled under `default.target`
+with `ExecStart=<shared-bin>/t3-thread watch --interval 5 --idle-exit 0
+--max-lifetime 0`, an explicit Node/shared-bin PATH and HOME, `Restart=always`,
+`RestartSec=30s`, and `SendSIGKILL=no`. Enable user lingering for boot startup.
+Keep it outside the server's system cgroup and without `PartOf=t3code.service`.
+`Restart=always` retries when a live on-demand watcher wins the singleton lease
+and the managed command exits successfully. Verify the managed MainPID against
+`watch.pid` and its boot/start identity after cutover. A loaded service alone
+is not proof that it owns the lease or delivered a notification.
+
 `watch --interval 5` uses five seconds while work remains, and sixty seconds
 while idle. Each pass shares thread reads and uses HTTP/RPC within the watcher
 process. Unsubscribed sources are not scanned. Settled sources are checked once
