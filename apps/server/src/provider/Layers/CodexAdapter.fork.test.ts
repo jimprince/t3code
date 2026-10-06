@@ -306,6 +306,7 @@ validationLayer("CodexAdapterLive validation", (it) => {
 
       NodeAssert.deepStrictEqual(validationRuntimeFactory.factory.mock.calls[0]?.[0], {
         binaryPath: "codex",
+        skillExtraRoots: [],
         cwd: process.cwd(),
         launchArgs: "",
         model: "gpt-5.3-codex",

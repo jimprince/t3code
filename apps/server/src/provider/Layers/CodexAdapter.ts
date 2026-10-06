@@ -2375,6 +2375,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
           cwd: input.cwd ?? process.cwd(),
           ...(options?.models ? { models: options.models } : {}),
           binaryPath: effectiveConfig.binaryPath,
+          skillExtraRoots: effectiveConfig.skillExtraRoots,
           launchArgs: resolveCodexLaunchArgs(effectiveConfig.launchArgs, effectiveEnvironment),
           ...(effectiveEnvironment ? { environment: effectiveEnvironment } : {}),
           ...(effectiveConfig.homePath ? { homePath: effectiveConfig.homePath } : {}),
