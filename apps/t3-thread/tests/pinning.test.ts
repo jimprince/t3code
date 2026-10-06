@@ -47,11 +47,12 @@ function harness() {
   const resets: unknown[] = [];
   const decode = Schema.decodeUnknownSync(OrchestrationV2Command);
   const request = vi.fn(async (method: string, input: unknown) => {
-    if (method === "forkOrderReset") {
+    if (method === "threadOrderReset") {
       resets.push(input);
       return;
     }
-    if (method === "forkMetadataList") return [{ threadId: base.id, parentThreadId: "parent" }];
+    if (method === "threadMetadataList") return [{ threadId: base.id, parentThreadId: "parent" }];
+    if (method === "threadMetadataUpdate") return input;
     if (method === "serverGetConfig") return { providers: [], settings: DEFAULT_SERVER_SETTINGS };
     if (method === "launchThread") return { threadId: base.id };
     expect(method).toBe("dispatchCommand");
