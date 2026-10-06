@@ -602,6 +602,7 @@ function withRateLimitBackoff(
       ? {}
       : { listLabelCandidates: interactive("listLabelCandidates", api.listLabelCandidates) }),
     ...(api.setLabels === undefined ? {} : { setLabels: interactive("setLabels", api.setLabels) }),
+    ...(api.resolveHostAlias === undefined ? {} : { resolveHostAlias: api.resolveHostAlias }),
     replyToThread: interactive("replyToThread", api.replyToThread),
     setReaction: interactive("setReaction", api.setReaction),
     setThreadResolution: interactive("setThreadResolution", api.setThreadResolution),
@@ -802,6 +803,27 @@ export const make = Effect.gen(function* () {
    * from the checkout, so it requires a matching repository.
    */
   const requireProject = (ref: PullRequestRef): Effect.Effect<SupportedProject, PullRequestError> =>
+    canonicalHost(ref).pipe(
+      Effect.flatMap((host) => requireProjectOnHost(host === undefined ? ref : { ...ref, host })),
+    );
+
+  /**
+   * A link made from the public address a server is reached on names a host no checkout carries.
+   * Providers that serve such an address say which host their own projects use for it.
+   */
+  const canonicalHost = (ref: PullRequestRef) => {
+    const host = ref.host?.trim().toLowerCase();
+    const resolveAlias = registry.get("gitea")?.resolveHostAlias;
+    if (host === undefined || resolveAlias === undefined) return Effect.succeed(host);
+    return resolveAlias({ host, repository: ref.repository.trim() }).pipe(
+      Effect.map((canonical) => canonical ?? host),
+      Effect.orElseSucceed(() => host),
+    );
+  };
+
+  const requireProjectOnHost = (
+    ref: PullRequestRef,
+  ): Effect.Effect<SupportedProject, PullRequestError> =>
     listWorkspaceProjects({ projectId: ref.projectId }).pipe(
       Effect.flatMap(({ supported }): Effect.Effect<SupportedProject, PullRequestError> => {
         const own = supported[0];
