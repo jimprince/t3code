@@ -1821,10 +1821,41 @@ const make = Effect.gen(function* () {
       });
     };
 
+    // The provider acknowledged the interrupt, so the turn is over. Waiting
+    // for its terminal runtime event would leave the session reporting a
+    // running turn that the projection already shows as interrupted, for as
+    // long as runtime ingestion lags.
+    const releaseInterruptedSession = Effect.gen(function* () {
+      const latestSession = (yield* resolveThreadShell(event.payload.threadId))?.session;
+      if (
+        !latestSession ||
+        latestSession.status !== "running" ||
+        latestSession.activeTurnId === null ||
+        latestSession.activeTurnId !== session.activeTurnId
+      ) {
+        return;
+      }
+      const releasedAt = DateTime.formatIso(yield* DateTime.now);
+      yield* setThreadSession({
+        threadId: event.payload.threadId,
+        session: {
+          ...latestSession,
+          status: "ready",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: releasedAt,
+        },
+        createdAt: releasedAt,
+      });
+    });
+
     // Orchestration turn ids are not provider turn ids, so interrupt by session.
-    yield* providerService
-      .interruptTurn({ threadId: event.payload.threadId })
-      .pipe(Effect.catchCause(recoverInterruptFailure));
+    yield* providerService.interruptTurn({ threadId: event.payload.threadId }).pipe(
+      Effect.matchCauseEffect({
+        onFailure: recoverInterruptFailure,
+        onSuccess: () => releaseInterruptedSession,
+      }),
+    );
   });
 
   const processApprovalResponseRequested = Effect.fn("processApprovalResponseRequested")(function* (
