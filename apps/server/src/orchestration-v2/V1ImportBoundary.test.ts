@@ -20,6 +20,8 @@ const legacyReaderFiles: Record<string, string> = {
   "forkLegacy/AttachmentImport.ts": "attachment recovery used only by the V1 importer",
   "persistence/ForkMigrations/003_ProjectionThreadMessageFileAttachments.ts":
     "shipped legacy attachment schema history",
+  "persistence/ForkMigrations/008_ProjectionThreadsSettleOnComplete.ts":
+    "shipped legacy lifecycle preference schema history",
   // Provider history for settings migration reads V1 thread sessions once at load.
   "serverSettings.ts": "one-time provider history for settings migration",
 };
