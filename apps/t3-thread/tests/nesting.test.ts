@@ -77,26 +77,19 @@ function harness(supported = true, remoteSupported = true) {
   return { client, request, dispose };
 }
 describe("V2 organizational nesting", () => {
-  it("launches through V2 then records the organizational parent with the new UUID", async () => {
+  it("claims an empty shell, commits parent and policy, then starts the first turn once", async () => {
     const { client, request } = harness();
-    const created = await client.createAgentThread({
-      projectId: "project",
-      title: "Worker",
-      initialMessage: "Work",
-      parentThreadId: "parent",
-    });
-    const launch = request.mock.calls.find(([method]) => method === "launchThread");
-    const update = request.mock.calls.find(([method]) => method === "threadMetadataUpdate");
-    expect(launch?.[1]).toMatchObject({
-      threadId: created.threadId,
-      initialMessage: { text: "Work" },
-    });
-    expect(update?.[1]).toMatchObject({
-      threadId: created.threadId,
-      parentThreadId: "parent",
-      remoteParent: null,
-    });
-    expect(request.mock.calls.indexOf(launch!)).toBeLessThan(request.mock.calls.indexOf(update!));
+    const created = await client.createAgentThread({ projectId: "project", title: "Worker", initialMessage: "Work", parentThreadId: "parent" });
+    const launches = request.mock.calls.filter(([method]) => method === "launchThread");
+    const updates = request.mock.calls.filter(([method]) => method === "threadMetadataUpdate");
+    expect(launches).toHaveLength(2);
+    expect(updates).toHaveLength(1);
+    expect(launches[0]?.[1]).toMatchObject({ threadId: created.threadId });
+    expect(launches[0]?.[1]).not.toHaveProperty("initialMessage");
+    expect(updates[0]?.[1]).toMatchObject({ threadId: created.threadId, parentThreadId: "parent", remoteParent: null, settleOnComplete: true });
+    expect(launches[1]?.[1]).toMatchObject({ threadId: created.threadId, initialMessage: { text: "Work" }, reuseExistingThread: true });
+    expect(request.mock.calls.indexOf(launches[0]!)).toBeLessThan(request.mock.calls.indexOf(updates[0]!));
+    expect(request.mock.calls.indexOf(updates[0]!)).toBeLessThan(request.mock.calls.indexOf(launches[1]!));
   });
 
   it("keeps ordering inside one environment-qualified remote-parent group", () => {
@@ -202,9 +195,9 @@ describe("V2 organizational nesting", () => {
       expect.objectContaining({ threadId: "child" }),
     );
   });
-import { expect, it } from "vite-plus/test";
+});
+
 import { selectThreadChildren } from "../src/status.js";
-import type { OrchestrationThreadShell } from "../src/types.js";
 const row = (
   id: string,
   parentThreadId: string | null,

@@ -756,7 +756,6 @@ agent
   )
   .option("--top-level", "create without an organizational parent or automatic caller subscription")
   .option("--parent <agent-or-thread>", "organizational parent; defaults to the current caller")
-  .option("--parent <agent-or-thread>", "supervising thread")
   .option("--top-level", "create without a supervision parent")
   .option("--pin", "pin the new thread (default: unpinned)")
   .option(
