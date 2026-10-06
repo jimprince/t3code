@@ -238,6 +238,8 @@ import * as SqlClient from "effect/sql/SqlClient";
 import * as PullRequestSyncReactor from "./orchestration-v2/PullRequestSyncReactor.ts";
 import * as ProjectIssuesService from "./projectIssues/ProjectIssuesService.ts";
 import * as RequestLedger from "./projectIssues/RequestLedger.ts";
+import * as ProjectDashboardService from "./projectDashboard/ProjectDashboardService.ts";
+import * as ProjectDashboardStore from "./projectDashboard/ProjectDashboardStore.ts";
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as SourceControlBuiltInDrivers from "./sourceControl/builtInDrivers.ts";
@@ -1335,6 +1337,9 @@ const layerWsRpc = (
       const withPullRequestViewer = pullRequests.withRoutingCredential;
       const projectIssues = yield* ProjectIssuesService.make;
       const requestLedger = yield* RequestLedger.make({ projectIssues, threadIssues });
+      const projectDashboard = yield* ProjectDashboardService.make(
+        yield* ProjectDashboardStore.make,
+      );
       const bootstrapCredentials = yield* PairingGrantStore.PairingGrantStore;
       const sessions = yield* SessionStore.SessionStore;
       const processDiagnostics = yield* ProcessDiagnostics.ProcessDiagnostics;
@@ -2491,6 +2496,9 @@ const layerWsRpc = (
         [WS_METHODS.projectRequestsSettle]: (input) => requestLedger.settle(input),
         [WS_METHODS.projectRequestsCreate]: (input) => requestLedger.create(input),
         [WS_METHODS.projectRequestsUpdate]: (input) => requestLedger.update(input),
+        [WS_METHODS.projectDashboardGet]: (input) => projectDashboard.get(input),
+        [WS_METHODS.projectDashboardSetWidgets]: (input) => projectDashboard.setWidgets(input),
+        [WS_METHODS.projectDashboardSetTracker]: (input) => projectDashboard.setTracker(input),
         [WS_METHODS.projectRequestsList]: (input) => requestLedger.listForThread(input),
         [WS_METHODS.pullRequestsList]: (input) => pullRequests.list(input),
         [WS_METHODS.pullRequestsListStats]: (input) => pullRequests.listStats(input),

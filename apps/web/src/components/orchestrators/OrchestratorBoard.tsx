@@ -54,7 +54,9 @@ import { useOrchestratorThreadShells } from "./useOrchestratorThreads";
 import { readOrchestratorLastVisit, recordOrchestratorVisit } from "./orchestratorVisit";
 import { ProjectAutomationsSlot } from "../projects/ProjectAutomationsSlot";
 import { ProjectIssuesBoard } from "./ProjectIssuesBoard";
-import { ProjectRequestsSection } from "./ProjectRequestsSection";
+import { ProjectReleaseWidget, ProjectRequestsSection } from "./ProjectRequestsSection";
+import { ProjectWidgetList, WorkerRequestTag } from "./ProjectWidgetList";
+import type { ProjectWidgetId } from "./projectWidgets.logic";
 import { projectReturnState } from "./projectNavigation";
 import { ProjectPullRequestLink } from "./ProjectPullRequestLink";
 
@@ -275,6 +277,167 @@ export function OrchestratorBoard({
     setChatOpen(true);
   };
 
+  const widgetViews: Partial<Record<ProjectWidgetId, ReactNode>> = {
+    requests: <ProjectRequestsSection summary={summary} />,
+    release: <ProjectReleaseWidget summary={summary} />,
+    "needs-you": (
+      <BoardSection title="Needs you" count={summary.needsYou.length}>
+        {summary.needsYou.length === 0 ? (
+          <Empty>Nothing is waiting on you.</Empty>
+        ) : (
+          <ul className="divide-y divide-border">
+            {summary.needsYou.map((item) => (
+              <li key={`${item.kind}:${item.thread.id}`} className="flex items-center gap-3 py-2">
+                <CircleAlertIcon className="size-4 shrink-0 text-warning-foreground" />
+                <span className="min-w-0 flex-1 truncate text-sm">{item.thread.title}</span>
+                <span className="text-xs text-muted-foreground">
+                  {item.kind === "approval"
+                    ? "Approval"
+                    : item.kind === "input"
+                      ? "Question"
+                      : "Plan ready"}
+                </span>
+                <ThreadProviderModel
+                  thread={item.thread}
+                  entries={providerEntriesFor(item.thread)}
+                />
+                <OpenThreadButton summary={summary} threadId={item.thread.id} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </BoardSection>
+    ),
+    working: (
+      <BoardSection title="Working" count={summary.working.length}>
+        {summary.working.length === 0 ? (
+          <Empty>No workers are active.</Empty>
+        ) : (
+          <ul className="divide-y divide-border">
+            {summary.working.map((item) => (
+              <li key={item.thread.id} className="flex items-start gap-3 py-2">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium">{item.thread.title}</span>
+                  {item.latestLine ? (
+                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                      {item.latestLine}
+                    </span>
+                  ) : null}
+                  <WorkerRequestTag summary={summary} threadId={item.thread.id} />
+                </span>
+                <ThreadProviderModel
+                  thread={item.thread}
+                  entries={providerEntriesFor(item.thread)}
+                />
+                <OpenThreadButton summary={summary} threadId={item.thread.id} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </BoardSection>
+    ),
+    blocked:
+      summary.blocked.length > 0 ? (
+        <BoardSection title="Blocked" count={summary.blocked.length}>
+          <ul className="divide-y divide-border">
+            {summary.blocked.map((item) => (
+              <li key={item.thread.id} className="flex items-start gap-3 py-2">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-error">
+                    {item.thread.title}
+                  </span>
+                  {item.latestLine ? (
+                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                      {item.latestLine}
+                    </span>
+                  ) : null}
+                  <WorkerRequestTag summary={summary} threadId={item.thread.id} />
+                </span>
+                <time className="text-xs text-muted-foreground">
+                  {new Date(item.thread.updatedAt).toLocaleString()}
+                </time>
+                <ThreadProviderModel
+                  thread={item.thread}
+                  entries={providerEntriesFor(item.thread)}
+                />
+                <OpenThreadButton summary={summary} threadId={item.thread.id} />
+              </li>
+            ))}
+          </ul>
+        </BoardSection>
+      ) : null,
+    done: (
+      <BoardSection title="Done since your last visit" count={done.length}>
+        {done.length === 0 ? (
+          <Empty>No newly completed workers.</Empty>
+        ) : (
+          <ul className="divide-y divide-border">
+            {done.map((item) => (
+              <li key={item.thread.id} className="flex items-center gap-3 py-2">
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-sm">{item.thread.title}</span>
+                  <WorkerRequestTag summary={summary} threadId={item.thread.id} />
+                </span>
+                <time className="text-xs text-muted-foreground" dateTime={item.completedAt}>
+                  {new Date(item.completedAt).toLocaleString()}
+                </time>
+                <OpenThreadButton summary={summary} threadId={item.thread.id} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </BoardSection>
+    ),
+    "new-request": (
+      <BoardSection title="New request">
+        {chatOpen ? (
+          <Button size="sm" variant="outline" onClick={() => setChatOpen(true)}>
+            Continue in orchestrator chat
+            <MessageSquareIcon />
+          </Button>
+        ) : (
+          <div className="relative h-44 overflow-hidden">
+            <ChatView
+              routeKind="server"
+              environmentId={rootRef.environmentId}
+              threadId={rootRef.threadId}
+              presentation="project-request"
+              onMessageSent={revealSentMessage}
+            />
+          </div>
+        )}
+      </BoardSection>
+    ),
+    issues: (
+      <BoardSection title="Issues">
+        <ProjectIssuesBoard summary={summary} />
+      </BoardSection>
+    ),
+    prs:
+      summary.pullRequests.length > 0 ? (
+        <BoardSection title="Pull requests" count={summary.pullRequests.length}>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+            {summary.pullRequests.map((pullRequest) => (
+              <ProjectPullRequestLink
+                key={`${pullRequest.host}/${pullRequest.repository}#${pullRequest.number}`}
+                summary={summary}
+                pullRequest={pullRequest}
+              />
+            ))}
+          </div>
+        </BoardSection>
+      ) : null,
+    automations: (
+      <ProjectAutomationsSlot
+        project={{
+          environmentId: summary.root.environmentId,
+          rootThreadId: summary.root.id,
+          rootProjectId: summary.root.projectId,
+        }}
+      />
+    ),
+  };
+
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden">
       <div className="flex min-h-0 flex-1 flex-col">
@@ -355,157 +518,7 @@ export function OrchestratorBoard({
                 </span>
               </div>
 
-              <BoardSection title="Needs you" count={summary.needsYou.length}>
-                {summary.needsYou.length === 0 ? (
-                  <Empty>Nothing is waiting on you.</Empty>
-                ) : (
-                  <ul className="divide-y divide-border">
-                    {summary.needsYou.map((item) => (
-                      <li
-                        key={`${item.kind}:${item.thread.id}`}
-                        className="flex items-center gap-3 py-2"
-                      >
-                        <CircleAlertIcon className="size-4 shrink-0 text-warning-foreground" />
-                        <span className="min-w-0 flex-1 truncate text-sm">{item.thread.title}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {item.kind === "approval"
-                            ? "Approval"
-                            : item.kind === "input"
-                              ? "Question"
-                              : "Plan ready"}
-                        </span>
-                        <ThreadProviderModel
-                          thread={item.thread}
-                          entries={providerEntriesFor(item.thread)}
-                        />
-                        <OpenThreadButton summary={summary} threadId={item.thread.id} />
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </BoardSection>
-
-              <ProjectRequestsSection summary={summary} />
-
-              <BoardSection title="Working" count={summary.working.length}>
-                {summary.working.length === 0 ? (
-                  <Empty>No workers are active.</Empty>
-                ) : (
-                  <ul className="divide-y divide-border">
-                    {summary.working.map((item) => (
-                      <li key={item.thread.id} className="flex items-start gap-3 py-2">
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium">
-                            {item.thread.title}
-                          </span>
-                          {item.latestLine ? (
-                            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                              {item.latestLine}
-                            </span>
-                          ) : null}
-                        </span>
-                        <ThreadProviderModel
-                          thread={item.thread}
-                          entries={providerEntriesFor(item.thread)}
-                        />
-                        <OpenThreadButton summary={summary} threadId={item.thread.id} />
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </BoardSection>
-
-              {summary.blocked.length > 0 ? (
-                <BoardSection title="Blocked" count={summary.blocked.length}>
-                  <ul className="divide-y divide-border">
-                    {summary.blocked.map((item) => (
-                      <li key={item.thread.id} className="flex items-start gap-3 py-2">
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium text-error">
-                            {item.thread.title}
-                          </span>
-                          {item.latestLine ? (
-                            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                              {item.latestLine}
-                            </span>
-                          ) : null}
-                        </span>
-                        <time className="text-xs text-muted-foreground">
-                          {new Date(item.thread.updatedAt).toLocaleString()}
-                        </time>
-                        <ThreadProviderModel
-                          thread={item.thread}
-                          entries={providerEntriesFor(item.thread)}
-                        />
-                        <OpenThreadButton summary={summary} threadId={item.thread.id} />
-                      </li>
-                    ))}
-                  </ul>
-                </BoardSection>
-              ) : null}
-
-              <BoardSection title="Done since your last visit" count={done.length}>
-                {done.length === 0 ? (
-                  <Empty>No newly completed workers.</Empty>
-                ) : (
-                  <ul className="divide-y divide-border">
-                    {done.map((item) => (
-                      <li key={item.thread.id} className="flex items-center gap-3 py-2">
-                        <span className="min-w-0 flex-1 truncate text-sm">{item.thread.title}</span>
-                        <time className="text-xs text-muted-foreground" dateTime={item.completedAt}>
-                          {new Date(item.completedAt).toLocaleString()}
-                        </time>
-                        <OpenThreadButton summary={summary} threadId={item.thread.id} />
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </BoardSection>
-
-              <BoardSection title="New request">
-                {chatOpen ? (
-                  <Button size="sm" variant="outline" onClick={() => setChatOpen(true)}>
-                    Continue in orchestrator chat
-                    <MessageSquareIcon />
-                  </Button>
-                ) : (
-                  <div className="relative h-44 overflow-hidden">
-                    <ChatView
-                      routeKind="server"
-                      environmentId={rootRef.environmentId}
-                      threadId={rootRef.threadId}
-                      presentation="project-request"
-                      onMessageSent={revealSentMessage}
-                    />
-                  </div>
-                )}
-              </BoardSection>
-
-              <BoardSection title="Issues">
-                <ProjectIssuesBoard summary={summary} />
-              </BoardSection>
-
-              {summary.pullRequests.length > 0 ? (
-                <BoardSection title="Pull requests" count={summary.pullRequests.length}>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-                    {summary.pullRequests.map((pullRequest) => (
-                      <ProjectPullRequestLink
-                        key={`${pullRequest.host}/${pullRequest.repository}#${pullRequest.number}`}
-                        summary={summary}
-                        pullRequest={pullRequest}
-                      />
-                    ))}
-                  </div>
-                </BoardSection>
-              ) : null}
-
-              <ProjectAutomationsSlot
-                project={{
-                  environmentId: summary.root.environmentId,
-                  rootThreadId: summary.root.id,
-                  rootProjectId: summary.root.projectId,
-                }}
-              />
+              <ProjectWidgetList summary={summary} views={widgetViews} />
             </WorkspacePageContainer>
           </div>
           {chatOpen ? (
