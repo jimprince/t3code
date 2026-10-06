@@ -113,26 +113,32 @@ export function selectThreadChildren(
   threads: readonly OrchestrationThreadShell[],
   parentThreadId: string,
   recursive: boolean,
+  parentEnvironmentId?: string,
 ): OrchestrationThreadShell[] {
-  const parents = new Set([parentThreadId]);
-  if (recursive) {
-    const children = new Map<string, OrchestrationThreadShell[]>();
-    for (const thread of threads) {
-      if (thread.parentThreadId == null) continue;
-      const siblings = children.get(thread.parentThreadId) ?? [];
-      siblings.push(thread);
-      children.set(thread.parentThreadId, siblings);
-    }
-    for (const id of parents) {
-      for (const child of children.get(id) ?? []) parents.add(child.id);
-    }
-  }
-  return threads.filter(
-    (thread) =>
-      thread.id !== parentThreadId &&
-      thread.parentThreadId != null &&
-      parents.has(thread.parentThreadId),
+  const direct = threads.filter((thread) =>
+    parentEnvironmentId
+      ? thread.remoteParent?.environmentId === parentEnvironmentId &&
+        thread.remoteParent.threadId === parentThreadId
+      : thread.parentThreadId === parentThreadId && thread.remoteParent == null,
   );
+  if (!recursive) return direct;
+  const result = [...direct];
+  const seen = new Set([
+    ...direct.map((thread) => thread.id),
+    ...(parentEnvironmentId ? [] : [parentThreadId]),
+  ]);
+  for (let i = 0; i < result.length; i++) {
+    for (const child of threads)
+      if (
+        child.parentThreadId === result[i]!.id &&
+        child.remoteParent == null &&
+        !seen.has(child.id)
+      ) {
+        seen.add(child.id);
+        result.push(child);
+      }
+  }
+  return result;
 }
 
 export function selectRemoteThreadChildren(
