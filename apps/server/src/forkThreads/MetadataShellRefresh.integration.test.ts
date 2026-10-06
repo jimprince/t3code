@@ -14,6 +14,10 @@ import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterReg
 import { makeOrchestratorV2ReplayLayerWithRegistry } from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
 import { makeNestingService } from "./NestingService.ts";
 
+class CliTransportError extends Schema.TaggedError<CliTransportError>()("CliTransportError", {
+  cause: Schema.Unknown,
+}) {}
+
 const decodeCliMetadata = Schema.decodeUnknownSync(ForkThreadMetadataUpdate);
 const database = SqlitePersistenceMemory;
 const runtime = makeOrchestratorV2ReplayLayerWithRegistry(
@@ -140,10 +144,10 @@ it.effect(
               })) as T;
             },
             subscribeShellSnapshot: async <T>(): Promise<T> => {
-              throw new Error("Unused snapshot");
+              throw new CliTransportError({ cause: "Unused snapshot" });
             },
             subscribeThreadSnapshot: async <T>(): Promise<T> => {
-              throw new Error("Unused snapshot");
+              throw new CliTransportError({ cause: "Unused snapshot" });
             },
             dispose: async () => {},
           }),
@@ -163,13 +167,13 @@ it.effect(
         };
       };
       const cli = new cliModule.RemoteEnvironmentClient(...cliArguments);
-      const cliRequest = yield* Effect.callback<ForkThreadMetadataUpdate, Error>((resume) => {
-        receiveRpc = (value) => resume(Effect.succeed(value));
-        cliResponse = cli.setThreadParent(threadId, parentId);
-        void cliResponse.catch((cause) =>
-          resume(Effect.fail(new Error("CLI update failed", { cause }))),
-        );
-      });
+      const cliRequest = yield* Effect.callback<ForkThreadMetadataUpdate, CliTransportError>(
+        (resume) => {
+          receiveRpc = (value) => resume(Effect.succeed(value));
+          cliResponse = cli.setThreadParent(threadId, parentId);
+          void cliResponse.catch((cause) => resume(Effect.fail(new CliTransportError({ cause }))));
+        },
+      );
       // The test fiber services the real CLI request, then releases its RPC response.
       finishRpc(yield* service.update(cliRequest));
       const cliResult = yield* Effect.tryPromise(() => cliResponse);
