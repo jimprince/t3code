@@ -1,0 +1,13 @@
+name = "fork-request-intake"
+subject = "feat(projects): New request box triages through a short-lived intake thread"
+class = "product"
+purpose = "Stop the New request box from waking the project's orchestrator with every request: a short-lived intake thread nested under it triages the request, catalogs it or starts it, and hands it to the orchestrator only when it needs starting now or needs a decision (Brad, 2026-10-05)."
+retire_when = "Requests are triaged by an equivalent built-in intake, or the project page is retired."
+depends_on = [
+  "fork-request-followups",
+  "fork-request-answers",
+  "fork-project-request-box-pinned",
+  "fork-roadmap-next-later",
+]
+roles = []
+note = "projectRequests.startIntake creates the intake thread (thread.create nested under the orchestrator, settleOnComplete, no CLI subscriber so nothing is notified) on claude-sonnet-5-5 when an enabled provider offers it, else another Claude Sonnet, else the orchestrator's model, and returns the fixed brief (buildIntakeBrief). The box then submits the request as explicit on the intake thread and sends brief plus Brad's words and images through the normal queued send path, so the ledger files the task from his words, linked to the intake and the orchestrator; a server without the RPC falls back to sending to the orchestrator. The brief: find the task, request type and request title, roadmap move next or later, then answer a question with request ready, or start one worker (--parent and --notify the orchestrator at attention level), or send the orchestrator one message, or catalog; note what was done; settle itself. projectRequests.update takes title (CLI request title). Integration fork.6: adapted replay to preserve UI theme/owner notes alongside BE authoritative contract and helpers. Fork.6 integration: adapt: union inventory, retain earlier integrated owner notes and later stanza (docs/operations/fork-inventory.toml). Retire/narrow/relocate do not apply to these retained UI behaviors or inventory insertions."
