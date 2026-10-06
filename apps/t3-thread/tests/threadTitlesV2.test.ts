@@ -18,11 +18,15 @@ const environment: SavedEnvironment = {
   expiresAt: "2099-01-01T00:00:00.000Z",
   pairedAt: "2026-10-02T00:00:00.000Z",
 };
+const decodeMetadataUpdate = Schema.decodeUnknownSync(ForkThreadMetadataUpdate);
+const decodeLaunch = Schema.decodeUnknownSync(OrchestrationV2ThreadLaunchInput);
+const decodeCommand = Schema.decodeUnknownSync(OrchestrationV2Command);
 function harness() {
   let title = "Original";
   let scope: string | null = null;
   let parentThreadId: string | null = null;
   const commands: string[] = [];
+  const operations: string[] = [];
   const launches: Array<typeof OrchestrationV2ThreadLaunchInput.Type> = [];
   const client = new RemoteEnvironmentClient(environment, {
     descriptorFactory: async () => ({
@@ -37,17 +41,19 @@ function harness() {
         if (method === "threadMetadataList")
           return [{ threadId: "thread", parentThreadId, scope }] as T;
         if (method === "threadMetadataUpdate") {
-          const value = Schema.decodeUnknownSync(ForkThreadMetadataUpdate)(input);
+          operations.push("nest");
+          const value = decodeMetadataUpdate(input);
           if (value.scope !== undefined) scope = value.scope;
           if (value.parentThreadId !== undefined) parentThreadId = value.parentThreadId;
           return value as T;
         }
         if (method === "launchThread") {
-          const value = Schema.decodeUnknownSync(OrchestrationV2ThreadLaunchInput)(input);
+          const value = decodeLaunch(input);
           launches.push(value);
+          operations.push(value.initialMessage ? "start" : "claim");
           return { threadId: value.threadId } as T;
         }
-        const command = Schema.decodeUnknownSync(OrchestrationV2Command)(input);
+        const command = decodeCommand(input);
         commands.push(command.type);
         if (command.type === "thread.metadata.update" && command.title) title = command.title;
         return { sequence: commands.length } as T;
@@ -76,9 +82,25 @@ function harness() {
     }),
   });
   vi.spyOn(client, "getServerConfig").mockRejectedValue(new Error("model inventory unavailable"));
-  return { client, commands, launches };
+  return { client, commands, launches, operations };
 }
 describe("V2 worker titles", () => {
+  it("persists supervision before the first provider message", async () => {
+    const h = harness();
+    await h.client.createAgentThread({
+      projectId: "project",
+      title: "Chosen",
+      initialMessage: "Work",
+      parentThreadId: "parent",
+    });
+    expect(h.operations).toEqual(["claim", "nest", "start"]);
+    expect(h.launches[0]?.initialMessage).toBeUndefined();
+    expect(h.launches[1]).toMatchObject({
+      reuseExistingThread: true,
+      generateTitle: false,
+      initialMessage: { text: "Work" },
+    });
+  });
   it("renames and clears server scope with verified reads without launching a provider", async () => {
     const h = harness();
     expect(

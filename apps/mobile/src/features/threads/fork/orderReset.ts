@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useSupervisionReadyHosts } from "../../../state/forkSupervision";
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentId } from "@t3tools/contracts";
@@ -10,11 +11,16 @@ export const resetForkThreadOrder = createEnvironmentRpcCommand(connectionAtomRu
   tag: "fork.threads.order.reset",
 });
 
-export function useForkOrderResetSupported(environmentId: EnvironmentId) {
+/** Hosts whose order metadata is loaded, and those that also accept order reset. Read once per list. */
+export function useForkOrderHosts() {
   const readyHosts = useSupervisionReadyHosts();
   const configs = useAtomValue(environmentServerConfigsAtom);
-  return (
-    readyHosts.has(environmentId) &&
-    configs.get(environmentId)?.environment.capabilities.threadOrderReset === true
-  );
+  return useMemo(() => {
+    const resetSupported = new Set<EnvironmentId>();
+    for (const environmentId of readyHosts) {
+      if (configs.get(environmentId)?.environment.capabilities.threadOrderReset === true)
+        resetSupported.add(environmentId);
+    }
+    return { ready: readyHosts, resetSupported };
+  }, [readyHosts, configs]);
 }
