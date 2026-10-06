@@ -1,24 +1,66 @@
 import type { ProjectRoadmap, ProjectRoadmapItem } from "@t3tools/contracts";
 
+export type RoadmapTarget =
+  /** The automatic next version: the first open version, or no version at all. */
+  | { readonly kind: "next" }
+  | { readonly kind: "version"; readonly title: string }
+  /** Parked: saved for later and kept off the Dashboard. */
+  | { readonly kind: "later" };
+
 export interface RoadmapColumn {
-  /** Null is Later: no version yet. */
-  readonly versionId: number | null;
+  readonly key: string;
   readonly title: string;
+  /** A real version (milestone) that can be renamed; null for the automatic ones. */
+  readonly versionId: number | null;
+  readonly target: RoadmapTarget;
   readonly items: ReadonlyArray<ProjectRoadmapItem>;
 }
 
-/** Later first, then each open version in roadmap order. */
+/**
+ * Next version first, filled automatically: the first open version's items plus
+ * every unversioned item that is not parked. Then each later open version, and
+ * Later last (parked items without a version).
+ */
 export function roadmapColumns(roadmap: ProjectRoadmap): RoadmapColumn[] {
-  const byVersion = (versionId: number | null) =>
-    roadmap.items.filter((item) => item.versionId === versionId);
+  const [first, ...rest] = roadmap.versions;
+  const unversioned = roadmap.items.filter((item) => item.versionId === null);
+  const next: RoadmapColumn = {
+    key: "next",
+    title: first ? first.title : "Next version",
+    versionId: first?.id ?? null,
+    target: first ? { kind: "version", title: first.title } : { kind: "next" },
+    items: [
+      ...(first ? roadmap.items.filter((item) => item.versionId === first.id) : []),
+      ...unversioned.filter((item) => !item.parked),
+    ],
+  };
   return [
-    { versionId: null, title: "Later", items: byVersion(null) },
-    ...roadmap.versions.map((version) => ({
-      versionId: version.id,
+    next,
+    ...rest.map((version) => ({
+      key: String(version.id),
       title: version.title,
-      items: byVersion(version.id),
+      versionId: version.id,
+      target: { kind: "version", title: version.title } as const,
+      items: roadmap.items.filter((item) => item.versionId === version.id),
     })),
+    {
+      key: "later",
+      title: "Later",
+      versionId: null,
+      target: { kind: "later" },
+      items: unversioned.filter((item) => item.parked),
+    },
   ];
+}
+
+/** The column an item sits in, so a move to the same place is a no-op. */
+export const columnOf = (columns: ReadonlyArray<RoadmapColumn>, item: ProjectRoadmapItem) =>
+  columns.find((column) => column.items.some((candidate) => candidate.number === item.number));
+
+/** The move request for a target: a version title, the automatic next, or Later. */
+export function moveInput(target: RoadmapTarget): { version: string | null; later?: true } {
+  if (target.kind === "version") return { version: target.title };
+  return target.kind === "later" ? { version: null, later: true } : { version: null };
 }
 
 /** The next release: the first open version, if any. */
