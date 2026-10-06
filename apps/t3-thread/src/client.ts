@@ -798,7 +798,6 @@ export class RemoteEnvironmentClient {
           : null,
         coalesceKey: input.coalesceKey ?? null,
         queuedDuringTurnId: thread.latestTurn?.turnId ?? null,
-        origin: input.origin ?? null,
       });
       return {
         dispatched: false,
