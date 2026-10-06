@@ -1,6 +1,6 @@
-Bottom: 31aef1de891900ba45384e6794f92045e410a53b
-Top:    fbe322e37b5ad73dfab9973a11b77a5a90c197ce
+Bottom: 86cc251c0cfb73118daa791f7efe0216bdbd653c
+Top:    8302d9a104575ff923ead84190187c581bf19c80
 Author: brad <bradprin@live.com>
-Date:   2026-10-06 01:02:25 +0000
+Date:   2026-10-06 01:03:26 +0000
 
 feat(threads): surface child input attention
