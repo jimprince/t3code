@@ -1,3 +1,5 @@
+import { ThreadIssuesToolkitHandlersLive } from "./toolkits/issues/handlers.ts";
+import { ThreadIssuesToolkit } from "./toolkits/issues/tools.ts";
 import { WorkerIdentityToolkit, WorkerIdentityHandlersLive } from "./WorkerIdentityToolkit.ts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -844,6 +846,8 @@ export const layerPullRequestsToolkit = toolkitRegistration(
   PullRequestsHandlers.layer,
 );
 
+const layerThreadIssuesToolkit = toolkitRegistration(ThreadIssuesToolkit, ThreadIssuesToolkitHandlersLive);
+
 const layerDeviceStandardToolkitRegistration = toolkitRegistration(
   DeviceStandardToolkit,
   DeviceHandlers.layerStandard,
@@ -878,6 +882,7 @@ export const layer = Layer.mergeAll(
   layerPreviewControlsRegistration,
   layerWorktreeToolkitRegistration,
   layerPullRequestsToolkit,
+  layerThreadIssuesToolkit,
   layerDeviceToolkit,
   layerHtmlToolkit,
 ).pipe(Layer.provideMerge(layerMcpTransport));
