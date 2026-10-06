@@ -5,6 +5,7 @@ import {
   ProjectId,
   ProviderInstanceId,
   PullRequestOperationError,
+  PullRequestUnavailableError,
   RunId,
   ThreadId,
   TurnItemId,
@@ -162,7 +163,7 @@ interface HarnessOptions {
   readonly snapshot: TestShellSnapshot;
   readonly summary?: (
     input: PullRequestRef,
-  ) => Effect.Effect<PullRequestSummary, PullRequestOperationError>;
+  ) => Effect.Effect<PullRequestSummary, PullRequestOperationError | PullRequestUnavailableError>;
   readonly stack?: (
     input: PullRequestRef,
   ) => Effect.Effect<PullRequestStack | null, PullRequestOperationError>;
@@ -941,6 +942,48 @@ describe("PullRequestSyncReactor", () => {
             (yield* Ref.get(fixture.syncCommands)).map((command) => command.number),
             [8],
           );
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
+
+  it.effect("sets aside a host no checkout can read instead of retrying it every sweep", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(NOW));
+        const giteaLink = (number: number) =>
+          makeLink(number, null, {
+            host: "git.example.com",
+            url: `https://git.example.com/owner/repository/pulls/${number}`,
+          });
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([
+            makeThread("gitea", { pullRequests: [giteaLink(1), giteaLink(2)] }),
+            makeThread("github", { pullRequests: [makeLink(3, { state: "open" })] }),
+          ]),
+          summary: (input) =>
+            input.host === "git.example.com"
+              ? Effect.fail(new PullRequestUnavailableError({ reason: "provider-unsupported" }))
+              : Effect.succeed(makeSummary(input)),
+        });
+        const hostReads = Effect.map(
+          Ref.get(fixture.summaryCalls),
+          (calls) => calls.filter((call) => call.host === "git.example.com").length,
+        );
+
+        yield* Effect.gen(function* () {
+          const reactor = yield* startAndSweep(fixture);
+          const firstReads = yield* hostReads;
+          assert.isAtLeast(firstReads, 1);
+          for (let index = 0; index < 29; index += 1) yield* sweepAgain(fixture, reactor);
+          assert.strictEqual(yield* hostReads, firstReads);
+          // Other hosts keep their normal cadence meanwhile.
+          assert.isAtLeast(
+            (yield* Ref.get(fixture.summaryCalls)).filter((call) => call.number === 3).length,
+            29,
+          );
+          yield* sweepAgain(fixture, reactor);
+          assert.isAbove(yield* hostReads, firstReads);
         }).pipe(Effect.provide(fixture.layer));
       }),
     ),
