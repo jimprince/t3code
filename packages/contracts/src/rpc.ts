@@ -3,6 +3,7 @@ import {
   ResourceRecoveryPreviewRpc,
   ResourceRecoveryExecuteRpc,
 } from "./forkResourceRecoveryRpc.ts";
+import { ForkThreadOrderResetRpc } from "./forkThreadOrder.ts";
 import { ForkThreadMetadataRpcs } from "./forkThreadMetadata.ts";
 import { SupervisionDropRpc } from "./forkSupervisionDrag.ts";
 import { THREAD_SUBSCRIPTION_METHODS, ThreadSubscriptionRpcs } from "./threadSubscriptions.ts";
@@ -1718,6 +1719,7 @@ export const WsRpcGroup = RpcGroup.make(
   SupervisionDropRpc,
   ...ThreadSubscriptionRpcs,
   WorkspaceUploadRpc,
+  ForkThreadOrderResetRpc,
   ...ForkThreadMetadataRpcs,
   HeadlessDeliveryRpc,
   ResourceRecoveryPreviewRpc,
