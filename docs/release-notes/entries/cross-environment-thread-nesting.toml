@@ -1,0 +1,4 @@
+id = "cross-environment-thread-nesting"
+category = "feature"
+functionality = "threads"
+text = "Nest workers on another machine under their orchestrator, with combined activity and project views across connected environments."
