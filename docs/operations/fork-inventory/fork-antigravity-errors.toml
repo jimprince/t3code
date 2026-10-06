@@ -1,0 +1,15 @@
+name = "fork-antigravity-errors"
+subject = "fix(antigravity): show native transport failure details"
+class = "upstream-bound"
+purpose = "Preserve explanatory Antigravity transport errors so startup and cancellation failures are actionable in every client."
+retire_when = "Upstream preserves native transport details in Antigravity adapter errors."
+depends_on = []
+roles = []
+
+note = "V2 exposes native Antigravity transport details through the shared bounded and redacted provider failure contract consumed by every client."
+
+[[decision]]
+id = "v2-antigravity-provider-failure"
+date = "2026-10-06"
+decided = "adapt"
+rationale = "V2 removed the V1 adapter request error. Preserve explanatory transport detail while traversing an Antigravity adapter cause at the provider failure boundary, retaining V2 redaction and size limits."
