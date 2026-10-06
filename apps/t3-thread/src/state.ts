@@ -308,6 +308,7 @@ export function buildSubscriptionRecord(
     baselineTurnId?: string | null;
     level?: NotificationLevel;
     inputReminderMinutes?: number;
+    inactivityMinutes?: number;
   } = {},
 ): SavedSubscription {
   return {
