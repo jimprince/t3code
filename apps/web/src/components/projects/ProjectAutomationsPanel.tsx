@@ -5,6 +5,7 @@ import {
 import {
   AutomationDefinition,
   type Automation,
+  type AutomationResultMode,
   type EnvironmentId,
   type ProjectId,
   type ThreadId,
@@ -426,6 +427,24 @@ export function ProjectAutomationsPanel({ environmentId, projectId, rootThreadId
                 {thread.id === rootThreadId ? "Orchestrator" : thread.title}
               </option>
             ))}
+          </select>
+          <select
+            aria-label="Result mode"
+            value={editing.resultMode ?? ""}
+            onChange={(event) => {
+              const { resultMode: _ignored, ...rest } = editing;
+              setEditing(
+                event.target.value
+                  ? { ...rest, resultMode: event.target.value as AutomationResultMode }
+                  : rest,
+              );
+            }}
+          >
+            <option value="">Unset (send the prompt as written)</option>
+            <option value="review">Review (file nothing, thread stays open)</option>
+            <option value="file-only">File only</option>
+            <option value="file-and-settle">File and settle</option>
+            <option value="act">Act (no filing or settling instructions)</option>
           </select>
           <div className="flex gap-2">
             <Button size="sm" disabled={pending} type="submit">

@@ -23,6 +23,7 @@ import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSn
 import * as ServerSettings from "../serverSettings.ts";
 import * as ProjectIssuesService from "../projectIssues/ProjectIssuesService.ts";
 import type { AutomationObservation } from "./events.ts";
+import { unboundRunOutcome } from "./runOutcome.ts";
 
 /** Why the engine should look again. */
 export type AutomationWakeup = "thread" | "legacy" | "project";
@@ -119,6 +120,14 @@ const make = Effect.gen(function* () {
             ? finish("failed", "Turn checkpoint failed.")
             : finish("completed", "Turn completed.");
         return started;
+      }
+      if (turnId === null) {
+        const outcome = unboundRunOutcome({
+          messageCreatedAt: message.value.message.createdAt,
+          latestTurn: turn,
+          session: target.value.session,
+        });
+        return outcome ? finish(outcome.status, outcome.result) : started;
       }
       if (target.value.session?.status === "error" || target.value.session?.status === "stopped")
         return finish(
