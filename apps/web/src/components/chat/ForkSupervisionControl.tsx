@@ -32,7 +32,7 @@ export function ForkSupervisionControl(props: { environmentId: EnvironmentId; th
     await update({ environmentId: props.environmentId, input: { commandId: newForkCommandId(), threadId: props.threadId, parentThreadId } });
   };
   return <ThreadDetailsSection headingId="fork-supervision-heading" title="Workers">
-    {rows.map(thread => <button type="button" key={thread.id} onClick={() => { void navigate({ to: "/thread/$environmentId/$threadId", params: buildThreadRouteParams(scopeThreadRef(props.environmentId, thread.id)) }); }} className="block w-full truncate px-1.5 py-1 text-left text-xs">
+    {rows.map(thread => <button type="button" key={thread.id} onClick={() => { void navigate({ to: "/$environmentId/$threadId", params: buildThreadRouteParams(scopeThreadRef(props.environmentId, thread.id)) }); }} className="block w-full truncate px-1.5 py-1 text-left text-xs">
       {thread.title} · {projects.find(project => project.id === thread.projectId)?.title ?? thread.projectId}{thread.settledAt ? " · settled" : ""}
     </button>)}
     <form onSubmit={event => { event.preventDefault(); void setParentId(parent ? ThreadId.make(parent) : null); }}>

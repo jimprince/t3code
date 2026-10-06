@@ -4,6 +4,7 @@ import {
   planExplicitThreadOrder,
   planThreadMove,
   sortThreadOrderGroup,
+  sameThreadOrderGroup,
   threadOrderSection,
   type OrderableThread,
 } from "../src/threadOrder.js";
@@ -24,6 +25,22 @@ function thread(id: string, overrides: Partial<OrderableThread> = {}): Orderable
 }
 
 describe("agent-controlled thread order", () => {
+  it("separates remote parents by descriptor even when their thread IDs collide", () => {
+    const remote = thread("one", { remoteParent: { environmentId: "a", threadId: "parent" } });
+    expect(
+      sameThreadOrderGroup(
+        remote,
+        thread("two", { remoteParent: { environmentId: "a", threadId: "parent" } }),
+      ),
+    ).toBe(true);
+    expect(
+      sameThreadOrderGroup(
+        remote,
+        thread("three", { remoteParent: { environmentId: "b", threadId: "parent" } }),
+      ),
+    ).toBe(false);
+    expect(sameThreadOrderGroup(remote, thread("four"))).toBe(false);
+  });
   it("puts listed threads first and retains every unlisted thread's relative order", () => {
     const group = [
       thread("new", { createdAt: "2026-01-04T00:00:00.000Z" }),
