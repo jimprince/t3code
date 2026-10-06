@@ -326,12 +326,7 @@ export function OrchestratorBoard({
   };
 
   const widgetViews: Partial<Record<ProjectWidgetId, ReactNode>> = {
-    requests: (
-      <ProjectRequestsSection
-        summary={summary}
-        header={<ProjectRequestBox summary={summary} onSent={revealSentMessage} />}
-      />
-    ),
+    requests: <ProjectRequestsSection summary={summary} />,
     release: <ProjectReleaseWidget summary={summary} />,
     maintenance: <ProjectMaintenanceWidget summary={summary} />,
     roadmap: <ProjectRoadmapSummary summary={summary} onOpen={() => selectTab("roadmap")} />,
@@ -567,7 +562,11 @@ export function OrchestratorBoard({
                   <ProjectIssuesBoard summary={summary} />
                 </BoardSection>
               ) : (
-                <ProjectWidgetList summary={summary} views={widgetViews} />
+                <>
+                  {/* Pinned first on the Dashboard, outside the widget order. */}
+                  <ProjectRequestBox summary={summary} onOpenChat={() => setChatOpen(true)} />
+                  <ProjectWidgetList summary={summary} views={widgetViews} />
+                </>
               )}
             </WorkspacePageContainer>
           </div>
