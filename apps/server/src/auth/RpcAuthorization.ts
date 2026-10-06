@@ -42,6 +42,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.serverPreviewRecovery]: AuthOrchestrationReadScope,
   [WS_METHODS.serverExecuteRecovery]: AuthOrchestrationOperateScope,
   "fork.threads.order.reset": AuthOrchestrationOperateScope,
+  "orchestration.forkThread": AuthOrchestrationOperateScope,
   "fork.threads.metadata.list": AuthOrchestrationReadScope,
   "fork.threads.metadata.update": AuthOrchestrationOperateScope,
   [WS_METHODS.serverThreadSubscriptions]: AuthOrchestrationReadScope,
