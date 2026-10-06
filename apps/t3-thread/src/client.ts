@@ -646,7 +646,7 @@ export class RemoteEnvironmentClient {
     if (status.state === "running" && !input.allowWhileRunning) {
       if (input.queueWhileRunning === false) {
         throw new Error(
-          `Thread '${thread.id}' is still running. Use interrupt first or pass a force path in code if you really want concurrent sends.`,
+          `Thread '${thread.id}' is still running. Use interrupt first or pass a force path in code if you really want concurrent sends. If its latest turn already ended, run 'session reconcile' to clear the stale session.`,
         );
       }
 
@@ -953,6 +953,16 @@ export class RemoteEnvironmentClient {
     } finally {
       await rpc.dispose();
     }
+  }
+
+  async reconcileSession(threadId: string): Promise<void> {
+    const thread = await this.findThread(threadId);
+    await this.dispatchOnce({
+      type: "thread.session.reconcile",
+      commandId: NodeCrypto.randomUUID(),
+      threadId: thread.id,
+      createdAt: nowIso(),
+    });
   }
 
   async setThreadPinned(threadId: string, pinned: boolean) {

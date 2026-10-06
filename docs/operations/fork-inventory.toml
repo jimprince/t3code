@@ -1927,3 +1927,13 @@ retire_when = "The CLI no longer edits the project layout, or upstream tracks an
 depends_on = ["fork-project-layout", "fork-project-dashboard-widgets"]
 roles = []
 note = "widgetOrderOps (packages/contracts projectLayout.ts) replaces legacyWidgetOrderOps: each --widgets id resolves as an older id, canvas:<id> or any registered PROJECT_WIDGET_TYPES type, and an id that is none returns an error naming every unknown id (the old version skipped them, which hid decisions, markdown, links, canvas-slot and every type added since). ProjectDashboardService.setWidgets now fails with that error as well, so older callers of projectDashboard.setWidgets stop dropping silently. In the CLI, `dashboard set --widgets` reads the layout (projectLayout.get) and applies the ops with projectLayout.apply (reason 'dashboard set'); --reset still uses projectDashboard.setWidgets null. `dashboard show` keeps the dashboard object and its compact older-id widgets array, and adds revision and tabs: every tab with each widget's id, type, title, size and config. New `project layout get|apply|add` pass ProjectLayoutOp through the existing projectLayout.get and projectLayout.apply RPCs (registered in apps/t3-thread contracts.ts, rpc.ts and client.ts projectLayout); apply takes --ops JSON, --base-revision (default current) and --reason, add builds one addWidget op for a registered type (--tab, default dashboard). Pure helpers live in apps/t3-thread/src/projectLayout.ts. These layout RPCs need a server that has fork-project-layout."
+
+[[patch]]
+name = "fork-session-reconcile"
+subject = "fix(server): clear a session left running by an interrupted turn"
+class = "product"
+purpose = "Keep an interrupted turn from leaving its session running: the interrupt path clears the session once the provider acknowledges it, the in-memory read model ends the interrupted turn like the SQL projection, and a thread.session.reconcile command (t3-thread session reconcile) recomputes a session stuck on an ended turn."
+retire_when = "Upstream settles the session in the same transaction as an interrupt request, or the fork stops depending on session status to deliver queued sends."
+depends_on = ["fork-queue-idle-dispatch"]
+roles = []
+note = "Fixes the server-side variant of brad/t3code-fork#150. The release waits for the provider's acknowledgement, not its terminal event, because runtime ingestion is one ordered worker and lagged about a minute behind a busy server; clearing earlier would hide a failed interrupt from its stop-session recovery. Reconcile only rewrites a session whose active turn is the latest turn and that turn has ended; it is not offered in the web or mobile UI."
