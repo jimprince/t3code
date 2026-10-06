@@ -54,7 +54,11 @@ import { useOrchestratorThreadShells } from "./useOrchestratorThreads";
 import { readOrchestratorLastVisit, recordOrchestratorVisit } from "./orchestratorVisit";
 import { ProjectAutomationsSlot } from "../projects/ProjectAutomationsSlot";
 import { ProjectIssuesBoard } from "./ProjectIssuesBoard";
-import { ProjectReleaseWidget, ProjectRequestsSection } from "./ProjectRequestsSection";
+import {
+  ProjectMaintenanceWidget,
+  ProjectReleaseWidget,
+  ProjectRequestsSection,
+} from "./ProjectRequestsSection";
 import { ProjectWidgetList, WorkerRequestTag } from "./ProjectWidgetList";
 import { ProjectRoadmapWidget, SaveForLater } from "./ProjectRoadmapWidget";
 import { ProjectPullRequestsWidget } from "./ProjectPullRequestsWidget";
@@ -334,6 +338,7 @@ export function OrchestratorBoard({
       />
     ),
     release: <ProjectReleaseWidget summary={summary} />,
+    maintenance: <ProjectMaintenanceWidget summary={summary} />,
     roadmap: <ProjectRoadmapSummary summary={summary} onOpen={() => selectTab("roadmap")} />,
     "needs-you": (
       <BoardSection title="Needs you" count={summary.needsYou.length}>
