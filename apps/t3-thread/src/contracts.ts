@@ -1,4 +1,6 @@
 import { NestingRpcs } from "./v2/nesting.js";
+import * as Effect from "effect/Effect";
+import { ServerSettings as SharedServerSettings } from "@t3tools/contracts/settings";
 import {
   ORCHESTRATION_V2_WS_METHODS,
   OrchestrationV2RpcSchemas,
@@ -37,7 +39,27 @@ export const ServerProvider = Schema.Struct({
   ),
 });
 export type ServerProvider = typeof ServerProvider.Type;
-export const ServerConfig = Schema.Struct({ providers: Schema.Array(ServerProvider) });
+
+export const ServerConfig = Schema.Struct({
+  providers: Schema.Array(ServerProvider),
+  settings: Schema.Struct({
+    subthreadSettleOnComplete: SharedServerSettings.fields.subthreadSettleOnComplete,
+    projectSettingsOverrides: Schema.Record(
+      Schema.String,
+      Schema.Struct({
+        subthreadSettleOnComplete: Schema.optionalKey(Schema.Boolean),
+      }),
+    ).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  }).pipe(
+    Schema.withDecodingDefault(
+      Effect.succeed({
+        subthreadSettleOnComplete: true,
+        projectSettingsOverrides: {},
+      }),
+    ),
+  ),
+});
+
 export type ServerConfig = typeof ServerConfig.Type;
 export const decodeServerConfig = Schema.decodeUnknownSync(ServerConfig);
 export const decodeServerProvider = Schema.decodeUnknownSync(ServerProvider);

@@ -1,0 +1,4 @@
+id = "worker-archive-read-cost"
+category = "performance"
+functionality = "threads"
+text = "Reduce repeated reads when checking whether completed workers can be archived, while retaining checks for active descendants."
