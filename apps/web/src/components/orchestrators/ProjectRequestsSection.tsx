@@ -25,19 +25,22 @@ import {
   latestProgressLine,
   nextReleaseRequests,
   requestsOfSettledThreads,
+  STAGE_STATUS,
+  TASK_STATUS_LABEL,
+  taskStatuses,
   type CompletedTask,
   type NeedsYouItem,
   type ProjectRequest,
 } from "./projectRequests.logic";
 
-/** One word per status, the same everywhere on the page. */
+/** One status word per request stage, the same words as Tasks, Roadmap and Needs you. */
 const STAGE_LABEL: Record<ProjectRequestStage, string> = {
-  requested: "requested",
-  "in-progress": "working",
-  ready: "ready",
-  "awaiting-release": "waiting for release",
-  "needs-test": "shipped, test it",
-  settled: "settled",
+  requested: TASK_STATUS_LABEL[STAGE_STATUS.requested],
+  "in-progress": TASK_STATUS_LABEL[STAGE_STATUS["in-progress"]],
+  ready: TASK_STATUS_LABEL[STAGE_STATUS.ready],
+  "awaiting-release": TASK_STATUS_LABEL[STAGE_STATUS["awaiting-release"]],
+  "needs-test": TASK_STATUS_LABEL[STAGE_STATUS["needs-test"]],
+  settled: TASK_STATUS_LABEL[STAGE_STATUS.settled],
 };
 
 /**
@@ -63,7 +66,26 @@ export function useProjectRequests(summary: OrchestratorSummary) {
   return { query, requests, now, pending: query.data?.pendingRequests ?? [] };
 }
 
-/** What waits on Brad: the same list for the Dashboard and the Issues board. */
+/**
+ * Every task's status (Pending, Active, For review, Complete), from the same
+ * sources for the Tasks board, the Roadmap and Needs you.
+ */
+export function useTaskStatuses(summary: OrchestratorSummary) {
+  const { items, query } = useNeedsYou(summary);
+  const statuses = useMemo(
+    () =>
+      taskStatuses(
+        query.data?.issues ?? [],
+        items,
+        [summary.root, ...summary.descendants],
+        summary.root.id,
+      ),
+    [items, query.data, summary.descendants, summary.root],
+  );
+  return { statuses, query };
+}
+
+/** What waits on Brad: the same list for the Dashboard and the Tasks board. */
 export function useNeedsYou(summary: OrchestratorSummary) {
   const { query, requests } = useProjectRequests(summary);
   const items = useMemo(
@@ -541,7 +563,7 @@ function CompletedRow({
       <span
         className={`w-28 shrink-0 text-xs ${task.toTest ? "text-foreground/90" : "text-muted-foreground"}`}
       >
-        {task.toTest ? "shipped, test it" : task.issue.isRequest ? "settled" : "closed"}
+        {task.toTest ? TASK_STATUS_LABEL["for-review"] : TASK_STATUS_LABEL.complete}
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
         <IssueLink issue={task.issue} />
@@ -623,7 +645,7 @@ export function ProjectReleaseWidget({ summary }: { readonly summary: Orchestrat
             {versionOnly.map((item) => (
               <li key={item.number} className="flex items-center gap-3 py-1.5">
                 <span className="w-28 shrink-0 text-xs text-muted-foreground">
-                  {item.stage ? (STAGE_LABEL[item.stage] ?? item.stage) : "planned"}
+                  {item.stage ? STAGE_LABEL[item.stage] : TASK_STATUS_LABEL.pending}
                 </span>
                 <a
                   href={item.url}
@@ -703,7 +725,7 @@ export function ProjectMaintenanceWidget({ summary }: { readonly summary: Orches
               className="items-center py-1.5"
             >
               <span className="w-28 shrink-0 text-xs text-muted-foreground">
-                {task.issue.status === "in-progress" ? "working" : "open"}
+                {TASK_STATUS_LABEL[task.issue.status === "in-progress" ? "active" : "pending"]}
               </span>
               <span className="min-w-0 flex-1">
                 <IssueLink issue={task.issue} />
