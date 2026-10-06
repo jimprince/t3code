@@ -1,0 +1,4 @@
+id = "background-branch-preflight-cache"
+category = "performance"
+functionality = "source-control"
+text = "Reduce repeated Git launches during background pull request discovery while keeping refreshes and repository identity checks fresh."
