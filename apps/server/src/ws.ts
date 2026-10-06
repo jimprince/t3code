@@ -1,3 +1,4 @@
+import * as ThreadIssueService from "./forkThreads/ThreadIssueService.ts";
 import { resourceRecoveryHandlers } from "./resourceRecoveryRpc.ts";
 import { makeMetadataHandlers } from "./forkThreads/MetadataRpc.ts";
 import { makeSupervisionDragHandlers } from "./forkThreads/SupervisionDrag.ts";
@@ -1212,6 +1213,7 @@ const layerWsRpc = (
       >();
       const applicationEvents = yield* OrchestrationEventStore.OrchestrationEventStore;
       const projectStore = yield* ProjectStore.ProjectStoreV2;
+      const threadIssues = yield* ThreadIssueService.make;
       const projectService = yield* ProjectService.ProjectService;
       const managedFolders = yield* ManagedProjectFolders.ManagedProjectFolders;
       const threadSearch = yield* ThreadSearch.ThreadSearch;
@@ -2445,6 +2447,8 @@ const layerWsRpc = (
           backgroundPolicy.reportHostPowerState(input),
         [WS_METHODS.serverGetBackgroundPolicy]: (_input) => backgroundPolicy.snapshot,
         ...(yield* makeMetadataHandlers),
+        [WS_METHODS.threadIssuesLink]: (input) => threadIssues.link(input),
+        [WS_METHODS.threadIssuesUnlink]: (input) => threadIssues.unlink(input),
         ...headlessDeliveryHandlers(),
         ...resourceRecoveryHandlers(),
         [WS_METHODS.cloudGetRelayClientStatus]: (_input) => relayClient.resolve,

@@ -1,0 +1,20 @@
+name = "fork-gitea-issue-links"
+subject = "feat(threads): link Gitea issues"
+class = "product"
+purpose = "Persist Gitea issue links on threads, expose them to agents, and show cached issue state beside thread work across web and desktop."
+retire_when = "Upstream provides equivalent server-owned issue links with agent commands and client badges, or the fork stops using Gitea issues to track work."
+depends_on = ["fork-gitea-connections", "fork-worker-operations", "fork-embedded-pages"]
+roles = []
+note = "A link stores normalized host/repository/number plus a cached title and open/closed state after resolving the URL through the same configured-instance and repository-identity route used by Gitea pull requests; public links fetch metadata through that instance's apiOrigin, while the client-facing URL remains the one the user linked. Public and internal aliases therefore resolve to one issue key without requiring the Gitea API to be online. A canonical issue URL on a host no instance or project names (a public HTTPS alias of an internal instance) is linked only when exactly one configured instance confirms that issue and it is not a pull request; unlinking such a URL matches the stored link and needs no API. The /issues/ URL path and a non-null API pull_request value distinguish issues from pull requests; Forgejo's pull_request:null issue payload remains valid. Cached metadata is synchronizable after the link is created so later Gitea reads can repair fallback titles and state. Other hosts that no configured instance confirms, and pull-request URLs, are rejected. Multiple issues may be linked per thread and unlink is the reverse state. Web and desktop badges deep-link the configured Agent Status Board by repo and issue, with the canonical Gitea URL as the fallback. Mobile receives the shared issue data but has no badge in this patch because its thread list has no pull-request badge analogue."
+
+[[decision]]
+id = "v2-port-m3-issues"
+date = "2026-10-06"
+decided = "rebuild-on-v2"
+rationale = "Issue links use native V2 thread metadata events, commands and projections, retaining link/unlink/sync RPCs and CLI. Historical main-ledger ID60 remains immutable in ForkV2Ledger; V1 issue rows are read only by the legacy importer, once per missing issues field. An explicit empty V2 array always wins on restart."
+
+[[decision]]
+id = "catchup-2908-issue-link-access"
+date = "2026-10-10"
+decided = "adapt"
+rationale = "Carry own-thread issue link/unlink and read capability through upstream granular RPC scopes and nominal MCP target declarations (#9786–#9791, #10298). Preserve stored issue-link semantics and current orchestrator search types; additive badge imports do not change UI behavior. Static access/conflict review passed; composed issue/link authorization tests remain required."
