@@ -307,6 +307,7 @@ const AGENT_COMMAND_ALIASES = new Set([
   "unsettle",
   "pin",
   "unpin",
+  "auto-settle",
   "order",
   "move",
   "forget",
@@ -1130,6 +1131,20 @@ for (const operation of ["pin", "unpin"] as const) {
       printJson(await client.setThreadPinned(savedAgent.threadId, operation === "pin"));
     });
 }
+
+agent
+  .command("auto-settle")
+  .description("Turn automatic settlement on or off for an existing thread")
+  .argument("<name>", "agent name or raw thread UUID")
+  .option("--off", "never settle this thread automatically")
+  .option("--on", "allow automatic settlement again")
+  .action(async (name, options: { on?: boolean; off?: boolean }) => {
+    if (options.on === options.off) {
+      throw new Error("Pass exactly one of --on or --off.");
+    }
+    const { agent: savedAgent, client } = await withAgent(name);
+    printJson(await client.setThreadAutoSettle(savedAgent.threadId, options.on === true));
+  });
 
 agent
   .command("order")
