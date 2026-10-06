@@ -1,8 +1,11 @@
 import {
+  CommandId,
+  MessageId,
   ProjectIssuesError,
   type GiteaInstanceConfig,
   type ProjectIssuesListResult,
   type ProjectRequestCreateInput,
+  type ProjectRequestDecideInput,
   type ProjectRequestRef,
   type ProjectRequestSettleInput,
   type ProjectRequestSubmitInput,
@@ -41,15 +44,24 @@ import {
   NEEDS_TEST_LABEL,
   PARKED_LABEL,
   parseBlockedBy,
+  type GiteaRepositoryTarget,
 } from "./projectIssues.logic.ts";
 import { ensureMilestone, setIssueMilestone } from "./giteaMilestones.ts";
 import {
   answerToMessage,
+  decisionThreadId,
   formatFollowUpComment,
+  planDecision,
   planRequestItem,
   progressLineFor,
   requestCandidates,
 } from "./requestLedger.logic.ts";
+import {
+  NEEDS_BRAD_LABEL,
+  parseDecisionIssue,
+  planBradAnswer,
+  resolveWaitingThread,
+} from "./decisions.logic.ts";
 import {
   fallbackRequestItem,
   formatRequestIssueBody,
@@ -74,6 +86,8 @@ const GiteaLabel = Schema.Struct({ id: Schema.Number, name: Schema.String });
 const GiteaLabels = Schema.Array(GiteaLabel);
 const CreatedIssue = Schema.Struct({ number: Schema.Number, html_url: Schema.String });
 const GiteaIssueLabels = Schema.Struct({
+  title: Schema.optional(Schema.String),
+  body: Schema.optional(Schema.NullOr(Schema.String)),
   state: Schema.Literals(["open", "closed"]),
   html_url: Schema.String,
   labels: Schema.optional(Schema.NullOr(Schema.Array(Schema.Struct({ name: Schema.String })))),
@@ -160,6 +174,8 @@ export const make = (deps: {
       );
       return [...snapshot.threads, ...snapshot.archivedThreads].map((thread) => ({
         ...thread,
+        updatedAt: DateTime.formatIso(thread.updatedAt),
+        archivedAt: thread.archivedAt === null ? null : DateTime.formatIso(thread.archivedAt),
         parentThreadId: parents.get(thread.id) ?? null,
       }));
     });
@@ -790,6 +806,147 @@ export const make = (deps: {
         } satisfies ProjectRequestRef;
       });
 
+    /** One short user message to a thread; the server queues or steers it when a run is active. */
+    const tellThread = (recipient: { readonly id: ThreadId }, text: string, number: number) =>
+      Effect.gen(function* () {
+        const stamp = yield* Clock.currentTimeMillis;
+        return yield* engine
+          .dispatch({
+            type: "message.dispatch",
+            createdBy: "user",
+            creationSource: "server",
+            commandId: CommandId.make(`decision:${stamp}:${number}`),
+            threadId: recipient.id,
+            messageId: MessageId.make(`decision:${stamp}:${number}`),
+            text,
+            attachments: [],
+            deliveryIntent: "auto",
+            dispatchMode: { type: "start_immediately" },
+          })
+          .pipe(
+            Effect.as(recipient.id),
+            Effect.tapError((error) =>
+              Effect.logWarning("could not tell the thread about Brad's decision", {
+                detail: String(error),
+              }),
+            ),
+            Effect.orElseSucceed(() => null),
+          );
+      });
+
+    /**
+     * Brad answers a needs-brad decision issue: his answer is commented on it, the
+     * label comes off so it leaves the Decisions widget, and the same answer goes to
+     * the thread its decision block says is waiting. The issue stays open.
+     */
+    const answerDecision = (
+      input: ProjectRequestDecideInput,
+      target: GiteaRepositoryTarget,
+      reference: { readonly number: number },
+      issue: typeof GiteaIssueLabels.Type,
+    ) =>
+      Effect.gen(function* () {
+        const path = `${GiteaApi.repositoryPath(target.repository)}/issues/${reference.number}`;
+        const plan = planBradAnswer({
+          decision: input.decision === "answer" ? "answer" : "option",
+          option: input.option,
+          answer: input.answer,
+          note: input.reason,
+          title: issue.title ?? `#${reference.number}`,
+          reference: `${target.repository}#${reference.number}`,
+          url: issue.html_url,
+        });
+        if (!plan) return yield* fail("Choose an option or write an answer.");
+
+        const [labelId] = yield* ensureLabels(target.instance, target.repository, [
+          NEEDS_BRAD_LABEL,
+        ]).pipe(Effect.mapError((error) => fail(error.detail)));
+        yield* api
+          .send(target.instance, "POST", `${path}/comments`, { body: plan.comment })
+          .pipe(Effect.mapError((error) => fail(error.detail)));
+        yield* api
+          .send(target.instance, "DELETE", `${path}/labels/${labelId}`)
+          .pipe(Effect.mapError((error) => fail(error.detail)));
+        deps.projectIssues.invalidate(target);
+
+        const threads = yield* readThreads;
+        const projects = yield* projectService
+          .listShells()
+          .pipe(Effect.mapError(() => fail("Could not read projects.")));
+        const waitingId = resolveWaitingThread(
+          parseDecisionIssue(issue.body).waiting,
+          threads,
+          projects,
+        );
+        const recipient = threads.find((thread) => thread.id === waitingId);
+        if (!recipient) return { notifiedThreadId: null };
+        return { notifiedThreadId: yield* tellThread(recipient, plan.message, reference.number) };
+      });
+
+    /**
+     * Brad decides an item from Needs you. Approve and an option comment, move the
+     * issue to in progress and tell the thread on it (the orchestrator when none is
+     * linked) to go ahead; Not yet comments his reason and returns it to Pending.
+     */
+    const decide = (input: ProjectRequestDecideInput) =>
+      Effect.gen(function* () {
+        const resolved = yield* resolveOrFail(input.threadId);
+        const reference = parseRequestReference(input.reference, resolved.target);
+        if (!reference) return yield* fail("Expected an issue number, owner/repo#N, or issue URL.");
+        const target =
+          reference.repository === resolved.target.repository
+            ? resolved.target
+            : { ...resolved.target, repository: reference.repository };
+        const issue = yield* api
+          .request(
+            target.instance,
+            `${GiteaApi.repositoryPath(target.repository)}/issues/${reference.number}`,
+            GiteaIssueLabels,
+          )
+          .pipe(Effect.mapError((error) => fail(error.detail)));
+        if (issue.state === "closed") return yield* fail("That issue is already closed.");
+        const asksBrad = (issue.labels ?? []).some(
+          (label) => label.name.toLowerCase() === NEEDS_BRAD_LABEL,
+        );
+        if (input.decision === "answer" || (input.decision === "option" && asksBrad)) {
+          return yield* answerDecision(input, target, reference, issue);
+        }
+        const plan = planDecision({
+          decision: input.decision,
+          option: input.option,
+          reason: input.reason,
+          title: issue.title ?? `#${reference.number}`,
+          url: issue.html_url,
+        });
+        if (!plan) return yield* fail("Choose an option to decide with.");
+
+        const threads = yield* readThreads;
+        const listed = yield* deps.projectIssues.list({ rootThreadId: resolved.root.id });
+        const linked =
+          listed.issues.find(
+            (candidate) =>
+              candidate.repository === reference.repository &&
+              candidate.number === reference.number,
+          )?.linkedThreadIds ?? [];
+        const liveThreadIds = new Set(
+          threads.filter((thread) => thread.archivedAt === null).map((thread) => thread.id),
+        );
+        const recipient = threads.find(
+          (thread) => thread.id === decisionThreadId(linked, resolved.root.id, liveThreadIds),
+        );
+
+        yield* update({
+          threadId: input.threadId,
+          reference: input.reference,
+          status: plan.status,
+          comment: plan.comment,
+        });
+        if (plan.message === null || !recipient) return { notifiedThreadId: null };
+
+        const notifiedThreadId = yield* tellThread(recipient, plan.message, reference.number);
+        return { notifiedThreadId };
+      });
+
     /** The requests of the calling thread's project tree, for agents. */
     const listForThread = (input: ProjectRequestsListInput) =>
       Effect.gen(function* () {
@@ -911,7 +1068,9 @@ export const make = (deps: {
             !answerCache.has(issue.requestSource.messageId),
         );
         if (waiting.length > 0) {
-          const shells = new Map((yield* readThreads).map((thread) => [thread.id as string, thread]));
+          const shells = new Map(
+            (yield* readThreads).map((thread) => [thread.id as string, thread]),
+          );
           const threadsToRead = new Set<string>();
           for (const issue of waiting) {
             const shell = shells.get(issue.requestSource!.threadId);
@@ -959,6 +1118,7 @@ export const make = (deps: {
       withAnswers,
       create,
       update,
+      decide,
       listForThread,
       resolveThread,
       park,
