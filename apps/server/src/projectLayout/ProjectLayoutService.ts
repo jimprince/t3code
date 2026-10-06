@@ -28,7 +28,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { listMetadata } from "../forkThreads/MetadataStore.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import * as ProjectDashboardStore from "../projectDashboard/ProjectDashboardStore.ts";
-import { findRootThreadId } from "../projectIssues/projectIssues.logic.ts";
+import { findProjectRootThreadId } from "../projectIssues/projectIssues.logic.ts";
 
 const fail = (message: string, layout?: ProjectLayout) =>
   new ProjectLayoutError({ message, ...(layout ? { layout } : {}) });
@@ -76,13 +76,14 @@ const make = Effect.gen(function* () {
       const parents = new Map(
         (yield* listMetadata(sql).pipe(
           Effect.mapError(() => fail("Could not read thread parents.")),
-        )).map((row) => [row.threadId, row.parentThreadId]),
+        )).map((row) => [row.threadId, row]),
       );
       const threads = [...snapshot.threads, ...snapshot.archivedThreads].map((thread) => ({
         ...thread,
-        parentThreadId: parents.get(thread.id) ?? null,
+        parentThreadId: parents.get(thread.id)?.parentThreadId ?? null,
+        subproject: parents.get(thread.id)?.subproject ?? "auto",
       }));
-      const rootThreadId = findRootThreadId(threads, threadId);
+      const rootThreadId = findProjectRootThreadId(threads, threadId);
       return threads.some((thread) => thread.id === rootThreadId)
         ? rootThreadId
         : yield* fail(`Thread '${threadId}' was not found.`);
