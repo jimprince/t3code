@@ -1,0 +1,4 @@
+id = "subthread-completion-retention"
+category = "feature"
+functionality = "threads"
+text = "Agent-created workers settle after completing work, and settled subthreads archive after seven days with configurable project defaults and protection for pinned or active work."
