@@ -2,6 +2,8 @@ import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestr
 import type { ProjectIssue } from "@t3tools/contracts";
 import { useMemo, useState } from "react";
 
+import { InlineButton } from "../ui/button";
+
 import {
   formatIssueAge,
   groupProjectIssues,
@@ -11,8 +13,8 @@ import {
 import { ProjectQueryState } from "./ProjectQueryState";
 import { isBug, issueKey, taskKind } from "./projectRequests.logic";
 import { RequestKindTag } from "./RequestKindTag";
+import { RowMenu } from "./ProjectSection";
 import {
-  ReopenButton,
   SettleButton,
   useSettle,
   useTaskStatuses,
@@ -23,13 +25,19 @@ import { TaskTitle } from "./TaskLink";
 const DONE_PREVIEW = 8;
 const PENDING_PREVIEW = 10;
 
-/** A card: the title, the item type, its age and Settle or Reopen. The lane is its status. */
+/**
+ * A card: the title (never cut), the type and age, and what Brad can do. For
+ * review cards offer Settle; the rest keep Settle or Reopen in their menu. The
+ * lane is its status.
+ */
 function IssueRow({
   issue,
+  lane,
   now,
   settle,
 }: {
   readonly issue: ProjectIssue;
+  readonly lane: ProjectIssueLane;
   readonly now: number;
   readonly settle: SettleControls;
 }) {
@@ -39,29 +47,38 @@ function IssueRow({
       <TaskTitle
         task={{ host: issue.host, repository: issue.repository, number: issue.number }}
         url={issue.url}
-        className="line-clamp-2 max-w-full text-sm text-foreground hover:underline"
+        className="max-w-full text-sm text-foreground hover:underline"
       >
         {issue.title}
       </TaskTitle>
-      {issue.labels.some((label) => label.toLowerCase() === "needs-test") ? (
-        <span className="block text-xs text-foreground/80">
-          Shipped{issue.milestone ? ` in ${issue.milestone.title}` : ""}, test it
-        </span>
-      ) : null}
       <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-        <RequestKindTag
-          kind={taskKind(issue.labels)}
-          bug={isBug(issue.labels)}
-          className="text-foreground/70"
-        />
+        <RequestKindTag kind={taskKind(issue.labels)} bug={isBug(issue.labels)} />
+        {issue.labels.some((label) => label.toLowerCase() === "needs-test") && issue.milestone ? (
+          <span>{issue.milestone.title}</span>
+        ) : null}
         <span className="tabular-nums">
           {formatIssueAge(issue.closedAt ?? issue.updatedAt, now)}
         </span>
         <span className="ml-auto">
-          {closed ? (
-            <ReopenButton issue={issue} settle={settle} />
-          ) : (
+          {lane === "for-review" ? (
             <SettleButton issues={[issue]} settle={settle} />
+          ) : (
+            <RowMenu
+              label={issue.title}
+              items={[
+                closed
+                  ? {
+                      label: "Reopen",
+                      disabled: settle.isBusy(issue),
+                      onClick: () => void settle.reopen(issue),
+                    }
+                  : {
+                      label: "Settle",
+                      disabled: settle.isBusy(issue),
+                      onClick: () => void settle.settle([issue]),
+                    },
+              ]}
+            />
           )}
         </span>
       </div>
@@ -99,12 +116,14 @@ export function ProjectIssuesBoard({
   }
   if (query.data.repositories.length === 0) {
     return (
-      <p className="py-2 text-sm text-muted-foreground">No Gitea repository for this project.</p>
+      <p className="py-2 text-sm text-muted-foreground">
+        No task repository yet. Set one under Edit.
+      </p>
     );
   }
 
-  const row = (issue: ProjectIssue) => (
-    <IssueRow key={issueKey(issue)} issue={issue} now={now} settle={settle} />
+  const row = (lane: ProjectIssueLane) => (issue: ProjectIssue) => (
+    <IssueRow key={issueKey(issue)} issue={issue} lane={lane} now={now} settle={settle} />
   );
   return (
     <div className="flex flex-col gap-2">
@@ -120,45 +139,47 @@ export function ProjectIssuesBoard({
                 {title}
                 <span className="tabular-nums text-foreground/60">{all.length}</span>
               </h3>
-              <ul>{(folded ? all.slice(0, preview) : all).map(row)}</ul>
+              <ul>{(folded ? all.slice(0, preview) : all).map(row(lane))}</ul>
               {preview > 0 && all.length > preview ? (
-                <button
-                  type="button"
-                  className="mt-1 text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() =>
-                    setExpanded((current) => {
-                      const next = new Set(current);
-                      if (next.has(lane)) next.delete(lane);
-                      else next.add(lane);
-                      return next;
-                    })
-                  }
-                >
-                  {folded ? `Show all ${all.length}` : "Show fewer"}
-                </button>
+                <p className="mt-1 text-xs">
+                  <InlineButton
+                    tone="muted"
+                    onClick={() =>
+                      setExpanded((current) => {
+                        const next = new Set(current);
+                        if (next.has(lane)) next.delete(lane);
+                        else next.add(lane);
+                        return next;
+                      })
+                    }
+                  >
+                    {folded ? `Show all ${all.length}` : "Show fewer"}
+                  </InlineButton>
+                </p>
               ) : null}
               {lane === "pending" && grouped.backlog.length > 0 ? (
                 <div className="mt-1">
-                  <button
-                    type="button"
-                    className="text-xs text-muted-foreground hover:text-foreground"
-                    onClick={() => setShowBacklog((value) => !value)}
-                  >
-                    Backlog {grouped.backlog.length}
-                  </button>
-                  {showBacklog ? <ul>{grouped.backlog.map(row)}</ul> : null}
+                  <p className="text-xs">
+                    <InlineButton
+                      tone="muted"
+                      aria-expanded={showBacklog}
+                      onClick={() => setShowBacklog((value) => !value)}
+                    >
+                      Later {grouped.backlog.length}
+                    </InlineButton>
+                  </p>
+                  {showBacklog ? <ul>{grouped.backlog.map(row("pending"))}</ul> : null}
                 </div>
               ) : null}
             </section>
           );
         })}
       </div>
-      <p className="text-xs text-muted-foreground">
-        {query.data.repositories.map((repository) => repository.repository).join(", ")}
-        {failed.length > 0
-          ? ` · could not read ${failed.map((repository) => repository.repository).join(", ")}`
-          : ""}
-      </p>
+      {failed.length > 0 ? (
+        <p role="alert" className="text-xs text-warning-foreground">
+          Could not read {failed.map((repository) => repository.repository).join(", ")}
+        </p>
+      ) : null}
     </div>
   );
 }
