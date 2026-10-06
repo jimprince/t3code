@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "c115aa5dc81aa8a66d5fd2f1d5df322c272058fa",
-  "head": "f4e5f764512caed345fdd10470e841dcba4309ae",
+  "prev": "aa3f5a7aba516536c2e0b69aae385f1905254df3",
+  "head": "b5355fb6d8658d657b8c9dcd5a2c7e848e8b6261",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -36,7 +36,9 @@
     "fork-worktree-cleanup",
     "fork-enter-sends-queued",
     "fork-restart-when-idle",
-    "fork-nested-threads",
+    "fork-nested-threads"
+  ],
+  "unapplied": [
     "fork-resume-background-work",
     "fork-overnight-updates",
     "fork-spawn-budget",
@@ -55,9 +57,7 @@
     "fork-interrupted-turn-rewind",
     "fork-agent-thread-ordering",
     "fork-cross-environment-nesting",
-    "fork-queue-coalesced-notes"
-  ],
-  "unapplied": [
+    "fork-queue-coalesced-notes",
     "fork-conversation-fork",
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
