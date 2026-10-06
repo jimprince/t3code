@@ -1,0 +1,4 @@
+id = "t3-thread-issue-link-rpc"
+category = "fix"
+functionality = "threads"
+text = "Agents can link and unlink Gitea issues with t3-thread issue link and unlink again; both commands failed before reaching the server."

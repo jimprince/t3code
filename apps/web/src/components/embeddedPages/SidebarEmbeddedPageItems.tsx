@@ -21,7 +21,11 @@ export const SidebarEmbeddedPageItems = memo(function SidebarEmbeddedPageItems()
               size="icon"
               onClick={() => {
                 if (isMobile) setOpenMobile(false);
-                void navigate({ to: "/embedded/$pageId", params: { pageId: page.id } });
+                void navigate({
+                  to: "/embedded/$pageId",
+                  params: { pageId: page.id },
+                  search: {},
+                });
               }}
             >
               <EmbeddedPageIcon icon={page.icon} />
