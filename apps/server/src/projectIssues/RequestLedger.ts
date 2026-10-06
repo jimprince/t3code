@@ -57,6 +57,7 @@ import {
   requestCandidates,
 } from "./requestLedger.logic.ts";
 import {
+  hasDecisionBlock,
   NEEDS_BRAD_LABEL,
   parseDecisionIssue,
   planBradAnswer,
@@ -823,21 +824,15 @@ export const make = (deps: {
             deliveryIntent: "auto",
             dispatchMode: { type: "start_immediately" },
           })
-          .pipe(
-            Effect.as(recipient.id),
-            Effect.tapError((error) =>
-              Effect.logWarning("could not tell the thread about Brad's decision", {
-                detail: String(error),
-              }),
-            ),
-            Effect.orElseSucceed(() => null),
-          );
+          .pipe(Effect.as(recipient.id));
       });
 
     /**
-     * Brad answers a needs-brad decision issue: his answer is commented on it, the
-     * label comes off so it leaves the Decisions widget, and the same answer goes to
-     * the thread its decision block says is waiting. The issue stays open.
+     * Brad answers a decision issue, in an order that makes a retry safe: his answer is
+     * commented on it (the record, not posted again when it is already the newest
+     * comment), the needs-brad label comes off so it leaves the Decisions widget, and
+     * the thread its decision block says is waiting is told last. A failed step fails
+     * with what already happened. The issue stays open.
      */
     const answerDecision = (
       input: ProjectRequestDecideInput,
@@ -847,40 +842,69 @@ export const make = (deps: {
     ) =>
       Effect.gen(function* () {
         const path = `${GiteaApi.repositoryPath(target.repository)}/issues/${reference.number}`;
+        const ref = `${target.repository}#${reference.number}`;
         const plan = planBradAnswer({
           decision: input.decision === "answer" ? "answer" : "option",
           option: input.option,
           answer: input.answer,
           note: input.reason,
           title: issue.title ?? `#${reference.number}`,
-          reference: `${target.repository}#${reference.number}`,
+          reference: ref,
           url: issue.html_url,
         });
         if (!plan) return yield* fail("Choose an option or write an answer.");
 
-        const [labelId] = yield* ensureLabels(target.instance, target.repository, [
-          NEEDS_BRAD_LABEL,
-        ]).pipe(Effect.mapError((error) => fail(error.detail)));
-        yield* api
-          .send(target.instance, "POST", `${path}/comments`, { body: plan.comment })
-          .pipe(Effect.mapError((error) => fail(error.detail)));
-        yield* api
-          .send(target.instance, "DELETE", `${path}/labels/${labelId}`)
-          .pipe(Effect.mapError((error) => fail(error.detail)));
+        const comments = yield* api
+          .request(target.instance, `${path}/comments`, GiteaComments)
+          .pipe(Effect.mapError((error) => fail(`Could not read ${ref}: ${error.detail}`)));
+        if (comments.at(-1)?.body.trim() !== plan.comment) {
+          yield* api
+            .send(target.instance, "POST", `${path}/comments`, { body: plan.comment })
+            .pipe(
+              Effect.mapError((error) =>
+                fail(`Could not post the answer on ${ref}: ${error.detail}`),
+              ),
+            );
+        }
+        const asksBrad = (issue.labels ?? []).some(
+          (label) => label.name.toLowerCase() === NEEDS_BRAD_LABEL,
+        );
+        if (asksBrad) {
+          yield* ensureLabels(target.instance, target.repository, [NEEDS_BRAD_LABEL]).pipe(
+            Effect.flatMap(([labelId]) =>
+              api.send(target.instance, "DELETE", `${path}/labels/${labelId}`),
+            ),
+            Effect.mapError((error) =>
+              fail(`The answer is on ${ref}, but its needs-brad label stayed: ${error.detail}`),
+            ),
+          );
+        }
         deps.projectIssues.invalidate(target);
 
-        const threads = yield* readThreads;
-        const projects = yield* projectService
-          .listShells()
-          .pipe(Effect.mapError(() => fail("Could not read projects.")));
+        const threads = yield* readThreads.pipe(
+          Effect.mapError(() => fail(`The answer is on ${ref}, but threads could not be read.`)),
+        );
         const waitingId = resolveWaitingThread(
           parseDecisionIssue(issue.body).waiting,
           threads,
-          projects,
+          yield* projectService
+            .listShells()
+            .pipe(
+              Effect.mapError(() =>
+                fail(`The answer is on ${ref}, but projects could not be read.`),
+              ),
+            ),
         );
         const recipient = threads.find((thread) => thread.id === waitingId);
         if (!recipient) return { notifiedThreadId: null };
-        return { notifiedThreadId: yield* tellThread(recipient, plan.message, reference.number) };
+        const notifiedThreadId = yield* tellThread(recipient, plan.message, reference.number).pipe(
+          Effect.mapError((error) =>
+            fail(
+              `The answer is on ${ref}, but ${recipient.title} was not told: ${describeError(error)}`,
+            ),
+          ),
+        );
+        return { notifiedThreadId };
       });
 
     /**
@@ -908,7 +932,10 @@ export const make = (deps: {
         const asksBrad = (issue.labels ?? []).some(
           (label) => label.name.toLowerCase() === NEEDS_BRAD_LABEL,
         );
-        if (input.decision === "answer" || (input.decision === "option" && asksBrad)) {
+        if (
+          input.decision === "answer" ||
+          (input.decision === "option" && (asksBrad || hasDecisionBlock(issue.body)))
+        ) {
           return yield* answerDecision(input, target, reference, issue);
         }
         const plan = planDecision({
@@ -943,7 +970,14 @@ export const make = (deps: {
         });
         if (plan.message === null || !recipient) return { notifiedThreadId: null };
 
-        const notifiedThreadId = yield* tellThread(recipient, plan.message, reference.number);
+        const notifiedThreadId = yield* tellThread(recipient, plan.message, reference.number).pipe(
+          Effect.tapError((error) =>
+            Effect.logWarning("could not tell the thread about Brad's decision", {
+              detail: String(error),
+            }),
+          ),
+          Effect.orElseSucceed(() => null),
+        );
         return { notifiedThreadId };
       });
 
