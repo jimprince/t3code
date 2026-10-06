@@ -1,0 +1,4 @@
+id = "thread-project-scope"
+category = "feature"
+functionality = "worker-threads"
+text = "Project orchestrators can carry a concise shared scope that agents can set, clear, and inspect with t3-thread."
