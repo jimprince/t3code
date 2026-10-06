@@ -21,6 +21,10 @@ import {
   ProjectRequestCreateInput,
   ProjectRequestKind,
   ProjectRequestCreateResult,
+  ProjectRequestDecideInput,
+  ProjectRequestDecideResult,
+  ProjectRequestDiscussInput,
+  ProjectRequestDiscussResult,
   ProjectRequestRef,
   ProjectRequestsListInput,
   ProjectRequestUpdateInput,
@@ -477,6 +481,17 @@ const WsProjectRequestsUpdateRpc = Rpc.make(WS_METHODS.projectRequestsUpdate, {
   success: ProjectRequestRef,
   error: projectRequestError,
 });
+// Decisions: agents record the answer Brad settled on, or open a thread to discuss one.
+const WsProjectRequestsDecideRpc = Rpc.make(WS_METHODS.projectRequestsDecide, {
+  payload: ProjectRequestDecideInput,
+  success: ProjectRequestDecideResult,
+  error: projectRequestError,
+});
+const WsProjectRequestsDiscussRpc = Rpc.make(WS_METHODS.projectRequestsDiscuss, {
+  payload: ProjectRequestDiscussInput,
+  success: ProjectRequestDiscussResult,
+  error: projectRequestError,
+});
 const WsProjectRequestsListRpc = Rpc.make(WS_METHODS.projectRequestsList, {
   payload: ProjectRequestsListInput,
   success: ProjectIssuesListResult,
@@ -573,6 +588,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectRequestsCreateRpc,
   WsProjectRequestsUpdateRpc,
   WsProjectRequestsListRpc,
+  WsProjectRequestsDecideRpc,
+  WsProjectRequestsDiscussRpc,
   WsProjectDashboardGetRpc,
   WsProjectDashboardSetWidgetsRpc,
   WsProjectDashboardSetTrackerRpc,

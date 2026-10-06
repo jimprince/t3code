@@ -8,14 +8,16 @@ import {
   type ProjectIssuesListResult,
   type ProjectRequestCreateInput,
   type ProjectRequestDecideInput,
+  type ProjectRequestDiscussInput,
   type ProjectRequestRef,
   type ProjectRequestSettleInput,
   type ProjectRequestSubmitInput,
   type ProjectRequestsListInput,
   type ProjectRequestUpdateInput,
-  type ThreadId,
+  ThreadId,
 } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
+import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -64,6 +66,12 @@ import {
   planBradAnswer,
   resolveWaitingThread,
 } from "./decisions.logic.ts";
+import {
+  buildDiscussionBrief,
+  discussionTitle,
+  findDiscussion,
+  type DiscussedDecision,
+} from "./decisionDiscussion.logic.ts";
 import {
   fallbackRequestItem,
   formatRequestIssueBody,
@@ -125,6 +133,9 @@ function withLatestComment(
 
 const fail = (message: string) => new ProjectIssuesError({ message });
 
+/** One Discuss at a time across connections, so a double click opens one thread. */
+const discussLock = Semaphore.makeUnsafe(1);
+
 /** One writer for the outbox file across every connection's ledger in this process. */
 const outboxLock = Semaphore.makeUnsafe(1);
 /** Outbox files with a drain loop already running. */
@@ -165,6 +176,7 @@ export const make = (deps: {
     const api = yield* GiteaApi.make;
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
+    const crypto = yield* Crypto.Crypto;
     const serverConfig = yield* ServerConfig.ServerConfig;
     const outboxPath = path.join(serverConfig.stateDir, "request-ledger-outbox.json");
 
@@ -1015,6 +1027,117 @@ export const make = (deps: {
         return { notifiedThreadId };
       });
 
+    /**
+     * Brad wants to talk a decision through before answering it. Opens a thread nested
+     * under the thread his answer would reach (the needs-brad `waiting:` thread, or for
+     * a Needs you item the thread Decide tells), falling back to the orchestrator, with
+     * that thread's model, seeded with the question and the command that records the
+     * answer the way the Decisions widget does. A live discussion of it is reused.
+     */
+    const discuss = (input: ProjectRequestDiscussInput) =>
+      discussLock.withPermit(
+        Effect.gen(function* () {
+          const resolved = yield* resolveOrFail(input.threadId);
+          const reference = parseRequestReference(input.reference, resolved.target);
+          if (!reference) {
+            return yield* fail("Expected an issue number, owner/repo#N, or issue URL.");
+          }
+          const target =
+            reference.repository === resolved.target.repository
+              ? resolved.target
+              : { ...resolved.target, repository: reference.repository };
+          const issuePath = `${GiteaApi.repositoryPath(target.repository)}/issues/${reference.number}`;
+          const issue = yield* api
+            .request(target.instance, issuePath, GiteaIssueLabels)
+            .pipe(Effect.mapError((error) => fail(error.detail)));
+          if (issue.state === "closed") return yield* fail("That issue is already closed.");
+          const asksBrad = (issue.labels ?? []).some(
+            (label) => label.name.toLowerCase() === NEEDS_BRAD_LABEL,
+          );
+
+          const snapshot = yield* snapshots
+            .getShellSnapshot()
+            .pipe(Effect.mapError(() => fail("Could not read threads.")));
+          const live = snapshot.threads.filter((thread) => thread.archivedAt === null);
+          let ownerId: string | null;
+          let decided: DiscussedDecision;
+          if (asksBrad) {
+            const decision = parseDecisionIssue(issue.body);
+            ownerId = resolveWaitingThread(decision.waiting, snapshot.threads, snapshot.projects);
+            decided = { kind: "needs-brad", decision };
+          } else {
+            const listed = yield* deps.projectIssues.list({ rootThreadId: resolved.root.id });
+            const linked =
+              listed.issues.find(
+                (candidate) =>
+                  candidate.repository === reference.repository &&
+                  candidate.number === reference.number,
+              )?.linkedThreadIds ?? [];
+            ownerId = decisionThreadId(
+              linked,
+              resolved.root.id,
+              new Set(live.map((thread) => thread.id)),
+            );
+            const comments = yield* api
+              .request(target.instance, `${issuePath}/comments`, GiteaComments)
+              .pipe(Effect.orElseSucceed(() => []));
+            decided = {
+              kind: "needs-you",
+              comment: comments.at(-1)?.body.slice(0, COMMENT_EXCERPT_CHARS) ?? "",
+            };
+          }
+          const owner = live.find((thread) => thread.id === ownerId) ?? resolved.root;
+
+          const existing = findDiscussion(snapshot.threads, owner.id, reference.number);
+          if (existing) return { threadId: ThreadId.make(existing), created: false };
+
+          const newId = crypto.randomUUIDv4.pipe(
+            Effect.mapError(() => fail("Could not create an id.")),
+          );
+          const threadId = ThreadId.make(yield* newId);
+          const title = issue.title ?? `#${reference.number}`;
+          yield* deps
+            .dispatch({
+              type: "thread.create",
+              commandId: CommandId.make(yield* newId),
+              threadId,
+              projectId: owner.projectId,
+              title: discussionTitle(reference.number, title),
+              modelSelection: owner.modelSelection,
+              runtimeMode: owner.runtimeMode,
+              interactionMode: "default",
+              branch: null,
+              worktreePath: null,
+              createdAt: DateTime.formatIso(yield* DateTime.now),
+              parentThreadId: owner.id,
+            })
+            .pipe(Effect.mapError(() => fail("Could not create the discussion thread.")));
+          const brief = buildDiscussionBrief({
+            title,
+            url: issue.html_url,
+            reference: `${target.repository}#${reference.number}`,
+            decided,
+            projectThreadId: resolved.root.id,
+            owner: { id: owner.id, title: owner.title },
+          });
+          // The thread exists now, so a failed seed still opens it (empty) rather than
+          // failing Discuss.
+          yield* tellThread(
+            { id: threadId, runtimeMode: owner.runtimeMode, interactionMode: "default" },
+            brief,
+            reference.number,
+          ).pipe(
+            Effect.tapError((error) =>
+              Effect.logWarning("could not seed the decision discussion thread", {
+                detail: String(error),
+              }),
+            ),
+            Effect.ignore,
+          );
+          return { threadId, created: true };
+        }),
+      );
+
     /** The requests of the calling thread's project tree, for agents. */
     const listForThread = (input: ProjectRequestsListInput) =>
       Effect.gen(function* () {
@@ -1197,6 +1320,7 @@ export const make = (deps: {
       create,
       update,
       decide,
+      discuss,
       listForThread,
       resolveThread,
       park,
