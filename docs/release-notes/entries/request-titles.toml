@@ -1,0 +1,4 @@
+id = "request-titles"
+category = "improvement"
+functionality = "projects"
+text = "Requests you type are now titled for what they deliver, in under 70 characters (\"Troubleshoot the T3 orchestrator\", \"Why did the nightly deploy fail?\"), not with your raw words. Your exact words stay in the issue under \"Brad's words\". Starting or linking a request replaces a still-raw title; a title anyone set is never overwritten."
