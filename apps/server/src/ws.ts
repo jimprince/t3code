@@ -114,6 +114,7 @@ import {
   WsCoreRpcGroup,
   WsForkRpcGroup,
   WsRpcGroup,
+  withoutPageAgentThreads,
 } from "@t3tools/contracts";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
 import {
@@ -155,6 +156,10 @@ import {
   toShellApplicationEvent,
   type ShellApplicationEvent,
 } from "./orchestration-v2/ShellStream.ts";
+import {
+  withoutPageAgentMatches,
+  withoutPageAgentShellEvents,
+} from "./pageAgents/PageAgentVisibilityPolicy.ts";
 import { ORCHESTRATION_V2_PROJECTION_SCHEMA_VERSION } from "./orchestration-v2/ProjectionStore.ts";
 import { bufferLiveStream } from "./orchestration-v2/LiveStreamBudget.ts";
 import { coalesceThreadLiveStream } from "./orchestration-v2/ThreadLiveEventCoalescer.ts";
@@ -997,7 +1002,7 @@ export const subscribeOrchestrationV2Shell = Effect.fn("ws.orchestrationV2.subsc
       const base = buildActiveShellSnapshot(
         yield* loadShellSnapshotParts({
           sql,
-          readThreads: threadManagement.readShellSnapshot({ location: "active" }),
+          readThreads: threadManagement.readShellSnapshot({ location: "active" }).pipe(Effect.map(Effect.map(withoutPageAgentThreads))),
           listProjects: projects.listShells(),
           latestSequence: applicationEvents.latestApplicationSequence,
         }),
@@ -1064,7 +1069,7 @@ export const subscribeOrchestrationV2Shell = Effect.fn("ws.orchestrationV2.subsc
     });
 
     const toShellStream = <E, R>(stream: Stream.Stream<ShellApplicationEvent, E, R>) =>
-      stream.pipe(
+      withoutPageAgentShellEvents(stream).pipe(
         Stream.groupedWithin(512, Duration.millis(50)),
         Stream.mapEffect((events) => projectShellItems(Array.from(events))),
         Stream.flatMap(Stream.fromIterable),
@@ -1813,7 +1818,7 @@ const layerWsRpc = (
           schemaVersion: threads.schemaVersion,
           snapshotSequence,
           projects,
-          threads: threads.archivedThreads,
+          threads: withoutPageAgentThreads(threads).archivedThreads,
         } as const;
       }).pipe(
         Effect.flatMap((snapshot) =>
@@ -1964,6 +1969,7 @@ const layerWsRpc = (
             .pipe(Stream.mapError((cause) => new OrchestrationV2SearchThreadError({ cause }))),
         [ORCHESTRATION_V2_WS_METHODS.searchThreads]: (input) =>
           threadSearch.search(input).pipe(
+            Effect.map(withoutPageAgentMatches),
             Effect.mapError(
               (cause) =>
                 new OrchestrationSearchThreadsError({
