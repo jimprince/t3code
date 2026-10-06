@@ -12,6 +12,7 @@ export function resolveThreadFeedFixedItemSize(
 ): number | undefined {
   switch (entryType) {
     case "run-fold":
+    case "background-fold":
       return TURN_FOLD_HEIGHT;
     case "work-toggle":
       return WORK_GROUP_TOGGLE_HEIGHT;
