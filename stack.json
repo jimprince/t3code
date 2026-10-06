@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "b772a80a4b0687d56799a54eed8f6220b127aca0",
-  "head": "3e67c8dee9ed767f8d6f27d51d8a5fb6911b66e0",
+  "prev": "77b7434f5666ef1b367bf4423911c5c827ce90f2",
+  "head": "0cc69996abef361d431a688310bd1047251e4692",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -93,16 +93,16 @@
     "fork-pr-widget-refresh",
     "fork-decisions-other",
     "fork-cli-project-layout",
-    "fork-item-types",
+    "fork-item-types"
+  ],
+  "unapplied": [
     "fork-board-declutter",
     "fork-project-skew-gate",
     "fork-request-titles",
     "fork-page-agent-tray",
     "fork-release-publication",
     "fork-maintenance-automation",
-    "fork-antigravity-errors"
-  ],
-  "unapplied": [
+    "fork-antigravity-errors",
     "fork-conversation-fork",
     "fork-thread-transfer",
     "fork-thread-history-compatibility"
