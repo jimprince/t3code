@@ -27,7 +27,6 @@ import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as ApplicationEvents from "../persistence/Services/OrchestrationEventStore.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import type { AutomationObservation } from "./events.ts";
-import { unboundRunOutcome } from "./runOutcome.ts";
 
 import * as ProjectIssuesService from "../projectIssues/ProjectIssuesService.ts";
 /** Why the engine should look again. */
@@ -127,26 +126,27 @@ const make = Effect.gen(function* () {
           (candidate.userMessageId === step.messageId &&
             candidate.restartContinuationOfRunId == null),
       );
+      if (
+        root &&
+        ["completed", "failed", "interrupted", "cancelled", "rolled_back"].includes(root.status)
+      ) {
+        if (root.status === "completed") return finish("completed", "Turn completed.");
+        const state =
+          root.status === "failed"
+            ? "error"
+            : root.status === "cancelled" || root.status === "rolled_back"
+              ? "interrupted"
+              : root.status;
+        return finish("failed", `Turn ${state}.`);
+      }
       const providerThread = projection?.providerThreads.find(
         (thread) => thread.id === root?.providerThreadId,
       );
       const session = projection?.providerSessions.find(
         (session) => session.id === providerThread?.providerSessionId,
       );
-      const outcome = unboundRunOutcome({
-        messageCreatedAt: DateTime.formatIso(message.createdAt),
-        run: root
-          ? { status: root.status, requestedAt: DateTime.formatIso(root.requestedAt) }
-          : null,
-        session: session
-          ? {
-              status: session.status,
-              updatedAt: DateTime.formatIso(session.updatedAt),
-              lastError: session.lastError,
-            }
-          : null,
-      });
-      if (outcome) return finish(outcome.status, outcome.result);
+      if (session?.status === "error" || session?.status === "stopped")
+        return finish("failed", session.lastError ?? "Provider session stopped before completion.");
       if (!root && message.runId === null && shell?.historyOrigin === "v1_import") {
         const legacy = yield* threads
           .readImportedAutomationOutcome(step.threadId, step.messageId)

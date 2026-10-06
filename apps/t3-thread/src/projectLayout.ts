@@ -49,17 +49,13 @@ export function parseLayoutOps(json: string) {
   try {
     value = JSON.parse(json);
   } catch (error) {
-    throw new Error(`--ops is not valid JSON: ${error instanceof Error ? error.message : error}`, {
-      cause: error,
-    });
+    throw new Error(`--ops is not valid JSON: ${error instanceof Error ? error.message : error}`);
   }
   if (!Array.isArray(value)) throw new Error("--ops must be a JSON array of layout ops.");
   try {
     return decodeOps(value);
   } catch (error) {
-    throw new Error(`--ops has an invalid op: ${error instanceof Error ? error.message : error}`, {
-      cause: error,
-    });
+    throw new Error(`--ops has an invalid op: ${error instanceof Error ? error.message : error}`);
   }
 }
 
