@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "a3e1d41c0ccc0a63a5d014e3e74aff7d7171b52c",
-  "head": "35d15202981587a40f11147975e7abbb70b3eab5",
+  "prev": "35716b3772224da432d7036782cb6b2199b42261",
+  "head": "bce55b6c2f27979a750273f01ba06b8d8aa5a9fa",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -59,7 +59,8 @@
     "fork-standing-agent-autosettle",
     "fork-queue-idle-dispatch",
     "fork-textgen-tempfile-cause",
-    "fork-textgen-own-scope"
+    "fork-textgen-own-scope",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-dev-vm-heavy-check-gate",
@@ -431,6 +432,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "7d11da466d331462c6048f3d254d8aa68d1fb29f"
+    },
+    "refresh-temp": {
+      "oid": "bce55b6c2f27979a750273f01ba06b8d8aa5a9fa"
     }
   }
 }
