@@ -58,6 +58,7 @@ export interface ExecutionEnvironmentDescriptor {
     threadActiveReorder?: boolean;
     threadOrderReset?: boolean;
     threadNesting?: boolean;
+    threadSubprojects?: boolean;
     threadIssues?: boolean;
     remoteThreadNesting?: boolean;
     projectItemTypes?: boolean;
@@ -136,6 +137,7 @@ export interface OrchestrationThread {
   archivedAt: string | null;
   settledOverride?: "settled" | "active" | null;
   autoSettleDisabledAt?: string | null | undefined;
+  subproject?: "auto" | "on" | "off" | null | undefined;
   pinnedAt?: string | null | undefined;
   pinOrderKey?: string | null | undefined;
   activeOrderKey?: string | null | undefined;
@@ -180,6 +182,7 @@ export interface OrchestrationThreadShell {
   archivedAt: string | null;
   settledOverride?: "settled" | "active" | null;
   autoSettleDisabledAt?: string | null | undefined;
+  subproject?: "auto" | "on" | "off" | null | undefined;
   pinnedAt?: string | null | undefined;
   pinOrderKey?: string | null | undefined;
   activeOrderKey?: string | null | undefined;
