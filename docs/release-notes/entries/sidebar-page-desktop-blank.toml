@@ -1,0 +1,4 @@
+id = "sidebar-page-desktop-blank"
+category = "fix"
+functionality = "web sidebar"
+text = "Sidebar pages show again in the desktop app instead of a blank main area."
