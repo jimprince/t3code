@@ -737,35 +737,36 @@ projectLayout
     "--ops <json>",
     'JSON array of layout ops, e.g. [{"op":"addWidget","tabId":"dashboard","widget":{"type":"decisions"}}]; all apply or none',
   )
-  .option("--base-revision <n>", "the revision the ops were made against (default: the current one)")
+  .option(
+    "--base-revision <n>",
+    "the revision the ops were made against (default: the current one)",
+  )
   .option("--reason <text>", "why, shown beside the change in the page's history (max 200 chars)")
-  .action(
-    async (reference, options: { ops: string; baseRevision?: string; reason?: string }) => {
-      const ops = parseLayoutOps(options.ops);
-      const { agent: target, client } = await withAgent(reference);
-      const baseRevision =
-        options.baseRevision === undefined
-          ? (
-              await client.projectLayout<ProjectLayout>("projectLayoutGet", {
-                threadId: target.threadId,
-              })
-            ).revision
-          : Number(options.baseRevision);
-      if (!Number.isInteger(baseRevision) || baseRevision < 0) {
-        throw new Error("--base-revision must be a whole number.");
-      }
-      printJson(
-        describeLayout(
-          await client.projectLayout<ProjectLayout>("projectLayoutApply", {
-            threadId: target.threadId,
-            baseRevision,
-            ops,
-            ...(options.reason ? { reason: options.reason } : {}),
-          }),
-        ),
-      );
-    },
-  );
+  .action(async (reference, options: { ops: string; baseRevision?: string; reason?: string }) => {
+    const ops = parseLayoutOps(options.ops);
+    const { agent: target, client } = await withAgent(reference);
+    const baseRevision =
+      options.baseRevision === undefined
+        ? (
+            await client.projectLayout<ProjectLayout>("projectLayoutGet", {
+              threadId: target.threadId,
+            })
+          ).revision
+        : Number(options.baseRevision);
+    if (!Number.isInteger(baseRevision) || baseRevision < 0) {
+      throw new Error("--base-revision must be a whole number.");
+    }
+    printJson(
+      describeLayout(
+        await client.projectLayout<ProjectLayout>("projectLayoutApply", {
+          threadId: target.threadId,
+          baseRevision,
+          ops,
+          ...(options.reason ? { reason: options.reason } : {}),
+        }),
+      ),
+    );
+  });
 
 projectLayout
   .command("add")
