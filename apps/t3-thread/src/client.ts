@@ -1143,7 +1143,11 @@ export class RemoteEnvironmentClient {
 
   /** Project page widgets and the project's Gitea tracker repository. */
   async projectDashboard<T>(
-    method: "projectDashboardGet" | "projectDashboardSetWidgets" | "projectDashboardSetTracker",
+    method:
+      | "projectDashboardGet"
+      | "projectDashboardSetWidgets"
+      | "projectDashboardSetTracker"
+      | "projectDashboardSetHealth",
     input: Record<string, unknown>,
   ): Promise<T> {
     const rpc = await this.openRpc();
