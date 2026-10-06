@@ -138,6 +138,27 @@ describe("agent target resolution", () => {
     expect(clientFactory).not.toHaveBeenCalled();
   });
 
+  it("resolves a page-agent thread by id, since shell lists never contain it", async () => {
+    const pageAgentId = "page-agent-status-board-3f2a";
+    const clientFactory = vi.fn((environmentName: string) => ({
+      listThreads: vi.fn(async () => [makeThread()]),
+      findThread: vi.fn(async (threadId: string) => {
+        if (environmentName !== "dev-vm") throw new Error(`Thread ${threadId} was not found`);
+        return { id: threadId, projectId: "chat-project", title: "Status board agent" } as never;
+      }),
+    }));
+
+    const resolved = await resolveAgentTarget(makeState(), pageAgentId, { clientFactory });
+
+    expect(resolved).toMatchObject({
+      threadId: pageAgentId,
+      environment: "dev-vm",
+      title: "Status board agent",
+      checkedEnvironments: ["local-mbp", "dev-vm"],
+      unreachableEnvironments: [],
+    });
+  });
+
   it("resolves an unsaved raw UUID by scanning paired environments", async () => {
     const threadsByEnvironment = new Map<string, OrchestrationThreadShell[]>([
       ["local-mbp", []],
