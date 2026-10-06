@@ -1762,10 +1762,6 @@ export type OrchestrationV2LatestVisibleMessageSummary =
 
 export const OrchestrationV2ThreadShell = Schema.Struct({
   workerSummary: Schema.optional(ForkWorkerSummary),
-  parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
-  remoteParent: Schema.optional(
-    Schema.NullOr(Schema.Struct({ environmentId: Schema.String, threadId: ThreadId })),
-  ),
   ...OrchestrationV2CreationFields,
   id: ThreadId,
   projectId: ProjectId,
