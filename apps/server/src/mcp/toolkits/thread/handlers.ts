@@ -21,6 +21,7 @@ import {
   unavailable,
 } from "../../threadAccess.ts";
 import * as ThreadSearch from "../../../orchestration-v2/ThreadSearch.ts";
+import { withoutPageAgentMatches } from "../../../pageAgents/PageAgentVisibilityPolicy.ts";
 import * as ScheduledTasks from "../../../scheduledTasks/ScheduledTaskService.ts";
 import { queuedRunsInDeliveryOrder } from "../../../orchestration-v2/QueuedRunOrder.ts";
 import { ThreadToolkit } from "./tools.ts";
@@ -110,7 +111,9 @@ export const ThreadToolkitHandlersLive = ThreadToolkit.toLayer({
       // outside a thread searches every project.
       const projectId = requested ?? caller?.projectId;
       const threadSearch = yield* ThreadSearch.ThreadSearch;
-      const result = yield* threadSearch.search(query).pipe(Effect.mapError(unavailable));
+      const result = withoutPageAgentMatches(
+        yield* threadSearch.search(query).pipe(Effect.mapError(unavailable)),
+      );
       return {
         matches:
           projectId === undefined
