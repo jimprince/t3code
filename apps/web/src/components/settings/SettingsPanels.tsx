@@ -2455,6 +2455,52 @@ export function GeneralSettingsPanel() {
           <>
             <SettingsRow
               serverScoped
+              settingKeys={["subthreadSettleOnComplete"]}
+              {...searchableSetting("settle-completed-workers")}
+              description="Settle agent-created workers after each completed turn when no input or approval is pending."
+              control={
+                <ScopedSwitch
+                  settingKeys={["subthreadSettleOnComplete"]}
+                  checked={settings.subthreadSettleOnComplete}
+                  onCheckedChange={(checked) =>
+                    updateSettings({ subthreadSettleOnComplete: Boolean(checked) })
+                  }
+                  aria-label="Settle completed workers"
+                />
+              }
+            />
+            <SettingsRow
+              serverScoped
+              settingKeys={["settledSubthreadArchiveAfterDays"]}
+              {...searchableSetting("archive-settled-subthreads")}
+              description="Archive settled workers after this many days. Pinned threads, threads with auto-settle off, and parents of active descendants stay available."
+              control={
+                <ScopedSwitch
+                  settingKeys={["settledSubthreadArchiveAfterDays"]}
+                  checked={settings.settledSubthreadArchiveAfterDays !== null}
+                  onCheckedChange={(checked) =>
+                    updateSettings({ settledSubthreadArchiveAfterDays: checked ? 7 : null })
+                  }
+                  aria-label="Archive settled workers"
+                />
+              }
+            />
+            {settings.settledSubthreadArchiveAfterDays !== null ? (
+              <SettingsRow
+                serverScoped
+                settingKeys={["settledSubthreadArchiveAfterDays"]}
+                title="Days before worker archive"
+                description="Archived threads can be restored from the archive."
+                control={
+                  <AutoSettleDaysInput
+                    value={settings.settledSubthreadArchiveAfterDays}
+                    onCommit={(days) => updateSettings({ settledSubthreadArchiveAfterDays: days })}
+                  />
+                }
+              />
+            ) : null}
+            <SettingsRow
+              serverScoped
               settingKeys={["sidebarAutoSettleOnMerge"]}
               {...searchableSetting("auto-settle-merged-threads")}
               description="Settle a thread when its pull request merges. Closed pull requests still settle automatically."
