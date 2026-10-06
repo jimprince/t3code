@@ -339,6 +339,7 @@ import {
 import { useNowMinute } from "../hooks/useNowMinute";
 import { usePanelAnimationSettings, usePanelPresence } from "../panelAnimations";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
+import { useNestedDraftBannerItem, useThreadNestingActions } from "../hooks/useThreadNesting";
 import { useRemoveClonedProject } from "../hooks/useRemoveClonedProject";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
 import { resolveAppModelSelectionForInstance } from "../modelSelection";
@@ -1584,6 +1585,8 @@ export default function ChatView(props: ChatViewProps) {
   const canReadTerminal = useEnvironmentScope(environmentId, AuthTerminalReadScope);
   const draftId = routeKind === "draft" ? props.draftId : null;
   const handleNewThread = useNewThreadHandler();
+  const { attachNestedDraft } = useThreadNestingActions();
+  const nestedDraftBannerItem = useNestedDraftBannerItem(draftId, environmentId);
   const { settleThread, pinThread, confirmAndUnpinThread } = useThreadActions();
   const routeThreadRef = useMemo(
     () => scopeThreadRef(environmentId, threadId),
@@ -7785,12 +7788,14 @@ export default function ChatView(props: ChatViewProps) {
     // The user asked for this one, so it leads the notice tier instead of trailing it.
     const usageLimitsItems = usageLimitsBanner === null ? [] : [usageLimitsBanner];
     const projectCloneItems = projectCloneBannerItem === null ? [] : [projectCloneBannerItem];
+    const nestedDraftItems = nestedDraftBannerItem === null ? [] : [nestedDraftBannerItem];
     if (!localCheckoutBranchMismatch || !showBranchMismatchBanner || !activeBranchMismatchKey) {
       return [
         ...feedbackBannerItems,
         ...limitRecoveryItems,
         ...usageLimitsItems,
         ...projectCloneItems,
+        ...nestedDraftItems,
         ...systemComposerBannerItems,
         ...backgroundWorkItems,
       ];
@@ -7800,6 +7805,7 @@ export default function ChatView(props: ChatViewProps) {
       ...limitRecoveryItems,
       ...usageLimitsItems,
       ...projectCloneItems,
+      ...nestedDraftItems,
       ...systemComposerBannerItems,
       ...backgroundWorkItems,
       {
@@ -7854,6 +7860,8 @@ export default function ChatView(props: ChatViewProps) {
     backgroundWorkBannerItem,
     goalBannerItem,
     localCheckoutBranchMismatch,
+    nestedDraftBannerItem,
+
     projectCloneBannerItem,
     showBranchMismatchBanner,
     systemComposerBannerItems,
@@ -9203,7 +9211,13 @@ export default function ChatView(props: ChatViewProps) {
       return;
     }
     if (!hasSendableContent) {
-      if (sendQueuedRunOnEmptyEnter({ hasSendableContent, expiredTerminalContextCount, repeat: e?.repeat ?? false }, queuedRunsControlRef.current)) return;
+      if (
+        sendQueuedRunOnEmptyEnter(
+          { hasSendableContent, expiredTerminalContextCount, repeat: e?.repeat ?? false },
+          queuedRunsControlRef.current,
+        )
+      )
+        return;
       if (expiredTerminalContextCount > 0) {
         const toastCopy = buildExpiredTerminalContextToastCopy(
           expiredTerminalContextCount,
@@ -10000,6 +10014,10 @@ export default function ChatView(props: ChatViewProps) {
       } else {
         turnStartSucceeded = true;
         setKeepFullHistory(routeThreadKey, false);
+        if (draftId !== null && isLocalDraftThread) {
+          void attachNestedDraft(draftId, scopeThreadRef(environmentId, threadIdForSend));
+        }
+
         // The turn is under way and will spend quota, so that thread's limits
         // snapshot is stale. Uploads may have outlasted a navigation, so only
         // the sending thread's panel clears.
