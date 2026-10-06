@@ -4,19 +4,26 @@ import { presentThreadShell } from "./models.ts";
 import { v2ThreadShell } from "./orchestrationV2TestFixtures.ts";
 import {
   supervisionRoots,
-  supervisionForest,
+  supervisionForest as buildForest,
   supervisionIsActive,
   supervisionVisiblePaths,
 } from "./forkNesting.ts";
 
 const env = EnvironmentId.make("local");
+const links = new Map<string, string | null>();
 function thread(id: string, parentThreadId: string | null = null) {
-  return presentThreadShell(env, {
-    ...v2ThreadShell,
-    id: ThreadId.make(id),
-    parentThreadId,
-  } as typeof v2ThreadShell);
+  links.set(id, parentThreadId);
+  return presentThreadShell(env, { ...v2ThreadShell, id: ThreadId.make(id) });
 }
+const supervisionForest = (threads: Parameters<typeof buildForest>[0]) =>
+  buildForest(
+    threads,
+    threads.map((t) => ({
+      environmentId: t.environmentId,
+      threadId: t.id,
+      parentThreadId: links.get(t.id) ? ThreadId.make(links.get(t.id)!) : null,
+    })),
+  );
 
 describe("V2 organizational supervision", () => {
   it("keeps all depths and pinned/open ancestor paths, without exposing execution lineage as nesting", () => {
@@ -36,11 +43,12 @@ describe("V2 organizational supervision", () => {
     expect(
       supervisionVisiblePaths(supervisionForest([root, child]), "local:child").has("local:root"),
     ).toBe(true);
-    expect(
-      supervisionForest([
-        { ...child, source: { ...child.source, parentThreadId: undefined } as typeof child.source },
-      ]).parentByKey.size,
-    ).toBe(0);
+    const executionChild = presentThreadShell(env, {
+      ...v2ThreadShell,
+      id: ThreadId.make("execution-child"),
+      lineage: { rootThreadId: root.id, parentThreadId: root.id, relationshipToParent: "subagent" },
+    });
+    expect(buildForest([root, executionChild], []).parentByKey.size).toBe(0);
   });
   it("makes missing parents and cycles reachable roots", () => {
     expect(
