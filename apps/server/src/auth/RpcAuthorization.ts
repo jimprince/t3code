@@ -60,6 +60,7 @@ export const RPC_REQUIRED_SCOPES = {
   "fork.threads.order.reset": AuthOrchestrationOperateScope,
   "orchestration.exportThread": AuthOrchestrationOperateScope,
   "orchestration.importThread": AuthOrchestrationOperateScope,
+  "orchestration.getLegacyHistory": AuthOrchestrationReadScope,
   "orchestration.forkThread": AuthOrchestrationOperateScope,
   "fork.threads.metadata.list": AuthOrchestrationReadScope,
   "fork.threads.metadata.update": AuthOrchestrationOperateScope,
