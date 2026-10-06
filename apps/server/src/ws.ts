@@ -1,3 +1,4 @@
+import { makeSessionReconcileService } from "./forkThreads/SessionReconcileService.ts";
 import * as LegacyHistory from "./forkLegacy/HistoryReader.ts";
 import * as ThreadTransfer from "./forkThreads/TransferService.ts";
 import * as ForkWorkspace from "./forkThreads/ForkWorkspaceService.ts";
@@ -3220,6 +3221,8 @@ const layerWsRpc = (
         [WS_METHODS.projectRequestsList]: (input) => requestLedger.listForThread(input),
         ...(yield* makeWorkspaceUploadHandlers),
         ...(yield* makeSupervisionDragHandlers),
+        "fork.session.reconcile": (input) =>
+          makeSessionReconcileService(threadManagement).reconcile(input),
         "orchestration.getLegacyHistory": (input) => legacyHistory.get(input),
         "orchestration.exportThread": (input) => threadTransfer.exportThread(input),
         "orchestration.importThread": (input) => threadTransfer.importThread(input),

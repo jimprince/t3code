@@ -1,3 +1,4 @@
+import { SessionReconcileInput, SessionReconcileError } from "./sessionReconcile.ts";
 import { LegacyHistoryRpc } from "./forkLegacyHistory.ts";
 import { ThreadTransferRpcs } from "./threadTransfer.ts";
 import { ForkConversationRpc } from "./forkConversation.ts";
@@ -2355,9 +2356,16 @@ export const WsCoreRpcGroup = RpcGroup.make(
   WsOrchestrationV2SubscribeThreadRpc,
 ).middleware(RpcScopeAuthorization);
 
+export const WsSessionReconcileRpc = Rpc.make("fork.session.reconcile", {
+  payload: SessionReconcileInput,
+  success: Schema.Void,
+  error: Schema.Union([SessionReconcileError, EnvironmentAuthorizationError]),
+});
+
 // Every fork RPC lives here, not in WsCoreRpcGroup: past upstream's own methods, the core
 // group's toHandlers type hits TS2589 and the server's handler-service types resolve to any in R.
 export const WsForkRpcGroup = RpcGroup.make(
+  WsSessionReconcileRpc,
   WsAutomationsListRpc,
   WsAutomationsSaveRpc,
   WsAutomationsRemoveRpc,

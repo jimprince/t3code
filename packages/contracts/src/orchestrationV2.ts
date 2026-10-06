@@ -3150,6 +3150,8 @@ const OrchestrationV2InternalCommand = Schema.Union([
    */
   Schema.Struct({
     type: Schema.Literal("thread.background-work.settle"),
+    /** Stop ACK only records acknowledgement and schedules the native-terminal fallback. */
+    interruptAcknowledged: Schema.optional(Schema.Boolean),
     commandId: CommandId,
     threadId: ThreadId,
     providerThreadId: ProviderThreadId,
