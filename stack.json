@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "fdf3ab7c160ba6439c3637358b091e4844b97ce7",
-  "head": "725e1b97074827e5f3a393ce6644f6ca4e345ad6",
+  "prev": "d2684c8911ddabf3a2719bbd061a6fe97ca64d15",
+  "head": "333bf695f87121857d69e9c5cb177251223d1954",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -36,13 +36,13 @@
     "fork-worktree-cleanup",
     "fork-enter-sends-queued",
     "fork-restart-when-idle",
-    "fork-nested-threads"
-  ],
-  "unapplied": [
+    "fork-nested-threads",
     "fork-resume-background-work",
     "fork-overnight-updates",
     "fork-spawn-budget",
-    "fork-cross-project-thread-nesting",
+    "fork-cross-project-thread-nesting"
+  ],
+  "unapplied": [
     "fork-launch-health",
     "fork-notification-preferences",
     "fork-sidebar-agent-visibility",
@@ -122,7 +122,7 @@
       "oid": "16a706318088b92275e415b09ff849c8ba0394a4"
     },
     "fork-cross-project-thread-nesting": {
-      "oid": "6770e5252aa367dea26380c444928e7b9ab2ef75"
+      "oid": "333bf695f87121857d69e9c5cb177251223d1954"
     },
     "fork-desktop-delivery": {
       "oid": "dc99bd0ac57507bb9ab87f4f036790711281764e"
@@ -188,7 +188,7 @@
       "oid": "85c8c8dd5e6475a99dac07c161c120ddffae6718"
     },
     "fork-overnight-updates": {
-      "oid": "aca23b676185cc92444feaa3dce85241ed7792b6"
+      "oid": "d4ce02b680d4f7de0d9e4893600d8f8da2b43aa4"
     },
     "fork-page-agent-tray": {
       "oid": "5ebee716313f1a2821f013466470ddcaab635d37"
@@ -257,7 +257,7 @@
       "oid": "51195836d2bd46f247ba6e84bc9dc0cc69521ee2"
     },
     "fork-resume-background-work": {
-      "oid": "f1e6c3a1b798aee3b4f299d6d88440160f3d2452"
+      "oid": "87c17f70ef091b1f536f39ac482ba836981fa37e"
     },
     "fork-roadmap-next-later": {
       "oid": "1eff394be63e032bea3ec7090753040a7678d77d"
@@ -278,7 +278,7 @@
       "oid": "05c633f2f5e3a6208dcb83b35d3ea1e1a53ce598"
     },
     "fork-spawn-budget": {
-      "oid": "319cf47d77e75ce2963c2f8c76aa4a514423f2a5"
+      "oid": "f3ba6e795232b30c51ce24dccdae3017a5525f65"
     },
     "fork-step-preview": {
       "oid": "28422db35bbf505fb6551cb1adf97c56e45f08f7"
