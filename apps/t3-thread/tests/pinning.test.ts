@@ -44,8 +44,15 @@ const base = {
 function harness() {
   let current = { ...base, pinnedAt: null as string | null };
   const commands: (typeof OrchestrationV2Command.Type)[] = [];
+  const resets: unknown[] = [];
   const decode = Schema.decodeUnknownSync(OrchestrationV2Command);
   const request = vi.fn(async (method: string, input: unknown) => {
+    if (method === "threadOrderReset") {
+      resets.push(input);
+      return;
+    }
+    if (method === "threadMetadataList") return [{ threadId: base.id, parentThreadId: "parent" }];
+    if (method === "threadMetadataUpdate") return input;
     if (method === "serverGetConfig") return { providers: [], settings: DEFAULT_SERVER_SETTINGS };
     if (method === "launchThread") return { threadId: base.id };
     expect(method).toBe("dispatchCommand");
@@ -93,6 +100,7 @@ function harness() {
       rpcFactory,
     }),
     commands,
+    resets,
     thread: () => current,
   };
 }
@@ -164,5 +172,48 @@ describe("worker pinning", () => {
       expect.objectContaining({ type: "thread.pin.reorder", orderKey: "f" }),
       expect.objectContaining({ type: "thread.active.reorder", orderKey: "m" }),
     ]);
+    vi.spyOn(h.client, "describe").mockResolvedValue({
+      capabilities: { threadOrderReset: true },
+    } as Awaited<ReturnType<typeof h.client.describe>>);
+    await h.client.resetThreadOrder(base.id);
+    expect(h.resets).toEqual([expect.objectContaining({ threadId: base.id })]);
+  });
+
+  it("puts a new pin before its direct siblings without moving a repeated pin", async () => {
+    const h = harness();
+    vi.spyOn(h.client, "listThreads").mockImplementation(async () => [
+      {
+        ...h.thread(),
+        latestUserMessageAt: null,
+        hasPendingApprovals: false,
+        hasPendingUserInput: false,
+        hasActionableProposedPlan: false,
+      },
+      {
+        ...h.thread(),
+        id: "sibling",
+        pinnedAt: timestamp,
+        pinOrderKey: "f",
+        latestUserMessageAt: null,
+        hasPendingApprovals: false,
+        hasPendingUserInput: false,
+        hasActionableProposedPlan: false,
+      },
+      {
+        ...h.thread(),
+        id: "unrelated",
+        parentThreadId: "other",
+        pinnedAt: timestamp,
+        latestUserMessageAt: null,
+        hasPendingApprovals: false,
+        hasPendingUserInput: false,
+        hasActionableProposedPlan: false,
+      },
+    ]);
+    await h.client.setThreadPinned(base.id, true);
+    const order = h.commands.filter((command) => command.type === "thread.pin.reorder");
+    expect(order.map((command) => command.threadId)).toEqual([base.id, "sibling"]);
+    await h.client.setThreadPinned(base.id, true);
+    expect(h.commands.filter((command) => command.type === "thread.pin.reorder")).toHaveLength(2);
   });
 });
