@@ -2,7 +2,6 @@ import { supervisionMoveAvailability } from "@t3tools/client-runtime/state/fork-
 import { useSupervisionMetadata } from "../../state/forkSupervision";
 import { useAndroidControlSizing } from "../../components/useAndroidControlSizing";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
-import { computeThreadMoveAvailability } from "./threadOrder";
 import type {
   EnvironmentProject,
   EnvironmentThreadShell,
