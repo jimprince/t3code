@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Publication reads existing evidence; only verify-stgit-replay stages/waits for CI.
+head="$1"
+previous_main="$2"
+remote="${STGIT_REMOTE:-origin}"
+repository="$(gh repo view "$(git remote get-url "$remote")" --json nameWithOwner --jq .nameWithOwner)"
+bun -e '
+  import { reuseCandidateCI, reuseReleaseCI } from "./scripts/ci/reuse-release-ci.ts";
+  const [repository, source, previousMain] = process.argv.slice(1);
+  const result = source === previousMain
+    ? await reuseReleaseCI({ repository, ref: source, version: "", maxWaitMs: 0 })
+    : await reuseCandidateCI({ repository, source });
+  console.log(result.reason);
+  if (result.runUrl) console.log(result.runUrl);
+  if (!result.reused) {
+    console.error("Publication requires successful CI for this exact source. Run scripts/ci/verify-stgit-replay before publishing a changed stack.");
+    process.exit(1);
+  }
+' "$repository" "$head" "$previous_main"

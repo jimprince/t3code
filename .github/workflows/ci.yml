@@ -2,22 +2,68 @@ name: CI
 
 on:
   pull_request:
+  workflow_dispatch:
   push:
     branches:
       - main
+      - "ci-candidate/**"
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  candidate_ci:
+    name: Candidate CI evidence
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      reused: ${{ steps.evidence.outputs.reused == 'true' && steps.restore.outcome == 'success' }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+      - name: Read exact candidate CI evidence
+        id: evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_CANDIDATE_SHA: ${{ github.sha }}
+        run: bun scripts/ci/reuse-release-ci.ts --candidate
+
+      # PR comparisons resolve the baseline artifact through the main CI run.
+      # If retention has expired, run tests again to recreate the report.
+      - name: Restore verified thread transfer result
+        id: restore
+        if: steps.evidence.outputs.reused == 'true'
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: thread-transfer-results
+          path: ${{ runner.temp }}/candidate-transfer
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.evidence.outputs.run_id }}
+
+      - name: Preserve main thread transfer baseline
+        if: steps.restore.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: thread-transfer-results
+          path: ${{ runner.temp }}/candidate-transfer/thread-transfer-result.json
+          if-no-files-found: error
+          retention-days: 30
+
   # Lint, typecheck, and the desktop build each get a runner so they run side by
   # side instead of one after another. The `Check` job at the end of this file
   # passes only when every other job does.
   lint:
+    needs: candidate_ci
+    if: ${{ !cancelled() && needs.candidate_ci.outputs.reused != 'true' }}
     name: Lint
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -45,17 +91,17 @@ jobs:
           cache: true
           run-install: true
 
-      - name: Ensure Electron runtime is installed
-        run: vp run --filter @t3tools/desktop ensure:electron
+      - name: Check source
+        run: scripts/ci/verify-source lint
 
-      # Files/dependencies are repo-wide; export checks cover clean workspaces only.
-      - name: Check unused code
-        run: vp run knip:check
-
-      - name: Check
-        run: vp check
+      - name: Check verified source unchanged
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
 
   typecheck:
+    needs: candidate_ci
+    if: ${{ !cancelled() && needs.candidate_ci.outputs.reused != 'true' }}
     name: Typecheck
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -75,16 +121,20 @@ jobs:
           cache: true
           run-install: true
 
-      - name: Ensure Electron runtime is installed
-        run: vp run --filter @t3tools/desktop ensure:electron
+      - name: Check source
+        run: scripts/ci/verify-source typecheck
 
-      - name: Typecheck
-        run: vpr typecheck
+      - name: Check verified source unchanged
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
 
   build:
+    needs: candidate_ci
+    if: ${{ !cancelled() && needs.candidate_ci.outputs.reused != 'true' }}
     name: Build
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -129,6 +179,46 @@ jobs:
       - name: Verify preload bundle output
         run: node apps/desktop/scripts/verify-preload-bundle.mjs
 
+      - name: Smoke packaged server history
+        run: node scripts/smoke-thread-history.ts node "$GITHUB_WORKSPACE/apps/server/dist/bin.mjs"
+
+      - name: Setup Rust for headless packaging
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Build CLI single-executable
+        env:
+          # Match the release build and SEA_NODE_VERSION.
+          VP_NODE_VERSION: "26.8.2"
+        run: node apps/server/scripts/cli.ts build-exe --verbose
+
+      - name: Build headless artifact
+        run: |
+          cargo build --locked --release \
+            --manifest-path native/resource-monitor/Cargo.toml \
+            --target x86_64-unknown-linux-gnu
+          mkdir -p "$RUNNER_TEMP/headless-resource-monitor/linux-x64"
+          cp native/resource-monitor/target/x86_64-unknown-linux-gnu/release/t3-resource-monitor \
+            "$RUNNER_TEMP/headless-resource-monitor/linux-x64/t3-resource-monitor"
+          version="$(node -p "require('./apps/server/package.json').version")"
+          node scripts/build-headless-artifact.ts \
+            --platform linux --arch x64 --build-version "$version" \
+            --output-dir "$RUNNER_TEMP/candidate-headless" \
+            --resource-monitor-dir "$RUNNER_TEMP/headless-resource-monitor"
+
+      - name: Smoke headless artifact
+        run: |
+          version="$(node -p "require('./apps/server/package.json').version")"
+          node scripts/smoke-headless-artifact.ts \
+            --artifact "$RUNNER_TEMP/candidate-headless/t3-headless-${version}-linux-x64.tar.gz" \
+            --version "$version"
+
+      - name: Check verified source unchanged
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+
   # Everything except `t3` (apps/server) and the web app, which has its own job
   # below. `--parallel` drops the package dependency ordering that `vp run`
   # applies by default: these `test` tasks declare no `dependsOn` and resolve
@@ -136,6 +226,8 @@ jobs:
   # dependency layers. The concurrency limit stays at the default 4 so peak load
   # per runner is unchanged.
   test:
+    needs: candidate_ci
+    if: ${{ !cancelled() && needs.candidate_ci.outputs.reused != 'true' }}
     name: Test
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -183,9 +275,6 @@ jobs:
         with:
           bun-version: 1.3.11
 
-      - name: Ensure Electron runtime is installed
-        run: vp run --filter @t3tools/desktop ensure:electron
-
       - name: Test preview artifact validation
         run: python3 -B .github/scripts/stage-preview-bundle.test.py
 
@@ -200,7 +289,7 @@ jobs:
           exit "$(cat "$RUNNER_TEMP/apt-status")"
 
       - name: Test
-        run: vp run --parallel --concurrency-limit 4 --filter '!t3' --filter '!@t3tools/monorepo' --filter '!@t3tools/web' test
+        run: scripts/ci/verify-source test-other
 
       - name: Smoke operator status and thread snapshots with a bounded heap
         timeout-minutes: 3
@@ -209,9 +298,16 @@ jobs:
           timeout 90s node --max-old-space-size=512 apps/t3-thread/tests/fixtures/status-smoke.mjs
           timeout 60s node --max-old-space-size=512 apps/t3-thread/tests/fixtures/threads-smoke.mjs
 
+      - name: Check verified source unchanged
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+
   # The web suite is the largest outside the server. In the shared Test job it
   # started last and ran alone for about 40s after everything else finished.
   test_web:
+    needs: candidate_ci
+    if: ${{ !cancelled() && needs.candidate_ci.outputs.reused != 'true' }}
     name: Test Web
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -232,7 +328,12 @@ jobs:
           run-install: true
 
       - name: Test
-        run: vp run --filter @t3tools/web test
+        run: scripts/ci/verify-source test-web
+
+      - name: Check verified source unchanged
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
 
   # apps/server sets `fileParallelism: false`, so its test files run strictly
   # one at a time. Sharding spreads them over separate runners instead of
@@ -241,6 +342,8 @@ jobs:
   # about 1.5 cores busy, so 4 vCPU runners lose nothing against 8. The shards
   # split files by recorded duration (apps/server/src/testUtils/weightedShardSequencer.ts).
   test_server:
+    needs: candidate_ci
+    if: ${{ !cancelled() && needs.candidate_ci.outputs.reused != 'true' }}
     name: Test Server ${{ matrix.shard }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -271,7 +374,7 @@ jobs:
         env:
           T3CODE_TRANSFER_BUDGET_REPORT_PATH: ${{ runner.temp }}/t3code-transfer-budget.md
           T3CODE_TRANSFER_BUDGET_RESULT_PATH: ${{ runner.temp }}/thread-transfer-result.json
-        run: vp run --filter t3 test --shard ${{ matrix.shard }}/${{ strategy.job-total }}
+        run: scripts/ci/verify-source test-server --shard ${{ matrix.shard }}/${{ strategy.job-total }}
 
       # integration/transferBudgetV2.integration.test.ts writes the report; exactly one shard
       # produces these files. Gating the upload on their presence keeps a
@@ -305,9 +408,15 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
+      - name: Check verified source unchanged
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+
   transfer-report:
+    needs: [candidate_ci, test_server]
+    if: ${{ !cancelled() && needs.candidate_ci.outputs.reused != 'true' }}
     name: Transfer report artifact
-    needs: test_server
     runs-on: ubuntu-24.04
     steps:
       - name: Require transfer measurements
@@ -319,6 +428,8 @@ jobs:
   # Split out of Check and Test: both paid ~7-9s to install a Rust toolchain
   # for checks that take under 3s, on the critical path of every PR.
   rust:
+    needs: candidate_ci
+    if: ${{ !cancelled() && needs.candidate_ci.outputs.reused != 'true' }}
     name: Rust
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -353,6 +464,8 @@ jobs:
   # for it on every push. Detection is API-only (no checkout) and fails open: if
   # the diff cannot be resolved, the lint runs.
   mobile_native_changes:
+    needs: candidate_ci
+    if: ${{ !cancelled() && needs.candidate_ci.outputs.reused != 'true' }}
     name: Mobile Native Changes
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -428,10 +541,10 @@ jobs:
 
   mobile_native_static_analysis:
     name: Mobile Native Static Analysis
-    needs: mobile_native_changes
+    needs: [mobile_native_changes, candidate_ci]
     # Skip only on an explicit "no": a gate job that failed or errored leaves the
     # output empty, and that must run the lint rather than silently skip it.
-    if: ${{ !cancelled() && needs.mobile_native_changes.outputs.changed != 'false' }}
+    if: ${{ !cancelled() && needs.candidate_ci.outputs.reused != 'true' && needs.mobile_native_changes.outputs.changed != 'false' }}
     runs-on: macos-15
     timeout-minutes: 10
     steps:
@@ -459,6 +572,8 @@ jobs:
         run: vp run lint:mobile
 
   release_smoke:
+    needs: candidate_ci
+    if: ${{ !cancelled() && needs.candidate_ci.outputs.reused != 'true' }}
     name: Release Smoke
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -483,6 +598,59 @@ jobs:
       - name: Exercise release-only workflow steps
         run: node scripts/release-smoke.ts
 
+  fork-policy:
+    name: Fork patch policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: |
+            args:
+              - --filter=@t3tools/scripts...
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+
+      - name: Fetch StGit metadata
+        run: |
+          if [[ "$GITHUB_REF" == refs/heads/ci-candidate/* ]]; then
+            test "$GITHUB_REF" = "refs/heads/ci-candidate/$GITHUB_SHA"
+            git fetch origin "refs/ci-stacks/$GITHUB_SHA:refs/stacks/stgit/adopt"
+            git show refs/stacks/stgit/adopt:stack.json | bun -e '
+              const stack = await Bun.stdin.json();
+              for (const name of stack.applied) {
+                const result = Bun.spawnSync(["git", "update-ref", `refs/patches/stgit/adopt/${name}`, stack.patches[name].oid]);
+                if (result.exitCode !== 0) process.exit(result.exitCode);
+              }
+            '
+          else
+            git fetch origin \
+              '+refs/stacks/stgit/adopt:refs/stacks/stgit/adopt' \
+              '+refs/patches/stgit/adopt/*:refs/patches/stgit/adopt/*'
+          fi
+
+      - name: Check fork patch stack
+        run: |
+          context="$(scripts/ci/check-stgit-stack --format=json)"
+          printf '%s\n' "$context"
+          scripts/ci/report-nightly-delivery "$(jq -r .base <<< "$context")" "$(jq -r .head <<< "$context")"
+
+      - name: Check fork documentation
+        run: bun scripts/ci/check-fork-docs.ts
+
+      - name: Check release-note entries
+        run: bun scripts/ci/check-fork-release-notes.ts
+
   # Branch protection requires this job by its name, `Check`. It fails when any
   # other job fails, is cancelled, or is skipped without a reason, so splitting
   # or resharding jobs needs no ruleset change. Add every new job to `needs`.
@@ -493,6 +661,7 @@ jobs:
     if: ${{ always() }}
     needs:
       [
+        candidate_ci,
         lint,
         typecheck,
         build,
@@ -504,6 +673,7 @@ jobs:
         mobile_native_changes,
         mobile_native_static_analysis,
         release_smoke,
+        fork-policy,
       ]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -511,9 +681,15 @@ jobs:
       - name: Require every job to pass
         env:
           RESULTS: ${{ toJSON(needs) }}
+          # A promoted candidate skips every verification job; its own candidate
+          # CI run already proved this exact source, which candidate_ci checked.
+          REUSED: ${{ needs.candidate_ci.outputs.reused == 'true' }}
         run: |
           echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
-          # Only the macOS lint skips on purpose, when no native mobile code changed.
-          echo "$RESULTS" | jq -e 'all(to_entries[];
+          # The macOS lint skips on purpose when no native mobile code changed,
+          # and candidate_ci itself skips on every event other than a main push.
+          echo "$RESULTS" | jq -e --argjson reused "$REUSED" 'all(to_entries[];
             .value.result == "success"
-            or (.key == "mobile_native_static_analysis" and .value.result == "skipped"))' > /dev/null
+            or (.key == "candidate_ci" and .value.result == "skipped")
+            or (.key == "mobile_native_static_analysis" and .value.result == "skipped")
+            or ($reused and .value.result == "skipped"))' > /dev/null
