@@ -1,3 +1,7 @@
+import type { EnvironmentId } from "@t3tools/contracts";
+import { useEnvironments } from "../../state/environments";
+import { useEnvironmentQuery } from "../../state/query";
+import { serverEnvironment } from "../../state/server";
 import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollView";
 import Constants from "expo-constants";
 import * as Updates from "expo-updates";
@@ -43,6 +47,7 @@ function appIdentity() {
  */
 export function SettingsDiagnosticsRouteScreen() {
   const insets = useSafeAreaInsets();
+  const { environments } = useEnvironments();
   const [state, setState] = useState<CrashLogState>(() =>
     Updates.isEnabled ? { status: "loading" } : { status: "unavailable" },
   );
@@ -82,6 +87,15 @@ export function SettingsDiagnosticsRouteScreen() {
         className="flex-1"
         contentContainerClassName="gap-6 px-5 pt-4 pb-[18px]"
       >
+        {environments
+          .filter((environment) => environment.connection.phase === "connected")
+          .map((environment) => (
+            <EnvironmentLaunchHealth
+              key={environment.environmentId}
+              environmentId={environment.environmentId}
+              label={environment.label}
+            />
+          ))}
         <SettingsSection title="Startup crashes">
           {state.status === "loading" ? (
             <View className="items-center gap-3 px-6 py-8">
@@ -163,5 +177,41 @@ function CrashRow(props: { readonly record: StartupCrashRecord; readonly first: 
         </Text>
       ) : null}
     </View>
+  );
+}
+
+function EnvironmentLaunchHealth({
+  environmentId,
+  label,
+}: {
+  environmentId: EnvironmentId;
+  label: string;
+}) {
+  const { data, error } = useEnvironmentQuery(
+    serverEnvironment.resourceTelemetry({ environmentId, input: {} }),
+  );
+  const health = data?.health.processLaunch;
+  return (
+    <SettingsSection title={`${label}: process launch health`}>
+      <View className="gap-2 px-5 py-3">
+        {health ? (
+          <>
+            {health.warnings.map((warning) => (
+              <Text key={warning} accessibilityRole="alert" className="text-sm text-destructive">
+                {warning}
+              </Text>
+            ))}
+            <Text className="text-sm tabular-nums">
+              {health.attemptsPerMinute} launches/min, {health.failuresPerMinute} failures/min
+              {health.syspolicyd
+                ? `, syspolicyd ${Math.round(health.syspolicyd.residentBytes / 1024 ** 2)} MiB, ${health.syspolicyd.cpuPercent.toFixed(1)}% CPU`
+                : ""}
+            </Text>
+          </>
+        ) : (
+          <Text className="text-sm">{error ?? "Waiting for the first minute health sample."}</Text>
+        )}
+      </View>
+    </SettingsSection>
   );
 }
