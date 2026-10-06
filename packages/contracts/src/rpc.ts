@@ -55,6 +55,13 @@ import {
   ProjectDashboardSetWidgetsInput,
 } from "./projectDashboard.ts";
 import {
+  ProjectRoadmap,
+  ProjectRoadmapError,
+  ProjectRoadmapGetInput,
+  ProjectRoadmapMoveInput,
+  ProjectRoadmapSaveVersionInput,
+} from "./projectRoadmap.ts";
+import {
   CodexAuthCallbackInput,
   CodexAuthCallbackState,
   ProviderAuthCancelInput,
@@ -567,6 +574,9 @@ export const WS_METHODS = {
   projectDashboardGet: "projectDashboard.get",
   projectDashboardSetWidgets: "projectDashboard.setWidgets",
   projectDashboardSetTracker: "projectDashboard.setTracker",
+  projectRoadmapGet: "projectRoadmap.get",
+  projectRoadmapMove: "projectRoadmap.move",
+  projectRoadmapSaveVersion: "projectRoadmap.saveVersion",
 
   // Source control methods
   sourceControlLookupRepository: "sourceControl.lookupRepository",
@@ -1002,6 +1012,23 @@ const WsProjectDashboardSetTrackerRpc = Rpc.make(WS_METHODS.projectDashboardSetT
   payload: ProjectDashboardSetTrackerInput,
   success: ProjectDashboard,
   error: projectDashboardError,
+});
+
+const projectRoadmapError = Schema.Union([ProjectRoadmapError, EnvironmentAuthorizationError]);
+const WsProjectRoadmapGetRpc = Rpc.make(WS_METHODS.projectRoadmapGet, {
+  payload: ProjectRoadmapGetInput,
+  success: ProjectRoadmap,
+  error: projectRoadmapError,
+});
+const WsProjectRoadmapMoveRpc = Rpc.make(WS_METHODS.projectRoadmapMove, {
+  payload: ProjectRoadmapMoveInput,
+  success: ProjectRoadmap,
+  error: projectRoadmapError,
+});
+const WsProjectRoadmapSaveVersionRpc = Rpc.make(WS_METHODS.projectRoadmapSaveVersion, {
+  payload: ProjectRoadmapSaveVersionInput,
+  success: ProjectRoadmap,
+  error: projectRoadmapError,
 });
 
 const WsProjectRequestsListRpc = Rpc.make(WS_METHODS.projectRequestsList, {
@@ -1940,6 +1967,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectDashboardGetRpc,
   WsProjectDashboardSetWidgetsRpc,
   WsProjectDashboardSetTrackerRpc,
+  WsProjectRoadmapGetRpc,
+  WsProjectRoadmapMoveRpc,
+  WsProjectRoadmapSaveVersionRpc,
   WsSourceControlLookupRepositoryRpc,
   WsSourceControlCloneRepositoryRpc,
   WsSourceControlPublishRepositoryRpc,
