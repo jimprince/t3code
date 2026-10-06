@@ -512,6 +512,7 @@ function runBrowserAccessScenario(input: {
   readonly deviceOverride?: boolean;
   readonly createThread?: boolean;
   readonly projectExists?: boolean;
+  readonly threadId?: string;
 }) {
   return Effect.gen(function* () {
     const state = yield* Ref.make(emptyState);
@@ -519,7 +520,9 @@ function runBrowserAccessScenario(input: {
       ReadonlyArray<McpProviderSession.McpProviderSessionConfig | undefined>
     >([]);
     const projectId = ProjectId.make("project-provider-session-manager-browser-access");
-    const threadId = ThreadId.make("thread-provider-session-manager-browser-access");
+    const threadId = ThreadId.make(
+      input.threadId ?? "thread-provider-session-manager-browser-access",
+    );
     const projectServiceLayer = Layer.mock(ProjectService.ProjectService)({
       getById: (requestedProjectId) =>
         Effect.succeed(
@@ -1181,6 +1184,18 @@ it.effect("ProviderSessionManagerV2 honors a project browser-access opt-in", () 
     const captured = yield* runBrowserAccessScenario({
       enableAgentBrowserAccess: false,
       projectOverride: true,
+    });
+    assert.isDefined(captured);
+    assert.equal(captured?.browserToolsAvailable, true);
+  }),
+);
+
+it.effect("ProviderSessionManagerV2 always grants a page-agent thread the preview capability", () =>
+  Effect.gen(function* () {
+    const captured = yield* runBrowserAccessScenario({
+      enableAgentBrowserAccess: false,
+      projectOverride: false,
+      threadId: "page-agent-status-board-4c1e",
     });
     assert.isDefined(captured);
     assert.equal(captured?.browserToolsAvailable, true);

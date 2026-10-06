@@ -4,6 +4,7 @@ import {
   ThreadId,
   TurnItemId,
   type OrchestrationProjectShell,
+  withoutPageAgentThreads,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Predicate from "effect/Predicate";
@@ -98,7 +99,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
           const threads = yield* threadManagement.getShellSnapshot({ location: "active" });
           return buildActiveShellSnapshot({
             projects: yield* projectStore.listShells(),
-            threads,
+            threads: withoutPageAgentThreads(threads),
             snapshotSequence: yield* applicationEvents.latestApplicationSequence,
           });
         }),

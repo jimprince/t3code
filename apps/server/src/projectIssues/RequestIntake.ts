@@ -17,7 +17,6 @@ import * as ProjectService from "../project/ProjectService.ts";
 import type { ProviderRegistryShape } from "../provider/Services/ProviderRegistry.ts";
 import { findRootThreadId } from "./projectIssues.logic.ts";
 import { buildIntakeBrief, clampTitle, intakeModelSelection } from "./requestLedger.logic.ts";
-import { deriveRequestTitle } from "./requestTitle.logic.ts";
 
 const fail = (message: string) => new ProjectIssuesError({ message });
 
@@ -65,7 +64,7 @@ export const make = (deps: { readonly providers: ProviderRegistryShape }) =>
         const providers = yield* deps.providers.getProviders;
         const modelSelection = intakeModelSelection(providers, root.modelSelection);
         const threadId = ThreadId.make(yield* newId);
-        const asked = deriveRequestTitle(input.title).title;
+        const firstLine = input.title.split("\n")[0]!.trim() || "New request";
         yield* engine
           .dispatch({
             type: "thread.create",
@@ -74,7 +73,7 @@ export const make = (deps: { readonly providers: ProviderRegistryShape }) =>
             commandId: CommandId.make(yield* newId),
             threadId,
             projectId: project.id,
-            title: clampTitle(`Intake: ${asked}`).slice(0, 80),
+            title: clampTitle(`Intake: ${firstLine}`).slice(0, 80),
             modelSelection: modelSelection as typeof root.modelSelection,
             runtimeMode: "full-access",
             interactionMode: "default",
