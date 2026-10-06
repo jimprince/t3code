@@ -1,0 +1,4 @@
+id = "project-request-box-pinned"
+category = "feature"
+functionality = "projects"
+text = "The request box sits first on each project's Dashboard and works like a support box: Send hands your request to the orchestrator in the background, clears the box and links the request that tracks it (or says it is pending filing while Gitea is down). Open the chat only when you want it."
