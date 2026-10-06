@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "3cc01582609fb9810dd044ac75380c8046005af1",
-  "head": "483a89d86c68b0aa3da22994ee6a4a9b05019791",
+  "prev": "ec4108ea8c367edeacbc2e4a24d3c7cf9f874963",
+  "head": "fa339b65f9b1f6594d472f4c7452623e41b6c1fe",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -32,7 +32,9 @@
     "fork-embedded-pages",
     "fork-sandbox-session-recovery",
     "fork-thread-client-recovery",
-    "fork-resource-recovery",
+    "fork-resource-recovery"
+  ],
+  "unapplied": [
     "fork-worktree-cleanup",
     "fork-enter-sends-queued",
     "fork-restart-when-idle",
@@ -55,9 +57,7 @@
     "fork-interrupted-turn-rewind",
     "fork-agent-thread-ordering",
     "fork-cross-environment-nesting",
-    "fork-queue-coalesced-notes"
-  ],
-  "unapplied": [
+    "fork-queue-coalesced-notes",
     "fork-conversation-fork",
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
