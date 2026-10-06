@@ -1,0 +1,4 @@
+id = "decisions-answer-stays"
+category = "fix"
+functionality = "projects"
+text = "An answered decision keeps showing your answer until it leaves, instead of briefly showing its options again. If the answer cannot be delivered, the decision says why and offers Retry, and a retry never posts your answer on the issue twice. The mobile app behaves the same way."
