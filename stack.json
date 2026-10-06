@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "339f411bbc043bf307bf2d21f533ed93eb868d98",
-  "head": "4d61c6a05be7f95a7a5dc9bfc70ab6aae0b0d6cc",
+  "prev": "3d7e0b6f34eb273f2e0fd0fb0a14dc3979a02dce",
+  "head": "ac4eeba7bb3d38703061025eaf1e998fd790b6f5",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -109,11 +109,12 @@
     "fork-dashboard-polish",
     "fork-phone-side-panels",
     "fork-decision-links",
-    "fork-decision-discuss",
+    "fork-decision-discuss"
+  ],
+  "unapplied": [
     "fork-decision-context-media",
     "fork-subprojects-server"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
