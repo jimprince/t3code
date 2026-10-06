@@ -5,12 +5,13 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   deriveCompleted,
   deriveMaintenance,
+  deriveNeedsYou,
   deriveProjectRequests,
   latestProgressLine,
-  countParked,
   nextReleaseRequests,
   requestKind,
   requestsByWorker,
+  requestsOfSettledThreads,
   sentRequestStatus,
   taskKind,
 } from "./projectRequests.logic";
@@ -337,7 +338,58 @@ describe("saved for later", () => {
     const started = request(2, { labels: ["ask", "ask:change", "parked"], stage: "in-progress" });
     const items = deriveProjectRequests([parked, started], [thread()], tree, NOW, "root");
     expect(items.map((item) => item.issue.number)).toEqual([2]);
-    expect(countParked([parked, started], "root")).toBe(1);
+  });
+
+  it("keeps parked issues out of Maintenance and Needs you", () => {
+    const issues = [
+      request(1, { isRequest: false, requestSource: null, labels: ["ask:maintenance", "parked"] }),
+      request(2, {
+        isRequest: false,
+        requestSource: null,
+        status: "needs-review",
+        labels: ["parked"],
+      }),
+    ];
+    expect(deriveMaintenance(issues, [])).toEqual([]);
+    expect(deriveNeedsYou(issues, [])).toEqual([]);
+  });
+});
+
+describe("needs you", () => {
+  it("is Brad's request groups plus any issue marked for his review or test", () => {
+    const issues = [
+      request(1, { status: "needs-review", stage: "ready" }),
+      request(2, { stage: "in-progress" }),
+      request(3, { isRequest: false, requestSource: null, status: "needs-review" }),
+      request(4, { isRequest: false, requestSource: null, labels: ["needs-test"] }),
+      request(5, { isRequest: false, requestSource: null }),
+    ];
+    const items = deriveProjectRequests(issues, [thread()], tree, NOW, "root");
+    expect(
+      deriveNeedsYou(issues, items).map((item) => [item.issue.number, item.group, !!item.request]),
+    ).toEqual([
+      [1, "answers", true],
+      [3, "review", false],
+      [4, "test", false],
+    ]);
+  });
+
+  it("gathers open requests of threads Brad already settled", () => {
+    const settled = thread({ settledAt: "2026-10-04T11:00:00.000Z" });
+    const items = deriveProjectRequests(
+      [request(1, { stage: "in-progress" }), request(2, { stage: "in-progress" })],
+      [settled],
+      tree,
+      NOW,
+      "root",
+    );
+    const groups = requestsOfSettledThreads(items);
+    expect(groups.map((group) => group.requests.map((item) => item.issue.number))).toEqual([
+      [1, 2],
+    ]);
+    expect(
+      requestsOfSettledThreads(deriveProjectRequests([request(3)], [thread()], tree, NOW)),
+    ).toEqual([]);
   });
 });
 
