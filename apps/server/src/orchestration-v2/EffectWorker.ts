@@ -171,20 +171,39 @@ export const executorLayer: Layer.Layer<
                 providerTurnId: effect.request.providerTurnId,
               })
               .pipe(
-                // The provider has stopped what it still ran and reported it.
-                // Whatever the thread still shows on that provider thread is
-                // work no process will report on, so the Stop ends it too.
-                // One Stop can interrupt several provider threads, so the
-                // settle is keyed by effect, not by the Stop command.
+                // An ACK does not mean native finalization has been ingested.
+                // Record it durably and give the driver time to publish its
+                // rollback boundary, usage and terminal event before fallback.
                 Effect.andThen(
                   threads.dispatch({
                     type: "thread.background-work.settle",
                     commandId: CommandId.make(`${effect.id}:background-work-settled`),
+                    interruptAcknowledged: true,
                     threadId: effect.threadId,
                     providerThreadId: effect.request.providerThreadId,
                     providerTurnId: effect.request.providerTurnId,
                   }),
                 ),
+                Effect.mapError(
+                  (cause) =>
+                    new OrchestrationEffectExecutionError({
+                      effectId: effect.id,
+                      effectType: effect.request.type,
+                      cause,
+                    }),
+                ),
+              );
+          case "provider-turn.interrupt-settle":
+            return threads
+              .dispatch({
+                type: "thread.background-work.settle",
+                commandId: effect.commandId,
+                threadId: effect.threadId,
+                providerThreadId: effect.request.providerThreadId,
+                providerTurnId: effect.request.providerTurnId,
+              })
+              .pipe(
+                Effect.asVoid,
                 Effect.mapError(
                   (cause) =>
                     new OrchestrationEffectExecutionError({
