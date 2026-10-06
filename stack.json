@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "8f60f150340feaa233a3e21f8e0b3a832fc0a164",
-  "head": "27f7cf93e77e83875d4d8ebf3031fb8237703a6e",
+  "prev": "858a1bdc033be3974b97bf17cf0ff74fb7bd34b7",
+  "head": "359bc6c4dabea1eae26d940251e5d10fb1532c34",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -251,7 +251,7 @@
       "oid": "8bd6ec49265574bd480d5ac3c9602a68007aa5d3"
     },
     "fork-resource-recovery": {
-      "oid": "27f7cf93e77e83875d4d8ebf3031fb8237703a6e"
+      "oid": "359bc6c4dabea1eae26d940251e5d10fb1532c34"
     },
     "fork-restart-when-idle": {
       "oid": "bfcd94cfeda1545cf47ad0dee1af1ea6ed93e8a2"
