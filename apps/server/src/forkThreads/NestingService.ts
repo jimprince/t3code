@@ -28,7 +28,7 @@ export const makeNestingService = <E, R, DispatchError = never, DispatchContext 
         cursor = parents.get(cursor) ?? null;
       }
     }
-    const value: ForkThreadMetadata = { ...existing, parentThreadId };
+    const value: ForkThreadMetadata = { ...existing, parentThreadId, ...(input.scope !== undefined ? { scope: input.scope?.trim() || null } : {}) };
     yield* writeMetadata(sql, value);
     yield* sql`INSERT INTO fork_thread_metadata_receipts (command_id, payload) VALUES (${input.commandId}, ${JSON.stringify(value)})`;
     return value;
