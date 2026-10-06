@@ -100,8 +100,10 @@ class DeployTest(unittest.TestCase):
         self.assertTrue((self.snap / "old/keep").exists())
 
     def test_dry_run_and_prune_only_never_restart(self):
+        (self.snap / "current").unlink()
+        (self.snap / "current").symlink_to(self.sha)
         self.assertEqual(self.deploy("--dry-run").returncode, 0)
-        self.assertEqual(os.readlink(self.snap / "current"), "old")
+        self.assertEqual(os.readlink(self.snap / "current"), self.sha)
         self.assertNotIn("restart", self.events())
         self.assertEqual(self.deploy("--prune-only").returncode, 0)
         self.assertNotIn("restart", self.events())
@@ -113,6 +115,67 @@ class DeployTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertTrue((self.snap / "old/keep").exists())
         self.assertIn("does not own the live lease", result.stderr)
+
+    def use_unmanaged_predecessor(self):
+        self.stop_watcher()
+        self.watcher = subprocess.Popen([shutil.which("node"), "-e", "setInterval(() => {}, 1000)"], cwd=self.snap / "old")
+        self.env["TEST_LOADED"] = "not-found"
+        stat = Path(f"/proc/{self.watcher.pid}/stat").read_text()
+        self.lease.update(pid=self.watcher.pid, startTime=stat[stat.rfind(")") + 2:].split()[19])
+        (self.root / ".config/t3-remote-agents/watch.pid").write_text(json.dumps(self.lease))
+
+    def test_unmanaged_predecessor_survives_deploy_prune(self):
+        self.use_unmanaged_predecessor()
+        result = self.deploy()
+        self.assertTrue((self.snap / "old/keep").exists(), "live unmanaged runtime was deleted")
+        self.assertNotEqual(result.returncode, 0, "live unmanaged predecessor must prevent pruning")
+        self.assertIsNone(self.watcher.poll())
+
+    def test_unmanaged_predecessor_survives_prune_only(self):
+        self.use_unmanaged_predecessor()
+        (self.snap / "current").unlink()
+        (self.snap / "current").symlink_to(self.sha)
+        result = self.deploy("--prune-only")
+        self.assertTrue((self.snap / "old/keep").exists(), "prune-only deleted the live unmanaged runtime")
+        self.assertNotEqual(result.returncode, 0, "prune-only must preserve the live predecessor")
+        self.assertIsNone(self.watcher.poll())
+
+    def test_prune_without_lease_remains_supported(self):
+        (self.root / ".config/t3-remote-agents/watch.pid").unlink()
+        (self.snap / "current").unlink()
+        (self.snap / "current").symlink_to(self.sha)
+        self.assertEqual(self.deploy("--prune-only").returncode, 0)
+        self.assertFalse((self.snap / "old").exists())
+
+    def test_stale_process_identity_does_not_block_prune(self):
+        self.use_unmanaged_predecessor()
+        self.lease["startTime"] = "0"
+        (self.root / ".config/t3-remote-agents/watch.pid").write_text(json.dumps(self.lease))
+        (self.snap / "current").unlink()
+        (self.snap / "current").symlink_to(self.sha)
+        self.assertEqual(self.deploy("--prune-only").returncode, 0)
+        self.assertFalse((self.snap / "old").exists())
+
+    def test_unknown_or_legacy_live_lease_prevents_prune(self):
+        (self.snap / "current").unlink()
+        (self.snap / "current").symlink_to(self.sha)
+        for raw in ["not-json", str(self.watcher.pid)]:
+            with self.subTest(raw=raw):
+                (self.root / ".config/t3-remote-agents/watch.pid").write_text(raw)
+                self.assertNotEqual(self.deploy("--prune-only").returncode, 0)
+                self.assertTrue((self.snap / "old/keep").exists())
+
+    def test_custom_state_path_protects_unmanaged_predecessor(self):
+        self.use_unmanaged_predecessor()
+        custom = self.root / "custom/watch.pid"
+        custom.parent.mkdir()
+        custom.write_text(json.dumps(self.lease))
+        self.env["T3_AGENT_STATE_FILE"] = str(custom.parent / "state.json")
+        (self.root / ".config/t3-remote-agents/watch.pid").unlink()
+        (self.snap / "current").unlink()
+        (self.snap / "current").symlink_to(self.sha)
+        self.assertNotEqual(self.deploy("--prune-only").returncode, 0)
+        self.assertTrue((self.snap / "old/keep").exists())
 
     def test_inactive_after_restart_stops_pruning(self):
         self.env["TEST_INACTIVE"] = "1"
