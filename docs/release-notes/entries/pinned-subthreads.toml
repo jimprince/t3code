@@ -1,0 +1,4 @@
+id = "pinned-subthreads"
+category = "feature"
+functionality = "web sidebar"
+text = "Pin a nested thread to keep it visible under its parent and first among its siblings."
