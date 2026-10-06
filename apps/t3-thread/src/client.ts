@@ -615,6 +615,22 @@ export class RemoteEnvironmentClient {
     }
   }
 
+  async renameThread(input: { threadId: string; title?: string; scope?: string | null }): Promise<{ threadId: string; title: string; scope: string | null }> {
+    const title = input.title?.trim();
+    const scope = input.scope === undefined ? undefined : input.scope?.trim() || null;
+    if (input.title !== undefined && !title) throw new Error("Thread title must not be empty.");
+    if (title === undefined && scope === undefined) throw new Error("Thread title or scope must be provided.");
+    const rpc = await this.openRpc();
+    try {
+      if (title !== undefined) await rpc.request("dispatchCommand", { type: "thread.metadata.update", commandId: NodeCrypto.randomUUID(), threadId: input.threadId, title });
+      if (scope !== undefined) await rpc.request("threadMetadataUpdate", { commandId: NodeCrypto.randomUUID(), threadId: input.threadId, scope });
+    } finally { await rpc.dispose(); }
+    const thread = await this.findThread(input.threadId);
+    if (title !== undefined && thread.title !== title) throw new Error("Thread title readback did not match.");
+    if (scope !== undefined && (thread.scope ?? null) !== scope) throw new Error("Thread scope readback did not match.");
+    return { threadId: thread.id, title: thread.title, scope: thread.scope ?? null };
+  }
+
   async createAgentThread(input: {
     projectId: string;
     title: string;
@@ -630,6 +646,8 @@ export class RemoteEnvironmentClient {
     parentThreadId?: string;
     remoteParent?: { environmentId: string; threadId: string };
   }): Promise<{ threadId: string; projectId: string; title: string; pinned: boolean }> {
+    const title = input.title.trim();
+    if (!title) throw new Error("Thread title must not be empty.");
     if ((input.parentThreadId || input.remoteParent) && !(await this.supportsThreadNesting())) {
       throw new Error(
         `'${this.environment.name}' runs a server without thread nesting. No worker was created.`,
@@ -672,7 +690,7 @@ export class RemoteEnvironmentClient {
         commandId: NodeCrypto.randomUUID(),
         threadId,
         projectId: project.id,
-        title: input.title,
+        title,
         generateTitle: false,
         modelSelection: wireModel(modelSelection),
         runtimeMode,
@@ -719,7 +737,7 @@ export class RemoteEnvironmentClient {
     return {
       threadId,
       projectId: project.id,
-      title: input.title,
+      title,
       pinned: pinState?.pinned ?? false,
     };
   }
