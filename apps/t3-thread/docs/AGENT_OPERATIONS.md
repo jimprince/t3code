@@ -480,9 +480,9 @@ t3-thread create \
 
 ### Notification levels and quiet results
 
-Nested workers waiting for input remind their subscribed parent every 45 minutes,
+Nested workers waiting for input remind their subscribed parent once after 20 minutes,
 including the pending question. Configure with `--input-reminder-minutes <minutes>`
-on `create` or `subscribe`; zero disables repeats. Answered, settled, archived or
+on `create` or `subscribe`; zero disables reminders. Answered, settled, archived or
 unnested workers stop reminders. See [Thread communication](THREAD_COMMUNICATION.md).
 
 The first delivered notice includes a short guide once per subscriber, across

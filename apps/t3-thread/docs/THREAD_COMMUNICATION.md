@@ -56,8 +56,8 @@ See [Agent operations](AGENT_OPERATIONS.md) for pairing, lookup and watcher reco
 
 ## Waiting-child reminders
 
-A nested worker's unanswered question is sent again to its subscribed parent every
-45 minutes after the last confirmed delivery, with the question and choices.
+A nested worker's unanswered question is sent once more to its subscribed parent
+20 minutes after the initial confirmed delivery, with the question and choices.
 Change a route with `t3-thread subscribe --watch <name> --input-reminder-minutes 20`,
 or choose the interval at creation using `--input-reminder-minutes 20`.
 Zero disables reminders while preserving the initial input notification. All
