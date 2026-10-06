@@ -1,6 +1,6 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import * as NodeFSP from "node:fs/promises";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 import { afterEach, expect, it, vi } from "vite-plus/test";
 import { RuntimeRequestId, NodeId } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
@@ -46,9 +46,9 @@ afterEach(() => vi.unstubAllEnvs());
 it.each([false, true])(
   "wakes the current parent (remote=%s) despite a saved same-UUID parent on another host",
   async (remote) => {
-    const directory = await mkdtemp(join(tmpdir(), "t3-focus-v2-"));
+    const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-focus-v2-"));
     try {
-      vi.stubEnv("T3_AGENT_STATE_FILE", join(directory, "state.json"));
+      vi.stubEnv("T3_AGENT_STATE_FILE", NodePath.join(directory, "state.json"));
       const child: OrchestrationThread = {
         ...thread("child"),
         ...(remote
@@ -125,7 +125,7 @@ it.each([false, true])(
       expect(obsolete.some((notification) => notification.status === "superseded")).toBe(true);
       expect(sent).toHaveLength(1);
     } finally {
-      await rm(directory, { recursive: true, force: true });
+      await NodeFSP.rm(directory, { recursive: true, force: true });
     }
   },
 );
