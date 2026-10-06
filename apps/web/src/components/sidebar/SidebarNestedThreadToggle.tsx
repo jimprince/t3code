@@ -10,7 +10,7 @@ export function SidebarNestedThreadToggle(props: {
   return (
     <button
       type="button"
-      aria-label={`${props.expanded ? "Collapse" : "Expand"} ${props.count} sub-agents`}
+      aria-label={`${props.expanded ? "Collapse" : "Expand"} ${props.count} workers`}
       aria-expanded={props.expanded}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => {
