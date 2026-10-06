@@ -1244,3 +1244,21 @@ note = "Runtime ingestion mirrors each thread's live background tasks (ThreadBac
 id = "v2-port-2689-m2"
 decision = "reconcile-smaller"
 note = "Native restart recording and delivery remain; retained legacy rows map to guarded, stable-id V2 notices whose receipts supply the once-only marker."
+
+[[patch]]
+name = "fork-overnight-updates"
+subject = "feat(desktop): install updates overnight and roll back failed ones"
+class = "product"
+purpose = "Download and install desktop updates overnight or after configurable daytime system idle once local agents and the user are idle, and restore the previous macOS app when an installed update never reports healthy."
+retire_when = "Upstream installs desktop updates unattended with automatic rollback, or the fork stops wanting it."
+depends_on = ["fork-desktop-delivery", "fork-restart-when-idle"]
+roles = []
+note = "The renderer watcher (desktopOvernightUpdate.tsx, mounted at AppRoot) downloads an available update at night and installs a downloaded one after five quiet minutes plus the idle-restart grace, using the idle-restart agent count; overnight steps retain once-per-version-per-night retries. Install updates when idle defaults on with a 15-minute threshold in the updates settings; the same watcher polls system idle seconds through getUpdateState, requires the existing agent-idle count and quiet window, and passes the version and threshold through installUpdate for a fresh Electron powerMonitor check before admission. Daytime installs are attempted once per version, and turning the setting off preserves overnight-only behavior. On a packaged macOS .app, DesktopUpdates arms DesktopUpdateRollback before every quitAndInstall, manual or automatic: ditto --clone copies the bundle to userdata/update-rollback/previous-app and a detached sh watchdog starts. Each launch writes healthy-version once the primary backend is ready (at once without a local environment). After 120 five-second waits without the expected version, the watchdog stops processes running from the bundle, restores the copy, reopens it, and writes rolled-back.json; that version is then ignored as an update and reported once by notification. A failed quitAndInstall disarms. Rollback restores the app only, not state the new version migrated. Linux servers already get the same behavior from scripts/headless-auto-upgrade.sh."
+
+[[patch.decision]]
+id = "health-marker-wait-reads-content"
+date = "2026-09-30"
+decided = "adapt"
+rationale = "The rollback coverage waited for the healthy-version marker with existsSync, but writeText is a plain writeFile that creates the file before its bytes land, so a loaded runner read an empty marker and the case failed with expected '' to equal '1.2.3' in candidate CI while passing locally. Wait for the written version instead. Production keeps the plain write: the watchdog already re-reads the marker with cat on every five-second attempt."
+
+# v2-port-2689-m2: V2 hosted-work boundary guard and native staged install reservation; fork rollback keeps binary backup only.
