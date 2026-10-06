@@ -1,0 +1,8 @@
+name = "fork-project-health"
+subject = "feat(projects): orchestrator-written health line on the project page"
+class = "product"
+purpose = "Answer 'are we OK, where are we going' on the first screen: a status chip, one sentence and an as-of time written by the orchestrator (dashboard redesign, synthesis.md section 1, approved 2026-10-05)."
+retire_when = "Upstream ships a project status line the orchestrator can write."
+depends_on = ["fork-project-dashboard-widgets", "fork-project-layout"]
+roles = []
+note = "Stored per root thread in the dashboard settings file (health record next to widgets and tracker). projectDashboard.setHealth (operate scope) and t3-thread project health set/show write and read it. The page shows it as stale when it is older than a day or older than the newest descendant thread update or task link; the curator checks freshness, nothing auto-clears it. Integration fork.6: adapted replay to preserve UI theme/owner notes alongside BE authoritative contract and helpers. Fork.6 integration: adapt: union inventory, retain earlier integrated owner notes and later stanza (docs/operations/fork-inventory.toml). Retire/narrow/relocate do not apply to these retained UI behaviors or inventory insertions."
