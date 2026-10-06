@@ -32,3 +32,25 @@ the computer.
 
 The pressure monitor stores its latest bounded snapshot in the app data
 directory as `system-pressure.json`. It does not create a separate rolling log.
+
+## Process launch early warnings
+
+Open **Settings → Diagnostics** to see the connected server’s launch health.
+The server checks once a minute even when Diagnostics is closed. On macOS it
+reads `syspolicyd` RSS and CPU through the existing native monitor, with no
+sampling subprocesses. macOS may deny access to this system daemon’s metrics
+from an unprivileged helper; Diagnostics shows them as unavailable in that
+case, and launch-rate warnings still work.
+
+Provisional defaults warn above 1 GiB RSS, more than 300 MiB growth within ten
+minutes, or more than 600 T3 process-runner attempts per minute sustained for a
+minute. Adjust these thresholds under **Performance Protection** in web or
+desktop Settings. Mobile Diagnostics shows each connected server’s health.
+Runner counts include attempted launches and spawn failures, including missing
+executables; they exclude agent descendants and direct provider SDK spawns.
+
+If warned, reduce active threads. If macOS launches still stall, run
+`sudo killall syspolicyd` **once** in a terminal on the server Mac. Repeated kills can make launchd
+throttle the daemon and freeze WindowServer. T3 never runs this command.
+Minute samples and warnings are recorded in the existing server diagnostics
+logs for later investigation; normal log rotation bounds retention.
