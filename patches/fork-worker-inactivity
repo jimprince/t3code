@@ -1,6 +1,6 @@
-Bottom: 763e33047eb4a83a42f9b922fcadcb91172833aa
-Top:    8e5cf92dc80e8e6c78ce20bb449f74799fccf8d6
+Bottom: 8ed31572a4ef6eb591bdf8e9b91c0a094e93e997
+Top:    1732ded07b9ad0c1bc5ae4dff4eb41ecd75775fa
 Author: User <user@example.com>
-Date:   2026-10-06 14:31:42 +0000
+Date:   2026-10-06 15:24:36 +0000
 
 feat(t3-thread): alert supervisors when active workers go quiet
