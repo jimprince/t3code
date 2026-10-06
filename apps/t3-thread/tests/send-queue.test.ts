@@ -125,15 +125,11 @@ async function queue(text: string, threadId = "thread-worker-a"): Promise<void> 
 }
 
 describe("send queue drain", () => {
-  it("holds persisted sends while settled and releases them only after explicit resume", async () => {
+  it("wakes settled threads for an explicit queued instruction", async () => {
     await withTempState(async () => {
       await queue("Please retry the operation");
       const thread = makeThread({ settledOverride: "settled" });
       const { clientFactory, sent } = createClientFactory({ thread: () => thread });
-      await drainQueuedSends({ clientFactory });
-      expect(sent).toHaveLength(0);
-      expect((await loadState()).queuedSends[0]?.attempts).toBe(0);
-      thread.settledOverride = null;
       await drainQueuedSends({ clientFactory });
       expect(sent.map((message) => message.text)).toEqual(["Please retry the operation"]);
     });
