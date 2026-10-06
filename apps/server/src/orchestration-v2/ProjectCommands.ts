@@ -1,3 +1,4 @@
+import type { ProjectAutomation } from "@t3tools/contracts";
 import type { PermanentAgent } from "@t3tools/contracts";
 import {
   type CommandId,
@@ -28,6 +29,7 @@ export interface ProjectCreateCommand {
 }
 
 export interface ProjectMetaUpdateCommand {
+  readonly automations?: ReadonlyArray<ProjectAutomation>;
   readonly permanentAgent?: PermanentAgent | null;
   readonly type: "project.meta.update";
   readonly commandId: CommandId;
@@ -215,6 +217,7 @@ export function planProjectCommand(input: {
         type: "project.meta-updated",
         payload: {
           projectId: command.projectId,
+          ...(command.automations === undefined ? {} : { automations: command.automations }),
           ...(command.permanentAgent === undefined
             ? {}
             : { permanentAgent: command.permanentAgent }),
