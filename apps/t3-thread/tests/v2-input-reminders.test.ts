@@ -30,8 +30,8 @@ const route: SavedSubscription = {
   level: "none",
   inputReminderMinutes: 1,
 };
-const pending = () =>
-  threadDetail(
+const pending = () => ({
+  ...threadDetail(
     projection({
       runtimeRequests: [request("b"), request("a")],
       turnItems: [
@@ -48,10 +48,12 @@ const pending = () =>
         }),
       ],
     }),
-  );
+  ),
+  parentThreadId: "parent",
+});
 it("uses stable native request sets and preserves required questions at every level", () => {
   const thread = pending();
-  expect(pendingInputKey(thread)).toBe('["a","b"]');
+  expect(pendingInputKey(thread)).toBe('["user_input:a","user_input:b"]');
   for (const level of ["none", "attention", "all"] as const)
     expect(shouldNotify({ ...route, level }, buildAgentOverview(agent, thread), thread)).toBe(true);
   const notice = buildNotificationRecord({
@@ -93,5 +95,5 @@ it("starts reminders from delivered receipts without a sleep backlog, and honors
       [delivered, { ...reminder, id: "reminder", status: "delivered", deliveredAt: at(10) }],
       route,
     ).eventKey,
-  ).toBe(notice.eventKey);
+  ).toBe(reminder.eventKey);
 });

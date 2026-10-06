@@ -1,7 +1,13 @@
-import { pendingRequests } from "./v2/requests.js";
-import type { OrchestrationThread, SavedNotification, SavedSubscription } from "./types.js";
+import { matchesCurrentParent } from "./parentRouting.js";
+import { pendingRequests as findPendingRequests } from "./v2/requests.js";
+import type {
+  OrchestrationThread,
+  SavedNotification,
+  SavedSubscription,
+  StateFile,
+} from "./types.js";
 
-export const DEFAULT_INPUT_REMINDER_MINUTES = 45;
+export const DEFAULT_INPUT_REMINDER_MINUTES = 20;
 
 export function parseInputReminderMinutes(value: string): number {
   const minutes = Number(value);
@@ -11,14 +17,13 @@ export function parseInputReminderMinutes(value: string): number {
 }
 
 export function pendingInputKey(thread: OrchestrationThread): string | null {
-  const ids = pendingRequests(thread)
-    .filter((request) => request.kind === "user_input")
-    .map((request) => request.id)
+  const ids = findPendingRequests(thread)
+    .map((request) => `${request.kind}:${request.id}`)
     .sort();
   return ids.length ? JSON.stringify(ids) : null;
 }
 
-/** Schedule one reminder after the last confirmed delivery, never a backlog after sleep. */
+/** One durable reminder per request, measured from the initial confirmed delivery. */
 export function withInputReminder(
   detected: SavedNotification,
   history: ReadonlyArray<SavedNotification>,
@@ -26,15 +31,15 @@ export function withInputReminder(
 ): SavedNotification {
   const minutes = subscription?.inputReminderMinutes ?? DEFAULT_INPUT_REMINDER_MINUTES;
   if (!detected.isChildInput || minutes === 0) return detected;
-  const delivered = history
-    .filter(
-      (candidate) =>
-        (candidate.eventKey === detected.eventKey ||
-          candidate.reminderOfEventKey === detected.eventKey) &&
-        candidate.status === "delivered" &&
-        candidate.deliveredAt != null,
-    )
-    .sort((a, b) => b.deliveredAt!.localeCompare(a.deliveredAt!))[0];
+  const reminder = history.find((candidate) => candidate.reminderOfEventKey === detected.eventKey);
+  if (reminder)
+    return { ...detected, eventKey: reminder.eventKey, reminderOfEventKey: detected.eventKey };
+  const delivered = history.find(
+    (candidate) =>
+      candidate.eventKey === detected.eventKey &&
+      candidate.status === "delivered" &&
+      candidate.deliveredAt,
+  );
   if (
     !delivered ||
     Date.parse(detected.updatedAt) - Date.parse(delivered.deliveredAt!) < minutes * 60_000
@@ -47,24 +52,24 @@ export function withInputReminder(
   };
 }
 
-/** Caller validates the organizational parent with parentRouting.matchesCurrentParent first. */
 export function inputNotificationStillCurrent(
   notification: SavedNotification,
   thread: OrchestrationThread,
+  state?: Pick<StateFile, "environments">,
 ): boolean {
   return (
     !thread.archivedAt &&
     !thread.deletedAt &&
     thread.settledOverride !== "settled" &&
+    (!notification.isChildInput || matchesCurrentParent(thread, notification, state)) &&
     notification.pendingInputRequestKey != null &&
     pendingKeysStillCurrent(notification.pendingInputRequestKey, thread)
   );
 }
 
-/** Accept aggregate legacy keys and individual durable V2 user-input/approval keys. */
 function pendingKeysStillCurrent(key: string, thread: OrchestrationThread): boolean {
   const pending = new Set(
-    pendingRequests(thread).flatMap((request) => [request.id, `${request.kind}:${request.id}`]),
+    findPendingRequests(thread).flatMap((request) => [request.id, `${request.kind}:${request.id}`]),
   );
   try {
     const keys: unknown = JSON.parse(key);

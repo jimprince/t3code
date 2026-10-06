@@ -865,7 +865,7 @@ export async function deliverPendingNotifications(
           ).findThread(notification.sourceThreadId);
           if (
             !matchesCurrentParent(source, notification, state) ||
-            !inputNotificationStillCurrent(notification, source) ||
+            !inputNotificationStillCurrent(notification, source, state) ||
             (notification.reminderOfEventKey && subscription.inputReminderMinutes === 0)
           ) {
             result = {
