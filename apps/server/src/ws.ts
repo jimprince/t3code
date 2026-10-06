@@ -1,4 +1,5 @@
 import { resourceRecoveryHandlers } from "./resourceRecoveryRpc.ts";
+import { makeMetadataHandlers } from "./forkThreads/MetadataRpc.ts";
 import { threadSubscriptionHandlers } from "./threadSubscriptionHandlers.ts";
 import { makeWorkspaceUploadHandlers } from "./workspace/WorkspaceUploadRpc.ts";
 import { headlessDeliveryHandlers } from "./headlessDeliveryRpc.ts";
@@ -2435,6 +2436,7 @@ const layerWsRpc = (
         [WS_METHODS.serverReportHostPowerState]: (input) =>
           backgroundPolicy.reportHostPowerState(input),
         [WS_METHODS.serverGetBackgroundPolicy]: (_input) => backgroundPolicy.snapshot,
+        ...(yield* makeMetadataHandlers),
         ...headlessDeliveryHandlers(),
         ...resourceRecoveryHandlers(),
         [WS_METHODS.cloudGetRelayClientStatus]: (_input) => relayClient.resolve,
