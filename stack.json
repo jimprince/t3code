@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "574cd571591dba90d9a6b54f3325ef9c02af1925",
-  "head": "9bf96e0d822bffb92cc40066f5777b1c8515486c",
+  "prev": "6bae13024d8e254f92086c2015f833d4277561ba",
+  "head": "5ac7a4f043f46e863ff4f4d821c99ffeb921e880",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -104,7 +104,9 @@
     "fork-conversation-fork",
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
-    "fork-session-reconcile",
+    "fork-session-reconcile"
+  ],
+  "unapplied": [
     "fork-codex-extra-skill-roots",
     "fork-dashboard-polish",
     "fork-phone-side-panels",
@@ -113,7 +115,6 @@
     "fork-decision-context-media",
     "fork-subprojects-server"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
