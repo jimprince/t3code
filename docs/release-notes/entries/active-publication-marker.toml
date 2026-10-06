@@ -1,0 +1,4 @@
+id = "active-publication-marker"
+category = "maintenance"
+functionality = "fork publication"
+text = "Expose active fork publication to concurrent writers and expire abandoned publication markers after two hours."
