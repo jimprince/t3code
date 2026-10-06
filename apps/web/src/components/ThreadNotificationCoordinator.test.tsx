@@ -108,8 +108,12 @@ vi.mock("../hooks/useSettings", () => ({
 vi.mock("../state/environments", () => ({
   useEnvironmentIds: () => ["env-1"],
 }));
+vi.mock("../state/forkSupervision", () => ({
+  useSupervisionForest: () => ({ parentByKey: new Map() }),
+}));
 vi.mock("../state/shell", () => ({
   environmentShell: { stateValueAtom: vi.fn() },
+  environmentSnapshotAtom: vi.fn(),
 }));
 vi.mock("../threadNotifications", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../threadNotifications")>()),
