@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "716aa27f1ed6323154f93c3a52cf731d4060253a",
-  "head": "0818ad2a01060ee7d68753ab2c03fddcc4297414",
+  "prev": "a53fa8ec1ecff4aceb5c5558509183e19f453b90",
+  "head": "10fbbf47f35192d33ebda49aa8a7d674b3643e77",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -68,10 +68,10 @@
     "fork-orchestrators-view",
     "fork-project-issues-board",
     "fork-request-ledger",
-    "fork-cross-environment-nesting"
+    "fork-cross-environment-nesting",
+    "fork-project-dashboard-widgets"
   ],
   "unapplied": [
-    "fork-project-dashboard-widgets",
     "fork-project-roadmap",
     "fork-project-page-workflow",
     "fork-project-canvas",
@@ -252,7 +252,7 @@
       "oid": "c5196cedaed3799d59f93345d3bb8107146f98d7"
     },
     "fork-project-dashboard-widgets": {
-      "oid": "3ec56d7e1ba938a6d3f859d6e78e4b0ed5aaea25"
+      "oid": "10fbbf47f35192d33ebda49aa8a7d674b3643e77"
     },
     "fork-project-health": {
       "oid": "28b081386b24fd9fecd8e8f07d316193fec86356"
