@@ -302,21 +302,10 @@ export function ClickableRow({
   );
 }
 
-/** "-> worker, worker": who is on a request. */
-function ServedBy({ request }: { readonly request: ProjectRequest }) {
-  if (request.servedBy.length === 0) return null;
-  return (
-    <span className="truncate text-xs text-muted-foreground">
-      {"-> "}
-      {request.servedBy.map((worker) => worker.title).join(", ")}
-    </span>
-  );
-}
-
 /** The newest progress line an agent recorded on the request's issue. */
 function LatestProgress({ request }: { readonly request: ProjectRequest }) {
   const line = latestProgressLine(request.issue.latestComment?.body);
-  return line ? <span className="truncate text-xs text-foreground/80">latest: {line}</span> : null;
+  return line ? <span className="truncate text-xs text-foreground/80">{line}</span> : null;
 }
 
 function IssueLink({ issue }: { readonly issue: ProjectIssue }) {
@@ -414,7 +403,6 @@ function CompactRow({
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
         <IssueLink issue={request.issue} />
-        <ServedBy request={request} />
         <LatestProgress request={request} />
       </span>
       <RequestKindTag kind={request.kind} bug={request.bug} />
@@ -839,7 +827,8 @@ function CompletedRow({
 /**
  * The Release widget, derived from stages and milestones: completed tasks by the
  * release that shipped them (shipped ones wait for Brad's test until he settles
- * them; settled ones can be reopened), then what the next release will carry.
+ * them; settled ones can be reopened), then what is built and awaiting release.
+ * The next release's own items live in "Where we're going".
  */
 export function ProjectReleaseWidget({ summary }: { readonly summary: OrchestratorSummary }) {
   const { query, requests, now } = useProjectRequests(summary);
@@ -848,23 +837,12 @@ export function ProjectReleaseWidget({ summary }: { readonly summary: Orchestrat
     const threadIds = new Set([summary.root.id, ...summary.descendants.map((thread) => thread.id)]);
     return deriveCompleted(query.data?.issues ?? [], requests, threadIds);
   }, [query.data, requests, summary.descendants, summary.root.id]);
-  const next = useMemo(() => nextReleaseRequests(requests), [requests]);
-  const nextVersion = useNextReleaseItems(summary);
-  // The next version's items feed "Next release" too: release = milestone + stage.
-  const versionOnly = nextVersion.items.filter(
-    (item) =>
-      !next.some(
-        (request) =>
-          request.issue.number === item.number &&
-          request.issue.repository === requests[0]?.issue.repository,
-      ),
-  );
+  const awaiting = useMemo(() => nextReleaseRequests(requests), [requests]);
   const completedCount = completed.reduce((total, group) => total + group.items.length, 0);
-  const nextCount = next.length + versionOnly.length;
-  if (nextCount === 0 && completedCount === 0) return null;
+  if (awaiting.length === 0 && completedCount === 0) return null;
   return (
     <section className="border-t border-border pt-4">
-      <WidgetHeading title="Release" count={nextCount + completedCount} />
+      <WidgetHeading title="Release" count={awaiting.length + completedCount} />
       {completed.map((group) => (
         <div key={group.release ?? ""} className="mb-3">
           <GroupTitle
@@ -878,37 +856,12 @@ export function ProjectReleaseWidget({ summary }: { readonly summary: Orchestrat
           </ul>
         </div>
       ))}
-      {nextCount > 0 ? (
+      {awaiting.length > 0 ? (
         <div className="mb-3">
-          <GroupTitle
-            title={
-              nextVersion.version && nextVersion.version.title.toLowerCase() !== "next release"
-                ? `Next release (${nextVersion.version.title})`
-                : "Next release"
-            }
-            count={nextCount}
-          />
+          <GroupTitle title="Awaiting release" count={awaiting.length} />
           <ul className="divide-y divide-border">
-            {next.map((request) => (
+            {awaiting.map((request) => (
               <CompactRow key={issueKey(request.issue)} request={request} now={now} onOpen={null} />
-            ))}
-            {versionOnly.map((item) => (
-              <li key={item.number} className="flex items-center gap-3 py-1.5">
-                <span className="w-28 shrink-0 text-xs text-muted-foreground">
-                  {item.stage ? STAGE_LABEL[item.stage] : TASK_STATUS_LABEL.pending}
-                </span>
-                <TaskTitle
-                  task={{
-                    host: nextVersion.tracker?.host ?? "",
-                    repository: nextVersion.tracker?.repository ?? "",
-                    number: item.number,
-                  }}
-                  url={item.url}
-                  className="min-w-0 flex-1 truncate text-sm hover:underline"
-                >
-                  {item.title}
-                </TaskTitle>
-              </li>
             ))}
           </ul>
         </div>
