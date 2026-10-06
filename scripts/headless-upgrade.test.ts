@@ -1,5 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeChildProcess from "node:child_process";
+import * as NodeURL from "node:url";
 import { describe, it } from "vite-plus/test";
 
 describe("headless staged promotion and rollback", () => {
@@ -23,7 +24,10 @@ describe("headless staged promotion and rollback", () => {
     (testCase) => {
       NodeChildProcess.execFileSync(
         "python3",
-        ["scripts/headless-auto-upgrade.test.py", testCase],
+        [
+          NodeURL.fileURLToPath(new URL("./headless-auto-upgrade.test.py", import.meta.url)),
+          testCase,
+        ],
         {
           timeout: 60_000,
           stdio: "pipe",
