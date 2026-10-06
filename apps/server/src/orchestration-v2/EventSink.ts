@@ -1,3 +1,4 @@
+import { seedDelegatedMetadata } from "../forkThreads/MetadataStore.ts";
 import {
   CommandId,
   type OrchestrationV2Run,
@@ -333,6 +334,21 @@ const baseLayer: Layer.Layer<
         yield* Effect.forEach(storedEvents, (stored) => projectionStore.apply(stored.event), {
           concurrency: 1,
         });
+        const created = new Set(
+          storedEvents
+            .filter((stored) => stored.event.type === "thread.created")
+            .map((stored) => stored.event.threadId),
+        );
+        for (const { event } of storedEvents) {
+          if (
+            event.type === "subagent.updated" &&
+            event.payload.origin === "app_owned" &&
+            event.payload.childThreadId !== null &&
+            created.has(event.payload.childThreadId)
+          ) {
+            yield* seedDelegatedMetadata(sql, event.payload.childThreadId, event.payload.threadId);
+          }
+        }
         const sequence = storedEvents.at(-1)?.sequence;
         if (sequence !== undefined) {
           const now = DateTime.formatIso(yield* DateTime.now);
