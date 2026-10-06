@@ -16,6 +16,7 @@ import { previewRuntimeTabId } from "~/browser/previewRuntimeTabId";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { randomUUID } from "~/lib/utils";
 import {
+  beginPreviewSessionClose,
   readThreadPreviewState,
   reconcilePreviewServerSessions,
   useThreadPreviewState,
@@ -30,6 +31,7 @@ import { closePreviewSession } from "../preview/closePreviewSession";
 import { openPreviewSession } from "../preview/openPreviewSession";
 import { usePreviewSession } from "../preview/usePreviewSession";
 import {
+  closeTabOrHide,
   createPendingTabCloses,
   ensurePageAgentTab,
   isPageAgentRunning,
@@ -180,7 +182,10 @@ export function usePageAgentBrowserTab(input: {
       const snapshot = readThreadPreviewState(threadRef).sessions[tabId] ?? null;
       pendingTabCloses.track(
         pendingKey,
-        closePreviewSession({ closePreview: close, snapshot, tabId, threadRef }),
+        closeTabOrHide({
+          close: () => closePreviewSession({ closePreview: close, snapshot, tabId, threadRef }),
+          hide: () => beginPreviewSessionClose(threadRef, tabId),
+        }),
       );
     };
     void ensurePageAgentTab({

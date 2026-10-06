@@ -8,6 +8,7 @@ import {
   isPageAgentRunning,
   newPageAgentConversation,
   openPageAgentConversation,
+  closeTabOrHide,
   createPendingTabCloses,
   pageAgentActivityLabel,
   pageAgentSessionError,
@@ -209,6 +210,32 @@ describe("createPendingTabCloses", () => {
     expect(settled).toBe(true);
     await closes.settled("t");
     await closes.settled("other");
+  });
+});
+
+describe("closeTabOrHide", () => {
+  const run = async (outcomes: Array<"Success" | "Failure">) => {
+    let closes = 0;
+    let hidden = 0;
+    await closeTabOrHide({
+      close: async () => ({ _tag: outcomes[closes++] ?? "Failure" }),
+      hide: () => {
+        hidden += 1;
+      },
+    });
+    return { closes, hidden };
+  };
+
+  it("leaves a closed tab alone", async () => {
+    expect(await run(["Success"])).toEqual({ closes: 1, hidden: 0 });
+  });
+
+  it("retries a failed close once before giving up on it", async () => {
+    expect(await run(["Failure", "Success"])).toEqual({ closes: 2, hidden: 0 });
+  });
+
+  it("hides a tab whose close failed twice so the next page cannot reuse it", async () => {
+    expect(await run(["Failure", "Failure"])).toEqual({ closes: 2, hidden: 1 });
   });
 });
 

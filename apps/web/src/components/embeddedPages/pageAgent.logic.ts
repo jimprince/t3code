@@ -253,6 +253,21 @@ export function createPendingTabCloses() {
 }
 
 /**
+ * Closes a tab that must not outlive its page. A failed close puts the tab back in
+ * the store, where the next page would reuse it at its old URL, so the close is
+ * tried once more and then the tab is hidden for good.
+ */
+export async function closeTabOrHide(deps: {
+  readonly close: () => Promise<{ readonly _tag: string }>;
+  readonly hide: () => void;
+}): Promise<void> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    if ((await deps.close())._tag !== "Failure") return;
+  }
+  deps.hide();
+}
+
+/**
  * Gives a page conversation exactly one browser tab: an existing server tab
  * (a renderer reload keeps them) is reused, otherwise one is opened at `url`.
  * The server's list is read directly rather than through a passive
