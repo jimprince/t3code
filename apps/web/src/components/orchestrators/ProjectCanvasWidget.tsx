@@ -2,7 +2,7 @@ import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestr
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { ProjectCanvas, ProjectCanvasPage } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";
 import { useTheme } from "../../hooks/useTheme";
@@ -10,6 +10,7 @@ import { logProjectCanvasAction } from "../../state/projectCanvas";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { Button } from "../ui/button";
+import { ProjectSection, WidgetCollapseContext, WidgetCollapseToggle } from "./ProjectSection";
 import { formatIssueAge } from "./projectIssuesBoard.logic";
 import { useProjectRequests } from "./ProjectRequestsSection";
 import {
@@ -301,10 +302,12 @@ export function ProjectCanvasWidget({
   const frame = useRef<HTMLIFrameElement | null>(null);
   const canvasHeight = useCanvasHeight(summary, canvas.id);
   const bridge = useCanvasBridge(summary, canvas.id, frame, canvasHeight.apply);
+  const collapsed = use(WidgetCollapseContext)?.collapsed ?? false;
   const html = useThemedCanvasHtml(canvas.html);
   return (
     <section className={`min-w-0 ${CANVAS_SPAN[canvas.size]}`}>
       <h2 className="mb-2 flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+        <WidgetCollapseToggle />
         <span className="truncate">{canvas.title}</span>
         {canvas.updatedAt ? (
           <span className="shrink-0 font-normal normal-case">
@@ -331,7 +334,7 @@ export function ProjectCanvasWidget({
           </Button>
         </div>
       ) : null}
-      {canvas.html === null ? (
+      {collapsed ? null : canvas.html === null ? (
         <p className="text-sm text-muted-foreground">
           The orchestrator can show a page here by writing {canvas.path} in the project.
         </p>
@@ -358,11 +361,8 @@ export function ProjectCanvasWidget({
 export function ProjectCanvasError({ canvas }: { readonly canvas: ProjectCanvas }) {
   if (!canvas.error) return null;
   return (
-    <section className="border-t border-border pt-4">
-      <h2 className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-        Canvas
-      </h2>
+    <ProjectSection title="Canvas">
       <p className="text-sm text-muted-foreground">{canvas.error}</p>
-    </section>
+    </ProjectSection>
   );
 }
