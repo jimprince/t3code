@@ -4,7 +4,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 
 /** A bounded first nonblank line; scanning stops as soon as the preview is full. */
-export function workerOutput(text: string | null): string | null {
+function workerOutput(text: string | null): string | null {
   if (text === null) return null;
   const start = /\S/u.exec(text)?.index;
   if (start === undefined) return null;
