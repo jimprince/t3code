@@ -2,8 +2,8 @@ import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell
 import {
   supervisionIsActive,
   supervisionNeedsAttention,
-  supervisionKey,
-} from "@t3tools/client-runtime/state/forkNesting";
+  supervisionThreadKey,
+} from "@t3tools/client-runtime/state/fork-nesting";
 
 export type SupervisionGroup = {
   key: string;
@@ -20,7 +20,7 @@ export function groupQuietChildren(input: {
   const visible: EnvironmentThreadShell[] = [];
   const quiet: EnvironmentThreadShell[] = [];
   for (const child of input.children) {
-    const key = supervisionKey(child);
+    const key = supervisionThreadKey(child);
     if (
       child.pinnedAt !== null ||
       supervisionIsActive(child) ||
@@ -52,13 +52,13 @@ export function groupQuietChildren(input: {
     current.push(child);
   }
   if (current.length > 1) bursts.push(current);
-  const burstKeys = new Set(bursts.flatMap((group) => group.map(supervisionKey)));
+  const burstKeys = new Set(bursts.flatMap((group) => group.map(supervisionThreadKey)));
   const groups: SupervisionGroup[] = bursts.map((children) => ({
     key: `burst:${input.parentKey}:${children.map((t) => t.id).join(",")}`,
     kind: "burst",
     children,
   }));
-  const done = quiet.filter((t) => !burstKeys.has(supervisionKey(t)));
+  const done = quiet.filter((t) => !burstKeys.has(supervisionThreadKey(t)));
   if (done.length > 0)
     groups.push({ key: `done:${input.parentKey}`, kind: "quiet", children: done });
   return { visible, groups };
