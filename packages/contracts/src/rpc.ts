@@ -5,6 +5,13 @@ import {
   ThreadIssueUnlinkResult,
 } from "./threadIssue.ts";
 import {
+  NamedAgentError,
+  ListNamedAgentsResult,
+  ResolveNamedAgentInput,
+  HandOverNamedAgentInput,
+  NamedAgentThreadResult,
+} from "./namedAgents.ts";
+import {
   RESOURCE_RECOVERY_METHODS,
   ResourceRecoveryPreviewRpc,
   ResourceRecoveryExecuteRpc,
@@ -1735,7 +1742,25 @@ export class RpcScopeAuthorization extends RpcMiddleware.Service<RpcScopeAuthori
   { error: EnvironmentAuthorizationError },
 ) {}
 
+const namedAgentRpcs = [
+  Rpc.make("orchestration.listNamedAgents", {
+    payload: Schema.Struct({}),
+    success: ListNamedAgentsResult,
+    error: Schema.Union([NamedAgentError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make("orchestration.resolveNamedAgent", {
+    payload: ResolveNamedAgentInput,
+    success: NamedAgentThreadResult,
+    error: Schema.Union([NamedAgentError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make("orchestration.handOverNamedAgent", {
+    payload: HandOverNamedAgentInput,
+    success: NamedAgentThreadResult,
+    error: Schema.Union([NamedAgentError, EnvironmentAuthorizationError]),
+  }),
+];
 export const WsRpcGroup = RpcGroup.make(
+  ...namedAgentRpcs,
   SupervisionDropRpc,
   ...ThreadSubscriptionRpcs,
   WorkspaceUploadRpc,
