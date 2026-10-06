@@ -3248,6 +3248,7 @@ const layerWsRpc = (
           projectLayout.revert(input, { kind: "user", threadId: null, reason: null }),
         [WS_METHODS.projectLayoutHistory]: (input) => projectLayout.history(input),
         [WS_METHODS.subscribeProjectLayout]: (input) => projectLayout.stream(input.threadId),
+        [WS_METHODS.projectRequestsDiscuss]: (input) => requestLedger.discuss(input),
         [WS_METHODS.projectRequestsDecide]: (input) => requestLedger.decide(input),
       });
       return Context.merge(
