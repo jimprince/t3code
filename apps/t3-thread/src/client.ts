@@ -11,6 +11,7 @@ import { threadShell as gcThreadShell } from "./v2/reads.js";
 import type { WorktreeGcThread } from "./worktreeGc.js";
 import type { OrchestrationV2ShellSnapshot } from "@t3tools/contracts";
 import { makeMessageOriginContext, type MessageOrigin } from "@t3tools/shared/messageOrigin";
+import { planExplicitThreadOrder, sameThreadOrderGroup } from "./threadOrder.js";
 import { refreshSavedEnvironmentSession } from "./sessionRefresh.js";
 import { pendingRequests, requirePendingRequest } from "./v2/requests.js";
 import { wrapWithPreamble, type WorkerContext } from "./thread-preamble.js";
@@ -956,9 +957,7 @@ export class RemoteEnvironmentClient {
 
   async resetThreadOrder(threadId: string): Promise<void> {
     if ((await this.describe()).capabilities.threadOrderReset !== true) {
-      throw new Error(
-        `'${this.environment.name}' runs a server without automatic-order reset. Update T3 Code there first.`,
-      );
+      throw new Error(`'${this.environment.name}' runs a server without automatic-order reset. Update T3 Code there first.`);
     }
     const rpc = await this.openRpc();
     try {
@@ -988,6 +987,7 @@ export class RemoteEnvironmentClient {
   }
 
   async setThreadPinned(threadId: string, pinned: boolean) {
+    const previouslyPinned = pinned && (await this.findThread(threadId)).pinnedAt != null;
     const rpc = await this.openRpc();
     try {
       await rpc.request("dispatchCommand", {
@@ -999,6 +999,16 @@ export class RemoteEnvironmentClient {
       await rpc.dispose();
     }
     const thread = await this.findThread(threadId);
+    if (pinned && !previouslyPinned) {
+      const siblings = (await this.listThreads()).filter(candidate => sameThreadOrderGroup(thread, candidate));
+      if (siblings.some(candidate => candidate.id !== thread.id)) {
+        const assignments = planExplicitThreadOrder({ group: siblings, leadingIds: [thread.id] });
+        const orderRpc = await this.openRpc();
+        try {
+          for (const assignment of assignments) await orderRpc.request("dispatchCommand", { type: "thread.pin.reorder", commandId: NodeCrypto.randomUUID(), threadId: assignment.threadId, orderKey: assignment.orderKey });
+        } finally { await orderRpc.dispose(); }
+      }
+    }
     return {
       threadId: thread.id,
       environment: this.environment.name,
