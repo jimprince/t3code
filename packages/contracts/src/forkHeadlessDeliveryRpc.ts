@@ -6,8 +6,11 @@ export const HEADLESS_DELIVERY_METHODS = {
   serverRequestHeadlessUpdateCheck: "server.requestHeadlessUpdateCheck",
 } as const;
 
-export const HeadlessDeliveryRpc = Rpc.make(HEADLESS_DELIVERY_METHODS.serverRequestHeadlessUpdateCheck, {
-  payload: ServerHeadlessUpdateCheckInput,
-  success: ServerHeadlessUpdateCheckResult,
-  error: EnvironmentAuthorizationError,
-});
+export const HeadlessDeliveryRpc = Rpc.make(
+  HEADLESS_DELIVERY_METHODS.serverRequestHeadlessUpdateCheck,
+  {
+    payload: ServerHeadlessUpdateCheckInput,
+    success: ServerHeadlessUpdateCheckResult,
+    error: EnvironmentAuthorizationError,
+  },
+);

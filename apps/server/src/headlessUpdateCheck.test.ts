@@ -86,20 +86,45 @@ describe("headlessUpdateCheck", () => {
   });
   it("keeps disabled installs unsupported without invoking systemd", async () => {
     const runCommand = vi.fn();
-    const request = createHeadlessUpdateCheckRequester({ platform: "linux", env: { T3CODE_HEADLESS_UPDATE_CHECK: "0" }, runCommand });
-    expect(await Effect.runPromise(request({ clientVersion: "2", serverVersion: "1" }))).toMatchObject({ status: "unsupported" });
+    const request = createHeadlessUpdateCheckRequester({
+      platform: "linux",
+      env: { T3CODE_HEADLESS_UPDATE_CHECK: "0" },
+      runCommand,
+    });
+    expect(
+      await Effect.runPromise(request({ clientVersion: "2", serverVersion: "1" })),
+    ).toMatchObject({ status: "unsupported" });
     expect(runCommand).not.toHaveBeenCalled();
   });
   it("does not start duplicate concurrent checks", async () => {
     let release!: () => void;
-    const pending = new Promise<void>((resolve) => { release = resolve; });
-    const runCommand = vi.fn(async () => { await pending; return { stdout: "", stderr: "", code: null, timedOut: false, stdoutTruncated: false, stderrTruncated: false, stdoutInvalidUtf8: false, stderrInvalidUtf8: false }; });
-    const request = createHeadlessUpdateCheckRequester({ platform: "linux", env: { T3CODE_HEADLESS_UPDATE_CHECK: "1" }, runCommand });
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const runCommand = vi.fn(async () => {
+      await pending;
+      return {
+        stdout: "",
+        stderr: "",
+        code: null,
+        timedOut: false,
+        stdoutTruncated: false,
+        stderrTruncated: false,
+        stdoutInvalidUtf8: false,
+        stderrInvalidUtf8: false,
+      };
+    });
+    const request = createHeadlessUpdateCheckRequester({
+      platform: "linux",
+      env: { T3CODE_HEADLESS_UPDATE_CHECK: "1" },
+      runCommand,
+    });
     const first = Effect.runPromise(request({ clientVersion: "2", serverVersion: "1" }));
-    expect(await Effect.runPromise(request({ clientVersion: "2", serverVersion: "1" }))).toMatchObject({ status: "cooldown" });
+    expect(
+      await Effect.runPromise(request({ clientVersion: "2", serverVersion: "1" })),
+    ).toMatchObject({ status: "cooldown" });
     release();
     expect(await first).toMatchObject({ status: "queued" });
     expect(runCommand).toHaveBeenCalledTimes(1);
   });
-
 });

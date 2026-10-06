@@ -124,12 +124,20 @@ function requestHttp200(url: string, version: string): Promise<boolean> {
     const request = NodeHttp.get(url, (response) => {
       let body = "";
       response.setEncoding("utf8");
-      response.on("data", (chunk: string) => { body += chunk; });
+      response.on("data", (chunk: string) => {
+        body += chunk;
+      });
       response.on("end", () => {
         try {
           const descriptor = JSON.parse(body);
-          settle(response.statusCode === 200 && descriptor.serverVersion === version && descriptor.orchestrationProtocolVersion === 2);
-        } catch { settle(false); }
+          settle(
+            response.statusCode === 200 &&
+              descriptor.serverVersion === version &&
+              descriptor.orchestrationProtocolVersion === 2,
+          );
+        } catch {
+          settle(false);
+        }
       });
     });
     request.setTimeout(1_000, () => {
@@ -201,7 +209,11 @@ async function findAvailablePort(): Promise<number> {
   });
 }
 
-async function smokeServe(artifactRoot: string, entrypoint: string, version: string): Promise<void> {
+async function smokeServe(
+  artifactRoot: string,
+  entrypoint: string,
+  version: string,
+): Promise<void> {
   const baseDir = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-headless-base-"));
   const workspaceDir = await NodeFSP.mkdtemp(
     NodePath.join(NodeOS.tmpdir(), "t3-headless-workspace-"),
@@ -228,7 +240,7 @@ async function smokeServe(artifactRoot: string, entrypoint: string, version: str
         ...process.env,
         PATH: "",
         T3CODE_LOG_LEVEL: "Error",
-          T3CODE_DISABLE_STARTUP_RESUME: "1",
+        T3CODE_DISABLE_STARTUP_RESUME: "1",
       },
       stdio: ["ignore", "pipe", "pipe"],
     },
