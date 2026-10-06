@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "a1feb26948868f282d37959b05c06272386b2607",
-  "head": "8c36b6794904fb4ffb8dfa7a1f2e8bb28dd7a190",
+  "prev": "14f14a0ad3186126421ac8e6c6f5515505d27b4f",
+  "head": "462f40e8934202ae059d51646a2a105766b6f0bc",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -11,7 +11,9 @@
     "fork-project-selection",
     "fork-private-connection-defaults",
     "fork-workspace-file-uploads",
-    "fork-attachment-compatibility",
+    "fork-attachment-compatibility"
+  ],
+  "unapplied": [
     "fork-remote-file-downloads",
     "fork-fresh-remote-worktrees",
     "fork-pr-dismissal",
@@ -55,9 +57,7 @@
     "fork-interrupted-turn-rewind",
     "fork-agent-thread-ordering",
     "fork-cross-environment-nesting",
-    "fork-queue-coalesced-notes"
-  ],
-  "unapplied": [
+    "fork-queue-coalesced-notes",
     "fork-conversation-fork",
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
