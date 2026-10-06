@@ -1,0 +1,4 @@
+id = "storage-cleanup-sweep-budget"
+category = "performance"
+functionality = "storage-cleanup"
+text = "Reduce background worktree cleanup load by limiting session and deletion updates to deleted worktrees, combining repeated updates, and avoiding unnecessary Git probes."
