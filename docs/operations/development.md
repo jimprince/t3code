@@ -118,6 +118,19 @@ Use `vp run lint:mobile` for native mobile changes. CI owns the full suite; see
 The [manual Windows lane](../../.github/workflows/windows-tests.yml) is available for focused
 Windows investigation while that suite is not a required gate.
 
+### Background launch pressure
+
+The server log message `direct process launches in the last minute` reports attempted,
+spawned, and failed direct launches by executable, without arguments or credentials.
+These counts cover the shared process runner, not agent-owned descendants or every
+host process. Compare the same workload over a minute before and after a build change;
+runner attempts and successful host executions are different measurements.
+
+Missing executables back off for ten minutes. PATH or hosting configuration changes
+start a new discovery context; a tool installed on the same PATH can take up to ten
+minutes to be discovered. PR sweeps and periodic Git refreshes share a five-attempts
+per second budget. Interactive operations retain their own deadlines.
+
 ### Unused code
 
 `vp run knip:check` checks unused files and dependencies across the repo, then
