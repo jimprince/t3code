@@ -311,7 +311,10 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
         }),
       );
     }).pipe(Effect.ensuring(cleanup));
-  });
+    // Each call owns its temp files: a caller's scope may already be closed (the
+    // request ledger splits in a detached fiber that outlives its RPC), and
+    // registering the temp folder there would remove it as soon as it was made.
+  }, Effect.scoped);
 
   return TextGenerationOperations.fromRunner("CodexTextGeneration", runCodexJson);
 });
