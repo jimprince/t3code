@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import * as TestClock from "effect/testing/TestClock";
 import { ChildProcessSpawner } from "effect/process";
 
 import * as VcsProcess from "./VcsProcess.ts";
@@ -105,6 +106,26 @@ describe("VcsDriverRegistry", () => {
           "rev-parse --show-toplevel",
           "rev-parse --git-common-dir",
         ]);
+      }).pipe(Effect.provide(makeDiskBackedLayer(repoDir, calls)));
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("reuses a detected repository for thirty seconds", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const repoDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-vcs-registry-backoff-" });
+      yield* fs.makeDirectory(path.join(repoDir, ".git"));
+      const calls: string[] = [];
+      yield* Effect.gen(function* () {
+        const registry = yield* VcsDriverRegistry.VcsDriverRegistry;
+        assert.equal((yield* registry.detect({ cwd: repoDir }))?.repository.rootPath, repoDir);
+        yield* TestClock.adjust("29 seconds");
+        assert.equal((yield* registry.detect({ cwd: repoDir }))?.repository.rootPath, repoDir);
+        assert.equal(calls.filter((call) => call === "rev-parse --is-inside-work-tree").length, 1);
+        yield* TestClock.adjust("2 seconds");
+        assert.equal((yield* registry.detect({ cwd: repoDir }))?.repository.rootPath, repoDir);
+        assert.equal(calls.filter((call) => call === "rev-parse --is-inside-work-tree").length, 2);
       }).pipe(Effect.provide(makeDiskBackedLayer(repoDir, calls)));
     }).pipe(Effect.provide(NodeServices.layer)),
   );
