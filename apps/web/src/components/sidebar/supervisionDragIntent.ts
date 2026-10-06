@@ -1,5 +1,8 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import { supervisionForest, supervisionKey } from "@t3tools/client-runtime/state/forkNesting";
+import {
+  supervisionForest,
+  supervisionThreadKey,
+} from "@t3tools/client-runtime/state/fork-nesting";
 
 export type SupervisionDragIntent = { kind: "reorder" } | { kind: "nest"; parentKey: string };
 export function canSupervise(
@@ -46,7 +49,7 @@ export function directSiblingBucket(
   forest: ReturnType<typeof supervisionForest>,
   source: EnvironmentThreadShell,
 ) {
-  const parent = forest.parentByKey.get(supervisionKey(source));
+  const parent = forest.parentByKey.get(supervisionThreadKey(source));
   return (parent === undefined ? [] : (forest.children.get(parent) ?? [])).filter(
     (t) => (t.pinnedAt !== null) === (source.pinnedAt !== null),
   );
