@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "789a67663779e85f2d0618e3f9f1f4df5cd41019",
-  "head": "82e20cf83754059fc0686a92fe9b54ae6885fc2a",
+  "prev": "1704373ed3e1248cc4da0f46aa53660e1aca98f0",
+  "head": "7414d0ce91ff48ebd806dbd3dc2dd166671c2949",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -73,7 +73,8 @@
     "fork-project-page-workflow",
     "fork-project-canvas",
     "fork-project-task-types",
-    "fork-project-request-box-pinned"
+    "fork-project-request-box-pinned",
+    "fork-scripts-automations"
   ],
   "unapplied": [
     "fork-conversation-fork",
@@ -274,6 +275,9 @@
     },
     "fork-sandbox-session-recovery": {
       "oid": "d27b2d91d4df8421928750a82cc5a56489c4d008"
+    },
+    "fork-scripts-automations": {
+      "oid": "7414d0ce91ff48ebd806dbd3dc2dd166671c2949"
     },
     "fork-sidebar-agent-visibility": {
       "oid": "b30fd43f4a96c1b7e718994a205f0713dff8eb5f"
