@@ -11,6 +11,7 @@ import {
   type AutomationRun,
   type AutomationRunStep,
   ProviderSessionId,
+  ProviderThreadId,
   RuntimeRequestId,
   NodeId,
   type OrchestrationV2StoredEvent,
@@ -205,6 +206,58 @@ it.effect(
         );
         assert.equal((yield* threads.getThreadShell(fresh.threadId))?.title, fresh.title);
         const now = yield* DateTime.now;
+        const providerThreadId = ProviderThreadId.make("gateway-root-provider");
+        const providerSessionId = ProviderSessionId.make("gateway-stale-session");
+        yield* projections.apply({
+          id: EventId.make("gateway-stopped-session"),
+          type: "provider-session.attached",
+          threadId: step.threadId,
+          occurredAt: now,
+          payload: {
+            id: providerSessionId,
+            driver: ProviderDriverKind.make("codex"),
+            providerInstanceId: modelSelection.instanceId,
+            status: "stopped",
+            cwd: "/tmp/automation",
+            model: modelSelection.model,
+            capabilities: CodexProviderCapabilitiesV2,
+            createdAt: now,
+            updatedAt: now,
+            lastError: null,
+          },
+        });
+        yield* projections.apply({
+          id: EventId.make("gateway-provider-thread"),
+          type: "provider-thread.updated",
+          threadId: step.threadId,
+          occurredAt: now,
+          payload: {
+            id: providerThreadId,
+            driver: ProviderDriverKind.make("codex"),
+            providerInstanceId: modelSelection.instanceId,
+            providerSessionId,
+            appThreadId: step.threadId,
+            ownerNodeId: null,
+            nativeThreadRef: null,
+            nativeConversationHeadRef: null,
+            status: "active",
+            firstRunOrdinal: 1,
+            lastRunOrdinal: 1,
+            handoffIds: [],
+            forkedFrom: null,
+            createdAt: now,
+            updatedAt: now,
+          },
+        });
+        yield* projections.apply({
+          id: EventId.make("gateway-running-root"),
+          type: "run.updated",
+          threadId: step.threadId,
+          occurredAt: now,
+          payload: { ...records.runs[0]!, providerThreadId, status: "running", startedAt: now },
+        });
+        // Exact V2 input/run identity wins over a session stop, even one recorded after the input.
+        assert.equal((yield* gateway.advance(run, first)).status, "running");
         yield* projections.apply({
           id: EventId.make("terminal-root"),
           type: "run.updated",

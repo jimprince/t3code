@@ -1,6 +1,10 @@
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
-import { AutomationDefinition, AutomationScriptDefinition } from "@t3tools/contracts/automations";
+import {
+  AutomationDefinition,
+  AutomationScriptDefinition,
+  type Automation,
+} from "@t3tools/contracts/automations";
 import * as Schema from "effect/Schema";
 import type { Command } from "commander";
 import { RemoteEnvironmentClient } from "./client.js";
@@ -99,6 +103,9 @@ function definition(options: Options) {
   if ((text === undefined) === (options.script === undefined))
     throw new Error("Give exactly one of --prompt, --prompt-file or --script.");
   const timing = schedule(options);
+  /** An existing-thread run is a turn in a thread Brad already uses; default it to acting rather
+   * than the server's review fallback, which would tell it to change nothing. */
+  const resultMode = options.resultMode ?? (options.thread ? "act" : undefined);
   return decodeDefinition({
     id: NodeCrypto.randomUUID(),
     projectId: options.project,
@@ -129,7 +136,7 @@ function definition(options: Options) {
       {
         type: "agent",
         ...(options.script ? { script: options.script } : { prompt: text }),
-        ...(options.resultMode ? { resultMode: options.resultMode } : {}),
+        ...(resultMode ? { resultMode } : {}),
         target: options.thread
           ? { kind: "existing-thread", threadId: options.thread }
           : { kind: "new-thread" },
@@ -203,9 +210,48 @@ export function registerAutomationCommands(
     .option("--paused", "create paused")
     .option(
       "--result-mode <mode>",
-      "review (default: file nothing, thread stays open), file-only, or file-and-settle",
+      "review (default: file nothing, thread stays open), file-only, file-and-settle, or act (no filing/settling instructions; default with --thread)",
     )
     .action((options: Options) => call(options.env, "automationsSave", definition(options)));
+  automation
+    .command("edit")
+    .description("Change an existing automation's result mode or owner")
+    .argument("<id>", "automation id")
+    .requiredOption("--env <name>")
+    .option("--project <id>", "accepted for compatibility")
+    .option(
+      "--result-mode <mode>",
+      "review, file-only, file-and-settle, or act, applied to every action",
+    )
+    .option("--owner-thread <id>", "orchestrator whose Projects page shows it")
+    .action(async (id: string, options: Options) => {
+      if (!options.resultMode && !options.ownerThread)
+        throw new Error("Pass --result-mode, --owner-thread, or both.");
+      const automations = (
+        await (
+          await client(options.env)
+        ).automationRpc<{ automations: Automation[] }>("automationsList", {})
+      ).automations;
+      const current = automations.find((automation) => automation.id === id);
+      if (!current) throw new Error(`No automation "${id}".`);
+      await call(
+        options.env,
+        "automationsSave",
+        decodeDefinition({
+          id: current.id,
+          projectId: current.projectId,
+          name: current.name,
+          enabled: current.enabled,
+          ...((options.ownerThread ?? current.ownerThreadId)
+            ? { ownerThreadId: options.ownerThread ?? current.ownerThreadId }
+            : {}),
+          triggers: current.triggers,
+          actions: options.resultMode
+            ? current.actions.map((action) => ({ ...action, resultMode: options.resultMode }))
+            : current.actions,
+        }),
+      );
+    });
   for (const [name, enabled] of [
     ["pause", false],
     ["resume", true],
@@ -283,7 +329,7 @@ export function registerAutomationCommands(
     .option("--description <text>")
     .option(
       "--result-mode <mode>",
-      "review (default: file nothing, thread stays open), file-only, or file-and-settle",
+      "review (default: file nothing, thread stays open), file-only, file-and-settle, or act (no filing/settling instructions)",
     )
     .action(async (options: Options) => {
       const projectId = scope(options);
