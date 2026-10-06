@@ -1,3 +1,4 @@
+import * as ThreadTransfer from "./forkThreads/TransferService.ts";
 import * as ForkWorkspace from "./forkThreads/ForkWorkspaceService.ts";
 import * as ThreadIssueService from "./forkThreads/ThreadIssueService.ts";
 import * as AutomationEngine from "./automations/AutomationEngine.ts";
@@ -3214,6 +3215,7 @@ const layerWsRpc = (
           ),
       });
       const conversationFork = yield* ForkWorkspace.ForkWorkspaceService;
+      const threadTransfer = yield* ThreadTransfer.TransferService;
       const forkHandlers = WsForkRpcGroup.of({
         ...threadSubscriptionHandlers(threadManagement),
         [WS_METHODS.automationsList]: (input) =>
@@ -3260,6 +3262,8 @@ const layerWsRpc = (
         [WS_METHODS.projectRequestsList]: (input) => requestLedger.listForThread(input),
         ...(yield* makeWorkspaceUploadHandlers),
         ...(yield* makeSupervisionDragHandlers),
+        "orchestration.exportThread": (input) => threadTransfer.exportThread(input),
+        "orchestration.importThread": (input) => threadTransfer.importThread(input),
         "orchestration.forkThread": (input) => conversationFork.fork(input),
         [WS_METHODS.projectIssuesGet]: (input) =>
           projectIssues
