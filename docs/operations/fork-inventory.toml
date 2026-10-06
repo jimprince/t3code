@@ -1307,3 +1307,15 @@ note = "Parentage only controls placement and attention rollup in the same envir
 id = "v2-port-2689-m2"
 decision = "reconcile-smaller"
 note = "V2 supervision metadata is separate from native execution lineage; retained behavior and import coverage are recorded in the nesting lane report."
+
+[[patch]]
+name = "fork-launch-health"
+subject = "feat(diagnostics): warn before macOS process launches stall"
+class = "product"
+purpose = "Sample macOS syspolicyd through the existing native helper, record bounded runner attempt/failure rates and expose configurable early warnings in web, desktop and mobile Diagnostics."
+retire_when = "Upstream provides equivalent native daemon and launch-rate health warnings."
+depends_on = ["fork-resource-recovery", "fork-spawn-budget"]
+roles = []
+note = "No sampling subprocesses or automatic daemon recovery. Counts cover the shared process runner, excluding vendor descendants and direct SDK spawns."
+
+# v2-port-2689-m2: subscriber-scoped native telemetry, selected-environment mobile query, fork evaluator.
