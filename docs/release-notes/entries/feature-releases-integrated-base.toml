@@ -1,0 +1,4 @@
+id = "feature-releases-integrated-base"
+category = "maintenance"
+functionality = "updates"
+text = "Fork feature updates now publish against the upstream version already integrated by the fork, without waiting for another upstream merge."
