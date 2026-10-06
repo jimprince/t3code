@@ -238,6 +238,7 @@ import * as ProjectIssuesService from "./projectIssues/ProjectIssuesService.ts";
 import * as RequestLedger from "./projectIssues/RequestLedger.ts";
 import * as ProjectDashboardService from "./projectDashboard/ProjectDashboardService.ts";
 import * as ProjectDashboardStore from "./projectDashboard/ProjectDashboardStore.ts";
+import * as ProjectRoadmapService from "./projectRoadmap/ProjectRoadmapService.ts";
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as AzureDevOpsCli from "./sourceControl/AzureDevOpsCli.ts";
@@ -1337,6 +1338,10 @@ const makeWsRpcLayer = (
       const withPullRequestViewer = pullRequests.withRoutingCredential;
       const projectIssues = yield* ProjectIssuesService.make;
       const requestLedger = yield* RequestLedger.make({ projectIssues, threadIssues });
+      const projectRoadmap = yield* ProjectRoadmapService.make({
+        ledger: requestLedger,
+        projectIssues,
+      });
       const projectDashboard = yield* ProjectDashboardService.make(
         yield* ProjectDashboardStore.make,
       );
@@ -2737,6 +2742,20 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.projectRequestsUpdate, requestLedger.update(input), {
             "rpc.aggregate": "project-issues",
           }),
+        [WS_METHODS.projectRoadmapGet]: (input) =>
+          observeRpcEffect(WS_METHODS.projectRoadmapGet, projectRoadmap.get(input), {
+            "rpc.aggregate": "project-roadmap",
+          }),
+        [WS_METHODS.projectRoadmapMove]: (input) =>
+          observeRpcEffect(WS_METHODS.projectRoadmapMove, projectRoadmap.move(input), {
+            "rpc.aggregate": "project-roadmap",
+          }),
+        [WS_METHODS.projectRoadmapSaveVersion]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectRoadmapSaveVersion,
+            projectRoadmap.saveVersion(input),
+            { "rpc.aggregate": "project-roadmap" },
+          ),
         [WS_METHODS.projectDashboardGet]: (input) =>
           observeRpcEffect(WS_METHODS.projectDashboardGet, projectDashboard.get(input), {
             "rpc.aggregate": "project-dashboard",
