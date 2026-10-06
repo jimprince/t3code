@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "5d538d7c1b9166525bd21cd2d86eb52ba6e61329",
-  "head": "b3f1e67463bc6cec65e5ec2229f68ee802f3672d",
+  "prev": "90ced61a36ed1b4d26adff7a817ecf6eefd05330",
+  "head": "2772d199c0ce5626d81f87b46e00214efbff1c1d",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -55,7 +55,8 @@
     "fork-interrupted-turn-rewind",
     "fork-agent-thread-ordering",
     "fork-cross-environment-nesting",
-    "fork-queue-coalesced-notes"
+    "fork-queue-coalesced-notes",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-conversation-fork",
@@ -315,6 +316,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "fc736412725ff1674bb378160032f71d89d391da"
+    },
+    "refresh-temp": {
+      "oid": "2772d199c0ce5626d81f87b46e00214efbff1c1d"
     }
   }
 }
