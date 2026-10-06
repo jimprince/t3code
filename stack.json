@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "5eea5310ec138a46141ce41455a0ac00c6061e69",
-  "head": "c676504c77ab07800e22ef5cc2036bc8acbc9e3c",
+  "prev": "fc35090c2dde1c1de5cce1e6bc165a8b9e764984",
+  "head": "b6bc7abc349eabbcb0ec5a3ff072e1edc5688da1",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -95,7 +95,8 @@
     "fork-cli-project-layout",
     "fork-item-types",
     "fork-board-declutter",
-    "fork-project-skew-gate"
+    "fork-project-skew-gate",
+    "fork-request-titles"
   ],
   "unapplied": [
     "fork-conversation-fork",
@@ -329,6 +330,9 @@
     },
     "fork-request-ledger": {
       "oid": "54550a489b2bc534ed04062fa0730d7df5ae0841"
+    },
+    "fork-request-titles": {
+      "oid": "b6bc7abc349eabbcb0ec5a3ff072e1edc5688da1"
     },
     "fork-resource-recovery": {
       "oid": "a700355875951ba29f4ed54ab4706a326e239d87"
