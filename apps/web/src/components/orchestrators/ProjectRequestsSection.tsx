@@ -1,5 +1,6 @@
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import type { ProjectIssue, ProjectRequestStage } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { CheckIcon, RotateCcwIcon } from "lucide-react";
@@ -209,11 +210,7 @@ export function useUndoableActions() {
 }
 
 /** What is waiting to be sent, each with its Undo. */
-export function UndoLines({
-  actions,
-}: {
-  readonly actions: ReturnType<typeof useUndoableActions>;
-}) {
+function UndoLines({ actions }: { readonly actions: ReturnType<typeof useUndoableActions> }) {
   if (actions.queued.length === 0) return null;
   return (
     <ul className="mt-2 border-t border-border pt-1">
@@ -230,14 +227,19 @@ export function UndoLines({
   );
 }
 
-/** Brad's decisions on Needs you rows: approve, not yet, or one of the options. */
+/** What became of a decision: sent (and whether a thread was told), or the server's reason it was not. */
+export type DecideOutcome =
+  | { readonly sent: true; readonly notified: boolean }
+  | { readonly sent: false; readonly error: string };
+
+/** Brad's decisions on Needs you rows and decision cards: approve, not yet, an option or an answer. */
 export function useDecide(summary: OrchestratorSummary, refresh: () => void) {
   const decide = useAtomCommand(decideProjectRequest, "Decide");
   return async (
     issue: ProjectIssue,
     decision: "approve" | "not-yet" | "option" | "answer",
     extra: { readonly option?: string; readonly answer?: string; readonly reason?: string },
-  ) => {
+  ): Promise<DecideOutcome> => {
     const result = await decide({
       environmentId: summary.root.environmentId,
       input: {
@@ -248,7 +250,15 @@ export function useDecide(summary: OrchestratorSummary, refresh: () => void) {
       },
     });
     refresh();
-    return result._tag === "Success";
+    if (result._tag === "Success") {
+      return { sent: true, notified: result.value.notifiedThreadId !== null };
+    }
+    const error = squashAtomCommandFailure(result);
+    return {
+      sent: false,
+      error:
+        error instanceof Error && error.message ? error.message : "Could not reach the server.",
+    };
   };
 }
 
@@ -565,7 +575,7 @@ export function NeedsYouIssueGroups({
                               : kind === "not-yet"
                                 ? "Not yet"
                                 : (extra.option ?? "Chosen"),
-                            () => decide(issue, kind, extra),
+                            async () => (await decide(issue, kind, extra)).sent,
                           )
                         }
                       />
