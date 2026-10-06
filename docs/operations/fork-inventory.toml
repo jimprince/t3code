@@ -1627,3 +1627,12 @@ id = "delegated-worker-bottom-up-226"
 date = "2026-10-09"
 decided = "repair-existing-concern"
 rationale = "The existing completion sweep treats inactive settled descendants as completed, so successful workers settle bottom-up while active descendants still block. Pin and auto-settle opt-out guards remain authoritative. Unnesting preserves existing completion preferences through NestingService.update; auto-settle --off is the explicit opt-out."
+[[patch]]
+name = "fork-queue-idle-dispatch"
+subject = "fix(threads): deliver queued sends to idle targets promptly"
+class = "product"
+purpose = "Keep queued sends from waiting on an idle target: the watcher drains the queue on its own short loop instead of behind the minutes-long attention scan, reads targets in parallel with timeouts, leaves a send queued (without spending attempts) while a server restarts, and any t3-thread command revives a watcher that died with the server."
+retire_when = "Upstream or maintained shared tooling provides server-side after-current delivery for queued thread messages, or the fork stops queueing worker sends."
+depends_on = ["fork-worker-operations", "fork-queue-coalesced-notes"]
+roles = []
+note = "Fixes brad/t3code-fork#150. Dispatch eligibility is unchanged (running and starting hold; completed, interrupted, stopped dispatch); only when and how often the drain runs changed. An unreachable server never marks a send undeliverable; only failed dispatches count against the attempt cap. The revival runs as a postAction hook, after a successful command, because its liveness check rewrites the state file and a refused command (env forget without --force) must leave that file unchanged."
