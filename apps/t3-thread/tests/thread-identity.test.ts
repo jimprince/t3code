@@ -27,6 +27,8 @@ function harness(failRename = false) {
     descriptorFactory: descriptorFixture(environment),
     rpcFactory: () => ({
       request: async (_method, input) => {
+        if (_method === "threadMetadataList") return [];
+        if (_method === "threadMetadataUpdate") return input;
         const command = decodeCommand(input);
         commands.push(command);
         if (false) {
@@ -90,7 +92,9 @@ describe("worker bootstrap identity", () => {
 
       workerContext: { name: "worker", parent, notifyLevel: "attention" },
     });
-    const command = h.commands[0]!;
+    expect(h.commands[0]?.initialMessage).toBeUndefined();
+    const command = h.commands[1]!;
+    expect(command.reuseExistingThread).toBe(true);
     expect(command.threadId).toBe(created.threadId);
     if (!command.initialMessage) throw new Error("missing initial message");
     expect(command.initialMessage.text).toContain(`thread_id: "${created.threadId}"`);

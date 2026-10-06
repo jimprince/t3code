@@ -1,3 +1,4 @@
+import { ForkThreadMetadata } from "./forkThreadMetadata.ts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
@@ -314,6 +315,9 @@ export const OrchestratorMcpThreadListItem = Schema.Struct({
   linkedPullRequest: Schema.NullOr(ThreadLinkedPullRequest),
   settled: Schema.Boolean,
   settledAt: Schema.NullOr(IsoDateTime),
+  organization: Schema.optionalKey(Schema.NullOr(ForkThreadMetadata)),
+  pinned: Schema.optionalKey(Schema.Boolean),
+  pinnedAt: Schema.optionalKey(Schema.NullOr(IsoDateTime)),
   parentThreadId: Schema.NullOr(ThreadId),
   relationshipToParent: Schema.NullOr(Schema.Literals(["fork", "subagent"])),
   itemCount: NonNegativeInt,
@@ -362,6 +366,9 @@ export const OrchestratorMcpThreadDetail = Schema.Struct({
   titleRegeneration: Schema.NullOr(ThreadTitleRegeneration),
   branch: Schema.NullOr(Schema.String),
   worktreePath: Schema.NullOr(Schema.String),
+  organization: Schema.optionalKey(Schema.NullOr(ForkThreadMetadata)),
+  pinned: Schema.optionalKey(Schema.Boolean),
+  pinnedAt: Schema.optionalKey(Schema.NullOr(IsoDateTime)),
   parentThreadId: Schema.NullOr(ThreadId),
   relationshipToParent: Schema.NullOr(Schema.Literals(["fork", "subagent"])),
   runCount: NonNegativeInt,

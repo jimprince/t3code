@@ -3,7 +3,10 @@ import * as Layer from "effect/Layer";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as Migrator from "effect/unstable/sql/Migrator";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
+
+import { initializeMetadata } from "../../forkThreads/MetadataStore.ts";
 
 import { runForkMigrations } from "../ForkMigrations.ts";
 import { runMigrations } from "../Migrations.ts";
@@ -25,6 +28,18 @@ const setup = Layer.effectDiscard(
     yield* sql.unsafe(`PRAGMA journal_size_limit = ${WAL_SIZE_LIMIT_BYTES};`);
     yield* runMigrations();
     yield* runForkMigrations();
+    // The persistence layer owns schema/import work, never a connection-scoped handler.
+    yield* initializeMetadata(sql).pipe(
+      Effect.catchTag("SchemaError", (cause) =>
+        Effect.fail(
+          new Migrator.MigrationError({
+            kind: "ImportError",
+            message: "Failed to import fork thread metadata.",
+            cause,
+          }),
+        ),
+      ),
+    );
   }),
 );
 
