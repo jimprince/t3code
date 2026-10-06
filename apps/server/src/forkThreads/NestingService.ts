@@ -13,7 +13,7 @@ import type * as SqlClient from "effect/unstable/sql/SqlClient";
 import { initializeMetadata, listMetadata, writeMetadata, metadataJson } from "./MetadataStore.ts";
 
 /** Inert until all clients can navigate promoted subprojects. */
-export const AUTO_PROMOTE_SUBPROJECTS = false;
+const AUTO_PROMOTE_SUBPROJECTS = false;
 
 type NestingShell = Pick<OrchestrationV2ThreadShell, "id" | "projectId" | "archivedAt">;
 /** Commit supervision metadata, then publish a native shell refresh with replay-safe receipts. */
