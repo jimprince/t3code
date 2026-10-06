@@ -31,6 +31,7 @@ import {
   giteaRepositoryForIdentity,
   instanceHost,
   isPartOf,
+  parseBlockedBy,
   parseRequestMarker,
   REQUEST_LABEL,
   repositoryKey,
@@ -283,6 +284,7 @@ export const make = Effect.gen(function* () {
   ): ProjectIssue => {
     const labels = (issue.labels ?? []).map((label) => label.name);
     const isRequest = labels.some((label) => label.toLowerCase() === REQUEST_LABEL);
+    const blockedBy = parseBlockedBy(issue.body);
     return {
       host: target.host,
       repository: target.repository,
@@ -293,6 +295,7 @@ export const make = Effect.gen(function* () {
       labels,
       isRequest,
       ...(isRequest ? { stage: deriveRequestStage(issue.state, labels) } : {}),
+      ...(blockedBy.length > 0 ? { blockedBy } : {}),
       milestone:
         issue.milestone && issue.milestone.id > 0 && issue.milestone.title.trim()
           ? { id: issue.milestone.id, title: issue.milestone.title.trim() }
