@@ -1,0 +1,4 @@
+id = "request-followups"
+category = "fix"
+functionality = "projects"
+text = "Request tracking no longer files every message you send an orchestrator as its own issue. Follow-ups such as \"just do the full version\" are added as comments to the issue the thread already tracks, questions like \"did it work?\" are left as conversation, and new requests come from the New request box or genuinely new work."
