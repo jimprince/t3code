@@ -2325,6 +2325,19 @@ export function GeneralSettingsPanel() {
       <ProjectDefaultsSettings category="general" />
       <SettingsSection id="organization" title="Organization">
         <SettingsRow
+          {...searchableSetting("orchestrators-view")}
+          description="Show the Threads and Projects switch in the sidebar."
+          control={
+            <Switch
+              checked={settings.sidebarOrchestratorsEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ sidebarOrchestratorsEnabled: Boolean(checked) })
+              }
+              aria-label="Projects view"
+            />
+          }
+        />
+        <SettingsRow
           {...searchableSetting("project-grouping")}
           description="Combine matching repositories across environments."
           resetAction={
