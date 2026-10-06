@@ -83,6 +83,9 @@ layer("001_ProviderSessionRuntimeBootGeneration", (it) => {
           { migration_id: 10, name: "ProjectionProjectAutomations" },
           { migration_id: 11, name: "ProjectionThreadsScope" },
           { migration_id: 12, name: "ProjectionThreadsRemoteParent" },
+          { migration_id: 13, name: "Automations" },
+          { migration_id: 14, name: "AutomationStarterScripts" },
+          { migration_id: 15, name: "AutomationSourceState" },
         ]);
 
         const upstreamCollision = yield* sql<{ readonly name: string }>`
