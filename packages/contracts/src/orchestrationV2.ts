@@ -2898,6 +2898,15 @@ export const OrchestrationV2Command = Schema.Union([
     requestId: RuntimeRequestId,
   }),
   Schema.Struct({
+    type: Schema.Literal("conversation.rewind"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    runId: RunId,
+    messageId: MessageId,
+    providerThreadId: Schema.NullOr(ProviderThreadId),
+    providerInstanceId: ProviderInstanceId,
+  }),
+  Schema.Struct({
     type: Schema.Literal("checkpoint.rollback"),
     restoreFiles: Schema.optional(Schema.Boolean),
     commandId: CommandId,
