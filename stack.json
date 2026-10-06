@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "fc884d28c667f29b3068b94c13baddeb5eb01591",
-  "head": "394c8efdf304988cddd77b8bb18131f988aa5773",
+  "prev": "6fb90322996e2c7ef89475eb8e863f06ce75c7b9",
+  "head": "3b13a15e5151a4b9fe7dd7056cf971fa2e312ddd",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -97,7 +97,8 @@
     "fork-board-declutter",
     "fork-dev-vm-heavy-check-gate",
     "fork-textgen-own-scope",
-    "fork-project-skew-gate"
+    "fork-project-skew-gate",
+    "fork-queue-idle-dispatch"
   ],
   "unapplied": [],
   "hidden": [],
@@ -287,6 +288,9 @@
     },
     "fork-queue-coalesced-notes": {
       "oid": "d9e39f5883a90487b1812b3ad3263b2cebb54313"
+    },
+    "fork-queue-idle-dispatch": {
+      "oid": "3b13a15e5151a4b9fe7dd7056cf971fa2e312ddd"
     },
     "fork-release-horizon": {
       "oid": "280482a23a66f49fb8693e20b8e03ba584b26764"
