@@ -1,6 +1,6 @@
-Bottom: b8a42e59025f0cbc5658db2b9231d718765d16bd
-Top:    4072deee1dfeaf8f8a6dfce0d70ef85086c3cf24
+Bottom: bf9bebab1ae77482003ab561411729c01bb21c09
+Top:    2a764ae395ade4eb508f6d3bd162b590709a1a42
 Author: User <user@example.com>
-Date:   2026-10-06 11:14:15 +0000
+Date:   2026-10-06 12:04:12 +0000
 
 feat(remote): download linked workspace files
