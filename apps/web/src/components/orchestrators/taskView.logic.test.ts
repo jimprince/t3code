@@ -81,6 +81,15 @@ describe("pickAnswer", () => {
     );
   });
 
+  it("never takes a curator note or Brad's own follow-up as the answer", () => {
+    const comments = [
+      comment("Done: moved the box."),
+      comment("Follow-up from Brad in **T3 Orchestrator**:\nGo with your recommendation."),
+      comment("Curator: retyped question -> task."),
+    ];
+    expect(pickAnswer(issue(1), comments, "for-review")).toBe("Done: moved the box.");
+  });
+
   it("strips the hidden request marker", () => {
     expect(pickAnswer(issue(1), [comment("Done.\n<!-- t3-request {} -->")], "for-review")).toBe(
       "Done.",
