@@ -414,6 +414,10 @@
     "./state/fork-thread-ids": {
       "types": "./src/state/forkThreadIds.ts",
       "default": "./src/state/forkThreadIds.ts"
+    },
+    "./state/forkNesting": {
+      "types": "./src/state/forkNesting.ts",
+      "default": "./src/state/forkNesting.ts"
     }
   },
   "scripts": {
