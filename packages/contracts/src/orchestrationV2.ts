@@ -1,8 +1,5 @@
 import { ForkWorkerSummary } from "./forkWorkerSummary.ts";
-import {
-  workerArchiveFields,
-  workerCompletionFields,
-} from "./forkWorkerLifecycle.ts";
+import { workerArchiveFields, workerCompletionFields } from "./forkWorkerLifecycle.ts";
 import { OrchestrationMessageContext } from "./composerContext.ts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -419,6 +416,8 @@ export const OrchestrationV2AppThread = Schema.Struct({
   pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   /** Fractional-index slot in the user-arranged active order. */
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  /** Counts fork sidecar nesting writes on this thread. */
+  forkMetadataRevision: Schema.optional(NonNegativeInt),
   lastVisitedAt: Schema.NullOr(Schema.DateTimeUtc).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
@@ -1842,10 +1841,6 @@ export type OrchestrationV2LatestVisibleMessageSummary =
 
 export const OrchestrationV2ThreadShell = Schema.Struct({
   workerSummary: Schema.optional(ForkWorkerSummary),
-  parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
-  remoteParent: Schema.optional(
-    Schema.NullOr(Schema.Struct({ environmentId: Schema.String, threadId: ThreadId })),
-  ),
   ...OrchestrationV2CreationFields,
   id: ThreadId,
   projectId: ProjectId,
@@ -1922,6 +1917,8 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
   pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   /** Slot in the user-arranged active order; omitted by pre-reorder servers. */
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  /** Bumped by each fork sidecar nesting write; omitted by servers that predate it. */
+  forkMetadataRevision: Schema.optional(NonNegativeInt),
   /**
    * Omitted by servers that predate server-side visited tracking; clients fall
    * back to their local visited state when the field is absent.
@@ -2766,6 +2763,8 @@ export const OrchestrationV2Command = Schema.Union([
     limitRecovery: Schema.optional(Schema.NullOr(OrchestrationV2LimitRecoveryUpdate)),
     /** Link (object) or unlink (null) a pull request (#8160); absent leaves it unchanged. */
     linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
+    /** Fork nesting service only: bump `forkMetadataRevision`. Off when absent. */
+    bumpForkMetadataRevision: Schema.optional(Schema.Boolean),
   }),
   Schema.Struct({
     type: Schema.Literal("thread.pull-request.link"),
