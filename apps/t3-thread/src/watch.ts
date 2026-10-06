@@ -522,8 +522,7 @@ export async function detectAttentionEvents(
       if (notification.sourceState === "error") {
         const route = currentState.subscriptions.find(
           (subscription) =>
-            subscription.sourceThreadId === notification.sourceThreadId &&
-            subscription.subscriberThreadId === notification.subscriberThreadId,
+            sameNotificationRoute(subscription, notification, currentState),
         );
         if (
           route?.observedState === "error" &&
@@ -533,8 +532,7 @@ export async function detectAttentionEvents(
           notification = { ...notification, eventKey: route.errorEventKey };
           const observed = observedSubscriptions.find(
             (subscription) =>
-              subscription.sourceThreadId === notification.sourceThreadId &&
-              subscription.subscriberThreadId === notification.subscriberThreadId,
+              sameNotificationRoute(subscription, notification, currentState),
           );
           if (observed) observed.errorEventKey = route.errorEventKey;
         }
@@ -545,8 +543,7 @@ export async function detectAttentionEvents(
           (candidate) =>
             notification.sourceState === "completed" &&
             candidate.sourceState === notification.sourceState &&
-            candidate.subscriberThreadId === notification.subscriberThreadId &&
-            candidate.sourceThreadId === notification.sourceThreadId &&
+            sameNotificationRoute(candidate, notification, currentState) &&
             candidate.latestTurnId === notification.latestTurnId &&
             candidate.latestAssistantMessageId === notification.latestAssistantMessageId,
         ) ??
