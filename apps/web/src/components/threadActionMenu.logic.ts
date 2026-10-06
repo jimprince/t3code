@@ -30,6 +30,7 @@ export type ThreadActionMenuId =
   | "copy-path"
   | "copy-branch"
   | "copy-thread-id"
+  | "move-to-machine"
   | "archive"
   | "delete";
 
@@ -92,6 +93,8 @@ export interface ThreadActionMenuState {
   readonly isRegeneratingTitle: boolean;
   /** Archive rejects a thread with an attached provider, so disable it here rather than let the action fail. */
   readonly isRunning: boolean;
+  /** Another environment hosts this project, so the thread can move there. */
+  readonly canMoveToMachine?: boolean | undefined;
   readonly move?: { readonly up: boolean; readonly down: boolean } | undefined;
   /** The thread holds a manual order slot; reset has nothing to do for an automatic one. */
   readonly orderIsManual?: boolean | undefined;
@@ -239,6 +242,9 @@ export function buildThreadActionMenuItems(
       ],
     },
     { id: "project-settings", label: "Project settings", icon: "settings" },
+    ...(state.canMoveToMachine === true
+      ? [{ id: "move-to-machine" as const, label: "Move to machine…" }]
+      : []),
     // Archive removes the thread from the sidebar while keeping its
     // conversation under Settings > Archived threads — distinct from Settle
     // (stays visible in the Settled shelf) and Delete (clears history for
