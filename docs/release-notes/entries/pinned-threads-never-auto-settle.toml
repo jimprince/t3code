@@ -1,0 +1,4 @@
+id = "pinned-threads-never-auto-settle"
+category = "fix"
+functionality = "worker lifecycle"
+text = "Pinned threads and threads with sub-agents no longer settle themselves out of the sidebar, and moving a worker to the top level now clears its settle-on-complete setting."
