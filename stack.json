@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "47176ec372966f10aea738251cc61a3ad4a3f347",
-  "head": "895b2a112d302e94805d0d4164a513d60dc35f2e",
+  "prev": "229c223bdff013338d3dd7a24e51722acfc1b0a8",
+  "head": "246a3feb98c77b6f686040d338822906648d4d63",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -91,7 +91,9 @@
     "fork-task-view",
     "fork-release-horizon",
     "fork-board-blocked-working",
-    "fork-needs-you-decisions",
+    "fork-needs-you-decisions"
+  ],
+  "unapplied": [
     "fork-project-workstreams",
     "fork-item-types",
     "fork-board-declutter",
@@ -110,7 +112,6 @@
     "fork-phone-side-panels",
     "fork-decision-links"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
