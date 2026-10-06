@@ -444,7 +444,14 @@ Queue rules:
   sees one pending note per worker, never for a decision or a final result.
 - The queue lives in `~/.config/t3-remote-agents/state.json`, so it survives the
   CLI exiting, the watcher exiting, machine sleep, and reboot. It drains only
-  while a watcher is running on this machine; `send` ensures one.
+  while a watcher is running on this machine; `send` ensures one, and so does
+  any other `t3-thread` command that finds a send still waiting (a server restart
+  takes the watcher down with it).
+- The watcher drains on its own cadence, one poll interval apart, separately from
+  the notification scan, so an idle target (completed, interrupted, or stopped)
+  picks its queue up within seconds however many agents the scan has to read. An
+  unreachable server (a restart) leaves the send queued without spending its
+  attempt budget; only a failed dispatch counts.
 - `interrupt` does not drop the queue: the held message dispatches at the
   boundary the interrupt creates. Use `dequeue` to drop it.
 - A queued send is never delivered to an archived thread; archiving the target
@@ -640,7 +647,7 @@ Current scope note:
 - `subscribe` rejects self-subscriptions so a coordinator thread cannot watch itself.
 - `subscribe` records the source's current turn as a baseline when the source is already idle, completed, or errored. Routine completion for that turn is not replayed. Required input, approval, actionable plans, and errors still deliver once. Subscribing to a source that is still mid-turn keeps no baseline, so that turn's completion still routes.
 - When the source moves on before an event is delivered, the older undelivered events on that route become `superseded` (terminal) and only the newest is delivered. A completed-turn backlog therefore costs the recipient one turn, not one per stale event.
-- `watch` polls the current snapshot-backed deployment in two phases: detection persists deduplicated notification events, then delivery claims pending events and attempts routed sends. The same pass drains queued sends at their next turn boundary.
+- `watch` polls the current snapshot-backed deployment in two phases: detection persists deduplicated notification events, then delivery claims pending events and attempts routed sends. Queued sends drain at their next turn boundary on a separate, faster loop, so a slow scan never delays them.
 - Delivery order is oldest event first, and at most one notification per recipient per pass, because delivering one starts a turn on the recipient.
 - A failed delivery backs off (15s doubling to 10 min) and gives up after 6 attempts. A recipient that is mid-turn is re-offered ~30s later and does not spend the attempt budget.
 - A recipient the user explicitly settled gets `held` instead of a turn. Newer events on the route supersede a held one, the watcher re-checks it every minute while running, and it does not keep the watcher awake. See Thread Settlement.
