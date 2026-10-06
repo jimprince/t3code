@@ -105,7 +105,13 @@ export const DesktopUpdateStatusSchema = Schema.Literals([
 export const DesktopRuntimeArchSchema = Schema.Literals(["arm64", "x64", "other"]);
 export const DesktopThemeSchema = Schema.Literals(["light", "dark", "system"]);
 export const DesktopUpdateChannelSchema = Schema.Literals(["latest", "nightly"]);
-export const DesktopAppStageLabelSchema = Schema.Literals(["Alpha", "Dev", "Nightly", "Fork", "Fork Dev"]);
+export const DesktopAppStageLabelSchema = Schema.Literals([
+  "Alpha",
+  "Dev",
+  "Nightly",
+  "Fork",
+  "Fork Dev",
+]);
 
 export interface DesktopAppBranding {
   baseName: string;
@@ -285,11 +291,20 @@ export const DesktopUpdatePhaseSchema = Schema.Literals([
 ]);
 export type DesktopUpdatePhase = typeof DesktopUpdatePhaseSchema.Type;
 
+export const DesktopIdleUpdateInstallOptionsSchema = Schema.Struct({
+  expectedVersion: Schema.String,
+  minimumSystemIdleSeconds: Schema.optional(
+    Schema.Int.check(Schema.isBetween({ minimum: 60, maximum: 86400 })),
+  ),
+});
+export type DesktopIdleUpdateInstallOptions = typeof DesktopIdleUpdateInstallOptionsSchema.Type;
+
 export interface DesktopUpdateState {
   /** Optional for compatibility with older Electron shells. */
   updatePhase?: DesktopUpdatePhase;
   downloadTransferredBytes?: number;
   downloadTotalBytes?: number;
+  systemIdleSeconds?: number;
   enabled: boolean;
   status: DesktopUpdateStatus;
   channel: DesktopUpdateChannel;
@@ -324,6 +339,7 @@ export const DesktopUpdateStateSchema = Schema.Struct({
   updatePhase: Schema.optionalKey(DesktopUpdatePhaseSchema),
   downloadTransferredBytes: Schema.optionalKey(Schema.Number),
   downloadTotalBytes: Schema.optionalKey(Schema.Number),
+  systemIdleSeconds: Schema.optionalKey(Schema.Number),
   enabled: Schema.Boolean,
   status: DesktopUpdateStatusSchema,
   channel: DesktopUpdateChannelSchema,
@@ -1282,7 +1298,7 @@ export interface DesktopBridge {
   /** Run check, download and install after the renderer's interruption confirmation. */
   startUpdate?: () => Promise<DesktopUpdateActionResult>;
   downloadUpdate: () => Promise<DesktopUpdateActionResult>;
-  installUpdate: (options?: { readonly expectedVersion: string }) => Promise<DesktopUpdateActionResult>;
+  installUpdate: (options?: DesktopIdleUpdateInstallOptions) => Promise<DesktopUpdateActionResult>;
   onUpdateState: (listener: (state: DesktopUpdateState) => void) => () => void;
   /** Present when the desktop shell accepts `t3 app` activation requests. */
   appActivation?: {

@@ -1,0 +1,4 @@
+id = "daytime-idle-desktop-updates"
+category = "feature"
+functionality = "desktop updates"
+text = "The macOS app can install updates during the day after 15 idle minutes and once its agents finish, with settings to change the delay or keep overnight-only updates."
