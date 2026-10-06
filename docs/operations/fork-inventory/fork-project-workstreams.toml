@@ -1,0 +1,13 @@
+name = "fork-project-workstreams"
+subject = "feat(projects): workstreams block on the project Dashboard"
+class = "product"
+purpose = "Show at a glance where each parallel effort stands: one Dashboard line per active epic, derived from epics, their children and linked worker threads (fork.28 board redesign)."
+retire_when = "Upstream provides an equivalent project board, or the project page is retired."
+depends_on = [
+  "fork-release-horizon",
+  "fork-task-view",
+  "fork-board-blocked-working",
+  "fork-project-health",
+]
+roles = []
+note = "ProjectWorkstreams in OrchestratorBoard.tsx renders directly under the health line on the dashboard tab (built in, not a layout widget, so PROJECT_WIDGET_TYPES is unchanged). Since fork-dash-173 it is the compact mode of WorkstreamBands (workstreamBands.logic): one band per open, unparked epic, still reading the earliest open milestone as 'M1 of M1-M4', 'N of M · Phase' from formatEpicProgress, the working agents, and a Blocked marker (an open blockedBy, or a stuck Active task). The epic-only deriveWorkstreams, its 'next:' step and its blocked-worker signal were replaced there and in fork-dash-178. Nothing renders while no epic has work left. No new RPC, contract or setting."
