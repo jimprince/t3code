@@ -7,6 +7,8 @@ import {
   deriveMaintenance,
   deriveNeedsYou,
   deriveProjectRequests,
+  isBug,
+  isMaintenance,
   latestProgressLine,
   needsYouDecision,
   parseDecisionComment,
@@ -68,7 +70,7 @@ describe("deriveProjectRequests", () => {
     const [question, plan] = deriveProjectRequests(
       [
         request(1, { status: "needs-review", stage: "ready" }),
-        request(2, { status: "needs-review", stage: "ready", labels: ["ask", "ask:plan"] }),
+        request(2, { status: "needs-review", stage: "ready", labels: ["ask", "ask:epic"] }),
       ],
       [thread()],
       tree,
@@ -80,7 +82,7 @@ describe("deriveProjectRequests", () => {
 
   it("treats the thread's answer to the request as ready even before the agent marks it", () => {
     const [item] = deriveProjectRequests(
-      [request(1, { labels: ["ask", "ask:deliverable"], answer })],
+      [request(1, { labels: ["ask", "ask:task"], answer })],
       [thread()],
       tree,
       NOW,
@@ -164,16 +166,39 @@ describe("deriveProjectRequests", () => {
 });
 
 describe("requestKind", () => {
-  it("reads the kind label and defaults to deliverable", () => {
-    expect(requestKind(["ask", "ask:test"])).toBe("test");
-    expect(requestKind(["ask"])).toBe("deliverable");
+  it("reads the current type labels and defaults to task", () => {
+    expect(requestKind(["ask", "ask:epic"])).toBe("epic");
+    expect(requestKind(["ask", "ask:question"])).toBe("question");
+    expect(requestKind(["ask"])).toBe("task");
   });
 
-  it("reads every task type and leaves untyped issues untyped", () => {
-    expect(taskKind(["ask:bug"])).toBe("bug");
-    expect(taskKind(["ask:feature"])).toBe("feature");
-    expect(taskKind(["ASK:Maintenance"])).toBe("maintenance");
+  it("reads earlier labels as their successor and leaves untyped issues untyped", () => {
+    expect(taskKind(["ask:plan"])).toBe("epic");
+    expect(taskKind(["ask:bug"])).toBe("task");
+    expect(taskKind(["ask:feature"])).toBe("task");
+    expect(taskKind(["ASK:Maintenance"])).toBe("task");
+    expect(taskKind(["ask:question"])).toBe("question");
     expect(taskKind(["bug"])).toBeNull();
+  });
+
+  it("lets a current label win over earlier ones", () => {
+    expect(taskKind(["ask:plan", "ask:task"])).toBe("task");
+    expect(taskKind(["ask:feature", "ask:epic"])).toBe("epic");
+    expect(taskKind(["ask:bug", "ask:question"])).toBe("question");
+  });
+
+  it("reads the bug tag from the bug label, or from ask:bug when no current label exists", () => {
+    expect(isBug(["ask", "ask:task", "bug"])).toBe(true);
+    expect(isBug(["ask:bug"])).toBe(true);
+    expect(isBug(["ask:bug", "ask:task"])).toBe(false);
+    expect(isBug(["ask:feature"])).toBe(false);
+  });
+
+  it("treats only a task with the earlier maintenance label as maintenance", () => {
+    expect(isMaintenance(["ask", "ask:maintenance"])).toBe(true);
+    expect(isMaintenance(["ask", "ask:maintenance", "ask:task"])).toBe(true);
+    expect(isMaintenance(["ask", "ask:maintenance", "ask:question"])).toBe(false);
+    expect(isMaintenance(["ask", "ask:task"])).toBe(false);
   });
 });
 
@@ -249,7 +274,7 @@ describe("release stages", () => {
           [3, false, "question"],
         ],
       ],
-      ["fork.9", [[4, false, "bug"]]],
+      ["fork.9", [[4, false, "task"]]],
       [null, [[5, false, "question"]]],
     ]);
   });
