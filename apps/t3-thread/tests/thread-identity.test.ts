@@ -27,6 +27,7 @@ function harness(failRename = false) {
     descriptorFactory: descriptorFixture(environment),
     rpcFactory: () => ({
       request: async (_method, input) => {
+        if (_method === "forkMetadataList") return [];
         const command = decodeCommand(input);
         commands.push(command);
         if (false) {
