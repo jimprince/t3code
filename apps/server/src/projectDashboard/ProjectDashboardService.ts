@@ -1,0 +1,100 @@
+import {
+  ProjectDashboardError,
+  type ProjectDashboard,
+  type ProjectDashboardGetInput,
+  type ProjectDashboardSetTrackerInput,
+  type ProjectDashboardSetWidgetsInput,
+  type ThreadId,
+} from "@t3tools/contracts";
+import * as Effect from "effect/Effect";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
+
+import { listMetadata } from "../forkThreads/MetadataStore.ts";
+import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
+import { ServerSettingsService } from "../serverSettings.ts";
+import { findRootThreadId } from "../projectIssues/projectIssues.logic.ts";
+import { normalizeWidgets, resolveTrackerSetting } from "./projectDashboard.logic.ts";
+import type { ProjectDashboardStore } from "./ProjectDashboardStore.ts";
+
+const fail = (message: string) => new ProjectDashboardError({ message });
+
+/** Reads and writes a project page's widget order and its Gitea tracker repository. */
+export const make = (store: ProjectDashboardStore) =>
+  Effect.gen(function* () {
+    const engine = yield* ThreadManagement.ThreadManagementService;
+    const sql = yield* SqlClient.SqlClient;
+    const settings = yield* ServerSettingsService;
+
+    /** Any thread's orchestrator (root) thread and that thread's T3 project. */
+    const resolveRoot = (threadId: ThreadId) =>
+      Effect.gen(function* () {
+        const snapshot = yield* engine
+          .getShellSnapshot()
+          .pipe(Effect.mapError(() => fail("Could not read threads.")));
+        const parents = new Map(
+          (yield* listMetadata(sql).pipe(
+            Effect.mapError(() => fail("Could not read thread parents.")),
+          )).map((row) => [row.threadId, row.parentThreadId]),
+        );
+        const threads = [...snapshot.threads, ...snapshot.archivedThreads].map((thread) => ({
+          ...thread,
+          parentThreadId: parents.get(thread.id) ?? null,
+        }));
+        const rootThreadId = findRootThreadId(threads, threadId);
+        const root = threads.find((thread) => thread.id === rootThreadId);
+        if (!root) return yield* fail(`Thread '${threadId}' was not found.`);
+        return { rootThreadId: root.id, rootProjectId: root.projectId };
+      });
+
+    const get = (input: ProjectDashboardGetInput) =>
+      Effect.gen(function* () {
+        const { rootThreadId, rootProjectId } = yield* resolveRoot(input.threadId);
+        const file = yield* store.read;
+        return {
+          rootThreadId,
+          rootProjectId,
+          widgets: file.dashboards[rootThreadId]?.widgets ?? null,
+          tracker: file.trackers[rootProjectId] ?? null,
+        } satisfies ProjectDashboard;
+      });
+
+    const setWidgets = (input: ProjectDashboardSetWidgetsInput) =>
+      Effect.gen(function* () {
+        const { rootThreadId } = yield* resolveRoot(input.threadId);
+        yield* store
+          .modify((file) => {
+            const dashboards = { ...file.dashboards };
+            if (input.widgets === null) delete dashboards[rootThreadId];
+            else dashboards[rootThreadId] = { widgets: normalizeWidgets(input.widgets) };
+            return { ...file, dashboards };
+          })
+          .pipe(Effect.mapError(() => fail("Could not save the dashboard.")));
+        return yield* get(input);
+      });
+
+    const setTracker = (input: ProjectDashboardSetTrackerInput) =>
+      Effect.gen(function* () {
+        const { rootProjectId } = yield* resolveRoot(input.threadId);
+        if (input.tracker !== null) {
+          const config = yield* settings.getSettings.pipe(
+            Effect.mapError(() => fail("Could not read configured Gitea connections.")),
+          );
+          if (!resolveTrackerSetting(input.tracker, config.giteaInstances)) {
+            return yield* fail(
+              "Expected owner/repo or a repository URL on a configured Gitea instance.",
+            );
+          }
+        }
+        yield* store
+          .modify((file) => {
+            const trackers = { ...file.trackers };
+            if (input.tracker === null) delete trackers[rootProjectId];
+            else trackers[rootProjectId] = input.tracker.trim();
+            return { ...file, trackers };
+          })
+          .pipe(Effect.mapError(() => fail("Could not save the tracker repository.")));
+        return yield* get(input);
+      });
+
+    return { get, setWidgets, setTracker };
+  });
