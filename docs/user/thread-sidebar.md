@@ -245,3 +245,8 @@ Choose **Snooze → Custom…** from a thread's menu to pick a date and time in 
 local time zone, or a duration in minutes, hours, or days. Durations start when
 you confirm; one day means 24 hours. On web and desktop, you can also snooze
 several selected threads together. Choose **Wake thread** to bring a thread back early.
+
+A parent's status describes its own work and requests. A separate sub-agent input
+marker counts waiting, unsettled children; select it to expand the children and
+open the first waiting child. Answering, settling or archiving a child clears its
+marker. Child work remains visible through the active sub-agent count.
