@@ -125,6 +125,7 @@ describe("OrchestrationReactor", () => {
             },
             drain: Effect.void,
             requestSync: () => Effect.void,
+            refreshStale: Effect.void,
           }),
         ),
         Layer.provideMerge(
