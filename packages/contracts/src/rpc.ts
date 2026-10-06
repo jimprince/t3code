@@ -62,6 +62,7 @@ import {
   ProjectRequestCreateResult,
   ProjectRequestRef,
   ProjectRequestSettleInput,
+  ProjectRequestSubmitInput,
   ProjectRequestSettleResult,
   ProjectRequestsListInput,
   ProjectRequestUpdateInput,
@@ -604,6 +605,7 @@ export const WS_METHODS = {
   threadIssuesUnlink: "threadIssues.unlink",
   projectIssuesList: "projectIssues.list",
   projectRequestsSettle: "projectRequests.settle",
+  projectRequestsSubmit: "projectRequests.submit",
   projectRequestsCreate: "projectRequests.create",
   projectRequestsUpdate: "projectRequests.update",
   projectRequestsList: "projectRequests.list",
@@ -1020,6 +1022,12 @@ const WsProjectIssuesListRpc = Rpc.make(WS_METHODS.projectIssuesList, {
 const WsProjectRequestsSettleRpc = Rpc.make(WS_METHODS.projectRequestsSettle, {
   payload: ProjectRequestSettleInput,
   success: ProjectRequestSettleResult,
+  error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectRequestsSubmitRpc = Rpc.make(WS_METHODS.projectRequestsSubmit, {
+  payload: ProjectRequestSubmitInput,
+  success: Schema.Void,
   error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
 });
 
@@ -2074,6 +2082,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsThreadIssuesUnlinkRpc,
   WsProjectIssuesListRpc,
   WsProjectRequestsSettleRpc,
+  WsProjectRequestsSubmitRpc,
   WsProjectRequestsCreateRpc,
   WsProjectRequestsUpdateRpc,
   WsProjectRequestsListRpc,

@@ -143,11 +143,24 @@ export const ProjectRequestSettleInput = Schema.Struct({
   host: TrimmedNonEmptyString,
   repository: TrimmedNonEmptyString,
   number: PositiveInt,
+  /** Reopen a settled or closed issue instead of settling it. */
+  reopen: Schema.optionalKey(Schema.Boolean),
 });
 export type ProjectRequestSettleInput = typeof ProjectRequestSettleInput.Type;
 
 export const ProjectRequestSettleResult = Schema.Struct({ settled: Schema.Boolean });
 export type ProjectRequestSettleResult = typeof ProjectRequestSettleResult.Type;
+
+/**
+ * A message from the New request box, queued as an explicit request just before it
+ * is sent, so the ledger files it instead of folding it into an existing issue.
+ */
+export const ProjectRequestSubmitInput = Schema.Struct({
+  threadId: ThreadId,
+  messageId: TrimmedNonEmptyString,
+  text: Schema.String.check(Schema.isMaxLength(20_000)),
+});
+export type ProjectRequestSubmitInput = typeof ProjectRequestSubmitInput.Type;
 
 /** An agent files a request on Brad's behalf, in the tracker of its thread's project tree. */
 export const ProjectRequestCreateInput = Schema.Struct({
