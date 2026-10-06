@@ -690,7 +690,8 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       ...(props.reorderSupported === true
         ? [
             { id: "arrange", title: "Arrange threads…", image: "line.3.horizontal" },
-            ...(orderResetSupported && (thread.pinnedAt != null || thread.settledOverride !== "settled")
+            ...(orderResetSupported &&
+            (thread.pinnedAt != null || thread.settledOverride !== "settled")
               ? [
                   {
                     id: "order-reset",
