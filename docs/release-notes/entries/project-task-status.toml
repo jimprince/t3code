@@ -1,0 +1,4 @@
+id = "project-task-status"
+category = "feature"
+functionality = "projects"
+text = "Issues are now called Tasks on the project page, and every task shows one status, Pending, Active, For review or Complete, the same on the Tasks board, the Roadmap and in Needs you. Each roadmap version shows how far along it is, for example 63 · 12 complete · 3 active · 2 for review · 46 pending, with a progress bar."

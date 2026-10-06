@@ -1037,6 +1037,11 @@ captured requests.
 
 ## Project page widgets and tracker repository
 
+Brad's project page calls the tracker's issues Tasks, and every task has one of four statuses,
+the same on the Tasks board, the Roadmap and in Needs you: Pending, Active (marked in progress,
+or a worker thread linked to it is working), For review (waiting on Brad, shipped work to test
+included) or Complete (closed). Use these words when you report to him.
+
 A project page (the orchestrator's dashboard) is an ordered list of widgets: requests, needs-you,
 release, roadmap, working, blocked, done, new-request, issues, prs, canvas, automations. Brad
 changes it with Customize; an orchestrator can set it for him:
