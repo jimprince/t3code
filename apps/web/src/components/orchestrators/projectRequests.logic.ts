@@ -398,7 +398,9 @@ export function taskStatuses(
 ): Map<string, TaskStatus> {
   const forReview = new Set(needsYou.map((item) => issueKey(item.issue)));
   const working = new Set(
-    threads.filter((thread) => thread.id !== rootThreadId && isWorking(thread)).map((t) => t.id),
+    threads
+      .filter((thread) => thread.id !== rootThreadId && isThreadWorking(thread))
+      .map((t) => t.id),
   );
   const statuses = new Map<string, TaskStatus>();
   for (const issue of issues) {
