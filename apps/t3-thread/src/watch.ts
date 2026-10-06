@@ -414,7 +414,10 @@ async function scanAttentionState(
         subscription.errorEventKey = detected.eventKey;
       }
       detected.isChildInput = isChildInput;
-      detected.subscriberEnvironmentId = mapRouteEnvironment(state, subscription).subscriberEnvironmentId;
+      detected.subscriberEnvironmentId = mapRouteEnvironment(
+        state,
+        subscription,
+      ).subscriberEnvironmentId;
       scanned.push(detected);
     }
   }
@@ -651,9 +654,30 @@ export async function detectAttentionEvents(
                 sameNotificationRoute(route, existing, currentState),
               ),
           ),
-         ].map((route) => {
-          const observed = observedSubscriptions.find(candidate => sameNotificationRoute(candidate, route, currentState));
-          return mapRouteEnvironment(currentState, observed ? { ...route, inactivityObservation: observed.updatedAt === route.updatedAt && observed.inactivityMinutes === route.inactivityMinutes && (!route.inactivityObservation || !observed.inactivityObservation || Date.parse(observed.inactivityObservation.observedAt) >= Date.parse(route.inactivityObservation.observedAt)) ? observed.inactivityObservation : route.inactivityObservation, observedState: observed.observedState, observedReason: observed.observedReason, errorEventKey: observed.errorEventKey } : route);
+        ].map((route) => {
+          const observed = observedSubscriptions.find((candidate) =>
+            sameNotificationRoute(candidate, route, currentState),
+          );
+          return mapRouteEnvironment(
+            currentState,
+            observed
+              ? {
+                  ...route,
+                  inactivityObservation:
+                    observed.updatedAt === route.updatedAt &&
+                    observed.inactivityMinutes === route.inactivityMinutes &&
+                    (!route.inactivityObservation ||
+                      !observed.inactivityObservation ||
+                      Date.parse(observed.inactivityObservation.observedAt) >=
+                        Date.parse(route.inactivityObservation.observedAt))
+                      ? observed.inactivityObservation
+                      : route.inactivityObservation,
+                  observedState: observed.observedState,
+                  observedReason: observed.observedReason,
+                  errorEventKey: observed.errorEventKey,
+                }
+              : route,
+          );
         }),
       },
       result: persisted,
