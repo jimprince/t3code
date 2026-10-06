@@ -2,7 +2,6 @@ import {
   buildOrchestratorSummaries,
   orchestratorDoneSince,
   type OrchestratorSummary,
-  type OrchestratorThreadShell,
 } from "@t3tools/client-runtime/state/orchestrators";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
@@ -36,26 +35,19 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { isElectron } from "../../env";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { useProjects, useServerConfigs } from "../../state/entities";
-import {
-  deriveProviderEntriesByEnvironment,
-  shouldShowInstanceBadge,
-  type ProviderInstanceEntry,
-} from "../../providerInstances";
 import { updateProjectScopeCommand } from "../../state/forkProjectScope";
 import { useSupervisionReadyHosts } from "../../state/forkSupervision";
 import { threadEnvironment } from "../../state/threads";
 import { applyProjectLayout, useProjectLayout } from "../../state/projectLayout";
-import { projectDashboardQuery } from "../../state/projectDashboard";
+import { projectDashboardQuery, setProjectDashboardTracker } from "../../state/projectDashboard";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { randomUUID } from "../../lib/utils";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
 import ChatView from "../ChatView";
-import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
-import { getTriggerDisplayModelLabel } from "../chat/providerIconUtils";
 import { ProjectFavicon } from "../ProjectFavicon";
-import { Button } from "../ui/button";
+import { Button, InlineButton } from "../ui/button";
 import { Dialog, DialogFooter, DialogHeader, DialogPopup, DialogTitle } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
@@ -92,10 +84,12 @@ import { ProjectLayoutTabView, TAB_DRAG_TYPE, WIDGET_DRAG_TYPE } from "./Project
 import { ProjectRoadmapWidget, SaveForLater } from "./ProjectRoadmapWidget";
 import { ProjectPullRequestsWidget } from "./ProjectPullRequestsWidget";
 import { ProjectRequestBox } from "./ProjectRequestBox";
+import { ProjectSection } from "./ProjectSection";
 import { ProjectIssuesSummary, ProjectRoadmapSummary } from "./ProjectTabSummaries";
+import { formatIssueAge } from "./projectIssuesBoard.logic";
 import { resolveProjectTab, type ProjectTab } from "./projectTabs.logic";
 import { HEALTH_LABEL, isHealthStale, latestWorkChangeAt } from "./projectHealth.logic";
-import { issueKey, TASK_STATUS_LABEL } from "./projectRequests.logic";
+import { issueKey } from "./projectRequests.logic";
 import {
   deriveBlocked,
   deriveWorkingNow,
@@ -106,8 +100,8 @@ import { projectReturnState } from "./projectNavigation";
 
 /**
  * The layout's tabs, with the page's actions (Edit layout) at the right. In edit
- * mode tabs can be dragged, renamed, removed and added, and a widget dropped on
- * a tab moves to its end.
+ * mode tabs can be dragged, renamed (double-click), removed and added, and a
+ * widget dropped on a tab moves to its end.
  */
 function ProjectTabBar({
   tabs,
@@ -125,6 +119,7 @@ function ProjectTabBar({
   readonly onApply: (ops: ProjectLayoutOp[]) => void;
 }) {
   const [newTab, setNewTab] = useState("");
+  const [renaming, setRenaming] = useState<string | null>(null);
   return (
     <div className="flex items-end gap-4 border-b border-border">
       <div role="tablist" aria-label="Project views" className="flex flex-wrap gap-4">
@@ -161,12 +156,18 @@ function ProjectTabBar({
               }
             }}
           >
-            {editing && tab === item.id ? (
+            {editing && renaming === item.id ? (
               <Input
                 aria-label={`Rename ${item.title}`}
                 className="-mb-px h-7 w-32"
                 defaultValue={item.title}
+                autoFocus
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") event.currentTarget.blur();
+                  if (event.key === "Escape") setRenaming(null);
+                }}
                 onBlur={(event) => {
+                  setRenaming(null);
                   const title = event.target.value.trim();
                   if (title && title !== item.title) {
                     onApply([{ op: "renameTab", tabId: item.id, title }]);
@@ -184,6 +185,7 @@ function ProjectTabBar({
                     : "border-transparent text-muted-foreground hover:text-foreground"
                 } ${editing ? "cursor-grab" : ""}`}
                 onClick={() => onSelect(item.id)}
+                onDoubleClick={() => editing && setRenaming(item.id)}
               >
                 {item.title}
               </button>
@@ -229,85 +231,23 @@ function ProjectTabBar({
   );
 }
 
-function BoardSection({
-  title,
-  count,
-  children,
-}: {
-  readonly title: string;
-  readonly count?: number;
-  readonly children: ReactNode;
-}) {
-  return (
-    <section className="border-t border-border pt-4 first:border-t-0 first:pt-0">
-      <h2 className="mb-2 flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-        {title}
-        {count === undefined ? null : (
-          <span className="tabular-nums text-foreground/60">{count}</span>
-        )}
-      </h2>
-      {children}
-    </section>
-  );
-}
-
 const Empty = ({ children }: { readonly children: ReactNode }) => (
   <p className="py-2 text-sm text-muted-foreground">{children}</p>
 );
-const EMPTY_PROVIDER_ENTRIES: ReadonlyMap<string, ProviderInstanceEntry> = new Map();
-
-function ThreadProviderModel({
-  thread,
-  entries,
-}: {
-  readonly thread: OrchestratorThreadShell;
-  readonly entries: ReadonlyMap<string, ProviderInstanceEntry>;
-}) {
-  const instanceId = thread.runtime?.providerInstanceId ?? thread.modelSelection.instanceId;
-  const entry = entries.get(instanceId) ?? null;
-  const model = entry?.models.find((candidate) => candidate.slug === thread.modelSelection.model);
-  const modelLabel = model
-    ? getTriggerDisplayModelLabel(model)
-    : thread.modelSelection.model || "Default model";
-  return (
-    <span className="inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-      {entry ? (
-        <ProviderInstanceIcon
-          driverKind={entry.driverKind}
-          displayName={entry.displayName}
-          accentColor={entry.accentColor}
-          showBadge={shouldShowInstanceBadge(entry, entries.values())}
-          className="size-4"
-          iconClassName="size-3.5"
-          badgeClassName="-right-1 -bottom-1"
-        />
-      ) : null}
-      <span className="max-w-32 truncate">{modelLabel}</span>
-    </span>
-  );
-}
 
 /**
  * Everything waiting on Brad, from one source: threads asking for an approval,
  * an answer or a plan review, then the requests and issues the Issues board's
  * Needs you lane shows. Hidden when nothing waits.
  */
-function ProjectNeedsYouWidget({
-  summary,
-  providerEntriesFor,
-}: {
-  readonly summary: OrchestratorSummary;
-  readonly providerEntriesFor: (
-    thread: EnvironmentThreadShell,
-  ) => ReadonlyMap<string, ProviderInstanceEntry>;
-}) {
+function ProjectNeedsYouWidget({ summary }: { readonly summary: OrchestratorSummary }) {
   const { items, query } = useNeedsYou(summary);
   const settle = useSettle(summary, query.refresh);
   const openThread = useOpenThread(summary);
   const count = summary.needsYou.length + items.length;
   if (count === 0) return null;
   return (
-    <BoardSection title="Needs you" count={count}>
+    <ProjectSection title="Needs you" count={count}>
       {summary.needsYou.length > 0 ? (
         <ul className="mb-3 divide-y divide-border">
           {summary.needsYou.map((item) => (
@@ -315,18 +255,17 @@ function ProjectNeedsYouWidget({
               key={`${item.kind}:${item.thread.id}`}
               label={`Open ${item.thread.title}`}
               onOpen={() => openThread(item.thread.id)}
-              className="items-center py-2"
+              className="items-start py-1.5"
             >
-              <CircleAlertIcon className="size-4 shrink-0 text-warning-foreground" />
-              <span className="min-w-0 flex-1 truncate text-sm">{item.thread.title}</span>
-              <span className="text-xs text-muted-foreground">
+              <CircleAlertIcon className="mt-0.5 size-4 shrink-0 text-warning-foreground" />
+              <span className="min-w-0 flex-1 text-sm">{item.thread.title}</span>
+              <span className="shrink-0 text-xs text-muted-foreground">
                 {item.kind === "approval"
                   ? "Approval"
                   : item.kind === "input"
                     ? "Question"
                     : "Plan ready"}
               </span>
-              <ThreadProviderModel thread={item.thread} entries={providerEntriesFor(item.thread)} />
             </ClickableRow>
           ))}
         </ul>
@@ -337,7 +276,7 @@ function ProjectNeedsYouWidget({
         settle={settle}
         refresh={query.refresh}
       />
-    </BoardSection>
+    </ProjectSection>
   );
 }
 
@@ -384,20 +323,21 @@ function ProjectBlockedWidget({ summary }: { readonly summary: OrchestratorSumma
   const openThread = useOpenThread(summary);
   if (rows.length === 0) return null;
   return (
-    <BoardSection title="Blocked" count={rows.length}>
+    <ProjectSection title="Blocked" count={rows.length}>
       <ul className="divide-y divide-border">
         {rows.map((row) => (
           <ClickableRow
             key={row.key}
             label={`Open ${row.owner?.title ?? row.title}`}
             onOpen={row.owner ? () => openThread(row.owner!.id) : null}
-            className="items-center py-2"
+            className="items-start py-1.5"
           >
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium">{row.title}</span>
-              <span className="block truncate text-xs text-muted-foreground">
+              <span className="block text-sm">{row.title}</span>
+              <span className="block text-xs text-muted-foreground">
                 <span className="text-error">{row.cause}</span>
-                {row.owner ? ` · ${row.owner.title}` : ""}
+                {/* The owner only when it says more than the title. */}
+                {row.owner && row.owner.title !== row.title ? ` · ${row.owner.title}` : ""}
                 {row.next ? ` · next: ${row.next}` : ""}
               </span>
             </span>
@@ -413,7 +353,7 @@ function ProjectBlockedWidget({ summary }: { readonly summary: OrchestratorSumma
           </ClickableRow>
         ))}
       </ul>
-    </BoardSection>
+    </ProjectSection>
   );
 }
 
@@ -438,7 +378,7 @@ function ProjectWorkstreams({ summary }: { readonly summary: OrchestratorSummary
   );
   if (rows.length === 0) return null;
   return (
-    <BoardSection title="Workstreams" count={rows.length}>
+    <ProjectSection title="Workstreams" count={rows.length}>
       <ul className="divide-y divide-border">
         {rows.map((row) => (
           <li key={issueKey(row.epic)} className="py-1.5">
@@ -449,29 +389,27 @@ function ProjectWorkstreams({ summary }: { readonly summary: OrchestratorSummary
                 number: row.epic.number,
               }}
               url={row.epic.url}
-              className="flex w-full min-w-0 items-baseline gap-x-2 text-sm hover:underline"
+              className="flex w-full min-w-0 flex-wrap items-baseline gap-x-2 text-sm hover:underline"
             >
-              <span className="shrink-0 font-medium">{row.epic.title}</span>
-              <span className="shrink-0 text-muted-foreground">
+              <span>{row.epic.title}</span>
+              <span className="text-muted-foreground">
                 {row.milestone ? `${row.milestone} · ` : ""}
                 {row.progress}
               </span>
               {row.agents > 0 ? (
-                <span className="shrink-0 text-muted-foreground">
+                <span className="text-muted-foreground">
                   {row.agents} {row.agents === 1 ? "agent" : "agents"}
                 </span>
               ) : null}
               {row.next ? (
-                <span className="min-w-0 truncate text-muted-foreground">
-                  next: {row.next.title}
-                </span>
+                <span className="text-muted-foreground">next: {row.next.title}</span>
               ) : null}
-              {row.blocked ? <span className="shrink-0 text-error">Blocked</span> : null}
+              {row.blocked ? <span className="text-error">Blocked</span> : null}
             </TaskTitle>
           </li>
         ))}
       </ul>
-    </BoardSection>
+    </ProjectSection>
   );
 }
 
@@ -485,26 +423,25 @@ function ProjectWorkingWidget({ summary }: { readonly summary: OrchestratorSumma
   );
   if (rows.length === 0) return null;
   return (
-    <BoardSection title="Working now" count={rows.length}>
+    <ProjectSection title="Working now" count={rows.length}>
       <ul className="divide-y divide-border">
         {rows.map((row) => (
           <ClickableRow
             key={row.key}
             label={`Open ${row.worker ?? row.title}`}
             onOpen={() => openThread(row.threadId)}
-            className="items-start py-2"
+            className="items-start py-1.5"
           >
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm">
-                <span className="font-medium">{row.title}</span>
+              <span className="block text-sm">
+                {row.title}
                 <span className="text-muted-foreground">
-                  {` · ${TASK_STATUS_LABEL.active}`}
                   {row.next ? ` · next: ${row.next}` : ""}
-                  {row.worker ? ` · ${row.worker}` : ""}
+                  {row.worker && row.worker !== row.title ? ` · ${row.worker}` : ""}
                 </span>
               </span>
               {row.forRequests.length > 0 ? (
-                <span className="mt-0.5 block truncate text-xs text-foreground/80">
+                <span className="block text-xs text-muted-foreground">
                   for: {row.forRequests.join(" · ")}
                 </span>
               ) : null}
@@ -512,7 +449,7 @@ function ProjectWorkingWidget({ summary }: { readonly summary: OrchestratorSumma
           </ClickableRow>
         ))}
       </ul>
-    </BoardSection>
+    </ProjectSection>
   );
 }
 
@@ -531,10 +468,10 @@ function WorkerRow({
     <ClickableRow
       label={`Open ${thread.title}`}
       onOpen={() => openThread(thread.id)}
-      className="items-start py-2"
+      className="items-start py-1.5"
     >
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium">{thread.title}</span>
+        <span className="block text-sm">{thread.title}</span>
         <WorkerRequestTag summary={summary} threadId={thread.id} />
       </span>
       {trailing}
@@ -542,12 +479,56 @@ function WorkerRow({
   );
 }
 
+/** Rows "Done since your last visit" shows before "Show all". */
+const DONE_PREVIEW = 5;
+/** Without a recorded visit, "since your last visit" means the last day. */
+const FIRST_VISIT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** Workers that finished since Brad last opened the page, newest first; hidden when none did. */
+function ProjectDoneWidget({
+  summary,
+  done,
+}: {
+  readonly summary: OrchestratorSummary;
+  readonly done: ReturnType<typeof orchestratorDoneSince>;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const [now] = useState(() => Date.now());
+  if (done.length === 0) return null;
+  const shown = showAll ? done : done.slice(0, DONE_PREVIEW);
+  return (
+    <ProjectSection title="Done since your last visit" count={done.length}>
+      <ul className="divide-y divide-border">
+        {shown.map((item) => (
+          <WorkerRow
+            key={item.thread.id}
+            summary={summary}
+            thread={item.thread}
+            trailing={
+              <time
+                className="w-8 shrink-0 pt-px text-right text-xs tabular-nums text-muted-foreground"
+                dateTime={item.completedAt}
+              >
+                {formatIssueAge(item.completedAt, now)}
+              </time>
+            }
+          />
+        ))}
+      </ul>
+      {done.length > DONE_PREVIEW ? (
+        <p className="mt-1 text-xs">
+          <InlineButton tone="muted" onClick={() => setShowAll((value) => !value)}>
+            {showAll ? "Show fewer" : `Show all ${done.length}`}
+          </InlineButton>
+        </p>
+      ) : null}
+    </ProjectSection>
+  );
+}
+
 interface BoardPage {
   readonly summary: OrchestratorSummary;
   readonly done: ReturnType<typeof orchestratorDoneSince>;
-  readonly providerEntriesFor: (
-    thread: EnvironmentThreadShell,
-  ) => ReadonlyMap<string, ProviderInstanceEntry>;
   readonly selectTab: (tab: ProjectTab) => void;
   readonly roadmapTab: string | null;
   readonly tasksTab: string | null;
@@ -568,7 +549,6 @@ function BuiltinWidget({
   const {
     summary,
     done,
-    providerEntriesFor,
     selectTab,
     roadmapTab,
     tasksTab,
@@ -613,37 +593,20 @@ function BuiltinWidget({
     case "decisions":
       return <ProjectDecisionsWidget summary={summary} />;
     case "needs-you":
-      return <ProjectNeedsYouWidget summary={summary} providerEntriesFor={providerEntriesFor} />;
+      return <ProjectNeedsYouWidget summary={summary} />;
     case "working":
       return <ProjectWorkingWidget summary={summary} />;
     case "blocked":
       return <ProjectBlockedWidget summary={summary} />;
     case "done":
-      return done.length > 0 ? (
-        <BoardSection title="Done since your last visit" count={done.length}>
-          <ul className="divide-y divide-border">
-            {done.map((item) => (
-              <WorkerRow
-                key={item.thread.id}
-                summary={summary}
-                thread={item.thread}
-                trailing={
-                  <time className="text-xs text-muted-foreground" dateTime={item.completedAt}>
-                    {formatRelativeTimeLabel(item.completedAt)}
-                  </time>
-                }
-              />
-            ))}
-          </ul>
-        </BoardSection>
-      ) : null;
+      return <ProjectDoneWidget summary={summary} done={done} />;
     case "composer":
       return (
-        <BoardSection title="New request">
+        <ProjectSection title="New request">
           {chatOpen ? (
             <Button size="sm" variant="outline" onClick={() => setChatOpen(true)}>
-              Continue in orchestrator chat
               <MessageSquareIcon />
+              Open chat
             </Button>
           ) : (
             <div className="relative h-44 overflow-hidden">
@@ -659,7 +622,7 @@ function BuiltinWidget({
           <div className="mt-2">
             <SaveForLater summary={summary} />
           </div>
-        </BoardSection>
+        </ProjectSection>
       );
     case "issues-summary":
       return (
@@ -671,19 +634,15 @@ function BuiltinWidget({
       );
     case "prs":
       return <ProjectPullRequestsWidget summary={summary} />;
-    // The panel is shared with project settings; here its heading matches the
-    // page's other widget headings.
     case "automations":
       return (
-        <div className="border-t border-border pt-4 [&_h2]:font-semibold [&_h2]:tracking-wide [&_h2]:text-muted-foreground">
-          <ProjectAutomationsSlot
-            project={{
-              environmentId: summary.root.environmentId,
-              rootThreadId: summary.root.id,
-              rootProjectId: summary.root.projectId,
-            }}
-          />
-        </div>
+        <ProjectAutomationsSlot
+          project={{
+            environmentId: summary.root.environmentId,
+            rootThreadId: summary.root.id,
+            rootProjectId: summary.root.projectId,
+          }}
+        />
       );
     default:
       return null;
@@ -713,17 +672,18 @@ function ProjectHealthLine({ summary }: { readonly summary: OrchestratorSummary 
   if (health === null) return null;
   const stale = isHealthStale(health, latestWorkChangeAt(summary), Date.now());
   return (
-    <div className="flex min-w-0 items-center gap-2 text-sm">
+    <p className="text-sm">
       <span
-        className={`shrink-0 rounded-sm px-1.5 py-0.5 text-xs font-medium ${HEALTH_TONE[health.status]}`}
+        className={`mr-2 rounded-sm px-1.5 py-0.5 text-xs font-medium ${HEALTH_TONE[health.status]}`}
       >
         {HEALTH_LABEL[health.status]}
       </span>
-      <span className="min-w-0 truncate">{health.sentence}</span>
-      <span className={`shrink-0 text-xs ${stale ? "text-warning" : "text-muted-foreground"}`}>
-        {stale ? "stale, " : ""}as of {formatRelativeTimeLabel(health.updatedAt)}
+      {health.sentence}
+      <span className={`ml-2 text-xs ${stale ? "text-warning" : "text-muted-foreground"}`}>
+        {stale ? "Stale, as of " : "As of "}
+        {formatRelativeTimeLabel(health.updatedAt)}
       </span>
-    </div>
+    </p>
   );
 }
 
@@ -769,8 +729,7 @@ export function OrchestratorBoard({
     if (!layoutState.live) {
       toastManager.add({
         type: "error",
-        title: "This server cannot save layouts",
-        description: "Update the server to edit the project layout.",
+        title: "Update this server to edit layouts",
       });
       return;
     }
@@ -818,6 +777,11 @@ export function OrchestratorBoard({
   const [editTitle, setEditTitle] = useState("");
   const [editScope, setEditScope] = useState("");
   const supervisionReadyHosts = useSupervisionReadyHosts();
+  const [editTracker, setEditTracker] = useState("");
+  const dashboard = useEnvironmentQuery(
+    projectDashboardQuery({ environmentId, input: { threadId } }),
+  );
+  const saveTracker = useAtomCommand(setProjectDashboardTracker, "Save task repository");
   const summary = useMemo(
     () =>
       buildOrchestratorSummaries(threads, projects).find(
@@ -825,17 +789,7 @@ export function OrchestratorBoard({
       ) ?? null,
     [environmentId, projects, threadId, threads],
   );
-  const providerEntriesByEnvironment = useMemo(
-    () =>
-      deriveProviderEntriesByEnvironment(
-        [...serverConfigs].map(
-          ([serverEnvironmentId, config]) => [serverEnvironmentId, config.providers] as const,
-        ),
-      ),
-    [serverConfigs],
-  );
-  const providerEntriesFor = (thread: OrchestratorThreadShell) =>
-    providerEntriesByEnvironment.get(thread.environmentId) ?? EMPTY_PROVIDER_ENTRIES;
+  const [openedAt] = useState(() => Date.now());
   const previousVisit = useMemo(
     () =>
       readOrchestratorLastVisit(
@@ -846,8 +800,14 @@ export function OrchestratorBoard({
     [environmentId, threadId],
   );
   const done = useMemo(
-    () => (summary === null ? [] : orchestratorDoneSince(summary, previousVisit)),
-    [previousVisit, summary],
+    () =>
+      summary === null
+        ? []
+        : orchestratorDoneSince(
+            summary,
+            previousVisit ?? new Date(openedAt - FIRST_VISIT_WINDOW_MS).toISOString(),
+          ),
+    [openedAt, previousVisit, summary],
   );
 
   useEffect(() => {
@@ -877,6 +837,7 @@ export function OrchestratorBoard({
   const openEditor = () => {
     setEditTitle(summary.root.title);
     setEditScope(summary.root.scope ?? "");
+    setEditTracker(dashboard.data?.tracker ?? "");
     setEditing(true);
   };
   const saveIdentity = async () => {
@@ -912,6 +873,15 @@ export function OrchestratorBoard({
       }
       return;
     }
+    const tracker = editTracker.trim() || null;
+    if (tracker !== (dashboard.data?.tracker ?? null)) {
+      const saved = await saveTracker({
+        environmentId: summary.root.environmentId,
+        input: { threadId: summary.root.id, tracker },
+      });
+      dashboard.refresh();
+      if (saved._tag === "Failure") return;
+    }
     setEditing(false);
   };
   const revealSentMessage = (messageId: import("@t3tools/contracts").MessageId) => {
@@ -928,7 +898,6 @@ export function OrchestratorBoard({
   const page: BoardPage = {
     summary,
     done,
-    providerEntriesFor,
     selectTab,
     roadmapTab,
     tasksTab,
@@ -975,21 +944,16 @@ export function OrchestratorBoard({
               <WorkspacePageContainer width="wide" className="gap-5">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
                   <OrchestratorStatus status={summary.status} />
-                  <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                    <UsersIcon className="size-4" />
-                    {summary.activeWorkerCount} working
-                  </span>
+                  {summary.activeWorkerCount > 0 ? (
+                    <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                      <UsersIcon className="size-4" />
+                      {summary.activeWorkerCount} working
+                    </span>
+                  ) : null}
                   <NeedsYouCount summary={summary} />
                   <BlockedCount summary={summary} />
-                  <span className="flex flex-wrap gap-1">
-                    {summary.projects.map((project) => (
-                      <span
-                        key={`${project.environmentId}:${project.id}`}
-                        className="rounded-sm bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
-                      >
-                        {project.title}
-                      </span>
-                    ))}
+                  <span className="text-xs text-muted-foreground">
+                    {summary.projects.map((project) => project.title).join(" · ")}
                   </span>
                 </div>
 
@@ -1013,7 +977,7 @@ export function OrchestratorBoard({
                     layoutState.live ? (
                       <Button
                         size="xs"
-                        variant={editingLayout ? "default" : "ghost-muted"}
+                        variant={editingLayout ? "secondary" : "ghost-muted"}
                         onClick={() => setEditingLayout((value) => !value)}
                       >
                         <SlidersHorizontalIcon />
@@ -1109,6 +1073,14 @@ export function OrchestratorBoard({
                   maxLength={500}
                   placeholder="Coordinates the entire repo"
                   onChange={(event) => setEditScope(event.target.value)}
+                />
+              </label>
+              <label className="flex flex-col gap-1.5 text-sm font-medium">
+                Task repository
+                <Input
+                  value={editTracker}
+                  placeholder="owner/repo, only when the code is not on Gitea"
+                  onChange={(event) => setEditTracker(event.target.value)}
                 />
               </label>
             </div>
