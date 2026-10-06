@@ -2359,6 +2359,12 @@ roles = []
 note = "Brad approved removing goals on 2026-09-05. Retain historical goal schema, projection and import compatibility; numbered migrations remain in the migration ledger. Migration 5 converts sidebar-reordered/orderKey to meta-updated/activeOrderKey transactionally without changing event identity or sequence. ID 4 remains reserved for the previously shipped sidebar-order column migration. Thread transfer bundles contain snapshots, not raw ordering events. Packaged upgrade fixtures freeze released 1293 and 1400 schemas with synthetic sidebar, goal and legacy attachment events; verify replay, preserved IDs and migration ledgers, projections and restart before release. Recent retirement review: sidebar data now migrates through 5; goals keep historical schemas and projection support; file handoffs retain compatibility under their own concern."
 
 [[patch.decision]]
+id = "v2-stable-history-paging"
+date = "2026-10-06"
+decided = "adapt"
+rationale = "Page retained legacy tables by created_at and rowid, or rowid when no timestamp exists; event history retains sequence order. Deterministic ties prevent page boundaries from depending on SQLite query plans."
+
+[[patch.decision]]
 id = "v2-read-only-history"
 date = "2026-10-06"
 decided = "adapt"

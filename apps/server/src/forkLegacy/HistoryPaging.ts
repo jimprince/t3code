@@ -84,7 +84,12 @@ const tableSource = Effect.fn("HistoryPaging.tableSource")(function* (
   if (where === null || (narrow !== undefined && !columns.includes(narrow.column))) {
     return memorySource([]);
   }
-  const order = table === "orchestration_events" ? " ORDER BY sequence" : "";
+  const order =
+    table === "orchestration_events"
+      ? " ORDER BY sequence"
+      : columns.includes("created_at")
+        ? " ORDER BY created_at, rowid"
+        : " ORDER BY rowid";
   const map = narrow?.map ?? ((row: Row) => row);
   return {
     exists: db
