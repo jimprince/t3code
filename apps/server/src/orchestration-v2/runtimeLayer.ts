@@ -1,3 +1,5 @@
+import * as ForkWorkspace from "../forkThreads/ForkWorkspaceService.ts";
+import * as PortableHistory from "../forkThreads/PortableHistory.ts";
 import * as StartupResumePolicy from "../fork/recovery/StartupResumePolicy.ts";
 import * as UsageLimitRecoveryWorker from "./UsageLimitRecoveryWorker.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
@@ -348,6 +350,7 @@ export const layer = Layer.mergeAll(
 );
 
 export const layerProduction = Layer.mergeAll(
+  ForkWorkspace.layer.pipe(Layer.provide(Layer.mergeAll(layerThreadManagementProvided, layerProjectService, layerStores, PortableHistory.layer.pipe(Layer.provide(Layer.mergeAll(layerStores, layerEventSinkProvided)))))),
   layer.pipe(Layer.provide(layerProjectService)),
   layerProjectService,
   layerManagedProjectFoldersProvided,
