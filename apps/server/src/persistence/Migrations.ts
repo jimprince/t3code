@@ -136,7 +136,7 @@ const upstreamMigrationEntries = [
   [52, "ProjectionThreadTitleState", Migration0052],
   [53, "PullRequestFilesViewed", Migration0053],
   [54, "ProjectionThreadsAutoSettleDisabledAt", Migration0054],
-  // Released as 53 and 54 in V2 previews; reconcileV2PreviewMigration preserves their ledger.
+  // The fork ledger assigns these upstream migrations immutable fork ids.
   // Preserve this migration's schema. Future V2 schema changes need new migrations.
   [55, "OrchestrationV2", Migration0055],
   [56, "RemoveRedundantProjectionIndexes", Migration0056],
