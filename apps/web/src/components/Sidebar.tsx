@@ -2,7 +2,7 @@ import { appAtomRegistry } from "../rpc/atomRegistry";
 import { planSupervisionMove } from "@t3tools/client-runtime/state/fork-thread-ordering";
 import { supervision as forkSupervision, useSupervisionReadyHosts, useSupervisionMetadata } from "../state/forkSupervision";
 import { useSupervisionForest } from "../state/forkSupervision";
-import { supervisionRoots } from "@t3tools/client-runtime/state/forkNesting";
+import { supervisionRoots } from "@t3tools/client-runtime/state/fork-nesting";
 import { useSupervisionDrag } from "./sidebar/useSupervisionDrag";
 import { SupervisionThreadRows, useSupervisionSidebar } from "./sidebar/SupervisionThreadRows";
 import { groupChildInputAttention } from "@t3tools/client-runtime/child-attention";
@@ -2335,7 +2335,10 @@ export default function Sidebar() {
   const threads = useThreadShells();
 
   const attentionForest = useSupervisionForest();
-  const childInputAttention = useMemo(() => groupChildInputAttention([...attentionForest.byKey.values()], attentionForest.parentByKey), [threads, attentionForest]);
+  const childInputAttention = useMemo(
+    () => groupChildInputAttention([...attentionForest.byKey.values()], attentionForest.parentByKey),
+    [attentionForest],
+  );
   const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
@@ -2620,7 +2623,14 @@ export default function Sidebar() {
         override holds until all of them appear in canonical state. */
     readonly assignedKeys: ReadonlyMap<string, string>;
   } | null>(null);
-  const supervision = useSupervisionSidebar(threads.filter(thread => scopedProjectKeys === null || scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`)), routeThreadKey);
+  const supervision = useSupervisionSidebar(
+    threads.filter(
+      (thread) =>
+        scopedProjectKeys === null ||
+        scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`),
+    ),
+    routeThreadKey,
+  );
   const supervisionDrag = useSupervisionDrag(supervision.forest);
   const {
     pinnedThreads,
@@ -4478,6 +4488,7 @@ export default function Sidebar() {
                 up: planSupervisionMove(threads, orderMetadata, thread, "up", orderReadyHosts) !== null,
                 down: planSupervisionMove(threads, orderMetadata, thread, "down", orderReadyHosts) !== null,
               } : undefined,
+
               snoozePresets,
             }),
             position,
@@ -4496,9 +4507,17 @@ export default function Sidebar() {
           case "move-up":
           case "move-down": {
             const assignments = planSupervisionMove(threads, orderMetadata, thread, clicked.value === "move-up" ? "up" : "down", appAtomRegistry.get(forkSupervision.readyHosts));
+
             for (const assignment of assignments ?? []) {
-              const moved = threads.find(row => scopedThreadKey(scopeThreadRef(row.environmentId, row.id)) === assignment.id);
-              if (moved) await (isPinned ? reorderPinnedThread : reorderActiveThread)(scopeThreadRef(moved.environmentId, moved.id), assignment.orderKey);
+              const moved = threads.find(
+                (row) =>
+                  scopedThreadKey(scopeThreadRef(row.environmentId, row.id)) === assignment.id,
+              );
+              if (moved)
+                await (isPinned ? reorderPinnedThread : reorderActiveThread)(
+                  scopeThreadRef(moved.environmentId, moved.id),
+                  assignment.orderKey,
+                );
             }
             return;
           }
@@ -5009,9 +5028,9 @@ export default function Sidebar() {
                             // Fade between card and compact rows while the outer
                             // sortable wrapper keeps its identity during a drag.
                             key={`${threadKey}:${rowVariant}`}
-                            waitingInputChildren={childInputAttention.get(
-                              `${thread.environmentId}:${thread.id}`,
-                            ) ?? []}
+                            waitingInputChildren={
+                              childInputAttention.get(`${thread.environmentId}:${thread.id}`) ?? []
+                            }
                             thread={thread}
                             variant={rowVariant}
                             // Snoozed rows wake, settled rows un-settle, and cards settle.
