@@ -23,7 +23,7 @@ import {
 } from "../ui/alert-dialog";
 import { Button } from "../ui/button";
 import { stackedThreadToast, toastManager } from "../ui/toast";
-import { countAgentsBlockingIdleRestart, IDLE_RESTART_GRACE_MS } from "./desktopIdleRestart.logic";
+import { countAgentsBlockingIdleRestart, makeResumesMonitoring, IDLE_RESTART_GRACE_MS } from "./desktopIdleRestart.logic";
 
 function isLocalConnectionTarget(target: ConnectionCatalogEntry["target"]): boolean {
   return target._tag === "PrimaryConnectionTarget" || isDesktopLocalConnectionTarget(target);
@@ -43,8 +43,8 @@ export function useLocalAgentsBlockingRestart(): number {
     [environments],
   );
   return useMemo(
-    () => countAgentsBlockingIdleRestart({ threads, localEnvironmentIds }),
-    [threads, localEnvironmentIds],
+    () => countAgentsBlockingIdleRestart({ threads, localEnvironmentIds, resumesMonitoring: makeResumesMonitoring(environments) }),
+    [threads, localEnvironmentIds, environments],
   );
 }
 
