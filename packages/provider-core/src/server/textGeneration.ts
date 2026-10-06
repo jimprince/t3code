@@ -85,13 +85,21 @@ export interface RequestItemsGenerationInput {
 }
 
 export interface RequestItemsGenerationResult {
-  items: ReadonlyArray<{ title: string; kind: RequestKind; excerpt: string; existing: number | null }>;
+  items: ReadonlyArray<{
+    title: string;
+    kind: RequestKind;
+    bug: boolean;
+    excerpt: string;
+    existing: number | null;
+  }>;
 }
 
 /** Commit, change request, branch, and title generation backed by one provider instance. */
 export interface ProviderTextGeneration {
   /** Split a message into tracked requests when supported by the provider. */
-  readonly generateRequestItems?: (input: RequestItemsGenerationInput) => Effect.Effect<RequestItemsGenerationResult, TextGenerationError>;
+  readonly generateRequestItems?: (
+    input: RequestItemsGenerationInput,
+  ) => Effect.Effect<RequestItemsGenerationResult, TextGenerationError>;
 
   /**
    * Generate a commit message from staged change context.
