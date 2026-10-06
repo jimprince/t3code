@@ -17,6 +17,8 @@ import { parseInputReminderMinutes } from "./inputReminders.js";
 import { buildFollowUpMessage } from "./agentPrompts.js";
 import { sendDirectResult } from "./directResult.js";
 import { RemoteEnvironmentClient } from "./client.js";
+import { withSenderHeader } from "./thread-identity.js";
+import { listNamedAgents, routeToNamedAgent, scaffoldAgentFolder } from "./namedAgents.js";
 import {
   cancelDeferredSettlement,
   parseSettlementRequest,
@@ -357,6 +359,7 @@ Direct thread commands:
   search       Locate a thread UUID across paired environments
   pin/unpin    Change worker pinning (create --pin starts pinned)
   order/move  Arrange workers in their shared sidebar section
+  agents       List named agents; add one or hand it over (send <name> routes to it)
   status       Show compact status for one saved worker or all workers
   worklog      Show recent T3 runtime/provider activity for a worker
   result       Fetch latest/final worker output
@@ -1807,7 +1810,35 @@ agent
   .option("--coalesce <key>", "replace your own still-waiting keyed note")
   .option("--progress", "shorthand for --coalesce progress")
   .action(async (name, messageParts: string[], options: SendCommandOptions) => {
-    const { agent: savedAgent, client, saved } = await withAgent(name);
+    const rawText = messageParts.join(" ").trim();
+    // A name that is neither a saved alias nor a UUID may be a named agent; a
+    // dormant one starts with this message, so there is nothing left to send.
+    const routingState = await loadState();
+    const callerId = resolveCallerThreadId();
+    const sender = callerId
+      ? await resolveThreadEndpoint(
+          routingState,
+          callerId,
+          undefined,
+          resolveCallerEnvironmentMetadata(),
+        )
+      : null;
+    const text = withSenderHeader(
+      rawText,
+      callerSendOrigin(routingState),
+      sender?.environment ?? "unknown",
+    );
+    const routed = await routeToNamedAgent({
+      state: routingState,
+      name,
+      message: text,
+      clientFactory: namedAgentClients(routingState),
+    });
+    if (routed?.started) {
+      printJson({ namedAgent: name, ...routed, dispatched: true, queued: false });
+      return;
+    }
+    const { agent: savedAgent, client, saved } = await withAgent(routed?.threadId ?? name);
     const state = await loadState();
     const outcome = await sendDirectResult({
       callerThreadId: resolveCallerThreadId(),
@@ -1821,7 +1852,7 @@ agent
       send: () =>
         client.sendMessage({
           threadId: savedAgent.threadId,
-          text: messageParts.join(" ").trim(),
+          text,
           queueWhileRunning: options.queue,
           origin: callerSendOrigin(state),
           senderEnvironment:
@@ -1837,6 +1868,7 @@ agent
     }
     printJson({
       agent: saved ? savedAgent.name : null,
+      ...(routed ? { namedAgent: name } : {}),
       threadId: savedAgent.threadId,
       environment: savedAgent.environment,
       ...outcome,
@@ -2042,6 +2074,103 @@ agent
       agent: savedAgent.name,
       threadId: savedAgent.threadId,
       lastSeenAssistantMessageId: latestAssistant.id,
+    });
+  });
+
+/** Named-agent clients for the environments saved in `state`. */
+function namedAgentClients(state: Awaited<ReturnType<typeof loadState>>) {
+  return (environment: string) =>
+    new RemoteEnvironmentClient(requireEnvironment(state, environment));
+}
+
+const namedAgentsCommand = program
+  .command("agents")
+  .description("Named agents: one owner per resource, each with one live thread");
+
+namedAgentsCommand
+  .command("list", { isDefault: true })
+  .description("List named agents with scope, live thread and status")
+  .option("--env <name>", "only this saved environment")
+  .action(async (options: { env?: string }) => {
+    const state = await loadState();
+    printJson(
+      await listNamedAgents({
+        state,
+        clientFactory: namedAgentClients(state),
+        ...(options.env ? { environment: options.env } : {}),
+      }),
+    );
+  });
+
+namedAgentsCommand
+  .command("add")
+  .description("Make a folder the home of a named agent (its project is created if missing)")
+  .argument("<name>", "agent name: lowercase letters, digits and hyphens")
+  .requiredOption("--env <name>", "saved environment that can reach the resource")
+  .requiredOption(
+    "--path <folder>",
+    "agent folder on that environment, e.g. ~/.shared/agents/<name>",
+  )
+  .option("--scope <text>", "one-line scope; also writes starter AGENT.md/BRIEFING.md if missing")
+  .action(async (name: string, options: { env: string; path: string; scope?: string }) => {
+    if (!/^[a-z][a-z0-9-]{0,47}$/.test(name)) {
+      throw new Error(
+        "Agent names use lowercase letters, digits and hyphens, starting with a letter.",
+      );
+    }
+    const state = await loadState();
+    const client = new RemoteEnvironmentClient(requireEnvironment(state, options.env));
+    const scaffolded = options.scope
+      ? scaffoldAgentFolder({
+          folder: options.path,
+          name,
+          scope: options.scope,
+          environment: options.env,
+        })
+      : [];
+    const existing = (await client.listProjects()).find(
+      (project) => project.workspaceRoot === options.path,
+    );
+    const project =
+      existing ?? (await client.createProject({ workspaceRoot: options.path, title: name }));
+    await client.setPermanentAgent(project.id, name);
+    printJson({
+      name,
+      environment: options.env,
+      projectId: project.id,
+      folder: options.path,
+      scaffolded,
+    });
+  });
+
+namedAgentsCommand
+  .command("handover")
+  .description(
+    "Start a fresh incarnation from AGENT.md and BRIEFING.md, archiving the idle current one",
+  )
+  .argument("<name>", "named agent")
+  .argument("[message...]", "optional first request for the new incarnation")
+  .action(async (name: string, messageParts: string[]) => {
+    const state = await loadState();
+    const { agents } = await listNamedAgents({ state, clientFactory: namedAgentClients(state) });
+    const owners = agents.filter((agent) => agent.name === name);
+    if (owners.length !== 1) {
+      throw new Error(
+        owners.length === 0
+          ? `No named agent '${name}' on any reachable paired environment.`
+          : `Named agent '${name}' exists in several environments: ${owners.map((owner) => owner.environment).join(", ")}.`,
+      );
+    }
+    const environment = owners[0]!.environment;
+    const message = messageParts.join(" ").trim();
+    const result = await new RemoteEnvironmentClient(
+      requireEnvironment(state, environment),
+    ).handOverNamedAgent(name, message.length > 0 ? message : undefined);
+    printJson({
+      namedAgent: name,
+      environment,
+      previousThreadId: owners[0]!.liveThreadId,
+      ...result,
     });
   });
 
