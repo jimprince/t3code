@@ -1,3 +1,6 @@
+import * as CommandReceipts from "../orchestration-v2/CommandReceiptStore.ts";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
+import { validateNaming, withOwnershipLock } from "../forkThreads/NamedAgentPolicy.ts";
 import {
   CommandId,
   type OrchestrationProjectShell,
@@ -149,11 +152,15 @@ export class ProjectService extends Context.Service<
 >()("t3/project/ProjectService") {}
 
 export const make = Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient;
   const projects = yield* ProjectStore.ProjectStoreV2;
   const projectEnrichment = yield* ProjectEnrichmentService.ProjectEnrichmentService;
   const workspacePaths = yield* WorkspacePaths.WorkspacePaths;
   const threadProjections = yield* ProjectionStore.ProjectionStoreV2;
   const eventSink = yield* EventSink.EventSinkV2;
+  const receipts = yield* CommandReceipts.CommandReceiptStoreV2.pipe(
+    Effect.provide(CommandReceipts.layer),
+  );
   const idAllocator = yield* IdAllocator.IdAllocatorV2;
   const legacyImporter = yield* LegacyV1ThreadImporter.LegacyV1ThreadImporter;
   const threadCommands = yield* ThreadCommandExecutor.ThreadCommandExecutor;
@@ -166,6 +173,7 @@ export const make = Effect.gen(function* () {
     row: ProjectStore.ProjectRow,
     enrichment: ProjectEnrichmentService.ProjectEnrichment | null,
   ): Project => ({
+    permanentAgent: row.permanentAgent ?? null,
     id: row.projectId,
     kind: row.kind ?? "workspace",
     title: row.title,
@@ -244,6 +252,10 @@ export const make = Effect.gen(function* () {
       new ProjectOperationError({ operation: "dispatch-project-command", projectId, cause });
     const workspaceRoot = command.type === "project.delete" ? undefined : command.workspaceRoot;
     const planAndCommit = Effect.gen(function* () {
+      const previous = yield* receipts
+        .getProjectByCommandId(command.commandId)
+        .pipe(Effect.mapError(dispatchError));
+      if (Option.isSome(previous)) return previous.value;
       const project = Option.getOrUndefined(yield* readRow(projectId, { includeDeleted: true }));
       const workspaceOwner =
         workspaceRoot === undefined
@@ -253,6 +265,11 @@ export const make = Effect.gen(function* () {
                 .findActiveByWorkspaceRoot(workspaceRoot)
                 .pipe(Effect.mapError(dispatchError)),
             );
+      if (command.type === "project.meta.update" && command.permanentAgent) {
+        yield* validateNaming(sql, projectId, command.permanentAgent.name).pipe(
+          Effect.mapError(dispatchError),
+        );
+      }
       const now = yield* DateTime.now;
       const eventId = yield* idAllocator.allocate
         .event({ commandId: command.commandId })
@@ -281,14 +298,17 @@ export const make = Effect.gen(function* () {
         error: encodeProjectCommandRejection(planned.failure),
       });
     });
-    const receipt = yield* projectLocks
-      .withLock(
-        projectId,
-        workspaceRoot === undefined
-          ? planAndCommit
-          : workspaceLocks.withLock(workspaceRoot, planAndCommit),
-      )
-      .pipe(Effect.mapError(dispatchError));
+    const receipt = yield* withOwnershipLock(
+      sql,
+      projectLocks
+        .withLock(
+          projectId,
+          workspaceRoot === undefined
+            ? planAndCommit
+            : workspaceLocks.withLock(workspaceRoot, planAndCommit),
+        )
+        .pipe(Effect.mapError(dispatchError)),
+    );
     if (receipt.projectId !== projectId || receipt.commandType !== command.type) {
       return yield* dispatchError(
         `Command ${command.commandId} was already used by ${receipt.commandType} for ${receipt.projectId}.`,
@@ -393,6 +413,7 @@ export const make = Effect.gen(function* () {
         type: "project.meta.update",
         commandId: input.commandId,
         projectId: input.projectId,
+        ...(input.permanentAgent === undefined ? {} : { permanentAgent: input.permanentAgent }),
         ...(input.title === undefined ? {} : { title: input.title }),
         ...(workspaceRoot === previousRoot ? {} : { workspaceRoot }),
         ...(input.defaultModelSelection === undefined
