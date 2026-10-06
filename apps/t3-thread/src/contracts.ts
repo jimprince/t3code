@@ -8,6 +8,13 @@ import {
   ResolveNamedAgentInput,
   HandOverNamedAgentInput,
   NamedAgentThreadResult,
+  ProjectIssuesError,
+  ProjectIssuesListResult,
+  ProjectRequestCreateInput,
+  ProjectRequestCreateResult,
+  ProjectRequestRef,
+  ProjectRequestsListInput,
+  ProjectRequestUpdateInput,
 } from "@t3tools/contracts";
 import { NestingRpcs } from "./v2/nesting.js";
 import * as Effect from "effect/Effect";
@@ -200,5 +207,20 @@ export const WsRpcGroup = RpcGroup.make(
     success: schema.subscribeThread.output,
     stream: true,
     error: Schema.Union([OrchestrationV2GetThreadProjectionError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make("projectRequests.create", {
+    payload: ProjectRequestCreateInput,
+    success: ProjectRequestCreateResult,
+    error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make("projectRequests.update", {
+    payload: ProjectRequestUpdateInput,
+    success: ProjectRequestRef,
+    error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make("projectRequests.list", {
+    payload: ProjectRequestsListInput,
+    success: ProjectIssuesListResult,
+    error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
   }),
 );
