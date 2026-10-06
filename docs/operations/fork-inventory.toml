@@ -1221,3 +1221,42 @@ note = "Idle means no desktop-hosted thread (primary or desktop-local secondary)
 id = "v2-port-2689-m2"
 decision = "reconcile-smaller"
 note = "Hosted V2 runtime and server-owned queue selectors gate restart; the install boundary re-reads live atoms and reserves the prepared version natively."
+
+[[patch]]
+name = "fork-nested-threads"
+subject = "feat(threads): nest threads under an orchestrating thread"
+class = "product"
+purpose = "Let a thread nest under an orchestrating thread so it leaves the sidebar and appears in the parent's Agents panel, move threads in and out of nesting, default t3-thread workers to nest under their caller, and let parents answer their workers' questions and approvals from the CLI."
+retire_when = "Upstream provides persistent parent/child thread placement with an equivalent Agents-panel view and CLI escalation, or the fork stops wanting orchestrator nesting."
+depends_on = ["fork-worker-operations"]
+roles = []
+note = "parentThreadId is an optional thread field (fork migration 6, projection_threads.parent_thread_id) set at creation or by thread.parent.set, which emits thread.meta-updated so older clients ignore it; existing flat rows stay valid as NULL and need no new migration. Servers advertise threadNesting on the environment descriptor, which is where t3-thread reads it (serverGetConfig does not carry it). The original one-level cap was lifted because delegated callers can themselves orchestrate workers; ancestor-chain validation preserves the actual invariant, an acyclic tree, without flattening ownership or routing notifications past the direct caller. Nesting supports arbitrary acyclic depth within one project; the decider rejects self, descendants, cross-project, cyclic, missing, and archived parents. Children of an archived or missing parent show in the sidebar. Parent lifecycle changes never cascade to children. The parent's sidebar row rolls up all descendants' approvals, questions, and working or monitoring state. Nested attention remains visually surfaced but never plays completion or attention sounds; only top-level work makes notification sounds. Desktop and web only; mobile lists every thread until a follow-up. t3-thread nests workers directly under the caller at every depth, and pending/answer/approve/deny let the parent escalate instead of the user."
+
+[[patch.decision]]
+id = "agents-panel-settled-shelf"
+date = "2026-09-29"
+decided = "extract-to-additive"
+rationale = "Nested threads leave the sidebar, so the parent's Agents panel is their only shelf and must honor the server lifecycle, including automatic settlement. Threads, workflow runs and direct spawns share one start-ordered list and one collapsed Settled shelf (settled threads; terminal spawns and workflows; idle spawns stay active because they can resume), so this concern owns the whole list instead of a second patch stacking edits on the same AgentsPanel.tsx render block. AgentsPanelEntries.tsx and agentsPanelShelf.logic.ts are additive; AgentsPanel.tsx only hands over upstream's WorkflowSection and AgentRow renderers and drops the footer's settled count, which the shelf header now carries. Rows seen active stay in place until the panel remounts, matching upstream's rule that completion never moves rows under the reader."
+
+[[patch.decision]]
+id = "upstream2237-design-token-scale"
+date = "2026-09-25"
+decided = "adapt"
+rationale = "The nested-thread rows used text-[.7rem] and text-[.65rem], now errors under shadcn(no-arbitrary-values). Take the nearest new tokens: text-2xs (11px) for the row metadata and text-3xs (10px) for the section label."
+
+[[patch.decision]]
+id = "v2-port-2689-m2"
+decision = "reconcile-smaller"
+note = "V2 supervision metadata is separate from native execution lineage; retained behavior and import coverage are recorded in the nesting lane report."
+
+[[patch.decision]]
+id = "socket-open-209-nested-threads"
+date = "2026-10-08"
+decided = "adapt"
+rationale = "Initialize nesting metadata once per persistence environment; leave connection-scoped constructors inert and startup failures retryable."
+
+[[patch.decision]]
+id = "delegated-worker-organization-226"
+date = "2026-10-09"
+decided = "repair-existing-concern"
+rationale = "Seed app-owned child organizational metadata atomically with native creation, preserving later explicit reparent and unnest. The common child factory clears inherited pin/order/opt-out fields. MCP nest/unnest shares the CLI nesting service and exposes organizational metadata independently of execution lineage. Offline repair requires ownership and historical-event provenance; its default run repairs a private VACUUM INTO copy and never constructs repair layers on the source."
