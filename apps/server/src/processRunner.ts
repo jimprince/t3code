@@ -11,6 +11,9 @@ import * as ChildProcess from "effect/unstable/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
+import { makeBudgetedRun } from "./fork/process/LaunchBudget.ts";
+
+export { BackgroundProcessWork, ExecutableCacheGeneration } from "./fork/process/LaunchBudget.ts";
 import {
   collectUint8StreamText,
   decodeUtf8,
@@ -412,9 +415,13 @@ const runProcessCore = Effect.fn("processRunner.runProcessCore")(function* (
 /** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.fn("ProcessRunner.make")(function* () {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-
-  const run: ProcessRunner["Service"]["run"] = (input) =>
-    finalizeRunProcess(runProcessCore(spawner, input), input);
+  const run = yield* makeBudgetedRun(
+    spawner,
+    (invocationSpawner, resolved, original) =>
+      finalizeRunProcess(runProcessCore(invocationSpawner, resolved), original),
+    commandName,
+    hasWindowsCommandNotFoundMessage,
+  );
 
   return ProcessRunner.of({
     run,
