@@ -1,0 +1,4 @@
+id = "new-thread-under-parent-at-launch"
+category = "fix"
+functionality = "thread nesting"
+text = "A thread started with New thread under this one is nested under its parent when it is created, so it shows on the Projects card and project page even when the server is slow to answer or the view has moved on."
