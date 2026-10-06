@@ -1,0 +1,4 @@
+id = "issue-links-open-status-board"
+category = "fix"
+functionality = "threads"
+text = "Linked issues opened from a thread badge or a project issue card open the Agent Status Board page instead of showing {\"error\":\"not found\"}."
