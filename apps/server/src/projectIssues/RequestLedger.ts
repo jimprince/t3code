@@ -75,6 +75,7 @@ import {
   planKindLabelChange,
   requestKindLabel,
 } from "./requestLedger.logic.ts";
+import { cleanRequestTitle, deriveRequestTitle, planRetitle } from "./requestTitle.logic.ts";
 import {
   enqueue,
   isAlreadyFiled,
@@ -245,7 +246,13 @@ export const make = (deps: {
               bug?: boolean;
               excerpt: string;
               existing?: number | null;
-            }> => result.items,
+            }> =>
+              result.items.map((item) => ({
+                ...item,
+                title:
+                  cleanRequestTitle(item.title, item.kind) ||
+                  deriveRequestTitle(item.excerpt || input.text, item.kind).title,
+              })),
           ),
           Effect.catch((error) =>
             Effect.logWarning("request ledger could not split a message; filing it whole", {
@@ -729,6 +736,23 @@ export const make = (deps: {
           yield* api
             .send(target.instance, "PATCH", path, { title: input.title })
             .pipe(Effect.mapError((error) => fail(error.detail)));
+        } else if (!typeOnly && (input.status === "in-progress" || input.status === undefined)) {
+          // Starting or linking a captured request replaces Brad's raw words as its
+          // title; a title anyone set since is left alone.
+          const retitle = planRetitle({
+            title: issue.title ?? "",
+            body: issue.body,
+            kind: names.has("ask:question") && !names.has("ask:task") ? "question" : undefined,
+          });
+          if (retitle !== null) {
+            yield* api.send(target.instance, "PATCH", path, { title: retitle }).pipe(
+              Effect.catch((error) =>
+                Effect.logWarning("request ledger could not retitle a request", {
+                  detail: error.detail,
+                }),
+              ),
+            );
+          }
         }
         const kindChange = planKindLabelChange(names, { kind: input.kind, bug: input.bug });
         if (kindChange.add.length > 0 || kindChange.remove.length > 0) {
@@ -1044,7 +1068,7 @@ export const make = (deps: {
           .filter((entry) => entry.rootThreadId === rootThreadId)
           .flatMap((entry): Pending[] =>
             entry.items === null
-              ? [{ entry, title: entry.text.split("\n")[0]!.slice(0, 120), kind: null }]
+              ? [{ entry, title: deriveRequestTitle(entry.text).title, kind: null }]
               : entry.items
                   .map((item, index) => ({ item, index }))
                   .filter(({ index }) => !entry.filed.includes(index))
