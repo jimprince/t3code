@@ -1796,6 +1796,38 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
     }),
   );
 
+  it.effect("branch PR lookup replays a git failure until its backoff expires", () =>
+    Effect.gen(function* () {
+      const repoDir = yield* makeTempDir("t3code-git-manager-");
+      yield* initRepo(repoDir);
+      const originDir = yield* createBareRemote();
+      const forkDir = yield* createBareRemote();
+      yield* runGit(repoDir, ["remote", "add", "origin", originDir]);
+      yield* runGit(repoDir, ["remote", "add", "fork", forkDir]);
+      yield* runGit(repoDir, ["checkout", "-b", "feature/backoff"]);
+      yield* runGit(repoDir, ["push", "origin", "feature/backoff"]);
+      yield* runGit(repoDir, ["push", "fork", "feature/backoff"]);
+      yield* runGit(repoDir, ["checkout", "main"]);
+      yield* runGit(repoDir, ["branch", "-D", "feature/backoff"]);
+      const { manager } = yield* makeManager();
+      const lookup = manager.branchPullRequest({ cwd: repoDir, branch: "feature/backoff" });
+
+      expect((yield* Effect.flip(lookup))._tag).toBe("GitManagerError");
+      // Fixed on disk, but background sweeps keep the failure until the backoff ends
+      // rather than re-running git for it on every pass, refreshes included.
+      yield* runGit(repoDir, ["remote", "remove", "fork"]);
+      expect((yield* Effect.flip(lookup))._tag).toBe("GitManagerError");
+      expect(
+        (yield* Effect.flip(
+          manager.branchPullRequest({ cwd: repoDir, branch: "feature/backoff" }, { refresh: true }),
+        ))._tag,
+      ).toBe("GitManagerError");
+
+      yield* TestClock.adjust("21 seconds");
+      expect(yield* lookup).toBeNull();
+    }),
+  );
+
   it.effect("branch PR lookup does not reuse a cached PR after the remote is repointed", () =>
     Effect.gen(function* () {
       const repoDir = yield* makeTempDir("t3code-git-manager-");
