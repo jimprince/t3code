@@ -1,6 +1,6 @@
 import { threadRuntimeIsActive } from "@t3tools/client-runtime/state/models";
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
-import type { MessageId } from "@t3tools/contracts";
+import type { EnvironmentId, MessageId, ThreadId } from "@t3tools/contracts";
 import { useCallback } from "react";
 
 import type { ComposerImageAttachment } from "../../composerDraftStore";
@@ -9,25 +9,35 @@ import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { readFileAsDataUrl } from "../ChatView.logic";
 
+interface ThreadSendSettings {
+  readonly modelSelection: OrchestratorSummary["root"]["modelSelection"];
+  readonly runtimeMode: OrchestratorSummary["root"]["runtimeMode"];
+  readonly interactionMode: OrchestratorSummary["root"]["interactionMode"];
+}
+
 /**
- * Sends text (and images) verbatim to the project's orchestrator through the
- * normal message dispatch, so the request ledger captures it like any message
- * Brad types. The server queues it behind the turn when the orchestrator is busy.
+ * Sends text (and images) to a thread through the normal message dispatch, so
+ * the request ledger captures it like any message Brad types. `busy` queues it
+ * behind the thread's running turn instead of sending now.
  */
-export function useSendToOrchestrator() {
+export function useSendToThread() {
   const startTurn = useAtomCommand(threadEnvironment.startTurn);
   return useCallback(
     (
-      summary: OrchestratorSummary,
+      target: { readonly environmentId: EnvironmentId; readonly threadId: ThreadId },
+      settings: ThreadSendSettings,
       prompt: string,
-      images: ComposerImageAttachment[] = [],
-      /** Runs with the message id before it is dispatched, such as marking it a request. */
-      beforeSend?: (messageId: MessageId) => Promise<unknown>,
+      images: ComposerImageAttachment[],
+      options: {
+        readonly busy?: boolean;
+        /** Runs with the message id before it is dispatched, such as marking it a request. */
+        readonly beforeSend?: (messageId: MessageId) => Promise<unknown>;
+      } = {},
     ): { readonly messageId: MessageId; readonly queued: boolean } => {
       const messageId = newMessageId();
-      const queued = threadRuntimeIsActive(summary.root.runtime);
+      const queued = options.busy === true;
       void (async () => {
-        await beforeSend?.(messageId);
+        await options.beforeSend?.(messageId);
         const attachments = await Promise.all(
           images.map(async (image) => ({
             type: "image" as const,
@@ -40,13 +50,13 @@ export function useSendToOrchestrator() {
           })),
         );
         await startTurn({
-          environmentId: summary.root.environmentId,
+          environmentId: target.environmentId,
           input: {
-            threadId: summary.root.id,
+            threadId: target.threadId,
             message: { messageId, role: "user", text: prompt, attachments },
-            modelSelection: summary.root.modelSelection,
-            runtimeMode: summary.root.runtimeMode,
-            interactionMode: summary.root.interactionMode,
+            modelSelection: settings.modelSelection,
+            runtimeMode: settings.runtimeMode,
+            interactionMode: settings.interactionMode,
             dispatchMode: queued ? "queue" : "auto",
             createdAt: new Date().toISOString(),
           },
@@ -55,5 +65,34 @@ export function useSendToOrchestrator() {
       return { messageId, queued };
     },
     [startTurn],
+  );
+}
+
+/**
+ * Sends text (and images) verbatim to the project's orchestrator through the
+ * normal message dispatch, so the request ledger captures it like any message
+ * Brad types. The server queues it behind the turn when the orchestrator is busy.
+ */
+export function useSendToOrchestrator() {
+  const sendToThread = useSendToThread();
+  return useCallback(
+    (
+      summary: OrchestratorSummary,
+      prompt: string,
+      images: ComposerImageAttachment[] = [],
+      /** Runs with the message id before it is dispatched, such as marking it a request. */
+      beforeSend?: (messageId: MessageId) => Promise<unknown>,
+    ): { readonly messageId: MessageId; readonly queued: boolean } =>
+      sendToThread(
+        { environmentId: summary.root.environmentId, threadId: summary.root.id },
+        summary.root,
+        prompt,
+        images,
+        {
+          busy: threadRuntimeIsActive(summary.root.runtime),
+          ...(beforeSend ? { beforeSend } : {}),
+        },
+      ),
+    [sendToThread],
   );
 }
