@@ -488,6 +488,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["base directory folder browser path home"],
   },
   {
+    id: "orchestrators-view",
+    title: "Projects view",
+    to: "/settings/general",
+    searchTerms: ["sidebar workers agents threads board"],
+  },
+  {
     id: "unpin-confirmation",
     title: "Unpin confirmation",
     to: "/settings/general",
