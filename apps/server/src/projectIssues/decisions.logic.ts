@@ -46,6 +46,11 @@ export function parseDecisionIssue(body: string | null | undefined): ProjectIssu
   };
 }
 
+/** Whether an issue body carries a fenced `decision` block, answered or not. */
+export function hasDecisionBlock(body: string | null | undefined): boolean {
+  return DECISION_BLOCK.test((body ?? "").replace(/<!--[\s\S]*?-->/g, ""));
+}
+
 export interface BradAnswerPlan {
   /** Posted on the issue. */
   readonly comment: string;
