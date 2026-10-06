@@ -6,6 +6,8 @@ import * as Match from "effect/Match";
 import * as Schedule from "effect/Schedule";
 import * as Semaphore from "effect/Semaphore";
 import { ChildProcessSpawner } from "effect/process";
+import * as HostProcess from "@t3tools/shared/HostProcess";
+import { SpawnExecutableResolution } from "@t3tools/shared/shell";
 
 import {
   type VcsError,
@@ -19,6 +21,7 @@ import {
   VcsProcessTimeoutError,
 } from "@t3tools/contracts";
 import * as ProcessRunner from "../processRunner.ts";
+import { makeInternalGitResolver } from "./InternalGitExecutable.ts";
 
 export interface VcsProcessInput {
   readonly operation: string;
@@ -115,6 +118,9 @@ const isTransientGitExit = (stderr: string) =>
 
 export const make = Effect.gen(function* () {
   const processRunner = yield* ProcessRunner.ProcessRunner;
+  const platform = yield* HostProcess.Platform;
+  const hostEnvironment = yield* HostProcess.Environment;
+  const resolveGit = makeInternalGitResolver(yield* SpawnExecutableResolution);
   const vcsProcesses = yield* Semaphore.make(VCS_PROCESS_CONCURRENCY);
   const githubProcesses = yield* Semaphore.make(GITHUB_PROCESS_CONCURRENCY);
 
@@ -126,9 +132,24 @@ export const make = Effect.gen(function* () {
       argumentCount: input.args.length,
     };
 
+    const command =
+      input.command === "git"
+        ? resolveGit(
+            platform,
+            input.env === undefined ? hostEnvironment : { ...hostEnvironment, ...input.env },
+            input.spawnCwd ?? input.cwd,
+          )
+        : input.command;
+    if (command === undefined) {
+      return yield* new VcsProcessSpawnError({
+        ...baseError,
+        cause: new Error("Git executable not found outside agent safety wrapper directories"),
+      });
+    }
+
     const result = yield* processRunner
       .run({
-        command: input.command,
+        command,
         args: input.args,
         cwd: input.cwd,
         ...(input.spawnCwd !== undefined ? { spawnCwd: input.spawnCwd } : {}),
