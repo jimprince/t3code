@@ -1,3 +1,7 @@
+import { launchNesting } from "../forkThreads/LaunchNesting.ts";
+import { makeNestingService } from "../forkThreads/NestingService.ts";
+import { readMetadata } from "../forkThreads/MetadataStore.ts";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as WorktreeSetupTracker from "../project/WorktreeSetupTracker.ts";
 import * as ProjectCloneTracker from "../project/ProjectCloneTracker.ts";
@@ -2354,3 +2358,129 @@ it.effect("explicit local launch skips remote policy and preserves the local bas
     assert.equal(harness.createWorktree.mock.calls[0]?.[0].refName, "topic");
   }).pipe(Effect.provide(harness.layer));
 });
+
+/** The nesting a `launchThread` request with a parent installs, built as the websocket handler builds it. */
+const nestedLaunch = (parent: ThreadId, commandId: string) =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const threads = yield* ThreadManagement.ThreadManagementService;
+    const nesting = yield* makeNestingService(sql, threads.getThreadShell, threads.dispatch);
+    return launchNesting(nesting, threads.getThreadShell, {
+      commandId: CommandId.make(commandId),
+      parentThreadId: parent,
+    });
+  });
+
+it.effect(
+  "files a launched thread under its parent before its first message and replays on retry",
+  () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const launches = yield* ThreadLaunch.ThreadLaunchService;
+      const threads = yield* ThreadManagement.ThreadManagementService;
+      const sql = yield* SqlClient.SqlClient;
+      const head = ThreadId.make("nest-head");
+      yield* launches.launch(launchInput({ command: "nest-head", thread: head, message: "Head" }));
+      const child = ThreadId.make("nest-child");
+      const messagesWhenFiled: number[] = [];
+      const nested = yield* nestedLaunch(head, "nest-child");
+      const input = {
+        ...launchInput({ command: "nest-child", thread: child, message: "Look into this" }),
+        afterClaim: (threadId: ThreadId) =>
+          threads.getMessageCount(threadId).pipe(
+            Effect.orDie,
+            Effect.tap((count) => Effect.sync(() => messagesWhenFiled.push(count))),
+            Effect.andThen(nested.afterClaim(threadId)),
+          ),
+      };
+      yield* launches.launch(input);
+      // Nested while the thread was still empty, so the first message never sees a top-level thread.
+      assert.deepEqual(messagesWhenFiled, [0]);
+      assert.equal((yield* readMetadata(sql, child))?.parentThreadId, head);
+      assert.equal(yield* threads.getMessageCount(child), 1);
+      // The same request again replays: one thread, one message, same parent, no error.
+      yield* launches.launch(input);
+      assert.equal((yield* readMetadata(sql, child))?.parentThreadId, head);
+      assert.equal(yield* threads.getMessageCount(child), 1);
+    }).pipe(Effect.provide(harness.layer));
+  },
+);
+
+it.effect("a parent that is missing or archived fails before any thread or turn exists", () => {
+  const harness = makeHarness();
+  return Effect.gen(function* () {
+    const launches = yield* ThreadLaunch.ThreadLaunchService;
+    const threads = yield* ThreadManagement.ThreadManagementService;
+    const head = ThreadId.make("gone-head");
+    yield* launches.launch(launchInput({ command: "gone-head", thread: head, message: "Head" }));
+    const missing = yield* nestedLaunch(ThreadId.make("never-existed"), "gone-1");
+    assert.isTrue(Exit.isFailure(yield* Effect.exit(missing.check)));
+    yield* threads.dispatch({
+      type: "thread.archive",
+      commandId: CommandId.make("gone-archive"),
+      threadId: head,
+    });
+    const archived = yield* nestedLaunch(head, "gone-2");
+    assert.isTrue(Exit.isFailure(yield* Effect.exit(archived.check)));
+    const live = yield* launches.launch(launchInput({ command: "gone-live", thread: "gone-live" }));
+    const ok = yield* nestedLaunch(live.threadId, "gone-3");
+    assert.isTrue(Exit.isSuccess(yield* Effect.exit(ok.check)));
+  }).pipe(Effect.provide(harness.layer));
+});
+
+it.effect(
+  "a nesting failure after the thread exists stops the launch before its first turn",
+  () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const launches = yield* ThreadLaunch.ThreadLaunchService;
+      const threads = yield* ThreadManagement.ThreadManagementService;
+      const child = ThreadId.make("late-child");
+      const nested = yield* nestedLaunch(ThreadId.make("late-missing-head"), "late-child");
+      const exit = yield* Effect.exit(
+        launches.launch({
+          ...launchInput({ command: "late-child", thread: child, message: "Look into this" }),
+          afterClaim: nested.afterClaim,
+        }),
+      );
+      assert.isTrue(Exit.isFailure(exit));
+      if (Exit.isFailure(exit)) {
+        const failure = Cause.squash(exit.cause) as { readonly operation?: string };
+        assert.equal(failure.operation, "nest-thread");
+      }
+      // No message and no run: nothing for the client to restore a prompt for, no running orphan.
+      assert.equal(yield* threads.getMessageCount(child), 0);
+      assert.equal((yield* threads.getThreadRecords(child, ["runs"])).runs.length, 0);
+    }).pipe(Effect.provide(harness.layer));
+  },
+);
+
+it.effect(
+  "a named-agent project accepts the first message of a thread filed under its head",
+  () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const launches = yield* ThreadLaunch.ThreadLaunchService;
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`INSERT INTO projection_projects (project_id, title, workspace_root, scripts_json, created_at, updated_at, permanent_agent_json)
+      VALUES (${projectId}, 'Project', '/repo', '[]', '2026-06-20T00:00:00.000Z', '2026-06-20T00:00:00.000Z', '{"name":"printer"}')`;
+      const head = ThreadId.make("agent-head");
+      yield* launches.launch(launchInput({ command: "agent-head", thread: head, message: "Head" }));
+      // Filed after its first message, as before: the head already counts as the live root, so it is refused.
+      const refused = yield* Effect.exit(
+        launches.launch(
+          launchInput({ command: "agent-late", thread: "agent-late", message: "Hi" }),
+        ),
+      );
+      assert.isTrue(Exit.isFailure(refused));
+      // Filed before it, the thread is no root and its message is accepted.
+      const nested = yield* nestedLaunch(head, "agent-nested");
+      const child = ThreadId.make("agent-nested");
+      yield* launches.launch({
+        ...launchInput({ command: "agent-nested", thread: child, message: "Look into this" }),
+        afterClaim: nested.afterClaim,
+      });
+      assert.equal((yield* readMetadata(sql, child))?.parentThreadId, head);
+    }).pipe(Effect.provide(harness.layer));
+  },
+);

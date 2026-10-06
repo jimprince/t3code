@@ -164,6 +164,8 @@ interface StartThreadBootstrap {
 }
 
 export interface StartThreadTurnInput extends ThreadCommandInput {
+  /** Files a launched thread under this thread. Only for servers advertising `launchThreadParent`; older ones ignore it. */
+  readonly parentThreadId?: ThreadId;
   readonly manualContinuationOfRunId?: RunId;
   readonly message: {
     readonly messageId: MessageId;
@@ -678,6 +680,7 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
       runtimeMode: input.runtimeMode,
       interactionMode: input.interactionMode,
       workspaceStrategy,
+      ...(input.parentThreadId === undefined ? {} : { parentThreadId: input.parentThreadId }),
       initialMessage: {
         messageId: input.message.messageId,
         text: input.message.text,
