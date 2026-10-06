@@ -1,0 +1,4 @@
+id = "cli-project-layout"
+category = "fix"
+functionality = "projects"
+text = "Agents can now change a project page from the command line without losing widgets. Setting the dashboard widgets used to drop Decisions, Notes, Links and any newer widget without a word; it now accepts every widget and stops with an error naming any it does not know. Showing the dashboard lists every widget on every tab, and a new layout command applies the same changes as the page's editor."
