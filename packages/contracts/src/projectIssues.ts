@@ -69,6 +69,19 @@ export const ProjectEpicProgress = Schema.Struct({
 });
 export type ProjectEpicProgress = typeof ProjectEpicProgress.Type;
 
+/**
+ * A `needs-brad` issue in the fixed decision format: the context before the fenced
+ * `decision` block, who is waiting for the answer, and the options (none for an open
+ * question). Parsed by the server so every client shows the same thing.
+ */
+export const ProjectIssueDecision = Schema.Struct({
+  context: Schema.String,
+  /** A saved agent name or thread id; the block's `waiting:` line, else chief-of-staff-inbox. */
+  waiting: Schema.String,
+  options: Schema.Array(Schema.Struct({ text: Schema.String, recommended: Schema.Boolean })),
+});
+export type ProjectIssueDecision = typeof ProjectIssueDecision.Type;
+
 export const ProjectIssue = Schema.Struct({
   host: TrimmedNonEmptyString,
   repository: TrimmedNonEmptyString,
@@ -87,6 +100,8 @@ export const ProjectIssue = Schema.Struct({
   closedAt: Schema.NullOr(IsoDateTime),
   /** Threads in the project tree that link this issue. */
   linkedThreadIds: Schema.Array(ThreadId),
+  /** Set on an open issue labeled `needs-brad`: a decision waiting on Brad. */
+  decision: Schema.optionalKey(ProjectIssueDecision),
   /** Set for requests (issues labeled ask). */
   stage: Schema.optionalKey(ProjectRequestStage),
   milestone: Schema.optionalKey(Schema.NullOr(ProjectMilestone)),
@@ -202,6 +217,34 @@ export type ProjectRequestSettleInput = typeof ProjectRequestSettleInput.Type;
 
 export const ProjectRequestSettleResult = Schema.Struct({ settled: Schema.Boolean });
 export type ProjectRequestSettleResult = typeof ProjectRequestSettleResult.Type;
+
+/**
+ * Brad decides an item waiting on him from Needs you. `approve` and `option` start
+ * the work (comment, in progress, one message to the thread on it); `not-yet`
+ * returns the item to Pending with his reason and sends nothing. On a `needs-brad`
+ * decision issue, `option` and `answer` comment, remove the label and send the answer
+ * to the thread the issue says is waiting; the issue stays open.
+ */
+export const ProjectRequestDecideInput = Schema.Struct({
+  /** A thread of the project tree, as in `ProjectRequestUpdateInput`. */
+  threadId: ThreadId,
+  /** Issue number in the project's tracker repository, `owner/repo#N`, or a full issue URL. */
+  reference: TrimmedNonEmptyString,
+  decision: Schema.Literals(["approve", "not-yet", "option", "answer"]),
+  /** The option Brad chose (with `option`). */
+  option: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(300))),
+  /** Brad's own answer to an open question (with `answer`). */
+  answer: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(2000))),
+  /** Why not yet (with `not-yet`), or the short note that goes with an answer; one line. */
+  reason: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(500))),
+});
+export type ProjectRequestDecideInput = typeof ProjectRequestDecideInput.Type;
+
+export const ProjectRequestDecideResult = Schema.Struct({
+  /** The thread that was told to go ahead; null for Not yet or when it could not be messaged. */
+  notifiedThreadId: Schema.NullOr(ThreadId),
+});
+export type ProjectRequestDecideResult = typeof ProjectRequestDecideResult.Type;
 
 /**
  * A message from the New request box, queued as an explicit request just before it
