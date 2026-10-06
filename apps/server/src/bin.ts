@@ -20,6 +20,9 @@ if (
   if (command === "acp-mcp-bridge" || command === "acp-mcp-call") {
     const { runAcpMcpCliFastPath } = await import("./mcp/AcpMcpStdioBridge.ts");
     await runAcpMcpCliFastPath(command, process.argv.slice(3));
+  } else if (command === "repair-delegated-workers") {
+    const { runRepairDelegatedWorkers } = await import("./cli/repairDelegatedWorkers.ts");
+    await runRepairDelegatedWorkers(process.argv.slice(3));
   } else {
     const { runCli } = await import("./binCli.ts");
     runCli();
