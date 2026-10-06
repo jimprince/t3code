@@ -1206,6 +1206,19 @@ export class RemoteEnvironmentClient {
     }
   }
 
+  /** Project roadmap: versions as Gitea milestones on the project's tracker. */
+  async projectRoadmap<T>(
+    method: "projectRoadmapGet" | "projectRoadmapMove" | "projectRoadmapSaveVersion",
+    input: Record<string, unknown>,
+  ): Promise<T> {
+    const rpc = await this.openRpc();
+    try {
+      return await rpc.request<T>(method, input);
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
   async settleThread(threadId: string, options: { self?: boolean } = {}) {
     if (threadId === resolveCallerThreadId() && !options.self) {
       throw new Error(
