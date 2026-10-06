@@ -337,6 +337,16 @@ export interface PullRequestProviderApi {
   readonly kind: SourceControlProviderKind;
   readonly capabilities: PullRequestCapabilities;
 
+  /**
+   * The host this provider's own projects carry for a reference whose `host` is another name
+   * for the same server, such as the public address a reverse proxy serves it on. Null when the
+   * host is not one it serves.
+   */
+  readonly resolveHostAlias?: (input: {
+    readonly host: string;
+    readonly repository: string;
+  }) => Effect.Effect<string | null, PullRequestProviderError>;
+
   /** The signed-in account, which is what involvement filtering compares against. */
   readonly getViewer: (input: {
     readonly cwd: string;
