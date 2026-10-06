@@ -1,3 +1,8 @@
+import {
+  newForkCommandId,
+  resetForkThreadOrder,
+  readForkOrderResetSupported,
+} from "../components/chat/forkThreadCommands";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { requestCustomSnooze } from "../components/CustomSnoozeDialog";
 import {
@@ -68,6 +73,7 @@ export function useThreadActionMenu(input: {
   readonly projectCwd: string | null;
   readonly onStartRename: () => void;
 }) {
+  const resetOrder = useAtomCommand(resetForkThreadOrder);
   const { threadRef, projectCwd, onStartRename } = input;
   const router = useRouter();
   const projects = useProjects();
@@ -137,6 +143,7 @@ export function useThreadActionMenu(input: {
           autoSettleOptOut: readEnvironmentSupportsAutoSettleOptOut(threadRef.environmentId),
           snooze: readEnvironmentSupportsSnooze(threadRef.environmentId),
           pinning: readEnvironmentSupportsPinning(threadRef.environmentId),
+          orderReset: readForkOrderResetSupported(threadRef.environmentId),
           titleRegeneration: readEnvironmentSupportsTitleRegeneration(threadRef.environmentId),
         };
         const isRegeneratingTitle = thread.titleRegeneration != null;
@@ -179,6 +186,12 @@ export function useThreadActionMenu(input: {
           }
         };
         switch (action) {
+          case "order-reset":
+            await resetOrder({
+              environmentId: threadRef.environmentId,
+              input: { threadId: threadRef.threadId, commandId: newForkCommandId() },
+            });
+            return;
           case "project-settings": {
             const project = projects.find(
               (candidate) =>
@@ -337,6 +350,7 @@ export function useThreadActionMenu(input: {
       markThreadUnread,
       onStartRename,
       pinThread,
+      resetOrder,
       projectCwd,
       projectGroupingSettings,
       projects,
