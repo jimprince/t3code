@@ -1,7 +1,9 @@
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
 import { useMemo, useState } from "react";
 
+import { InlineButton } from "../ui/button";
 import { formatIssueAge } from "./projectIssuesBoard.logic";
+import { GroupTitle, ProjectSection } from "./ProjectSection";
 import { ProjectPullRequestLink } from "./ProjectPullRequestLink";
 import {
   derivePullRequestRows,
@@ -10,7 +12,7 @@ import {
 } from "./projectPullRequests.logic";
 
 const GROUPS: ReadonlyArray<{ group: PullRequestGroup; title: string }> = [
-  { group: "needs-you", title: "Needs you" },
+  { group: "needs-you", title: "For review" },
   { group: "open", title: "Open" },
   { group: "recent", title: "Recently merged or closed" },
 ];
@@ -39,12 +41,12 @@ function Row({
     row.conflicting ? "conflicts" : null,
   ].filter(Boolean);
   return (
-    <li className="flex items-center gap-3 py-1.5">
+    <li className="flex items-baseline gap-3 py-1.5">
       <span className="shrink-0">
         <ProjectPullRequestLink summary={summary} pullRequest={row.link} />
       </span>
       <span
-        className={`min-w-0 flex-1 truncate text-sm ${row.superseded ? "text-muted-foreground line-through" : ""}`}
+        className={`min-w-0 flex-1 text-sm ${row.superseded ? "text-muted-foreground line-through" : ""}`}
       >
         {row.link.snapshot?.title ?? ""}
       </span>
@@ -76,16 +78,10 @@ export function ProjectPullRequestsWidget({ summary }: { readonly summary: Orche
   const hidden = rows.filter((row) => row.group === "hidden");
   const recent = rows.filter((row) => row.group === "recent");
   const openCount = rows.length - hidden.length - recent.length;
-  if (rows.length === 0) return null;
+  // Only open pull requests earn the widget its place; merged or closed ones fold under them.
+  if (openCount === 0) return null;
   return (
-    <section className="border-t border-border pt-4">
-      {/* The count is open pull requests; merged or closed ones get one line of their own. */}
-      <h2 className="mb-2 flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-        Pull requests
-        {openCount > 0 ? (
-          <span className="tabular-nums text-foreground/60">{openCount}</span>
-        ) : null}
-      </h2>
+    <ProjectSection title="Pull requests" count={openCount}>
       {GROUPS.map(({ group, title }) => {
         const items = rows.filter((row) => row.group === group);
         if (items.length === 0) return null;
@@ -93,18 +89,17 @@ export function ProjectPullRequestsWidget({ summary }: { readonly summary: Orche
         return (
           <div key={group} className="mb-2">
             {group === "recent" ? (
-              <button
-                type="button"
-                className="mb-1 text-xs text-foreground/80 hover:text-foreground"
-                aria-expanded={showRecent}
-                onClick={() => setShowRecent((value) => !value)}
-              >
-                {title} <span className="tabular-nums text-muted-foreground">{items.length}</span>
-              </button>
+              <p className="mb-1 text-xs">
+                <InlineButton
+                  tone="muted"
+                  aria-expanded={showRecent}
+                  onClick={() => setShowRecent((value) => !value)}
+                >
+                  {title} {items.length}
+                </InlineButton>
+              </p>
             ) : (
-              <h3 className="mb-1 text-xs text-foreground/80">
-                {title} <span className="tabular-nums text-muted-foreground">{items.length}</span>
-              </h3>
+              <GroupTitle title={title} count={items.length} />
             )}
             {collapsed ? null : (
               <ul className="divide-y divide-border">
@@ -118,14 +113,15 @@ export function ProjectPullRequestsWidget({ summary }: { readonly summary: Orche
       })}
       {hidden.length > 0 ? (
         <div>
-          <button
-            type="button"
-            className="text-xs text-muted-foreground hover:text-foreground"
-            aria-expanded={showHidden}
-            onClick={() => setShowHidden((value) => !value)}
-          >
-            {showHidden ? "Hide" : "Show"} {hidden.length} older merged or closed
-          </button>
+          <p className="text-xs">
+            <InlineButton
+              tone="muted"
+              aria-expanded={showHidden}
+              onClick={() => setShowHidden((value) => !value)}
+            >
+              {showHidden ? "Hide" : "Show"} {hidden.length} older merged or closed
+            </InlineButton>
+          </p>
           {showHidden ? (
             <ul className="divide-y divide-border">
               {hidden.map((row) => (
@@ -135,6 +131,6 @@ export function ProjectPullRequestsWidget({ summary }: { readonly summary: Orche
           ) : null}
         </div>
       ) : null}
-    </section>
+    </ProjectSection>
   );
 }
