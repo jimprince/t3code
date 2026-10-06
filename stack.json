@@ -1,10 +1,12 @@
 {
   "version": 5,
-  "prev": "f34bc3717de91570178fe03bcba23da97de35b5c",
-  "head": "89ef1f3f8b765636356c6161e1a9a620f60817f0",
+  "prev": "8cbf32cc4f4766e5091f65a8ab60073977e3b8fb",
+  "head": "d3388b457dc6d61b65a1d819cdd9a41bd45a975c",
   "applied": [
     "fork-build-ci-compat",
-    "fork-worker-operations",
+    "fork-worker-operations"
+  ],
+  "unapplied": [
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
     "fork-general-chat",
@@ -96,9 +98,7 @@
     "fork-item-types",
     "fork-board-declutter",
     "fork-project-skew-gate",
-    "fork-request-titles"
-  ],
-  "unapplied": [
+    "fork-request-titles",
     "fork-conversation-fork",
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
