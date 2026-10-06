@@ -1,3 +1,4 @@
+import { assertFixtureMigration16 } from "../persistence/fixtureMigration16.testkit.ts";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
@@ -10,6 +11,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
+import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { layerFromPath as makeSqlitePersistenceLive } from "../persistence/Sqlite.ts";
 import { runMigrations } from "../persistence/Migrations.ts";
@@ -36,6 +38,9 @@ describe.runIf(fixtures !== undefined)("shipped issue data", () => {
         yield* Effect.tryPromise(() =>
           NodeFSP.copyFile(NodePath.join(fixtures!, `${name}.small.sanitized.sqlite`), file),
         );
+        yield* assertFixtureMigration16.pipe(
+          Effect.provide(NodeSqliteClient.layer({ filename: file })),
+        );
         const database = makeSqlitePersistenceLive(file).pipe(
           Layer.provideMerge(NodeServices.layer),
         );
@@ -54,7 +59,7 @@ describe.runIf(fixtures !== undefined)("shipped issue data", () => {
           const main = yield* sql`SELECT * FROM effect_sql_migrations ORDER BY migration_id`;
           const fork = yield* sql`SELECT * FROM effect_sql_fork_migrations ORDER BY migration_id`;
           expect(main.at(-1)?.migration_id).toBe(62);
-          expect(fork.at(-1)?.migration_id).toBe(15);
+          expect(fork.at(-1)?.migration_id).toBe(16);
           yield* imports.reconcileShells;
           yield* imports.reconcileShells;
           let checked = 0;
