@@ -1,3 +1,4 @@
+import type { MessageOrigin } from "@t3tools/shared/messageOrigin";
 import * as NodeCrypto from "node:crypto";
 
 import {
@@ -46,6 +47,7 @@ export interface QueueClient {
     text: string;
     allowWhileRunning?: boolean;
     queueWhileRunning?: boolean;
+    origin?: MessageOrigin | null;
   }): Promise<unknown>;
 }
 
@@ -62,6 +64,7 @@ export async function enqueueSend(input: {
   environment: string;
   text: string;
   queuedDuringTurnId: string | null;
+  origin?: MessageOrigin | null;
   now?: () => string;
 }): Promise<SavedQueuedSend> {
   const now = (input.now ?? nowIso)();
@@ -74,6 +77,7 @@ export async function enqueueSend(input: {
       agentName: input.agentName,
       environment: input.environment,
       text: input.text,
+      origin: input.origin ?? null,
       status: "queued",
       queuedDuringTurnId: input.queuedDuringTurnId,
       attempts: 0,
@@ -327,6 +331,7 @@ export async function drainQueuedSends(options: {
       await client.sendMessage({
         threadId: claimed.threadId,
         text: claimed.text,
+        origin: claimed.origin ?? null,
         queueWhileRunning: false,
       });
       result = {
