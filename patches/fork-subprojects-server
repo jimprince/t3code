@@ -1,6 +1,6 @@
 Bottom: 7bed57c7e00f37136bbfea0f465053211ce10bbd
-Top:    0044a08279339a77a39cc8d83cf49b5de2888a7f
+Top:    67ede7979e7f15049ff485401270cdade0353172
 Author: brad <bradprin@live.com>
-Date:   2026-10-06 19:52:49 +0000
+Date:   2026-10-06 20:00:12 +0000
 
 feat(projects): nested threads can be subprojects with their own page data
