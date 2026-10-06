@@ -1310,6 +1310,8 @@ export const ServerSettings = Schema.Struct({
   branchNameInstructions: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   removeAgentCreditsOnMerge: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   giteaInstances: GiteaInstances.pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  /** File the requests typed in this server's threads as Gitea issues (the request ledger). */
+  requestLedgerEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   sourceControlWritingStyle: SourceControlWritingStyleSettings.pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
@@ -1576,6 +1578,7 @@ export const ServerSettingsPatch = Schema.Struct({
   branchNameInstructions: Schema.optionalKey(TrimmedString),
   removeAgentCreditsOnMerge: Schema.optionalKey(Schema.Boolean),
   giteaInstances: Schema.optionalKey(GiteaInstances),
+  requestLedgerEnabled: Schema.optionalKey(Schema.Boolean),
   sourceControlWritingStyle: Schema.optionalKey(
     Schema.Struct({
       mode: Schema.optionalKey(SourceControlWritingStyleMode),
