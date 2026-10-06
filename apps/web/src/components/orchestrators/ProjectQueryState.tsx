@@ -2,7 +2,8 @@ import { Button } from "../ui/button";
 
 /**
  * What a project view shows before its data: never an empty pane. "Loading" while
- * the first answer is on its way, or the error with a Retry.
+ * the first answer is on its way, or the error with a Retry. The error wraps in
+ * full: a clipped reason cannot be acted on or reported.
  */
 export function ProjectQueryState({
   what,
@@ -14,16 +15,16 @@ export function ProjectQueryState({
   readonly what: string;
   readonly error: string | null;
   readonly onRetry: () => void;
-  /** One line inside a summary row instead of a paragraph. */
+  /** Inside a summary row instead of a paragraph. */
   readonly inline?: boolean;
 }) {
   const Tag = inline ? "span" : "p";
   return (
     <Tag
       role={error ? "alert" : "status"}
-      className={`flex min-w-0 items-center gap-2 text-sm text-muted-foreground ${inline ? "" : "py-2"}`}
+      className={`flex min-w-0 items-start gap-2 text-sm text-muted-foreground ${inline ? "" : "py-2"}`}
     >
-      <span className="min-w-0 truncate">
+      <span className="min-w-0 flex-1 break-words">
         {error ? `Could not load the ${what}: ${error}` : `Loading the ${what}...`}
       </span>
       {error ? (
