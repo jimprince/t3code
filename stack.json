@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "e3d35cdd3dce4bf82cb1d397644186aa10e872dd",
-  "head": "36d40a7cc2c4783290008ae2be6227b784c9539d",
+  "prev": "83eb3203de4d26ce5f0be286c70ba4f89c1472dd",
+  "head": "ec4502838058e4c246e6d268e518d79ed80bcb9e",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -106,7 +106,8 @@
     "fork-cli-project-layout",
     "fork-session-reconcile",
     "fork-codex-extra-skill-roots",
-    "fork-dashboard-polish"
+    "fork-dashboard-polish",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-phone-side-panels",
@@ -431,6 +432,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "b944a2751d8828af07f0b2402a53eeac5ad02a0c"
+    },
+    "refresh-temp": {
+      "oid": "ec4502838058e4c246e6d268e518d79ed80bcb9e"
     }
   }
 }
