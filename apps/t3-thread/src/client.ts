@@ -9,6 +9,7 @@ import { withThreadMetadata, type ThreadMetadata } from "./v2/nesting.js";
 import { projectionHasWork } from "./v2/workState.js";
 import type { WorktreeGcThread } from "./worktreeGc.js";
 import type { OrchestrationV2ShellSnapshot } from "@t3tools/contracts";
+import { makeMessageOriginContext, type MessageOrigin } from "@t3tools/shared/messageOrigin";
 import { refreshSavedEnvironmentSession } from "./sessionRefresh.js";
 import { pendingRequests, requirePendingRequest } from "./v2/requests.js";
 import { wrapWithPreamble, type WorkerContext } from "./thread-preamble.js";
@@ -812,6 +813,7 @@ export class RemoteEnvironmentClient {
     allowWhileRunning?: boolean;
     queueWhileRunning?: boolean;
     agentName?: string | null;
+    origin?: MessageOrigin | null;
   }): Promise<SendMessageOutcome> {
     const thread = await this.findThread(input.threadId);
     if (thread.archivedAt || thread.deletedAt) {
@@ -832,6 +834,7 @@ export class RemoteEnvironmentClient {
         environment: this.environment.name,
         text: input.text,
         queuedDuringTurnId: thread.latestTurn?.turnId ?? null,
+        origin: input.origin ?? null,
       });
       return {
         dispatched: false,
@@ -850,6 +853,12 @@ export class RemoteEnvironmentClient {
         messageId: NodeCrypto.randomUUID(),
         text: input.text,
         attachments: [],
+        ...(input.origin
+          ? {
+              context: makeMessageOriginContext(input.origin),
+              senderThreadId: input.origin.fromThreadId,
+            }
+          : {}),
         dispatchMode:
           input.allowWhileRunning && thread.latestTurn?.state === "running"
             ? { type: "steer_active", targetRunId: thread.latestTurn.turnId }
