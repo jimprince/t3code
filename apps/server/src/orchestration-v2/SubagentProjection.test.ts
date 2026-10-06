@@ -72,6 +72,11 @@ function makeParentThread(): OrchestrationV2AppThread {
     snoozedAt,
     deletedAt: null,
     historyOrigin: "v1_import",
+    pinnedAt: snoozedAt,
+    pinOrderKey: "an",
+    activeOrderKey: "a0",
+    autoSettleDisabledAt: snoozedAt,
+    unsettledAt: snoozedAt,
   };
 }
 
@@ -92,6 +97,11 @@ it("keeps a subagent child awake when its parent thread is snoozed", () => {
     creationSource: "provider",
   });
 
+  assert.isNull(childThread.pinnedAt);
+  assert.isNull(childThread.pinOrderKey);
+  assert.isNull(childThread.activeOrderKey);
+  assert.isNull(childThread.autoSettleDisabledAt);
+  assert.isNull(childThread.unsettledAt);
   assert.isNull(childThread.snoozedUntil);
   assert.isNull(childThread.snoozedAt);
   assert.equal(childThread.projectId, parentThread.projectId);
