@@ -1,29 +1,41 @@
-import type { ProjectIssue, ProjectIssueStatus } from "@t3tools/contracts";
+import type { ProjectIssue } from "@t3tools/contracts";
 
-/** Lanes in Agent Status Board order and wording, so the two boards read the same. */
+/**
+ * Board lanes. Needs you and Shipped, test it come from the same source as the
+ * Dashboard's Needs you; the rest follow the issue's status.
+ */
 export const PROJECT_ISSUE_LANES = [
-  { status: "needs-review", title: "Needs your review" },
-  { status: "in-progress", title: "In progress" },
-  { status: "pending", title: "Pending" },
-  { status: "done", title: "Done" },
-] as const satisfies ReadonlyArray<{ status: ProjectIssueStatus; title: string }>;
+  { lane: "needs-you", title: "Needs you" },
+  { lane: "shipped", title: "Shipped, test it" },
+  { lane: "in-progress", title: "Working" },
+  { lane: "pending", title: "Pending" },
+  { lane: "done", title: "Done" },
+] as const;
 
-export type ProjectIssueLaneStatus = (typeof PROJECT_ISSUE_LANES)[number]["status"];
+export type ProjectIssueLane = (typeof PROJECT_ISSUE_LANES)[number]["lane"];
 
 export interface ProjectIssueLanes {
-  readonly lanes: Record<ProjectIssueLaneStatus, ProjectIssue[]>;
+  readonly lanes: Record<ProjectIssueLane, ProjectIssue[]>;
   /** Open issues parked in Backlog; shown folded under Pending. */
   readonly backlog: ProjectIssue[];
 }
 
+/** The Needs you groups that land in the Shipped, test it lane. */
+const SHIPPED_GROUP = "test";
+
 /**
- * Sorts issues into lanes. Open lanes put the longest-waiting issue first;
- * Done shows the most recently closed first and skips archived (abandoned) work,
- * which the Agent Status Board also keeps out of its lanes.
+ * Sorts issues into lanes. `needsYou` maps an issue (repository#number) to its
+ * Needs you group, so the board and the Dashboard agree. Open lanes put the
+ * longest-waiting issue first; Done shows the most recently closed first and
+ * skips archived (abandoned) work.
  */
-export function groupProjectIssues(issues: ReadonlyArray<ProjectIssue>): ProjectIssueLanes {
+export function groupProjectIssues(
+  issues: ReadonlyArray<ProjectIssue>,
+  needsYou: ReadonlyMap<string, string> = new Map(),
+): ProjectIssueLanes {
   const lanes: ProjectIssueLanes["lanes"] = {
-    "needs-review": [],
+    "needs-you": [],
+    shipped: [],
     "in-progress": [],
     pending: [],
     done: [],
@@ -31,11 +43,18 @@ export function groupProjectIssues(issues: ReadonlyArray<ProjectIssue>): Project
   const backlog: ProjectIssue[] = [];
   for (const issue of issues) {
     if (issue.status === "archived") continue;
-    if (issue.status === "backlog") backlog.push(issue);
+    const group =
+      issue.closedAt === null ? needsYou.get(`${issue.repository}#${issue.number}`) : undefined;
+    if (group !== undefined) lanes[group === SHIPPED_GROUP ? "shipped" : "needs-you"].push(issue);
+    else if (issue.status === "done") lanes.done.push(issue);
+    else if (issue.status === "backlog") backlog.push(issue);
+    // Marked for review but not (or no longer) waiting on Brad: still being worked.
+    else if (issue.status === "needs-review") lanes["in-progress"].push(issue);
     else lanes[issue.status].push(issue);
   }
   const oldestFirst = (a: ProjectIssue, b: ProjectIssue) => a.updatedAt.localeCompare(b.updatedAt);
-  lanes["needs-review"].sort(oldestFirst);
+  lanes["needs-you"].sort(oldestFirst);
+  lanes.shipped.sort(oldestFirst);
   lanes["in-progress"].sort(oldestFirst);
   lanes.pending.sort(oldestFirst);
   backlog.sort(oldestFirst);

@@ -1,42 +1,50 @@
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import type { EnvironmentId, ProjectIssue } from "@t3tools/contracts";
+import type { ProjectIssue } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { MessageSquareIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { resolveThreadIssueBadgeTarget } from "../ThreadIssueBadges";
 import { useEmbeddedPages } from "../embeddedPages/useEmbeddedPages";
-import { projectIssuesQuery } from "../../state/projectIssues";
-import { useEnvironmentQuery } from "../../state/query";
-import { buildThreadRouteParams } from "../../threadRoutes";
 import {
   formatIssueAge,
   groupProjectIssues,
   PROJECT_ISSUE_LANES,
-  type ProjectIssueLaneStatus,
+  type ProjectIssueLane,
 } from "./projectIssuesBoard.logic";
 import { projectReturnState, type ProjectReturnLocation } from "./projectNavigation";
-import { taskKind } from "./projectRequests.logic";
+import { ProjectQueryState } from "./ProjectQueryState";
+import { issueKey, taskKind } from "./projectRequests.logic";
+import {
+  ReopenButton,
+  SettleButton,
+  useNeedsYou,
+  useOpenThread,
+  useSettle,
+  type SettleControls,
+} from "./ProjectRequestsSection";
 
 const DONE_PREVIEW = 8;
+const PENDING_PREVIEW = 10;
 
 function IssueRow({
-  environmentId,
   issue,
   now,
   projectReturn,
+  settle,
+  onOpenThread,
 }: {
-  readonly environmentId: EnvironmentId;
   readonly issue: ProjectIssue;
   readonly now: number;
   readonly projectReturn: ProjectReturnLocation;
+  readonly settle: SettleControls;
+  readonly onOpenThread: (threadId: string) => void;
 }) {
   const navigate = useNavigate();
   const pages = useEmbeddedPages();
   const target = resolveThreadIssueBadgeTarget(pages, issue);
   const thread = issue.requestSource?.threadId ?? issue.linkedThreadIds[0];
-  const kind = taskKind(issue.labels);
+  const closed = issue.closedAt !== null || issue.status === "done";
   return (
     <li className="border-b border-border/60 py-1.5 last:border-b-0">
       {target.kind === "external" ? (
@@ -44,14 +52,14 @@ function IssueRow({
           href={target.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="block truncate text-sm text-foreground hover:underline"
+          className="line-clamp-2 text-sm text-foreground hover:underline"
         >
           {issue.title}
         </a>
       ) : (
         <button
           type="button"
-          className="block max-w-full truncate text-sm text-foreground hover:underline"
+          className="line-clamp-2 max-w-full text-left text-sm text-foreground hover:underline"
           onClick={() =>
             void navigate({
               to: "/embedded/$pageId",
@@ -64,67 +72,70 @@ function IssueRow({
           {issue.title}
         </button>
       )}
-      <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-        <span className="truncate">
+      {/* The same tags, in the same order, on every card; nothing is clipped. */}
+      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+        <span className="break-all">
           {issue.repository.split("/")[1]}#{issue.number}
         </span>
-        {kind ? (
-          <span className="text-foreground/70">{kind}</span>
-        ) : issue.isRequest ? (
-          <span className="text-foreground/70">request</span>
-        ) : null}
+        <span className="text-foreground/70">
+          {taskKind(issue.labels) ?? (issue.isRequest ? "request" : "issue")}
+        </span>
         {issue.comments > 0 ? (
           <span className="inline-flex items-center gap-0.5 tabular-nums">
             <MessageSquareIcon className="size-3" />
             {issue.comments}
           </span>
         ) : null}
-        <span className="ml-auto tabular-nums">
+        <span className="tabular-nums">
           {formatIssueAge(issue.closedAt ?? issue.updatedAt, now)}
         </span>
         {thread ? (
           <button
             type="button"
             className="hover:text-foreground"
-            onClick={() =>
-              void navigate({
-                to: "/$environmentId/$threadId",
-                params: buildThreadRouteParams(scopeThreadRef(environmentId, thread)),
-                state: projectReturnState(projectReturn),
-              })
-            }
+            onClick={() => onOpenThread(thread)}
           >
             thread
           </button>
         ) : null}
+        <span className="ml-auto">
+          {closed ? (
+            <ReopenButton issue={issue} settle={settle} />
+          ) : (
+            <SettleButton issues={[issue]} settle={settle} />
+          )}
+        </span>
       </div>
     </li>
   );
 }
 
 /**
- * The project's Gitea issues as a board, in the Agent Status Board's lanes:
- * every repository the orchestrator tree works in, requests included.
+ * The project's Gitea issues as a board: Needs you (the Dashboard's list),
+ * Shipped, test it, Working, Pending and Done, for every repository the
+ * orchestrator tree works in, requests included. Every card can be settled or
+ * reopened in place.
  */
 export function ProjectIssuesBoard({ summary }: { readonly summary: OrchestratorSummary }) {
-  const query = useEnvironmentQuery(
-    projectIssuesQuery({
-      environmentId: summary.root.environmentId,
-      input: { rootThreadId: summary.root.id },
-    }),
-  );
+  const { items, query } = useNeedsYou(summary);
+  const settle = useSettle(summary, query.refresh);
+  const openThread = useOpenThread(summary);
   const [showBacklog, setShowBacklog] = useState(false);
-  const [showAllDone, setShowAllDone] = useState(false);
-  const grouped = useMemo(() => groupProjectIssues(query.data?.issues ?? []), [query.data]);
+  const [expanded, setExpanded] = useState<ReadonlySet<ProjectIssueLane>>(new Set());
+  const grouped = useMemo(
+    () =>
+      groupProjectIssues(
+        query.data?.issues ?? [],
+        new Map(items.map((item) => [issueKey(item.issue), item.group])),
+      ),
+    [items, query.data],
+  );
   const now = query.dataUpdatedAt ?? 0;
   const failed = (query.data?.repositories ?? []).filter((repository) => repository.error);
+  const projectReturn = { environmentId: summary.root.environmentId, threadId: summary.root.id };
 
   if (query.data === null) {
-    return (
-      <p className="py-2 text-sm text-muted-foreground">
-        {query.error ? `Issues unavailable: ${query.error}` : "Loading issues..."}
-      </p>
-    );
+    return <ProjectQueryState what="issues" error={query.error} onRetry={query.refresh} />;
   }
   if (query.data.repositories.length === 0) {
     return (
@@ -132,43 +143,47 @@ export function ProjectIssuesBoard({ summary }: { readonly summary: Orchestrator
     );
   }
 
+  const row = (issue: ProjectIssue) => (
+    <IssueRow
+      key={issueKey(issue)}
+      issue={issue}
+      now={now}
+      projectReturn={projectReturn}
+      settle={settle}
+      onOpenThread={openThread}
+    />
+  );
   return (
     <div className="flex flex-col gap-2">
-      <div className="grid grid-cols-1 gap-px overflow-hidden border border-border bg-border sm:grid-cols-2 xl:grid-cols-4">
-        {PROJECT_ISSUE_LANES.map((lane) => {
-          const status: ProjectIssueLaneStatus = lane.status;
-          const all = grouped.lanes[status];
-          const items = status === "done" && !showAllDone ? all.slice(0, DONE_PREVIEW) : all;
+      <div className="grid grid-cols-1 gap-px overflow-hidden border border-border bg-border sm:grid-cols-2 xl:grid-cols-5">
+        {PROJECT_ISSUE_LANES.map(({ lane, title }) => {
+          const all = grouped.lanes[lane];
+          const preview = lane === "done" ? DONE_PREVIEW : lane === "pending" ? PENDING_PREVIEW : 0;
+          const folded = preview > 0 && !expanded.has(lane) && all.length > preview;
           return (
-            <section key={status} className="min-w-0 bg-background px-2.5 py-2">
+            <section key={lane} className="min-w-0 bg-background px-2.5 py-2">
               <h3 className="mb-1 flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                {lane.title}
+                {title}
                 <span className="tabular-nums text-foreground/60">{all.length}</span>
               </h3>
-              <ul>
-                {items.map((issue) => (
-                  <IssueRow
-                    key={`${issue.repository}#${issue.number}`}
-                    environmentId={summary.root.environmentId}
-                    issue={issue}
-                    now={now}
-                    projectReturn={{
-                      environmentId: summary.root.environmentId,
-                      threadId: summary.root.id,
-                    }}
-                  />
-                ))}
-              </ul>
-              {status === "done" && all.length > DONE_PREVIEW ? (
+              <ul>{(folded ? all.slice(0, preview) : all).map(row)}</ul>
+              {preview > 0 && all.length > preview ? (
                 <button
                   type="button"
                   className="mt-1 text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => setShowAllDone((value) => !value)}
+                  onClick={() =>
+                    setExpanded((current) => {
+                      const next = new Set(current);
+                      if (next.has(lane)) next.delete(lane);
+                      else next.add(lane);
+                      return next;
+                    })
+                  }
                 >
-                  {showAllDone ? "Show fewer" : `Show all ${all.length}`}
+                  {folded ? `Show all ${all.length}` : "Show fewer"}
                 </button>
               ) : null}
-              {status === "pending" && grouped.backlog.length > 0 ? (
+              {lane === "pending" && grouped.backlog.length > 0 ? (
                 <div className="mt-1">
                   <button
                     type="button"
@@ -177,22 +192,7 @@ export function ProjectIssuesBoard({ summary }: { readonly summary: Orchestrator
                   >
                     Backlog {grouped.backlog.length}
                   </button>
-                  {showBacklog ? (
-                    <ul>
-                      {grouped.backlog.map((issue) => (
-                        <IssueRow
-                          key={`${issue.repository}#${issue.number}`}
-                          environmentId={summary.root.environmentId}
-                          issue={issue}
-                          now={now}
-                          projectReturn={{
-                            environmentId: summary.root.environmentId,
-                            threadId: summary.root.id,
-                          }}
-                        />
-                      ))}
-                    </ul>
-                  ) : null}
+                  {showBacklog ? <ul>{grouped.backlog.map(row)}</ul> : null}
                 </div>
               ) : null}
             </section>
