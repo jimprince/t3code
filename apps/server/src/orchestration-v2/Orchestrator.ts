@@ -1,4 +1,9 @@
 import { legacyNoticeCanStart } from "../fork/recovery/LegacyBackgroundWorkPolicy.ts";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
+import { listMetadata } from "../forkThreads/MetadataStore.ts";
+import { readWorkerMetadata } from "../forkThreads/WorkerLifecycleMetadata.ts";
+import { archiveEligible } from "../forkThreads/ArchiveDeadlines.ts";
+import { completionEligible } from "../forkThreads/WorkerLifecyclePolicy.ts";
 import { synchronizedLegacyPullRequest } from "../sourceControl/forkPullRequestUrl.ts";
 import {
   latestExecutedRun,
@@ -128,10 +133,14 @@ export class OrchestratorDispatchError extends Schema.TaggedError<OrchestratorDi
   {
     commandId: CommandId,
     commandType: Schema.String,
+    reasonCode: Schema.optional(Schema.Literal("thread_settled")),
     cause: Schema.optional(Schema.Defect()),
   },
 ) {
   override get message(): string {
+    if (this.reasonCode === "thread_settled") {
+      return "Skipped because the thread is settled. Un-settle it to resume.";
+    }
     return `Failed to dispatch orchestration command ${this.commandType} (${this.commandId}).`;
   }
 }
@@ -742,6 +751,7 @@ function lastDeliveredRunForProviderThread(
 }
 
 const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(function* () {
+  const sql = yield* SqlClient.SqlClient;
   const checkpointService = yield* CheckpointServiceV2;
   const commandPolicy = yield* CommandPolicyV2;
   const contextHandoffService = yield* ContextHandoffServiceV2;
@@ -2347,6 +2357,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     >,
     events: Ref.Ref<Array<OrchestrationV2DomainEvent>>,
     effects: Ref.Ref<Array<PendingOrchestrationEffectV2>>,
+    preservePins = false,
   ) {
     const thread = yield* projectionStore.getThread(command.threadId).pipe(
       Effect.mapError(
@@ -2357,6 +2368,47 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           }),
       ),
     );
+    if (command.type === "thread.archive" && command.autoArchiveSettledBefore !== undefined) {
+      const active = yield* projectionStore
+        .getShellSnapshot()
+        .pipe(
+          Effect.mapError(
+            (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
+          ),
+        );
+      const archived = yield* projectionStore
+        .getShellSnapshot({ location: "archive" })
+        .pipe(
+          Effect.mapError(
+            (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
+          ),
+        );
+      const metadata = yield* readWorkerMetadata(sql, command.threadId).pipe(
+        Effect.mapError(
+          (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
+        ),
+      );
+      const organization = new Map((yield* listMetadata(sql).pipe(
+        Effect.mapError(cause => new OrchestratorProjectionError({ threadId: command.threadId, cause })),
+      )).map(row => [row.threadId, row]));
+      const current = active.threads.find((entry) => entry.id === thread.id);
+      if (
+        !current ||
+        !archiveEligible(
+          current,
+          [...active.threads, ...archived.threads],
+          DateTime.toEpochMillis(command.autoArchiveSettledBefore),
+          metadata,
+          organization,
+        )
+      ) {
+        return yield* new OrchestratorDispatchError({
+          commandId: command.commandId,
+          commandType: command.type,
+          cause: "Worker archive deadline is no longer eligible.",
+        });
+      }
+    }
     if (thread.deletedAt !== null) {
       return yield* new OrchestratorDispatchError({
         commandId: command.commandId,
@@ -2700,7 +2752,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         case "thread.settle": {
           // Settling is "I'm done with this": it clears a pin the same way it
           // parks the thread (mirrors the v1 decider's settle/pin exclusion).
-          const wasPinned = thread.pinnedAt != null;
+          const wasPinned = !preservePins && thread.pinnedAt != null;
           const alreadySettled =
             thread.settledOverride === "settled" && thread.settledAt !== null && !wasPinned;
           return {
@@ -2709,9 +2761,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             settledAt: alreadySettled ? thread.settledAt : (command.settledAt ?? now),
             pullRequests: thread.pullRequests?.map((link) => withPullRequestWatch(link, undefined)),
             unsettledAt: null,
-            pinnedAt: null,
-            pinOrderKey: null,
-            activeOrderKey: null,
+            pinnedAt: preservePins ? thread.pinnedAt : null,
+            pinOrderKey: preservePins ? thread.pinOrderKey : null,
+            activeOrderKey: preservePins ? thread.activeOrderKey : null,
             updatedAt: alreadySettled ? thread.updatedAt : now,
           };
         }
@@ -4431,16 +4483,25 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         }
       }
 
-      if (projection.thread.settledOverride !== null) {
+      // Recheck inside serialized admission: settlement may have changed since
+      // the scheduler loaded the task. Skipped occurrences create no queued run.
+      if (
+        command.scheduledTaskId !== undefined &&
+        projection.thread.settledOverride === "settled"
+      ) {
+        return yield* new OrchestratorDispatchError({
+          commandId: command.commandId,
+          commandType: command.type,
+          reasonCode: "thread_settled",
+        });
+      }
+      if (projection.thread.settledOverride === "settled") {
         const now = yield* DateTime.now;
         const thread: OrchestrationV2AppThread = {
           ...projection.thread,
           settledOverride: null,
           settledAt: null,
-          unsettledAt:
-            projection.thread.settledOverride === "active"
-              ? (projection.thread.unsettledAt ?? null)
-              : now,
+          unsettledAt: now,
           updatedAt: now,
         };
         yield* emit(
@@ -9490,6 +9551,32 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             cause: `Thread ${command.threadId} changed before automatic settlement.`,
           });
         }
+        if (command.completionRunId !== undefined) {
+          const current = yield* projectionStore
+            .getThreadProjection(command.threadId)
+            .pipe(
+              Effect.mapError(
+                (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
+              ),
+            );
+          const metadata = yield* readWorkerMetadata(sql, command.threadId).pipe(
+            Effect.mapError(
+              (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
+            ),
+          );
+          if (
+            !completionEligible(
+              current,
+              command.completionRunId,
+              metadata,
+            )
+          )
+            return yield* new OrchestratorDispatchError({
+              commandId: command.commandId,
+              commandType: command.type,
+              cause: "Worker completion is no longer eligible.",
+            });
+        }
         yield* dispatchThreadMutation(
           {
             type: "thread.settle",
@@ -9499,6 +9586,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           },
           events,
           effects,
+          command.completionRunId !== undefined,
         );
         break;
       }
@@ -10191,6 +10279,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
 export const layer: Layer.Layer<
   OrchestratorV2,
   never,
+  | SqlClient.SqlClient
   | CheckpointServiceV2
   | FileSystem.FileSystem
   | Path.Path
