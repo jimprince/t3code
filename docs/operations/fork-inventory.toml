@@ -1483,3 +1483,20 @@ id = "v2-port-2689-m2"
 date = "2026-10-05"
 decided = "keep-on-top"
 rationale = "Port supervision UI to V2 shells behind fork-owned components; preserve native lineage and run state."
+
+[[patch]]
+name = "fork-interrupted-turn-rewind"
+subject = "fix(web): allow editing interrupted turns without checkpoints"
+class = "upstream-bound"
+purpose = "Offer Edit from here for the latest interrupted user message even when no assistant checkpoint exists, using the last ready checkpoint or conversation-only baseline."
+retire_when = "Upstream offers rewind for interrupted turns without assistant checkpoints."
+depends_on = []
+roles = []
+
+# v2-port-2689-m2: latest terminal fallback, native ready checkpoint path, durable conversation-only baseline without filesystem restore.
+[[patch.decision]]
+id = "v2-port-2689-m2"
+date = "2026-10-06"
+decided = "reconcile-smaller"
+rationale = "V2 port: restore uses V2's native ready filesystem boundary when present. Otherwise a minimal conversation.rewind command with a durable provider-thread.conversation-rewind outbox effect, guarded by run/message/provider ownership, terminal state, no active work and native rollback capability. No checkpoint records are fabricated."
+
