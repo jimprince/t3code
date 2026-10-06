@@ -1,5 +1,5 @@
 import { isPermanentRoot } from "./PermanentRoots.ts";
-import type { ForkThreadMetadata, OrchestrationV2ThreadShell } from "@t3tools/contracts";
+import type { ForkThreadMetadata, ThreadId, OrchestrationV2ThreadShell } from "@t3tools/contracts";
 import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import * as DateTime from "effect/DateTime";
 
@@ -25,9 +25,10 @@ export function archiveEligible(
   threads: ReadonlyArray<Thread>,
   before: number,
   metadata?: ForkThreadMetadata,
+  organization: ReadonlyMap<ThreadId, ForkThreadMetadata> = new Map(),
 ): boolean {
   if (
-    !thread.lineage.parentThreadId ||
+    !(metadata?.parentThreadId != null || metadata?.remoteParent != null) ||
     thread.archivedAt ||
     thread.settledOverride !== "settled" ||
     thread.settledAt == null ||
@@ -39,7 +40,7 @@ export function archiveEligible(
     Math.max(epoch(thread.settledAt), epoch(thread.updatedAt)) > before
   )
     return false;
-  const children = Map.groupBy(threads, (child) => child.lineage.parentThreadId);
+  const children = Map.groupBy(threads, (child) => organization.get(child.id)?.parentThreadId ?? null);
   const pending = [...(children.get(thread.id) ?? [])];
   const visited = new Set([thread.id]);
   while (pending.length) {

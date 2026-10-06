@@ -87,7 +87,7 @@ const make = Effect.gen(function* () {
           }
         }
         const days = policy.settledSubthreadArchiveAfterDays;
-        if (days == null || !archiveEligible(thread, all, now, metadata.get(thread.id))) continue;
+        if (days == null || !archiveEligible(thread, all, now, metadata.get(thread.id), metadata)) continue;
         const deadline = archiveDeadline(thread, days);
         if (deadline == null) continue;
         if (deadline > now) {

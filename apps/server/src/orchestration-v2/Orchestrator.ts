@@ -1,6 +1,6 @@
 import { legacyNoticeCanStart } from "../fork/recovery/LegacyBackgroundWorkPolicy.ts";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
-import { initializeMetadata } from "../forkThreads/MetadataStore.ts";
+import { initializeMetadata, listMetadata } from "../forkThreads/MetadataStore.ts";
 import { readWorkerMetadata } from "../forkThreads/WorkerLifecycleMetadata.ts";
 import { archiveEligible } from "../forkThreads/ArchiveDeadlines.ts";
 import { completionEligible } from "../forkThreads/WorkerLifecyclePolicy.ts";
@@ -2385,6 +2385,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
         ),
       );
+      const organization = new Map((yield* listMetadata(sql).pipe(
+        Effect.mapError(cause => new OrchestratorProjectionError({ threadId: command.threadId, cause })),
+      )).map(row => [row.threadId, row]));
       const current = active.threads.find((entry) => entry.id === thread.id);
       if (
         !current ||
@@ -2393,6 +2396,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           [...active.threads, ...archived.threads],
           DateTime.toEpochMillis(command.autoArchiveSettledBefore),
           metadata,
+          organization,
         )
       ) {
         return yield* new OrchestratorDispatchError({
