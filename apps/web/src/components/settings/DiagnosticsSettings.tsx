@@ -36,6 +36,7 @@ import {
 } from "../ui/alert-dialog";
 import { Button } from "../ui/button";
 import { MorphIcon } from "~/components/MorphIcon";
+import { Input } from "../ui/input";
 import { Checkbox } from "../ui/checkbox";
 import { ScrollArea } from "../ui/scroll-area";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
@@ -1041,6 +1042,34 @@ export function DiagnosticsSettingsPanel() {
     <SettingsPageContainer width="expanded" className="gap-10">
       <ResourceTelemetryDiagnostics environmentId={environmentId} />
       <SettingsSection title="Performance Protection">
+        {(
+          [
+            ["syspolicydRssMb", "syspolicyd memory warning (MiB)"],
+            ["syspolicydGrowthMb", "syspolicyd growth within ten minutes (MiB)"],
+            ["spawnAttemptsPerMinute", "Sustained runner attempts per minute"],
+          ] as const
+        ).map(([key, label]) => (
+          <SettingsRow
+            key={key}
+            title={label}
+            description="Provisional early-warning threshold. Samples are recorded once per minute in server diagnostics logs."
+            control={
+              <Input
+                type="number"
+                min={1}
+                step={1}
+                aria-label={label}
+                value={settings.processLaunchWarnings[key]}
+                onChange={(event) => {
+                  const value = Number(event.target.value);
+                  if (Number.isSafeInteger(value) && value > 0)
+                    updateSettings({ processLaunchWarnings: { [key]: value } });
+                }}
+              />
+            }
+          />
+        ))}
+
         <SettingsRow
           title="System pressure notifications"
           description="Monitor sustained macOS CPU pressure in a lightweight login helper and offer a recovery preview. Recovery is never run automatically."
