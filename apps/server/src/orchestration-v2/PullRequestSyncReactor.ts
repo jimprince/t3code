@@ -16,6 +16,7 @@ import {
   visibleThreadPullRequests,
 } from "@t3tools/shared/threadPullRequests";
 import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
@@ -37,6 +38,8 @@ import { isTerminalRunStatus } from "./ThreadManagementService.ts";
 const SLOW_SYNC_INTERVAL_MS = 15 * 60 * 1_000;
 /** Shell commands that can merge or close a pull request without a merge notification. */
 const PULL_REQUEST_CLOSE_COMMAND = /\b(?:gh\s+pr|glab\s+mr)\s+(?:merge|close)\b/u;
+// Opening a page re-reads what has not been read this recently, however often it is opened.
+const PAGE_LOAD_REFRESH_COOLDOWN_MS = 60 * 1_000;
 
 type SnapshotFields = Omit<ThreadPullRequestSnapshot, "syncedAt">;
 
@@ -126,6 +129,11 @@ export class PullRequestSyncReactor extends Context.Service<
     readonly drain: Effect.Effect<void>;
     /** Force the next sweep to re-read this pull request, even when its snapshot is terminal. */
     readonly requestSync: (key: ThreadPullRequestKey) => Effect.Effect<void>;
+    /**
+     * For a page that shows pull request state: re-read every pull request that is not merged
+     * and was not just read, instead of waiting for the next slow sweep.
+     */
+    readonly refreshStale: Effect.Effect<void>;
   }
 >()("t3/orchestration-v2/PullRequestSyncReactor") {}
 
@@ -188,14 +196,20 @@ export const make = Effect.gen(function* () {
 
     const syncEntry = Effect.fn("PullRequestSyncReactor.syncEntry")(function* (
       entry: LinkEntry,
-      url: string,
+      fetchedUrl: string,
       fields: SnapshotFields,
       fetchedStack: { readonly stack: ThreadPullRequestStack | null } | null,
     ) {
       const { thread, link } = entry;
+      // The URL is part of the link's identity, and Gitea reports html_url under its
+      // ROOT_URL, which can differ from the alias host the link was made with. Keep the
+      // linked URL when the host's would re-key the link, or the sync is rejected.
+      const syncUrl = threadPullRequestKeysEqual(link, { ...link, url: fetchedUrl })
+        ? fetchedUrl
+        : link.url;
       const nextStack = fetchedStack === null ? link.stack : fetchedStack.stack;
       const changed =
-        link.url !== url ||
+        link.url !== syncUrl ||
         link.snapshot === null ||
         !snapshotFieldsEqual(link.snapshot, fields) ||
         !stacksEqual(link.stack, nextStack);
@@ -238,7 +252,7 @@ export const make = Effect.gen(function* () {
           host: normalizeThreadPullRequestKey(link).host,
           repository: link.repository,
           number: link.number,
-          url,
+          url: syncUrl,
           snapshot: { ...fields, syncedAt: nowIso },
           stack: nextStack,
         });
@@ -413,7 +427,34 @@ export const make = Effect.gen(function* () {
       return worker.enqueue("requested");
     });
 
-  return { start, drain: worker.drain, requestSync } satisfies PullRequestSyncReactor["Service"];
+  const refreshRequestedAt = new Map<string, number>();
+  const refreshStale: PullRequestSyncReactor["Service"]["refreshStale"] = Effect.gen(function* () {
+    const threads = yield* projections.getThreadsWithPullRequests();
+    const nowMs = yield* Clock.currentTimeMillis;
+    const groups = new Map<string, Array<ThreadPullRequestLink>>();
+    for (const thread of threads) {
+      for (const link of visibleThreadPullRequests(thread.pullRequests ?? [])) {
+        const key = threadPullRequestKeyOf(link);
+        groups.set(key, [...(groups.get(key) ?? []), link]);
+      }
+    }
+    for (const key of refreshRequestedAt.keys())
+      if (!groups.has(key)) refreshRequestedAt.delete(key);
+    for (const [key, links] of groups) {
+      if (links.every((link) => link.snapshot?.state === "merged")) continue;
+      const lastRead = Math.max(lastSyncedAt.get(key) ?? 0, refreshRequestedAt.get(key) ?? 0);
+      if (nowMs - lastRead < PAGE_LOAD_REFRESH_COOLDOWN_MS) continue;
+      refreshRequestedAt.set(key, nowMs);
+      yield* requestSync(links[0]!);
+    }
+  }).pipe(Effect.catch(() => Effect.logWarning("pull request refresh skipped")));
+
+  return {
+    start,
+    drain: worker.drain,
+    requestSync,
+    refreshStale,
+  } satisfies PullRequestSyncReactor["Service"];
 });
 
 export const layer = Layer.effect(PullRequestSyncReactor, make);
