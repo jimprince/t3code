@@ -25,16 +25,27 @@ function issue(number: number, overrides: Partial<ProjectIssue> = {}): ProjectIs
 }
 
 describe("groupProjectIssues", () => {
-  it("sorts issues into Agent Status Board lanes and folds backlog", () => {
-    const { lanes, backlog } = groupProjectIssues([
-      issue(1, { status: "needs-review" }),
-      issue(2, { status: "in-progress" }),
-      issue(3),
-      issue(4, { status: "backlog" }),
-      issue(5, { status: "done", closedAt: "2026-10-02T00:00:00.000Z" }),
-      issue(6, { status: "archived" }),
-    ]);
-    expect(lanes["needs-review"].map((item) => item.number)).toEqual([1]);
+  it("sorts issues into lanes, with Needs you from the shared source, and folds backlog", () => {
+    const { lanes, backlog } = groupProjectIssues(
+      [
+        issue(1, { status: "needs-review" }),
+        issue(2, { status: "in-progress" }),
+        issue(3),
+        issue(4, { status: "backlog" }),
+        issue(5, { status: "done", closedAt: "2026-10-02T00:00:00.000Z" }),
+        issue(6, { status: "archived" }),
+        issue(7, { status: "needs-review" }),
+        issue(8),
+      ],
+      new Map([
+        ["brad/printcell#1", "review"],
+        ["brad/printcell#7", "test"],
+        // A request whose thread replied: pending on the tracker, but waiting on Brad.
+        ["brad/printcell#8", "answers"],
+      ]),
+    );
+    expect(lanes["needs-you"].map((item) => item.number)).toEqual([1, 8]);
+    expect(lanes.shipped.map((item) => item.number)).toEqual([7]);
     expect(lanes["in-progress"].map((item) => item.number)).toEqual([2]);
     expect(lanes.pending.map((item) => item.number)).toEqual([3]);
     expect(backlog.map((item) => item.number)).toEqual([4]);
