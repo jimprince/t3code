@@ -1,3 +1,5 @@
+import { supervisionOrderSiblings } from "@t3tools/client-runtime/state/fork-thread-ordering";
+import { supervision } from "../../state/forkSupervision";
 import type { ThreadMoveDestination } from "../threads/threadOrder";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import { canSnooze, effectiveSnoozed } from "@t3tools/client-runtime/state/thread-settled";
@@ -660,7 +662,7 @@ export function useThreadListActions(): {
         );
         return false;
       }
-      const ordered = getThreadListV2OrderedSection({
+      const orderedSection = getThreadListV2OrderedSection({
         threads: shells,
         section,
         now: new Date().toISOString(),
@@ -676,6 +678,14 @@ export function useThreadListActions(): {
           ),
         ),
       });
+      const ordered =
+        typeof direction === "string"
+          ? supervisionOrderSiblings(
+              orderedSection,
+              appAtomRegistry.get(supervision.metadata),
+              thread,
+            )
+          : orderedSection;
       const assignments = createThreadMovePlanner({
         allThreads: shells,
         ordered,
