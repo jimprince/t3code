@@ -24,7 +24,13 @@ export function groupSupervisionChildInputAttention(
     while (parentKey !== null && !seen.has(parentKey)) {
       seen.add(parentKey);
       const parent = byKey.get(parentKey);
-      if (!parent || parent.forkMetadataAvailable === false || parent.archivedAt || parent.deletedAt || parent.settledOverride === "settled")
+      if (
+        !parent ||
+        parent.forkMetadataAvailable === false ||
+        parent.archivedAt ||
+        parent.deletedAt ||
+        parent.settledOverride === "settled"
+      )
         break;
       const waiting = groups.get(parentKey) ?? [];
       waiting.push(child);

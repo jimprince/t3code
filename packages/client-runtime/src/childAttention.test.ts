@@ -89,6 +89,12 @@ it("cuts unavailable cached hosts while reachable grandchildren still target the
   const grandchild = { ...waiting("grandchild", "online"), forkMetadataAvailable: true };
   const unavailableInput = { ...waiting("input", "offline"), forkMetadataAvailable: false };
   const threads = [parent, child, grandchild, unavailableInput];
-  const parents = new Map([["online:child", "offline:parent"], ["online:grandchild", "online:child"], ["offline:input", "online:child"]]);
-  expect([...groupSupervisionChildInputAttention(threads, parents)]).toEqual([["online:child", [grandchild]]]);
+  const parents = new Map([
+    ["online:child", "offline:parent"],
+    ["online:grandchild", "online:child"],
+    ["offline:input", "online:child"],
+  ]);
+  expect([...groupSupervisionChildInputAttention(threads, parents)]).toEqual([
+    ["online:child", [grandchild]],
+  ]);
 });
