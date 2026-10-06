@@ -27,6 +27,10 @@
       "types": "./src/backgroundTurns.ts",
       "default": "./src/backgroundTurns.ts"
     },
+    "./decision-answer": {
+      "types": "./src/decisionAnswer.ts",
+      "default": "./src/decisionAnswer.ts"
+    },
     "./pending-requests": {
       "types": "./src/pendingRequests.ts",
       "default": "./src/pendingRequests.ts"
