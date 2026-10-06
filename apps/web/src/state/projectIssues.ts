@@ -29,6 +29,12 @@ export const settleProjectRequest = createEnvironmentRpcCommand(connectionAtomRu
   tag: WS_METHODS.projectRequestsSettle,
 });
 
+/** Brad approves, defers or picks an option for an item waiting on him in Needs you. */
+export const decideProjectRequest = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "environment-data:project-requests:decide",
+  tag: WS_METHODS.projectRequestsDecide,
+});
+
 /** The New request box marks its message as an explicit request before sending it. */
 export const submitProjectRequest = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "environment-data:project-requests:submit",
