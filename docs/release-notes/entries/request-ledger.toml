@@ -1,0 +1,4 @@
+id = "request-ledger"
+category = "feature"
+functionality = "projects"
+text = "Requests you type in any thread are tracked as Gitea issues and listed on the project page by what you do next (answers ready, review, approve, test) or as still with the agents, until you settle them. Agents mark requests in progress, ready, waiting for the next release, or shipped with a test step for you. Requests typed while Gitea is unreachable wait as Pending filing and are filed once it returns. Turn it off under Source control settings."
