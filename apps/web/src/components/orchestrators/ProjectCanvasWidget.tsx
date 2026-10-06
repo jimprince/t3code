@@ -9,6 +9,7 @@ import { logProjectCanvasAction } from "../../state/projectCanvas";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { Button } from "../ui/button";
+import { ProjectSection } from "./ProjectSection";
 import { formatIssueAge } from "./projectIssuesBoard.logic";
 import { useProjectRequests } from "./ProjectRequestsSection";
 import {
@@ -337,11 +338,8 @@ export function ProjectCanvasWidget({
 export function ProjectCanvasError({ canvas }: { readonly canvas: ProjectCanvas }) {
   if (!canvas.error) return null;
   return (
-    <section className="border-t border-border pt-4">
-      <h2 className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-        Canvas
-      </h2>
+    <ProjectSection title="Canvas">
       <p className="text-sm text-muted-foreground">{canvas.error}</p>
-    </section>
+    </ProjectSection>
   );
 }
