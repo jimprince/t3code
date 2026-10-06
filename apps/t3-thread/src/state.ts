@@ -203,14 +203,26 @@ export function resolveCallerEndpointFromLocalContext(
 ): SubscriptionEndpoint | null {
   // A paired caller descriptor disambiguates cached aliases with colliding UUIDs.
   const savedEnvironment = callerEnvironment
-    ? state.environments.find((environment) => environment.environmentId === callerEnvironment.environmentId)
-      ?? state.environments.find((environment) => environment.name === callerEnvironment.environmentName
-        || environment.label === callerEnvironment.environmentName)
+    ? (state.environments.find(
+        (environment) => environment.environmentId === callerEnvironment.environmentId,
+      ) ??
+      state.environments.find(
+        (environment) =>
+          environment.name === callerEnvironment.environmentName ||
+          environment.label === callerEnvironment.environmentName,
+      ))
     : undefined;
-  const savedAgent = state.agents.find((agent) => agent.threadId === threadId
-    && (!savedEnvironment || agent.environment === savedEnvironment.name));
+  const savedAgent = state.agents.find(
+    (agent) =>
+      agent.threadId === threadId &&
+      (!savedEnvironment || agent.environment === savedEnvironment.name),
+  );
   if (savedAgent) {
-    return { threadId: savedAgent.threadId, name: savedAgent.name, environment: savedAgent.environment };
+    return {
+      threadId: savedAgent.threadId,
+      name: savedAgent.name,
+      environment: savedAgent.environment,
+    };
   }
   if (!callerEnvironment) return null;
 
