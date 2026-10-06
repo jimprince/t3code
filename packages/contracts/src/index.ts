@@ -75,3 +75,5 @@ export * from "./threadIssue.ts";
 export * from "./codexNativeGoal.ts";
 
 export * from "./namedAgents.ts";
+
+export * from "./projectAutomations.ts";
