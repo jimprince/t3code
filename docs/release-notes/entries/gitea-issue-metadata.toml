@@ -1,0 +1,4 @@
+id = "gitea-issue-metadata"
+category = "fix"
+functionality = "threads"
+text = "Gitea issue links now accept ordinary issue responses, fetch metadata through configured API aliases, and keep cached titles and states current."
