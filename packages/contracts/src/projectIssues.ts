@@ -99,13 +99,19 @@ export const ProjectIssuesListInput = Schema.Struct({
 });
 export type ProjectIssuesListInput = typeof ProjectIssuesListInput.Type;
 
-/** Request kinds; each has its own lifecycle on the project page. */
+/**
+ * Task types, stored as `ask:<kind>` labels on requests and issues alike; each has
+ * its own lifecycle on the project page.
+ */
 export const ProjectRequestKind = Schema.Literals([
+  "bug",
+  "feature",
   "question",
   "deliverable",
   "plan",
   "change",
   "test",
+  "maintenance",
 ]);
 export type ProjectRequestKind = typeof ProjectRequestKind.Type;
 
@@ -175,6 +181,8 @@ export const ProjectRequestUpdateInput = Schema.Struct({
   comment: Schema.optionalKey(Schema.String),
   /** Release the request shipped in, recorded as its milestone (with `needs-test`). */
   release: Schema.optionalKey(TrimmedNonEmptyString),
+  /** Retypes the task: replaces its `ask:<kind>` label. Any tracker issue can be typed. */
+  kind: Schema.optionalKey(ProjectRequestKind),
 });
 export type ProjectRequestUpdateInput = typeof ProjectRequestUpdateInput.Type;
 
