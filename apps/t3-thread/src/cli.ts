@@ -16,6 +16,7 @@ import {
 import { parseInputReminderMinutes } from "./inputReminders.js";
 import { buildFollowUpMessage } from "./agentPrompts.js";
 import { sendDirectResult } from "./directResult.js";
+import { requestKindPayload } from "./requestKind.js";
 import { RemoteEnvironmentClient } from "./client.js";
 import { withSenderHeader } from "./thread-identity.js";
 import { listNamedAgents, routeToNamedAgent, scaffoldAgentFolder } from "./namedAgents.js";
@@ -1899,7 +1900,7 @@ agent
     });
   });
 
-function assertItemKind(kind: string): void {
+function assertItemKind(kind: string): asserts kind is "question" | "task" | "epic" {
   if (kind !== "question" && kind !== "task" && kind !== "epic") {
     throw new Error("Kind must be question, task or epic.");
   }
@@ -1942,12 +1943,12 @@ request
   .action(async (reference, title, options: { kind: string; bug?: boolean; detail?: string }) => {
     assertItemKind(options.kind);
     const { agent: target, client } = await withAgent(reference);
+    const serverHasItemTypes = (await client.describe()).capabilities.projectItemTypes === true;
     printJson(
       await client.projectRequest("projectRequestsCreate", {
         threadId: target.threadId,
         title,
-        kind: options.kind,
-        ...(options.bug ? { bug: true } : {}),
+        ...requestKindPayload(options.kind, options.bug === true, serverHasItemTypes),
         ...(options.detail ? { detail: options.detail } : {}),
       }),
     );
