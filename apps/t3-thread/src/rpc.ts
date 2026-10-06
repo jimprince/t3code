@@ -25,6 +25,9 @@ import {
 const RPC_METHODS = {
   threadIssuesLink: "threadIssues.link",
   threadIssuesUnlink: "threadIssues.unlink",
+  listNamedAgents: "orchestration.listNamedAgents",
+  resolveNamedAgent: "orchestration.resolveNamedAgent",
+  handOverNamedAgent: "orchestration.handOverNamedAgent",
   threadMetadataList: "fork.threads.metadata.list",
   threadMetadataUpdate: "fork.threads.metadata.update",
   threadOrderReset: "fork.threads.order.reset",
