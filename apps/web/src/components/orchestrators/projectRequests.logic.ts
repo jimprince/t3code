@@ -7,7 +7,7 @@ export type RequestKind = "question" | "task" | "epic";
 /** What Brad does next with a request that is his to act on. */
 export type ForYouGroup = "answers" | "review" | "approve" | "test";
 
-export const FOR_YOU_GROUPS: ReadonlyArray<{ group: ForYouGroup; title: string }> = [
+const FOR_YOU_GROUPS: ReadonlyArray<{ group: ForYouGroup; title: string }> = [
   { group: "answers", title: "Answers ready" },
   { group: "review", title: "Review" },
   { group: "approve", title: "Approve" },
@@ -285,19 +285,40 @@ export function deriveMaintenance(
 export const isMaintenanceWithAgents = (request: ProjectRequest) =>
   request.maintenance && request.forYou === null && request.stage !== "awaiting-release";
 
-/** First line of a comment, without its "Progress:" or "Test:" prefix and markdown. */
+const PROGRESS_PREFIX = /^(progress|test|answer):\s*/i;
+/** Workspace paths, commit hashes and bracketed issue refs: detail for the thread, not a row. */
+const PATH = String.raw`(?:~|/home)/[^\s;,)]*`;
+const HASH = String.raw`\b(?=[0-9a-f]*\d)[0-9a-f]{7,40}\b`;
+const ROW_DETAIL = new RegExp(
+  String.raw`\s*\((?:${PATH}|${HASH}|#\d+)\)|\s+(?:in|at)\s+${PATH}|\s*${PATH}|\s*${HASH}`,
+  "g",
+);
+
+/**
+ * The line a task row shows under its title: the first line of an agent's
+ * "Progress:", "Test:" or "Answer:" comment, without its prefix, markdown, paths,
+ * hashes or bracketed issue numbers. Curator notes, Brad's follow-ups and a bare "started"
+ * are not progress.
+ */
 export function latestProgressLine(body: string | null | undefined): string | null {
   const line = (body ?? "")
     .replace(/<!--[\s\S]*?-->/g, "")
     .split("\n")
     .map((part) => part.trim())
     .find((part) => part.length > 0);
-  if (!line) return null;
-  return line
-    .replace(/^(progress|test):\s*/i, "")
+  if (!line || !PROGRESS_PREFIX.test(line)) return null;
+  const text = line
+    .replace(PROGRESS_PREFIX, "")
     .replace(/\*\*|__|`/g, "")
-    .slice(0, 160);
+    .replace(ROW_DETAIL, "")
+    .replace(/\s+([,.;:])/g, "$1")
+    .trim();
+  return text && !/^started\.?$/i.test(text) ? text : null;
 }
+
+/** A comment that is never an answer: a progress note, a curator note or Brad's own follow-up. */
+export const isNotAnswer = (body: string) =>
+  /^\s*(?:progress:|curator:|follow-up from brad\b)/i.test(body.replace(/<!--[\s\S]*?-->/g, ""));
 
 const isParked = (issue: Pick<ProjectIssue, "labels">) =>
   issue.labels.some((label) => label.toLowerCase() === "parked");
