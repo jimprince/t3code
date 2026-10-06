@@ -242,6 +242,8 @@ interface ActiveTurn {
   compaction: { readonly nativeId: string; readonly startedAt: DateTime.Utc } | undefined;
   compactions: number;
   interrupted: boolean;
+  /** The server accepted Stop; shutdown must not send it again before its terminal event. */
+  stopAcknowledged: boolean;
   /**
    * Set until the turn's prompt, command or compaction is sent. A Stop before
    * then has nothing on the server to stop, so it ends the turn here and the
@@ -1241,6 +1243,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
       compaction: undefined,
       compactions: 0,
       interrupted: false,
+      stopAcknowledged: false,
       unsent: false,
       steers: new Set(),
       settledInbox: new Set(),
@@ -2871,7 +2874,9 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
     if (connection.external) {
       yield* Effect.addFinalizer(() =>
         Effect.forEach(
-          [...threads].filter(([, state]) => state.active !== undefined),
+          [...threads].filter(
+            ([, state]) => state.active !== undefined && !state.active.stopAcknowledged,
+          ),
           ([sessionId]) =>
             client.session
               .interrupt({ sessionID: Session.ID.make(sessionId) })
@@ -3934,6 +3939,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
             state.unsettled = true;
             return yield* lock.withPermit(finishTurn(state, { status: "interrupted" }));
           }
+          turn.stopAcknowledged = reply.value.interrupted;
           // Between the executions a late steer spans nothing runs yet. The
           // steers are taken back, and a run they already started is skipped.
           if (!reply.value.interrupted && state.active === turn && turn.heldEnd !== undefined) {
