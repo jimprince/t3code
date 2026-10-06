@@ -1,3 +1,5 @@
+import * as NativeAppIconResolver from "./NativeAppIconResolver.ts";
+import * as ProjectFaviconResolver from "../project/ProjectFaviconResolver.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 import * as TestClock from "effect/testing/TestClock";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -143,7 +145,7 @@ it.effect("minted URLs contain instance and upload only, validate signatures, an
     yield* TestClock.adjust("1 day");
     expect(yield* resolveAsset(token!, name!)).toBeNull();
   }).pipe(
-    Effect.provide(Layer.mock(WorkspacePaths.WorkspacePaths)({})),
+    Effect.provide(Layer.mergeAll(Layer.mock(WorkspacePaths.WorkspacePaths)({}), Layer.mock(NativeAppIconResolver.NativeAppIconResolver)({}), Layer.mock(ProjectFaviconResolver.ProjectFaviconResolver)({}))),
     Effect.provide(
       Layer.mock(ServerSecretStore.ServerSecretStore)({
         getOrCreateRandom: () => Effect.succeed(new Uint8Array(32).fill(7)),
