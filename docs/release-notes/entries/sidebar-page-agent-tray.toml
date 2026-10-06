@@ -1,0 +1,4 @@
+id = "sidebar-page-agent-tray"
+category = "feature"
+functionality = "web sidebar"
+text = "Open an agent beside a sidebar page that can operate the page in the desktop app and check on or message your threads."
