@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "f28068fc13b56f02be9fd711b23da9d59fbe1437",
-  "head": "473c8ccf6f0f2f7b0059c3ee416abadb2a576113",
+  "prev": "39fe18f6fcfa9a2dd2d69b4712ba2f9548738d53",
+  "head": "95d5751f53d8886eadba71e67f005026d92a64dc",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -91,14 +91,14 @@
     "fork-project-workstreams",
     "fork-canvas-resize",
     "fork-pr-widget-refresh",
-    "fork-decisions-other"
-  ],
-  "unapplied": [
+    "fork-decisions-other",
     "fork-cli-project-layout",
     "fork-item-types",
     "fork-board-declutter",
     "fork-project-skew-gate",
-    "fork-request-titles",
+    "fork-request-titles"
+  ],
+  "unapplied": [
     "fork-page-agent-tray",
     "fork-release-publication",
     "fork-maintenance-automation",
@@ -136,7 +136,7 @@
       "oid": "36ebf937cd5e86033f7889554beff53596f217f2"
     },
     "fork-board-declutter": {
-      "oid": "d81350480f53647999f293b99a6ece6fc67e4d57"
+      "oid": "a27e984a570363f8bb85692a385c310e0e7aa545"
     },
     "fork-bounded-diagnostics": {
       "oid": "6159bfd9df2d3adb59559e42318faa843b8bcff8"
@@ -151,7 +151,7 @@
       "oid": "04d27cff6bea6fcca77ac27519f3e1da31731fcc"
     },
     "fork-cli-project-layout": {
-      "oid": "9b5ff121ee2d13fded7167f4c180dc7ea534c30a"
+      "oid": "5c0581ee7c1f18f46d586ae0b8d7a328a200fbc7"
     },
     "fork-codex-extra-skill-roots": {
       "oid": "643111cd6a39a411c66f93085c8fa8885903142f"
@@ -217,7 +217,7 @@
       "oid": "c5d8228408a77afd736474241c709533606a9f96"
     },
     "fork-item-types": {
-      "oid": "32c1fe40f293c6cadc044eb95ed79df81f046e7b"
+      "oid": "882a8d78d0facbb87b565eae350847b697630d0b"
     },
     "fork-launch-health": {
       "oid": "ec8466c879e7470e5f7c150037e200a90ab29375"
@@ -304,7 +304,7 @@
       "oid": "1caf5bcbf6291ca950108d168895d7eb60d82b23"
     },
     "fork-project-skew-gate": {
-      "oid": "e474154cdd7dceff1e87083b62356aa8e40c71db"
+      "oid": "115f88f49081d03d44e1c0eb487dc746606ca813"
     },
     "fork-project-task-status": {
       "oid": "d2c8f44147e6290a85738daf803723fb7cf433b6"
@@ -349,7 +349,7 @@
       "oid": "1046a45de34070fbad73a8606a77c1b11be3ccab"
     },
     "fork-request-titles": {
-      "oid": "7a88e9122731a045b66a1f9aa7e50cc19c1579fd"
+      "oid": "95d5751f53d8886eadba71e67f005026d92a64dc"
     },
     "fork-resource-recovery": {
       "oid": "15943dbbc55313167778ef5a50d9be0fdb406d09"
