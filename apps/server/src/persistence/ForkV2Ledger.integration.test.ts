@@ -1,3 +1,4 @@
+import { assertFixtureMigration16 } from "./fixtureMigration16.testkit.ts";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
@@ -45,7 +46,7 @@ it.effect("preserves ids through60 and creates V2 at61/62 exactly once", () =>
 const fixtures = process.env.T3CODE_FORK_FIXTURES;
 describe.runIf(fixtures !== undefined)("published fork snapshots", () => {
   it.effect.each(["dev-vm", "local-mbp"])(
-    "upgrades %s without changing historical rows or fork ledger",
+    "upgrades %s without changing historical rows or historical fork ledger",
     (name) =>
       Effect.gen(function* () {
         const directory = yield* Effect.promise(() =>
@@ -69,7 +70,9 @@ describe.runIf(fixtures !== undefined)("published fork snapshots", () => {
                   )
                   .all(),
                 fork: database
-                  .prepare("SELECT * FROM effect_sql_fork_migrations ORDER BY migration_id")
+                  .prepare(
+                    "SELECT * FROM effect_sql_fork_migrations WHERE migration_id <=15 ORDER BY migration_id",
+                  )
                   .all(),
                 messages: database
                   .prepare("SELECT * FROM projection_thread_messages ORDER BY message_id")
@@ -80,6 +83,9 @@ describe.runIf(fixtures !== undefined)("published fork snapshots", () => {
             }
           };
           const before = snapshot();
+          yield* assertFixtureMigration16.pipe(
+            Effect.provide(NodeSqliteClient.layer({ filename: destination })),
+          );
           for (let startup = 0; startup < 2; startup++) {
             yield* Effect.gen(function* () {
               const sql = yield* SqlClient.SqlClient;
