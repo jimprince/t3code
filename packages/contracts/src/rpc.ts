@@ -54,6 +54,13 @@ import {
   ProjectIssuesError,
   ProjectIssuesListInput,
   ProjectIssuesListResult,
+  ProjectRequestCreateInput,
+  ProjectRequestCreateResult,
+  ProjectRequestRef,
+  ProjectRequestSettleInput,
+  ProjectRequestSettleResult,
+  ProjectRequestsListInput,
+  ProjectRequestUpdateInput,
 } from "./projectIssues.ts";
 import {
   CodexAuthCallbackInput,
@@ -578,6 +585,10 @@ export const WS_METHODS = {
   threadIssuesLink: "threadIssues.link",
   threadIssuesUnlink: "threadIssues.unlink",
   projectIssuesList: "projectIssues.list",
+  projectRequestsSettle: "projectRequests.settle",
+  projectRequestsCreate: "projectRequests.create",
+  projectRequestsUpdate: "projectRequests.update",
+  projectRequestsList: "projectRequests.list",
 
   // Source control methods
   sourceControlLookupRepository: "sourceControl.lookupRepository",
@@ -976,6 +987,30 @@ const WsThreadIssuesUnlinkRpc = Rpc.make(WS_METHODS.threadIssuesUnlink, {
 
 const WsProjectIssuesListRpc = Rpc.make(WS_METHODS.projectIssuesList, {
   payload: ProjectIssuesListInput,
+  success: ProjectIssuesListResult,
+  error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectRequestsSettleRpc = Rpc.make(WS_METHODS.projectRequestsSettle, {
+  payload: ProjectRequestSettleInput,
+  success: ProjectRequestSettleResult,
+  error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectRequestsCreateRpc = Rpc.make(WS_METHODS.projectRequestsCreate, {
+  payload: ProjectRequestCreateInput,
+  success: ProjectRequestCreateResult,
+  error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectRequestsUpdateRpc = Rpc.make(WS_METHODS.projectRequestsUpdate, {
+  payload: ProjectRequestUpdateInput,
+  success: ProjectRequestRef,
+  error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectRequestsListRpc = Rpc.make(WS_METHODS.projectRequestsList, {
+  payload: ProjectRequestsListInput,
   success: ProjectIssuesListResult,
   error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
 });
@@ -1985,6 +2020,10 @@ export const WsRpcGroup = RpcGroup.make(
   WsThreadIssuesLinkRpc,
   WsThreadIssuesUnlinkRpc,
   WsProjectIssuesListRpc,
+  WsProjectRequestsSettleRpc,
+  WsProjectRequestsCreateRpc,
+  WsProjectRequestsUpdateRpc,
+  WsProjectRequestsListRpc,
   WsSourceControlLookupRepositoryRpc,
   WsSourceControlCloneRepositoryRpc,
   WsSourceControlPublishRepositoryRpc,
