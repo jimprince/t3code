@@ -14,7 +14,7 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
 import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
-import { findRootThreadId } from "../projectIssues/projectIssues.logic.ts";
+import { findProjectRootThreadId } from "../projectIssues/projectIssues.logic.ts";
 import {
   CANVAS_DIR,
   CANVAS_MANIFEST,
@@ -107,7 +107,7 @@ export const make = Effect.gen(function* () {
       const snapshot = yield* snapshots
         .getShellSnapshot()
         .pipe(Effect.mapError(() => fail("Could not read threads.")));
-      const rootThreadId = findRootThreadId(snapshot.threads, input.threadId);
+      const rootThreadId = findProjectRootThreadId(snapshot.threads, input.threadId);
       const root = snapshot.threads.find((thread) => thread.id === rootThreadId);
       const project = snapshot.projects.find((candidate) => candidate.id === root?.projectId);
       if (!project) {

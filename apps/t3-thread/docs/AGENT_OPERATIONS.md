@@ -289,6 +289,16 @@ remote nesting; local nesting still reports unsupported servers in `nesting`.
 - Move a worker later with `t3-thread nest <agent> --parent <agent-or-thread>`
   or `t3-thread unnest <agent>`.
 
+A nested thread can be a **subproject**: it owns its own page data (health,
+layout, tracker, Decisions, requests) instead of writing its parent project's.
+The server promotes a nested thread automatically the first time it gets a
+child of its own, so under the default `auto` any worker that spawns one helper
+becomes a subproject. Choose explicitly with `t3-thread orchestrator mark
+<thread>` (on), `unmark` (off: a plain worker that merely uses helpers, never
+promoted), or `auto` (back to the default); `create --subproject` marks the new
+thread at creation. Promotion is sticky. A subproject without its own tracker
+uses its parent project's.
+
 Nesting and notification ownership stay direct at every depth: a worker created
 by a nested caller is parented to that caller, and its completion or attention
 subscription targets that same caller (or the explicit `--notify` target), not

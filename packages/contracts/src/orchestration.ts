@@ -901,6 +901,18 @@ export const OrchestrationThreadGoal = Schema.Struct({
 });
 export type OrchestrationThreadGoal = typeof OrchestrationThreadGoal.Type;
 
+/**
+ * Whether a nested thread owns its own project page data. `auto` (the default,
+ * and what an absent value means) lets the server promote it to `on` when it
+ * gets its own nested child; `off` blocks that promotion. A top-level thread
+ * stores a mode but it changes nothing.
+ */
+export const ThreadSubprojectMode = Schema.Literals(["auto", "on", "off"]);
+export type ThreadSubprojectMode = typeof ThreadSubprojectMode.Type;
+
+export const ThreadSubprojectSource = Schema.Literals(["user", "auto"]);
+export type ThreadSubprojectSource = typeof ThreadSubprojectSource.Type;
+
 export const ThreadScope = TrimmedNonEmptyString.check(Schema.isMaxLength(500));
 export type ThreadScope = typeof ThreadScope.Type;
 
@@ -960,6 +972,8 @@ export const OrchestrationThread = Schema.Struct({
   // Survives manual settle, un-settle, and activity: only the user clears it.
   // Optional so payloads from older servers still decode.
   autoSettleDisabledAt: Schema.optional(Schema.NullOr(IsoDateTime)),
+  // Optional so payloads from pre-subproject servers still decode; absent means auto.
+  subproject: Schema.optional(Schema.NullOr(ThreadSubprojectMode)),
   // Orchestrating thread this one is nested under (one level, same project).
   // Nested threads leave the sidebar and appear in the parent's Agents panel.
   // Optional so payloads from pre-nesting servers still decode.
@@ -1056,6 +1070,8 @@ export const OrchestrationThreadShell = Schema.Struct({
   pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   autoSettleDisabledAt: Schema.optional(Schema.NullOr(IsoDateTime)),
+  // Optional so payloads from pre-subproject servers still decode; absent means auto.
+  subproject: Schema.optional(Schema.NullOr(ThreadSubprojectMode)),
   settleOnComplete: Schema.optional(Schema.NullOr(Schema.Boolean)),
   parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
   remoteParent: Schema.optionalKey(Schema.NullOr(RemoteThreadParent)),
@@ -1585,6 +1601,13 @@ const ThreadAutoSettleSetCommand = Schema.Struct({
   enabled: Schema.Boolean,
 });
 
+const ThreadSubprojectSetCommand = Schema.Struct({
+  type: Schema.Literal("thread.subproject.set"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  mode: ThreadSubprojectMode,
+});
+
 const ThreadActiveReorderCommand = Schema.Struct({
   type: Schema.Literal("thread.active.reorder"),
   commandId: CommandId,
@@ -1842,6 +1865,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadUnpinCommand,
   ThreadPinReorderCommand,
   ThreadAutoSettleSetCommand,
+  ThreadSubprojectSetCommand,
   ThreadActiveReorderCommand,
   ThreadOrderResetCommand,
   ThreadParentSetCommand,
@@ -1882,6 +1906,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadUnpinCommand,
   ThreadPinReorderCommand,
   ThreadAutoSettleSetCommand,
+  ThreadSubprojectSetCommand,
   ThreadActiveReorderCommand,
   ThreadOrderResetCommand,
   ThreadParentSetCommand,
@@ -2137,6 +2162,7 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.unpinned",
   "thread.pin-reordered",
   "thread.auto-settle-set",
+  "thread.subproject-set",
   "thread.meta-updated",
   "thread.pull-request-linked",
   "thread.pull-request-unlinked",
@@ -2293,6 +2319,14 @@ export const ThreadAutoSettleSetPayload = Schema.Struct({
   threadId: ThreadId,
   // Null re-enables automatic settlement.
   autoSettleDisabledAt: Schema.NullOr(IsoDateTime),
+  updatedAt: IsoDateTime,
+});
+
+export const ThreadSubprojectSetPayload = Schema.Struct({
+  threadId: ThreadId,
+  mode: ThreadSubprojectMode,
+  // `auto` marks the server's own promotion when a nested thread got a child.
+  source: ThreadSubprojectSource,
   updatedAt: IsoDateTime,
 });
 
@@ -2620,6 +2654,11 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.auto-settle-set"),
     payload: ThreadAutoSettleSetPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.subproject-set"),
+    payload: ThreadSubprojectSetPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,
