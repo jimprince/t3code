@@ -21,7 +21,13 @@ vi.mock("@tanstack/react-router", () => ({
   useParams: () => ({}),
 }));
 vi.mock("./ui/toast", () => ({ toastManager: { add: state.toast } }));
-vi.mock("../state/shell", () => ({ environmentShell: { stateValueAtom: (id: string) => id } }));
+vi.mock("../state/forkSupervision", () => ({
+  useSupervisionForest: () => ({ parentByKey: new Map() }),
+}));
+vi.mock("../state/shell", () => ({
+  environmentShell: { stateValueAtom: (id: string) => id },
+  environmentSnapshotAtom: vi.fn(),
+}));
 vi.mock("../state/environments", () => ({
   useEnvironmentIds: () => state.environmentIds,
 }));

@@ -1,13 +1,6 @@
-import {
-  supervision as forkSupervision,
-  useSupervisionReadyHosts,
-} from "../../state/forkSupervision";
+import { supervision as forkSupervision } from "../../state/forkSupervision";
 import { useSupervisionStatus } from "./useSupervisionStatus";
-import {
-  newForkCommandId,
-  resetForkThreadOrder,
-  useForkOrderResetSupported,
-} from "./fork/orderReset";
+import { newForkCommandId, resetForkThreadOrder } from "./fork/orderReset";
 import { useAtomCommand } from "../../state/use-atom-command";
 import type { ThreadRowProviderInstance } from "./thread-provider-instance";
 import {
@@ -586,6 +579,9 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       would fall off the end of the list. */
   readonly canMoveUp?: boolean;
   readonly canMoveDown?: boolean;
+  /** Order-metadata readiness and reset support for this thread's host, computed once per list. */
+  readonly orderMetadataReady?: boolean;
+  readonly orderResetSupported?: boolean;
   readonly onSwipeableWillOpen: (methods: SwipeableMethods) => void;
   readonly onSwipeableClose: (methods: SwipeableMethods) => void;
   /** List key checked against the Home swipe row activation. */
@@ -595,8 +591,8 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   readonly simultaneousSwipeGesture?: ComponentProps<typeof ThreadSwipeable>["simultaneousWith"];
 }) {
   const resetOrder = useAtomCommand(resetForkThreadOrder);
-  const orderResetSupported = useForkOrderResetSupported(props.thread.environmentId);
-  const orderMetadataReady = useSupervisionReadyHosts().has(props.thread.environmentId);
+  const orderResetSupported = props.orderResetSupported === true;
+  const orderMetadataReady = props.orderMetadataReady === true;
   const { width: windowWidth } = useWindowDimensions();
   const {
     thread,
@@ -642,6 +638,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
 
   const supervision = useSupervisionStatus(thread);
   const status = resolveThreadListV2Status(thread);
+  const supervising = supervision.supervising && status === "ready";
   // "Done" marks a completion the user has not opened yet — same emerald
   // label as the web sidebar, sourced from the server-side visited watermark
   // so checking a thread on any device clears it everywhere.
@@ -744,11 +741,13 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       ...(props.reorderSupported === true
         ? [
             { id: "arrange", title: "Arrange threads…", image: "line.3.horizontal" },
-            ...(orderResetSupported && (thread.pinnedAt != null || thread.settledOverride !== "settled")
+            ...(orderResetSupported &&
+            (thread.pinnedAt != null ? thread.pinOrderKey : thread.activeOrderKey) != null &&
+            (thread.pinnedAt != null || thread.settledOverride !== "settled")
               ? [
                   {
                     id: "order-reset",
-                    title: "Return to automatic order",
+                    title: "Reset to automatic order",
                     image: "arrow.uturn.backward",
                   },
                 ]
@@ -1044,7 +1043,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             type="monochrome"
           />
         ) : null}
-        {statusLabel ? (
+        {statusLabel && !supervising ? (
           <View className="flex-row items-center gap-1">
             <SymbolView
               name={statusLabel.icon}
@@ -1062,7 +1061,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
               )}
             >
               {statusLabel.label}
-              {supervision.count > 0 ? ` · ${supervision.count} workers` : ""}
+              {supervision.count > 0 ? ` · ${supervision.count} active` : ""}
             </Text>
           </View>
         ) : (
@@ -1071,14 +1070,15 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
               "text-xs tabular-nums",
               selected
                 ? selectedThreadRowColors.foregroundClassName
-                : rowAppearance.tertiaryForegroundClassName,
+                : supervising
+                  ? "text-adaptive-sky-600-400"
+                  : rowAppearance.tertiaryForegroundClassName,
             )}
           >
-            {supervision.supervising && status === "ready" ? "Supervising" : timeLabel}
-            {supervision.count > 0 ? ` · ${supervision.count} workers` : ""}
+            {supervising ? "Supervising" : timeLabel}
+            {supervision.count > 0 ? ` · ${supervision.count} active` : ""}
           </Text>
         )}
-
       </View>
       <Text
         className={cn(
