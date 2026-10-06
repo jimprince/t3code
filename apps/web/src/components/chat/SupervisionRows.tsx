@@ -1,12 +1,10 @@
 import { useSupervisionForest } from "../../state/forkSupervision";
-import { useMemo } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import {
-  supervisionForest,
   supervisionThreadKey,
 } from "@t3tools/client-runtime/state/fork-nesting";
-import { useThreadShells, useServerConfigs, useProjects } from "../../state/entities";
+import { useServerConfigs, useProjects } from "../../state/entities";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
@@ -15,7 +13,6 @@ import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell
 
 /** Organizational workers are distinct from native fork/subagent Lineage. */
 export function SupervisionRows(props: { environmentId: EnvironmentId; threadId: ThreadId }) {
-  const shells = useThreadShells();
   const forest = useSupervisionForest();
   const children = (forest.children.get(`${props.environmentId}:${props.threadId}`) ?? []).toSorted(
     (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),

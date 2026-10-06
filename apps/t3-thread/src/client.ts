@@ -697,36 +697,7 @@ export class RemoteEnvironmentClient {
             }
           : {}),
       });
-      await rpc.request("launchThread", {
-        reuseExistingThread: true,
-        commandId: NodeCrypto.randomUUID(),
-        threadId,
-        projectId: project.id,
-        title,
-        generateTitle: false,
-        modelSelection: wireModel(modelSelection),
-        runtimeMode,
-        interactionMode,
-        workspaceStrategy: input.branch
-          ? { type: "worktree", branch: input.branch, baseRef: input.baseBranch ?? "main" }
-          : { type: "root" },
-        initialMessage: {
-          messageId: NodeCrypto.randomUUID(),
-          text: input.workerContext
-            ? wrapWithPreamble(initialMessage, {
-                ...input.workerContext,
-                threadId,
-                environment: this.environment.name,
-                projectId: project.id,
-                projectTitle: project.title,
-                branch: input.branch ?? null,
-                worktreePath: input.branch ? null : project.workspaceRoot,
-                createdAt,
-              })
-            : initialMessage,
-          attachments: [],
-        },
-      });
+      await rpc.request("launchThread", { ...launch, reuseExistingThread: true });
     } finally {
       await rpc.dispose();
     }

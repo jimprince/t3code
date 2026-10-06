@@ -2,7 +2,6 @@ import { useSupervisionForest } from "../../state/forkSupervision";
 import { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import {
-  supervisionForest,
   supervisionThreadKey,
 } from "@t3tools/client-runtime/state/fork-nesting";
 import { useThreadShells } from "../../state/entities";

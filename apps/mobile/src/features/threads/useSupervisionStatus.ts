@@ -1,9 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import { Atom } from "effect/unstable/reactivity";
-import { environmentThreadShells } from "../../state/threads";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import {
-  supervisionForest,
   supervisionThreadKey,
   supervisionIsActive,
 } from "@t3tools/client-runtime/state/fork-nesting";

@@ -7,9 +7,7 @@ import {
 } from "@t3tools/client-runtime/state/thread-sort";
 import { newForkCommandId } from "@t3tools/client-runtime/state/fork-thread-ids";
 import * as Effect from "effect/Effect";
-import { useAtomValue } from "@effect/atom-react";
 import {
-  createEnvironmentRpcQueryAtomFamily,
   createEnvironmentRpcCommand,
 } from "@t3tools/client-runtime/state/runtime";
 import {
@@ -18,8 +16,7 @@ import {
 } from "@t3tools/client-runtime/state/fork-nesting";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { ThreadId, type EnvironmentId } from "@t3tools/contracts";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { connectionAtomRuntime } from "../../connection/runtime";
 import { useThreadShells, useProjects } from "../../state/entities";
