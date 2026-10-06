@@ -32,7 +32,7 @@ export class PortableHistoryError extends Schema.TaggedError<PortableHistoryErro
 /** Imported messages are evidence, never synthetic native runs or checkpoints.
  * V2's existing v1_import handoff budgets these null-run items on first continuation.
  */
-export function portableHistoryEvents(
+function portableHistoryEvents(
   input: PortableHistoryInput,
 ): Array<OrchestrationV2DomainEvent> {
   const threadId = input.thread.id;

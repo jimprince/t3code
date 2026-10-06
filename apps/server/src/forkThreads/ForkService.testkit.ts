@@ -12,7 +12,7 @@ import * as Threads from "../orchestration-v2/ThreadManagementService.ts";
 import * as Projects from "../project/ProjectService.ts";
 import * as Git from "../git/GitWorkflowService.ts";
 import * as Portable from "./PortableHistory.ts";
-export const unused = () => Effect.die("Unexpected test boundary call");
+const unused = () => Effect.die("Unexpected test boundary call");
 const stores = Layer.mergeAll(Projections.layer, Events.layer, Receipts.layer).pipe(
   Layer.provideMerge(SqlitePersistenceMemory),
 );
