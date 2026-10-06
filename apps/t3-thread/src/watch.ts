@@ -7,6 +7,7 @@ import {
 } from "./parentRouting.js";
 import { observeInactivity, inactivityStillCurrent } from "./inactivity.js";
 import { withInputReminder, inputNotificationStillCurrent } from "./inputReminders.js";
+import { notificationOrigin } from "./focusNotifications.js";
 import * as NodeCrypto from "node:crypto";
 
 import { RemoteEnvironmentClient } from "./client.js";
@@ -67,6 +68,7 @@ export interface WatchClient {
     threadId: string;
     text: string;
     queueWhileRunning?: boolean;
+    origin?: import("@t3tools/shared/messageOrigin").MessageOrigin | null;
   }): Promise<unknown>;
 }
 
@@ -402,7 +404,10 @@ async function scanAttentionState(
         subscription.errorEventKey = detected.eventKey;
       }
       detected.isChildInput = isChildInput;
-      detected.subscriberEnvironmentId = mapRouteEnvironment(state, subscription).subscriberEnvironmentId;
+      detected.subscriberEnvironmentId = mapRouteEnvironment(
+        state,
+        subscription,
+      ).subscriberEnvironmentId;
       scanned.push(detected);
     }
   }
@@ -555,9 +560,8 @@ export async function detectAttentionEvents(
       // Another detector may have established this episode while our source
       // snapshot was in flight. Select its key and count under the state lock.
       if (notification.sourceState === "error") {
-        const route = currentState.subscriptions.find(
-          (subscription) =>
-            sameNotificationRoute(subscription, notification, currentState),
+        const route = currentState.subscriptions.find((subscription) =>
+          sameNotificationRoute(subscription, notification, currentState),
         );
         if (
           route?.observedState === "error" &&
@@ -565,9 +569,8 @@ export async function detectAttentionEvents(
           route.errorEventKey
         ) {
           notification = { ...notification, eventKey: route.errorEventKey };
-          const observed = observedSubscriptions.find(
-            (subscription) =>
-              sameNotificationRoute(subscription, notification, currentState),
+          const observed = observedSubscriptions.find((subscription) =>
+            sameNotificationRoute(subscription, notification, currentState),
           );
           if (observed) observed.errorEventKey = route.errorEventKey;
         }
@@ -575,9 +578,8 @@ export async function detectAttentionEvents(
       notification = withInputReminder(
         notification,
         notifications,
-        currentState.subscriptions.find(
-          (route) =>
-            sameNotificationRoute(route, notification, currentState),
+        currentState.subscriptions.find((route) =>
+          sameNotificationRoute(route, notification, currentState),
         ),
       );
       const existing =
@@ -635,9 +637,30 @@ export async function detectAttentionEvents(
                 sameNotificationRoute(route, existing, currentState),
               ),
           ),
-         ].map((route) => {
-          const observed = observedSubscriptions.find(candidate => sameNotificationRoute(candidate, route, currentState));
-          return mapRouteEnvironment(currentState, observed ? { ...route, inactivityObservation: observed.updatedAt === route.updatedAt && observed.inactivityMinutes === route.inactivityMinutes && (!route.inactivityObservation || !observed.inactivityObservation || Date.parse(observed.inactivityObservation.observedAt) >= Date.parse(route.inactivityObservation.observedAt)) ? observed.inactivityObservation : route.inactivityObservation, observedState: observed.observedState, observedReason: observed.observedReason, errorEventKey: observed.errorEventKey } : route);
+        ].map((route) => {
+          const observed = observedSubscriptions.find((candidate) =>
+            sameNotificationRoute(candidate, route, currentState),
+          );
+          return mapRouteEnvironment(
+            currentState,
+            observed
+              ? {
+                  ...route,
+                  inactivityObservation:
+                    observed.updatedAt === route.updatedAt &&
+                    observed.inactivityMinutes === route.inactivityMinutes &&
+                    (!route.inactivityObservation ||
+                      !observed.inactivityObservation ||
+                      Date.parse(observed.inactivityObservation.observedAt) >=
+                        Date.parse(route.inactivityObservation.observedAt))
+                      ? observed.inactivityObservation
+                      : route.inactivityObservation,
+                  observedState: observed.observedState,
+                  observedReason: observed.observedReason,
+                  errorEventKey: observed.errorEventKey,
+                }
+              : route,
+          );
         }),
       },
       result: persisted,
@@ -985,6 +1008,7 @@ export async function deliverPendingNotifications(
           await subscriberClient.sendMessage({
             threadId: notification.subscriberThreadId,
             text: buildNotificationMessage(notification, includeOnboarding),
+            origin: notificationOrigin(notification),
             queueWhileRunning: false,
           });
           result = {
