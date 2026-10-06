@@ -310,6 +310,7 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
     });
     // The integrated M2 tip advertises the real sidecar; M1 retains its explicit capability gap.
     const descriptor = await client.describe();
+    expect(descriptor.capabilities.threadNesting).toBe(true);
     if (descriptor.capabilities.threadNesting === true) {
       const child = await client.createAgentThread({
         projectId: created.projectId,
@@ -324,7 +325,11 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
         executionParentThreadId: null,
         session: null,
       });
+      const shellRefresh = rpc.waitForThreadEvent(child.threadId, item =>
+        item.kind === "event" && item.event.type === "thread.metadata-updated",
+      );
       await client.setThreadParent(child.threadId, null);
+      await shellRefresh;
       expect(await client.findThread(child.threadId)).toMatchObject({
         parentThreadId: null,
         remoteParent: null,
