@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "d43101d80bc24345b77f0cf15435eefccf72aad5",
-  "head": "fb49ad65342aacf14dabf07fd1e92bb0194e638b",
+  "prev": "163a26aaf37da6f066be67627803b38dd0b2d012",
+  "head": "437e7b74fa8da7f6b13810c8bb5cfced5d66537a",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -55,8 +55,7 @@
     "fork-interrupted-turn-rewind",
     "fork-agent-thread-ordering",
     "fork-cross-environment-nesting",
-    "fork-queue-coalesced-notes",
-    "refresh-temp"
+    "fork-queue-coalesced-notes"
   ],
   "unapplied": [
     "fork-conversation-fork",
@@ -120,7 +119,7 @@
       "oid": "40a64d515cf849fe803c52acfeca6cc0f2f1d5ee"
     },
     "fork-cross-environment-nesting": {
-      "oid": "0915c016d45a5062dce3ebd857047fb877aad0b9"
+      "oid": "479acd1666908379e49934a8cd06234c907bbf78"
     },
     "fork-cross-project-thread-nesting": {
       "oid": "8035ead5fe7ab5d547077b96134e8943e7e261bc"
@@ -237,7 +236,7 @@
       "oid": "bbc5738db211bb812350cf220faecad8827a9b6b"
     },
     "fork-queue-coalesced-notes": {
-      "oid": "839aa0bfa699865ab377e981fb2990cc53f942c0"
+      "oid": "437e7b74fa8da7f6b13810c8bb5cfced5d66537a"
     },
     "fork-release-publication": {
       "oid": "09e3f234998283f5a249afc031eaa360e5495bff"
@@ -316,9 +315,6 @@
     },
     "fork-worktree-cleanup": {
       "oid": "4dcd932f9ba1b723205082919baa98fdc208084c"
-    },
-    "refresh-temp": {
-      "oid": "fb49ad65342aacf14dabf07fd1e92bb0194e638b"
     }
   }
 }
