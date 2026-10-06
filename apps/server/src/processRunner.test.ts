@@ -80,6 +80,164 @@ const runWith =
     );
 
 describe("runProcess", () => {
+  it.effect(
+    "backs off concurrent missing executable launches and resets after TTL, PATH and settings changes",
+    () =>
+      Effect.gen(function* () {
+        let attempts = 0;
+        let available = false;
+        const cause = PlatformError.systemError({
+          _tag: "NotFound",
+          module: "ChildProcessSpawner",
+          method: "spawn",
+          pathOrDescriptor: "glab",
+        });
+        const spawner = makeSpawner(() => {
+          attempts++;
+          return available
+            ? Effect.succeed(makeHandle({ stdout: "authenticated" }))
+            : Effect.fail(cause);
+        });
+        const runner = yield* ProcessRunner.make().pipe(
+          Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+        );
+        const input = { command: "glab", args: ["auth", "status"] };
+        yield* Effect.all(
+          Array.from({ length: 20 }, () => runner.run(input).pipe(Effect.result)),
+          { concurrency: "unbounded" },
+        );
+        expect(attempts).toBe(1);
+        yield* TestClock.adjust("10 minutes");
+        yield* runner.run(input).pipe(Effect.result);
+        expect(attempts).toBe(2);
+        yield* runner.run({ ...input, env: { PATH: "/new/path" } }).pipe(Effect.result);
+        expect(attempts).toBe(3);
+        yield* runner
+          .run(input)
+          .pipe(
+            Effect.provideService(ProcessRunner.ExecutableCacheGeneration, "changed-settings"),
+            Effect.result,
+          );
+        expect(attempts).toBe(4);
+        available = true;
+        yield* TestClock.adjust("10 minutes");
+        expect((yield* runner.run(input)).stdout).toBe("authenticated");
+        expect(attempts).toBe(5);
+      }).pipe(Effect.provideService(SpawnExecutableResolution, () => undefined)),
+  );
+
+  it.effect("retries immediately when a missing executable becomes available", () => {
+    let available = false;
+    return Effect.gen(function* () {
+      let attempts = 0;
+      const spawner = makeSpawner(() => {
+        attempts++;
+        return available
+          ? Effect.succeed(makeHandle({ stdout: "ready" }))
+          : Effect.fail(
+              PlatformError.systemError({
+                _tag: "NotFound",
+                module: "ChildProcessSpawner",
+                method: "spawn",
+              }),
+            );
+      });
+      const runner = yield* ProcessRunner.make().pipe(
+        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+      );
+      const input = { command: "new-cli", args: [] };
+      yield* runner.run(input).pipe(Effect.result);
+      yield* runner.run(input).pipe(Effect.result);
+      expect(attempts).toBe(1);
+      available = true;
+      expect((yield* runner.run(input)).stdout).toBe("ready");
+      expect(attempts).toBe(2);
+    }).pipe(
+      Effect.provideService(SpawnExecutableResolution, () =>
+        available ? "/bin/new-cli" : undefined,
+      ),
+    );
+  });
+
+  it.effect(
+    "resolves executable paths once and does not mistake a missing cwd for a missing CLI",
+    () => {
+      let resolutions = 0;
+      return Effect.gen(function* () {
+        let attempts = 0;
+        let cwdMissing = false;
+        const spawner = makeSpawner((command) => {
+          attempts++;
+          expect(command.command).toBe("/bin/fake");
+          return cwdMissing
+            ? Effect.fail(
+                PlatformError.systemError({
+                  _tag: "NotFound",
+                  module: "ChildProcessSpawner",
+                  method: "spawn",
+                }),
+              )
+            : Effect.succeed(makeHandle({ stdout: "ok" }));
+        });
+        const runner = yield* ProcessRunner.make().pipe(
+          Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+        );
+        const input = { command: "fake", args: [] };
+        yield* runner.run(input);
+        yield* runner.run(input);
+        expect(resolutions).toBe(1);
+        cwdMissing = true;
+        yield* runner.run(input).pipe(Effect.result);
+        yield* runner.run(input).pipe(Effect.result);
+        expect(attempts).toBe(4);
+      }).pipe(
+        Effect.provideService(HostProcessPlatform, "darwin"),
+        Effect.provideService(SpawnExecutableResolution, () => {
+          resolutions++;
+          return "/bin/fake";
+        }),
+      );
+    },
+  );
+
+  it.effect("spaces background attempts while allowing interactive commands through", () =>
+    Effect.gen(function* () {
+      const first = yield* Deferred.make<void>();
+      let attempts = 0;
+      const spawner = makeSpawner(() =>
+        Effect.gen(function* () {
+          attempts++;
+          yield* Deferred.succeed(first, undefined);
+          return makeHandle({ stdout: "ok" });
+        }),
+      );
+      const runner = yield* ProcessRunner.make().pipe(
+        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+      );
+      const input = { command: "fake", args: [] };
+      const work = yield* Effect.forkChild(
+        Effect.all([runner.run(input), runner.run(input), runner.run(input)], {
+          concurrency: "unbounded",
+        }).pipe(Effect.provideService(ProcessRunner.BackgroundProcessWork, true)),
+      );
+      yield* Deferred.await(first);
+      // No test-clock advance: interactive work must bypass the background delay.
+      expect((yield* runner.run(input)).stdout).toBe("ok");
+      expect(attempts).toBe(2);
+      yield* TestClock.adjust("199 millis");
+      expect(attempts).toBe(2);
+      yield* TestClock.adjust("1 millis");
+      expect(attempts).toBe(3);
+      yield* TestClock.adjust("200 millis");
+      const results = yield* Fiber.join(work);
+      expect(results.map((result) => result.stdout)).toEqual(["ok", "ok", "ok"]);
+      expect(attempts).toBe(4);
+      const interactive = yield* runner.run(input);
+      expect(interactive.stdout).toBe("ok");
+      expect(attempts).toBe(5);
+    }),
+  );
+
   it.effect("collects stdout through an injected ChildProcessSpawner", () =>
     Effect.gen(function* () {
       const spawner = makeSpawner((command) =>
