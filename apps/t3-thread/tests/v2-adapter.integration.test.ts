@@ -1,11 +1,11 @@
 import { drainQueuedSends } from "../src/sendQueue.js";
 import { loadState, saveState } from "../src/state.js";
-import { createServer } from "node:net";
-import { spawn, execFileSync } from "node:child_process";
-import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import * as NodeNet from "node:net";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeFSP from "node:fs/promises";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import * as NodeURL from "node:url";
 import { expect, it, vi } from "vite-plus/test";
 import { RemoteEnvironmentClient } from "../src/client.js";
 import { resolvePairingTarget, resolveWebSocketUrl } from "../src/http.js";
@@ -15,14 +15,14 @@ import { decodeThreadSnapshotItem } from "../src/contracts.js";
 import { T3RpcClient } from "../src/rpc.js";
 
 it("pairs with an isolated V2 server, launches a custom instance, reads and controls its run", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "t3-cli-v2-"));
-  const home = join(directory, "t3");
-  const repo = join(directory, "workspace");
-  const state = join(directory, "operator-state.json");
-  await mkdir(join(home, "userdata"), { recursive: true });
-  await mkdir(repo);
-  execFileSync("git", ["init", "-q", repo]);
-  execFileSync("git", [
+  const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-cli-v2-"));
+  const home = NodePath.join(directory, "t3");
+  const repo = NodePath.join(directory, "workspace");
+  const state = NodePath.join(directory, "operator-state.json");
+  await NodeFSP.mkdir(NodePath.join(home, "userdata"), { recursive: true });
+  await NodeFSP.mkdir(repo);
+  NodeChildProcess.execFileSync("git", ["init", "-q", repo]);
+  NodeChildProcess.execFileSync("git", [
     "-C",
     repo,
     "-c",
@@ -34,19 +34,19 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
     "-qm",
     "fixture",
   ]);
-  const peer = fileURLToPath(
+  const peer = NodeURL.fileURLToPath(
     new URL("../../server/src/provider/testFixtures/codexCollabMockPeer.mjs", import.meta.url),
   );
   const capture = JSON.parse(
-    await readFile(
-      fileURLToPath(
+    await NodeFSP.readFile(
+      NodeURL.fileURLToPath(
         new URL("../../server/src/provider/testFixtures/codexMultiAgentWire.json", import.meta.url),
       ),
       "utf8",
     ),
   );
-  const script = join(directory, "peer.json");
-  await writeFile(
+  const script = NodePath.join(directory, "peer.json");
+  await NodeFSP.writeFile(
     script,
     JSON.stringify({
       rootThreadId: capture.rootThreadId,
@@ -91,14 +91,14 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
       ],
     }),
   );
-  const wrapper = join(directory, "mock-codex");
-  await writeFile(
+  const wrapper = NodePath.join(directory, "mock-codex");
+  await NodeFSP.writeFile(
     wrapper,
     `#!/bin/sh\nif [ "$1" = "--version" ]; then echo 'codex-cli 0.145.0'; exit 0; fi\nprintf '%s\\n' "$T3_THREAD_ID" >> '${directory}/identity'\nexec '${process.execPath}' '${peer}'\n`,
     { mode: 0o755 },
   );
-  await writeFile(
-    join(home, "userdata", "settings.json"),
+  await NodeFSP.writeFile(
+    NodePath.join(home, "userdata", "settings.json"),
     JSON.stringify({
       providerInstances: {
         cli_custom: {
@@ -107,7 +107,7 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
           config: {
             setupMode: "existing",
             binaryPath: wrapper,
-            homePath: join(directory, "codex-home"),
+            homePath: NodePath.join(directory, "codex-home"),
           },
           environment: [{ name: "T3_CODEX_COLLAB_SCRIPT", value: script }],
         },
@@ -117,8 +117,8 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
   );
   // All server and operator writes land in fresh temporary state.
   vi.stubEnv("T3_AGENT_STATE_FILE", state);
-  const bin = fileURLToPath(new URL("../../server/src/bin.ts", import.meta.url));
-  const reservation = createServer();
+  const bin = NodeURL.fileURLToPath(new URL("../../server/src/bin.ts", import.meta.url));
+  const reservation = NodeNet.createServer();
   await new Promise<void>((resolve) => reservation.listen(0, "127.0.0.1", resolve));
   const address = reservation.address();
   if (!address || typeof address === "string") throw new Error("Missing fixture port");
@@ -126,7 +126,7 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
   await new Promise<void>((resolve, reject) =>
     reservation.close((error) => (error ? reject(error) : resolve())),
   );
-  const server = spawn(
+  const server = NodeChildProcess.spawn(
     process.execPath,
     [
       bin,
@@ -147,7 +147,7 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
         T3CODE_DISABLE_STARTUP_RESUME: "1",
         T3CODE_DEV_AUTH_TOKEN: "",
         T3CODE_HOME: home,
-        CODEX_HOME: join(directory, "codex-home"),
+        CODEX_HOME: NodePath.join(directory, "codex-home"),
       },
       stdio: ["ignore", "pipe", "pipe"],
     },
@@ -290,7 +290,7 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
     expect(decodeThreadSnapshotItem(encoded).snapshot.thread.messages[0]?.attachments).toEqual([
       file,
     ]);
-    expect((await readFile(join(directory, "identity"), "utf8")).split("\n")).toContain(
+    expect((await NodeFSP.readFile(NodePath.join(directory, "identity"), "utf8")).split("\n")).toContain(
       created.threadId,
     );
     const queued = await client.sendMessage({ threadId: created.threadId, text: "Follow-up" });
@@ -406,6 +406,6 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
       server.exitCode !== null ? resolve() : server.once("exit", () => resolve()),
     );
     vi.unstubAllEnvs();
-    await rm(directory, { recursive: true, force: true });
+    await NodeFSP.rm(directory, { recursive: true, force: true });
   }
 }, 180_000);

@@ -3,7 +3,7 @@ import { projectionHasWork } from "./v2/workState.js";
 import { threadShell as gcThreadShell } from "./v2/reads.js";
 import type { WorktreeGcThread } from "./worktreeGc.js";
 import type { OrchestrationV2ShellSnapshot } from "@t3tools/contracts";
-import { makeMessageOriginContext, type MessageOrigin } from "@t3tools/shared/messageOrigin";
+import { makeMessageOriginContext } from "@t3tools/shared/messageOrigin";
 import { planExplicitThreadOrder, sameThreadOrderGroup } from "./threadOrder.js";
 import type { QueuedSendOrigin } from "./types.js";
 import { refreshSavedEnvironmentSession } from "./sessionRefresh.js";
