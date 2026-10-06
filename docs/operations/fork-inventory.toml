@@ -1494,3 +1494,9 @@ depends_on = []
 roles = []
 
 # v2-port-2689-m2: latest terminal fallback, native ready checkpoint path, durable conversation-only baseline without filesystem restore.
+[[patch.decision]]
+id = "v2-port-2689-m2"
+date = "2026-10-06"
+decided = "reconcile-smaller"
+rationale = "V2 port: restore uses V2's native ready filesystem boundary when present. Otherwise a minimal conversation.rewind command with a durable provider-thread.conversation-rewind outbox effect, guarded by run/message/provider ownership, terminal state, no active work and native rollback capability. No checkpoint records are fabricated."
+
