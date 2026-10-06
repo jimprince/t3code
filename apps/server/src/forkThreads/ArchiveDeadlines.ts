@@ -27,6 +27,7 @@ export function archiveEligible(
   before: number,
   metadata?: ForkThreadMetadata,
   organization: ReadonlyMap<ThreadId, ForkThreadMetadata> = new Map(),
+  permanentRoots: ReadonlySet<ThreadId> = new Set(),
 ): boolean {
   if (
     !(metadata?.parentThreadId != null || metadata?.remoteParent != null) ||
@@ -34,7 +35,7 @@ export function archiveEligible(
     thread.settledOverride !== "settled" ||
     thread.settledAt == null ||
     thread.pinnedAt ||
-    isPermanentRoot(thread.id) ||
+    isPermanentRoot(thread.id, permanentRoots) ||
     thread.autoSettleDisabledAt ||
     metadata?.settleOnComplete === false ||
     hasActiveWork(thread) ||
@@ -55,7 +56,7 @@ export function archiveEligible(
       hasActiveWork(child) ||
       (!child.archivedAt && child.settledOverride !== "settled") ||
       child.pinnedAt ||
-      isPermanentRoot(child.id) ||
+      isPermanentRoot(child.id, permanentRoots) ||
       child.autoSettleDisabledAt
     )
       return false;
