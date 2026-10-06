@@ -1,0 +1,4 @@
+id = "issue-link-public-alias"
+category = "fix"
+functionality = "threads"
+text = "Linking a Gitea issue by its public HTTPS address now works when that address differs from the configured Gitea connection."
