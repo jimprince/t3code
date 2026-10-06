@@ -1063,7 +1063,7 @@ export function OrchestratorBoard({
                 onClose={() => onTaskChange?.(null)}
               />
             ) : chatOpen ? (
-              <aside className="flex w-[400px] min-w-0 shrink-0 flex-col border-l border-border">
+              <aside className="flex w-full min-w-0 shrink-0 flex-col border-l border-border sm:w-[400px]">
                 <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
                   <MessageSquareIcon className="size-4 text-muted-foreground" />
                   <span className="min-w-0 flex-1 truncate text-sm font-medium">
