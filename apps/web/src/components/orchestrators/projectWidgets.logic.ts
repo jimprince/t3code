@@ -7,7 +7,8 @@ const PROJECT_WIDGETS = [
   { id: "working", title: "Working" },
   { id: "blocked", title: "Blocked" },
   { id: "done", title: "Done since your last visit" },
-  { id: "new-request", title: "New request" },
+  // The embedded orchestrator composer; the request box in Requests replaces it by default.
+  { id: "new-request", title: "Orchestrator composer", hiddenByDefault: true },
   { id: "issues", title: "Issues" },
   { id: "prs", title: "Pull requests" },
   { id: "canvas", title: "Canvas" },
@@ -18,9 +19,10 @@ export type ProjectWidgetId = (typeof PROJECT_WIDGETS)[number]["id"];
 
 const KNOWN = new Set<string>(PROJECT_WIDGETS.map((widget) => widget.id));
 
-export const DEFAULT_WIDGET_ORDER: ReadonlyArray<ProjectWidgetId> = PROJECT_WIDGETS.map(
-  (widget) => widget.id,
-);
+export const DEFAULT_WIDGET_ORDER: ReadonlyArray<ProjectWidgetId> = PROJECT_WIDGETS.filter(
+  (widget) => !("hiddenByDefault" in widget),
+).map((widget) => widget.id);
+const ALL_WIDGETS: ReadonlyArray<ProjectWidgetId> = PROJECT_WIDGETS.map((widget) => widget.id);
 
 /** The widgets to render: the saved order (unknown ids dropped), or the default. */
 export function visibleWidgets(saved: ReadonlyArray<string> | null): ProjectWidgetId[] {
@@ -40,7 +42,7 @@ export function widgetChoices(saved: ReadonlyArray<string> | null): WidgetChoice
   const titleOf = new Map(PROJECT_WIDGETS.map((widget) => [widget.id, widget.title]));
   return [
     ...visible.map((id) => ({ id, title: titleOf.get(id)!, visible: true })),
-    ...DEFAULT_WIDGET_ORDER.filter((id) => !visible.includes(id)).map((id) => ({
+    ...ALL_WIDGETS.filter((id) => !visible.includes(id)).map((id) => ({
       id,
       title: titleOf.get(id)!,
       visible: false,
