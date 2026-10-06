@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "6838868e8167e844628162ada62aa551afe5964a",
-  "head": "9b5ff121ee2d13fded7167f4c180dc7ea534c30a",
+  "prev": "708a3badd7a3103ef97de3cd7c50194881452d0b",
+  "head": "7a88e9122731a045b66a1f9aa7e50cc19c1579fd",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -92,13 +92,13 @@
     "fork-canvas-resize",
     "fork-pr-widget-refresh",
     "fork-decisions-other",
-    "fork-cli-project-layout"
-  ],
-  "unapplied": [
+    "fork-cli-project-layout",
     "fork-item-types",
     "fork-board-declutter",
     "fork-project-skew-gate",
-    "fork-request-titles",
+    "fork-request-titles"
+  ],
+  "unapplied": [
     "fork-page-agent-tray",
     "fork-release-publication",
     "fork-maintenance-automation",
@@ -136,7 +136,7 @@
       "oid": "3c46e090ae037d4809dda70eec272026d5bbc0ac"
     },
     "fork-board-declutter": {
-      "oid": "e4dd718e8d04a8f6501efaaeef431c063d9b4251"
+      "oid": "d81350480f53647999f293b99a6ece6fc67e4d57"
     },
     "fork-bounded-diagnostics": {
       "oid": "6159bfd9df2d3adb59559e42318faa843b8bcff8"
@@ -217,7 +217,7 @@
       "oid": "c5d8228408a77afd736474241c709533606a9f96"
     },
     "fork-item-types": {
-      "oid": "31132d139e819b973b1411a1f33721ed77588006"
+      "oid": "32c1fe40f293c6cadc044eb95ed79df81f046e7b"
     },
     "fork-launch-health": {
       "oid": "ec8466c879e7470e5f7c150037e200a90ab29375"
@@ -304,7 +304,7 @@
       "oid": "1caf5bcbf6291ca950108d168895d7eb60d82b23"
     },
     "fork-project-skew-gate": {
-      "oid": "f8c0e9a895bf7357c86ed5b4acb3cf76e2da9fd2"
+      "oid": "e474154cdd7dceff1e87083b62356aa8e40c71db"
     },
     "fork-project-task-status": {
       "oid": "6691e30e1ae0dae407e704fc14962efc53449378"
@@ -349,7 +349,7 @@
       "oid": "1046a45de34070fbad73a8606a77c1b11be3ccab"
     },
     "fork-request-titles": {
-      "oid": "bd4faf0f2179dacff330df7ba4d51bd4e47c3161"
+      "oid": "7a88e9122731a045b66a1f9aa7e50cc19c1579fd"
     },
     "fork-resource-recovery": {
       "oid": "15943dbbc55313167778ef5a50d9be0fdb406d09"
