@@ -81,7 +81,9 @@ import {
   ProjectRequestsSection,
   useNeedsYou,
   useOpenThread,
+  useProjectRequests,
   useSettle,
+  useTaskStatuses,
   WorkerRequestTag,
 } from "./ProjectRequestsSection";
 import { ProjectLayoutTabView, TAB_DRAG_TYPE, WIDGET_DRAG_TYPE } from "./ProjectLayoutView";
@@ -91,6 +93,13 @@ import { ProjectRequestBox } from "./ProjectRequestBox";
 import { ProjectIssuesSummary, ProjectRoadmapSummary } from "./ProjectTabSummaries";
 import { resolveProjectTab, type ProjectTab } from "./projectTabs.logic";
 import { HEALTH_LABEL, isHealthStale, latestWorkChangeAt } from "./projectHealth.logic";
+import { TASK_STATUS_LABEL } from "./projectRequests.logic";
+import {
+  deriveBlocked,
+  deriveWorkingNow,
+  type BlockedRow,
+  type WorkingRow,
+} from "./projectWork.logic";
 import { projectReturnState } from "./projectNavigation";
 
 /**
@@ -338,18 +347,118 @@ function NeedsYouCount({ summary }: { readonly summary: OrchestratorSummary }) {
   );
 }
 
-/** A worker row (Working, Blocked, Done) that opens its thread when clicked. */
+/** What is stuck on the project, derived from threads and tasks; the same rows feed the widget and the status line. */
+function useBlockedRows(summary: OrchestratorSummary): BlockedRow[] {
+  const { statuses, query } = useTaskStatuses(summary);
+  const now = query.dataUpdatedAt ?? 0;
+  return useMemo(
+    () =>
+      deriveBlocked({
+        blockedWorkers: summary.blocked,
+        issues: query.data?.issues ?? [],
+        statuses,
+        threads: [summary.root, ...summary.descendants],
+        rootThreadId: summary.root.id,
+        now,
+      }),
+    [now, query.data, statuses, summary.blocked, summary.descendants, summary.root],
+  );
+}
+
+/** "N blocked" in the status line: the same count as the Blocked widget. */
+function BlockedCount({ summary }: { readonly summary: OrchestratorSummary }) {
+  const count = useBlockedRows(summary).length;
+  return count > 0 ? <span className="text-error">{count} blocked</span> : null;
+}
+
+/** Stuck work with its cause, owner and next step; hidden when nothing is stuck. */
+function ProjectBlockedWidget({ summary }: { readonly summary: OrchestratorSummary }) {
+  const rows = useBlockedRows(summary);
+  const openThread = useOpenThread(summary);
+  if (rows.length === 0) return null;
+  return (
+    <BoardSection title="Blocked" count={rows.length}>
+      <ul className="divide-y divide-border">
+        {rows.map((row) => (
+          <ClickableRow
+            key={row.key}
+            label={`Open ${row.owner?.title ?? row.title}`}
+            onOpen={row.owner ? () => openThread(row.owner!.id) : null}
+            className="items-center py-2"
+          >
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium">{row.title}</span>
+              <span className="block truncate text-xs text-muted-foreground">
+                <span className="text-error">{row.cause}</span>
+                {row.owner ? ` · ${row.owner.title}` : ""}
+                {row.next ? ` · next: ${row.next}` : ""}
+              </span>
+            </span>
+            {row.action ? (
+              <Button
+                size="xs"
+                variant="outline"
+                render={<a href={row.action.url} target="_blank" rel="noopener noreferrer" />}
+              >
+                {row.action.label}
+              </Button>
+            ) : null}
+          </ClickableRow>
+        ))}
+      </ul>
+    </BoardSection>
+  );
+}
+
+/** Who is working on what: one outcome row per worker, opening its thread. */
+function ProjectWorkingWidget({ summary }: { readonly summary: OrchestratorSummary }) {
+  const { query, requests } = useProjectRequests(summary);
+  const openThread = useOpenThread(summary);
+  const rows: WorkingRow[] = useMemo(
+    () => deriveWorkingNow(summary.working, query.data?.issues ?? [], requests),
+    [query.data, requests, summary.working],
+  );
+  if (rows.length === 0) return null;
+  return (
+    <BoardSection title="Working now" count={rows.length}>
+      <ul className="divide-y divide-border">
+        {rows.map((row) => (
+          <ClickableRow
+            key={row.key}
+            label={`Open ${row.worker ?? row.title}`}
+            onOpen={() => openThread(row.threadId)}
+            className="items-start py-2"
+          >
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm">
+                <span className="font-medium">{row.title}</span>
+                <span className="text-muted-foreground">
+                  {` · ${TASK_STATUS_LABEL.active}`}
+                  {row.next ? ` · next: ${row.next}` : ""}
+                  {row.worker ? ` · ${row.worker}` : ""}
+                </span>
+              </span>
+              {row.forRequests.length > 0 ? (
+                <span className="mt-0.5 block truncate text-xs text-foreground/80">
+                  for: {row.forRequests.join(" · ")}
+                </span>
+              ) : null}
+            </span>
+          </ClickableRow>
+        ))}
+      </ul>
+    </BoardSection>
+  );
+}
+
+/** A worker row (Done) that opens its thread when clicked. */
 function WorkerRow({
   summary,
   thread,
-  latestLine,
-  tone = "default",
   trailing,
 }: {
   readonly summary: OrchestratorSummary;
   readonly thread: EnvironmentThreadShell;
-  readonly latestLine?: string | null;
-  readonly tone?: "default" | "error";
   readonly trailing: ReactNode;
 }) {
   const openThread = useOpenThread(summary);
@@ -360,14 +469,7 @@ function WorkerRow({
       className="items-start py-2"
     >
       <span className="min-w-0 flex-1">
-        <span
-          className={`block truncate text-sm font-medium ${tone === "error" ? "text-error" : ""}`}
-        >
-          {thread.title}
-        </span>
-        {latestLine ? (
-          <span className="mt-0.5 block truncate text-xs text-muted-foreground">{latestLine}</span>
-        ) : null}
+        <span className="block truncate text-sm font-medium">{thread.title}</span>
         <WorkerRequestTag summary={summary} threadId={thread.id} />
       </span>
       {trailing}
@@ -446,53 +548,9 @@ function BuiltinWidget({
     case "needs-you":
       return <ProjectNeedsYouWidget summary={summary} providerEntriesFor={providerEntriesFor} />;
     case "working":
-      return summary.working.length > 0 ? (
-        <BoardSection title="Working" count={summary.working.length}>
-          <ul className="divide-y divide-border">
-            {summary.working.map((item) => (
-              <WorkerRow
-                key={item.thread.id}
-                summary={summary}
-                thread={item.thread}
-                latestLine={item.latestLine}
-                trailing={
-                  <ThreadProviderModel
-                    thread={item.thread}
-                    entries={providerEntriesFor(item.thread)}
-                  />
-                }
-              />
-            ))}
-          </ul>
-        </BoardSection>
-      ) : null;
+      return <ProjectWorkingWidget summary={summary} />;
     case "blocked":
-      return summary.blocked.length > 0 ? (
-        <BoardSection title="Blocked" count={summary.blocked.length}>
-          <ul className="divide-y divide-border">
-            {summary.blocked.map((item) => (
-              <WorkerRow
-                key={item.thread.id}
-                summary={summary}
-                thread={item.thread}
-                latestLine={item.latestLine}
-                tone="error"
-                trailing={
-                  <>
-                    <time className="text-xs text-muted-foreground">
-                      {formatRelativeTimeLabel(item.thread.updatedAt)}
-                    </time>
-                    <ThreadProviderModel
-                      thread={item.thread}
-                      entries={providerEntriesFor(item.thread)}
-                    />
-                  </>
-                }
-              />
-            ))}
-          </ul>
-        </BoardSection>
-      ) : null;
+      return <ProjectBlockedWidget summary={summary} />;
     case "done":
       return done.length > 0 ? (
         <BoardSection title="Done since your last visit" count={done.length}>
@@ -855,9 +913,7 @@ export function OrchestratorBoard({
                     {summary.activeWorkerCount} working
                   </span>
                   <NeedsYouCount summary={summary} />
-                  {summary.blocked.length > 0 ? (
-                    <span className="text-error">{summary.blocked.length} blocked</span>
-                  ) : null}
+                  <BlockedCount summary={summary} />
                   <span className="flex flex-wrap gap-1">
                     {summary.projects.map((project) => (
                       <span
