@@ -89,6 +89,8 @@ it("keeps the legacy importer out of reach of new code", () => {
   // thread and project services hydrate a V1 transcript before they act on it.
   assert.deepEqual(importers, [
     "fork/recovery/LegacyBackgroundWorkImport.ts",
+    "forkLegacy/HistoryPaging.ts",
+    "forkLegacy/SidebarOrderImport.ts",
     "forkThreads/MetadataStore.ts",
     "orchestration-v2/ThreadManagementService.ts",
     "orchestration-v2/runtimeLayer.ts",
