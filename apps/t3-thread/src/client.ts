@@ -5,6 +5,7 @@ import type { WorktreeGcThread } from "./worktreeGc.js";
 import type { OrchestrationV2ShellSnapshot } from "@t3tools/contracts";
 import { makeMessageOriginContext, type MessageOrigin } from "@t3tools/shared/messageOrigin";
 import { planExplicitThreadOrder, sameThreadOrderGroup } from "./threadOrder.js";
+import type { QueuedSendOrigin } from "./types.js";
 import { refreshSavedEnvironmentSession } from "./sessionRefresh.js";
 import { pendingRequests, requirePendingRequest } from "./v2/requests.js";
 import { wrapWithPreamble, type WorkerContext } from "./thread-preamble.js";
@@ -60,7 +61,13 @@ type RpcFactory = (wsUrl: string) => RemoteRpcClient;
 /** Result of `RemoteEnvironmentClient.sendMessage`. Exactly one of the two shapes. */
 export type SendMessageOutcome =
   | { dispatched: true; queued: false }
-  | { dispatched: false; queued: true; queuedSendId: string; sequence: number };
+  | {
+      dispatched: false;
+      queued: true;
+      queuedSendId: string;
+      sequence: number;
+      supersededSendIds?: string[];
+    };
 
 function buildPlanImplementationPrompt(planMarkdown: string): string {
   return `PLEASE IMPLEMENT THIS PLAN:\n${planMarkdown.trim()}`;
@@ -556,19 +563,26 @@ export class RemoteEnvironmentClient {
     }
   }
 
-  async renameThread(input: { threadId: string; title?: string; scope?: string | null }): Promise<{ threadId: string; title: string; scope: string | null }> {
+  async renameThread(input: {
+    threadId: string;
+    title?: string;
+    scope?: string | null;
+  }): Promise<{ threadId: string; title: string; scope: string | null }> {
     const title = input.title?.trim();
     const scope = input.scope === undefined ? undefined : input.scope?.trim() || null;
     if (input.title !== undefined && !title) throw new Error("Thread title must not be empty.");
-    if (title === undefined && scope === undefined) throw new Error("Thread title or scope must be provided.");
+    if (title === undefined && scope === undefined)
+      throw new Error("Thread title or scope must be provided.");
     const rpc = await this.openRpc();
     try {
       if (title !== undefined) await rpc.request("dispatchCommand", { type: "thread.metadata.update", commandId: NodeCrypto.randomUUID(), threadId: input.threadId, title });
       if (scope !== undefined) await rpc.request("threadMetadataUpdate", { commandId: NodeCrypto.randomUUID(), threadId: input.threadId, scope });
     } finally { await rpc.dispose(); }
     const thread = await this.findThread(input.threadId);
-    if (title !== undefined && thread.title !== title) throw new Error("Thread title readback did not match.");
-    if (scope !== undefined && (thread.scope ?? null) !== scope) throw new Error("Thread scope readback did not match.");
+    if (title !== undefined && thread.title !== title)
+      throw new Error("Thread title readback did not match.");
+    if (scope !== undefined && (thread.scope ?? null) !== scope)
+      throw new Error("Thread scope readback did not match.");
     return { threadId: thread.id, title: thread.title, scope: thread.scope ?? null };
   }
 
@@ -634,6 +648,35 @@ export class RemoteEnvironmentClient {
     const interactionMode = input.interactionMode ?? "default";
     const createdAt = nowIso();
     const rpc = await this.openRpc();
+    const launch = {
+      commandId: NodeCrypto.randomUUID(),
+      threadId,
+      projectId: project.id,
+      title,
+      generateTitle: false,
+      modelSelection: wireModel(modelSelection),
+      runtimeMode,
+      interactionMode,
+      workspaceStrategy: input.branch
+        ? { type: "worktree", branch: input.branch, baseRef: input.baseBranch ?? "main" }
+        : { type: "root" },
+      initialMessage: {
+        messageId: NodeCrypto.randomUUID(),
+        text: input.workerContext
+          ? wrapWithPreamble(initialMessage, {
+              ...input.workerContext,
+              threadId,
+              environment: this.environment.name,
+              projectId: project.id,
+              projectTitle: project.title,
+              branch: input.branch ?? null,
+              worktreePath: input.branch ? null : project.workspaceRoot,
+              createdAt,
+            })
+          : initialMessage,
+        attachments: [],
+      },
+    };
     try {
       // Claim an empty thread first so parenting and policy exist before any provider turn.
       await rpc.request("launchThread", {
@@ -718,12 +761,17 @@ export class RemoteEnvironmentClient {
    *   that need a mid-turn send to fail loudly instead of being held.
    */
   async sendMessage(input: {
+    commandId?: string;
     threadId: string;
     text: string;
     allowWhileRunning?: boolean;
     queueWhileRunning?: boolean;
     agentName?: string | null;
-    origin?: MessageOrigin | null;
+    /** Identifies the sender for local queue coalescing and summaries. */
+    origin?: QueuedSendOrigin | null;
+    /** Replace this sender's still-waiting queued send that carries the same key. */
+    coalesceKey?: string | null;
+    senderEnvironment?: string;
   }): Promise<SendMessageOutcome> {
     const thread = await this.findThread(input.threadId);
     if (thread.archivedAt || thread.deletedAt) {
@@ -738,11 +786,18 @@ export class RemoteEnvironmentClient {
         );
       }
 
-      const queued = await enqueueSend({
+      const { queued, superseded } = await enqueueSend({
         threadId: thread.id,
         agentName: input.agentName ?? null,
         environment: this.environment.name,
         text: input.text,
+        origin: input.origin
+          ? {
+              ...input.origin,
+              ...(input.senderEnvironment ? { senderEnvironment: input.senderEnvironment } : {}),
+            }
+          : null,
+        coalesceKey: input.coalesceKey ?? null,
         queuedDuringTurnId: thread.latestTurn?.turnId ?? null,
         origin: input.origin ?? null,
       });
@@ -751,6 +806,7 @@ export class RemoteEnvironmentClient {
         queued: true,
         queuedSendId: queued.id,
         sequence: queued.sequence,
+        ...(superseded.length > 0 ? { supersededSendIds: superseded.map(({ id }) => id) } : {}),
       };
     }
 
@@ -758,9 +814,11 @@ export class RemoteEnvironmentClient {
     try {
       await rpc.request("dispatchCommand", {
         type: "message.dispatch",
-        commandId: NodeCrypto.randomUUID(),
+        createdBy: "user",
+        creationSource: "server",
+        commandId: input.commandId ?? NodeCrypto.randomUUID(),
         threadId: thread.id,
-        messageId: NodeCrypto.randomUUID(),
+        messageId: input.commandId ? `${input.commandId}:message` : NodeCrypto.randomUUID(),
         text: input.text,
         attachments: [],
         ...(input.origin
@@ -818,6 +876,8 @@ export class RemoteEnvironmentClient {
         });
       await rpc.request("dispatchCommand", {
         type: "message.dispatch",
+        createdBy: "user",
+        creationSource: "server",
         commandId: NodeCrypto.randomUUID(),
         threadId: thread.id,
         messageId: NodeCrypto.randomUUID(),
@@ -895,7 +955,9 @@ export class RemoteEnvironmentClient {
 
   async resetThreadOrder(threadId: string): Promise<void> {
     if ((await this.describe()).capabilities.threadOrderReset !== true) {
-      throw new Error(`'${this.environment.name}' runs a server without automatic-order reset. Update T3 Code there first.`);
+      throw new Error(
+        `'${this.environment.name}' runs a server without automatic-order reset. Update T3 Code there first.`,
+      );
     }
     const rpc = await this.openRpc();
     try {
@@ -938,13 +1000,23 @@ export class RemoteEnvironmentClient {
     }
     const thread = await this.findThread(threadId);
     if (pinned && !previouslyPinned) {
-      const siblings = (await this.listThreads()).filter(candidate => sameThreadOrderGroup(thread, candidate));
-      if (siblings.some(candidate => candidate.id !== thread.id)) {
+      const siblings = (await this.listThreads()).filter((candidate) =>
+        sameThreadOrderGroup(thread, candidate),
+      );
+      if (siblings.some((candidate) => candidate.id !== thread.id)) {
         const assignments = planExplicitThreadOrder({ group: siblings, leadingIds: [thread.id] });
         const orderRpc = await this.openRpc();
         try {
-          for (const assignment of assignments) await orderRpc.request("dispatchCommand", { type: "thread.pin.reorder", commandId: NodeCrypto.randomUUID(), threadId: assignment.threadId, orderKey: assignment.orderKey });
-        } finally { await orderRpc.dispose(); }
+          for (const assignment of assignments)
+            await orderRpc.request("dispatchCommand", {
+              type: "thread.pin.reorder",
+              commandId: NodeCrypto.randomUUID(),
+              threadId: assignment.threadId,
+              orderKey: assignment.orderKey,
+            });
+        } finally {
+          await orderRpc.dispose();
+        }
       }
     }
     return {

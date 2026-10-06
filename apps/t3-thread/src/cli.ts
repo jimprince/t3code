@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import type { QueuedSendOrigin } from "./types.js";
 import { registerAutomationCommands } from "./automations.js";
 
 import { parseInactivityMinutes } from "./inactivity.js";
@@ -62,7 +63,13 @@ import {
   upsertSubscription,
   upsertEnvironment,
 } from "./state.js";
-import { cancelQueuedSend, drainQueuedSends, hasQueuedWork, listQueuedSends } from "./sendQueue.js";
+import {
+  cancelQueuedSend,
+  drainQueuedSends,
+  hasQueuedWork,
+  listQueuedSends,
+  summarizeQueuedSends,
+} from "./sendQueue.js";
 import {
   planExplicitThreadOrder,
   planThreadMove,
@@ -141,6 +148,77 @@ async function withAgent(agentName: string): Promise<{
     client: new RemoteEnvironmentClient(environment),
     saved: agentTarget.savedAgent !== null,
     target: agentTarget,
+  };
+}
+
+/** Resolves parent ownership without writing to the parent's server. */
+async function resolveParentLink(
+  state: Awaited<ReturnType<typeof loadState>>,
+  reference: string,
+  childEnvironment: string,
+): Promise<{
+  parentThreadId: string | null;
+  remoteParent?: { environmentId: string; threadId: string };
+  parentEnvironmentName?: string;
+  identity: ThreadIdentity;
+}> {
+  const callerMetadata =
+    reference === resolveCallerThreadId() ? resolveCallerEnvironmentMetadata() : null;
+  const callerEnvironment = callerMetadata
+    ? state.environments.find(
+        (environment) => environment.environmentId === callerMetadata.environmentId,
+      )
+    : null;
+  if (callerMetadata && !callerEnvironment)
+    throw new Error(
+      "The calling environment is not paired; pair its stable descriptor before nesting.",
+    );
+  if (
+    !callerMetadata &&
+    !state.agents.some((agent) => agent.name === reference) &&
+    new Set(
+      state.agents
+        .filter((agent) => agent.threadId === reference)
+        .map((agent) => agent.environment),
+    ).size > 1
+  ) {
+    throw new Error("Parent UUID belongs to multiple environments; use its saved agent name.");
+  }
+  const caller = callerEnvironment
+    ? {
+        threadId: reference,
+        name:
+          state.agents.find(
+            (agent) => agent.threadId === reference && agent.environment === callerEnvironment.name,
+          )?.name ?? null,
+        environment: callerEnvironment.name,
+      }
+    : reference === resolveCallerThreadId()
+      ? resolveCallerEndpointFromLocalContext(state, reference)
+      : null;
+  const target =
+    caller ??
+    (await resolveAgentTarget(state, reference, {
+      preferredEnvironment: childEnvironment,
+      requireUniqueRemoteMatch: true,
+      clientFactory: (name) => new RemoteEnvironmentClient(requireEnvironment(state, name)),
+    }));
+  const parentEnvironment = requireEnvironment(state, target.environment);
+  const savedParent = state.agents.find(
+    (agent) => agent.threadId === target.threadId && agent.environment === target.environment,
+  );
+  const identity = {
+    threadId: target.threadId,
+    name: savedParent?.name ?? null,
+    environment: target.environment,
+    title: savedParent?.title,
+  };
+  if (target.environment === childEnvironment) return { parentThreadId: target.threadId, identity };
+  return {
+    parentThreadId: null,
+    remoteParent: { environmentId: parentEnvironment.environmentId, threadId: target.threadId },
+    parentEnvironmentName: target.environment,
+    identity,
   };
 }
 
@@ -228,6 +306,21 @@ async function resolveNotifyEndpoint(
   return resolveThreadEndpoint(state, threadId, preferredEnvironment, callerEnvironment);
 }
 
+/** Origin for a send made from inside a T3 thread; a send from a plain terminal has none. */
+type SendCommandOptions = { queue: boolean; coalesce?: string; progress?: boolean };
+type QueueCommandOptions = { env?: string; open?: boolean; summary?: boolean };
+
+function callerSendOrigin(state: Awaited<ReturnType<typeof loadState>>): QueuedSendOrigin | null {
+  const fromThreadId = resolveCallerThreadId();
+  if (!fromThreadId) return null;
+  const fromName = resolveCallerEndpointFromLocalContext(
+    state,
+    fromThreadId,
+    resolveCallerEnvironmentMetadata(),
+  )?.name;
+  return { source: "thread-send", fromThreadId, ...(fromName ? { fromName } : {}) };
+}
+
 async function withCallerFromEnv(): Promise<{
   state: Awaited<ReturnType<typeof loadState>>;
   caller: SubscriptionEndpoint;
@@ -276,6 +369,8 @@ const AGENT_COMMAND_ALIASES = new Set([
   "nest",
   "unnest",
   "rename",
+  "nest",
+  "unnest",
   "attach",
   "list",
   "archive",
@@ -824,7 +919,8 @@ agent
     // `options.preamble` is false only when `--no-preamble` was passed (Commander convention).
     const initialMessage = options.message;
     const created = await client.createAgentThread({
-      parentThreadId: options.topLevel ? null : options.parent ? resolveParentThreadId(state, options.parent, environment.name) : (resolveCallerThreadId(process.env) ?? null),
+      parentThreadId: parentLink?.parentThreadId ?? null,
+      remoteParent: parentLink?.remoteParent,
       pin: options.pin === true,
       settleOnComplete: options.settleOnComplete,
       projectId: options.project,
@@ -1729,7 +1825,9 @@ agent
   .argument("<name>", "agent name or raw thread UUID")
   .argument("<message...>", "message text")
   .option("--no-queue", "fail instead of queueing when the target thread is still running")
-  .action(async (name, messageParts: string[], options: { queue: boolean }) => {
+  .option("--coalesce <key>", "replace your own still-waiting keyed note")
+  .option("--progress", "shorthand for --coalesce progress")
+  .action(async (name, messageParts: string[], options: SendCommandOptions) => {
     const { agent: savedAgent, client, saved } = await withAgent(name);
     const state = await loadState();
     const outcome = await sendDirectResult({
@@ -1746,9 +1844,11 @@ agent
           threadId: savedAgent.threadId,
           text: messageParts.join(" ").trim(),
           queueWhileRunning: options.queue,
-          origin: process.env.T3_THREAD_ID
-            ? { source: "thread-send", fromThreadId: process.env.T3_THREAD_ID }
-            : null,
+          origin: callerSendOrigin(state),
+          senderEnvironment:
+            resolveCallerEnvironmentMetadata()?.environmentName ??
+            resolveCallerEnvironmentMetadata()?.environmentId,
+          coalesceKey: options.coalesce ?? (options.progress ? "progress" : null),
           agentName: saved ? savedAgent.name : null,
         }),
     });
@@ -1770,9 +1870,19 @@ agent
   .argument("[name]", "agent name or raw thread UUID")
   .option("--env <name>", "optional saved environment filter")
   .option("--open", "only sends that are still waiting to dispatch")
-  .action(async (name: string | undefined, options: { env?: string; open?: boolean }) => {
+  .option("--summary", "count open sends by target thread and sender instead of listing them")
+  .action(async (name: string | undefined, options: QueueCommandOptions) => {
     const threadId = name ? (await withAgent(name)).agent.threadId : undefined;
     const state = await loadState();
+    if (options.summary) {
+      printJson(
+        summarizeQueuedSends(state, {
+          ...(options.env ? { env: options.env } : {}),
+          ...(threadId ? { threadId } : {}),
+        }),
+      );
+      return;
+    }
     printJson(
       listQueuedSends(state, {
         ...(options.env ? { env: options.env } : {}),
