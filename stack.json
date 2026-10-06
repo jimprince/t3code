@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "199cc36d21d8853ec6d596b2222bbe75098c5103",
-  "head": "be5f97856c8bdf590ac8aa9bc24d241ff733475c",
+  "prev": "6356bff8854e59d56b7202c80910cdce82f31d29",
+  "head": "d46ea707aa3656e2cd377102f7b6ace2d31e1857",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -91,10 +91,10 @@
     "fork-task-view",
     "fork-release-horizon",
     "fork-board-blocked-working",
-    "fork-needs-you-decisions"
+    "fork-needs-you-decisions",
+    "fork-project-workstreams"
   ],
   "unapplied": [
-    "fork-project-workstreams",
     "fork-item-types",
     "fork-board-declutter",
     "fork-dev-vm-heavy-check-gate",
@@ -288,7 +288,7 @@
       "oid": "00cf43339f6bada72e528508a5adb17c2d00975e"
     },
     "fork-project-workstreams": {
-      "oid": "a6c32a3f72295c45dada716c140afe47e4829a5b"
+      "oid": "d46ea707aa3656e2cd377102f7b6ace2d31e1857"
     },
     "fork-projects-pinned": {
       "oid": "2f98efdff0178b59b633463d8a129d6d58d233b2"
