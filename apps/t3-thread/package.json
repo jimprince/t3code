@@ -20,8 +20,8 @@
     "build": "node scripts/build.mjs",
     "cli": "node scripts/launch.mjs",
     "smoke": "tsx src/cli.ts envs >/dev/null && tsx src/cli.ts projects --env local-mbp >/dev/null && tsx src/cli.ts watch --once --no-deliver >/dev/null",
-    "test": "vp test run",
-    "typecheck": "tsc --noEmit",
+    "test": "node ../../scripts/ci/heavy-gate.ts vp test run",
+    "typecheck": "node ../../scripts/ci/heavy-gate.ts tsc --noEmit",
     "prepare": "node scripts/build.mjs",
     "cli:dev": "tsx src/cli.ts"
   },
