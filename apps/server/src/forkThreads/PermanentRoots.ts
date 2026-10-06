@@ -1,4 +1,7 @@
 import type { ThreadId } from "@t3tools/contracts";
 
-/** M3 named-agent policy supplies permanent roots; M2 has none. */
-export const isPermanentRoot = (_threadId: ThreadId): boolean => false;
+/** Snapshot membership supplied by the lifecycle sweep; no cross-runtime mutable registry. */
+export const isPermanentRoot = (
+  threadId: ThreadId,
+  roots: ReadonlySet<ThreadId> = new Set(),
+): boolean => roots.has(threadId);
