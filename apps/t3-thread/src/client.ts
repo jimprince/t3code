@@ -1071,6 +1071,27 @@ export class RemoteEnvironmentClient {
     };
   }
 
+  async setThreadAutoSettle(threadId: string, enabled: boolean) {
+    const rpc = await this.openRpc();
+    try {
+      await rpc.request("dispatchCommand", {
+        type: "thread.auto-settle.set",
+        commandId: NodeCrypto.randomUUID(),
+        threadId,
+        enabled,
+      });
+    } finally {
+      await rpc.dispose();
+    }
+    const thread = await this.findThread(threadId);
+    return {
+      threadId: thread.id,
+      environment: this.environment.name,
+      autoSettle: (thread.autoSettleDisabledAt ?? null) === null,
+      autoSettleDisabledAt: thread.autoSettleDisabledAt ?? null,
+    };
+  }
+
   async settleThread(threadId: string, options: { self?: boolean } = {}) {
     if (threadId === resolveCallerThreadId() && !options.self) {
       throw new Error(
