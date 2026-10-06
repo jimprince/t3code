@@ -107,6 +107,7 @@ const answer14 = (
     yield* initializeMetadata(yield* SqlClient.SqlClient);
     return yield* make({
       projectIssues: {
+        trackerForRoot: () => Effect.succeed(null),
         repositoryForProject: () => Effect.succeed(target),
         invalidate: () => undefined,
       } as never,
