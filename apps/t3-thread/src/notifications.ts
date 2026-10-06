@@ -239,6 +239,8 @@ export function shouldDeliverNotification(
   if (["needs-input", "needs-approval", "needs-plan", "error"].includes(notification.sourceState))
     return true;
   const level = subscription.level ?? "all";
+  if (notification.sourceState === "inactive")
+    return level !== "none" && (subscription.inactivityMinutes ?? 0) > 0;
   if (level === "none") return false;
   if (notification.sourceState === "completed") {
     const disposition = notification.completionDisposition;
