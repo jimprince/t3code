@@ -30,6 +30,10 @@ import {
   ProjectDashboardSetTrackerInput,
   ProjectDashboardSetHealthInput,
   ProjectDashboardSetWidgetsInput,
+  ProjectLayout,
+  ProjectLayoutApplyInput,
+  ProjectLayoutError,
+  ProjectLayoutGetInput,
   ProjectRoadmap,
   ProjectRoadmapError,
   ProjectRoadmapGetInput,
@@ -502,6 +506,19 @@ const WsProjectDashboardSetHealthRpc = Rpc.make(WS_METHODS.projectDashboardSetHe
   error: projectDashboardError,
 });
 
+// Project page layout: tabs of widgets.
+const projectLayoutError = Schema.Union([ProjectLayoutError, EnvironmentAuthorizationError]);
+const WsProjectLayoutGetRpc = Rpc.make(WS_METHODS.projectLayoutGet, {
+  payload: ProjectLayoutGetInput,
+  success: ProjectLayout,
+  error: projectLayoutError,
+});
+const WsProjectLayoutApplyRpc = Rpc.make(WS_METHODS.projectLayoutApply, {
+  payload: ProjectLayoutApplyInput,
+  success: ProjectLayout,
+  error: projectLayoutError,
+});
+
 // Project roadmap.
 const projectRoadmapError = Schema.Union([ProjectRoadmapError, EnvironmentAuthorizationError]);
 const WsProjectRoadmapGetRpc = Rpc.make(WS_METHODS.projectRoadmapGet, {
@@ -560,6 +577,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectDashboardSetWidgetsRpc,
   WsProjectDashboardSetTrackerRpc,
   WsProjectDashboardSetHealthRpc,
+  WsProjectLayoutGetRpc,
+  WsProjectLayoutApplyRpc,
   WsProjectRoadmapGetRpc,
   WsProjectRoadmapMoveRpc,
   WsProjectRoadmapSaveVersionRpc,
