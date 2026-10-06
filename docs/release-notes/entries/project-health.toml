@@ -1,0 +1,4 @@
+id = "project-health"
+category = "feature"
+functionality = "projects"
+text = "Project pages open with a health line: On track, At risk, Off track or Waiting on you, one sentence from the orchestrator and when it was written. It shows as stale once it is a day old or the work has changed since."
