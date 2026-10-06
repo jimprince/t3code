@@ -1220,6 +1220,19 @@ export class RemoteEnvironmentClient {
     }
   }
 
+  /** The project page's layout: tabs of widgets, changed through ops. */
+  async projectLayout<T>(
+    method: "projectLayoutGet" | "projectLayoutApply",
+    input: Record<string, unknown>,
+  ): Promise<T> {
+    const rpc = await this.openRpc();
+    try {
+      return await rpc.request<T>(method, input);
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
   /** Project roadmap: versions as Gitea milestones on the project's tracker. */
   async projectRoadmap<T>(
     method: "projectRoadmapGet" | "projectRoadmapMove" | "projectRoadmapSaveVersion",
