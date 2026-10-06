@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "b206e5a4e021b5cd535bb2396dc40eb042e665b7",
-  "head": "899972f37611f65e379d8d9d4d3322c925b43726",
+  "prev": "a3018195098ce06d33ac6a7bb4c44fb15c92e6a6",
+  "head": "e0dcbf4c7420874d666e7c6a1f1ff934b76d3879",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -61,7 +61,8 @@
     "fork-textgen-tempfile-cause",
     "fork-textgen-own-scope",
     "fork-dev-vm-heavy-check-gate",
-    "fork-gitea-issue-links"
+    "fork-gitea-issue-links",
+    "fork-orchestrators-view"
   ],
   "unapplied": [
     "fork-conversation-fork",
@@ -190,6 +191,9 @@
     },
     "fork-orchestrator-focus": {
       "oid": "bd10e1b21b4f4716940c72b44f3a15678a11d1cf"
+    },
+    "fork-orchestrators-view": {
+      "oid": "e0dcbf4c7420874d666e7c6a1f1ff934b76d3879"
     },
     "fork-overnight-updates": {
       "oid": "184137b5fc65314294a1fd05fb924b62bbe4b03d"
