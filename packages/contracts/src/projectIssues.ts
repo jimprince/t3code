@@ -108,6 +108,32 @@ export const ProjectIssuesListInput = Schema.Struct({
 });
 export type ProjectIssuesListInput = typeof ProjectIssuesListInput.Type;
 
+/** One issue opened in the app: its body and recent comments, plus children of an epic. */
+export const ProjectIssuesGetInput = Schema.Struct({
+  rootThreadId: ThreadId,
+  host: TrimmedNonEmptyString,
+  repository: TrimmedNonEmptyString,
+  number: PositiveInt,
+});
+export type ProjectIssuesGetInput = typeof ProjectIssuesGetInput.Type;
+
+export const ProjectIssueComment = Schema.Struct({
+  author: Schema.String,
+  body: Schema.String,
+  createdAt: IsoDateTime,
+});
+export type ProjectIssueComment = typeof ProjectIssueComment.Type;
+
+export const ProjectIssuesGetResult = Schema.Struct({
+  issue: ProjectIssue,
+  body: Schema.String,
+  /** Oldest first; only the latest few. */
+  comments: Schema.Array(ProjectIssueComment),
+  /** Numbers of issues in the same repository whose body starts "Part of #<number>". */
+  childNumbers: Schema.Array(PositiveInt),
+});
+export type ProjectIssuesGetResult = typeof ProjectIssuesGetResult.Type;
+
 /**
  * Task types, stored as `ask:<kind>` labels on requests and issues alike; each has
  * its own lifecycle on the project page.
