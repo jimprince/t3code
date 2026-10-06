@@ -1,6 +1,7 @@
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
 import * as LegacyBackgroundWorkImport from "./fork/recovery/LegacyBackgroundWorkImport.ts";
 import * as RecoveryProcessAccess from "./diagnostics/RecoveryProcessAccess.ts";
+import * as WorkerLifecycle from "./forkThreads/WorkerLifecycle.ts";
 import { configuredGiteaIdentity } from "./sourceControl/ForkGiteaLinkAdapter.ts";
 import type { RelayManagedEndpointRuntimeConfig } from "@t3tools/contracts/relay";
 import * as Clock from "effect/Clock";
@@ -561,6 +562,7 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   // Asks T3 Connect to deliver webhooks it held while this environment was offline.
   HeldHooksWaker.layer,
   layerThreadSettlementWorker,
+  WorkerLifecycle.live,
   Layer.effectDiscard(StorageCleanup.make.pipe(Effect.flatMap((service) => service.start()))).pipe(
     Layer.provide(ProjectionStoreV2.layer),
   ),
