@@ -13,11 +13,12 @@ const [Effect, Stream, Layer, Deferred, Fiber] = await Promise.all(
   ["Effect", "Stream", "Layer", "Deferred", "Fiber"].map(load),
 );
 const app = (file) => import(NodeURL.pathToFileURL(root + "/apps/server/src/" + file + ".ts"));
-const [Prefix, Ws, Threads, Events] = await Promise.all([
+const [Prefix, Ws, Threads, Events, Persistence] = await Promise.all([
   app("rpcInitialItems"),
   app("ws"),
   app("orchestration-v2/ThreadManagementService"),
   app("persistence/Services/OrchestrationEventStore"),
+  app("persistence/Layers/Sqlite"),
 ]);
 const refs = [];
 const fibers = [];
@@ -37,6 +38,7 @@ function start(ready) {
     Stream.concat(Stream.never),
   );
   const dependencies = Layer.mergeAll(
+    Persistence.SqlitePersistenceMemory,
     Layer.mock(Threads.ThreadManagementService)({
       ensureLegacyTranscript: () => Effect.void,
       getThreadSnapshot: () =>
