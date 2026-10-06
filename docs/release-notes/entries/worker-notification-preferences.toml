@@ -1,0 +1,4 @@
+id = "worker-notification-preferences"
+category = "feature"
+functionality = "worker supervision"
+text = "Choose worker notification levels, silence quiet results, and avoid repeated identical error alerts while keeping required escalations. Your first routed notice includes a short communication guide."
