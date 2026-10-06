@@ -85,7 +85,7 @@ export function ProjectTaskPanel({
   return (
     <aside
       aria-label="Task"
-      className="flex w-[420px] min-w-0 shrink-0 flex-col border-l border-border"
+      className="flex w-full min-w-0 shrink-0 sm:w-[420px] flex-col border-l border-border"
     >
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
         <span className="min-w-0 flex-1 truncate text-sm font-medium">
