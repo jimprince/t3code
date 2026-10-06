@@ -10,7 +10,11 @@ import { WorkspaceBreadcrumb, WorkspaceBreadcrumbItem } from "../WorkspaceBreadc
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { Button } from "../ui/button";
 import { SidebarInset } from "../ui/sidebar";
-import { findEmbeddedPage, resolveEmbeddedPageHost } from "./embeddedPages.logic";
+import {
+  findEmbeddedPage,
+  resolveEmbeddedPageHost,
+  statusBoardIssueUrl,
+} from "./embeddedPages.logic";
 import { useEmbeddedPages } from "./useEmbeddedPages";
 
 /**
@@ -23,11 +27,21 @@ const EMBEDDED_PAGE_FRAME_SANDBOX =
   "allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-modals";
 
 /** Main-area view for one footer page, opened from its sidebar icon. */
-export function EmbeddedPageView({ pageId }: { readonly pageId: string }) {
+export function EmbeddedPageView({
+  pageId,
+  issueTarget,
+}: {
+  readonly pageId: string;
+  readonly issueTarget?: { readonly repo?: string; readonly issue?: string };
+}) {
   const page = findEmbeddedPage(useEmbeddedPages(), pageId);
+  const targetUrl =
+    page && issueTarget?.repo && issueTarget.issue
+      ? statusBoardIssueUrl(page.url, issueTarget.repo, issueTarget.issue)
+      : page?.url;
   const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const host = page
-    ? resolveEmbeddedPageHost(page.url, {
+  const host = targetUrl
+    ? resolveEmbeddedPageHost(targetUrl, {
         desktopWebview: isPreviewSupportedInRuntime() && primaryEnvironmentId !== null,
         appProtocol: window.location.protocol,
       })
@@ -42,11 +56,11 @@ export function EmbeddedPageView({ pageId }: { readonly pageId: string }) {
               <h1 className="truncate">{page?.name ?? "Page not found"}</h1>
             </WorkspaceBreadcrumbItem>
           </WorkspaceBreadcrumb>
-          {page ? (
+          {page && targetUrl ? (
             <Button
               size="xs"
               variant="outline"
-              render={<a href={page.url} target="_blank" rel="noreferrer" />}
+              render={<a href={targetUrl} target="_blank" rel="noreferrer" />}
             >
               <ExternalLinkIcon />
               Open in browser
@@ -54,29 +68,29 @@ export function EmbeddedPageView({ pageId }: { readonly pageId: string }) {
           ) : null}
         </WorkspacePageHeader>
         <div className="relative min-h-0 flex-1 border-t">
-          {page === null || host === null ? (
+          {page === null || host === null || targetUrl === undefined ? (
             <p className="p-6 text-sm text-muted-foreground">
               This page was removed. Add it again in Settings → General → Sidebar pages.
             </p>
           ) : host.kind === "blocked" ? (
             <div className="space-y-3 p-6 text-sm">
               <p className="text-muted-foreground">{host.reason}</p>
-              <Button size="sm" render={<a href={page.url} target="_blank" rel="noreferrer" />}>
+              <Button size="sm" render={<a href={targetUrl} target="_blank" rel="noreferrer" />}>
                 <ExternalLinkIcon />
                 Open in browser
               </Button>
             </div>
           ) : host.kind === "webview" && primaryEnvironmentId !== null ? (
             <EmbeddedPageWebview
-              key={page.url}
+              key={targetUrl}
               environmentId={primaryEnvironmentId}
-              url={page.url}
+              url={targetUrl}
             />
           ) : (
             <iframe
-              key={page.url}
+              key={targetUrl}
               className="absolute inset-0 size-full bg-white"
-              src={page.url}
+              src={targetUrl}
               title={page.name}
               sandbox={EMBEDDED_PAGE_FRAME_SANDBOX}
             />
