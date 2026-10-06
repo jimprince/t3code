@@ -1,5 +1,3 @@
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import type { ReactNode } from "react";
 import {
   sortPinnedThreadsByOrderKey,
   sortActiveThreadsByOrderKey,
@@ -14,7 +12,7 @@ import {
 } from "@t3tools/client-runtime/state/fork-nesting";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { ThreadId, type EnvironmentId } from "@t3tools/contracts";
-import { useState } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { connectionAtomRuntime } from "../../connection/runtime";
 import { useThreadShells, useProjects } from "../../state/entities";
@@ -30,11 +28,13 @@ const updateMetadata = createEnvironmentRpcCommand(connectionAtomRuntime, {
   onSuccess: ({ environmentId }, registry) =>
     Effect.sync(() => registry.refresh(metadataQuery({ environmentId, input: {} }))),
 });
+export type ForkSupervisionRow = ReturnType<typeof useThreadShells>[number];
+
 /** Organizational workers appear beside native execution lineage, never as delegated-task results. */
 export function ForkSupervisionControl(props: {
   environmentId: EnvironmentId;
   threadId: ThreadId;
-  renderWorkerRow?: (thread: EnvironmentThreadShell) => ReactNode;
+  renderRow?: (thread: ForkSupervisionRow) => ReactNode;
 }) {
   const threads = useThreadShells();
   const projects = useProjects();
@@ -69,13 +69,9 @@ export function ForkSupervisionControl(props: {
       },
     });
   };
-  const renderRow = (thread: (typeof threads)[number]) =>
-    props.renderWorkerRow ? (
-      props.renderWorkerRow(thread)
-    ) : (
+  const renderDefaultRow = (thread: ForkSupervisionRow) => (
       <button
         type="button"
-        key={supervisionKey(thread.environmentId, thread.id)}
         onClick={() => {
           void navigate({
             to: "/$environmentId/$threadId",
@@ -91,6 +87,11 @@ export function ForkSupervisionControl(props: {
         )?.title ?? thread.projectId}
       </button>
     );
+  const renderRow = (thread: ForkSupervisionRow) => (
+    <Fragment key={supervisionKey(thread.environmentId, thread.id)}>
+      {props.renderRow ? props.renderRow(thread) : renderDefaultRow(thread)}
+    </Fragment>
+  );
   const active = [
     ...sortPinnedThreadsByOrderKey(rows.filter((thread) => thread.pinnedAt !== null)),
     ...sortActiveThreadsByOrderKey(
