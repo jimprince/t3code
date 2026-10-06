@@ -37,7 +37,6 @@ import {
   resolveSidebarThreadStatus,
   resolveSidebarV2TopStatus,
   resolveThreadLastVisitedAt,
-  resolveThreadRowClassName,
   resolveThreadStatusPill,
   resolveWorkingStartedAt,
   searchSidebarThreads,
@@ -52,7 +51,6 @@ import {
   sortProjectsForSidebar,
   sortScopedProjectsForSidebar,
   sortSidebarV2ProjectGroups,
-  shouldCreateNewThreadInCurrentProject,
   shouldNavigateAfterThreadPark,
   THREAD_JUMP_HINT_SHOW_DELAY_MS,
   type SidebarListItem,
@@ -61,7 +59,7 @@ import {
   resolveSidebarDropVerb,
 } from "./Sidebar.logic";
 import { threadSearchMatchKey } from "@t3tools/client-runtime/state/thread-search";
-import { sortSettledThreads } from "@t3tools/client-runtime/state/thread-sort";
+
 import { EnvironmentId, ProjectId, ProviderInstanceId, RunId, ThreadId } from "@t3tools/contracts";
 
 import {
@@ -917,6 +915,34 @@ describe("resolveSidebarThreadStatus", () => {
         runtime,
       }),
     ).toBe("approval");
+  });
+
+  it("keeps active native goals working between turns, while retaining attention precedence", () => {
+    const goal = { ...idle, codexNativeGoal: { objective: "Ship it", status: "active" as const } };
+    expect(resolveSidebarThreadStatus(goal)).toBe("working");
+    expect(resolveSidebarThreadStatus({ ...goal, hasPendingUserInput: true })).toBe("input");
+    expect(
+      resolveSidebarThreadStatus({
+        ...goal,
+        codexNativeGoal: { ...goal.codexNativeGoal, status: "blocked" },
+      }),
+    ).toBe("ready");
+  });
+
+  it("lets a failed or usage-limited run show through an active goal", () => {
+    const goal = { ...idle, codexNativeGoal: { objective: "Ship it", status: "active" as const } };
+    expect(
+      resolveSidebarThreadStatus({
+        ...goal,
+        runtime: { ...runtime, status: "failed", lastErrorClass: "provider_error" },
+      }),
+    ).toBe("failed");
+    expect(
+      resolveSidebarThreadStatus({
+        ...goal,
+        runtime: { ...runtime, status: "failed", lastErrorClass: "usage_limit" },
+      }),
+    ).toBe("limited");
   });
 
   it("reports working for running and starting runtimes", () => {
