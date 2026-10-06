@@ -1,10 +1,12 @@
 {
   "version": 5,
-  "prev": "0d1ac12ed6f1397ed7fd5d014ee50e89ab9a533d",
-  "head": "9d19af6c38f89cbaf2b9c12cdd8c83a5274a4505",
+  "prev": "533f34df0e09e6f84d97d5cd498b9b764357ffec",
+  "head": "c0c15bb58d3e51a3b3d2d95516317f09946884f1",
   "applied": [
     "fork-build-ci-compat",
-    "fork-worker-operations",
+    "fork-worker-operations"
+  ],
+  "unapplied": [
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
     "fork-general-chat",
@@ -55,9 +57,7 @@
     "fork-interrupted-turn-rewind",
     "fork-agent-thread-ordering",
     "fork-cross-environment-nesting",
-    "fork-queue-coalesced-notes"
-  ],
-  "unapplied": [
+    "fork-queue-coalesced-notes",
     "fork-conversation-fork",
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
