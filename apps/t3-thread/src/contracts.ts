@@ -33,6 +33,10 @@ import {
   ProjectRequestCreateInput,
   ProjectRequestKind,
   ProjectRequestCreateResult,
+  ProjectRequestDecideInput,
+  ProjectRequestDecideResult,
+  ProjectRequestDiscussInput,
+  ProjectRequestDiscussResult,
   ProjectRequestRef,
   ProjectRequestsListInput,
   ProjectRequestUpdateInput,
@@ -233,6 +237,16 @@ const WsAutomationScriptsRunRpc = Rpc.make("automationScripts.run", {
 });
 
 export const WsRpcGroup = RpcGroup.make(
+  Rpc.make("projectRequests.decide", {
+    payload: ProjectRequestDecideInput,
+    success: ProjectRequestDecideResult,
+    error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make("projectRequests.discuss", {
+    payload: ProjectRequestDiscussInput,
+    success: ProjectRequestDiscussResult,
+    error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+  }),
   WsSessionReconcileRpc,
   WsAutomationsListRpc,
   WsAutomationsSaveRpc,
