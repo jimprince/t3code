@@ -363,9 +363,12 @@ export function deriveNeedsYou(
  * Open requests whose thread Brad already settled: the work there is over, so
  * the page offers to settle them together instead of one by one.
  */
-export function requestsOfSettledThreads(
-  requests: ReadonlyArray<ProjectRequest>,
-): Array<{ readonly thread: EnvironmentThreadShell; readonly requests: ProjectRequest[] }> {
+export function requestsOfSettledThreads(requests: ReadonlyArray<ProjectRequest>): Array<{
+  readonly thread: EnvironmentThreadShell;
+  readonly requests: ProjectRequest[];
+  /** The request's own title when the thread holds one; intake threads are named after Brad's raw words. */
+  readonly title: string;
+}> {
   const byThread = new Map<
     string,
     { thread: EnvironmentThreadShell; requests: ProjectRequest[] }
@@ -377,7 +380,10 @@ export function requestsOfSettledThreads(
     group.requests.push(request);
     byThread.set(thread.id, group);
   }
-  return [...byThread.values()];
+  return [...byThread.values()].map((group) => ({
+    ...group,
+    title: group.requests.length === 1 ? group.requests[0]!.issue.title : group.thread.title,
+  }));
 }
 
 /**

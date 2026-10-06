@@ -3,6 +3,7 @@ import { isPageAgentThreadId } from "@t3tools/contracts";
 
 import type { RequestCandidate, RequestKind } from "../textGeneration/RequestItemsPrompt.ts";
 import { formatRequestMarker } from "./projectIssues.logic.ts";
+import { deriveRequestTitle } from "./requestTitle.logic.ts";
 
 /** Labels the ledger puts on a request issue: `ask` plus one type label, and `bug` for a bug. */
 export const requestKindLabel = (kind: RequestKind) => `ask:${kind}`;
@@ -102,13 +103,7 @@ export function fallbackRequestItem(text: string): {
   bug?: boolean;
   excerpt: string;
 } {
-  const trimmed = text.trim();
-  const firstSentence = /^[^\n]*?[.?!](?=\s|$)/.exec(trimmed)?.[0] ?? trimmed.split("\n")[0]!;
-  return {
-    title: clampTitle(firstSentence),
-    kind: firstSentence.trim().endsWith("?") ? "question" : "task",
-    excerpt: trimmed,
-  };
+  return { ...deriveRequestTitle(text), excerpt: text.trim() };
 }
 
 export function clampTitle(title: string): string {
@@ -116,7 +111,7 @@ export function clampTitle(title: string): string {
   return oneLine.length <= 90 ? oneLine : `${oneLine.slice(0, 87).trimEnd()}...`;
 }
 
-/** Issue body: Brad's words, where he asked, and the hidden provenance marker. */
+/** Issue body: Brad's words under their own heading, where he asked, and the hidden provenance marker. */
 export function formatRequestIssueBody(input: {
   readonly excerpt: string;
   readonly kind: RequestKind;
@@ -135,6 +130,8 @@ export function formatRequestIssueBody(input: {
       ? `**${input.threadTitle}** (under **${input.rootTitle}**)`
       : `**${input.threadTitle}**`;
   return [
+    "## Brad's words",
+    "",
     quoted,
     "",
     `Requested in ${where}. Kind: ${input.kind}${input.bug ? " (bug)" : ""}. Settled only by the requester, from the project page.`,
@@ -422,7 +419,7 @@ export function buildIntakeBrief(input: {
     "",
     'The request is filed as a task on the project tracker and linked to this thread. Find its number with `t3-thread request list "$T3_THREAD_ID"` (the open item asked in this thread; if it is still pending filing, wait 30 seconds and look again).',
     "",
-    'Dashboard guidelines: a question shows its answer first, in 1-3 plain sentences. Work gets an imperative title ("Move the New request box to the top"); a request worded as a question is still a task. Statuses are only Pending, Active, For review and Complete. If ~/maintenance-work/dashboard-guidelines/ exists, follow display.md and taxonomy.md there.',
+    'Dashboard guidelines: a question shows its answer first, in 1-3 plain sentences. Work gets a short deliverable title under 70 characters: an imperative ("Move the New request box to the top"), never "Can you ..." or "Please ..."; a request worded as a question is still a task. A question gets a crisp question. Brad\'s words stay in the issue body under "Brad\'s words". Statuses are only Pending, Active, For review and Complete. If ~/maintenance-work/dashboard-guidelines/ exists, follow display.md and taxonomy.md there.',
     "",
     "Steps (N is the task number):",
     '1. Type it: `t3-thread request type "$T3_THREAD_ID" N <question|task|epic>`, adding `--bug` when it fixes something broken.',

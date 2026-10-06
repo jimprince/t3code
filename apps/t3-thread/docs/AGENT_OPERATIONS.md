@@ -1129,6 +1129,13 @@ orchestrator, sends the orchestrator one message when it needs starting now or n
 decision, or just catalogs it; it records a progress note and settles itself. An orchestrator
 hears about a box request only through that one message.
 
+A request's title is a short deliverable title under 70 characters, not Brad's raw words: an
+imperative for work ("Troubleshoot the T3 orchestrator's stalled workers"), a crisp question for a
+question, never "Can you ...", "Please ..." or a greeting. His exact words stay in the issue body
+under "Brad's words". The ledger derives a title when it files a request, and `request start` or
+`request note` replaces a title that is still his raw first line; a title you set with
+`request title` is never overwritten, so set it only when the derived one is wrong.
+
 Every item has one type, its `ask:<kind>` label: question (Brad wants information back and nothing
 changes), task (something to do, however it is phrased: fix, feature, change, upkeep, test,
 draft), or epic (too big for one worker turn: a plan, a port, phases). A task that fixes
