@@ -1,0 +1,4 @@
+id = "installed-delegated-worker-repair"
+category = "maintenance"
+functionality = "worker repair"
+text = "Installed servers include a dry-run-first delegated-worker repair command with V2 home resolution and stricter offline ownership checks."
