@@ -15,6 +15,7 @@ type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
  * prefix. Adding an RPC to `WsRpcGroup` without a label is a type error.
  */
 const RPC_AGGREGATES = {
+  "projectRequests.startIntake": "project-issues",
   "projectLayout.apply": "project-layout",
   "projectLayout.get": "project-layout",
   "projectLayout.history": "project-layout",
