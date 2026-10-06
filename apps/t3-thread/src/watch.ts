@@ -14,6 +14,8 @@ import {
   buildNotificationRecord,
   MAX_DELIVERY_ATTEMPTS,
   mergeDetectedNotification,
+  shouldNotify,
+  shouldDeliverNotification,
   nextAttemptAt,
   TERMINAL_NOTIFICATION_STATUSES,
 } from "./notifications.js";
@@ -26,6 +28,7 @@ import type {
   OrchestrationThreadShell,
   SavedEnvironment,
   SavedNotification,
+  SavedSubscription,
   StateFile,
 } from "./types.js";
 
@@ -265,23 +268,20 @@ export async function scanAttentionNotifications(
   options: AttentionScanOptions = {},
 ): Promise<SavedNotification[]> {
   const discovered = await discoverParentRoutes(state, options);
-  return scanKnownRoutes(discovered.state, options);
+  return (await scanAttentionState(discovered.state, options)).notifications;
 }
 
-async function scanKnownRoutes(
+async function scanAttentionState(
   state: StateFile,
-  options: {
-    env?: string;
-    clientFactory?: WatchClientFactory;
-    now?: () => string;
-  } = {},
-): Promise<SavedNotification[]> {
+  options: AttentionScanOptions,
+): Promise<{ notifications: SavedNotification[]; observedSubscriptions: SavedSubscription[] }> {
   const clientFactory = options.clientFactory ?? createWatchClient;
   const now = options.now ?? nowIso;
   const scopedAgents = options.env
     ? state.agents.filter((savedAgent) => savedAgent.environment === options.env)
     : state.agents;
   const scanned: SavedNotification[] = [];
+  const observedSubscriptions: SavedSubscription[] = [];
 
   for (const sourceAgent of scopedAgents) {
     if (
@@ -309,16 +309,12 @@ async function scanKnownRoutes(
     )
       continue;
     const overview = buildAgentOverview(sourceAgent, sourceThread);
-    if (!needsAttention(overview)) {
-      continue;
-    }
     if (
       overview.state === "error" &&
       isNotificationReply(sourceThread) &&
       threadQuotaBlock(sourceThread)
-    ) {
+    )
       continue;
-    }
 
     const subscriptions = state.subscriptions.filter(
       (subscription) =>
@@ -336,45 +332,57 @@ async function scanKnownRoutes(
         matchesCurrentParent(sourceThread, subscription, state);
       if (subscription.nestingDerived && !isChildInput) continue;
       if (
-        (overview.state === "completed" || overview.state === "idle") &&
-        (subscription.events === "attention" || isNotificationReply(sourceThread))
+        subscription.observedState !== overview.state ||
+        subscription.observedReason !== overview.reason
       )
+        subscription.errorEventKey = null;
+      subscription.observedState = overview.state;
+      subscription.observedReason = overview.reason;
+      observedSubscriptions.push(subscription);
+      if (
+        (overview.state === "completed" || overview.state === "idle") &&
+        isNotificationReply(sourceThread)
+      )
+        continue;
+      if (!needsAttention(overview) || !shouldNotify(subscription, overview, sourceThread))
         continue;
       // Attention for the turn that was already current when the subscriber
       // signed up is old news to it; only a later turn is a new transition.
       if (
         subscription.baselineTurnId &&
         (sourceThread.latestTurn?.turnId ?? null) === subscription.baselineTurnId &&
-        !isChildInput
+        !["needs-approval", "needs-input", "needs-plan", "error"].includes(overview.state)
       ) {
         continue;
       }
-      const existing =
-        state.notifications.find((notification) => {
-          return (
-            sameNotificationRoute(notification, subscription, state) &&
-            notification.latestAssistantMessageId === overview.latestAssistantMessageId &&
-            notification.latestTurnId === (sourceThread.latestTurn?.turnId ?? null) &&
-            notification.sourceState === overview.state
-          );
-        }) ?? null;
-
-      scanned.push({
-        ...buildNotificationRecord({
-          sourceAgent,
-          subscription,
-          overview,
-          thread: sourceThread,
-          now: now(),
-          existing,
-        }),
-        isChildInput,
-        subscriberEnvironmentId: mapRouteEnvironment(state, subscription).subscriberEnvironmentId,
+      const detected = buildNotificationRecord({
+        sourceAgent,
+        subscription,
+        overview,
+        thread: sourceThread,
+        now: now(),
       });
+      if (overview.state === "error") {
+        const episode = state.notifications.find(
+          (notification) => notification.eventKey === subscription.errorEventKey,
+        );
+        const occurrenceKey = JSON.stringify([
+          detected.latestTurnId,
+          detected.latestAssistantMessageId,
+        ]);
+        detected.eventKey = episode?.eventKey ?? `${detected.eventKey}:error:${detected.id}`;
+        detected.occurrences =
+          (episode?.occurrences ?? 0) + (episode?.lastOccurrenceKey === occurrenceKey ? 0 : 1);
+        detected.lastOccurrenceKey = occurrenceKey;
+        subscription.errorEventKey = detected.eventKey;
+      }
+      detected.isChildInput = isChildInput;
+      detected.subscriberEnvironmentId = mapRouteEnvironment(state, subscription).subscriberEnvironmentId;
+      scanned.push(detected);
     }
   }
 
-  return scanned;
+  return { notifications: scanned, observedSubscriptions };
 }
 
 /**
@@ -499,16 +507,59 @@ export async function detectAttentionEvents(
 ): Promise<SavedNotification[]> {
   const state = await loadState();
   const discovered = await discoverParentRoutes(state, options);
-  const scanned = await scanKnownRoutes(discovered.state, options);
+  const { notifications: scanned, observedSubscriptions } = await scanAttentionState(
+    discovered.state,
+    options,
+  );
 
   return updateState(async (currentState) => {
     const persisted: SavedNotification[] = [];
     let notifications = currentState.notifications;
 
-    for (const notification of scanned) {
+    for (let notification of scanned) {
+      // Another detector may have established this episode while our source
+      // snapshot was in flight. Select its key and count under the state lock.
+      if (notification.sourceState === "error") {
+        const route = currentState.subscriptions.find(
+          (subscription) =>
+            sameNotificationRoute(subscription, notification, currentState),
+        );
+        if (
+          route?.observedState === "error" &&
+          route.observedReason === notification.reason &&
+          route.errorEventKey
+        ) {
+          notification = { ...notification, eventKey: route.errorEventKey };
+          const observed = observedSubscriptions.find(
+            (subscription) =>
+              sameNotificationRoute(subscription, notification, currentState),
+          );
+          if (observed) observed.errorEventKey = route.errorEventKey;
+        }
+      }
       const existing =
-        notifications.find((candidate) => candidate.eventKey === notification.eventKey) ?? null;
-      const merged = mergeDetectedNotification(existing, notification);
+        notifications.find((candidate) => candidate.eventKey === notification.eventKey) ??
+        notifications.find(
+          (candidate) =>
+            notification.sourceState === "completed" &&
+            candidate.sourceState === notification.sourceState &&
+            sameNotificationRoute(candidate, notification, currentState) &&
+            candidate.latestTurnId === notification.latestTurnId &&
+            candidate.latestAssistantMessageId === notification.latestAssistantMessageId,
+        ) ??
+        null;
+      if (notification.sourceState === "error") {
+        notification = {
+          ...notification,
+          occurrences:
+            (existing?.occurrences ?? 0) +
+            (existing?.lastOccurrenceKey === notification.lastOccurrenceKey ? 0 : 1),
+        };
+      }
+      const merged = mergeDetectedNotification(
+        existing,
+        existing ? { ...notification, eventKey: existing.eventKey } : notification,
+      );
       notifications = upsertNotification(notifications, merged);
       notifications = supersedeOvertakenNotifications(
         notifications,
@@ -541,7 +592,10 @@ export async function detectAttentionEvents(
                 sameNotificationRoute(route, existing, currentState),
               ),
           ),
-        ].map((route) => mapRouteEnvironment(currentState, route)),
+         ].map((route) => {
+          const observed = observedSubscriptions.find(candidate => sameNotificationRoute(candidate, route, currentState));
+          return mapRouteEnvironment(currentState, observed ? { ...route, observedState: observed.observedState, observedReason: observed.observedReason, errorEventKey: observed.errorEventKey } : route);
+        }),
       },
       result: persisted,
     };
@@ -583,6 +637,8 @@ export async function claimPendingNotifications(
           left.eventKey.localeCompare(right.eventKey),
       );
 
+    // A different watcher may already be delivering another event to this
+    // recipient. Serialize those too, including the first onboarding delivery.
     const claimedSubscribers = new Set(
       state.notifications
         .filter(
@@ -640,6 +696,12 @@ async function finalizeNotificationAttempt(input: {
 
     const finalized: SavedNotification = {
       ...input.notification,
+      occurrences: current.occurrences,
+      lastOccurrenceKey: current.lastOccurrenceKey,
+      latestTurnId: current.latestTurnId,
+      latestAssistantMessageId: current.latestAssistantMessageId,
+      preview: current.preview,
+      completionDisposition: current.completionDisposition,
       deliveryClaimId: null,
       deliveryClaimPid: null,
     };
@@ -759,6 +821,21 @@ export async function deliverPendingNotifications(
             continue;
           }
         }
+        if (!shouldDeliverNotification(subscription, notification)) {
+          result = {
+            ...notification,
+            status: "superseded",
+            updatedAt: attemptedAt,
+            lastError: "Completion suppressed by notification preference or direct result.",
+            nextAttemptAt: null,
+          };
+          const persisted = await finalizeNotificationAttempt({
+            notification: result,
+            claimId: notification.deliveryClaimId ?? null,
+          });
+          if (persisted) delivered.push(persisted);
+          continue;
+        }
         const subscriberClient = clientFactory(subscriberEnvironment);
         const subscriberThread = await subscriberClient.findThread(notification.subscriberThreadId);
         const subscriberStatus = classifyThread(subscriberThread);
@@ -811,17 +888,22 @@ export async function deliverPendingNotifications(
             ) ||
             latest.notifications.find((event) => event.id === notification.id)?.status !==
               "delivering"
-          ) {
+          )
             continue;
-          }
+          const includeOnboarding = !state.notifications.some(
+            (candidate) =>
+              candidate.subscriberThreadId === notification.subscriberThreadId &&
+              candidate.onboardingDelivered === true,
+          );
           await subscriberClient.sendMessage({
             threadId: notification.subscriberThreadId,
-            text: buildNotificationMessage(notification),
+            text: buildNotificationMessage(notification, includeOnboarding),
             queueWhileRunning: false,
           });
           result = {
             ...notification,
             status: "delivered",
+            onboardingDelivered: includeOnboarding,
             updatedAt: attemptedAt,
             deliveredAt: attemptedAt,
             lastAttemptedAt: attemptedAt,
