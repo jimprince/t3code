@@ -119,7 +119,7 @@ export function formatLegacyTimestamp(
 ): string | null {
   if (value === null) return null;
   const iso =
-    /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(value) && !/(Z|[+-]\d{2}:?\d{2})$/.test(value)
+    /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(value) && !/(Z|[+-]\d{2}:?\d{2})$/.test(value)
       ? `${value.replace(" ", "T")}Z`
       : value;
   const formatted = formatDayAwareTimestamp(iso, timestampFormat, nowMs);

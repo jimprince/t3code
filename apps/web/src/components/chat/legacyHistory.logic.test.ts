@@ -40,6 +40,12 @@ describe("formatLegacyTimestamp", () => {
     );
   });
 
+  it("reads a zoneless T-form value as UTC too, not local time", () => {
+    expect(formatLegacyTimestamp("2026-05-01T09:30:12", "12-hour", now)).toBe(
+      formatLegacyTimestamp("2026-05-01T09:30:12.000Z", "12-hour", now),
+    );
+  });
+
   it("keeps unparseable values and nulls", () => {
     expect(formatLegacyTimestamp("yesterday", "12-hour", now)).toBe("yesterday");
     expect(formatLegacyTimestamp(null, "12-hour", now)).toBeNull();
