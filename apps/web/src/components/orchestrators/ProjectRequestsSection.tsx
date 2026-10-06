@@ -24,6 +24,7 @@ import {
   issueKey,
   latestProgressLine,
   nextReleaseRequests,
+  requestsByWorker,
   requestsOfSettledThreads,
   STAGE_STATUS,
   TASK_STATUS_LABEL,
@@ -47,7 +48,7 @@ const STAGE_LABEL: Record<ProjectRequestStage, string> = {
  * The project's requests, issues and queued filings from one shared query: the
  * Needs you, Requests, Release and Roadmap widgets and the worker rows all read this.
  */
-export function useProjectRequests(summary: OrchestratorSummary) {
+export function useProjectRequests(summary: OrchestratorSummary, includeLater = false) {
   const environmentId = summary.root.environmentId;
   const query = useEnvironmentQuery(
     projectIssuesQuery({ environmentId, input: { rootThreadId: summary.root.id } }),
@@ -61,8 +62,9 @@ export function useProjectRequests(summary: OrchestratorSummary) {
       new Set(threads.map((thread) => thread.id)),
       now,
       summary.root.id,
+      includeLater,
     );
-  }, [now, query.data, summary.descendants, summary.root]);
+  }, [includeLater, now, query.data, summary.descendants, summary.root]);
   return { query, requests, now, pending: query.data?.pendingRequests ?? [] };
 }
 
@@ -422,8 +424,14 @@ export function NeedsYouIssueGroups({
  * release (what needs him is in Needs you). Requests whose thread he already
  * settled, and threads with several open requests, settle in one click.
  */
-export function ProjectRequestsSection({ summary }: { readonly summary: OrchestratorSummary }) {
-  const { query, requests, now, pending } = useProjectRequests(summary);
+export function ProjectRequestsSection({
+  summary,
+  includeLater = false,
+}: {
+  readonly summary: OrchestratorSummary;
+  readonly includeLater?: boolean;
+}) {
+  const { query, requests, now, pending } = useProjectRequests(summary, includeLater);
   const settle = useSettle(summary, query.refresh);
   const openThread = useOpenThread(summary);
   // Needs you shows Brad's groups; Maintenance shows upkeep still with the agents.
@@ -693,12 +701,18 @@ export function ProjectReleaseLine({
 }
 
 /** Open maintenance tasks that do not need Brad: upkeep kept out of the Requests list. */
-export function ProjectMaintenanceWidget({ summary }: { readonly summary: OrchestratorSummary }) {
-  const { query, requests, now } = useProjectRequests(summary);
+export function ProjectMaintenanceWidget({
+  summary,
+  includeLater = false,
+}: {
+  readonly summary: OrchestratorSummary;
+  readonly includeLater?: boolean;
+}) {
+  const { query, requests, now } = useProjectRequests(summary, includeLater);
   const openThread = useOpenThread(summary);
   const tasks = useMemo(
-    () => deriveMaintenance(query.data?.issues ?? [], requests),
-    [query.data, requests],
+    () => deriveMaintenance(query.data?.issues ?? [], requests, includeLater),
+    [includeLater, query.data, requests],
   );
   if (tasks.length === 0) return null;
   return (
@@ -738,5 +752,26 @@ export function ProjectMaintenanceWidget({ summary }: { readonly summary: Orches
         )}
       </ul>
     </section>
+  );
+}
+
+/** "for: <request>" under a worker row: which of Brad's asks the worker serves. */
+export function WorkerRequestTag({
+  summary,
+  threadId,
+}: {
+  readonly summary: OrchestratorSummary;
+  readonly threadId: string;
+}) {
+  const { requests } = useProjectRequests(summary);
+  const served = useMemo(
+    () => requestsByWorker(requests).get(threadId) ?? [],
+    [requests, threadId],
+  );
+  if (served.length === 0) return null;
+  return (
+    <span className="mt-0.5 block truncate text-xs text-foreground/80">
+      for: {served.map((request) => request.issue.title).join(" · ")}
+    </span>
   );
 }

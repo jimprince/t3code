@@ -7,9 +7,19 @@ export interface DashboardFile {
   readonly dashboards: Readonly<Record<string, { readonly widgets: ReadonlyArray<string> }>>;
   /** Gitea tracker repository per T3 project, when the git remote is not on Gitea. */
   readonly trackers: Readonly<Record<string, string>>;
+  /**
+   * Page layout per orchestrator (root) thread: its saved revisions, oldest first,
+   * the last one current. Raw JSON; the layout service decodes it.
+   */
+  readonly layouts: Readonly<Record<string, { readonly history: ReadonlyArray<unknown> }>>;
 }
 
-export const EMPTY_DASHBOARD_FILE: DashboardFile = { version: 1, dashboards: {}, trackers: {} };
+export const EMPTY_DASHBOARD_FILE: DashboardFile = {
+  version: 1,
+  dashboards: {},
+  trackers: {},
+  layouts: {},
+};
 
 export function parseDashboardFile(contents: string | null): DashboardFile {
   if (!contents) return EMPTY_DASHBOARD_FILE;
@@ -20,6 +30,7 @@ export function parseDashboardFile(contents: string | null): DashboardFile {
       version: 1,
       dashboards: value.dashboards && typeof value.dashboards === "object" ? value.dashboards : {},
       trackers: value.trackers && typeof value.trackers === "object" ? value.trackers : {},
+      layouts: value.layouts && typeof value.layouts === "object" ? value.layouts : {},
     };
   } catch {
     return EMPTY_DASHBOARD_FILE;
