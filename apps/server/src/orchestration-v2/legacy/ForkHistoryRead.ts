@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import type * as SqlClient from "effect/sql/SqlClient";
 
 /** Fixed historical tables only. Never restore these rows into native V2 execution. */
-const tables = {
+export const legacyHistoryTables = {
   legacyThreads: "projection_threads",
   legacyMessages: "projection_thread_messages",
   legacyTurns: "projection_turns",
@@ -15,10 +15,14 @@ const tables = {
   legacyGoals: "projection_thread_goals",
   legacyEvents: "orchestration_events",
 } as const;
+/** Keep event reads on the thread index: the version index scans every old event. */
+export const legacyEventWhere = (columns: ReadonlyArray<string>): string =>
+  `${columns.includes("aggregate_kind") ? "aggregate_kind = 'thread' AND " : ""}stream_id = ?${columns.includes("application_event_version") ? " AND +application_event_version = 1" : ""}`;
+
 export const readForkHistory = (sql: SqlClient.SqlClient, threadId: ThreadId) =>
   Effect.gen(function* () {
     const history: Record<string, unknown> = {};
-    for (const [section, table] of Object.entries(tables)) {
+    for (const [section, table] of Object.entries(legacyHistoryTables)) {
       const columns = yield* sql.unsafe<{ name: string }>(`PRAGMA table_info(${table})`);
       if (columns.some((column) => column.name === "thread_id")) {
         const rows = yield* sql.unsafe(`SELECT * FROM ${table} WHERE thread_id = ?`, [threadId]);
@@ -28,7 +32,7 @@ export const readForkHistory = (sql: SqlClient.SqlClient, threadId: ThreadId) =>
         columns.some((column) => column.name === "stream_id")
       ) {
         const rows = yield* sql.unsafe(
-          `SELECT * FROM ${table} WHERE stream_id = ?${columns.some((column) => column.name === "application_event_version") ? " AND application_event_version = 1" : ""} ORDER BY sequence`,
+          `SELECT * FROM ${table} WHERE ${legacyEventWhere(columns.map((column) => column.name))} ORDER BY sequence`,
           [threadId],
         );
         if (rows.length > 0) history[section] = rows;
