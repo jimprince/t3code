@@ -73,3 +73,5 @@ export * from "./forkThreadOrder.ts";
 
 export * from "./threadIssue.ts";
 export * from "./namedAgents.ts";
+
+export * from "./projectAutomations.ts";
