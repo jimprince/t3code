@@ -1,5 +1,8 @@
+import { useSupervisionForest } from "../state/forkSupervision";
 import { supervisionRoots } from "@t3tools/client-runtime/state/forkNesting";
 import { SupervisionThreadRows, useSupervisionSidebar } from "./sidebar/SupervisionThreadRows";
+import { groupSupervisionChildInputAttention } from "@t3tools/client-runtime/child-attention";
+import { SidebarChildInputAttention } from "./sidebar/SidebarChildInputAttention";
 import { SidebarProjectSelection, useSidebarProjectSelection } from "./SidebarProjectSelection";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "./ThreadHoverCard";
 import { CollapsibleSectionHeader } from "./ui/collapsible-section-header";
@@ -1123,6 +1126,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   onUnpin: (threadRef: ScopedThreadRef) => void;
   onAcknowledgeWoke: (threadRef: ScopedThreadRef, visitedAt: string) => void;
   onFileDropThreads?: ((threadRef: ScopedThreadRef, files: File[]) => void) | undefined;
+  waitingInputChildren?: ReadonlyArray<EnvironmentThreadShell>;
   changeRequestSnapshot: ThreadChangeRequestSnapshot | null;
   onChangeRequestSnapshot: (
     threadKey: string,
@@ -1585,7 +1589,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     isActive: props.isActive,
   });
 
-  const title = isRenaming ? (
+  const titleText = isRenaming ? (
     <input
       autoFocus
       value={renamingTitle}
@@ -1630,6 +1634,15 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     >
       {thread.title}
     </span>
+  );
+  const title = (
+    <>
+      {titleText}
+      <SidebarChildInputAttention
+        children={props.waitingInputChildren ?? []}
+        onOpen={(child) => onThreadActivate(scopeThreadRef(child.environmentId, child.id))}
+      />
+    </>
   );
   const accessibleTitle = isRenaming ? null : <span className="sr-only">{thread.title}</span>;
 
@@ -2316,6 +2329,8 @@ export default function Sidebar() {
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const threads = useThreadShells();
 
+  const attentionForest = useSupervisionForest();
+  const childInputAttention = useMemo(() => groupSupervisionChildInputAttention([...attentionForest.byKey.values()], attentionForest.parentByKey), [threads, attentionForest]);
   const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
@@ -4906,6 +4921,9 @@ export default function Sidebar() {
                             // Fade between card and compact rows while the outer
                             // sortable wrapper keeps its identity during a drag.
                             key={`${threadKey}:${rowVariant}`}
+                            waitingInputChildren={childInputAttention.get(
+                              `${thread.environmentId}:${thread.id}`,
+                            ) ?? []}
                             thread={thread}
                             variant={rowVariant}
                             // Snoozed rows wake, settled rows un-settle, and cards settle.
