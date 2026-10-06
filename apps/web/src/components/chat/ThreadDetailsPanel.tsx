@@ -1,3 +1,4 @@
+import { ForkSupervisionControl } from "./ForkSupervisionControl";
 import type {
   EditorId,
   EnvironmentId,
@@ -177,10 +178,16 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
           ) : null}
 
           {density === "full" && !props.draftId ? (
-            <ThreadRelationshipsPanel
-              environmentId={props.environmentId}
-              threadId={props.threadId}
-            />
+            <>
+              <ForkSupervisionControl
+                environmentId={props.environmentId}
+                threadId={props.threadId}
+              />
+              <ThreadRelationshipsPanel
+                environmentId={props.environmentId}
+                threadId={props.threadId}
+              />
+            </>
           ) : null}
         </>
       )}
