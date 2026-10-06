@@ -15,7 +15,6 @@ export function useForkOrderResetSupported(environmentId: EnvironmentId) {
   const configs = useAtomValue(environmentServerConfigsAtom);
   return (
     readyHosts.has(environmentId) &&
-    configs.get(environmentId)?.environment.capabilities
-      .threadOrderReset === true
+    configs.get(environmentId)?.environment.capabilities.threadOrderReset === true
   );
 }
