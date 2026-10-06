@@ -1,7 +1,9 @@
 import type {
   EmbeddedPage,
   ModelSelection,
+  OrchestrationV2AppThread,
   OrchestrationV2ProjectedTurnItem,
+  OrchestrationV2ProviderSession,
   OrchestrationV2Run,
   ProviderInstanceId,
 } from "@t3tools/contracts";
@@ -196,15 +198,58 @@ export function isPageAgentRunning(thread: {
   return thread.runs.some((run) => ACTIVE_RUN_STATUSES.has(run.status));
 }
 
-/** What the agent is doing right now: its latest tool call or command. */
+/**
+ * What the agent is doing right now: the latest tool call or command of the active
+ * run. Items of earlier runs never name current work.
+ */
 export function pageAgentActivityLabel(
   items: ReadonlyArray<OrchestrationV2ProjectedTurnItem>,
+  runs: ReadonlyArray<Pick<OrchestrationV2Run, "id" | "status">>,
 ): string | null {
+  const active = runs.findLast((run) => ACTIVE_RUN_STATUSES.has(run.status));
+  if (active === undefined) return null;
   for (const { item } of items.toReversed()) {
+    if (item.runId !== active.id) continue;
     if (item.type === "dynamic_tool" && item.toolName !== null) return item.toolName;
     if (item.type === "command_execution") return item.input;
   }
   return null;
+}
+
+/** The newest error of the session that serves the conversation's provider instance. */
+export function pageAgentSessionError(thread: {
+  readonly thread: Pick<OrchestrationV2AppThread, "providerInstanceId">;
+  readonly providerSessions: ReadonlyArray<
+    Pick<OrchestrationV2ProviderSession, "providerInstanceId" | "lastError">
+  >;
+}): string | null {
+  return (
+    thread.providerSessions.findLast(
+      (session) => session.providerInstanceId === thread.thread.providerInstanceId,
+    )?.lastError ?? null
+  );
+}
+
+/**
+ * Tracks tab closes that were started but not yet confirmed, per thread, so a page
+ * opened right after another can wait for the old tab to be gone instead of reusing it.
+ */
+export function createPendingTabCloses() {
+  const pending = new Map<string, Promise<void>>();
+  return {
+    track(key: string, closing: Promise<unknown>): void {
+      const previous = pending.get(key) ?? Promise.resolve();
+      const settled: Promise<void> = Promise.all([previous, closing.catch(() => undefined)]).then(
+        () => {
+          if (pending.get(key) === settled) pending.delete(key);
+        },
+      );
+      pending.set(key, settled);
+    },
+    settled(key: string): Promise<void> {
+      return pending.get(key) ?? Promise.resolve();
+    },
+  };
 }
 
 /**

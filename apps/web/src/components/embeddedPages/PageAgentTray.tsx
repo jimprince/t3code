@@ -50,6 +50,7 @@ import {
   isPageAgentRunning,
   openPageAgentConversation,
   pageAgentActivityLabel,
+  pageAgentSessionError,
   pageAgentModelSelection,
   resolvePageAgentModelSelection,
   resumePreviousPageAgentConversation,
@@ -188,8 +189,10 @@ export function PageAgentTray(props: {
   };
 
   const messages = thread?.messages ?? [];
-  const activity = running ? pageAgentActivityLabel(visibleItems) : null;
-  const sessionError = thread?.providerSessions.at(-1)?.lastError ?? null;
+  const activity =
+    running && thread !== null ? pageAgentActivityLabel(visibleItems, thread.runs) : null;
+  const sessionError = thread === null ? null : pageAgentSessionError(thread);
+  const noChatProject = !exists && chatProject === null;
 
   return (
     <aside className="flex w-[400px] min-w-0 shrink-0 flex-col border-l bg-background">
@@ -248,6 +251,7 @@ export function PageAgentTray(props: {
         {sessionError !== null && !running ? (
           <p className="text-xs text-destructive-foreground">{sessionError}</p>
         ) : null}
+        {noChatProject ? <p className="text-xs">No chat project on this machine</p> : null}
       </div>
       <div className="space-y-2 border-t p-3">
         <Textarea
@@ -273,7 +277,7 @@ export function PageAgentTray(props: {
             <Button
               size="sm"
               onClick={() => void send()}
-              disabled={draft.trim().length === 0 || model.selection === null}
+              disabled={draft.trim().length === 0 || model.selection === null || noChatProject}
             >
               <SendHorizontalIcon />
               Send

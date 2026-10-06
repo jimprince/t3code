@@ -30,6 +30,7 @@ import { closePreviewSession } from "../preview/closePreviewSession";
 import { openPreviewSession } from "../preview/openPreviewSession";
 import { usePreviewSession } from "../preview/usePreviewSession";
 import {
+  createPendingTabCloses,
   ensurePageAgentTab,
   isPageAgentRunning,
   newPageAgentConversation,
@@ -138,6 +139,7 @@ export function useRememberedPageAgentModel() {
 
 /** Where each page was last shown, so a new conversation's tab reopens at the same place. */
 const lastPageUrls = new Map<string, string>();
+const pendingTabCloses = createPendingTabCloses();
 
 /**
  * Hosts the page in the desktop browser as the conversation thread's only
@@ -173,12 +175,18 @@ export function usePageAgentBrowserTab(input: {
   useEffect(() => {
     let cancelled = false;
     const listTarget = { environmentId, input: { threadId } } as const;
+    const pendingKey = `${environmentId}:${threadId}`;
     const closeTab = (tabId: string) => {
       const snapshot = readThreadPreviewState(threadRef).sessions[tabId] ?? null;
-      void closePreviewSession({ closePreview: close, snapshot, tabId, threadRef });
+      pendingTabCloses.track(
+        pendingKey,
+        closePreviewSession({ closePreview: close, snapshot, tabId, threadRef }),
+      );
     };
     void ensurePageAgentTab({
       syncFromServer: async () => {
+        // A previous page's tab must be gone before the server's list can be trusted.
+        await pendingTabCloses.settled(pendingKey);
         registry.refresh(previewEnvironment.list(listTarget));
         const listed = await listPreviews(listTarget);
         if (listed._tag !== "Success") return false;

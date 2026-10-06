@@ -8,7 +8,9 @@ import {
   isPageAgentRunning,
   newPageAgentConversation,
   openPageAgentConversation,
+  createPendingTabCloses,
   pageAgentActivityLabel,
+  pageAgentSessionError,
   PAGE_AGENT_IDLE_RESTART_MS,
   resolvePageAgentModelSelection,
   resumePreviousPageAgentConversation,
@@ -147,16 +149,66 @@ describe("isPageAgentRunning", () => {
 });
 
 describe("pageAgentActivityLabel", () => {
-  const item = (fields: Record<string, unknown>) => ({ item: fields }) as never;
-  it("names the latest tool call or command", () => {
+  const item = (runId: string, fields: Record<string, unknown>) =>
+    ({ item: { runId, ...fields } }) as never;
+  const running = [{ id: "run-2", status: "running" }] as never;
+
+  it("names the latest tool call or command of the active run", () => {
     expect(
-      pageAgentActivityLabel([
-        item({ type: "dynamic_tool", toolName: "preview_snapshot" }),
-        item({ type: "command_execution", input: "t3-thread status x" }),
-        item({ type: "assistant_message" }),
-      ]),
+      pageAgentActivityLabel(
+        [
+          item("run-2", { type: "dynamic_tool", toolName: "preview_snapshot" }),
+          item("run-2", { type: "command_execution", input: "t3-thread status x" }),
+          item("run-2", { type: "assistant_message" }),
+        ],
+        running,
+      ),
     ).toBe("t3-thread status x");
-    expect(pageAgentActivityLabel([item({ type: "assistant_message" })])).toBeNull();
+    expect(
+      pageAgentActivityLabel([item("run-2", { type: "assistant_message" })], running),
+    ).toBeNull();
+  });
+
+  it("ignores items of earlier runs and names nothing without an active run", () => {
+    const earlier = [item("run-1", { type: "dynamic_tool", toolName: "preview_click" })];
+    expect(pageAgentActivityLabel(earlier, running)).toBeNull();
+    expect(
+      pageAgentActivityLabel(earlier, [{ id: "run-1", status: "completed" }] as never),
+    ).toBeNull();
+  });
+});
+
+describe("pageAgentSessionError", () => {
+  it("reads the newest session of the thread's provider instance", () => {
+    const thread = {
+      thread: { providerInstanceId: "codex" },
+      providerSessions: [
+        { providerInstanceId: "codex", lastError: "old" },
+        { providerInstanceId: "codex", lastError: "new" },
+        { providerInstanceId: "other", lastError: "unrelated" },
+      ],
+    } as never;
+    expect(pageAgentSessionError(thread)).toBe("new");
+  });
+});
+
+describe("createPendingTabCloses", () => {
+  it("settles only after every tracked close finished, even a failed one", async () => {
+    const closes = createPendingTabCloses();
+    let finish = () => {};
+    closes.track("t", new Promise<void>((resolve) => (finish = resolve)));
+    closes.track("t", Promise.reject(new Error("close failed")));
+    let settled = false;
+    const waiting = closes.settled("t").then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    finish();
+    await waiting;
+    expect(settled).toBe(true);
+    await closes.settled("t");
+    await closes.settled("other");
   });
 });
 
