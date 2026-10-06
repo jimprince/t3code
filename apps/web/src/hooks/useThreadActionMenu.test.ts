@@ -38,7 +38,15 @@ vi.mock("../components/chat/forkThreadCommands", () => ({
   newForkCommandId: () => "command",
   resetForkThreadOrder: "order-reset",
   readForkOrderResetSupported: () => false,
+  readForkNestingSupported: () => false,
+  readForkSubprojectsSupported: () => false,
 }));
+
+vi.mock("./useThreadNesting", () => ({
+  useThreadNestingActions: () => ({ runNestingMenuAction: vi.fn() }),
+}));
+vi.mock("../state/forkSupervision", () => ({ supervision: { forest: "forest" } }));
+vi.mock("../rpc/atomRegistry", () => ({ appAtomRegistry: { get: () => null } }));
 
 vi.mock("../components/CustomSnoozeDialog", () => ({ requestCustomSnooze: vi.fn() }));
 vi.mock("react", () => ({
