@@ -2388,9 +2388,13 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
         ),
       );
-      const organization = new Map((yield* listMetadata(sql).pipe(
-        Effect.mapError(cause => new OrchestratorProjectionError({ threadId: command.threadId, cause })),
-      )).map(row => [row.threadId, row]));
+      const organization = new Map(
+        (yield* listMetadata(sql).pipe(
+          Effect.mapError(
+            (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
+          ),
+        )).map((row) => [row.threadId, row]),
+      );
       const current = active.threads.find((entry) => entry.id === thread.id);
       if (
         !current ||
@@ -9626,13 +9630,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
             ),
           );
-          if (
-            !completionEligible(
-              current,
-              command.completionRunId,
-              metadata,
-            )
-          )
+          if (!completionEligible(current, command.completionRunId, metadata))
             return yield* new OrchestratorDispatchError({
               commandId: command.commandId,
               commandType: command.type,

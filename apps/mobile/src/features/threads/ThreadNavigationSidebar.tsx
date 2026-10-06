@@ -335,9 +335,21 @@ function ThreadNavigationSidebarPane(
   // list construction quadratic, and this list rebuilds on every minute tick.
   const threadMoveAvailability = useMemo(() => {
     const sectionAvailability = (section: "pinned" | "active") => {
-      const environments = section === "pinned" ? pinReorderEnvironmentIds : activeReorderEnvironmentIds;
-      const ordered = getThreadListV2OrderedSection({ threads, section, pendingOrder, now: new Date().toISOString(), settlementEnvironmentIds, snoozeEnvironmentIds, queuedThreadKeys });
-      return supervisionMoveAvailability(ordered.filter(thread => environments.has(thread.environmentId)), orderMetadata);
+      const environments =
+        section === "pinned" ? pinReorderEnvironmentIds : activeReorderEnvironmentIds;
+      const ordered = getThreadListV2OrderedSection({
+        threads,
+        section,
+        pendingOrder,
+        now: new Date().toISOString(),
+        settlementEnvironmentIds,
+        snoozeEnvironmentIds,
+        queuedThreadKeys,
+      });
+      return supervisionMoveAvailability(
+        ordered.filter((thread) => environments.has(thread.environmentId)),
+        orderMetadata,
+      );
     };
     // The Working beta orders the inbox by time, so only pins can move.
     return new Map([

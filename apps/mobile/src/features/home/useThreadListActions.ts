@@ -678,7 +678,14 @@ export function useThreadListActions(): {
           ),
         ),
       });
-      const ordered = typeof direction === "string" ? supervisionOrderSiblings(orderedSection, appAtomRegistry.get(supervision.metadata), thread) : orderedSection;
+      const ordered =
+        typeof direction === "string"
+          ? supervisionOrderSiblings(
+              orderedSection,
+              appAtomRegistry.get(supervision.metadata),
+              thread,
+            )
+          : orderedSection;
       const assignments = createThreadMovePlanner({
         allThreads: shells,
         ordered,

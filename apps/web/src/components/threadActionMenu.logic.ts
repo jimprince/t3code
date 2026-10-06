@@ -133,10 +133,17 @@ export function buildThreadActionMenuItems(
     ...(state.supports.orderReset === true && (state.isPinned || !state.isSettled)
       ? [{ id: "order-reset" as const, label: "Return to automatic order", icon: "list" }]
       : []),
-    ...(state.move ? [
-      { id: "move-up" as const, label: "Move up", icon: "arrow-up", disabled: !state.move.up },
-      { id: "move-down" as const, label: "Move down", icon: "arrow-down", disabled: !state.move.down },
-    ] : []),
+    ...(state.move
+      ? [
+          { id: "move-up" as const, label: "Move up", icon: "arrow-up", disabled: !state.move.up },
+          {
+            id: "move-down" as const,
+            label: "Move down",
+            icon: "arrow-down",
+            disabled: !state.move.down,
+          },
+        ]
+      : []),
     // Both lifecycle actions stay available on pinned threads: settling
     // clears the pin ("done" beats "keep on top"), and snoozing hides the
     // card until wake with the pin intact.
