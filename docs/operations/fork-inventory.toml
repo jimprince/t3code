@@ -1741,3 +1741,12 @@ date = "2026-10-06"
 decided = "adapt"
 rationale = "Keep original project automation records and migration 10 on the native project store. The later scripts concern imports them once into AutomationStore and owns the sole scheduler, preserving the final V1 stack behavior without a second scheduler."
 
+[[patch]]
+name = "fork-project-issues-board"
+subject = "feat(web): show project issues as a board"
+class = "product"
+purpose = "Read a project tree's Gitea issues on the server and show them on the project page in the Agent Status Board's lanes."
+retire_when = "Upstream provides project issue boards, or the Agent Status Board's issue view moves into T3 under another concern."
+depends_on = ["fork-orchestrators-view", "fork-gitea-issue-links", "fork-gitea-pr-browser"]
+roles = []
+note = "A project's repositories are each tree thread's project remote on a configured Gitea host (resolved with the same resolveGiteaRemote rule as Gitea PR links), otherwise the same-named repository under the token's account (the Agent Status Board's tracker rule, which covers the GitHub-hosted fork's tracking-only repo), plus every repository a tree thread links an issue from. Lanes and labels match the board exactly (needs-review, in-progress, backlog, closed and archived) so the two views can merge. Issue titles deep-link the configured embedded Agent Status Board and preserve the project return location; without that page they keep the canonical external URL fallback. The server caches issue lists for 30 seconds and repository lookups for 10 minutes; the page refreshes every minute while open."
