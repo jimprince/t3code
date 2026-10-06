@@ -25,9 +25,7 @@ it("round-trips shared page edits through V2 settings while an empty primary sup
     const saved = applyServerSettingsPatch(settings, sharedPatch);
     return {
       ...saved,
-      embeddedPages: decodeEmbeddedPages(
-        JSON.parse(JSON.stringify(saved.embeddedPages)),
-      ),
+      embeddedPages: decodeEmbeddedPages(JSON.parse(JSON.stringify(saved.embeddedPages))),
     };
   };
   const created = write(DEFAULT_SERVER_SETTINGS, pages);
