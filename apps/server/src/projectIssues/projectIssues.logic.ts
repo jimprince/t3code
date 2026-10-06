@@ -8,6 +8,8 @@ import type {
   ThreadId,
 } from "@t3tools/contracts";
 
+import { parsePartOf } from "./epicProgress.logic.ts";
+
 /** Labels the Agent Status Board uses for its lanes; the project board reads the same ones. */
 export const STATUS_LABELS = ["needs-review", "in-progress", "backlog"] as const;
 const ARCHIVED_LABEL = "archived";
@@ -54,8 +56,7 @@ export function deriveRequestStage(
 
 /** Whether an issue body opens with "Part of #<parent>", the way an epic's child issues do. */
 export function isPartOf(body: string | null | undefined, parent: number): boolean {
-  const match = /^\s*part of #(\d+)\b/i.exec(body ?? "");
-  return match !== null && Number(match[1]) === parent;
+  return parsePartOf(body) === parent;
 }
 
 const REQUEST_MARKER = /<!--\s*t3-request\s+(\{[^\n]*?\})\s*-->/;
