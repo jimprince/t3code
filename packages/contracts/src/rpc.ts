@@ -82,6 +82,8 @@ import {
   ProjectRequestCreateInput,
   ProjectRequestCreateResult,
   ProjectRequestDecideInput,
+  ProjectRequestDiscussInput,
+  ProjectRequestDiscussResult,
   ProjectRequestDecideResult,
   ProjectRequestRef,
   ProjectRequestSettleInput,
@@ -659,6 +661,7 @@ export const WS_METHODS = {
   projectIssuesGet: "projectIssues.get",
   projectRequestsSettle: "projectRequests.settle",
   projectRequestsDecide: "projectRequests.decide",
+  projectRequestsDiscuss: "projectRequests.discuss",
   projectRequestsSubmit: "projectRequests.submit",
   projectRequestsStartIntake: "projectRequests.startIntake",
   projectRequestsCreate: "projectRequests.create",
@@ -1095,6 +1098,12 @@ const WsProjectRequestsSettleRpc = Rpc.make(WS_METHODS.projectRequestsSettle, {
 const WsProjectRequestsDecideRpc = Rpc.make(WS_METHODS.projectRequestsDecide, {
   payload: ProjectRequestDecideInput,
   success: ProjectRequestDecideResult,
+  error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectRequestsDiscussRpc = Rpc.make(WS_METHODS.projectRequestsDiscuss, {
+  payload: ProjectRequestDiscussInput,
+  success: ProjectRequestDiscussResult,
   error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
 });
 
@@ -2365,6 +2374,7 @@ export const WsSessionReconcileRpc = Rpc.make("fork.session.reconcile", {
 // Every fork RPC lives here, not in WsCoreRpcGroup: past upstream's own methods, the core
 // group's toHandlers type hits TS2589 and the server's handler-service types resolve to any in R.
 export const WsForkRpcGroup = RpcGroup.make(
+  WsProjectRequestsDiscussRpc,
   WsSessionReconcileRpc,
   WsAutomationsListRpc,
   WsAutomationsSaveRpc,
