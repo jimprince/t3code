@@ -20,7 +20,14 @@ export interface OutboxEntry {
     excerpt: string;
     /** Saved for later: filed with the parked label, off the active request list. */
     parked?: boolean;
+    /** The open issue this item continues, when the split named one. */
+    existing?: number | null;
   }> | null;
+  /**
+   * Sent from the New request box: Brad asked for a tracked request, so every
+   * item is filed. Ordinary chat messages attach to existing issues instead.
+   */
+  readonly explicit?: boolean;
   /** Indexes of `items` already filed as issues. */
   readonly filed: ReadonlyArray<number>;
   readonly attempts: number;
@@ -48,11 +55,16 @@ export function parseOutbox(contents: string | null): Outbox {
   }
 }
 
-/** Adds a captured message unless the same message is already queued. */
+/**
+ * Adds a captured message unless the same message is already queued. An explicit
+ * entry (the New request box) upgrades a capture of the same message that has
+ * not been split yet, whichever arrived first.
+ */
 export function enqueue(outbox: Outbox, entry: OutboxEntry): Outbox {
-  return outbox.entries.some((existing) => existing.messageId === entry.messageId)
-    ? outbox
-    : { ...outbox, entries: [...outbox.entries, entry] };
+  const existing = outbox.entries.find((candidate) => candidate.messageId === entry.messageId);
+  if (!existing) return { ...outbox, entries: [...outbox.entries, entry] };
+  if (!entry.explicit || existing.explicit || existing.items !== null) return outbox;
+  return updateEntry(outbox, entry.messageId, (current) => ({ ...current, explicit: true }));
 }
 
 export function updateEntry(
