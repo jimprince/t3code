@@ -34,6 +34,27 @@ describe("request outbox", () => {
     expect(parseOutbox(null)).toEqual(EMPTY_OUTBOX);
   });
 
+  it("reads items queued under an earlier kind as their current type", () => {
+    const item = (kind: string) => ({ title: kind, kind, excerpt: kind });
+    const stored = {
+      version: 1,
+      entries: [
+        {
+          ...entry("m-1"),
+          items: ["bug", "plan", "maintenance", "question", "task"].map(item),
+        },
+      ],
+    };
+    const items = parseOutbox(JSON.stringify(stored)).entries[0]!.items!;
+    expect(items.map(({ kind, bug }) => [kind, bug])).toEqual([
+      ["task", true],
+      ["epic", undefined],
+      ["task", undefined],
+      ["question", undefined],
+      ["task", undefined],
+    ]);
+  });
+
   it("updates or removes one entry", () => {
     const outbox = enqueue(enqueue(EMPTY_OUTBOX, entry("m-1")), entry("m-2"));
     const retried = updateEntry(outbox, "m-1", (current) => ({ ...current, attempts: 1 }));
