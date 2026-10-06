@@ -48,7 +48,7 @@ layer("001_ProviderSessionRuntimeBootGeneration", (it) => {
 
         yield* Migration0001;
         yield* Migration0001;
-        yield* runForkMigrations({ toMigrationInclusive: 2 });
+        yield* runForkMigrations();
 
         const columns = yield* sql<{ readonly name: string }>`
           PRAGMA table_info(provider_session_runtime)
@@ -68,10 +68,18 @@ layer("001_ProviderSessionRuntimeBootGeneration", (it) => {
         }>`
           SELECT migration_id, name
           FROM effect_sql_fork_migrations
+          ORDER BY migration_id
         `;
+        // Exact M2 ledger; the final release must extend this assertion for all retained M3 IDs.
         assert.deepStrictEqual(forkMigrations, [
           { migration_id: 1, name: "ProviderSessionRuntimeBootGeneration" },
           { migration_id: 2, name: "ProviderSessionRuntimeActiveTurn" },
+          { migration_id: 3, name: "ProjectionThreadMessageFileAttachments" },
+          { migration_id: 5, name: "MigrateSidebarOrderEvents" },
+          { migration_id: 6, name: "ProjectionThreadsParentThread" },
+          { migration_id: 7, name: "ThreadBackgroundWork" },
+          { migration_id: 8, name: "ProjectionThreadsSettleOnComplete" },
+          { migration_id: 12, name: "ProjectionThreadsRemoteParent" },
         ]);
 
         const upstreamCollision = yield* sql<{ readonly name: string }>`
