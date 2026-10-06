@@ -1,3 +1,4 @@
+import { assertFixtureMigration16 } from "../../persistence/fixtureMigration16.testkit.ts";
 import { assert, it } from "@effect/vitest";
 import { vi } from "vite-plus/test";
 import { NodeServices } from "@effect/platform-node";
@@ -24,8 +25,6 @@ import * as ServerConfig from "../../config.ts";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
-import { runMigrations } from "../../persistence/Migrations.ts";
-import { runForkMigrations } from "../../persistence/ForkMigrations.ts";
 import * as ApplicationEvents from "../../persistence/Services/OrchestrationEventStore.ts";
 import * as ProjectStore from "../ProjectStore.ts";
 import * as ProjectionStore from "../ProjectionStore.ts";
@@ -65,8 +64,7 @@ it.effect.skipIf(!fixtures)(
         const database = NodeSqliteClient.layer({ filename: copy });
         yield* Effect.gen(function* () {
           const sql = yield* SqlClient.SqlClient;
-          yield* runMigrations();
-          assert.deepEqual(yield* runForkMigrations(), []);
+          yield* assertFixtureMigration16;
           // Repair only this disposable sanitized copy's invalid provider identifiers.
           yield* sql`UPDATE projection_projects SET default_model_selection_json=json_set(default_model_selection_json,'$.instanceId','codex') WHERE default_model_selection_json IS NOT NULL`;
           const projectId = ProjectId.make("upgrade-project");
