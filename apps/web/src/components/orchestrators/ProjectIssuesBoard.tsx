@@ -121,7 +121,14 @@ function IssueRow({
  * Complete, for every repository the orchestrator tree works in. Every card
  * can be settled or reopened in place.
  */
-export function ProjectIssuesBoard({ summary }: { readonly summary: OrchestratorSummary }) {
+export function ProjectIssuesBoard({
+  summary,
+  pendingPreview = PENDING_PREVIEW,
+}: {
+  readonly summary: OrchestratorSummary;
+  /** Pending cards shown before "Show all" (the layout's setting). */
+  readonly pendingPreview?: number;
+}) {
   const { statuses, query } = useTaskStatuses(summary);
   const settle = useSettle(summary, query.refresh);
   const openThread = useOpenThread(summary);
@@ -160,7 +167,7 @@ export function ProjectIssuesBoard({ summary }: { readonly summary: Orchestrator
         {PROJECT_ISSUE_LANES.map(({ lane, title }) => {
           const all = grouped.lanes[lane];
           const preview =
-            lane === "complete" ? DONE_PREVIEW : lane === "pending" ? PENDING_PREVIEW : 0;
+            lane === "complete" ? DONE_PREVIEW : lane === "pending" ? pendingPreview : 0;
           const folded = preview > 0 && !expanded.has(lane) && all.length > preview;
           return (
             <section key={lane} className="min-w-0 bg-background px-2.5 py-2">
