@@ -410,6 +410,10 @@
     "./state/fork-nesting-query": {
       "types": "./src/state/forkNestingQuery.ts",
       "default": "./src/state/forkNestingQuery.ts"
+    },
+    "./fork/thread-transfer": {
+      "types": "./src/fork/threadTransfer.ts",
+      "default": "./src/fork/threadTransfer.ts"
     }
   },
   "scripts": {
