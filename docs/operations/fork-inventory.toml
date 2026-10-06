@@ -359,7 +359,7 @@ subject = "feat(projects): add repository-independent General Chat projects"
 class = "product"
 purpose = "Provide server-owned General Chat projects: the project kind contract and migrations, startup creation, decider guards, projection handling, sidebar grouping, and default compose behavior."
 retire_when = "Upstream ships an equivalent repository-independent chat project kind."
-depends_on = ["fork-thread-client-recovery"]
+depends_on = []
 roles = []
 note = "Reorganized 2026-09-06 from fork-general-chat-projects. Upstream ordering fixtures include the owning project required by General Chat metadata guards. Copied-state tests use T3_LIFECYCLE_FIXTURES, preserve the shipped migration ledger through the production runner, and create scoped disposable copies before writes."
 
