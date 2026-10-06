@@ -30,6 +30,7 @@ const RPC_METHODS = {
   launchThread: ORCHESTRATION_V2_WS_METHODS.launchThread,
   serverGetConfig: WS_SERVER_GET_CONFIG_METHOD,
   dispatchCommand: ORCHESTRATION_V2_WS_METHODS.dispatchCommand,
+  getArchivedShellSnapshot: ORCHESTRATION_V2_WS_METHODS.getArchivedShellSnapshot,
   getTurnDiff: ORCHESTRATION_V2_WS_METHODS.getTurnDiff,
   getFullThreadDiff: ORCHESTRATION_V2_WS_METHODS.getFullThreadDiff,
   subscribeShell: ORCHESTRATION_V2_WS_METHODS.subscribeShell,
