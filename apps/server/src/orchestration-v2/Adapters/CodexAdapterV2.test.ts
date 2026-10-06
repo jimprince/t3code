@@ -1675,6 +1675,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
     onEvent: (event: ProviderAdapterV2Event) => Effect.Effect<unknown> = () => Effect.void,
     onRequest: (method: string, params: unknown) => Effect.Effect<void> = () => Effect.void,
     readChildMetadata?: (threadId: string) => Effect.Effect<unknown>,
+    settings = DEFAULT_CODEX_SETTINGS,
   ) =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
@@ -1714,7 +1715,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
       };
       const adapter = CodexAdapterV2.makeCodexAdapterV2({
         instanceId: CodexAdapterV2.CODEX_DEFAULT_INSTANCE_ID,
-        settings: DEFAULT_CODEX_SETTINGS,
+        settings,
         environment: {},
         clientFactory,
         fileSystem,
@@ -1886,6 +1887,88 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         assert.equal(requests.filter((method) => method === "turn/start").length, 1);
         assert.isBelow(requests.indexOf("thread/inject_items"), requests.indexOf("turn/start"));
       }).pipe(Effect.scoped, Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
+  );
+
+  it.effect.each([undefined, -32601, -32602, -32000] as const)(
+    "applies extra skill roots before native thread creation (%s)",
+    (code) =>
+      Effect.gen(function* () {
+        const roots = ["/isolated/skills-B", "/isolated/skills-A", "/isolated/skills-B"];
+        const entries = codexReplayPreamble({
+          nativeThreadId: "extra-roots",
+          nativeTurnId: "unused",
+          prompt: "unused",
+        }).slice(0, 5);
+        const threadFrames = entries.slice(3).map((entry) =>
+          "frame" in entry
+            ? {
+                ...entry,
+                frame: { ...(Predicate.isObject(entry.frame) ? entry.frame : {}), id: 3 },
+              }
+            : entry,
+        );
+        const transcript = makeCodexReplayTranscript({
+          scenario: `extra-roots-${code ?? "success"}`,
+          entries: [
+            ...entries.slice(0, 3),
+            {
+              type: "expect_outbound",
+              label: "roots",
+              frame: { id: 2, method: "skills/extraRoots/set", params: { extraRoots: roots } },
+            },
+            {
+              type: "emit_inbound",
+              label: "roots",
+              frame:
+                code === undefined
+                  ? { id: 2, result: {} }
+                  : { id: 2, error: { code, message: "root setup rejected" } },
+            },
+            ...(code === undefined || code === -32601 ? threadFrames : []),
+          ],
+        });
+        const methods: string[] = [];
+        const result = yield* makeCodexReplayHarness(
+          transcript,
+          () => Effect.void,
+          (method) =>
+            Effect.sync(() => {
+              methods.push(method);
+            }),
+          undefined,
+          { ...DEFAULT_CODEX_SETTINGS, skillExtraRoots: roots },
+        ).pipe(Effect.exit);
+        if (code === undefined || code === -32601) {
+          assert.equal(result._tag, "Success");
+          assert.deepEqual(methods.slice(0, 3), [
+            "initialize",
+            "skills/extraRoots/set",
+            "thread/start",
+          ]);
+          assert.equal(methods.filter((method) => method === "skills/extraRoots/set").length, 1);
+        } else {
+          assert.equal(result._tag, "Failure");
+          assert.notInclude(methods, "thread/start");
+        }
+      }).pipe(Effect.scoped, Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
+  );
+
+  it.effect("rejects relative extra roots before opening a Codex session", () =>
+    Effect.gen(function* () {
+      const methods: string[] = [];
+      const result = yield* makeCodexReplayHarness(
+        makeCodexReplayTranscript({ scenario: "relative-extra-roots", entries: [] }),
+        () => Effect.void,
+        (method) =>
+          Effect.sync(() => {
+            methods.push(method);
+          }),
+        undefined,
+        { ...DEFAULT_CODEX_SETTINGS, skillExtraRoots: ["relative/skills"] },
+      ).pipe(Effect.exit);
+      assert.equal(result._tag, "Failure");
+      assert.deepEqual(methods, []);
+    }).pipe(Effect.scoped, Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
   );
 
   it.effect("identifies sessions to Codex with the same client info as main", () =>
