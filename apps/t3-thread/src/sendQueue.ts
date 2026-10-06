@@ -1,4 +1,5 @@
 import type { MessageOrigin } from "@t3tools/shared/messageOrigin";
+import type { QueuedSendOrigin } from "./types.js";
 import * as NodeCrypto from "node:crypto";
 
 import {
@@ -21,8 +22,11 @@ import type { OrchestrationThread, SavedEnvironment, SavedQueuedSend, StateFile 
  * survives CLI exit, watcher exit, machine sleep, and reboot.
  *
  * Ordering is FIFO by `sequence` within a thread, one dispatched message per turn
- * boundary. Messages are never coalesced: two operator sends are two intents, and
- * concatenating them would silently change what the worker was asked to do.
+ * boundary. Messages are never merged: two operator sends are two intents, and
+ * concatenating them would silently change what the worker was asked to do. A sender
+ * may instead mark a recurring status note with a coalesce key, so a newer note from
+ * the same sender replaces its still-waiting predecessor rather than queueing behind
+ * it; without a key nothing is ever dropped.
  *
  * Retires when a paired server advertises upstream's `deliveryMode: "after-current"`
  * turn-start contract; `send` then forwards the flag instead of holding anything.
@@ -43,6 +47,7 @@ const OPEN_STATUSES = new Set<SavedQueuedSend["status"]>(["queued", "dispatching
 export interface QueueClient {
   findThread(threadId: string): Promise<OrchestrationThread>;
   sendMessage(input: {
+    commandId?: string;
     threadId: string;
     text: string;
     allowWhileRunning?: boolean;
@@ -63,10 +68,11 @@ export async function enqueueSend(input: {
   agentName: string | null;
   environment: string;
   text: string;
+  origin?: QueuedSendOrigin | null;
+  coalesceKey?: string | null;
   queuedDuringTurnId: string | null;
-  origin?: MessageOrigin | null;
   now?: () => string;
-}): Promise<SavedQueuedSend> {
+}): Promise<{ queued: SavedQueuedSend; superseded: SavedQueuedSend[] }> {
   const now = (input.now ?? nowIso)();
 
   return updateState(async (state) => {
@@ -78,6 +84,7 @@ export async function enqueueSend(input: {
       environment: input.environment,
       text: input.text,
       origin: input.origin ?? null,
+      ...(input.coalesceKey ? { coalesceKey: input.coalesceKey } : {}),
       status: "queued",
       queuedDuringTurnId: input.queuedDuringTurnId,
       attempts: 0,
@@ -89,11 +96,107 @@ export async function enqueueSend(input: {
       dispatchClaimId: null,
     };
 
-    return {
-      state: { ...state, queuedSends: upsertQueuedSend(state.queuedSends, queued) },
-      result: queued,
-    };
+    // A claimed (`dispatching`) send is already on its way, so only waiting ones are replaced.
+    const superseded = input.coalesceKey
+      ? state.queuedSends
+          .filter(
+            (candidate) =>
+              candidate.status === "queued" &&
+              candidate.coalesceKey === input.coalesceKey &&
+              candidate.threadId === queued.threadId &&
+              candidate.environment === queued.environment &&
+              senderOf(candidate) === senderOf(queued) &&
+              senderEnvironmentOf(candidate) === senderEnvironmentOf(queued),
+          )
+          .map((candidate): SavedQueuedSend => ({
+            ...candidate,
+            status: "cancelled",
+            updatedAt: now,
+            lastError: `Superseded by ${queued.id}.`,
+          }))
+      : [];
+
+    const queuedSends = [...superseded, queued].reduce(
+      (all, record) => upsertQueuedSend(all, record),
+      state.queuedSends,
+    );
+    return { state: { ...state, queuedSends }, result: { queued, superseded } };
   });
+}
+
+/** Stable identity of whoever queued a send; null for an operator at the keyboard. */
+function senderOf(queued: SavedQueuedSend): string | null {
+  return queued.origin?.fromThreadId ?? null;
+}
+function senderEnvironmentOf(queued: SavedQueuedSend): string {
+  return queued.origin?.senderEnvironment ?? queued.environment;
+}
+
+export interface QueueSummary {
+  open: number;
+  byTarget: Array<{
+    threadId: string;
+    agentName: string | null;
+    open: number;
+    bySender: Array<{
+      sender: string | null;
+      environment?: string;
+      name: string | null;
+      open: number;
+    }>;
+    oldestAgeSeconds: number;
+  }>;
+}
+
+/** Open sends grouped by target and sender, so a flood is visible before it drains. */
+export function summarizeQueuedSends(
+  state: StateFile,
+  filter: { env?: string; threadId?: string } = {},
+  nowMs: number = Date.now(),
+): QueueSummary {
+  const targets = new Map<string, QueueSummary["byTarget"][number]>();
+  const open = listQueuedSends(state, { ...filter, openOnly: true });
+  for (const queued of open) {
+    const key = JSON.stringify([queued.environment, queued.threadId]);
+    const target = targets.get(key) ?? {
+      threadId: queued.threadId,
+      agentName: queued.agentName,
+      open: 0,
+      bySender: [],
+      oldestAgeSeconds: 0,
+    };
+    target.open += 1;
+    const sender = senderOf(queued);
+    const entry = target.bySender.find(
+      (candidate) =>
+        candidate.sender === sender &&
+        (candidate.environment ?? queued.environment) === senderEnvironmentOf(queued),
+    );
+    if (entry) entry.open += 1;
+    else
+      target.bySender.push({
+        sender,
+        ...(queued.origin?.senderEnvironment
+          ? { environment: queued.origin.senderEnvironment }
+          : {}),
+        name: queued.origin?.fromName ?? null,
+        open: 1,
+      });
+    target.oldestAgeSeconds = Math.max(
+      target.oldestAgeSeconds,
+      Math.max(0, Math.floor((nowMs - Date.parse(queued.queuedAt)) / 1000)),
+    );
+    targets.set(key, target);
+  }
+  return {
+    open: open.length,
+    byTarget: [...targets.values()]
+      .map((target) => ({
+        ...target,
+        bySender: target.bySender.sort((left, right) => right.open - left.open),
+      }))
+      .sort((left, right) => right.open - left.open),
+  };
 }
 
 export function listQueuedSends(
@@ -329,6 +432,7 @@ export async function drainQueuedSends(options: {
     let result: SavedQueuedSend;
     try {
       await client.sendMessage({
+        commandId: `fork:queued-send:${claimed.id}`,
         threadId: claimed.threadId,
         text: claimed.text,
         origin: claimed.origin ?? null,
