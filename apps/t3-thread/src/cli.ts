@@ -1907,6 +1907,25 @@ request
   });
 
 request
+  .command("note")
+  .description(
+    "Record a short progress line on a request (started, blocked on X, shipped in fork.N); links your thread to it",
+  )
+  .argument("<thread>", "saved agent name or raw thread UUID in the project")
+  .argument("<request>", "issue number in the project tracker, owner/repo#N, or issue URL")
+  .argument("<text>", "one short line")
+  .action(async (reference, requestReference, text) => {
+    const { agent: target, client } = await withAgent(reference);
+    printJson(
+      await client.projectRequest("projectRequestsUpdate", {
+        threadId: target.threadId,
+        reference: requestReference,
+        comment: `Progress: ${text}`,
+      }),
+    );
+  });
+
+request
   .command("shipped")
   .description(
     "Mark a request as shipped in a release; it waits for Brad's test until he settles it",
