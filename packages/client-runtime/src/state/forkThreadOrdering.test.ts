@@ -76,11 +76,14 @@ it("keeps missing local parents distinct from remote descriptors and excludes se
   ];
   const threads = [root, local, remote, settled];
   for (const t of [root, local, remote])
-    expect(supervisionOrderSiblings(threads, metadata, t, readyHosts).map((s) => s.id)).toEqual([t.id]);
+    expect(supervisionOrderSiblings(threads, metadata, t, readyHosts).map((s) => s.id)).toEqual([
+      t.id,
+    ]);
 });
 
 it("blocks moves and resets until the child's own host metadata is ready, including empty root metadata", () => {
-  const first = thread("first", "child-host", "f"), second = thread("second", "child-host", "t");
+  const first = thread("first", "child-host", "f"),
+    second = thread("second", "child-host", "t");
   const unavailable = new Set(["other-host"]);
   expect(supervisionOrderReady(first, unavailable)).toBe(false);
   expect(supervisionOrderSiblings([first, second], [], first, unavailable)).toEqual([]);
@@ -88,5 +91,8 @@ it("blocks moves and resets until the child's own host metadata is ready, includ
   expect(supervisionMoveAvailability([first, second], [], unavailable).size).toBe(0);
   expect(supervisionOrderReady(first, readyHosts)).toBe(true);
   expect(planSupervisionMove([first, second], [], first, "down", readyHosts)).not.toBeNull();
-  expect(supervisionMoveAvailability([first, second], [], readyHosts).get("child-host:first")?.canMoveDown).toBe(true);
+  expect(
+    supervisionMoveAvailability([first, second], [], readyHosts).get("child-host:first")
+      ?.canMoveDown,
+  ).toBe(true);
 });

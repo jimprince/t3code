@@ -640,10 +640,12 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     [onSetThreadAutoSettle, thread],
   );
   const handleMoveUp = useCallback(() => {
-    if (appAtomRegistry.get(supervision.readyHosts).has(thread.environmentId)) return onMoveThread?.(thread, "up");
+    if (appAtomRegistry.get(supervision.readyHosts).has(thread.environmentId))
+      return onMoveThread?.(thread, "up");
   }, [onMoveThread, thread]);
   const handleMoveDown = useCallback(() => {
-    if (appAtomRegistry.get(supervision.readyHosts).has(thread.environmentId)) return onMoveThread?.(thread, "down");
+    if (appAtomRegistry.get(supervision.readyHosts).has(thread.environmentId))
+      return onMoveThread?.(thread, "down");
   }, [onMoveThread, thread]);
   const handleArchive = useCallback(() => onArchiveThread(thread), [onArchiveThread, thread]);
 
@@ -840,7 +842,10 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       if (nativeEvent.event === "auto-settle:enabled") handleSetAutoSettle(true);
       if (nativeEvent.event === "auto-settle:disabled") handleSetAutoSettle(false);
       if (nativeEvent.event === "arrange") appAtomRegistry.set(threadArrangementOpenAtom, true);
-      if (nativeEvent.event === "order-reset" && appAtomRegistry.get(supervision.readyHosts).has(thread.environmentId))
+      if (
+        nativeEvent.event === "order-reset" &&
+        appAtomRegistry.get(supervision.readyHosts).has(thread.environmentId)
+      )
         void resetOrder({
           environmentId: thread.environmentId,
           input: { threadId: thread.id, commandId: newForkCommandId() },
@@ -996,7 +1001,9 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
                 : rowAppearance.tertiaryForegroundClassName),
           )}
         >
-          {supervision.supervising && status === "ready" ? "Supervising" : statusLabel?.label ?? timeLabel}
+          {supervision.supervising && status === "ready"
+            ? "Supervising"
+            : (statusLabel?.label ?? timeLabel)}
           {supervision.count > 0 ? ` · ${supervision.count} workers` : ""}
         </Text>
       </View>

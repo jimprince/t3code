@@ -10,7 +10,10 @@ import {
 type Metadata = ForkThreadMetadata & { readonly environmentId: string };
 const key = (thread: EnvironmentThreadShell) =>
   scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
-export const supervisionOrderReady = (thread: EnvironmentThreadShell, readyHosts: ReadonlySet<string>) => readyHosts.has(thread.environmentId);
+export const supervisionOrderReady = (
+  thread: EnvironmentThreadShell,
+  readyHosts: ReadonlySet<string>,
+) => readyHosts.has(thread.environmentId);
 /** Orders only direct siblings on the child's host, even when their parent is disconnected. */
 export function supervisionOrderSiblings(
   threads: readonly EnvironmentThreadShell[],
