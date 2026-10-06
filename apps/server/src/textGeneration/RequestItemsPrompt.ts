@@ -1,17 +1,29 @@
 import * as Schema from "effect/Schema";
 
 /** Request kinds the ledger tracks; each has its own lifecycle on the project page. */
-const REQUEST_KINDS = ["question", "deliverable", "plan", "change", "test"] as const;
+const REQUEST_KINDS = [
+  "bug",
+  "feature",
+  "question",
+  "deliverable",
+  "plan",
+  "change",
+  "test",
+  "maintenance",
+] as const;
 export type RequestKind = (typeof REQUEST_KINDS)[number];
 
 const REQUEST_ITEMS_PROMPT = `You extract the requests a person made in one chat message to their AI agents, so each request can be tracked until the person settles it.
 
 Return one item per distinct thing they asked for. Classify each:
+- bug: something is broken or behaves wrongly and they want it fixed.
+- feature: they want a new capability that does not exist yet.
 - question: they want an answer or an explanation ("can we connect X to Y?", "why did Z fail?").
 - deliverable: they want something produced to look at: a draft, ideas, a mock-up, a document, research.
 - plan: they want something scoped or planned before it is done.
-- change: they want something built, fixed, configured, deployed or merged.
+- change: they want something that exists adjusted, configured, deployed or merged.
 - test: they want something tried, run or verified.
+- maintenance: upkeep with no new behavior: dependency or upstream syncs, CI repair, cleanup, migrations, releases.
 
 Return no items when the message only acknowledges, approves, continues, nudges, answers the agent's own question, gives feedback without a new ask, or asks for status ("do it", "continue", "yes", "looks good", "how is it going?", "where are we?").
 
