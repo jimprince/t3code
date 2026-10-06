@@ -1985,3 +1985,18 @@ id = "v2-decision-retry"
 date = "2026-10-06"
 decided = "adapt"
 rationale = "Use native message.dispatch and fork parent metadata. Decision issue replies propagate failed delivery and preserve landed Gitea updates for retry; ordinary approval still logs delivery failure."
+
+[[patch]]
+name = "fork-project-workstreams"
+subject = "feat(projects): workstreams block on the project Dashboard"
+class = "product"
+purpose = "Show at a glance where each parallel effort stands: one Dashboard line per active epic, derived from epics, their children and linked worker threads (fork.28 board redesign)."
+retire_when = "Upstream provides an equivalent project board, or the project page is retired."
+depends_on = [
+  "fork-release-horizon",
+  "fork-task-view",
+  "fork-board-blocked-working",
+  "fork-project-health",
+]
+roles = []
+note = "ProjectWorkstreams in OrchestratorBoard.tsx renders directly under the health line on the dashboard tab (built in, not a layout widget, so PROJECT_WIDGET_TYPES is unchanged); deriveWorkstreams in projectWorkstreams.logic lists every open, unparked epic with children remaining. A row reads: the epic title, the earliest milestone with open children as 'M1 of M1-M4' (only the open children are known, so a finished milestone drops out of the range), 'N of M · Phase' from formatEpicProgress, the distinct linked worker threads of the epic and its open children that are working now (the orchestrator excluded) as 'N agents', 'next: <title>' (the first Active open child, else the first Pending one, by issue number), and a Blocked marker when an open child's blockedBy names an open issue, a deriveBlocked blocked-by or stuck row names a member, or a blocked worker is linked to one. A row is a TaskTitle, so it opens the epic's task view. Nothing renders while no epic has work left. No new RPC, contract or setting."
