@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "8aadf26f29c803a329623e075cb94556049a6ee1",
-  "head": "d8b6e249eb823139892f3c0a15190a189631e72b",
+  "prev": "d56803106dbebbe443243d1448c2817b44871caf",
+  "head": "41e1140bea2a447c31e06f98f8b9c4d4f0a098c9",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -90,11 +90,11 @@
     "fork-needs-you-decisions",
     "fork-project-workstreams",
     "fork-canvas-resize",
-    "fork-pr-widget-refresh"
+    "fork-pr-widget-refresh",
+    "fork-decisions-other",
+    "fork-cli-project-layout"
   ],
   "unapplied": [
-    "fork-decisions-other",
-    "fork-cli-project-layout",
     "fork-item-types",
     "fork-board-declutter",
     "fork-project-skew-gate",
