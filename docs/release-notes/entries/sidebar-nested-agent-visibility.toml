@@ -1,0 +1,4 @@
+id = "sidebar-nested-agent-visibility"
+category = "feature"
+functionality = "web sidebar"
+text = "See active nested agents on their parent's sidebar card and expand a remembered list of its children."
