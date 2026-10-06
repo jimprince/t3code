@@ -1,3 +1,4 @@
+import { recoverLegacyBackgroundWork } from "./fork/recovery/LegacyBackgroundWorkImport.ts";
 import * as StartupResumePolicy from "./fork/recovery/StartupResumePolicy.ts";
 import * as Option from "effect/Option";
 import {
@@ -543,6 +544,7 @@ const make = (options?: StartupOptions) =>
       yield* Effect.logInfo("V2 orchestration recovery completed", recovery);
       // Runs after activation: the status check fetches every enabled project's
       // remote, and awaiting it here held command readiness for that long.
+      yield* recoverLegacyBackgroundWork;
       yield* runStartupPhase(
         "projects.auto-pull",
         Effect.gen(function* () {
