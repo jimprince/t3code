@@ -1,3 +1,4 @@
+import { ProjectAutomationsPanel } from "../projects/ProjectAutomationsPanel";
 import {
   isAtomCommandInterrupted,
   mapAtomCommandResult,
@@ -491,6 +492,13 @@ function ProjectDetail({
         </SettingsSection>
         <ProjectDefaultsSettings category="project" />
         <ProjectActionsSettings />
+        {group.memberProjects.map((member) => (
+          <ProjectAutomationsPanel
+            key={memberKey(member)}
+            environmentId={member.environmentId}
+            projectId={member.id}
+          />
+        ))}
         {hasMultipleCheckouts ? checkoutChoices : null}
         <SettingsSection title="Danger">
           <SettingsRow
