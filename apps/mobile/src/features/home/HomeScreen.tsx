@@ -323,7 +323,12 @@ function MobileOrchestratorList({
               </Text>
             ) : null}
             <MobileProjectRequests summary={summary} />
-            <MobileDecisions summary={summary} />
+            <MobileDecisions
+              summary={summary}
+              // Selection reads only the environment and id; a new discussion
+              // thread may not be in this list yet.
+              onOpenThread={(threadId) => onSelectThread({ ...summary.root, id: threadId })}
+            />
           </Pressable>
         );
       })}
