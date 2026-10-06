@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "0f05b6a34fe1509d2f138f5cb35f3171f6c2587c",
-  "head": "0149057b3f36fb78b08292e2dfa3b18ad66c58d0",
+  "prev": "e3535964d3570dff0976c1680ab5d00aff2391ea",
+  "head": "859d87c9ec55e5d1eaa204682165dcf4ed950563",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -63,13 +63,13 @@
     "fork-dev-vm-heavy-check-gate",
     "fork-gitea-issue-links",
     "fork-orchestrators-view",
-    "fork-codex-goal-visibility"
-  ],
-  "unapplied": [
+    "fork-codex-goal-visibility",
     "fork-named-agents",
     "fork-project-automations",
     "fork-project-issues-board",
-    "fork-request-ledger",
+    "fork-request-ledger"
+  ],
+  "unapplied": [
     "fork-project-dashboard-widgets",
     "fork-project-roadmap",
     "fork-project-page-workflow",
@@ -215,7 +215,7 @@
       "oid": "f3495f992c21a8c2dff22f514693400c74314390"
     },
     "fork-named-agents": {
-      "oid": "d53efd87bca9582ba0626f9022717c5e282a00ec"
+      "oid": "46a8a28dfd71accfab0b86d1f4234a111f15aa04"
     },
     "fork-needs-you-decisions": {
       "oid": "9ab79c731e8f61eb56a5fa5299e81c7c0795945c"
@@ -254,7 +254,7 @@
       "oid": "eca50441ba865120df6b1a6be49d8fb969a68b96"
     },
     "fork-project-automations": {
-      "oid": "e48129e224a8e887a682c25f63ebff7d26f6d59c"
+      "oid": "21943166724da17090904b416446d3ff007d8549"
     },
     "fork-project-canvas": {
       "oid": "10283e3da95aa647a7635d5362a80450776ecdca"
@@ -266,7 +266,7 @@
       "oid": "132a33fae2183bd025ee785408ab4c4c6b4d657b"
     },
     "fork-project-issues-board": {
-      "oid": "6ab2c0d30a6f436ac034424ae5f1f052bbd60a1b"
+      "oid": "b2ca0c4a1d91e3787b65f9be493e0e4786227a1b"
     },
     "fork-project-layout": {
       "oid": "c788c3919dc60e843cb28f479efafb770ec72477"
@@ -329,7 +329,7 @@
       "oid": "17d213da7f20ee86089f0e95a30c91117ed047ff"
     },
     "fork-request-ledger": {
-      "oid": "60a80ecf89c658e590b8ab5291c2108c3f21ba72"
+      "oid": "859d87c9ec55e5d1eaa204682165dcf4ed950563"
     },
     "fork-request-titles": {
       "oid": "b6727eda6ec7c47711a9389be9972f04ea8b7380"
