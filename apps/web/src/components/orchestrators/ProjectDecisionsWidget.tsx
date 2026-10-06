@@ -2,17 +2,19 @@ import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestr
 import {
   decisionAnswerInput,
   decisionSendStrip,
+  waitingLabel,
   type DecisionPick,
 } from "@t3tools/client-runtime/decision-answer";
 import type { ProjectIssue } from "@t3tools/contracts";
 import { RotateCcwIcon, SendIcon } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 
-import { Button } from "../ui/button";
+import { Button, InlineButton } from "../ui/button";
 import { Input } from "../ui/input";
 import { deriveDecisions } from "./decisions.logic";
 import { formatIssueAge } from "./projectIssuesBoard.logic";
 import { issueKey } from "./projectRequests.logic";
+import { ProjectSection } from "./ProjectSection";
 import { useDecide, useProjectRequests, useUndoableActions } from "./ProjectRequestsSection";
 
 /** How long "Sent" stays on a decision before its row leaves. */
@@ -22,20 +24,22 @@ type SendPhase = "held" | "sending" | "sent";
 
 const pickText = (pick: DecisionPick) => (pick.kind === "option" ? pick.option : pick.text);
 
-const linkButton = "text-xs text-muted-foreground underline-offset-2 hover:underline";
-
 /**
- * One decision's answer controls. Options send on click, then the row shows a strip
- * (held with Undo, sending, Sent). A note can be added before picking or, until the
- * hold ends, after: it is read when the answer is sent.
+ * One decision's answer controls, under its context. Each option is a full-width
+ * row that sends on click (the recommended one is labeled, not filled), then the
+ * row shows a strip (held with Undo, sending, Sent). A note can be added before
+ * picking or, until the hold ends, after: it is read when the answer is sent.
  */
 function DecisionAnswer({
   decision,
+  waiting,
   phase,
   onAnswer,
   onUndo,
 }: {
   readonly decision: NonNullable<ProjectIssue["decision"]>;
+  /** Who the answer goes to, in words. */
+  readonly waiting: string;
   readonly phase: SendPhase | null;
   readonly onAnswer: (pick: DecisionPick, readNote: () => string) => void;
   readonly onUndo: () => void;
@@ -68,16 +72,18 @@ function DecisionAnswer({
     />
   ) : null;
   const noteLink = noteOpen ? null : (
-    <button type="button" className={linkButton} onClick={() => setNoteOpen(true)}>
-      Add note
-    </button>
+    <span className="text-xs">
+      <InlineButton tone="muted" onClick={() => setNoteOpen(true)}>
+        Add note
+      </InlineButton>
+    </span>
   );
   if (phase) {
-    const strip = decisionSendStrip(phase, decision.waiting);
+    const strip = decisionSendStrip(phase, waiting);
     return (
-      <span className="flex w-60 shrink-0 flex-col gap-1">
+      <span className="flex max-w-2xl flex-col gap-1">
         <span className="flex items-center gap-2 text-xs">
-          <span className="min-w-0 flex-1 truncate text-foreground">{strip.text}</span>
+          <span className="min-w-0 flex-1 text-foreground">{strip.text}</span>
           {strip.undoable ? (
             <Button size="xs" variant="ghost-muted" onClick={onUndo}>
               <RotateCcwIcon />
@@ -85,7 +91,7 @@ function DecisionAnswer({
             </Button>
           ) : null}
         </span>
-        <span className="line-clamp-1 text-xs text-muted-foreground">{picked}</span>
+        <span className="text-xs text-muted-foreground">{picked}</span>
         {phase === "held" ? (
           <>
             {noteField}
@@ -96,7 +102,7 @@ function DecisionAnswer({
     );
   }
   return (
-    <span className="flex w-60 shrink-0 flex-col gap-1">
+    <span className="flex max-w-2xl flex-col gap-1">
       {open ? (
         <span className="flex gap-1">
           <Input
@@ -122,30 +128,32 @@ function DecisionAnswer({
         </span>
       ) : (
         <>
-          <span className="flex flex-wrap gap-1">
+          <span className="flex flex-col gap-1">
             {decision.options.map((option) => (
               <Button
                 key={option.text}
                 size="sm-multiline"
-                variant={option.recommended ? "default" : "outline"}
-                className="max-w-full text-left"
+                variant="outline"
                 onClick={() => answer({ kind: "option", option: option.text })}
               >
-                {option.text}
+                <span className="min-w-0 flex-1 text-left">{option.text}</span>
                 {option.recommended ? (
-                  <span className="text-xs font-normal opacity-70">recommended</span>
+                  <span className="shrink-0 text-xs font-normal text-muted-foreground">
+                    Recommended
+                  </span>
                 ) : null}
-                <SendIcon className="size-3 shrink-0 opacity-60" />
+                <SendIcon className="shrink-0 text-muted-foreground" />
               </Button>
             ))}
-            <Button
-              size="sm-multiline"
-              variant="ghost-muted"
-              aria-expanded={otherOpen}
-              onClick={() => setOtherOpen((current) => !current)}
-            >
-              Other...
-            </Button>
+            <span className="text-xs">
+              <InlineButton
+                tone="muted"
+                aria-expanded={otherOpen}
+                onClick={() => setOtherOpen((current) => !current)}
+              >
+                Other...
+              </InlineButton>
+            </span>
           </span>
           {otherOpen ? (
             <span className="flex gap-1">
@@ -230,51 +238,39 @@ export function ProjectDecisionsWidget({ summary }: { readonly summary: Orchestr
       setTimeout(() => setPhase(key, null), SENT_LINGER_MS);
       return true;
     });
+  if (shown.length === 0) return null;
+  const threads = [summary.root, ...summary.descendants];
   return (
-    <section className="border-t border-border pt-4 first:border-t-0 first:pt-0">
-      <h2 className="mb-2 flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-        Decisions
-        <span className="tabular-nums text-foreground/60">{shown.length}</span>
-      </h2>
-      {shown.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nothing waiting on you.</p>
-      ) : (
-        <ul className="divide-y divide-border">
-          {shown.map((issue) => {
-            const decision = issue.decision!;
-            const key = issueKey(issue);
-            return (
-              <li key={key} className="flex items-start gap-3 py-2">
-                <span className="min-w-0 flex-1">
-                  <span className="line-clamp-2 text-sm">{issue.title}</span>
-                  {decision.context ? (
-                    <span className="mt-1 line-clamp-3 block text-sm text-foreground/85">
-                      {decision.context}
-                    </span>
-                  ) : null}
-                  <span className="mt-1 block text-xs text-muted-foreground">
-                    {decision.waiting} · {formatIssueAge(issue.createdAt, now)} ·{" "}
-                    <a
-                      href={issue.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hover:underline"
-                    >
-                      #{issue.number}
-                    </a>
+    <ProjectSection title="Decisions" count={shown.length}>
+      <ul className="divide-y divide-border">
+        {shown.map((issue) => {
+          const decision = issue.decision!;
+          const key = issueKey(issue);
+          const waiting = waitingLabel(decision.waiting, threads);
+          return (
+            <li key={key} className="flex flex-col gap-2 py-2">
+              <span>
+                <span className="block text-sm">{issue.title}</span>
+                {decision.context ? (
+                  <span className="mt-1 block text-sm whitespace-pre-line text-foreground/85">
+                    {decision.context}
                   </span>
+                ) : null}
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  For {waiting} · {formatIssueAge(issue.createdAt, now)}
                 </span>
-                <DecisionAnswer
-                  decision={decision}
-                  phase={phaseOf(key)}
-                  onAnswer={(pick, readNote) => answer(issue, key, pick, readNote)}
-                  onUndo={() => actions.undo(key)}
-                />
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </section>
+              </span>
+              <DecisionAnswer
+                decision={decision}
+                waiting={waiting}
+                phase={phaseOf(key)}
+                onAnswer={(pick, readNote) => answer(issue, key, pick, readNote)}
+                onUndo={() => actions.undo(key)}
+              />
+            </li>
+          );
+        })}
+      </ul>
+    </ProjectSection>
   );
 }
