@@ -241,6 +241,7 @@ import * as RequestLedger from "./projectIssues/RequestLedger.ts";
 import * as ProjectDashboardService from "./projectDashboard/ProjectDashboardService.ts";
 import * as ProjectDashboardStore from "./projectDashboard/ProjectDashboardStore.ts";
 import * as ProjectRoadmapService from "./projectRoadmap/ProjectRoadmapService.ts";
+import * as ProjectCanvasService from "./projectCanvas/ProjectCanvasService.ts";
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as SourceControlBuiltInDrivers from "./sourceControl/builtInDrivers.ts";
@@ -1338,6 +1339,7 @@ const layerWsRpc = (
       const withPullRequestViewer = pullRequests.withRoutingCredential;
       const projectIssues = yield* ProjectIssuesService.make;
       const requestLedger = yield* RequestLedger.make({ projectIssues, threadIssues });
+      const projectCanvas = yield* ProjectCanvasService.make;
       const projectRoadmap = yield* ProjectRoadmapService.make({
         ledger: requestLedger,
         projectIssues,
@@ -2501,6 +2503,8 @@ const layerWsRpc = (
         [WS_METHODS.projectRequestsSettle]: (input) => requestLedger.settle(input),
         [WS_METHODS.projectRequestsCreate]: (input) => requestLedger.create(input),
         [WS_METHODS.projectRequestsUpdate]: (input) => requestLedger.update(input),
+        [WS_METHODS.projectCanvasRead]: (input) => projectCanvas.read(input),
+        [WS_METHODS.projectCanvasAction]: (input) => projectCanvas.logAction(input),
         [WS_METHODS.projectRoadmapGet]: (input) => projectRoadmap.get(input),
         [WS_METHODS.projectRoadmapMove]: (input) => projectRoadmap.move(input),
         [WS_METHODS.projectRoadmapSaveVersion]: (input) => projectRoadmap.saveVersion(input),
