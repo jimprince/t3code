@@ -1,0 +1,4 @@
+id = "nested-thread-notification-sounds"
+category = "fix"
+functionality = "threads"
+text = "Nested thread completions and attention requests no longer play notification sounds; top-level thread sounds and all visual indicators are unchanged."
