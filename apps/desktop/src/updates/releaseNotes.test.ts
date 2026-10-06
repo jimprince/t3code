@@ -3,7 +3,9 @@ import { describe, expect, it } from "vite-plus/test";
 import { normalizeDesktopUpdateReleaseNotes } from "./releaseNotes.ts";
 
 describe("normalizeDesktopUpdateReleaseNotes", () => {
-  it("shows the newest changes and counts all real changes", () => {
+  // Release note bodies are authored most-important-first (see the comment on
+  // extractReleaseNoteItems), so the popup keeps note order and shows every change.
+  it("keeps every real change in note order", () => {
     const result = normalizeDesktopUpdateReleaseNotes(
       [
         "- feat: first change",
@@ -29,16 +31,92 @@ describe("normalizeDesktopUpdateReleaseNotes", () => {
         {
           version: "0.0.36-nightly.20260828.1213",
           items: [
-            "fix(opencode): handle child approvals, stops, and model catalogs by @human in #8480",
-            "fix(web): keep long task drawers usable on small screens by @human in #8313",
-            "fix: eighth change",
-            "fix: seventh change",
-            "fix: sixth change",
-            "fix: fifth change",
-            "fix: fourth change",
+            "feat: first change",
+            "fix: second change",
             "fix: third change",
+            "fix: fourth change",
+            "fix: fifth change",
+            "fix: sixth change",
+            "fix: seventh change",
+            "fix: eighth change",
+            "fix(web): keep long task drawers usable on small screens by @human in #8313",
+            "fix(opencode): handle child approvals, stops, and model catalogs by @human in #8480",
           ],
           totalItems: 10,
+        },
+      ],
+      omittedReleaseCount: 0,
+    });
+  });
+
+  it("shows the full changelog instead of a leading subset", () => {
+    const bullets = Array.from({ length: 30 }, (_, index) => `- Feature ${index + 1}`);
+    const result = normalizeDesktopUpdateReleaseNotes(bullets.join("\n"), "1.0.0", "latest");
+
+    expect(result.releaseNotes).toEqual([
+      {
+        version: "1.0.0",
+        items: Array.from({ length: 30 }, (_, index) => `Feature ${index + 1}`),
+        totalItems: 30,
+      },
+    ]);
+  });
+
+  // electron-updater reads GitHub's rendered release HTML, where the footer's
+  // compare URL has become "v1...v2" link text.
+  it("stops at a GitHub-rendered Full Changelog footer instead of listing it", () => {
+    const result = normalizeDesktopUpdateReleaseNotes(
+      "<h2>Fork changes</h2><h3>Features</h3><ul><li>Press Enter to send the queued message</li></ul>" +
+        "<h2>What's changed</h2>" +
+        '<p>Full Changelog: <a href="https://github.com/jimprince/t3code/compare/v1-fork.2...v1-fork.3">' +
+        "<tt>v1-fork.2...v1-fork.3</tt></a></p>",
+      "0.0.43-nightly.20260924.2187-fork.3",
+      "nightly",
+    );
+
+    expect(result.releaseNotes).toEqual([
+      {
+        version: "0.0.43-nightly.20260924.2187-fork.3",
+        items: ["Press Enter to send the queued message"],
+        totalItems: 1,
+      },
+    ]);
+  });
+
+  it("filters compare links and the '+N more' summary line while preserving note order", () => {
+    const result = normalizeDesktopUpdateReleaseNotes(
+      [
+        "## Fork changes",
+        "",
+        "### Features",
+        "",
+        "- Create and check out Gitea pull requests",
+        "- Configure Gitea instances and branch PR badges",
+        "",
+        "## Compare: upstream v1 -> v2",
+        "- feat: upstream change 2",
+        "- feat: upstream change 1",
+        "- +3 more upstream changes",
+        "",
+        "[Upstream compare](https://github.com/pingdotgg/t3code/compare/v1...v2)",
+        "",
+        "Full Changelog: https://github.com/jimprince/t3code/compare/v1-fork.1...v2-fork.1",
+      ].join("\n"),
+      "0.0.40-fork.1",
+      "latest",
+    );
+
+    expect(result).toEqual({
+      releaseNotes: [
+        {
+          version: "0.0.40-fork.1",
+          items: [
+            "Create and check out Gitea pull requests",
+            "Configure Gitea instances and branch PR badges",
+            "feat: upstream change 2",
+            "feat: upstream change 1",
+          ],
+          totalItems: 4,
         },
       ],
       omittedReleaseCount: 0,
@@ -55,7 +133,7 @@ describe("normalizeDesktopUpdateReleaseNotes", () => {
     );
 
     expect(result).toEqual({
-      releaseNotes: [{ version: "1.2.3", items: ["Newer fix", "Older fix"], totalItems: 2 }],
+      releaseNotes: [{ version: "1.2.3", items: ["Older fix", "Newer fix"], totalItems: 2 }],
       omittedReleaseCount: 0,
     });
   });
@@ -75,8 +153,8 @@ describe("normalizeDesktopUpdateReleaseNotes", () => {
     );
 
     expect(result.releaseNotes).toEqual([
-      { version: "1.2.4", items: changes.toReversed(), totalItems: 8 },
-      { version: "1.2.3", items: changes.toReversed(), totalItems: 8 },
+      { version: "1.2.4", items: changes, totalItems: 8 },
+      { version: "1.2.3", items: changes, totalItems: 8 },
     ]);
   });
 
@@ -136,7 +214,7 @@ describe("normalizeDesktopUpdateReleaseNotes", () => {
     expect(result.releaseNotes.map(({ version }) => version)).toEqual(["0.0.42"]);
   });
 
-  it("counts valid groups before applying the six-release limit", () => {
+  it("shows every release with changes", () => {
     const releaseNotes = [
       { version: "1.3.9", note: "- Change 9" },
       { version: "1.3.8", note: "Full changelog: https://example.com/compare/x...y" },
@@ -157,8 +235,9 @@ describe("normalizeDesktopUpdateReleaseNotes", () => {
       "1.3.5",
       "1.3.4",
       "1.3.3",
+      "1.3.2",
     ]);
-    expect(result.omittedReleaseCount).toBe(1);
+    expect(result.omittedReleaseCount).toBe(0);
   });
 
   it("decodes valid HTML entities", () => {
