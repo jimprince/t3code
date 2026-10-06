@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "c2ecf19a0b40de19630eaa2280a9faba1b08a628",
-  "head": "c43b1b42d7c00060c916d0764d558bcc8acc4e46",
+  "prev": "cfef9d9777a271b66ca61c1b301ceffc5d2703c8",
+  "head": "d8b6e249eb823139892f3c0a15190a189631e72b",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -74,9 +74,7 @@
     "fork-project-canvas",
     "fork-project-task-types",
     "fork-project-request-box-pinned",
-    "fork-scripts-automations"
-  ],
-  "unapplied": [
+    "fork-scripts-automations",
     "fork-request-followups",
     "fork-roadmap-next-later",
     "fork-project-page-usability",
@@ -92,7 +90,9 @@
     "fork-needs-you-decisions",
     "fork-project-workstreams",
     "fork-canvas-resize",
-    "fork-pr-widget-refresh",
+    "fork-pr-widget-refresh"
+  ],
+  "unapplied": [
     "fork-decisions-other",
     "fork-cli-project-layout",
     "fork-item-types",
