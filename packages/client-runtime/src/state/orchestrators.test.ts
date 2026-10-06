@@ -457,6 +457,7 @@ describe("active Codex goal", () => {
         lastError: "boom",
       },
     });
+    expect(isThreadWorking(failed)).toBe(false);
     expect(buildStandaloneThreadGroups([failed], [project("project-a")], {})).toHaveLength(0);
   });
 });

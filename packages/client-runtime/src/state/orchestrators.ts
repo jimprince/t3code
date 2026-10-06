@@ -34,7 +34,8 @@ export function isThreadWorking(
   thread: Pick<EnvironmentThreadShell, "runtime" | "pendingBackgroundTasks" | "codexNativeGoal">,
 ): boolean {
   if (ACTIVE_RUNTIME_STATUSES.includes(thread.runtime?.status ?? "idle")) return true;
-  if (thread.codexNativeGoal?.status === "active") return true;
+  if (thread.codexNativeGoal?.status === "active" && thread.runtime?.status !== "failed")
+    return true;
   return thread.pendingBackgroundTasks.some(
     (task) => task.kind !== "command" && task.kind !== "monitor",
   );
