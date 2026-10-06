@@ -1,3 +1,5 @@
+import { AssetGiteaMediaUrlValidationError } from "@t3tools/contracts";
+import { giteaMediaFetchTarget } from "./assets/GiteaMediaFetch.ts";
 import { makeSessionReconcileService } from "./forkThreads/SessionReconcileService.ts";
 import * as LegacyHistory from "./forkLegacy/HistoryReader.ts";
 import * as ThreadTransfer from "./forkThreads/TransferService.ts";
@@ -3338,6 +3340,15 @@ const makeWsRpcLayer = (
                 (input.resource._tag === "media-file" && path.isAbsolute(input.resource.path))
               ) {
                 return yield* issueAssetUrl({ resource: input.resource });
+              }
+              if (input.resource._tag === "gitea-media") {
+                const settings = yield* serverSettings.getSettings.pipe(
+                  Effect.mapError(() => new AssetGiteaMediaUrlValidationError({})),
+                );
+                return yield* issueAssetUrl({
+                  resource: input.resource,
+                  giteaMedia: giteaMediaFetchTarget(input.resource.url, settings.giteaInstances),
+                });
               }
               if (input.resource._tag === "draft-workspace-file") {
                 // A project draft names its workspace directly; there is no
