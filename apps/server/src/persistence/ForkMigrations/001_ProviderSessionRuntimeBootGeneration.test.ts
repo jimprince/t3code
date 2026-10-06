@@ -48,7 +48,7 @@ layer("001_ProviderSessionRuntimeBootGeneration", (it) => {
 
         yield* Migration0001;
         yield* Migration0001;
-        yield* runForkMigrations();
+        yield* runForkMigrations({ toMigrationInclusive: 2 });
 
         const columns = yield* sql<{ readonly name: string }>`
           PRAGMA table_info(provider_session_runtime)
