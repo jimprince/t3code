@@ -1,7 +1,7 @@
 export const PROJECT_TABS = [
   { id: "dashboard", title: "Dashboard" },
   { id: "roadmap", title: "Roadmap" },
-  { id: "issues", title: "Issues" },
+  { id: "issues", title: "Tasks" },
 ] as const;
 
 export type ProjectTab = (typeof PROJECT_TABS)[number]["id"];
