@@ -1887,3 +1887,18 @@ depends_on = [
 ]
 roles = []
 note = "One ProjectLayout per orchestrator (root) thread, kept with its last 50 revisions in project-dashboards.json (layouts) next to the tracker setting; a project without one gets defaultProjectLayoutTabs from its old widget order (Dashboard, Roadmap, Tasks). The widget registry, ops and applyLayoutOps live in contracts so clients apply edits optimistically with the server's rules. ProjectLayoutService (one instance for WebSocket and MCP, re-provided per connection) applies ops by id on the newest revision under the settings file lock, rejects a replaceLayout made against an older revision, reverts by restoring a revision's tabs as a new one, and publishes every revision on a PubSub; projectLayout.subscribe streams the current layout and then each revision (one-slot sliding mailbox), gated by the projectLayout capability so older servers show the default. MCP toolkit project_layout_get/update/history/revert: writes only from the project's root orchestrator thread (Brad's decision), each with a reason shown in the clients' Undo chip. projectDashboard get/setWidgets map the old widget ids onto the first tab for the CLI. Web: tabs come from the layout (any tab id in ?tab=), widgets render by type in a 6-column grid by size; Edit layout replaces Customize (drag tabs and widgets, rename, add and remove tabs, add widgets from the registry, size, settings, tracker repository). Includes the cheap content widgets markdown (note) and links; embed, threads and mobile read-only wait for stage c."
+
+[[patch]]
+name = "fork-request-intake"
+subject = "feat(projects): New request box triages through a short-lived intake thread"
+class = "product"
+purpose = "Stop the New request box from waking the project's orchestrator with every request: a short-lived intake thread nested under it triages the request, catalogs it or starts it, and hands it to the orchestrator only when it needs starting now or needs a decision (Brad, 2026-10-05)."
+retire_when = "Requests are triaged by an equivalent built-in intake, or the project page is retired."
+depends_on = [
+  "fork-request-followups",
+  "fork-request-answers",
+  "fork-project-request-box-pinned",
+  "fork-roadmap-next-later",
+]
+roles = []
+note = "projectRequests.startIntake creates the intake thread (thread.create nested under the orchestrator, settleOnComplete, no CLI subscriber so nothing is notified) on claude-sonnet-5-5 when an enabled provider offers it, else another Claude Sonnet, else the orchestrator's model, and returns the fixed brief (buildIntakeBrief). The box then submits the request as explicit on the intake thread and sends brief plus Brad's words and images through the normal queued send path, so the ledger files the task from his words, linked to the intake and the orchestrator; a server without the RPC falls back to sending to the orchestrator. The brief: find the task, request type and request title, roadmap move next or later, then answer a question with request ready, or start one worker (--parent and --notify the orchestrator at attention level), or send the orchestrator one message, or catalog; note what was done; settle itself. projectRequests.update takes title (CLI request title)."
