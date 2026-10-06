@@ -325,6 +325,8 @@ stamp unable to run until they are explicitly built or redeployed.
 
 When a Linux user `t3-thread-watcher.service` is loaded, deployment restarts it
 through the user bus after promoting the verified snapshot and before pruning.
+It then checks the service PID against the boot/start lease and promoted runtime
+cwd; a live foreign watcher must not allow deletion of its old runtime.
 The service must run the shared wrapper, which follows `current`. A restart or
 service-health failure stops pruning and retains the previous runtime; repair
 the unit or atomically repoint `current` to the retained snapshot and restart

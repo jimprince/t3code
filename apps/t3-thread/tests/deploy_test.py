@@ -1,5 +1,7 @@
 """Production deploy-path checks; fixtures stub builds and the user service only."""
 import os
+import json
+import shutil
 from pathlib import Path
 import subprocess
 import tempfile
@@ -28,16 +30,30 @@ class DeployTest(unittest.TestCase):
         self.bin = self.root / "bin"
         self.bin.mkdir()
         self.env = dict(os.environ, PATH=f"{self.bin}:/usr/bin:/bin", T3_THREAD_SOURCE_REPO=str(self.repo), T3_THREAD_SNAPSHOT_ROOT=str(self.snap), TEST_LOG=str(self.root / "events"), TEST_SNAP=str(self.snap), TEST_SHA=self.sha, TEST_LOADED="loaded", HOME=str(self.root), XDG_CONFIG_HOME=str(self.root / "config"))
-        self.stub("node", 'echo build >> "$TEST_LOG"; [ "${TEST_BUILD_FAIL:-0}" = 0 ]')
+        real_node = shutil.which("node")
+        self.watcher = subprocess.Popen([real_node, "-e", "setInterval(() => {}, 1000)"], cwd=self.snap / self.sha / "apps/t3-thread")
+        self.addCleanup(self.stop_watcher)
+        self.env["TEST_PID"] = str(self.watcher.pid)
+        stat = Path(f"/proc/{self.watcher.pid}/stat").read_text()
+        self.lease = dict(pid=self.watcher.pid, bootId=Path("/proc/sys/kernel/random/boot_id").read_text().strip(), startTime=stat[stat.rfind(")") + 2:].split()[19])
+        lease_path = self.root / ".config/t3-remote-agents/watch.pid"
+        lease_path.parent.mkdir(parents=True)
+        lease_path.write_text(json.dumps(self.lease))
+        self.stub("node", f'if [ "$1" = "-" ]; then exec "{real_node}" "$@"; fi; ' + 'echo build >> "$TEST_LOG"; [ "${TEST_BUILD_FAIL:-0}" = 0 ]')
         self.stub("systemctl", '\n'.join([
             'echo "$*" >> "$TEST_LOG"',
             'case "$*" in',
+            '  *MainPID*) echo "$TEST_PID" ;;',
             '  *show*) echo "$TEST_LOADED" ;;',
             '  *restart*) [ "$(readlink "$TEST_SNAP/current")" = "$TEST_SHA" ] && [ -f "$TEST_SNAP/old/keep" ] && [ "${TEST_RESTART_FAIL:-0}" = 0 ] ;;',
             '  *is-active*) [ "${TEST_INACTIVE:-0}" = 0 ] ;;',
             '  *) exit 99 ;;',
             'esac',
         ]))
+
+    def stop_watcher(self):
+        self.watcher.terminate()
+        self.watcher.wait(timeout=5)
 
     def stub(self, name, body):
         p = self.bin / name
@@ -89,6 +105,14 @@ class DeployTest(unittest.TestCase):
         self.assertNotIn("restart", self.events())
         self.assertEqual(self.deploy("--prune-only").returncode, 0)
         self.assertNotIn("restart", self.events())
+
+    def test_foreign_lease_stops_pruning(self):
+        self.lease["startTime"] = "invalid"
+        (self.root / ".config/t3-remote-agents/watch.pid").write_text(json.dumps(self.lease))
+        result = self.deploy()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue((self.snap / "old/keep").exists())
+        self.assertIn("does not own the live lease", result.stderr)
 
     def test_inactive_after_restart_stops_pruning(self):
         self.env["TEST_INACTIVE"] = "1"
