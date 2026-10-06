@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import type * as SqlClient from "effect/unstable/sql/SqlClient";
 
 /** Fixed historical tables only. Never restore these rows into native V2 execution. */
-const tables = {
+export const legacyHistoryTables = {
   legacyThreads: "projection_threads",
   legacyMessages: "projection_thread_messages",
   legacyTurns: "projection_turns",
@@ -18,7 +18,7 @@ const tables = {
 export const readForkHistory = (sql: SqlClient.SqlClient, threadId: ThreadId) =>
   Effect.gen(function* () {
     const history: Record<string, unknown> = {};
-    for (const [section, table] of Object.entries(tables)) {
+    for (const [section, table] of Object.entries(legacyHistoryTables)) {
       const columns = yield* sql.unsafe<{ name: string }>(`PRAGMA table_info(${table})`);
       if (columns.some((column) => column.name === "thread_id")) {
         const rows = yield* sql.unsafe(`SELECT * FROM ${table} WHERE thread_id = ?`, [threadId]);
