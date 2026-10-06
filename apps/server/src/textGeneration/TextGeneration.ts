@@ -17,6 +17,8 @@ export type {
   CommitMessageGenerationResult,
   PrContentGenerationInput,
   PrContentGenerationResult,
+  RequestItemsGenerationInput,
+  RequestItemsGenerationResult,
   ThreadTitleGenerationInput,
   ThreadTitleGenerationResult,
 } from "@t3tools/provider-core/server/textGeneration";
@@ -32,7 +34,8 @@ type TextGenerationOp =
   | "generateCommitMessage"
   | "generatePrContent"
   | "generateBranchName"
-  | "generateThreadTitle";
+  | "generateThreadTitle"
+  | "generateRequestItems";
 
 const resolveInstance = (
   registry: ProviderInstanceRegistry.ProviderInstanceRegistry["Service"],
@@ -83,6 +86,19 @@ export const make = Effect.gen(function* () {
               ));
             return yield* textGeneration.generateThreadTitle({ ...input, linkedContext });
           }),
+        ),
+      ),
+    generateRequestItems: (input) =>
+      resolveInstance(registry, "generateRequestItems", input.modelSelection.instanceId).pipe(
+        Effect.flatMap((textGeneration) =>
+          textGeneration.generateRequestItems
+            ? textGeneration.generateRequestItems(input)
+            : Effect.fail(
+                new TextGenerationError({
+                  operation: "generateRequestItems",
+                  detail: "This provider cannot split requests.",
+                }),
+              ),
         ),
       ),
   });

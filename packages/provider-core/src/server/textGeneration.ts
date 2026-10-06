@@ -6,6 +6,7 @@ import type {
 } from "@t3tools/contracts";
 import type * as Effect from "effect/Effect";
 
+import type { RequestKind } from "./requestItemsPrompt.ts";
 import type { TextGenerationPolicy } from "./textGenerationPolicy.ts";
 
 export interface CommitMessageGenerationInput {
@@ -74,8 +75,23 @@ export interface ThreadTitleGenerationResult {
   needsRefinement?: boolean | undefined;
 }
 
+/** Split one user message into the requests it makes (fork: request ledger). */
+export interface RequestItemsGenerationInput {
+  cwd: string;
+  message: string;
+  threadTitle?: string | undefined;
+  modelSelection: ModelSelection;
+}
+
+export interface RequestItemsGenerationResult {
+  items: ReadonlyArray<{ title: string; kind: RequestKind; excerpt: string }>;
+}
+
 /** Commit, change request, branch, and title generation backed by one provider instance. */
 export interface ProviderTextGeneration {
+  /** Split a message into tracked requests when supported by the provider. */
+  readonly generateRequestItems?: (input: RequestItemsGenerationInput) => Effect.Effect<RequestItemsGenerationResult, TextGenerationError>;
+
   /**
    * Generate a commit message from staged change context.
    */
