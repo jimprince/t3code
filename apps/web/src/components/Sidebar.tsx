@@ -208,6 +208,8 @@ import {
   buildThreadActionMenuItems,
   threadActionRequiresOperate,
 } from "./threadActionMenu.logic";
+import { ThreadIssueBadges } from "./ThreadIssueBadges";
+
 import {
   animateSidebarLayoutChanges,
   applySidebarThreadDrop,
@@ -1764,6 +1766,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
         onOpenPullRequest={handlePrClick}
       />
     ) : null;
+  const issueBadges = <ThreadIssueBadges issues={thread.issues ?? []} />;
   const terminalStatusIcon = terminalStatus ? (
     <span
       role="img"
@@ -1950,6 +1953,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               remain visible AND clickable while the row is hovered. Only
               the time/jump label yields to the settle affordance. */}
             {prBadge}
+            {issueBadges}
             {sortable?.isDragging ? (
               dragDestination
             ) : (
@@ -2309,6 +2313,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               )}
               {terminalStatusIcon}
               {prBadge}
+              {issueBadges}
               {diff ? (
                 <span className="shrink-0 font-mono">
                   <span className="text-diff-addition-foreground">+{diff.insertions}</span>{" "}
