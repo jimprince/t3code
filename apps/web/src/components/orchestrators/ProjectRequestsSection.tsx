@@ -8,6 +8,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "
 
 import {
   decideProjectRequest,
+  discussProjectRequest,
   projectIssuesQuery,
   settleProjectRequest,
 } from "../../state/projectIssues";
@@ -263,6 +264,32 @@ export function useDecide(summary: OrchestratorSummary, refresh: () => void) {
         error instanceof Error && error.message ? error.message : "Could not reach the server.",
     };
   };
+}
+
+/**
+ * Discuss on a decision: opens a thread nested under the thread waiting on it (or the
+ * live one already discussing it) and goes there. `pending` names the decision whose
+ * thread is being opened, so its Discuss reads Opening and ignores a second click.
+ */
+export function useDiscuss(summary: OrchestratorSummary) {
+  const discuss = useAtomCommand(discussProjectRequest, "Discuss");
+  const openThread = useOpenThread(summary);
+  const [pending, setPending] = useState<string | null>(null);
+  const start = async (issue: ProjectIssue) => {
+    const key = issueKey(issue);
+    if (pending !== null) return;
+    setPending(key);
+    try {
+      const result = await discuss({
+        environmentId: summary.root.environmentId,
+        input: { threadId: summary.root.id, reference: key },
+      });
+      if (result._tag === "Success") openThread(result.value.threadId);
+    } finally {
+      setPending(null);
+    }
+  };
+  return { pending, start };
 }
 
 /** Opens a thread of the project, coming back to the project page afterwards. */
@@ -586,6 +613,7 @@ export function NeedsYouIssueGroups({
   const openThread = useOpenThread(summary);
   const actions = useUndoableActions();
   const decide = useDecide(summary, refresh);
+  const discuss = useDiscuss(summary);
   return (
     <>
       {NEEDS_YOU_GROUPS.map(({ title, groups }) => {
@@ -619,6 +647,8 @@ export function NeedsYouIssueGroups({
                     {decision ? (
                       <DecisionActions
                         decision={decision}
+                        discussing={discuss.pending === key}
+                        onDiscuss={() => void discuss.start(issue)}
                         onDecide={(kind, extra) =>
                           actions.run(
                             key,
@@ -659,12 +689,16 @@ export function NeedsYouIssueGroups({
   );
 }
 
-/** Approve, Not yet (with an optional one-line reason) and a button per option. */
+/** Approve, Not yet (with an optional one-line reason), a button per option, and Discuss. */
 function DecisionActions({
   decision,
+  discussing,
+  onDiscuss,
   onDecide,
 }: {
   readonly decision: NeedsYouDecision;
+  readonly discussing: boolean;
+  readonly onDiscuss: () => void;
   readonly onDecide: (
     kind: "approve" | "not-yet" | "option",
     extra: { readonly option?: string; readonly reason?: string },
@@ -707,6 +741,9 @@ function DecisionActions({
             Add reason
           </InlineButton>
         )}
+        <InlineButton tone="muted" disabled={discussing} onClick={onDiscuss}>
+          {discussing ? "Opening..." : "Discuss"}
+        </InlineButton>
       </span>
       {reasonOpen ? (
         <Input
