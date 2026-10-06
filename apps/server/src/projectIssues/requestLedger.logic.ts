@@ -1,3 +1,4 @@
+import { isPageAgentThreadId } from "@t3tools/contracts";
 import type { ProjectIssue, ProjectIssueRequestSource, ThreadId } from "@t3tools/contracts";
 
 import type { RequestCandidate, RequestKind } from "../textGeneration/RequestItemsPrompt.ts";
@@ -50,8 +51,6 @@ export const REQUEST_LABEL_COLORS: Record<string, string> = {
 };
 
 const ORIGIN_CONTEXT_KIND = "t3-origin";
-// Same reserved namespace as fork-page-agent-tray's `isPageAgentThreadId`, which this patch sits below.
-const isPageAgentThreadId = (threadId: string) => threadId.startsWith("page-agent-");
 const WORKER_PREAMBLE = /^You are a T3 worker thread\b/;
 const NUDGE =
   /^(ok(ay)?|k|yes|yep|yeah|no|nope|go|go ahead|do it|continue|proceed|thanks?|thank you|looks good|lgtm|sure|great|nice|now|status|done|approved?|ship it)[\s.!?]*$/i;

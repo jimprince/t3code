@@ -3,6 +3,7 @@ import * as SqlClient from "effect/sql/SqlClient";
 import {
   CommandId,
   type RunId,
+  isPageAgentThreadId,
   isProviderAvailable,
   MessageId,
   type ModelSelection,
@@ -2264,6 +2265,7 @@ const make = Effect.gen(function* () {
         const statuses = input.statuses === undefined ? null : new Set(input.statuses);
         const titleContains = input.titleContains?.toLocaleLowerCase();
         const filtered = projectThreads
+          .filter((thread) => !isPageAgentThreadId(thread.id))
           .filter(
             (thread) =>
               statuses === null || statuses.has(thread.activityRunStatus ?? thread.status),
