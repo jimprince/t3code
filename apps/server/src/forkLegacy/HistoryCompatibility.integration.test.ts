@@ -89,7 +89,7 @@ const servicesFor = <E>(db: Layer.Layer<SqlClient.SqlClient, E>) => {
 };
 
 describe.runIf(fixtures !== undefined)("copied shipped legacy history", () => {
-  it.effect.each(["null", "absent"])(
+  it.effect.each(["null", "absent", "modern"])(
     "imports retired sidebar ordering once when the newer key is %s",
     (newerKey) =>
       Effect.gen(function* () {
@@ -129,6 +129,8 @@ describe.runIf(fixtures !== undefined)("copied shipped legacy history", () => {
               .run(ids[2]!);
             if (newerKey === "absent")
               copy.exec("ALTER TABLE projection_threads DROP COLUMN active_order_key");
+            if (newerKey === "null")
+              copy.exec("DELETE FROM effect_sql_fork_migrations WHERE migration_id = 5");
             return ids.map((id) => ThreadId.make(id));
           } finally {
             copy.close();
@@ -144,7 +146,7 @@ describe.runIf(fixtures !== undefined)("copied shipped legacy history", () => {
           yield* importer.reconcileShells;
           assert.equal(
             (yield* projections.getThreadProjection(ids[0]!)).thread.activeOrderKey,
-            "a0",
+            newerKey === "modern" ? null : "a0",
           );
           assert.equal(
             (yield* projections.getThreadProjection(ids[1]!)).thread.activeOrderKey,

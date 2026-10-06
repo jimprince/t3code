@@ -2361,7 +2361,7 @@ rationale = "Brad approved a read-only view of historical tools, goals, checkpoi
 id = "v2-import-retired-sidebar-order"
 date = "2026-10-06"
 decided = "adapt"
-rationale = "V2 imports persisted V1 projections without replaying canonicalized sidebar events. Import active_order_key from sidebar_order_key when the newer key is absent or null, preserving explicit newer ordering and historical event identity/sequence. The import receipt makes this a one-time read; subsequent native clears remain cleared."
+rationale = "V2 imports persisted V1 projections without replaying canonicalized sidebar events. Capture source ordering semantics before upgrade: use sidebar_order_key only if active_order_key was absent or the source fork ledger lacked migration 5. Modern null active keys retain automatic ordering despite stale sidebar keys. The import receipt makes this a one-time read; subsequent native clears and historical event identity/sequence remain intact."
 
 [[patch.decision]]
 id = "upstream-thread-repository-list-removal"

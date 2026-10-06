@@ -1,4 +1,5 @@
 import { readLegacyAutomationOutcome } from "./ForkAutomationRead.ts";
+import { initializeSidebarOrderImport } from "../../forkLegacy/SidebarOrderImport.ts";
 import { makeHistoricalAttachmentRecovery } from "../../forkLegacy/AttachmentImport.ts";
 import { decodeHistoricalAttachments } from "../../forkLegacy/AttachmentDecoder.ts";
 import {
@@ -456,11 +457,12 @@ const make = Effect.gen(function* () {
     const now = DateTime.formatIso(yield* DateTime.now);
     const columns = yield* sql<{ readonly name: string }>`PRAGMA table_info(projection_threads)`;
     const hasColumn = (name: string) => columns.some((column) => column.name === name);
+    const needsLegacyOrder = yield* initializeSidebarOrderImport(sql);
     // V2 imports projections without replaying the sidebar events canonicalized by fork 5.
     // Read the retired key as a fallback only; never backfill or rewrite historical rows.
     const activeOrderKey = sql.unsafe(
       hasColumn("active_order_key")
-        ? hasColumn("sidebar_order_key")
+        ? needsLegacyOrder && hasColumn("sidebar_order_key")
           ? "COALESCE(thread.active_order_key, thread.sidebar_order_key)"
           : "thread.active_order_key"
         : hasColumn("sidebar_order_key")
