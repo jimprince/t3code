@@ -228,6 +228,8 @@ export interface SavedSubscription {
   subscriberEnvironmentId?: string;
   events?: "all" | "attention";
   level?: NotificationLevel;
+  /** Minutes between unanswered nested-child reminders; zero disables reminders. */
+  inputReminderMinutes?: number;
   lastDirectMessageTurnId?: string | null;
   errorEventKey?: string | null;
   observedState?: AgentState;
@@ -275,6 +277,9 @@ export interface SavedNotification {
   subscriberEnvironmentId?: string;
   /** An actionable input/approval for the current organizational parent. */
   isChildInput?: boolean;
+  pendingQuestion?: string | null;
+  pendingInputRequestKey?: string | null;
+  reminderOfEventKey?: string | null;
   completionDisposition?: "quiet" | "attention" | null;
   occurrences?: number;
   lastOccurrenceKey?: string;
