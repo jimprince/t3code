@@ -13,6 +13,9 @@ export const REQUEST_LABEL_COLORS: Record<string, string> = {
   "ask:plan": "#9085e9",
   "ask:change": "#d95926",
   "ask:test": "#c98500",
+  "ask:bug": "#e5484d",
+  "ask:feature": "#2f9e8f",
+  "ask:maintenance": "#7d7d7d",
   "awaiting-release": "#9085e9",
   "needs-test": "#fab219",
 };
