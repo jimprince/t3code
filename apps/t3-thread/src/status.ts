@@ -195,6 +195,9 @@ export function formatThreadLine(
     ...(thread.remoteParent
       ? [`remote-parent=${thread.remoteParent.environmentId}/${thread.remoteParent.threadId}`]
       : []),
+    ...(thread.issues?.length
+      ? [`issues=${thread.issues.map((issue) => `${issue.repository}#${issue.number}`).join(",")}`]
+      : []),
     status.reason,
   ].join(" ");
 }
