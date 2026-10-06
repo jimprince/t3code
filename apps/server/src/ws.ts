@@ -2513,6 +2513,7 @@ const layerWsRpc = (
           ),
         [WS_METHODS.projectIssuesList]: (input) => projectIssues.list(input).pipe(Effect.flatMap((result) => requestLedger.decorate(result, input.rootThreadId))),
         [WS_METHODS.projectRequestsSettle]: (input) => requestLedger.settle(input),
+        [WS_METHODS.projectRequestsSubmit]: (input) => requestLedger.submit(input),
         [WS_METHODS.projectRequestsCreate]: (input) => requestLedger.create(input),
         [WS_METHODS.projectRequestsUpdate]: (input) => requestLedger.update(input),
         [WS_METHODS.projectCanvasRead]: (input) => projectCanvas.read(input),
