@@ -1192,7 +1192,25 @@ show an answer box. Several questions are several issues ("Part of #N" on the fi
 line). Brad answers on the Decisions widget (or in the mobile app): the answer is commented on
 the issue as `Brad chose: <option>` or `Brad answered: <text>`, sent to the waiting thread with
 the issue reference, and `needs-brad` is removed. The issue stays open: close it when the
-decision is carried out. There is no command to answer for him.
+decision is carried out.
+
+Brad can choose Discuss on a decision (Decisions widget, a Needs you decision row, or the
+mobile app) to talk it through first. That opens a thread nested under the waiting thread
+(the orchestrator when it cannot be found), with that thread's model, whose first message
+holds the question, the options and the command that records his answer; a second Discuss
+opens the same thread while it is not archived. Record only what Brad settled on, once:
+
+```bash
+t3-thread decision answer <project-thread> <owner/repo#N> --option "<option as listed>" [--note "<why>"]
+t3-thread decision answer <project-thread> <owner/repo#N> --answer "<his words>"   # needs-brad only
+t3-thread decision answer <project-thread> <owner/repo#N> --approve                # Needs you plans
+t3-thread decision answer <project-thread> <owner/repo#N> --not-yet [--note "<reason>"]
+t3-thread decision discuss <project-thread> <owner/repo#N>
+```
+
+`decision answer` is the widget's own answer path (same comment, label change and message to
+the waiting thread); the MCP tools `decision_answer` and `decision_discuss` do the same.
+`<project-thread>` is a thread of the decision's project; the discussion brief names it.
 
 ## Project page widgets and tracker repository
 
