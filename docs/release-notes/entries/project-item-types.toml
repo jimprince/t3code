@@ -1,0 +1,4 @@
+id = "project-item-types"
+category = "feature"
+functionality = "projects"
+text = "Requests are now a question, a task or an epic, and a task can carry a small bug tag. Older labels keep reading as before: plan shows as epic, bug as a task with the tag, everything else as a task."
