@@ -1,31 +1,17 @@
 import { useAtomValue } from "@effect/atom-react";
 import { Atom } from "effect/reactivity";
-import { environmentThreadShells } from "../../state/threads";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import {
-  supervisionForest,
-  supervisionKey,
+  supervisionThreadKey,
   supervisionIsActive,
-} from "@t3tools/client-runtime/state/forkNesting";
+} from "@t3tools/client-runtime/state/fork-nesting";
 
-// Build once per immutable snapshot; rows subscribe only to their numeric count.
-const forests = new WeakMap<
-  ReadonlyArray<EnvironmentThreadShell>,
-  ReturnType<typeof supervisionForest>
->();
+import { supervision } from "../../state/forkSupervision";
 const countAtom = Atom.family((key: string) =>
-  Atom.make((get) => {
-    const shells = get(environmentThreadShells.threadShellsAtom);
-    let forest = forests.get(shells);
-    if (!forest) {
-      forest = supervisionForest(shells);
-      forests.set(shells, forest);
-    }
-    return forest.activeCounts.get(key) ?? 0;
-  }),
+  Atom.make((get) => get(supervision.forest).activeCounts.get(key) ?? 0),
 );
 export function useSupervisionStatus(thread: EnvironmentThreadShell) {
-  const count = useAtomValue(countAtom(supervisionKey(thread)));
+  const count = useAtomValue(countAtom(supervisionThreadKey(thread)));
   return {
     count,
     supervising: count > 0 && thread.settledOverride !== "settled" && !supervisionIsActive(thread),
