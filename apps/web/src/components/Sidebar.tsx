@@ -200,11 +200,8 @@ import { cn } from "~/lib/utils";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { ProjectEnvironmentBadge } from "./ProjectEnvironmentBadge";
 import { ThreadIssueBadges } from "./ThreadIssueBadges";
-<<<<<<< 2e7f32bf5f1f6c6975a482596d43961cf1550c5f
-=======
 import { OrchestratorSidebarList } from "./orchestrators/OrchestratorSidebarList";
 import { useThreadsVisibleInThreadsMode } from "./orchestrators/useOrchestratorThreads";
->>>>>>> 85f788864d67be8d33297eb6b66ea01ab912132c
 import { buildDraftActionMenuItems, buildThreadActionMenuItems } from "./threadActionMenu.logic";
 import {
   animateSidebarLayoutChanges,

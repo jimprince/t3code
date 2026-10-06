@@ -6,11 +6,8 @@ import type { MouseEvent } from "react";
 import { useEmbeddedPages } from "./embeddedPages/useEmbeddedPages";
 import { InlineButton } from "./ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
-<<<<<<< 2e7f32bf5f1f6c6975a482596d43961cf1550c5f
-=======
 import type { ProjectReturnLocation } from "./orchestrators/projectNavigation";
 import { projectReturnState } from "./orchestrators/projectNavigation";
->>>>>>> 85f788864d67be8d33297eb6b66ea01ab912132c
 
 const STATUS_BOARD_ORIGIN = "https://control.bradleyprince.com:8450";
 
@@ -43,9 +40,6 @@ export function resolveThreadIssueBadgeTarget(
   };
 }
 
-<<<<<<< 2e7f32bf5f1f6c6975a482596d43961cf1550c5f
-export function ThreadIssueBadges({ issues }: { readonly issues: readonly ThreadIssueLink[] }) {
-=======
 export function ThreadIssueBadges({
   issues,
   projectReturn,
@@ -53,7 +47,6 @@ export function ThreadIssueBadges({
   readonly issues: readonly ThreadIssueLink[];
   readonly projectReturn?: ProjectReturnLocation;
 }) {
->>>>>>> 85f788864d67be8d33297eb6b66ea01ab912132c
   const pages = useEmbeddedPages();
   const navigate = useNavigate();
   return issues.map((issue) => {
@@ -69,10 +62,7 @@ export function ThreadIssueBadges({
           to: "/embedded/$pageId",
           params: { pageId: target.pageId },
           search: { repo: target.repo, issue: target.issue },
-<<<<<<< 2e7f32bf5f1f6c6975a482596d43961cf1550c5f
-=======
           ...(projectReturn ? { state: projectReturnState(projectReturn) } : {}),
->>>>>>> 85f788864d67be8d33297eb6b66ea01ab912132c
         });
       }
     };

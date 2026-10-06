@@ -36,11 +36,8 @@ export function EmbeddedPageView({
   readonly pageId: string;
   readonly issueTarget?: { readonly repo?: string; readonly issue?: string };
 }) {
-<<<<<<< 2e7f32bf5f1f6c6975a482596d43961cf1550c5f
-=======
   const navigate = useNavigate();
   const projectReturn = useLocation({ select: (location) => location.state.projectReturn });
->>>>>>> 85f788864d67be8d33297eb6b66ea01ab912132c
   const page = findEmbeddedPage(useEmbeddedPages(), pageId);
   const targetUrl =
     page && issueTarget?.repo && issueTarget.issue
