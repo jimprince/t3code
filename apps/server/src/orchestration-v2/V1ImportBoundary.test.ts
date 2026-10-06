@@ -11,17 +11,17 @@ const forbiddenImport =
 const legacyTable =
   /\bprojection_(?:threads|thread_messages|thread_activities|thread_proposed_plans|thread_pull_requests|thread_sessions|turns|pending_approvals|state)\b/;
 /** Directories whose files may read the V1 tables: the importer and the schema history. */
-const legacyReaders = ["orchestration-v2/legacy/", "persistence/Migrations/"] as const;
+const legacyReaders = [
+  "orchestration-v2/legacy/",
+  "persistence/Migrations/",
+  "persistence/ForkMigrations/",
+] as const;
 /**
  * Individual files allowed to read the V1 tables, each with its reason. Keep this
  * list short; new V1 reads belong in the importer.
  */
 const legacyReaderFiles: Record<string, string> = {
   "forkLegacy/AttachmentImport.ts": "attachment recovery used only by the V1 importer",
-  "persistence/ForkMigrations/003_ProjectionThreadMessageFileAttachments.ts":
-    "shipped legacy attachment schema history",
-  "persistence/ForkMigrations/008_ProjectionThreadsSettleOnComplete.ts":
-    "shipped legacy lifecycle preference schema history",
   // Provider history for settings migration reads V1 thread sessions once at load.
   "serverSettings.ts": "one-time provider history for settings migration",
 };
@@ -89,6 +89,7 @@ it("keeps the legacy importer out of reach of new code", () => {
   // thread and project services hydrate a V1 transcript before they act on it.
   assert.deepEqual(importers, [
     "fork/recovery/LegacyBackgroundWorkImport.ts",
+    "forkThreads/MetadataStore.ts",
     "orchestration-v2/ThreadManagementService.ts",
     "orchestration-v2/runtimeLayer.ts",
     "project/ProjectService.ts",
