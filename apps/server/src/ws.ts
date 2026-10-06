@@ -1,3 +1,4 @@
+import { makeSessionReconcileService } from "./forkThreads/SessionReconcileService.ts";
 import * as LegacyHistory from "./forkLegacy/HistoryReader.ts";
 import * as ThreadTransfer from "./forkThreads/TransferService.ts";
 import * as ForkWorkspace from "./forkThreads/ForkWorkspaceService.ts";
@@ -3948,6 +3949,8 @@ const makeWsRpcLayer = (
       const threadTransfer = yield* ThreadTransfer.TransferService;
       const legacyHistory = yield* LegacyHistory.HistoryReader;
       const forkHandlers = WsForkRpcGroup.of({
+        "fork.session.reconcile": (input) =>
+          makeSessionReconcileService(threadManagement).reconcile(input),
         "orchestration.getLegacyHistory": (input) => legacyHistory.get(input),
         "orchestration.exportThread": (input) => threadTransfer.exportThread(input),
         "orchestration.importThread": (input) => threadTransfer.importThread(input),
