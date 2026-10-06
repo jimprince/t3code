@@ -1,0 +1,4 @@
+id = "automation-event-triggers"
+category = "feature"
+functionality = "projects"
+text = "Start automations when something happens: a pull request is linked, its checks start failing, an issue gets a label, a worker is blocked, or a repository publishes a release. Each new state fires once."
