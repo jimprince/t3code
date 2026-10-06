@@ -127,6 +127,44 @@ describe("classifyThread", () => {
     expect(status.state).toBe("running");
   });
 
+  it("reports running, not a stale turn error, while the session is live", () => {
+    const erroredTurn = {
+      turnId: "turn-1",
+      state: "error" as const,
+      requestedAt: "2026-10-05T18:07:29.000Z",
+      startedAt: "2026-10-05T18:07:29.000Z",
+      completedAt: "2026-10-05T18:07:29.000Z",
+      assistantMessageId: null,
+    };
+    const session = (status: "running" | "ready", lastError: string | null) => ({
+      threadId: "thread-1",
+      status,
+      providerName: "claudeAgent",
+      runtimeMode: "full-access" as const,
+      activeTurnId: null,
+      lastError,
+      updatedAt: "2026-10-05T18:10:00.000Z",
+    });
+
+    expect(
+      classifyThread(makeThread({ latestTurn: erroredTurn, session: session("running", null) }))
+        .state,
+    ).toBe("running");
+    const settled = classifyThread(
+      makeThread({ latestTurn: erroredTurn, session: session("ready", null) }),
+    );
+    expect(settled.state).toBe("error");
+    expect(settled.reason).toContain("no detail");
+    expect(
+      classifyThread(
+        makeThread({
+          latestTurn: erroredTurn,
+          session: { ...session("ready", "boom"), status: "error" },
+        }),
+      ),
+    ).toEqual({ state: "error", reason: "boom" });
+  });
+
   it("reports running when session has an active turn even if session.status is not 'running'", () => {
     // REGRESSION: guard the activeTurnId branch explicitly so a session with
     // status "starting"/"ready" but a still-present activeTurnId is not
