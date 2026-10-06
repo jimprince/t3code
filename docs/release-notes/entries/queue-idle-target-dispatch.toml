@@ -1,0 +1,4 @@
+id = "queue-idle-target-dispatch"
+category = "fix"
+functionality = "worker threads"
+text = "A queued send now reaches an idle or interrupted worker within seconds, and survives a server restart instead of waiting indefinitely or being dropped."

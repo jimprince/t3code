@@ -67,6 +67,7 @@ import {
   cancelQueuedSend,
   drainQueuedSends,
   hasQueuedWork,
+  startQueueDrainLoop,
   listQueuedSends,
   summarizeQueuedSends,
 } from "./sendQueue.js";
@@ -89,7 +90,7 @@ import {
   unblockNotificationsForEnvironment,
 } from "./watch.js";
 import type { CallerEnvironmentMetadata, SubscriptionEndpoint } from "./state.js";
-import type { SavedAgent, SavedNotification, SavedQueuedSend } from "./types.js";
+import type { SavedAgent, SavedEnvironment, SavedNotification, SavedQueuedSend } from "./types.js";
 
 function resolveParentThreadId(
   state: Awaited<ReturnType<typeof loadState>>,
@@ -290,6 +291,13 @@ async function ensureNotificationWatcher(
     maxLifetimeSeconds: 86_400,
     deliver: options.deliver ?? true,
   });
+}
+
+const queueClientFactory = (environment: SavedEnvironment) =>
+  new RemoteEnvironmentClient(environment);
+
+async function drainWatcherQueue(env?: string): Promise<SavedQueuedSend[]> {
+  return drainQueuedSends({ clientFactory: queueClientFactory, env });
 }
 
 const program = new Command();
@@ -1560,6 +1568,16 @@ agent
     let idleSince = 0;
     let handoff = false;
     const poller = createWatchPoller();
+    const drain =
+      options.deliver && !options.once
+        ? startQueueDrainLoop({
+            clientFactory: queueClientFactory,
+            env: options.env,
+            intervalMs,
+            report: (report) =>
+              printJson({ drainedAt: nowIso(), env: options.env ?? null, ...report }),
+          })
+        : null;
 
     try {
       for (;;) {
@@ -1577,12 +1595,10 @@ agent
           deliveryResults = options.deliver
             ? await deliverPendingNotifications({ env: options.env })
             : [];
-          queuedSendResults = options.deliver
-            ? await drainQueuedSends({
-                clientFactory: (environment) => new RemoteEnvironmentClient(environment),
-                env: options.env,
-              })
-            : [];
+          // A continuous watcher drains on its own cadence (below); a single scan
+          // has no background loop, so it drains inline.
+          queuedSendResults =
+            options.deliver && options.once ? await drainWatcherQueue(options.env) : [];
         } catch (error) {
           // One bad route must not end the watcher; the next scan retries.
           scanError = formatCliError(error);
@@ -1639,6 +1655,7 @@ agent
         );
       }
     } finally {
+      await drain?.stop();
       await releaseLease?.();
       if (handoff) {
         // Stopped by the lifetime backstop with events still undelivered: replace
@@ -2007,6 +2024,20 @@ agent
   });
 
 registerAutomationCommands(program);
+
+// The watcher dies with whatever process tree started it, so a server restart leaves
+// queued sends with no one to drain them until some command revives it. Any command
+// that finds work waiting does so, instead of waiting for a send to enqueue more.
+// It runs after a successful action: the liveness check rewrites the state file, so a
+// refused command (env forget without --force) must leave the file untouched.
+program.hook("postAction", async (_command, action) => {
+  if (action.name() === "watch") return;
+  try {
+    if (hasQueuedWork(await loadState())) await ensureNotificationWatcher();
+  } catch {
+    // Reviving the watcher is best effort and must never fail the command itself.
+  }
+});
 
 program.parseAsync(process.argv).catch((error) => {
   process.stderr.write(`${formatCliError(error)}\n`);
