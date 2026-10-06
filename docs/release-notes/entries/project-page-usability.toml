@@ -1,0 +1,4 @@
+id = "project-page-usability"
+category = "feature"
+functionality = "projects"
+text = "The project page is easier to read and act on: the New request box is on every tab, Needs you matches the Issues board, shipped work waits in Shipped, test it, every row can be settled or reopened in place, and the Projects sidebar highlights the project you are in. Rows open their thread when clicked, times are relative, and empty sections stay out of the way."

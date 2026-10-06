@@ -7,10 +7,10 @@ import { useEnvironmentQuery } from "../../state/query";
 
 const STAGE: Partial<Record<ProjectRequestStage, string>> = {
   requested: "requested",
-  "in-progress": "in progress",
-  ready: "ready for you",
-  "awaiting-release": "next release",
-  "needs-test": "ready to test",
+  "in-progress": "working",
+  ready: "ready",
+  "awaiting-release": "waiting for release",
+  "needs-test": "shipped, test it",
 };
 const ORDER: ReadonlyArray<ProjectRequestStage> = [
   "needs-test",
