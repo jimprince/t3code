@@ -14,7 +14,8 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
-import { roadmapColumns, type RoadmapColumn } from "./projectRoadmap.logic";
+import { ProjectQueryState } from "./ProjectQueryState";
+import { columnOf, moveInput, roadmapColumns, type RoadmapColumn } from "./projectRoadmap.logic";
 
 const DRAG_TYPE = "application/x-t3-roadmap-item";
 
@@ -27,7 +28,10 @@ function useRoadmap(summary: OrchestratorSummary) {
   );
 }
 
-/** The next release (first open version) and its items, for the Release widget. */
+/**
+ * The next release (first open version) and the items explicitly in it, for the
+ * Release widget; parked items stay off the Dashboard.
+ */
 export function useNextReleaseItems(summary: OrchestratorSummary) {
   const roadmap = useRoadmap(summary);
   return useMemo(() => {
@@ -35,7 +39,9 @@ export function useNextReleaseItems(summary: OrchestratorSummary) {
     return {
       version,
       items: version
-        ? (roadmap.data?.items ?? []).filter((item) => item.versionId === version.id)
+        ? (roadmap.data?.items ?? []).filter(
+            (item) => item.versionId === version.id && !item.parked,
+          )
         : [],
     };
   }, [roadmap.data]);
@@ -95,9 +101,12 @@ export function SaveForLater({
 
 function VersionTitle({
   column,
+  next,
   onRename,
 }: {
   readonly column: RoadmapColumn;
+  /** The automatic next version. */
+  readonly next: boolean;
   readonly onRename: (title: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -125,6 +134,9 @@ function VersionTitle({
   return (
     <h3 className="mb-1 flex items-center gap-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
       <span className="truncate">{column.title}</span>
+      {next && column.versionId !== null ? (
+        <span className="font-normal normal-case text-foreground/60">next</span>
+      ) : null}
       <span className="tabular-nums text-foreground/60">{column.items.length}</span>
       {column.versionId !== null ? (
         <Button
@@ -143,10 +155,18 @@ function VersionTitle({
   );
 }
 
+const STAGE_WORD: Record<string, string> = {
+  "in-progress": "working",
+  ready: "ready",
+  "awaiting-release": "waiting for release",
+  "needs-test": "shipped, test it",
+};
+
 /**
- * The Roadmap widget: Later (open items without a version) and one column per
- * open Gitea milestone on the tracker. Drag a card between columns, or use its
- * Move to menu from the keyboard; the first version is the next release.
+ * The Roadmap tab: the next version first, filled automatically with the first
+ * open version's items and every unversioned item; then each later version
+ * (Gitea milestones on the tracker); then Later, the parked items the Dashboard
+ * leaves out. Drag a card between columns, or use its Move to menu.
  */
 export function ProjectRoadmapWidget({ summary }: { readonly summary: OrchestratorSummary }) {
   const environmentId = summary.root.environmentId;
@@ -157,28 +177,25 @@ export function ProjectRoadmapWidget({ summary }: { readonly summary: Orchestrat
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const columns = useMemo(() => (roadmap.data ? roadmapColumns(roadmap.data) : []), [roadmap.data]);
 
-  if (!roadmap.data) return null;
+  if (!roadmap.data) {
+    return <ProjectQueryState what="roadmap" error={roadmap.error} onRetry={roadmap.refresh} />;
+  }
   if (!roadmap.data.tracker) {
     return (
-      <section className="border-t border-border pt-4">
-        <h2 className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-          Roadmap
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Name the project's Gitea tracker repository under Customize to plan versions.
-        </p>
-      </section>
+      <p className="py-2 text-sm text-muted-foreground">
+        Name the project's Gitea tracker repository under Customize to plan versions.
+      </p>
     );
   }
 
   const moveTo = async (item: ProjectRoadmapItem, column: RoadmapColumn) => {
-    if (item.versionId === column.versionId) return;
+    if (columnOf(columns, item)?.key === column.key) return;
     await move({
       environmentId,
       input: {
         threadId: summary.root.id,
         reference: String(item.number),
-        version: column.versionId === null ? null : column.title,
+        ...moveInput(column.target),
       },
     });
     roadmap.refresh();
@@ -202,100 +219,91 @@ export function ProjectRoadmapWidget({ summary }: { readonly summary: Orchestrat
   };
 
   return (
-    <section className="border-t border-border pt-4">
-      <h2 className="mb-2 flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-        Roadmap
-        <span className="font-normal normal-case text-muted-foreground">
-          {roadmap.data.tracker.repository}
-        </span>
-      </h2>
+    <section className="flex flex-col gap-2">
       <div className="grid auto-cols-[minmax(220px,1fr)] grid-flow-col gap-px overflow-x-auto border border-border bg-border">
-        {columns.map((column) => {
-          const key = column.versionId === null ? "later" : String(column.versionId);
-          return (
-            <section
-              key={key}
-              aria-label={column.title}
-              className={`min-w-0 bg-background px-2.5 py-2 ${dropTarget === key ? "bg-muted/40" : ""}`}
-              onDragOver={(event) => {
-                if (!event.dataTransfer.types.includes(DRAG_TYPE)) return;
-                event.preventDefault();
-                setDropTarget(key);
-              }}
-              onDragLeave={() => setDropTarget((current) => (current === key ? null : current))}
-              onDrop={onDrop(column)}
-            >
-              <VersionTitle
-                column={column}
-                onRename={(title) =>
-                  void saveVersion({
-                    environmentId,
-                    input: { threadId: summary.root.id, id: column.versionId!, title },
-                  }).then(() => roadmap.refresh())
-                }
-              />
-              <ul>
-                {column.items.map((item) => (
-                  <li
-                    key={item.number}
-                    draggable
-                    onDragStart={(event) => {
-                      event.dataTransfer.setData(DRAG_TYPE, String(item.number));
-                      event.dataTransfer.effectAllowed = "move";
-                    }}
-                    className="flex cursor-grab items-start gap-1 border-b border-border/60 py-1.5 last:border-b-0"
-                  >
-                    <span className="min-w-0 flex-1">
-                      <a
-                        href={item.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block truncate text-sm hover:underline"
-                      >
-                        {item.title}
-                      </a>
-                      <span className="text-xs text-muted-foreground">
-                        #{item.number}
-                        {item.isRequest ? " · request" : ""}
-                        {item.stage && item.stage !== "requested" ? ` · ${item.stage}` : ""}
-                      </span>
+        {columns.map((column, index) => (
+          <section
+            key={column.key}
+            aria-label={column.title}
+            className={`min-w-0 bg-background px-2.5 py-2 ${dropTarget === column.key ? "bg-muted/40" : ""}`}
+            onDragOver={(event) => {
+              if (!event.dataTransfer.types.includes(DRAG_TYPE)) return;
+              event.preventDefault();
+              setDropTarget(column.key);
+            }}
+            onDragLeave={() =>
+              setDropTarget((current) => (current === column.key ? null : current))
+            }
+            onDrop={onDrop(column)}
+          >
+            <VersionTitle
+              column={column}
+              next={index === 0}
+              onRename={(title) =>
+                void saveVersion({
+                  environmentId,
+                  input: { threadId: summary.root.id, id: column.versionId!, title },
+                }).then(() => roadmap.refresh())
+              }
+            />
+            <ul>
+              {column.items.map((item) => (
+                <li
+                  key={item.number}
+                  draggable
+                  onDragStart={(event) => {
+                    event.dataTransfer.setData(DRAG_TYPE, String(item.number));
+                    event.dataTransfer.effectAllowed = "move";
+                  }}
+                  className="flex cursor-grab items-start gap-1 border-b border-border/60 py-1.5 last:border-b-0"
+                >
+                  <span className="min-w-0 flex-1">
+                    <a
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="line-clamp-2 text-sm hover:underline"
+                    >
+                      {item.title}
+                    </a>
+                    <span className="text-xs text-muted-foreground">
+                      #{item.number}
+                      {item.isRequest ? " · request" : ""}
+                      {item.stage && STAGE_WORD[item.stage] ? ` · ${STAGE_WORD[item.stage]}` : ""}
                     </span>
-                    <Menu>
-                      <MenuTrigger
-                        render={
-                          <Button
-                            size="icon-xs"
-                            variant="ghost"
-                            aria-label={`Move #${item.number} to`}
-                          />
-                        }
-                      >
-                        <MoreHorizontalIcon />
-                      </MenuTrigger>
-                      <MenuPopup align="end">
-                        {columns
-                          .filter((target) => target.versionId !== item.versionId)
-                          .map((target) => (
-                            <MenuItem
-                              key={target.versionId ?? "later"}
-                              onClick={() => void moveTo(item, target)}
-                            >
-                              Move to {target.title}
-                            </MenuItem>
-                          ))}
-                      </MenuPopup>
-                    </Menu>
-                  </li>
-                ))}
-              </ul>
-              {column.versionId === null ? (
-                <div className="mt-2">
-                  <SaveForLater summary={summary} onSaved={roadmap.refresh} />
-                </div>
-              ) : null}
-            </section>
-          );
-        })}
+                  </span>
+                  <Menu>
+                    <MenuTrigger
+                      render={
+                        <Button
+                          size="icon-xs"
+                          variant="ghost"
+                          aria-label={`Move #${item.number} to`}
+                        />
+                      }
+                    >
+                      <MoreHorizontalIcon />
+                    </MenuTrigger>
+                    <MenuPopup align="end">
+                      {columns
+                        .filter((target) => target.key !== column.key)
+                        .map((target) => (
+                          <MenuItem key={target.key} onClick={() => void moveTo(item, target)}>
+                            Move to {target.title}
+                          </MenuItem>
+                        ))}
+                    </MenuPopup>
+                  </Menu>
+                </li>
+              ))}
+            </ul>
+            {column.target.kind === "later" ? (
+              <div className="mt-2">
+                <SaveForLater summary={summary} onSaved={roadmap.refresh} />
+              </div>
+            ) : null}
+          </section>
+        ))}
         <section aria-label="Add version" className="min-w-0 bg-background px-2.5 py-2">
           <form
             className="flex items-center gap-1"
@@ -307,7 +315,7 @@ export function ProjectRoadmapWidget({ summary }: { readonly summary: Orchestrat
             <Input
               value={newVersion}
               aria-label="New version"
-              placeholder="New version"
+              placeholder="Add a version"
               onChange={(event) => setNewVersion(event.target.value)}
             />
             <Button size="icon-xs" variant="ghost" type="submit" aria-label="Add version">
@@ -316,6 +324,9 @@ export function ProjectRoadmapWidget({ summary }: { readonly summary: Orchestrat
           </form>
         </section>
       </div>
+      <p className="text-xs text-muted-foreground">
+        {roadmap.data.tracker.repository} · Later items stay off the Dashboard.
+      </p>
     </section>
   );
 }

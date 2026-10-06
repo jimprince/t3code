@@ -1,0 +1,4 @@
+id = "roadmap-next-later"
+category = "feature"
+functionality = "projects"
+text = "The Roadmap tab now starts with the next version, filled automatically with the work in progress and pending, lets you add versions, and keeps a Later bucket whose items stay off the Dashboard. It shows loading or an error with Retry instead of an empty page."
