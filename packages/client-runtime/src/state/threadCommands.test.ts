@@ -192,6 +192,9 @@ describe("remote thread lifecycle commands", () => {
       const request = yield* Queue.take(h.requests);
       yield* Deferred.succeed(request.reply, { sequence: 3 });
       expect((yield* Effect.promise(() => result))._tag).toBe("Success");
+      // A disconnect clears the snapshot but cannot revoke an accepted receipt.
+      h.registry.set(h.snapshotAtom(ENVIRONMENT_ID), null);
+      expect(h.registry.get(h.visibleAtom)).toBeNull();
       const changed = {
         ...SNAPSHOT,
         snapshotSequence: 2,
