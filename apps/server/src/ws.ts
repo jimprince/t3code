@@ -4004,6 +4004,10 @@ const makeWsRpcLayer = (
             projectLayout.stream(input.threadId),
             { "rpc.aggregate": "project-layout" },
           ),
+        [WS_METHODS.projectRequestsDiscuss]: (input) =>
+          observeRpcEffect(WS_METHODS.projectRequestsDiscuss, requestLedger.discuss(input), {
+            "rpc.aggregate": "project-issues",
+          }),
         [WS_METHODS.projectRequestsDecide]: (input) =>
           observeRpcEffect(WS_METHODS.projectRequestsDecide, requestLedger.decide(input), {
             "rpc.aggregate": "project-issues",
