@@ -1534,7 +1534,7 @@ depends_on = [
   "fork-orchestrators-view",
 ]
 roles = []
-note = "Remote parents are optional metadata, persisted only by the child server. Disconnected, archived, missing, or cyclic parents do not hide the child. Servers do not traverse or mutate remote descendants; client presentation combines connected environments. Fork migration 12 reserves the nullable JSON column independently of the V1 core replacement."
+note = "Remote parents are optional metadata, persisted only by the child server. Disconnected, archived, missing, or cyclic parents do not hide the child. Servers do not traverse or mutate remote descendants; client presentation combines connected environments. Fork migration 12 reserves the nullable JSON column independently of the V1 core replacement. Copied-state metadata tests discover all three packaged fixtures through T3_LIFECYCLE_FIXTURES and create scoped copies before writes, with explicit skips when absent."
 
 [[patch.decision]]
 id = "v2-port-m2-uifix"
