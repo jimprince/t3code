@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "47343ebf4c2dd17d570f8a28e9e6224240ecfd6f",
-  "head": "8ab2972e27317095d80186d9439fdb56d0319554",
+  "prev": "2726d86c48af43b7c7f56a997dd685474f48bf1b",
+  "head": "49e14286480552a6891b5dfb18474116852d7d0b",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -105,9 +105,7 @@
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
     "fork-session-reconcile",
-    "fork-codex-extra-skill-roots"
-  ],
-  "unapplied": [
+    "fork-codex-extra-skill-roots",
     "fork-dashboard-polish",
     "fork-phone-side-panels",
     "fork-decision-links",
@@ -115,6 +113,7 @@
     "fork-decision-context-media",
     "fork-subprojects-server"
   ],
+  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
@@ -172,16 +171,16 @@
       "oid": "9645b4c6388fe363b39bdc24e5b5bf71f1c3a349"
     },
     "fork-dashboard-polish": {
-      "oid": "5d0d1d443c147ec3b8a01897070d22f2413badaa"
+      "oid": "05370545479784190516c7b3208d411d04d090d6"
     },
     "fork-decision-context-media": {
-      "oid": "911307388aab50d4ed64900c923f3cb6b8781083"
+      "oid": "6e1a3b9aa1e855432f847f1eb7f92cc99c2824c8"
     },
     "fork-decision-discuss": {
-      "oid": "d1d480d8f61107d5f2342a235447db1e43fe7fed"
+      "oid": "e990e5ca7576a24adbed16db45c08161d0c9a079"
     },
     "fork-decision-links": {
-      "oid": "53300c2914bbe277f6c373489392697d00ce149b"
+      "oid": "7900d25f09d60e9c7526596b75154a5be07c172c"
     },
     "fork-decisions-other": {
       "oid": "fa7825e8b4009126f237e98b392efdc94f8451e1"
@@ -265,7 +264,7 @@
       "oid": "3b3f5629c4de155263fb5de07a8439c6b4fbbc95"
     },
     "fork-phone-side-panels": {
-      "oid": "baebd62483214d33cf4800627f6a48bcff1628f5"
+      "oid": "cd46ed5b89f2ba957038b9bb24fcdcaccb13943c"
     },
     "fork-pr-dismissal": {
       "oid": "3b6d1c4896d2803df1e1b1565f7e754284e465ab"
@@ -400,7 +399,7 @@
       "oid": "70c9c5d79677b575fbe65f81cd60876004623ee0"
     },
     "fork-subprojects-server": {
-      "oid": "9bf96e0d822bffb92cc40066f5777b1c8515486c"
+      "oid": "49e14286480552a6891b5dfb18474116852d7d0b"
     },
     "fork-subthread-lifecycle": {
       "oid": "01d97191ba77333da33891b0e8faee37f8fd0194"
