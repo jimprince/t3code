@@ -8,6 +8,7 @@ export const ForkThreadMetadata = Schema.Struct({
   threadId: ThreadId,
   parentThreadId: Schema.NullOr(ThreadId),
   scope: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  settleOnComplete: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
 });
 export type ForkThreadMetadata = typeof ForkThreadMetadata.Type;
 export const ForkThreadMetadataUpdate = Schema.Struct({
@@ -15,6 +16,7 @@ export const ForkThreadMetadataUpdate = Schema.Struct({
   threadId: ThreadId,
   parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
   scope: Schema.optional(Schema.NullOr(Schema.String)),
+  settleOnComplete: Schema.optional(Schema.NullOr(Schema.Boolean)),
 });
 export type ForkThreadMetadataUpdate = typeof ForkThreadMetadataUpdate.Type;
 export class ForkThreadMetadataError extends Schema.TaggedError<ForkThreadMetadataError>()(
