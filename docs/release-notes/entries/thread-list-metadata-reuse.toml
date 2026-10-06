@@ -1,0 +1,4 @@
+id = "thread-list-metadata-reuse"
+category = "performance"
+functionality = "server"
+text = "Thread lists no longer re-read every thread's nesting details from scratch, easing server load when many clients connect."
