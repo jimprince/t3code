@@ -1,3 +1,4 @@
+import * as ThreadTransfer from "./forkThreads/TransferService.ts";
 import * as ForkWorkspace from "./forkThreads/ForkWorkspaceService.ts";
 import * as ThreadIssueService from "./forkThreads/ThreadIssueService.ts";
 import * as AutomationEngine from "./automations/AutomationEngine.ts";
@@ -3943,7 +3944,10 @@ const makeWsRpcLayer = (
           ),
       });
       const conversationFork = yield* ForkWorkspace.ForkWorkspaceService;
+      const threadTransfer = yield* ThreadTransfer.TransferService;
       const forkHandlers = WsForkRpcGroup.of({
+        "orchestration.exportThread": (input) => threadTransfer.exportThread(input),
+        "orchestration.importThread": (input) => threadTransfer.importThread(input),
         "orchestration.forkThread": (input) => conversationFork.fork(input),
         [WS_METHODS.projectIssuesGet]: (input) =>
           observeRpcEffect(
