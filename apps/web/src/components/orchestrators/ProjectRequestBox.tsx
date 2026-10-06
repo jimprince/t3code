@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEve
 
 import type { ComposerImageAttachment } from "../../composerDraftStore";
 import { randomUUID } from "../../lib/utils";
-import { submitProjectRequest } from "../../state/projectIssues";
+import { startRequestIntake, submitProjectRequest } from "../../state/projectIssues";
 import { saveRequestForLater } from "../../state/projectRoadmap";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
@@ -13,7 +13,7 @@ import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { sentRequestStatus } from "./projectRequests.logic";
 import { useProjectRequests } from "./ProjectRequestsSection";
-import { useSendToOrchestrator } from "./sendToOrchestrator";
+import { useSendToOrchestrator, useSendToThread } from "./sendToOrchestrator";
 
 /** How long the sent line stays, and when to look again for the filed request. */
 const SENT_LINE_MS = 120_000;
@@ -47,11 +47,18 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
   const [text, setText] = useState("");
   const [expanded, setExpanded] = useState(false);
   const submit = useAtomCommand(submitProjectRequest, { reportFailure: false });
+  const startIntake = useAtomCommand(startRequestIntake, { reportFailure: false });
   const [images, setImages] = useState<ComposerImageAttachment[]>([]);
   const [status, setStatus] = useState<string | null>(null);
-  const [sent, setSent] = useState<{ messageId: MessageId; queued: boolean } | null>(null);
+  const [sent, setSent] = useState<{
+    messageId: MessageId;
+    queued: boolean;
+    /** Triaged by an intake thread rather than sent to the orchestrator. */
+    intake: boolean;
+  } | null>(null);
   const saveForLater = useAtomCommand(saveRequestForLater, "Save for later");
   const sendToOrchestrator = useSendToOrchestrator();
+  const sendToThread = useSendToThread();
   const { query, pending } = useProjectRequests(summary);
   const sentStatus = useMemo(
     () => (sent ? sentRequestStatus(sent.messageId, query.data?.issues ?? [], pending) : null),
@@ -88,21 +95,51 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
   };
   const open = expanded || text.length > 0 || images.length > 0;
 
-  const send = () => {
+  const send = async () => {
     if (!text.trim() && images.length === 0) return;
     const prompt = text;
-    // Marked as an explicit request first, so the ledger files it as a new request
-    // instead of folding it into the thread's current issue.
-    const result = sendToOrchestrator(summary, prompt, images, (messageId) =>
-      submit({
-        environmentId: summary.root.environmentId,
-        input: { threadId: summary.root.id, messageId, text: prompt },
-      }),
-    );
+    const attached = images;
+    const environmentId = summary.root.environmentId;
     reset();
     setExpanded(false);
+    setStatus("Starting triage...");
+    // A short-lived intake thread triages the request (type, title, roadmap, and
+    // then answer, catalog, start a worker or hand it on), so the orchestrator is
+    // not woken for every request.
+    const intake = await startIntake({
+      environmentId,
+      input: { threadId: summary.root.id, title: prompt.trim() || "Request with images" },
+    });
+    // The request is marked explicit before its message is sent, so the ledger
+    // files it as a new task instead of folding it into an existing one.
+    const result =
+      intake._tag === "Success"
+        ? sendToThread(
+            { environmentId, threadId: intake.value.threadId },
+            {
+              modelSelection: intake.value.modelSelection,
+              runtimeMode: "full-access",
+              interactionMode: "default",
+            },
+            `${intake.value.brief}\n\n${prompt}`,
+            attached,
+            {
+              beforeSend: (messageId) =>
+                submit({
+                  environmentId,
+                  input: { threadId: intake.value.threadId, messageId, text: prompt },
+                }),
+            },
+          )
+        : // A server without intake threads: the orchestrator gets it, as before.
+          sendToOrchestrator(summary, prompt, attached, (messageId) =>
+            submit({
+              environmentId,
+              input: { threadId: summary.root.id, messageId, text: prompt },
+            }),
+          );
     setStatus(null);
-    setSent(result);
+    setSent({ ...result, intake: intake._tag === "Success" });
     // The ledger files the request a few seconds after the send; look for it, then
     // let the line go.
     for (const timer of sentTimers.current) window.clearTimeout(timer);
@@ -173,7 +210,7 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
           onKeyDown={(event) => {
             if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
               event.preventDefault();
-              send();
+              void send();
               event.currentTarget.blur();
             } else if (event.key === "Escape" && !text && images.length === 0) {
               event.currentTarget.blur();
@@ -214,7 +251,7 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
                 size="xs"
                 disabled={!text.trim() && images.length === 0}
                 onMouseDown={(event) => event.preventDefault()}
-                onClick={send}
+                onClick={() => void send()}
               >
                 Send
               </Button>
@@ -231,7 +268,9 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
           ) : null}
           <span role="status" className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
             {status ??
-              (sent && sentStatus ? <SentLine queued={sent.queued} status={sentStatus} /> : null)}
+              (sent && sentStatus ? (
+                <SentLine queued={sent.queued} intake={sent.intake} status={sentStatus} />
+              ) : null)}
           </span>
         </div>
       ) : null}
@@ -242,12 +281,18 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
 /** "Sent to the orchestrator · tracked as request #N", or why there is no link yet. */
 function SentLine({
   queued,
+  intake,
   status,
 }: {
   readonly queued: boolean;
+  readonly intake: boolean;
   readonly status: ReturnType<typeof sentRequestStatus>;
 }) {
-  const lead = queued ? "Queued for the orchestrator" : "Sent to the orchestrator";
+  const lead = intake
+    ? "Sent for triage"
+    : queued
+      ? "Queued for the orchestrator"
+      : "Sent to the orchestrator";
   if (status.state === "pending") return <>{lead} · pending filing</>;
   if (status.state === "filing") return <>{lead}</>;
   return (
