@@ -1,0 +1,4 @@
+id = "delegated-workers-nest"
+category = "fix"
+functionality = "Projects"
+text = "Delegated worker threads now nest under their orchestrator in Projects."
