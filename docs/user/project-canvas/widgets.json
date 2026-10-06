@@ -1,0 +1,6 @@
+{
+  "widgets": [
+    { "id": "status", "title": "Status", "path": "index.html", "size": "full" },
+    { "id": "funnel", "title": "Funnel", "path": "funnel/index.html", "size": "medium" }
+  ]
+}
