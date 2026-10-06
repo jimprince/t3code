@@ -1,0 +1,4 @@
+id = "project-automations"
+category = "feature"
+functionality = "projects"
+text = "Schedule project prompts hourly, daily, or weekly in your timezone, sending to an existing thread or a fresh thread per run. Pause, edit, run now, and inspect recent results."
