@@ -15,6 +15,14 @@ export const projectIssuesQuery = createEnvironmentRpcQueryAtomFamily(connection
   idleTtlMs: 0,
 });
 
+/** One task opened in the app: its body, recent comments and children, read when its panel opens. */
+export const projectIssueQuery = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
+  label: "environment-data:project-issues:get",
+  tag: WS_METHODS.projectIssuesGet,
+  staleTimeMs: 15_000,
+  idleTtlMs: 0,
+});
+
 /** Brad settles a request: the server closes its issue. */
 export const settleProjectRequest = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "environment-data:project-requests:settle",
