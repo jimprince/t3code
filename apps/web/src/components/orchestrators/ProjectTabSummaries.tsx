@@ -1,21 +1,23 @@
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
 import { ArrowRightIcon } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 
-import { projectIssuesQuery } from "../../state/projectIssues";
 import { projectRoadmapQuery } from "../../state/projectRoadmap";
 import { useEnvironmentQuery } from "../../state/query";
 import { Button } from "../ui/button";
 import { groupProjectIssues, PROJECT_ISSUE_LANES } from "./projectIssuesBoard.logic";
+import { ProjectQueryState } from "./ProjectQueryState";
 import { roadmapColumns } from "./projectRoadmap.logic";
+import { issueKey } from "./projectRequests.logic";
+import { useNeedsYou } from "./ProjectRequestsSection";
 
 function SummaryLine({
   title,
-  text,
+  children,
   onOpen,
 }: {
   readonly title: string;
-  readonly text: string;
+  readonly children: ReactNode;
   readonly onOpen: () => void;
 }) {
   return (
@@ -23,7 +25,7 @@ function SummaryLine({
       <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
         {title}
       </h2>
-      <span className="min-w-0 flex-1 truncate text-foreground/90">{text}</span>
+      <span className="min-w-0 flex-1 truncate text-foreground/90">{children}</span>
       <Button size="xs" variant="ghost-muted" onClick={onOpen}>
         Open {title.toLowerCase()}
         <ArrowRightIcon />
@@ -32,7 +34,7 @@ function SummaryLine({
   );
 }
 
-/** "Next release: 4 · Later: 12" on the Dashboard, linking to the Roadmap tab. */
+/** "fork.25: 4 · fork.26: 2" on the Dashboard, linking to the Roadmap tab; Later stays off. */
 export function ProjectRoadmapSummary({
   summary,
   onOpen,
@@ -47,19 +49,23 @@ export function ProjectRoadmapSummary({
     }),
   );
   const text = useMemo(() => {
-    if (!roadmap.data) return "Loading";
+    if (!roadmap.data) return null;
     if (!roadmap.data.tracker) return "No tracker repository";
-    const [later, next, ...rest] = roadmapColumns(roadmap.data);
-    return [
-      next ? `${next.title}: ${next.items.length}` : "No versions yet",
-      ...rest.map((column) => `${column.title}: ${column.items.length}`),
-      `Later: ${later?.items.length ?? 0}`,
-    ].join(" · ");
+    return roadmapColumns(roadmap.data)
+      .filter((column) => column.target.kind !== "later")
+      .map((column) => `${column.title}: ${column.items.length}`)
+      .join(" · ");
   }, [roadmap.data]);
-  return <SummaryLine title="Roadmap" text={text} onOpen={onOpen} />;
+  return (
+    <SummaryLine title="Roadmap" onOpen={onOpen}>
+      {text ?? (
+        <ProjectQueryState inline what="roadmap" error={roadmap.error} onRetry={roadmap.refresh} />
+      )}
+    </SummaryLine>
+  );
 }
 
-/** Issue counts per lane on the Dashboard, linking to the Issues tab. */
+/** Issue counts per board lane on the Dashboard, linking to the Issues tab. */
 export function ProjectIssuesSummary({
   summary,
   onOpen,
@@ -67,19 +73,27 @@ export function ProjectIssuesSummary({
   readonly summary: OrchestratorSummary;
   readonly onOpen: () => void;
 }) {
-  const query = useEnvironmentQuery(
-    projectIssuesQuery({
-      environmentId: summary.root.environmentId,
-      input: { rootThreadId: summary.root.id },
-    }),
-  );
+  const { items, query } = useNeedsYou(summary);
   const text = useMemo(() => {
-    if (!query.data) return "Loading";
-    const { lanes, backlog } = groupProjectIssues(query.data.issues);
+    if (!query.data) return null;
+    // Later (parked) issues stay off the Dashboard.
+    const open = query.data.issues.filter(
+      (issue) => !issue.labels.some((label) => label.toLowerCase() === "parked"),
+    );
+    const { lanes, backlog } = groupProjectIssues(
+      open,
+      new Map(items.map((item) => [issueKey(item.issue), item.group])),
+    );
     return [
-      ...PROJECT_ISSUE_LANES.map((lane) => `${lane.title}: ${lanes[lane.status].length}`),
+      ...PROJECT_ISSUE_LANES.map((lane) => `${lane.title}: ${lanes[lane.lane].length}`),
       `Backlog: ${backlog.length}`,
     ].join(" · ");
-  }, [query.data]);
-  return <SummaryLine title="Issues" text={text} onOpen={onOpen} />;
+  }, [items, query.data]);
+  return (
+    <SummaryLine title="Issues" onOpen={onOpen}>
+      {text ?? (
+        <ProjectQueryState inline what="issues" error={query.error} onRetry={query.refresh} />
+      )}
+    </SummaryLine>
+  );
 }
