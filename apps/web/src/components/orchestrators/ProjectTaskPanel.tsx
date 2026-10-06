@@ -9,7 +9,8 @@ import { projectIssueQuery } from "../../state/projectIssues";
 import { useEnvironmentQuery } from "../../state/query";
 import { resolveThreadIssueBadgeTarget } from "../ThreadIssueBadges";
 import { useEmbeddedPages } from "../embeddedPages/useEmbeddedPages";
-import { Button } from "../ui/button";
+import ChatMarkdown from "../ChatMarkdown";
+import { Button, InlineButton } from "../ui/button";
 import { formatIssueAge } from "./projectIssuesBoard.logic";
 import { projectReturnState } from "./projectNavigation";
 import { ProjectQueryState } from "./ProjectQueryState";
@@ -21,6 +22,7 @@ import {
   useSettle,
   useTaskStatuses,
 } from "./ProjectRequestsSection";
+import { RowMenu } from "./ProjectSection";
 import { OpenTaskContext } from "./TaskLink";
 import {
   deriveTaskView,
@@ -35,7 +37,9 @@ const hiddenMarkers = (text: string) => text.replace(/<!--[\s\S]*?-->/g, "").tri
 /**
  * One task in a right-hand panel over the project page: its status, the answer
  * or decision, the latest progress, the parts of an epic, its threads, and
- * Settle or Reopen. Closing it (or Back) returns to the page underneath.
+ * Settle or Reopen. Settle is the button only when the task is for Brad's review;
+ * open work keeps it in the menu, and an epic still under way has none. Closing
+ * it (or Back) returns to the page underneath.
  */
 export function ProjectTaskPanel({
   summary,
@@ -84,7 +88,9 @@ export function ProjectTaskPanel({
       className="flex w-[420px] min-w-0 shrink-0 flex-col border-l border-border"
     >
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">Task</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+          {view ? TASK_STATUS_LABEL[view.status] : "Task"}
+        </span>
         <Button size="icon-sm" variant="ghost" aria-label="Close the task" onClick={onClose}>
           <XIcon />
         </Button>
@@ -106,26 +112,45 @@ export function ProjectTaskPanel({
           <>
             <div className="flex flex-col gap-1">
               <h2 className="text-base font-medium">{view.issue.title}</h2>
-              <p className="text-xs text-muted-foreground">
-                {TASK_STATUS_LABEL[view.status]}
-                {view.kind ? ` · ${view.kind}` : ""}
-                {view.issue.milestone ? ` · ${view.issue.milestone.title}` : ""}
-              </p>
+              {view.kind || view.issue.milestone ? (
+                <p className="text-xs text-muted-foreground">
+                  {[view.kind, view.issue.milestone?.title].filter(Boolean).join(" · ")}
+                </p>
+              ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {view.status === "complete" ? (
                 <ReopenButton issue={view.issue} settle={settle} />
-              ) : (
+              ) : view.status === "for-review" ? (
                 <SettleButton issues={[view.issue]} settle={settle} />
-              )}
+              ) : null}
               {view.threadIds[0] ? (
                 <Button size="xs" variant="outline" onClick={() => openThread(view.threadIds[0]!)}>
                   Open thread
                 </Button>
               ) : null}
+              {/* Open work settles from the menu; an epic still under way does not settle. */}
+              {(view.status === "pending" || view.status === "active") &&
+              !(view.kind === "epic" && view.status === "active") ? (
+                <RowMenu
+                  label={view.issue.title}
+                  items={[
+                    {
+                      label: "Settle",
+                      disabled: settle.isBusy(view.issue),
+                      onClick: () => void settle.settle([view.issue]),
+                    },
+                  ]}
+                />
+              ) : null}
             </div>
             {view.answer ? (
-              <p className="text-sm whitespace-pre-wrap text-foreground/90">{view.answer}</p>
+              <ChatMarkdown
+                text={view.answer}
+                cwd={undefined}
+                environmentId={summary.root.environmentId}
+                className="text-sm"
+              />
             ) : null}
             {view.progress ? (
               <p className="text-xs text-foreground/80">Latest: {view.progress}</p>
@@ -142,12 +167,12 @@ export function ProjectTaskPanel({
                 <ul className="divide-y divide-border">
                   {view.children.map((child) => (
                     <li key={child.issue.number} className="flex items-center gap-3 py-1.5">
-                      <span className="w-20 shrink-0 text-xs text-muted-foreground">
+                      <span className="w-24 shrink-0 text-xs text-muted-foreground">
                         {TASK_STATUS_LABEL[child.status]}
                       </span>
                       <button
                         type="button"
-                        className="line-clamp-2 min-w-0 flex-1 text-left text-sm hover:underline"
+                        className="min-w-0 flex-1 text-left text-sm hover:underline"
                         onClick={() =>
                           openTask?.({
                             host: child.issue.host,
@@ -171,7 +196,7 @@ export function ProjectTaskPanel({
                     <li key={id}>
                       <button
                         type="button"
-                        className="line-clamp-1 max-w-full py-0.5 text-left text-sm hover:underline"
+                        className="max-w-full py-0.5 text-left text-sm hover:underline"
                         onClick={() => openThread(id)}
                       >
                         {threadTitle(id)}
@@ -182,20 +207,24 @@ export function ProjectTaskPanel({
               </section>
             ) : null}
             <section>
-              <button
-                type="button"
-                className="text-xs text-muted-foreground hover:text-foreground"
-                aria-expanded={showDetails}
-                onClick={() => setShowDetails((value) => !value)}
-              >
-                {showDetails ? "Hide details" : "Details"}
-              </button>
+              <p className="text-xs">
+                <InlineButton
+                  tone="muted"
+                  aria-expanded={showDetails}
+                  onClick={() => setShowDetails((value) => !value)}
+                >
+                  {showDetails ? "Hide details" : "Details"}
+                </InlineButton>
+              </p>
               {showDetails ? (
                 <div className="mt-2 flex flex-col gap-3">
                   {hiddenMarkers(query.data.body) ? (
-                    <p className="text-sm whitespace-pre-wrap text-foreground/80">
-                      {hiddenMarkers(query.data.body)}
-                    </p>
+                    <ChatMarkdown
+                      text={hiddenMarkers(query.data.body)}
+                      cwd={undefined}
+                      environmentId={summary.root.environmentId}
+                      className="text-sm"
+                    />
                   ) : null}
                   {query.data.comments.map((comment) => (
                     <div
@@ -205,9 +234,12 @@ export function ProjectTaskPanel({
                       <p className="text-xs text-muted-foreground">
                         {comment.author} · {formatIssueAge(comment.createdAt, now)}
                       </p>
-                      <p className="text-sm whitespace-pre-wrap text-foreground/80">
-                        {hiddenMarkers(comment.body)}
-                      </p>
+                      <ChatMarkdown
+                        text={hiddenMarkers(comment.body)}
+                        cwd={undefined}
+                        environmentId={summary.root.environmentId}
+                        className="text-sm"
+                      />
                     </div>
                   ))}
                 </div>
