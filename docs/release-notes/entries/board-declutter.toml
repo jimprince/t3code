@@ -1,0 +1,4 @@
+id = "board-declutter"
+category = "feature"
+functionality = "projects"
+text = "The project page is quieter: task and request rows show a status, the title and one progress line, with no ids, meta lines or agent chatter. The Release widget no longer repeats the next release's items, which now live only in Where we're going, and pull requests read as #N."
