@@ -1,0 +1,4 @@
+id = "project-page-workflow"
+category = "feature"
+functionality = "projects"
+text = "Project pages have Dashboard, Roadmap and Issues tabs that remember where you were. Type requests straight into the Requests widget to send them to the orchestrator or save them for later, see each request's latest progress line, and see what every pull request needs: your review, CI, or nothing because it was merged or superseded."
