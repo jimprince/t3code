@@ -82,13 +82,16 @@ function layerExecutorFor(input: {
   readonly threads?: Partial<ThreadManagementService.ThreadManagementService["Service"]>;
   readonly continueAfterRestart?: boolean;
   readonly interrupt?: ProviderTurnControlService.ProviderTurnControlServiceV2Shape["interrupt"];
+  readonly rejectInterrupt?: boolean;
 }) {
   const record = (event: string) => Ref.update(input.events, (events) => [...events, event]);
   const layerDependencies = Layer.mergeAll(
     Layer.succeed(
       ProviderTurnControlService.ProviderTurnControlServiceV2,
       ProviderTurnControlService.ProviderTurnControlServiceV2.of({
-        interrupt: input.interrupt ?? (() => Effect.void),
+        interrupt:
+          input.interrupt ??
+          (() => (input.rejectInterrupt ? Effect.die("Stop rejected") : Effect.void)),
         steer: () => Effect.void,
         interruptAndAwaitTerminal: (request) =>
           record(
@@ -212,7 +215,11 @@ it.effect("settles a stopped run when its adapter has already lost the native tu
         }),
       threads: {
         dispatch: (command) =>
-          Ref.update(events, (current) => [...current, command.type]).pipe(
+          Effect.sync(() => {
+            if (command.type === "thread.background-work.settle")
+              assert.notEqual(command.interruptAcknowledged, true);
+          }).pipe(
+            Effect.andThen(Ref.update(events, (current) => [...current, command.type])),
             Effect.as({ sequence: 1, storedEvents: [] }),
           ),
       },
@@ -839,4 +846,47 @@ it.effect("settles a delegated child once its restart continuation fails for goo
       assert.deepEqual(yield* Ref.get(recovered), [threadId]);
     }).pipe(Effect.provide(layer));
   }),
+);
+
+it.effect.each([false, true])(
+  "records Stop ACK only after successful interrupt (rejected=%s)",
+  (rejected) =>
+    Effect.gen(function* () {
+      const now = yield* DateTime.now;
+      const events = yield* Ref.make<ReadonlyArray<string>>([]);
+      const effect = {
+        ...restartEffect(now, { type: "detach" }),
+        request: {
+          type: "provider-turn.interrupt" as const,
+          providerSessionId: oldSessionId,
+          providerThreadId,
+          providerTurnId,
+        },
+      };
+      const exit = yield* EffectWorker.OrchestrationEffectExecutorV2.use((executor) =>
+        executor.execute(effect),
+      ).pipe(
+        Effect.provide(
+          layerExecutorFor({
+            events,
+            rejectInterrupt: rejected,
+            threads: {
+              dispatch: (command) =>
+                Effect.gen(function* () {
+                  assert.equal(command.type, "thread.background-work.settle");
+                  if (command.type === "thread.background-work.settle") {
+                    assert.equal(command.interruptAcknowledged, true);
+                    assert.equal(command.providerTurnId, providerTurnId);
+                  }
+                  yield* Ref.update(events, (current) => [...current, "ack"]);
+                  return { sequence: 1, storedEvents: [] };
+                }),
+            },
+          }),
+        ),
+        Effect.exit,
+      );
+      assert.equal(Exit.isFailure(exit), rejected);
+      assert.deepEqual(yield* Ref.get(events), rejected ? [] : ["ack"]);
+    }),
 );
