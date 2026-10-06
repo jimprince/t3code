@@ -1,0 +1,576 @@
+import {
+  buildOrchestratorSummaries,
+  orchestratorDoneSince,
+  type OrchestratorSummary,
+  type OrchestratorThreadShell,
+} from "@t3tools/client-runtime/state/orchestrators";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import {
+  isAtomCommandInterrupted,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
+import { CommandId, type EnvironmentId, type ThreadId } from "@t3tools/contracts";
+import { useNavigate } from "@tanstack/react-router";
+import * as Schema from "effect/Schema";
+import {
+  ArrowUpRightIcon,
+  CircleAlertIcon,
+  MessageSquareIcon,
+  PencilIcon,
+  UsersIcon,
+  XIcon,
+} from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+
+import { isElectron } from "../../env";
+import { useLocalStorage } from "../../hooks/useLocalStorage";
+import { useProjects, useServerConfigs } from "../../state/entities";
+import {
+  deriveProviderEntriesByEnvironment,
+  shouldShowInstanceBadge,
+  type ProviderInstanceEntry,
+} from "../../providerInstances";
+import { updateProjectScopeCommand } from "../../state/forkProjectScope";
+import { useSupervisionReadyHosts } from "../../state/forkSupervision";
+import { threadEnvironment } from "../../state/threads";
+import { useAtomCommand } from "../../state/use-atom-command";
+import { randomUUID } from "../../lib/utils";
+import { buildThreadRouteParams } from "../../threadRoutes";
+import ChatView from "../ChatView";
+import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
+import { getTriggerDisplayModelLabel } from "../chat/providerIconUtils";
+import { ProjectFavicon } from "../ProjectFavicon";
+import { ThreadIssueBadges } from "../ThreadIssueBadges";
+import { Button } from "../ui/button";
+import { Dialog, DialogFooter, DialogHeader, DialogPopup, DialogTitle } from "../ui/dialog";
+import { Input } from "../ui/input";
+import { Textarea } from "../ui/textarea";
+import { SidebarInset } from "../ui/sidebar";
+import { toastManager } from "../ui/toast";
+import { WorkspaceBreadcrumb, WorkspaceBreadcrumbItem } from "../WorkspaceBreadcrumb";
+import { WorkspacePageContainer } from "../WorkspacePageContainer";
+import { WorkspacePageHeader } from "../WorkspacePageHeader";
+import { OrchestratorStatus } from "./OrchestratorStatus";
+import { useOrchestratorThreadShells } from "./useOrchestratorThreads";
+import { readOrchestratorLastVisit, recordOrchestratorVisit } from "./orchestratorVisit";
+import { ProjectAutomationsSlot } from "../projects/ProjectAutomationsSlot";
+import { projectReturnState } from "./projectNavigation";
+import { ProjectPullRequestLink } from "./ProjectPullRequestLink";
+
+function BoardSection({
+  title,
+  count,
+  children,
+}: {
+  readonly title: string;
+  readonly count?: number;
+  readonly children: ReactNode;
+}) {
+  return (
+    <section className="border-t border-border pt-4 first:border-t-0 first:pt-0">
+      <h2 className="mb-2 flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+        {title}
+        {count === undefined ? null : (
+          <span className="tabular-nums text-foreground/60">{count}</span>
+        )}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
+function OpenThreadButton({
+  summary,
+  threadId,
+}: {
+  readonly summary: OrchestratorSummary;
+  readonly threadId: ThreadId;
+}) {
+  const navigate = useNavigate();
+  return (
+    <Button
+      size="xs"
+      variant="ghost-muted"
+      onClick={() =>
+        void navigate({
+          to: "/$environmentId/$threadId",
+          params: buildThreadRouteParams(scopeThreadRef(summary.root.environmentId, threadId)),
+          state: projectReturnState({
+            environmentId: summary.root.environmentId,
+            threadId: summary.root.id,
+          }),
+        })
+      }
+    >
+      Open thread
+      <ArrowUpRightIcon />
+    </Button>
+  );
+}
+
+const Empty = ({ children }: { readonly children: ReactNode }) => (
+  <p className="py-2 text-sm text-muted-foreground">{children}</p>
+);
+const EMPTY_PROVIDER_ENTRIES: ReadonlyMap<string, ProviderInstanceEntry> = new Map();
+
+function ThreadProviderModel({
+  thread,
+  entries,
+}: {
+  readonly thread: OrchestratorThreadShell;
+  readonly entries: ReadonlyMap<string, ProviderInstanceEntry>;
+}) {
+  const instanceId = thread.runtime?.providerInstanceId ?? thread.modelSelection.instanceId;
+  const entry = entries.get(instanceId) ?? null;
+  const model = entry?.models.find((candidate) => candidate.slug === thread.modelSelection.model);
+  const modelLabel = model
+    ? getTriggerDisplayModelLabel(model)
+    : thread.modelSelection.model || "Default model";
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+      {entry ? (
+        <ProviderInstanceIcon
+          driverKind={entry.driverKind}
+          displayName={entry.displayName}
+          accentColor={entry.accentColor}
+          showBadge={shouldShowInstanceBadge(entry, entries.values())}
+          className="size-4"
+          iconClassName="size-3.5"
+          badgeClassName="-right-1 -bottom-1"
+        />
+      ) : null}
+      <span className="max-w-32 truncate">{modelLabel}</span>
+    </span>
+  );
+}
+
+export function OrchestratorBoard({
+  environmentId,
+  threadId,
+}: {
+  readonly environmentId: EnvironmentId;
+  readonly threadId: ThreadId;
+}) {
+  const projects = useProjects();
+  const threads = useOrchestratorThreadShells();
+  const serverConfigs = useServerConfigs();
+  const navigate = useNavigate();
+  const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
+    reportFailure: false,
+  });
+  const updateProjectScope = useAtomCommand(updateProjectScopeCommand, {
+    reportFailure: false,
+  });
+  const [chatOpen, setChatOpen] = useLocalStorage(
+    `t3code:projects:orchestrator-chat-open:${environmentId}:${threadId}`,
+    false,
+    Schema.Boolean,
+  );
+  const [revealedMessageId, setRevealedMessageId] = useState<
+    import("@t3tools/contracts").MessageId | null
+  >(null);
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editScope, setEditScope] = useState("");
+  const supervisionReadyHosts = useSupervisionReadyHosts();
+  const summary = useMemo(
+    () =>
+      buildOrchestratorSummaries(threads, projects).find(
+        (item) => item.root.environmentId === environmentId && item.root.id === threadId,
+      ) ?? null,
+    [environmentId, projects, threadId, threads],
+  );
+  const providerEntriesByEnvironment = useMemo(
+    () =>
+      deriveProviderEntriesByEnvironment(
+        [...serverConfigs].map(
+          ([serverEnvironmentId, config]) => [serverEnvironmentId, config.providers] as const,
+        ),
+      ),
+    [serverConfigs],
+  );
+  const providerEntriesFor = (thread: OrchestratorThreadShell) =>
+    providerEntriesByEnvironment.get(thread.environmentId) ?? EMPTY_PROVIDER_ENTRIES;
+  const previousVisit = useMemo(
+    () =>
+      readOrchestratorLastVisit(
+        typeof window === "undefined" ? undefined : window.localStorage,
+        environmentId,
+        threadId,
+      ),
+    [environmentId, threadId],
+  );
+  const done = useMemo(
+    () => (summary === null ? [] : orchestratorDoneSince(summary, previousVisit)),
+    [previousVisit, summary],
+  );
+
+  useEffect(() => {
+    recordOrchestratorVisit(window.localStorage, environmentId, threadId, new Date().toISOString());
+  }, [environmentId, threadId]);
+
+  if (summary === null) {
+    // Until the host's nesting metadata has loaded, a project's workers are not attached to it, so
+    // a deep link or reload cannot tell a missing project from one still loading.
+    const loading = !supervisionReadyHosts.has(environmentId);
+    return (
+      <SidebarInset className="h-dvh">
+        <WorkspacePageContainer>
+          <Empty>{loading ? "Loading project…" : "This project is no longer available."}</Empty>
+        </WorkspacePageContainer>
+      </SidebarInset>
+    );
+  }
+
+  const rootProject =
+    summary.projects.find(
+      (project) =>
+        project.environmentId === summary.root.environmentId &&
+        project.id === summary.root.projectId,
+    ) ?? summary.projects[0];
+  const rootRef = scopeThreadRef(summary.root.environmentId, summary.root.id);
+  const openEditor = () => {
+    setEditTitle(summary.root.title);
+    setEditScope(summary.root.scope ?? "");
+    setEditing(true);
+  };
+  const saveIdentity = async () => {
+    const title = editTitle.trim();
+    if (!title) return;
+    const scope = editScope.trim() || null;
+    const results = [];
+    if (title !== summary.root.title) {
+      results.push(
+        await updateThreadMetadata({
+          environmentId: summary.root.environmentId,
+          input: { threadId: summary.root.id, title },
+        }),
+      );
+    }
+    if (scope !== (summary.root.scope ?? null)) {
+      results.push(
+        await updateProjectScope({
+          environmentId: summary.root.environmentId,
+          input: { commandId: CommandId.make(randomUUID()), threadId: summary.root.id, scope },
+        }),
+      );
+    }
+    for (const result of results) {
+      if (result._tag !== "Failure") continue;
+      if (!isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
+        toastManager.add({
+          type: "error",
+          title: "Could not update project",
+          description: error instanceof Error ? error.message : "An error occurred.",
+        });
+      }
+      return;
+    }
+    setEditing(false);
+  };
+  const revealSentMessage = (messageId: import("@t3tools/contracts").MessageId) => {
+    setRevealedMessageId(messageId);
+    setChatOpen(true);
+  };
+
+  return (
+    <SidebarInset className="h-dvh min-h-0 overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col">
+        <WorkspacePageHeader electron={isElectron} className="bg-background">
+          {rootProject ? <ProjectFavicon project={rootProject} className="size-5" /> : null}
+          <WorkspaceBreadcrumb ariaLabel="Project breadcrumb">
+            <WorkspaceBreadcrumbItem current>
+              <span className="flex min-w-0 flex-col">
+                <h1>{summary.root.title}</h1>
+                {summary.root.scope ? (
+                  <span className="truncate text-xs font-normal text-muted-foreground">
+                    {summary.root.scope}
+                  </span>
+                ) : null}
+              </span>
+            </WorkspaceBreadcrumbItem>
+          </WorkspaceBreadcrumb>
+          <div className="flex-1" />
+          <Button size="sm" variant="ghost" onClick={openEditor}>
+            <PencilIcon />
+            Edit
+          </Button>
+          <Button
+            size="sm"
+            variant={chatOpen ? "secondary" : "outline"}
+            onClick={() => setChatOpen((open) => !open)}
+          >
+            <MessageSquareIcon />
+            {chatOpen ? "Hide chat" : "Chat"}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              void navigate({
+                to: "/$environmentId/$threadId",
+                params: buildThreadRouteParams(
+                  scopeThreadRef(summary.root.environmentId, summary.root.id),
+                ),
+                state: projectReturnState({
+                  environmentId: summary.root.environmentId,
+                  threadId: summary.root.id,
+                }),
+              })
+            }
+          >
+            Open orchestrator
+            <ArrowUpRightIcon />
+          </Button>
+        </WorkspacePageHeader>
+        <div className="flex min-h-0 flex-1 border-t border-border">
+          <div className="topbar-scroll-fade min-h-0 min-w-0 flex-1 overflow-y-auto">
+            <WorkspacePageContainer width="wide" className="gap-5">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+                <OrchestratorStatus status={summary.status} />
+                <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                  <UsersIcon className="size-4" />
+                  {summary.activeWorkerCount} active
+                </span>
+                {summary.needsYou.length > 0 ? (
+                  <span className="inline-flex items-center gap-1.5 text-warning-foreground">
+                    <CircleAlertIcon className="size-4" />
+                    {summary.needsYou.length} need you
+                  </span>
+                ) : null}
+                {summary.blocked.length > 0 ? (
+                  <span className="text-error">{summary.blocked.length} blocked</span>
+                ) : null}
+                <span className="flex flex-wrap gap-1">
+                  {summary.projects.map((project) => (
+                    <span
+                      key={`${project.environmentId}:${project.id}`}
+                      className="rounded-sm bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
+                    >
+                      {project.title}
+                    </span>
+                  ))}
+                </span>
+              </div>
+
+              <BoardSection title="Needs you" count={summary.needsYou.length}>
+                {summary.needsYou.length === 0 ? (
+                  <Empty>Nothing is waiting on you.</Empty>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {summary.needsYou.map((item) => (
+                      <li
+                        key={`${item.kind}:${item.thread.id}`}
+                        className="flex items-center gap-3 py-2"
+                      >
+                        <CircleAlertIcon className="size-4 shrink-0 text-warning-foreground" />
+                        <span className="min-w-0 flex-1 truncate text-sm">{item.thread.title}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {item.kind === "approval"
+                            ? "Approval"
+                            : item.kind === "input"
+                              ? "Question"
+                              : "Plan ready"}
+                        </span>
+                        <ThreadProviderModel
+                          thread={item.thread}
+                          entries={providerEntriesFor(item.thread)}
+                        />
+                        <OpenThreadButton summary={summary} threadId={item.thread.id} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </BoardSection>
+
+              <BoardSection title="Working" count={summary.working.length}>
+                {summary.working.length === 0 ? (
+                  <Empty>No workers are active.</Empty>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {summary.working.map((item) => (
+                      <li key={item.thread.id} className="flex items-start gap-3 py-2">
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium">
+                            {item.thread.title}
+                          </span>
+                          {item.latestLine ? (
+                            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                              {item.latestLine}
+                            </span>
+                          ) : null}
+                        </span>
+                        <ThreadProviderModel
+                          thread={item.thread}
+                          entries={providerEntriesFor(item.thread)}
+                        />
+                        <OpenThreadButton summary={summary} threadId={item.thread.id} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </BoardSection>
+
+              {summary.blocked.length > 0 ? (
+                <BoardSection title="Blocked" count={summary.blocked.length}>
+                  <ul className="divide-y divide-border">
+                    {summary.blocked.map((item) => (
+                      <li key={item.thread.id} className="flex items-start gap-3 py-2">
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-error">
+                            {item.thread.title}
+                          </span>
+                          {item.latestLine ? (
+                            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                              {item.latestLine}
+                            </span>
+                          ) : null}
+                        </span>
+                        <time className="text-xs text-muted-foreground">
+                          {new Date(item.thread.updatedAt).toLocaleString()}
+                        </time>
+                        <ThreadProviderModel
+                          thread={item.thread}
+                          entries={providerEntriesFor(item.thread)}
+                        />
+                        <OpenThreadButton summary={summary} threadId={item.thread.id} />
+                      </li>
+                    ))}
+                  </ul>
+                </BoardSection>
+              ) : null}
+
+              <BoardSection title="Done since your last visit" count={done.length}>
+                {done.length === 0 ? (
+                  <Empty>No newly completed workers.</Empty>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {done.map((item) => (
+                      <li key={item.thread.id} className="flex items-center gap-3 py-2">
+                        <span className="min-w-0 flex-1 truncate text-sm">{item.thread.title}</span>
+                        <time className="text-xs text-muted-foreground" dateTime={item.completedAt}>
+                          {new Date(item.completedAt).toLocaleString()}
+                        </time>
+                        <OpenThreadButton summary={summary} threadId={item.thread.id} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </BoardSection>
+
+              <BoardSection title="New request">
+                {chatOpen ? (
+                  <Button size="sm" variant="outline" onClick={() => setChatOpen(true)}>
+                    Continue in orchestrator chat
+                    <MessageSquareIcon />
+                  </Button>
+                ) : (
+                  <div className="relative h-44 overflow-hidden">
+                    <ChatView
+                      routeKind="server"
+                      environmentId={rootRef.environmentId}
+                      threadId={rootRef.threadId}
+                      presentation="project-request"
+                      onMessageSent={revealSentMessage}
+                    />
+                  </div>
+                )}
+              </BoardSection>
+
+              <BoardSection
+                title="Issues & PRs"
+                count={summary.issues.length + summary.pullRequests.length}
+              >
+                {summary.issues.length + summary.pullRequests.length === 0 ? (
+                  <Empty>No linked issues or pull requests.</Empty>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+                    <ThreadIssueBadges
+                      issues={summary.issues}
+                      projectReturn={{
+                        environmentId: summary.root.environmentId,
+                        threadId: summary.root.id,
+                      }}
+                    />
+                    {summary.pullRequests.map((pullRequest) => (
+                      <ProjectPullRequestLink
+                        key={`${pullRequest.host}/${pullRequest.repository}#${pullRequest.number}`}
+                        summary={summary}
+                        pullRequest={pullRequest}
+                      />
+                    ))}
+                  </div>
+                )}
+              </BoardSection>
+
+              <ProjectAutomationsSlot
+                project={{
+                  environmentId: summary.root.environmentId,
+                  rootThreadId: summary.root.id,
+                  rootProjectId: summary.root.projectId,
+                }}
+              />
+            </WorkspacePageContainer>
+          </div>
+          {chatOpen ? (
+            <aside className="flex w-[400px] min-w-0 shrink-0 flex-col border-l border-border">
+              <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
+                <MessageSquareIcon className="size-4 text-muted-foreground" />
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                  {summary.root.title}
+                </span>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Close orchestrator chat"
+                  onClick={() => setChatOpen(false)}
+                >
+                  <XIcon />
+                </Button>
+              </div>
+              <ChatView
+                routeKind="server"
+                environmentId={rootRef.environmentId}
+                threadId={rootRef.threadId}
+                presentation="project-panel"
+                revealMessageId={revealedMessageId}
+              />
+            </aside>
+          ) : null}
+        </div>
+      </div>
+      <Dialog open={editing} onOpenChange={setEditing}>
+        <DialogPopup>
+          <DialogHeader>
+            <DialogTitle>Edit project</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 px-6 pb-2">
+            <label className="flex flex-col gap-1.5 text-sm font-medium">
+              Title
+              <Input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} />
+            </label>
+            <label className="flex flex-col gap-1.5 text-sm font-medium">
+              Scope
+              <Textarea
+                value={editScope}
+                rows={2}
+                maxLength={500}
+                placeholder="Coordinates the entire repo"
+                onChange={(event) => setEditScope(event.target.value)}
+              />
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+            <Button disabled={editTitle.trim().length === 0} onClick={() => void saveIdentity()}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
+    </SidebarInset>
+  );
+}
