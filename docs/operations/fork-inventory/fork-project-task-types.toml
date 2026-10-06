@@ -1,0 +1,8 @@
+name = "fork-project-task-types"
+subject = "feat(projects): typed tasks and release-grouped dashboard"
+class = "product"
+purpose = "Type every request and tracker issue (bug, feature, question, deliverable, plan, change, test, maintenance) and order the project Dashboard as Brad asked: tasks needing him, completed tasks by the release that shipped them, then maintenance."
+retire_when = "Upstream provides typed project tasks, or the project page is retired."
+depends_on = ["fork-request-ledger", "fork-project-dashboard-widgets", "fork-project-page-workflow"]
+roles = []
+note = "The type is the existing ask:<kind> label, so the five original kinds keep working; capture classifies the three new ones. projectRequests.update takes kind (CLI request type) and swaps the issue's ask:<kind> label; a type-only update works on any tracker issue, open or closed, and links no thread. The Release widget lists completed tasks by milestone, newest first (shipped requests to test with Settle, then settled or closed tasks of the tree or of a release milestone within the 14-day closed window, then work completed outside a release), then Next release. Open maintenance tasks not needing Brad move from Requests to a new Maintenance widget after Release; saved custom widget orders keep it hidden until added under Customize. Issue cards show the type. Integration fork.6: adapted replay to preserve UI theme/owner notes alongside BE authoritative contract and helpers. Fork.6 integration: adapt: union inventory, retain earlier integrated owner notes and later stanza (docs/operations/fork-inventory.toml). Retire/narrow/relocate do not apply to these retained UI behaviors or inventory insertions."
