@@ -12,6 +12,7 @@ import {
   toThreadSearchResult,
 } from "./agent-targets.js";
 import { buildFollowUpMessage } from "./agentPrompts.js";
+import { sendDirectResult } from "./directResult.js";
 import { RemoteEnvironmentClient } from "./client.js";
 import {
   cancelDeferredSettlement,
@@ -30,6 +31,7 @@ import {
   needsAttention,
   summarizeMessageText,
 } from "./monitor.js";
+import { parseNotificationLevel } from "./notifications.js";
 import {
   classifyThread,
   formatThreadLine,
@@ -752,6 +754,12 @@ agent
   .option("--parent <agent-or-thread>", "supervising thread")
   .option("--top-level", "create without a supervision parent")
   .option("--pin", "pin the new thread (default: unpinned)")
+  .option(
+    "--notify-level <level>",
+    "all, attention, or none (required escalations always deliver)",
+    parseNotificationLevel,
+    "all",
+  )
   .action(async (options) => {
     const state = await loadState();
     const environment = requireEnvironment(state, options.env);
@@ -843,7 +851,9 @@ agent
         );
         subscriptions = upsertSubscription(
           currentState.subscriptions,
-          buildSubscriptionRecord(notifyCaller, savedAgent, createdAt, existing),
+          buildSubscriptionRecord(notifyCaller, savedAgent, createdAt, existing, {
+            level: options.notifyLevel,
+          }),
         );
       }
       return {
@@ -874,6 +884,7 @@ agent
       parentThreadId: nesting ? (localParent ?? null) : null,
       remoteParent: nesting ? (remoteParent ?? null) : null,
       notifySubscribed: Boolean(notifyCaller),
+      notifyLevel: options.notifyLevel,
       notifySubscriberAgentName: notifyCaller?.name ?? null,
       notifySubscriberThreadId: notifyCaller?.threadId ?? null,
       pinned: created.pinned,
@@ -1249,10 +1260,8 @@ agent
     "Subscribe the calling T3 thread to attention from a saved source agent or raw thread UUID",
   )
   .requiredOption("--watch <name>", "saved source agent name or raw thread UUID to watch")
-  .option("--events <mode>", "all completions and attention, or attention only")
+  .option("--level <level>", "all, attention, or none", parseNotificationLevel)
   .action(async (options) => {
-    if (options.events && !["all", "attention"].includes(options.events))
-      throw new Error("--events must be all or attention.");
     const { state, caller } = await withCallerFromEnv();
     const resolvedSource = await resolveAgentTarget(state, options.watch, {
       clientFactory: (environmentName) =>
@@ -1265,11 +1274,6 @@ agent
     };
     assertNotSelfSubscription(caller, source);
     const now = new Date().toISOString();
-    const existing = state.subscriptions.find(
-      (subscription) =>
-        subscription.subscriberThreadId === caller.threadId &&
-        subscription.sourceThreadId === source.threadId,
-    );
     // A source that is already idle when the subscription is created must not
     // have that old state routed as a new event; a source still mid-turn keeps
     // no baseline so the subscriber hears how that turn ends.
@@ -1282,17 +1286,24 @@ agent
     } catch {
       // Unreachable source: subscribe anyway without a baseline.
     }
-    const next = buildSubscriptionRecord(caller, source, now, existing, {
-      baselineTurnId,
-      events: options.events,
+    const next = await updateState((currentState) => {
+      const existing = currentState.subscriptions.find(
+        (subscription) =>
+          subscription.subscriberThreadId === caller.threadId &&
+          subscription.sourceThreadId === source.threadId,
+      );
+      const next = buildSubscriptionRecord(caller, source, now, existing, {
+        baselineTurnId: existing ? existing.baselineTurnId : baselineTurnId,
+        level: options.level,
+      });
+      return {
+        state: {
+          ...currentState,
+          subscriptions: upsertSubscription(currentState.subscriptions, next),
+        },
+        result: next,
+      };
     });
-    await updateState(async (currentState) => ({
-      state: {
-        ...currentState,
-        subscriptions: upsertSubscription(currentState.subscriptions, next),
-      },
-      result: null,
-    }));
     void ensureNotificationWatcher({ env: source.environment }).catch(() => {});
     printJson(next);
   });
@@ -1646,11 +1657,23 @@ agent
   .option("--no-queue", "fail instead of queueing when the target thread is still running")
   .action(async (name, messageParts: string[], options: { queue: boolean }) => {
     const { agent: savedAgent, client, saved } = await withAgent(name);
-    const outcome = await client.sendMessage({
-      threadId: savedAgent.threadId,
-      text: messageParts.join(" ").trim(),
-      queueWhileRunning: options.queue,
-      agentName: saved ? savedAgent.name : null,
+    const state = await loadState();
+    const outcome = await sendDirectResult({
+      callerThreadId: resolveCallerThreadId(),
+      subscriberThreadId: savedAgent.threadId,
+      getSourceTurn: async (route) =>
+        (
+          await new RemoteEnvironmentClient(
+            requireEnvironment(state, route.sourceEnvironment),
+          ).findThread(route.sourceThreadId)
+        ).latestTurn?.turnId ?? null,
+      send: () =>
+        client.sendMessage({
+          threadId: savedAgent.threadId,
+          text: messageParts.join(" ").trim(),
+          queueWhileRunning: options.queue,
+          agentName: saved ? savedAgent.name : null,
+        }),
     });
     const released = outcome.queued ? [] : await releaseHeldNotifications(savedAgent.threadId);
     if (outcome.queued || released.length > 0) {
