@@ -442,6 +442,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         binaryPath: "/opt/homebrew/bin/codex",
         homePath: "/Users/julius/.codex",
         shadowHomePath: "",
+        skillExtraRoots: [],
         launchArgs: "",
         customModels: [],
       });
@@ -1226,6 +1227,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         binaryPath: "/opt/homebrew/bin/codex",
         homePath: "",
         shadowHomePath: "",
+        skillExtraRoots: [],
         launchArgs: "",
         customModels: [],
       });
