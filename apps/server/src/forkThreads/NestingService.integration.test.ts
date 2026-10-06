@@ -140,9 +140,13 @@ it.effect(
         });
       }
       const before = (yield* management.getThreadShell(id("native-child")))!;
-      const service = yield* makeNestingService(sql, management.getThreadShell);
+      const nativeEvents: string[] = [];
+      const service = yield* makeNestingService(sql, management.getThreadShell, command => management.dispatch(command).pipe(Effect.tap(receipt => Effect.sync(() => {
+        nativeEvents.push(...receipt.storedEvents.map(event => event.type));
+      }))));
       yield* service.update(input("native-child", "native-parent", "native-nest"));
       yield* service.update(input("native-grandchild", "native-child", "native-deep"));
+      assert.deepStrictEqual(nativeEvents, ["thread.metadata-updated", "thread.metadata-updated"]);
       for (const edge of [
         input("native-parent", "native-parent", "native-self"),
         input("native-parent", "native-grandchild", "native-cycle"),
