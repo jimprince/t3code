@@ -8,8 +8,8 @@ import { Button } from "../ui/button";
 import { groupProjectIssues, PROJECT_ISSUE_LANES } from "./projectIssuesBoard.logic";
 import { ProjectQueryState } from "./ProjectQueryState";
 import { roadmapColumns } from "./projectRoadmap.logic";
-import { issueKey } from "./projectRequests.logic";
-import { useNeedsYou } from "./ProjectRequestsSection";
+import { countStatuses } from "./projectRequests.logic";
+import { useTaskStatuses } from "./ProjectRequestsSection";
 
 function SummaryLine({
   title,
@@ -48,14 +48,25 @@ export function ProjectRoadmapSummary({
       input: { threadId: summary.root.id },
     }),
   );
+  const { statuses } = useTaskStatuses(summary);
   const text = useMemo(() => {
     if (!roadmap.data) return null;
-    if (!roadmap.data.tracker) return "No tracker repository";
+    const tracker = roadmap.data.tracker;
+    if (!tracker) return "No tracker repository";
+    // How far along each version is, in the Tasks board's statuses.
     return roadmapColumns(roadmap.data)
       .filter((column) => column.target.kind !== "later")
-      .map((column) => `${column.title}: ${column.items.length}`)
+      .map((column) => {
+        const counts = countStatuses(
+          column.items.map(
+            (item) => statuses.get(`${tracker.repository}#${item.number}`) ?? "pending",
+          ),
+          column.completeCount,
+        );
+        return `${column.title}: ${counts.complete} of ${counts.total} complete`;
+      })
       .join(" · ");
-  }, [roadmap.data]);
+  }, [roadmap.data, statuses]);
   return (
     <SummaryLine title="Roadmap" onOpen={onOpen}>
       {text ?? (
@@ -65,7 +76,7 @@ export function ProjectRoadmapSummary({
   );
 }
 
-/** Issue counts per board lane on the Dashboard, linking to the Issues tab. */
+/** Task counts per status on the Dashboard, linking to the Tasks tab. */
 export function ProjectIssuesSummary({
   summary,
   onOpen,
@@ -73,26 +84,23 @@ export function ProjectIssuesSummary({
   readonly summary: OrchestratorSummary;
   readonly onOpen: () => void;
 }) {
-  const { items, query } = useNeedsYou(summary);
+  const { statuses, query } = useTaskStatuses(summary);
   const text = useMemo(() => {
     if (!query.data) return null;
     // Later (parked) issues stay off the Dashboard.
     const open = query.data.issues.filter(
       (issue) => !issue.labels.some((label) => label.toLowerCase() === "parked"),
     );
-    const { lanes, backlog } = groupProjectIssues(
-      open,
-      new Map(items.map((item) => [issueKey(item.issue), item.group])),
-    );
+    const { lanes, backlog } = groupProjectIssues(open, statuses);
     return [
       ...PROJECT_ISSUE_LANES.map((lane) => `${lane.title}: ${lanes[lane.lane].length}`),
       `Backlog: ${backlog.length}`,
     ].join(" · ");
-  }, [items, query.data]);
+  }, [query.data, statuses]);
   return (
-    <SummaryLine title="Issues" onOpen={onOpen}>
+    <SummaryLine title="Tasks" onOpen={onOpen}>
       {text ?? (
-        <ProjectQueryState inline what="issues" error={query.error} onRetry={query.refresh} />
+        <ProjectQueryState inline what="tasks" error={query.error} onRetry={query.refresh} />
       )}
     </SummaryLine>
   );
