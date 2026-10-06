@@ -241,6 +241,7 @@ import * as ProjectIssuesService from "./projectIssues/ProjectIssuesService.ts";
 import * as RequestLedger from "./projectIssues/RequestLedger.ts";
 import * as ProjectDashboardService from "./projectDashboard/ProjectDashboardService.ts";
 import * as ProjectDashboardStore from "./projectDashboard/ProjectDashboardStore.ts";
+import * as ProjectLayoutService from "./projectLayout/ProjectLayoutService.ts";
 import * as ProjectRoadmapService from "./projectRoadmap/ProjectRoadmapService.ts";
 import * as ProjectCanvasService from "./projectCanvas/ProjectCanvasService.ts";
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
@@ -1346,8 +1347,10 @@ const layerWsRpc = (
         ledger: requestLedger,
         projectIssues,
       });
+      const projectLayout = yield* ProjectLayoutService.ProjectLayoutService;
       const projectDashboard = yield* ProjectDashboardService.make(
         yield* ProjectDashboardStore.make,
+        projectLayout,
       );
       const bootstrapCredentials = yield* PairingGrantStore.PairingGrantStore;
       const sessions = yield* SessionStore.SessionStore;
@@ -2524,6 +2527,11 @@ const layerWsRpc = (
         [WS_METHODS.projectDashboardGet]: (input) => projectDashboard.get(input),
         [WS_METHODS.projectDashboardSetWidgets]: (input) => projectDashboard.setWidgets(input),
         [WS_METHODS.projectDashboardSetTracker]: (input) => projectDashboard.setTracker(input),
+        [WS_METHODS.projectLayoutGet]: (input) => projectLayout.get(input.threadId),
+        [WS_METHODS.projectLayoutApply]: (input) => projectLayout.apply(input, { kind: "user", threadId: null, reason: null }),
+        [WS_METHODS.projectLayoutRevert]: (input) => projectLayout.revert(input, { kind: "user", threadId: null, reason: null }),
+        [WS_METHODS.projectLayoutHistory]: (input) => projectLayout.history(input),
+        [WS_METHODS.subscribeProjectLayout]: (input) => projectLayout.stream(input.threadId),
         [WS_METHODS.projectRequestsList]: (input) => requestLedger.listForThread(input),
         [WS_METHODS.pullRequestsList]: (input) => pullRequests.list(input),
         [WS_METHODS.pullRequestsListStats]: (input) => pullRequests.listStats(input),
@@ -3203,6 +3211,7 @@ export const layer = Layer.unwrap(
     const serverBrowser = yield* ServerBrowser.ServerBrowser;
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     const pullRequests = yield* PullRequestService.PullRequestService;
+    const projectLayouts = yield* ProjectLayoutService.ProjectLayoutService;
     const sql = yield* SqlClient.SqlClient;
     return HttpRouter.add(
       "GET",
@@ -3269,6 +3278,9 @@ export const layer = Layer.unwrap(
               // One server-lifetime service means clients share the same PR caches, and a WS
               // mutation invalidates the HTTP diff cache that every client reads from.
               Layer.provide(Layer.succeed(PullRequestService.PullRequestService, pullRequests)),
+              Layer.provide(
+                Layer.succeed(ProjectLayoutService.ProjectLayoutService, projectLayouts),
+              ),
               Layer.provide(
                 SourceControlDiscovery.layer.pipe(
                   Layer.provide(
