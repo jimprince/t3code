@@ -17,6 +17,7 @@ const legacyReaders = ["orchestration-v2/legacy/", "persistence/Migrations/"] as
  * list short; new V1 reads belong in the importer.
  */
 const legacyReaderFiles: Record<string, string> = {
+  "fork/recovery/LegacyBackgroundWorkImport.ts": "one-time stopped background work notice import guarded by native receipts",
   "persistence/ForkMigrations/006_ProjectionThreadsParentThread.ts": "shipped legacy parent schema history",
   "forkLegacy/AttachmentImport.ts": "attachment recovery used only by the V1 importer",
   "persistence/ForkMigrations/003_ProjectionThreadMessageFileAttachments.ts":
