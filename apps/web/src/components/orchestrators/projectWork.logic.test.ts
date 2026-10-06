@@ -204,12 +204,12 @@ describe("deriveWorkingNow", () => {
       threadId: "w1",
       title: "Fix the feeder",
       worker: "Worker w1",
-      next: "Reading the logs.",
+      next: null,
       forRequests: [],
     });
   });
 
-  it("prefers the task's Progress note and falls back to the thread's first sentence", () => {
+  it("takes the next step from the task's Progress note, never from the worker's prose", () => {
     const worker = thread("w1");
     const withNote = issue(5, {
       linkedThreadIds: ["w1" as never],
@@ -228,16 +228,7 @@ describe("deriveWorkingNow", () => {
         [answerComment],
         [],
       )[0]?.next,
-    ).toBe("First thing.");
-  });
-
-  it("shows no next step instead of cutting long agent prose", () => {
-    const [row] = deriveWorkingNow(
-      [{ thread: thread("w1"), latestLine: `${"word ".repeat(40)}.` }],
-      [],
-      [],
-    );
-    expect(row?.next).toBeNull();
+    ).toBeNull();
   });
 
   it("falls back to the thread title and lists the other requests it serves", () => {
