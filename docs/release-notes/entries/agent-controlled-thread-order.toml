@@ -1,0 +1,4 @@
+id = "agent-controlled-thread-order"
+category = "feature"
+functionality = "thread sidebar"
+text = "Let agents and people share persisted sidebar order, including move controls and a reset to automatic placement."
