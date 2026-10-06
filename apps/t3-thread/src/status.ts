@@ -16,6 +16,21 @@ export function subscriptionBaselineTurnId(thread: OrchestrationThread): string 
   return latestTurnId;
 }
 
+function failureReason(
+  thread: OrchestrationThread | OrchestrationThreadShell,
+  fallback: string,
+): string {
+  const item =
+    "projection" in thread
+      ? thread.projection?.turnItems
+          .filter((item) => item.runId === thread.latestTurn?.turnId && item.type === "error")
+          .at(-1)
+      : undefined;
+  return item?.type === "error"
+    ? item.failure.message
+    : thread.lastError || thread.session?.lastError || fallback;
+}
+
 export function classifyThread(
   thread: OrchestrationThread | OrchestrationThreadShell,
 ): AgentStatus {
@@ -61,20 +76,8 @@ export function classifyThread(
     };
   }
 
-  if (thread.session?.status === "error" || thread.latestTurn?.state === "error") {
-    const item =
-      "projection" in thread
-        ? thread.projection?.turnItems
-            .filter((item) => item.runId === thread.latestTurn?.turnId && item.type === "error")
-            .at(-1)
-        : undefined;
-    return {
-      state: "error",
-      reason:
-        item?.type === "error"
-          ? item.failure.message
-          : thread.lastError || thread.session?.lastError || "turn failed",
-    };
+  if (thread.session?.status === "error") {
+    return { state: "error", reason: failureReason(thread, "provider session errored") };
   }
 
   if (
@@ -86,6 +89,16 @@ export function classifyThread(
     return {
       state: "running",
       reason: "turn is running",
+    };
+  }
+
+  if (thread.latestTurn?.state === "error") {
+    return {
+      state: "error",
+      reason: failureReason(
+        thread,
+        "latest turn ended in error and the provider recorded no detail",
+      ),
     };
   }
 
