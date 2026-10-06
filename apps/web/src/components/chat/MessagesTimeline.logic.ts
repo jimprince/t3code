@@ -476,6 +476,13 @@ export type MessagesTimelineRow = MessagesTimelineRowContent & {
 
 type MessagesTimelineRowContent =
   | {
+      kind: "background-fold";
+      id: string;
+      createdAt: string;
+      run: import("@t3tools/client-runtime/backgroundTurns").BackgroundRun;
+      expanded: boolean;
+    }
+  | {
       kind: "worktree-setup";
       id: string;
       createdAt: string | null;
@@ -1978,6 +1985,8 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
   if (a.kind !== b.kind || a.id !== b.id) return false;
 
   switch (a.kind) {
+    case "background-fold":
+      return a.run === (b as typeof a).run && a.expanded === (b as typeof a).expanded;
     case "working":
       return a.createdAt === (b as typeof a).createdAt;
     case "thinking": {
