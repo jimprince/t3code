@@ -1,3 +1,4 @@
+import { readForkSubprojects } from "../orchestration-v2/legacy/ForkSubprojectRead.ts";
 import { ForkThreadMetadata, ForkRemoteParent, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -15,40 +16,56 @@ export const initializeMetadata = (sql: SqlClient.SqlClient) =>
     yield* sql`CREATE TABLE IF NOT EXISTS fork_thread_metadata (thread_id TEXT PRIMARY KEY, payload TEXT NOT NULL)`;
     yield* sql`CREATE TABLE IF NOT EXISTS fork_thread_metadata_receipts (command_id TEXT PRIMARY KEY, payload TEXT NOT NULL)`;
     const legacy = yield* readForkThreadMetadata(sql);
-    if (legacy === null) return;
-    const { rows, policies } = legacy;
-    for (const row of rows) {
-      const metadata: ForkThreadMetadata = {
-        threadId: ThreadId.make(row.thread_id),
-        parentThreadId: row.parent_thread_id === null ? null : ThreadId.make(row.parent_thread_id),
-        ...(row.scope !== undefined ? { scope: row.scope } : {}),
-        ...(row.settle_on_complete !== undefined
-          ? {
+    if (legacy !== null) {
+      const { rows, policies } = legacy;
+      for (const row of rows) {
+        const metadata: ForkThreadMetadata = {
+          threadId: ThreadId.make(row.thread_id),
+          parentThreadId:
+            row.parent_thread_id === null ? null : ThreadId.make(row.parent_thread_id),
+          ...(row.scope !== undefined ? { scope: row.scope } : {}),
+          ...(row.settle_on_complete !== undefined
+            ? {
+                settleOnComplete:
+                  row.settle_on_complete === null ? null : row.settle_on_complete === 1,
+              }
+            : {}),
+        };
+        if (row.remote_parent_json) {
+          const remoteParent = yield* decodeRemoteParent(row.remote_parent_json);
+          Object.assign(metadata, { remoteParent });
+        }
+        const payload = yield* encodeMetadata(metadata);
+        yield* sql`INSERT OR IGNORE INTO fork_thread_metadata (thread_id, payload) VALUES (${row.thread_id}, ${payload})`;
+      }
+      // Older sidecar rows predate lifecycle policy; explicit V2 values (including null) win.
+      if (policies !== null) {
+        const existing = yield* listMetadata(sql);
+        const byId = new Map(existing.map((row) => [String(row.threadId), row]));
+        for (const row of policies) {
+          const metadata = byId.get(row.thread_id);
+          if (metadata && metadata.settleOnComplete === undefined) {
+            yield* writeMetadata(sql, {
+              ...metadata,
               settleOnComplete:
                 row.settle_on_complete === null ? null : row.settle_on_complete === 1,
-            }
-          : {}),
-      };
-      if (row.remote_parent_json) {
-        const remoteParent = yield* decodeRemoteParent(row.remote_parent_json);
-        Object.assign(metadata, { remoteParent });
-      }
-      const payload = yield* encodeMetadata(metadata);
-      yield* sql`INSERT OR IGNORE INTO fork_thread_metadata (thread_id, payload) VALUES (${row.thread_id}, ${payload})`;
-    }
-    // Older sidecar rows predate lifecycle policy; explicit V2 values (including null) win.
-    if (policies !== null) {
-      const existing = yield* listMetadata(sql);
-      const byId = new Map(existing.map((row) => [String(row.threadId), row]));
-      for (const row of policies) {
-        const metadata = byId.get(row.thread_id);
-        if (metadata && metadata.settleOnComplete === undefined) {
-          yield* writeMetadata(sql, {
-            ...metadata,
-            settleOnComplete: row.settle_on_complete === null ? null : row.settle_on_complete === 1,
-          });
+            });
+          }
         }
       }
+    }
+    // Also imports when V1 already recorded migration 16; explicit V2 fields win.
+    const modes = yield* readForkSubprojects(sql);
+    const byId = new Map((yield* listMetadata(sql)).map((row) => [String(row.threadId), row]));
+    for (const row of modes) {
+      const existing = byId.get(row.thread_id);
+      if (existing?.subproject !== undefined) continue;
+      yield* writeMetadata(sql, {
+        ...existing,
+        threadId: ThreadId.make(row.thread_id),
+        parentThreadId: existing?.parentThreadId ?? null,
+        subproject: row.subproject ?? "auto",
+      });
     }
   });
 export const listMetadata = (sql: SqlClient.SqlClient) =>
