@@ -14,6 +14,8 @@ import {
 } from "../src/contracts.js";
 import { at, item, projection, shell, shellSnapshot } from "./v2-fixture.js";
 
+const encodeProjection = Schema.encodeSync(Schema.toCodecJson(OrchestrationV2ThreadProjection));
+const encodeLaunch = Schema.encodeUnknownSync(OrchestrationV2ThreadLaunchInput);
 const snapshot = (value: ReturnType<typeof projection>) => ({
   kind: "snapshot" as const,
   snapshotSequence: 1,
@@ -36,7 +38,7 @@ describe("V2 orchestration model option compatibility", () => {
     const base = projection();
     const native = projection({
       thread: {
-        ...Schema.encodeSync(Schema.toCodecJson(OrchestrationV2ThreadProjection))(base).thread,
+        ...encodeProjection(base).thread,
         modelSelection: selection,
       },
       turnItems: [
@@ -119,7 +121,7 @@ describe("V2 orchestration model option compatibility", () => {
       workspaceStrategy: { type: "root" },
       initialMessage: { messageId: "prompt", text, attachments: [] },
     };
-    const wire = Schema.encodeUnknownSync(OrchestrationV2ThreadLaunchInput)(launch);
+    const wire = encodeLaunch(launch);
     expect(wire).toMatchObject({ modelSelection: selection, initialMessage: { text } });
   });
 
