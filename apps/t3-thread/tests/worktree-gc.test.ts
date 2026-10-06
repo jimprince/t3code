@@ -318,7 +318,10 @@ describe("worktree gc snapshot integration", () => {
       expiresAt: "2099-01-01T00:00:00.000Z",
       pairedAt: "2026-09-04T00:00:00.000Z",
     };
-    const client = new RemoteEnvironmentClient(environment, { descriptorFactory: descriptorFixture(environment), rpcFactory: () => rpc });
+    const client = new RemoteEnvironmentClient(environment, {
+      descriptorFactory: descriptorFixture(environment),
+      rpcFactory: () => rpc,
+    });
     const plan = await planWorktreeGc({
       threads: await client.listWorktreeGcThreads(),
       inspect: alwaysClean,
