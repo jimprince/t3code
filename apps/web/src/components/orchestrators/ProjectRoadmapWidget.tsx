@@ -24,6 +24,7 @@ import {
   type TaskStatus,
 } from "./projectRequests.logic";
 import { useTaskStatuses } from "./ProjectRequestsSection";
+import { TaskTitle } from "./TaskLink";
 import { columnOf, moveInput, roadmapColumns, type RoadmapColumn } from "./projectRoadmap.logic";
 
 const DRAG_TYPE = "application/x-t3-roadmap-item";
@@ -47,6 +48,7 @@ export function useNextReleaseItems(summary: OrchestratorSummary) {
     const version = roadmap.data?.versions[0] ?? null;
     return {
       version,
+      tracker: roadmap.data?.tracker ?? null,
       items: version
         ? (roadmap.data?.items ?? []).filter(
             (item) => item.versionId === version.id && !item.parked,
@@ -226,7 +228,8 @@ export function ProjectRoadmapWidget({ summary }: { readonly summary: Orchestrat
   if (!roadmap.data) {
     return <ProjectQueryState what="roadmap" error={roadmap.error} onRetry={roadmap.refresh} />;
   }
-  if (!roadmap.data.tracker) {
+  const tracker = roadmap.data.tracker;
+  if (!tracker) {
     return (
       <p className="py-2 text-sm text-muted-foreground">
         Name the project's Gitea tracker repository under Customize to plan versions.
@@ -309,14 +312,17 @@ export function ProjectRoadmapWidget({ summary }: { readonly summary: Orchestrat
                   className="flex cursor-grab items-start gap-1 border-b border-border/60 py-1.5 last:border-b-0"
                 >
                   <span className="min-w-0 flex-1">
-                    <a
-                      href={item.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <TaskTitle
+                      task={{
+                        host: tracker.host,
+                        repository: tracker.repository,
+                        number: item.number,
+                      }}
+                      url={item.url}
                       className="line-clamp-2 text-sm hover:underline"
                     >
                       {item.title}
-                    </a>
+                    </TaskTitle>
                     <span className="text-xs text-muted-foreground">
                       {TASK_STATUS_LABEL[statusOf(item)]}
                     </span>
