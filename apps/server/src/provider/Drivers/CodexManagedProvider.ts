@@ -279,6 +279,7 @@ export const makeManagedCodexProvider = Effect.fn("makeManagedCodexProvider")(fu
               probeCodexSkillsForCwd({
                 binaryPath: effective.config.binaryPath,
                 homePath: effective.config.homePath,
+                skillExtraRoots: effective.config.skillExtraRoots,
                 launchArgs: effective.config.launchArgs,
                 cwd,
                 environment: effective.environment,
