@@ -3,6 +3,7 @@ import { useSupervisionDrag } from "./sidebar/useSupervisionDrag";
 import { SupervisionThreadRows, useSupervisionSidebar } from "./sidebar/SupervisionThreadRows";
 import { groupChildInputAttention } from "@t3tools/client-runtime/child-attention";
 import { SidebarChildInputAttention } from "./sidebar/SidebarChildInputAttention";
+import { newForkCommandId, resetForkThreadOrder } from "./chat/forkThreadCommands";
 import { SidebarProjectSelection, useSidebarProjectSelection } from "./SidebarProjectSelection";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "./ThreadHoverCard";
 import { CollapsibleSectionHeader } from "./ui/collapsible-section-header";
@@ -2354,6 +2355,7 @@ export default function Sidebar() {
     archiveThread,
     deleteThread,
   } = useThreadActions();
+  const resetOrder = useAtomCommand(resetForkThreadOrder);
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
@@ -4460,6 +4462,9 @@ export default function Sidebar() {
                 autoSettleOptOut: supportsAutoSettleOptOut,
                 snooze: supportsSnooze,
                 pinning: supportsPinning,
+                orderReset:
+                  serverConfigs.get(thread.environmentId)?.environment.capabilities
+                    .threadOrderReset === true,
                 titleRegeneration: supportsTitleRegeneration,
               },
               snoozePresets,
@@ -4477,6 +4482,12 @@ export default function Sidebar() {
           return;
         }
         switch (clicked.value) {
+          case "order-reset":
+            await resetOrder({
+              environmentId: thread.environmentId,
+              input: { threadId: thread.id, commandId: newForkCommandId() },
+            });
+            return;
           case "filter-by-project":
             // This item is the only filter control here, so picking the
             // already-isolated project again is the way back to all projects.
@@ -4673,6 +4684,7 @@ export default function Sidebar() {
       isolatedProjectKey,
       markThreadUnread,
       openProjectSettings,
+      resetOrder,
       projectByKey,
       serverConfigs,
       setHiddenProjectKeys,
