@@ -2,7 +2,7 @@ import { conversationBaselineAllowed } from "../fork/recovery/ConversationRewind
 import { legacyNoticeCanStart } from "../fork/recovery/LegacyBackgroundWorkPolicy.ts";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { listMetadata } from "../forkThreads/MetadataStore.ts";
-import { readWorkerMetadata } from "../forkThreads/WorkerLifecycleMetadata.ts";
+import { hasLiveChildren, readWorkerMetadata } from "../forkThreads/WorkerLifecycleMetadata.ts";
 import { archiveEligible } from "../forkThreads/ArchiveDeadlines.ts";
 import { completionEligible } from "../forkThreads/WorkerLifecyclePolicy.ts";
 import { pinnedReorderUpdatedAt } from "../forkThreads/ThreadOrderReset.ts";
@@ -9630,6 +9630,20 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             commandId: command.commandId,
             commandType: command.type,
             cause: `Thread ${command.threadId} changed before automatic settlement.`,
+          });
+        }
+        if (
+          thread.pinnedAt != null ||
+          (yield* hasLiveChildren(sql, command.threadId, projectionStore.getThreadShell).pipe(
+            Effect.mapError(
+              (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
+            ),
+          ))
+        ) {
+          return yield* new OrchestratorDispatchError({
+            commandId: command.commandId,
+            commandType: command.type,
+            cause: "Pinned threads and parents with live children never settle automatically.",
           });
         }
         if (command.completionRunId !== undefined) {
