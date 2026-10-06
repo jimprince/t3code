@@ -1445,3 +1445,18 @@ id = "v2-port-2689"
 date = "2026-10-05"
 decided = "reconcile-smaller"
 rationale = "Observe current V2 run items and their updatedAt timestamps; fresh run ids reset observations without provider restart."
+
+[[patch]]
+name = "fork-thread-titles"
+subject = "feat(t3-thread): rename threads and preserve explicit titles"
+class = "product"
+purpose = "Let operators and agents edit thread titles and project scope while preserving explicitly chosen creation titles."
+retire_when = "Upstream operator tooling provides equivalent rename and explicit title preservation."
+depends_on = ["fork-worker-operations"]
+roles = []
+note = "V2 launch opts out of generated titles for explicit creation; native thread.metadata.update handles rename. Saved aliases and raw UUIDs share title readback. Optional scope uses the server-owned supervision sidecar and supports explicit clearing."
+
+[[patch.decision]]
+id = "v2-port-2689-m2"
+decision = "reconcile-smaller"
+note = "V2 supervision metadata is separate from native execution lineage; retained behavior and import coverage are recorded in the nesting lane report."
