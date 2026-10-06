@@ -30,6 +30,7 @@ import {
   ProjectIssuesError,
   ProjectIssuesListResult,
   ProjectRequestCreateInput,
+  ProjectRequestKind,
   ProjectRequestCreateResult,
   ProjectRequestRef,
   ProjectRequestsListInput,
@@ -300,8 +301,13 @@ export const WsRpcGroup = RpcGroup.make(
     stream: true,
     error: Schema.Union([OrchestrationV2GetThreadProjectionError, EnvironmentAuthorizationError]),
   }),
+  // The kind goes out as the wire form so an earlier kind reaches a server that predates
+  // question, task and epic; the typed form only admits the current three.
   Rpc.make("projectRequests.create", {
-    payload: ProjectRequestCreateInput,
+    payload: Schema.Struct({
+      ...ProjectRequestCreateInput.fields,
+      kind: Schema.toEncoded(ProjectRequestKind),
+    }),
     success: ProjectRequestCreateResult,
     error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
   }),
