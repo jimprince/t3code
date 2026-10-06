@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "b70368ba6882b1eb89838a6891c8ce0babb2b4a8",
-  "head": "1e2c2e7b14d9ebfc7a777261211bc2a6b978d606",
+  "prev": "fa94b583d1fe7d65e57f9622ff884266c3370b1c",
+  "head": "a77644c1cb4da3e8010346d248fd44bf38236730",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -99,7 +99,8 @@
     "fork-textgen-own-scope",
     "fork-project-skew-gate",
     "fork-queue-idle-dispatch",
-    "fork-canvas-resize"
+    "fork-canvas-resize",
+    "fork-request-titles"
   ],
   "unapplied": [],
   "hidden": [],
@@ -316,6 +317,9 @@
     },
     "fork-request-ledger": {
       "oid": "445021e90367ddd0630e8979dc44c53b4fd2f176"
+    },
+    "fork-request-titles": {
+      "oid": "a77644c1cb4da3e8010346d248fd44bf38236730"
     },
     "fork-resource-recovery": {
       "oid": "aded63b3d85fe6040feacbf7710d122e63dffdf3"
