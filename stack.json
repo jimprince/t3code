@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "7583de7d35225b85acc235592cd9b5cc7b901223",
-  "head": "5084385266045fea63b88f3ffb1353c2d6d30060",
+  "prev": "b14bbda71cbafb8bc3544406baaa330d595fec55",
+  "head": "fcff3d3f3e562531d006eab0a7acd4dedbaa4f36",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -50,7 +50,9 @@
     "fork-worker-inactivity",
     "fork-thread-titles",
     "fork-subthread-lifecycle",
-    "fork-orchestrator-focus",
+    "fork-orchestrator-focus"
+  ],
+  "unapplied": [
     "fork-sidebar-nested-tidiness",
     "fork-interrupted-turn-rewind",
     "fork-agent-thread-ordering",
@@ -96,9 +98,7 @@
     "fork-item-types",
     "fork-board-declutter",
     "fork-project-skew-gate",
-    "fork-request-titles"
-  ],
-  "unapplied": [
+    "fork-request-titles",
     "fork-conversation-fork",
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
