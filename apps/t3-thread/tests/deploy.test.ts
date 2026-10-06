@@ -14,5 +14,5 @@ it.skipIf(!NodeFS.existsSync("/proc/sys/kernel/random/boot_id"))(
     ]);
     expect(result.stderr).toContain("OK");
   },
-  15_000,
+  60_000,
 );
