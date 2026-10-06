@@ -1,3 +1,5 @@
+import { toCodexNativeGoalSummary } from "../../provider/CodexNativeGoal.ts";
+import type { CodexNativeGoalSummary } from "@t3tools/contracts";
 import { withT3ThreadIdentityEnv } from "../../provider/t3ThreadIdentityEnv.ts";
 import { revertCodexThread } from "../../provider/CodexThreadRevert.ts";
 import { historyResponseItems } from "../ContextHandoffBudget.ts";
@@ -1579,7 +1581,10 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
           providerSessionId: input.providerSessionId,
           runtimePolicy: input.runtimePolicy,
           settings: resolvedRuntime?.config ?? adapterOptions.settings,
-          environment: withT3ThreadIdentityEnv(resolvedRuntime?.environment ?? adapterOptions.environment, { threadId: input.threadId }),
+          environment: withT3ThreadIdentityEnv(
+            resolvedRuntime?.environment ?? adapterOptions.environment,
+            { threadId: input.threadId },
+          ),
         });
         const additionalContextByThread = yield* Ref.make(
           new Map<
@@ -1707,8 +1712,64 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
         // path. Serialize the race so only one can publish terminal events.
         const turnTerminalizationPermit = yield* Semaphore.make(1);
 
-        const emitProviderEvent = (event: ProviderAdapterV2Event) =>
-          Queue.offer(events, event).pipe(Effect.asVoid);
+        const goalThreads = new Map<string, OrchestrationV2ProviderThread>();
+        const goalRevisions = new Map<string, number>();
+        const emitProviderEvent = (event: ProviderAdapterV2Event) => {
+          if (event.type === "provider_thread.updated") {
+            const nativeId = event.providerThread.nativeThreadRef?.nativeId;
+            const known = nativeId == null ? undefined : goalThreads.get(nativeId);
+            if (known) {
+              const providerThread = {
+                ...event.providerThread,
+                codexNativeGoal: known.codexNativeGoal ?? null,
+              };
+              goalThreads.set(nativeId!, providerThread);
+              event = { ...event, providerThread };
+            }
+          }
+          return Queue.offer(events, event).pipe(Effect.asVoid);
+        };
+        const hydrateGoal = Effect.fn("CodexAdapterV2.hydrateGoal")(function* (
+          thread: OrchestrationV2ProviderThread,
+        ) {
+          const nativeId = yield* getNativeThreadId(thread);
+          goalThreads.set(nativeId, {
+            ...thread,
+            codexNativeGoal: goalThreads.get(nativeId)?.codexNativeGoal ?? null,
+          });
+          const revision = goalRevisions.get(nativeId) ?? 0;
+          const goal = yield* client.request("thread/goal/get", { threadId: nativeId }).pipe(
+            Effect.map(({ goal }) =>
+              goal == null ? null : (toCodexNativeGoalSummary(goal) ?? null),
+            ),
+            Effect.catch(() => Effect.succeed(null)),
+          );
+          const hydrated = {
+            ...thread,
+            codexNativeGoal:
+              (goalRevisions.get(nativeId) ?? 0) === revision
+                ? goal
+                : (goalThreads.get(nativeId)?.codexNativeGoal ?? null),
+          };
+          goalThreads.set(nativeId, hydrated);
+          return hydrated;
+        });
+        const updateGoal = Effect.fn("CodexAdapterV2.updateGoal")(function* (
+          nativeId: string,
+          goal: CodexNativeGoalSummary | null,
+        ) {
+          // Only native roots registered by ensure/resume belong to the app shell.
+          const thread = goalThreads.get(nativeId);
+          if (!thread) return;
+          goalRevisions.set(nativeId, (goalRevisions.get(nativeId) ?? 0) + 1);
+          const updated = { ...thread, codexNativeGoal: goal, updatedAt: yield* DateTime.now };
+          goalThreads.set(nativeId, updated);
+          yield* emitProviderEvent({
+            type: "provider_thread.updated",
+            driver: CODEX_PROVIDER,
+            providerThread: updated,
+          });
+        });
 
         // Call only for new model-output activity. A local item/completed can
         // arrive while the upstream response stream is still retrying.
@@ -3847,6 +3908,16 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
           }).pipe(Effect.orDie),
         );
 
+        yield* client.handleServerNotification("thread/goal/updated", (payload) => {
+          const goal = toCodexNativeGoalSummary(payload.goal);
+          return goal === undefined
+            ? Effect.void
+            : updateGoal(payload.threadId, goal).pipe(Effect.orDie);
+        });
+        yield* client.handleServerNotification("thread/goal/cleared", (payload) =>
+          updateGoal(payload.threadId, null).pipe(Effect.orDie),
+        );
+
         yield* client.handleServerNotification("thread/tokenUsage/updated", (payload) =>
           Effect.gen(function* () {
             accumulateCodexTurnTokenUsage(
@@ -5373,6 +5444,12 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
           // against a long-delayed resume. Codex emits no resume-expected
           // signal to pin on.
           hasPendingBackgroundWork: Effect.gen(function* () {
+            if (
+              Array.from(goalThreads.values()).some(
+                (thread) => thread.codexNativeGoal?.status === "active",
+              )
+            )
+              return true;
             for (const items of (yield* Ref.get(runningCommandItemsByTurn)).values()) {
               if (items.size > 0) {
                 return true;
@@ -5392,6 +5469,12 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
           }),
           hasPendingBackgroundWorkForThread: (providerThread) =>
             Effect.gen(function* () {
+              const nativeId = providerThread.nativeThreadRef?.nativeId;
+              if (
+                nativeId != null &&
+                goalThreads.get(nativeId)?.codexNativeGoal?.status === "active"
+              )
+                return true;
               const contexts = [
                 ...(yield* Ref.get(activeTurns)).values(),
                 ...(yield* Ref.get(settledTurns)).values(),
@@ -5433,6 +5516,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
                   thread: response.thread,
                 }),
               ),
+              Effect.flatMap(hydrateGoal),
               Effect.mapError(
                 (cause) =>
                   new ProviderAdapterEnsureThreadError({
@@ -5481,7 +5565,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
                 ),
                 Effect.flatMap(decodeCodexResumeMetadata),
               );
-              return {
+              return yield* hydrateGoal({
                 ...threadInput.providerThread,
                 providerSessionId: input.providerSessionId,
                 providerInstanceId: adapterOptions.instanceId,
@@ -5493,7 +5577,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
                 },
                 nativeConversationHeadRef: threadInput.providerThread.nativeConversationHeadRef,
                 updatedAt: codexTimestamp(response.thread.updatedAt),
-              } satisfies OrchestrationV2ProviderThread;
+              } satisfies OrchestrationV2ProviderThread);
             }).pipe(
               Effect.mapError(
                 (cause) =>
@@ -5662,6 +5746,8 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
             Effect.gen(function* () {
               const nativeThreadId = yield* getNativeThreadId(unloadInput.providerThread);
               yield* client.request("thread/unsubscribe", { threadId: nativeThreadId });
+              goalThreads.delete(nativeThreadId);
+              goalRevisions.delete(nativeThreadId);
             }).pipe(
               Effect.mapError((cause) =>
                 cause._tag === "ProviderAdapterProtocolError"
