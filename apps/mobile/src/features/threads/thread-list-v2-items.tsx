@@ -1,4 +1,4 @@
-import { supervision } from "../../state/forkSupervision";
+import { supervision, useSupervisionReadyHosts } from "../../state/forkSupervision";
 import { useSupervisionStatus } from "./useSupervisionStatus";
 import {
   newForkCommandId,
@@ -549,6 +549,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
 }) {
   const resetOrder = useAtomCommand(resetForkThreadOrder);
   const orderResetSupported = useForkOrderResetSupported(props.thread.environmentId);
+  const orderMetadataReady = useSupervisionReadyHosts().has(props.thread.environmentId);
   const { width: windowWidth } = useWindowDimensions();
   const {
     thread,
@@ -638,8 +639,12 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     (enabled: boolean) => onSetThreadAutoSettle(thread, enabled),
     [onSetThreadAutoSettle, thread],
   );
-  const handleMoveUp = useCallback(() => onMoveThread?.(thread, "up"), [onMoveThread, thread]);
-  const handleMoveDown = useCallback(() => onMoveThread?.(thread, "down"), [onMoveThread, thread]);
+  const handleMoveUp = useCallback(() => {
+    if (appAtomRegistry.get(supervision.readyHosts).has(thread.environmentId)) return onMoveThread?.(thread, "up");
+  }, [onMoveThread, thread]);
+  const handleMoveDown = useCallback(() => {
+    if (appAtomRegistry.get(supervision.readyHosts).has(thread.environmentId)) return onMoveThread?.(thread, "down");
+  }, [onMoveThread, thread]);
   const handleArchive = useCallback(() => onArchiveThread(thread), [onArchiveThread, thread]);
 
   // Swipe: the v2 primary action is the lifecycle transition. Un-settling a
@@ -699,13 +704,13 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
               id: "move-up",
               title: "Move up",
               image: "arrow.up",
-              attributes: { disabled: props.canMoveUp !== true },
+              attributes: { disabled: !orderMetadataReady || props.canMoveUp !== true },
             } satisfies MenuAction,
             {
               id: "move-down",
               title: "Move down",
               image: "arrow.down",
-              attributes: { disabled: props.canMoveDown !== true },
+              attributes: { disabled: !orderMetadataReady || props.canMoveDown !== true },
             } satisfies MenuAction,
           ]
         : []),
@@ -719,6 +724,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     ],
     [
       orderResetSupported,
+      orderMetadataReady,
       props.canMoveDown,
       props.canMoveUp,
       props.reorderSupported,
