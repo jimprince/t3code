@@ -75,3 +75,4 @@ export * from "./threadIssue.ts";
 export * from "./namedAgents.ts";
 
 export * from "./projectAutomations.ts";
+export * from "./projectIssues.ts";
