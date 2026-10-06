@@ -70,7 +70,7 @@ layer("001_ProviderSessionRuntimeBootGeneration", (it) => {
           FROM effect_sql_fork_migrations
           ORDER BY migration_id
         `;
-        // Exact M2 ledger; the final release must extend this assertion for all retained M3 IDs.
+        // Exact fork ledger; each patch that registers a fork migration extends this list.
         assert.deepStrictEqual(forkMigrations, [
           { migration_id: 1, name: "ProviderSessionRuntimeBootGeneration" },
           { migration_id: 2, name: "ProviderSessionRuntimeActiveTurn" },
@@ -79,6 +79,9 @@ layer("001_ProviderSessionRuntimeBootGeneration", (it) => {
           { migration_id: 6, name: "ProjectionThreadsParentThread" },
           { migration_id: 7, name: "ThreadBackgroundWork" },
           { migration_id: 8, name: "ProjectionThreadsSettleOnComplete" },
+          { migration_id: 9, name: "ProjectionProjectsPermanentAgent" },
+          { migration_id: 10, name: "ProjectionProjectAutomations" },
+          { migration_id: 11, name: "ProjectionThreadsScope" },
           { migration_id: 12, name: "ProjectionThreadsRemoteParent" },
         ]);
 
