@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "ca03f0f171a2e13d4b3afd548ed0eef6e2177baf",
-  "head": "273fb7fcd8a6a0fe22f4441cc002d24582d22ddc",
+  "prev": "ded8489c8a5d271bee72ec16ba300629dd3cb5bf",
+  "head": "36098760cb258ab50e94f9e5186a026a2a08a3ee",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -54,10 +54,10 @@
     "fork-sidebar-nested-tidiness",
     "fork-interrupted-turn-rewind",
     "fork-agent-thread-ordering",
-    "fork-cross-environment-nesting",
-    "fork-queue-coalesced-notes"
+    "fork-cross-environment-nesting"
   ],
   "unapplied": [
+    "fork-queue-coalesced-notes",
     "fork-conversation-fork",
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
