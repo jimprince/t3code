@@ -2443,3 +2443,24 @@ id = "gitmanager-faketextgeneration"
 date = "2026-07-28"
 decided = "retire"
 rationale = "Upstream replaced the duplicate hand-written interface with TextGeneration['Service']; keep the upstream type alias and do not restore the redundant interface."
+
+[[patch]]
+name = "fork-session-reconcile"
+subject = "fix(server): clear a session left running by an interrupted turn"
+class = "product"
+purpose = "Keep an interrupted turn from leaving its session running: the interrupt path clears the session on native finalization or a bounded fallback after acknowledgement, the in-memory read model ends the interrupted turn like the SQL projection, and a thread.session.reconcile command (t3-thread session reconcile) recomputes a session stuck on an ended turn."
+retire_when = "Upstream settles the session in the same transaction as an interrupt request, or the fork stops depending on session status to deliver queued sends."
+depends_on = ["fork-queue-idle-dispatch"]
+roles = []
+note = "Fixes the server-side variant of brad/t3code-fork#150. V2 preserves native terminal ordering after the provider acknowledges Stop, with a durable ten-second fallback if native finalization never arrives. Clearing before acknowledgement would hide a failed interrupt from its stop-session recovery. Reconcile only rewrites a session whose active turn is the latest turn and that turn has ended; it is not offered in the web or mobile UI."
+
+
+[[patch.decision]]
+id = "v2-m5-session-reconcile"
+decision = "adapt"
+note = "V2 has runs and shared runtime session records, not V1 session summaries. Successful provider interrupt effects already dispatch thread.background-work.settle; its receipt now settles the exact interrupted run, attempt and nodes and clears the matching session. A fork RPC preserves t3-thread session reconcile and refuses live/newer runs. Startup recovery already stops all process-bound sessions; no new migration is needed. Native terminal receipts settle the run, with a ten-second durable fallback after Stop acknowledgement."
+
+[[patch.decision]]
+id = "v2-ci4-native-terminal-before-reconcile"
+decision = "adapt"
+note = "Stop ACK records acknowledgement without terminalizing the run. Native finalization retains upstream ordering for rollback refs, usage and terminal receipts across all drivers. A replay-safe durable outbox fallback settles the exact run after ten seconds if native finalization never arrives; newer work wins. This replaces the OpenCode replay drain, leaving upstream testkit files unchanged. V1 ACK-to-ready remains bounded rather than waiting indefinitely for ingestion."
