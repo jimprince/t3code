@@ -1,3 +1,4 @@
+import { pendingInputKey } from "./inputReminders.js";
 import * as NodeCrypto from "node:crypto";
 import { pendingRequests } from "./v2/requests.js";
 
@@ -98,6 +99,27 @@ export function buildNotificationRecord(input: {
       routeKey;
 
   return {
+    pendingInputRequestKey:
+      input.overview.state === "needs-input" ? pendingInputKey(input.thread) : null,
+    isChildInput:
+      input.overview.state === "needs-input" &&
+      input.thread.parentThreadId === input.subscription.subscriberThreadId &&
+      input.subscription.sourceEnvironment === input.subscription.subscriberEnvironment,
+    pendingQuestion:
+      input.overview.state === "needs-input"
+        ? pendingRequests(input.thread)
+            .flatMap((request) =>
+              (request.detail ?? []).flatMap((item) =>
+                item.type === "user_input_request"
+                  ? item.questions.map(
+                      (question) =>
+                        `${question.question}${question.options.length ? ` Choices: ${question.options.map((option) => option.label).join(", ")}` : ""}`,
+                    )
+                  : [],
+              ),
+            )
+            .join("; ") || null
+        : null,
     completionDisposition: turnResultDisposition(input.thread),
     id: input.existing?.id ?? NodeCrypto.randomUUID(),
     eventKey,
@@ -165,10 +187,12 @@ export function buildNotificationMessage(
   const preview = notification.preview ? summarizeMessageText(notification.preview, 120) : null;
   const notice = [
     `T3 orchestrator notification: ${sourceLabel} ${notification.sourceState === "completed" ? "completed a turn" : "needs attention"}.`,
+    notification.reminderOfEventKey ? "Reminder: this sub-agent is still waiting for input." : null,
     `State: ${notification.sourceState}.`,
     `Reason: ${notification.reason}.`,
     (notification.occurrences ?? 1) > 1 ? `Occurrences: ${notification.occurrences}.` : null,
     preview ? `Latest output: ${preview}.` : null,
+    notification.pendingQuestion ? `Pending question: ${notification.pendingQuestion}` : null,
     notification.sourceState === "completed"
       ? `Decide whether ${sourceLabel} is finished: if so, settle it with \`t3-thread settle ${sourceLabel}\`; if not, send it the follow-up.`
       : null,
