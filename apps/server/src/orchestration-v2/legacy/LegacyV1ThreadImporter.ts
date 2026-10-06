@@ -18,6 +18,7 @@ import {
   ProjectId,
   ProviderInstanceId,
   ThreadId,
+  ThreadIssueLink,
   ThreadLinkedPullRequest,
   ThreadPullRequestLink,
   TurnItemId,
@@ -57,6 +58,7 @@ interface LegacyThreadRow {
   readonly pinned_at: string | null;
   readonly auto_settle_disabled_at: string | null;
   readonly pin_order_key: string | null;
+  readonly issues_json: string;
   readonly pull_requests_json: string;
   readonly linked_pull_request_json: string | null;
   readonly branch_pull_request_json: string | null;
@@ -121,6 +123,7 @@ export class LegacyV1ThreadImporter extends Context.Service<
 >()("t3/orchestration-v2/legacy/LegacyV1ThreadImporter") {}
 
 const decodeModelSelection = Schema.decodeUnknownOption(ModelSelection);
+const decodeIssueLinks = Schema.decodeUnknownSync(Schema.Array(ThreadIssueLink));
 const decodePullRequests = Schema.decodeUnknownOption(Schema.Array(ThreadPullRequestLink));
 const decodeLinkedPullRequest = Schema.decodeUnknownOption(ThreadLinkedPullRequest);
 const decodeStoredThread = Schema.decodeUnknownOption(
@@ -214,6 +217,7 @@ function importedThread(row: LegacyThreadRow): OrchestrationV2AppThread {
     branch,
     worktreePath,
     linkedPullRequest,
+    issues: decodeIssueLinks(parseJson(row.issues_json)),
     pullRequests: importedPullRequests,
     branchPullRequest: branchPullRequestFor(row),
     activeOrderKey: row.active_order_key?.trim() || null,
@@ -464,6 +468,7 @@ const make = Effect.gen(function* () {
         thread.auto_settle_disabled_at,
         thread.pin_order_key,
         (SELECT json_group_array(json_object('host', pr.host, 'repository', pr.repository, 'number', pr.number, 'url', pr.url, 'source', pr.source, 'linkedAt', pr.linked_at, 'snapshot', json(pr.snapshot_json), 'stack', json(pr.stack_json))) FROM projection_thread_pull_requests pr WHERE pr.thread_id = thread.thread_id) AS pull_requests_json,
+        (SELECT json_group_array(json_object('host', i.host, 'repository', i.repository, 'number', i.number, 'url', i.url, 'linkedAt', i.linked_at, 'snapshot', json(i.snapshot_json))) FROM (SELECT * FROM projection_thread_issues ORDER BY linked_at ASC, number ASC) i WHERE i.thread_id = thread.thread_id) AS issues_json,
         thread.linked_pull_request_json,
         thread.branch_pull_request_json,
         thread.active_order_key,
@@ -480,6 +485,7 @@ const make = Effect.gen(function* () {
          OR json_type(projection.payload_json, '$.snoozedAt') IS NULL
          OR json_type(projection.payload_json, '$.unsettledAt') IS NULL
          OR json_type(projection.payload_json, '$.linkedPullRequest') IS NULL
+         OR json_type(projection.payload_json, '$.issues') IS NULL
          OR json_type(projection.payload_json, '$.pullRequests') IS NULL
          OR json_type(projection.payload_json, '$.branchPullRequest') IS NULL
          OR json_type(projection.payload_json, '$.activeOrderKey') IS NULL
@@ -494,6 +500,7 @@ const make = Effect.gen(function* () {
       const legacyPullRequests = legacy.pullRequests ?? [];
       const repaired: OrchestrationV2AppThread = {
         ...current,
+        issues: current.issues === undefined ? (legacy.issues ?? []) : current.issues,
         pinnedAt: current.pinnedAt === undefined ? legacy.pinnedAt : current.pinnedAt,
         autoSettleDisabledAt:
           current.autoSettleDisabledAt === undefined
@@ -568,6 +575,7 @@ const make = Effect.gen(function* () {
         thread.auto_settle_disabled_at,
         thread.pin_order_key,
         (SELECT json_group_array(json_object('host', pr.host, 'repository', pr.repository, 'number', pr.number, 'url', pr.url, 'source', pr.source, 'linkedAt', pr.linked_at, 'snapshot', json(pr.snapshot_json), 'stack', json(pr.stack_json))) FROM projection_thread_pull_requests pr WHERE pr.thread_id = thread.thread_id) AS pull_requests_json,
+        (SELECT json_group_array(json_object('host', i.host, 'repository', i.repository, 'number', i.number, 'url', i.url, 'linkedAt', i.linked_at, 'snapshot', json(i.snapshot_json))) FROM (SELECT * FROM projection_thread_issues ORDER BY linked_at ASC, number ASC) i WHERE i.thread_id = thread.thread_id) AS issues_json,
         thread.linked_pull_request_json,
         thread.branch_pull_request_json,
         thread.active_order_key,
