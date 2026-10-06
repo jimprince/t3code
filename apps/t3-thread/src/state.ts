@@ -5,6 +5,7 @@ import {
 } from "@t3tools/shared/threadRoutingState";
 
 import type {
+  NotificationLevel,
   SavedAgent,
   SavedEnvironment,
   SavedNotification,
@@ -290,10 +291,11 @@ export function buildSubscriptionRecord(
   source: SubscriptionEndpoint,
   now: string,
   existing?: SavedSubscription | null,
-  options: { baselineTurnId?: string | null; events?: "all" | "attention" } = {},
+  options: { baselineTurnId?: string | null; level?: NotificationLevel } = {},
 ): SavedSubscription {
   return {
-    events: options.events ?? existing?.events ?? "all",
+    ...existing,
+    level: options.level ?? existing?.level ?? "all",
     subscriberThreadId: caller.threadId,
     subscriberAgentName: caller.name,
     subscriberEnvironment: caller.environment,
