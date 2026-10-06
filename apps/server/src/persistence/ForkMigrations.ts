@@ -10,7 +10,7 @@ import Migration0005 from "./ForkMigrations/005_MigrateSidebarOrderEvents.ts";
 import Migration0006 from "./ForkMigrations/006_ProjectionThreadsParentThread.ts";
 import Migration0007 from "./ForkMigrations/007_ThreadBackgroundWork.ts";
 import Migration0008 from "./ForkMigrations/008_ProjectionThreadsSettleOnComplete.ts";
-
+import Migration0009 from "./ForkMigrations/009_ProjectionProjectsPermanentAgent.ts";
 import Migration0011 from "./ForkMigrations/011_ProjectionThreadsScope.ts";
 import Migration0012 from "./ForkMigrations/012_ProjectionThreadsRemoteParent.ts";
 
@@ -26,6 +26,7 @@ export const forkMigrationEntries = [
   [7, "ThreadBackgroundWork", Migration0007],
   // ID 4 was published as ProjectionThreadsSidebarOrderKey; do not reuse it.
   [8, "ProjectionThreadsSettleOnComplete", Migration0008],
+  [9, "ProjectionProjectsPermanentAgent", Migration0009],
   [11, "ProjectionThreadsScope", Migration0011],
   [12, "ProjectionThreadsRemoteParent", Migration0012],
 ] as const;
