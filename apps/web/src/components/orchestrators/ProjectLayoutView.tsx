@@ -14,14 +14,14 @@ import { useMemo, useState, type DragEvent, type ReactNode } from "react";
 
 import ChatMarkdown from "../ChatMarkdown";
 import { projectCanvasQuery } from "../../state/projectCanvas";
-import { projectDashboardQuery, setProjectDashboardTracker } from "../../state/projectDashboard";
 import { useEnvironmentQuery } from "../../state/query";
-import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
 import { Input } from "../ui/input";
+import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 import { ProjectCanvasError, ProjectCanvasWidget } from "./ProjectCanvasWidget";
+import { ProjectSection } from "./ProjectSection";
 
 /** Drag payloads: a widget moves within or across tabs, a tab moves along the tab row. */
 export const WIDGET_DRAG_TYPE = "application/x-t3-layout-widget";
@@ -33,7 +33,47 @@ const SPAN: Record<ProjectWidgetSize, string> = {
   full: "col-span-6",
 };
 
-const SIZES: ReadonlyArray<ProjectWidgetSize> = ["small", "medium", "full"];
+const SIZE_LABEL: Record<ProjectWidgetSize, string> = {
+  small: "Third",
+  medium: "Half",
+  full: "Full",
+};
+
+/** A compact dropdown for the layout editor; `items` maps each value to its label. */
+function EditorSelect<T extends string>({
+  label,
+  value,
+  items,
+  placeholder,
+  onChange,
+}: {
+  readonly label: string;
+  readonly value: T | "";
+  readonly items: Readonly<Record<T, string>>;
+  readonly placeholder?: string;
+  readonly onChange: (value: T) => void;
+}) {
+  return (
+    <Select
+      value={value === "" ? null : value}
+      items={items}
+      onValueChange={(next) => {
+        if (next !== null) onChange(next as T);
+      }}
+    >
+      <SelectTrigger size="compact" aria-label={label} className="w-auto">
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectPopup>
+        {(Object.keys(items) as T[]).map((key) => (
+          <SelectItem key={key} value={key}>
+            {items[key]}
+          </SelectItem>
+        ))}
+      </SelectPopup>
+    </Select>
+  );
+}
 
 const widgetLabel = (widget: ProjectLayoutWidget) =>
   widget.title ??
@@ -73,10 +113,7 @@ function LinksWidget({ widget }: { readonly widget: ProjectLayoutWidget }) {
   const items = (widget.config.items ?? []) as ReadonlyArray<{ label: string; url: string }>;
   if (items.length === 0) return null;
   return (
-    <section className="border-t border-border pt-4">
-      <h2 className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-        {widget.title ?? "Links"}
-      </h2>
+    <ProjectSection title={widget.title ?? "Links"}>
       <ul className="flex flex-col gap-1">
         {items.map((item) => (
           <li key={`${item.label}:${item.url}`}>
@@ -91,7 +128,7 @@ function LinksWidget({ widget }: { readonly widget: ProjectLayoutWidget }) {
           </li>
         ))}
       </ul>
-    </section>
+    </ProjectSection>
   );
 }
 
@@ -104,33 +141,27 @@ function NoteWidget({
 }) {
   const text = String(widget.config.text ?? "").trim();
   if (!text) return null;
-  return (
-    <section className="border-t border-border pt-4">
-      {widget.title ? (
-        <h2 className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-          {widget.title}
-        </h2>
-      ) : null}
-      <ChatMarkdown
-        text={text}
-        cwd={undefined}
-        environmentId={summary.root.environmentId}
-        className="text-sm"
-      />
-    </section>
+  const note = (
+    <ChatMarkdown
+      text={text}
+      cwd={undefined}
+      environmentId={summary.root.environmentId}
+      className="text-sm"
+    />
   );
+  return widget.title ? <ProjectSection title={widget.title}>{note}</ProjectSection> : note;
 }
 
 /** One settings field of a widget in the editor. */
 function ConfigField({
   field,
   value,
-  canvasIds,
+  canvasNames,
   onChange,
 }: {
   readonly field: ProjectWidgetConfigField;
   readonly value: unknown;
-  readonly canvasIds: ReadonlyArray<string>;
+  readonly canvasNames: Readonly<Record<string, string>>;
   readonly onChange: (value: unknown) => void;
 }) {
   const [draft, setDraft] = useState(() =>
@@ -170,17 +201,12 @@ function ConfigField({
       return (
         <label className="flex items-center gap-2 text-xs">
           {field.label}
-          <select
-            className="rounded-sm border border-border bg-background px-1 py-0.5"
+          <EditorSelect
+            label={field.label}
             value={String(value ?? "")}
-            onChange={(event) => onChange(event.target.value)}
-          >
-            {canvasIds.map((id) => (
-              <option key={id} value={id}>
-                {id}
-              </option>
-            ))}
-          </select>
+            items={canvasNames}
+            onChange={onChange}
+          />
         </label>
       );
     case "text":
@@ -214,14 +240,14 @@ function EditFrame({
   widget,
   tabId,
   index,
-  canvasIds,
+  canvasNames,
   onApply,
   children,
 }: {
   readonly widget: ProjectLayoutWidget;
   readonly tabId: string;
   readonly index: number;
-  readonly canvasIds: ReadonlyArray<string>;
+  readonly canvasNames: Readonly<Record<string, string>>;
   readonly onApply: (ops: ProjectLayoutOp[]) => void;
   readonly children: ReactNode;
 }) {
@@ -256,26 +282,12 @@ function EditFrame({
         <span className="min-w-0 flex-1 truncate font-medium text-foreground/80">
           {widgetLabel(widget)}
         </span>
-        <select
-          aria-label={`Size of ${widgetLabel(widget)}`}
-          className="rounded-sm border border-border bg-background px-1 py-0.5"
+        <EditorSelect
+          label={`Size of ${widgetLabel(widget)}`}
           value={widget.size ?? "full"}
-          onChange={(event) =>
-            onApply([
-              {
-                op: "setWidgetSize",
-                widgetId: widget.id,
-                size: event.target.value as ProjectWidgetSize,
-              },
-            ])
-          }
-        >
-          {SIZES.map((size) => (
-            <option key={size} value={size}>
-              {size}
-            </option>
-          ))}
-        </select>
+          items={SIZE_LABEL}
+          onChange={(size) => onApply([{ op: "setWidgetSize", widgetId: widget.id, size }])}
+        />
         {fields.length > 0 ? (
           <Button
             size="icon-xs"
@@ -319,7 +331,7 @@ function EditFrame({
               key={field.key}
               field={field}
               value={widget.config[field.key]}
-              canvasIds={canvasIds}
+              canvasNames={canvasNames}
               onChange={(value) =>
                 onApply([
                   { op: "setWidgetConfig", widgetId: widget.id, config: { [field.key]: value } },
@@ -337,11 +349,11 @@ function EditFrame({
 /** Adds a widget of any registered type to the open tab. */
 function AddWidget({
   tabId,
-  canvasIds,
+  canvasNames,
   onApply,
 }: {
   readonly tabId: string;
-  readonly canvasIds: ReadonlyArray<string>;
+  readonly canvasNames: Readonly<Record<string, string>>;
   readonly onApply: (ops: ProjectLayoutOp[]) => void;
 }) {
   const [type, setType] = useState("");
@@ -351,35 +363,25 @@ function AddWidget({
   return (
     <div className="col-span-6 flex flex-wrap items-center gap-2 rounded-md border border-dashed border-border px-2 py-2 text-xs">
       <PlusIcon className="size-3.5 text-muted-foreground" aria-hidden />
-      <select
-        aria-label="Widget to add"
-        className="rounded-sm border border-border bg-background px-1 py-0.5"
+      <EditorSelect
+        label="Widget to add"
         value={type}
-        onChange={(event) => setType(event.target.value)}
-      >
-        <option value="">Add a widget...</option>
-        {PROJECT_WIDGET_TYPES.filter((item) => item.type !== "canvas" || canvasIds.length > 0).map(
-          (item) => (
-            <option key={item.type} value={item.type}>
-              {item.title}
-            </option>
-          ),
+        placeholder="Add a widget"
+        items={Object.fromEntries(
+          PROJECT_WIDGET_TYPES.filter(
+            (item) => item.type !== "canvas" || Object.keys(canvasNames).length > 0,
+          ).map((item) => [item.type, item.title]),
         )}
-      </select>
+        onChange={setType}
+      />
       {needsCanvas ? (
-        <select
-          aria-label="Canvas"
-          className="rounded-sm border border-border bg-background px-1 py-0.5"
+        <EditorSelect
+          label="Canvas"
           value={canvasId}
-          onChange={(event) => setCanvasId(event.target.value)}
-        >
-          <option value="">Canvas...</option>
-          {canvasIds.map((id) => (
-            <option key={id} value={id}>
-              {id}
-            </option>
-          ))}
-        </select>
+          placeholder="Canvas"
+          items={canvasNames}
+          onChange={setCanvasId}
+        />
       ) : null}
       {definition ? (
         <span className="min-w-0 flex-1 truncate text-muted-foreground">
@@ -407,35 +409,6 @@ function AddWidget({
   );
 }
 
-/** The project's Gitea tracker repository, kept from the old Customize dialog. */
-function TrackerSetting({ summary }: { readonly summary: OrchestratorSummary }) {
-  const environmentId = summary.root.environmentId;
-  const dashboard = useEnvironmentQuery(
-    projectDashboardQuery({ environmentId, input: { threadId: summary.root.id } }),
-  );
-  const saveTracker = useAtomCommand(setProjectDashboardTracker, "Save tracker repository");
-  const current = dashboard.data?.tracker ?? "";
-  return (
-    <label className="col-span-6 flex items-center gap-2 text-xs text-muted-foreground">
-      Gitea tracker repository
-      <Input
-        key={current}
-        className="max-w-xs"
-        defaultValue={current}
-        placeholder="owner/repo, when the code is not on Gitea"
-        onBlur={(event) => {
-          const next = event.target.value.trim() || null;
-          if (next === (current || null)) return;
-          void saveTracker({
-            environmentId,
-            input: { threadId: summary.root.id, tracker: next },
-          }).then(() => dashboard.refresh());
-        }}
-      />
-    </label>
-  );
-}
-
 /**
  * One tab of the project layout: its widgets in a grid (full, half or a third of
  * the width). In edit mode each widget can be dragged, resized, configured or
@@ -458,7 +431,9 @@ export function ProjectLayoutTabView({
   readonly onApply: (ops: ProjectLayoutOp[]) => void;
 }) {
   const canvases = useCanvases(summary, tabs);
-  const canvasIds = [...canvases.pages.keys()];
+  const canvasNames = Object.fromEntries(
+    [...canvases.pages.values()].map((page) => [page.id, page.title]),
+  );
 
   const content = (widget: ProjectLayoutWidget): ReactNode => {
     switch (widget.type) {
@@ -477,7 +452,7 @@ export function ProjectLayoutTabView({
           <>
             {canvases.data ? <ProjectCanvasError canvas={canvases.data} /> : null}
             {canvases.unplaced.length > 0 ? (
-              <div className="grid grid-cols-6 gap-4 border-t border-border pt-4">
+              <div className="grid grid-cols-6 gap-4">
                 {canvases.unplaced.map((page) => (
                   <ProjectCanvasWidget
                     key={page.id}
@@ -502,7 +477,7 @@ export function ProjectLayoutTabView({
       : "full");
 
   return (
-    <div className="grid grid-cols-6 gap-x-4 gap-y-5">
+    <div className="grid grid-cols-6 gap-x-4 gap-y-8">
       {tab.widgets.map((widget, index) =>
         editing ? (
           <div key={widget.id} className={SPAN[sizeOf(widget)]}>
@@ -510,7 +485,7 @@ export function ProjectLayoutTabView({
               widget={widget}
               tabId={tab.id}
               index={index}
-              canvasIds={canvasIds}
+              canvasNames={canvasNames}
               onApply={onApply}
             >
               {content(widget)}
@@ -540,10 +515,9 @@ export function ProjectLayoutTabView({
               }
             }}
           >
-            Drop here to move a widget to the end of this tab
+            Drop a widget here
           </div>
-          <AddWidget tabId={tab.id} canvasIds={canvasIds} onApply={onApply} />
-          <TrackerSetting summary={summary} />
+          <AddWidget tabId={tab.id} canvasNames={canvasNames} onApply={onApply} />
         </>
       ) : null}
     </div>
