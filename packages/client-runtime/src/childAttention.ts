@@ -1,12 +1,12 @@
 import type { EnvironmentThreadShell } from "./state/models.ts";
-import { supervisionKey, supervisionParentKey } from "./state/forkNesting.ts";
+import { supervisionThreadKey, supervisionParentKey } from "./state/fork-nesting.ts";
 
 /** Waiting children add an action to their organizational ancestors, never a runtime state. */
 export function groupSupervisionChildInputAttention(
   threads: ReadonlyArray<EnvironmentThreadShell>,
 ) {
   const groups = new Map<string, EnvironmentThreadShell[]>();
-  const byKey = new Map(threads.map((thread) => [supervisionKey(thread), thread]));
+  const byKey = new Map(threads.map((thread) => [supervisionThreadKey(thread), thread]));
   for (const child of threads) {
     if (
       !child.hasPendingUserInput ||
@@ -15,7 +15,7 @@ export function groupSupervisionChildInputAttention(
       child.settledOverride === "settled"
     )
       continue;
-    const seen = new Set([supervisionKey(child)]);
+    const seen = new Set([supervisionThreadKey(child)]);
     let parentKey = supervisionParentKey(child);
     while (parentKey !== null && !seen.has(parentKey)) {
       seen.add(parentKey);
