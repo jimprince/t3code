@@ -254,6 +254,7 @@ describe("state helpers", () => {
 
     expect(buildSubscriptionRecord(caller, source, "2026-04-18T19:00:00.000Z")).toEqual({
       level: "all",
+      inputReminderMinutes: 45,
       subscriberThreadId: "thread-coordinator-a",
       subscriberAgentName: "coordinator-a",
       subscriberEnvironment: "local-mbp",
@@ -297,6 +298,7 @@ describe("state helpers", () => {
 
     expect(buildSubscriptionRecord(caller, source, "2026-04-18T19:00:00.000Z")).toEqual({
       level: "all",
+      inputReminderMinutes: 45,
       subscriberThreadId: "thread-unsaved-caller",
       subscriberAgentName: null,
       subscriberEnvironment: "local-mbp",
