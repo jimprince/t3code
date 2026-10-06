@@ -1815,3 +1815,8 @@ id = "v2-automation-interrupted-upgrade"
 date = "2026-10-06"
 decided = "adapt"
 rationale = "A running V1 automation input with no terminal legacy outcome finishes failed with Interrupted by the upgrade. Run it again if needed. The one-way upgrade occurs in an idle window; leftovers never redispatch, and users can Run now. The historical reader remains read-only inside the legacy import boundary."
+
+[[patch.decision]]
+id = "v2-m5-automation-result-modes"
+decision = "adapt"
+note = "Preserve act result mode, existing-thread CLI defaults and automation edit. Exact V2 root run identity replaces V1 null-turn matching; a live root run cannot fail from an older stopped session. The result mode UI delta is delivered separately to the UI lane."
