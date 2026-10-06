@@ -5,7 +5,7 @@ import { Button } from "../ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 
 /** A project-page widget heading: "NEEDS YOU 3", with an optional action at the right. */
-export function SectionHeading({
+function SectionHeading({
   title,
   count,
   action,

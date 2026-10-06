@@ -322,7 +322,7 @@ function IssueLink({ issue }: { readonly issue: ProjectIssue }) {
  * the status, type and age move to a line under the title, so the title keeps
  * the width.
  */
-export function TaskRow({
+function TaskRow({
   issue,
   status,
   statusTone = "muted",

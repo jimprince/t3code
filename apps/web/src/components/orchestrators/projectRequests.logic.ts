@@ -7,7 +7,7 @@ export type RequestKind = "question" | "task" | "epic";
 /** What Brad does next with a request that is his to act on. */
 export type ForYouGroup = "answers" | "review" | "approve" | "test";
 
-export const FOR_YOU_GROUPS: ReadonlyArray<{ group: ForYouGroup; title: string }> = [
+const FOR_YOU_GROUPS: ReadonlyArray<{ group: ForYouGroup; title: string }> = [
   { group: "answers", title: "Answers ready" },
   { group: "review", title: "Review" },
   { group: "approve", title: "Approve" },
