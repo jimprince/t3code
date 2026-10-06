@@ -1388,3 +1388,19 @@ id = "v2-port-2689-m2"
 date = "2026-10-05"
 decided = "reconcile-smaller"
 rationale = "Port supervision UI to V2 shells behind fork-owned components; preserve native lineage and run state."
+
+[[patch]]
+name = "fork-sidebar-drag-to-nest"
+subject = "feat(web): drag threads to nest them"
+class = "product"
+purpose = "Let web and desktop users nest threads directly through the existing sidebar drag interaction."
+retire_when = "Upstream supports drag-to-nest with cycle-safe parent assignment and an equivalent accessible menu action."
+depends_on = ["fork-cross-project-thread-nesting", "fork-sidebar-agent-visibility"]
+roles = []
+note = "Dragging defaults to reorder. An eligible row becomes a nesting target only after the pointer moves right by one existing 12px child indent; returning within half an indent restores reorder without boundary flicker. Reorder shows a full-width insertion line, while nesting highlights the parent and shows an indented child-depth marker. Parent assignment uses the V2 supervision sidecar service with the same cycle and candidate validation as other metadata mutations. Nesting preserves the dragged thread's own pin, while a section drop moves it to the top level and lets Pinned or Active set that state. Nested rows are drag sources, reorder only inside their matching pinned or unpinned sibling bucket, and never duplicate into the top-level Pinned shelf."
+
+[[patch.decision]]
+id = "v2-port-2689-m2"
+date = "2026-10-05"
+decided = "reconcile-smaller"
+rationale = "Port supervision UI to V2 shells behind fork-owned components; preserve native lineage and run state."
