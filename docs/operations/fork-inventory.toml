@@ -1550,4 +1550,3 @@ id = "v2-port-2689"
 date = "2026-10-05"
 decided = "reconcile-smaller"
 rationale = "Retain keyed waiting-note replacement under the local state lock with sender/environment isolation, dispatch through V2 native receipts and preserve unkeyed commands."
-
