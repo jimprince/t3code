@@ -1,3 +1,4 @@
+import { useSupervisionMetadata } from "../../state/forkSupervision";
 import { useProjects } from "../../state/entities";
 import { SupervisionGroupRow } from "./SupervisionGroupRow";
 import { groupQuietChildren, supervisionProjectLabel } from "./nestedThreadVisibility.logic";
@@ -6,10 +7,10 @@ import * as Schema from "effect/Schema";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import {
   supervisionForest,
-  supervisionKey,
+  supervisionThreadKey,
   supervisionVisiblePaths,
   supervisionIsActive,
-} from "@t3tools/client-runtime/state/forkNesting";
+} from "@t3tools/client-runtime/state/fork-nesting";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { SidebarNestedThreadToggle } from "./SidebarNestedThreadToggle";
 
@@ -21,8 +22,13 @@ export function useSupervisionSidebar(
   openedKey: string | null,
 ) {
   const projects = useProjects();
-  const projectTitles = useMemo(() => new Map(projects.map(project => [`${project.environmentId}:${project.id}`, project.title])), [projects]);
-  const forest = useMemo(() => supervisionForest(threads), [threads]);
+  const projectTitles = useMemo(
+    () =>
+      new Map(projects.map((project) => [`${project.environmentId}:${project.id}`, project.title])),
+    [projects],
+  );
+  const metadata = useSupervisionMetadata();
+  const forest = useMemo(() => supervisionForest(threads, metadata), [threads, metadata]);
   const paths = useMemo(() => supervisionVisiblePaths(forest, openedKey), [forest, openedKey]);
   return { forest, paths, projectTitles };
 }
@@ -34,7 +40,7 @@ export function SupervisionThreadRows(props: {
   renderRow: (thread: EnvironmentThreadShell) => ReactNode;
   children: ReactNode;
 }) {
-  const key = supervisionKey(props.thread);
+  const key = supervisionThreadKey(props.thread);
   const [expandedKeys, setExpandedKeys] = useLocalStorage(
     "t3code:sidebar:expanded-parents",
     EMPTY_KEYS,
@@ -56,13 +62,16 @@ export function SupervisionThreadRows(props: {
   });
   const renderChild = (child: EnvironmentThreadShell) => (
     <SupervisionThreadRows
-      key={supervisionKey(child)}
+      key={supervisionThreadKey(child)}
       thread={child}
       supervision={props.supervision}
       renderRow={props.renderRow}
     >
       {supervisionProjectLabel(child, props.thread) ? (
-        <span className="px-2 text-xs">{props.supervision.projectTitles.get(`${child.environmentId}:${child.projectId}`) ?? supervisionProjectLabel(child, props.thread)}</span>
+        <span className="px-2 text-xs">
+          {props.supervision.projectTitles.get(`${child.environmentId}:${child.projectId}`) ??
+            supervisionProjectLabel(child, props.thread)}
+        </span>
       ) : null}
       {props.renderRow(child)}
     </SupervisionThreadRows>
@@ -92,7 +101,7 @@ export function SupervisionThreadRows(props: {
       <div className="pl-3">
         {(expanded
           ? grouped.visible
-          : children.filter((child) => props.supervision.paths.has(supervisionKey(child)))
+          : children.filter((child) => props.supervision.paths.has(supervisionThreadKey(child)))
         ).map(renderChild)}
         {expanded
           ? grouped.groups.map((group) => (
