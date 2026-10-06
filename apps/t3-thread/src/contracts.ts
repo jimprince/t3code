@@ -1,3 +1,9 @@
+import {
+  ThreadIssueReferenceInput,
+  ThreadIssueLinkResult,
+  ThreadIssueUnlinkResult,
+  ThreadIssueOperationError,
+} from "@t3tools/contracts";
 import { NestingRpcs } from "./v2/nesting.js";
 import * as Effect from "effect/Effect";
 import { ServerSettings as SharedServerSettings } from "@t3tools/contracts/settings";
@@ -110,6 +116,16 @@ export function encodeClientOrchestrationCommand(input: unknown) {
 const schema = OrchestrationV2RpcSchemas;
 export const WsRpcGroup = RpcGroup.make(
   ...NestingRpcs,
+  Rpc.make("threadIssues.link", {
+    payload: ThreadIssueReferenceInput,
+    success: ThreadIssueLinkResult,
+    error: Schema.Union([ThreadIssueOperationError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make("threadIssues.unlink", {
+    payload: ThreadIssueReferenceInput,
+    success: ThreadIssueUnlinkResult,
+    error: Schema.Union([ThreadIssueOperationError, EnvironmentAuthorizationError]),
+  }),
   Rpc.make(WS_SERVER_GET_CONFIG_METHOD, {
     payload: Schema.Struct({}),
     success: ServerConfig,
