@@ -118,6 +118,36 @@ Use `vp run lint:mobile` for native mobile changes. CI owns the full suite; see
 The [manual Windows lane](../../.github/workflows/windows-tests.yml) is available for focused
 Windows investigation while that suite is not a required gate.
 
+### Shared heavy-check slot (dev VM)
+
+On the shared dev VM, every package `typecheck` and `test` script starts with
+`scripts/ci/heavy-gate.ts`, which queues for the one `heavy-check` slot (`nice 19`,
+CPUs 0-5) before running the command. A raw `vp run typecheck` or `vp run test`
+from any clone therefore waits its turn instead of adding a multi-gigabyte compile
+next to the T3 server. The gate runs the command directly, with the same argv and
+exit status, when `CI` is set, the host is not Linux, `~/.local/bin/heavy-check`
+is absent, or `T3_HEAVY_GATE_DISABLE=1`, so CI and other machines are unchanged.
+
+The slot is held until the whole process tree of the command has exited, not just
+the command. `vp` starts `tsc` and vitest workers that can outlive their parent, so the
+gate runs the command in its own session under a supervisor, tags every descendant with a
+per-run `T3_HEAVY_GATE_HELD` token, and releases the slot only when no tagged process
+remains. A straggler still alive after `T3_HEAVY_GATE_LINGER_MS` (default 30 minutes) is
+reported and stops holding the slot; it is not killed. Signalling the gate (Ctrl-C, SIGTERM)
+passes the signal to the command and every tagged descendant, kills any that survive
+`T3_HEAVY_GATE_KILL_GRACE_MS` (default 10 seconds), and exits with the command's status.
+
+Residual: a descendant started with a scrubbed environment (`env -i`, or a tool that
+sanitizes the environment for its workers) loses the token and is no longer held by the
+gate. The `tsc-governor` service and the Deployment containment are the backstop for
+launchers like that. The evidence run checks that real `vp`, `tsc`, and vitest workers
+(threads and forks) keep the token.
+
+Nesting is safe: a process carrying the token, or one with an ancestor that took the slot
+with `heavy-check vp run typecheck`, runs directly. Direct `tsc`, `vp check`, `vp build`,
+and `vp test run <files>` do not pass through package scripts; start those with
+`heavy-check` yourself.
+
 ### Background launch pressure
 
 The server log message `direct process launches in the last minute` reports attempted,
