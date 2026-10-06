@@ -10,7 +10,7 @@ export function supervisionOrderSiblings(threads: readonly EnvironmentThreadShel
   const rows = new Map(metadata.map(row => [`${row.environmentId}:${row.threadId}`, row]));
   const parent = (thread: EnvironmentThreadShell) => {
     const row = rows.get(`${thread.environmentId}:${thread.id}`);
-    return row?.remoteParent ? `${row.remoteParent.environmentId}:${row.remoteParent.threadId}` : row?.parentThreadId ?? null;
+    return JSON.stringify([row?.parentThreadId ?? null, row?.remoteParent?.environmentId ?? null, row?.remoteParent?.threadId ?? null]);
   };
   const siblings = threads.filter(thread => thread.environmentId === source.environmentId && thread.archivedAt === null && thread.deletedAt === null && parent(thread) === parent(source) && (thread.pinnedAt !== null) === (source.pinnedAt !== null) && (thread.pinnedAt !== null || thread.settledOverride !== "settled"));
   return source.pinnedAt !== null ? sortPinnedThreadsByOrderKey(siblings) : sortActiveThreadsByOrderKey(siblings);
