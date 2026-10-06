@@ -3,19 +3,47 @@ import type { ProjectIssue, ProjectIssueRequestSource, ThreadId } from "@t3tools
 import type { RequestCandidate, RequestKind } from "../textGeneration/RequestItemsPrompt.ts";
 import { formatRequestMarker } from "./projectIssues.logic.ts";
 
-/** Labels the ledger puts on a request issue: `ask` plus one kind label. */
+/** Labels the ledger puts on a request issue: `ask` plus one type label, and `bug` for a bug. */
 export const requestKindLabel = (kind: RequestKind) => `ask:${kind}`;
+
+export const BUG_LABEL = "bug";
+const KIND_LABELS: ReadonlyArray<string> = (["question", "task", "epic"] as const).map(
+  requestKindLabel,
+);
+
+/**
+ * Labels that retype an item and tag it a bug, from the issue's lowercase label
+ * names. Type labels swap only among the three current ones; an earlier `ask:*`
+ * label stays as history. An issue read as a bug only through `ask:bug` keeps
+ * that reading when retyped, by gaining the `bug` tag.
+ */
+export function planKindLabelChange(
+  names: ReadonlySet<string>,
+  change: { readonly kind?: RequestKind | undefined; readonly bug?: boolean | undefined },
+): { readonly add: string[]; readonly remove: string[] } {
+  const add: string[] = [];
+  const remove: string[] = [];
+  if (change.kind !== undefined) {
+    const wanted = requestKindLabel(change.kind);
+    if (!names.has(wanted)) add.push(wanted);
+    remove.push(...KIND_LABELS.filter((label) => label !== wanted && names.has(label)));
+  }
+  const legacyBug =
+    names.has("ask:bug") &&
+    !KIND_LABELS.some((label) => names.has(label)) &&
+    change.kind !== undefined;
+  const bug = change.bug ?? (legacyBug ? true : undefined);
+  if (bug === true && !names.has(BUG_LABEL)) add.push(BUG_LABEL);
+  if (bug === false && names.has(BUG_LABEL)) remove.push(BUG_LABEL);
+  return { add, remove };
+}
 
 export const REQUEST_LABEL_COLORS: Record<string, string> = {
   ask: "#5b6ee1",
   "ask:question": "#3987e5",
-  "ask:deliverable": "#199e70",
-  "ask:plan": "#9085e9",
-  "ask:change": "#d95926",
-  "ask:test": "#c98500",
-  "ask:bug": "#e5484d",
-  "ask:feature": "#2f9e8f",
-  "ask:maintenance": "#7d7d7d",
+  "ask:task": "#199e70",
+  "ask:epic": "#9085e9",
+  bug: "#e5484d",
   "awaiting-release": "#9085e9",
   "needs-test": "#fab219",
 };
@@ -75,13 +103,14 @@ export function isObviouslyNotARequest(text: string): boolean {
 export function fallbackRequestItem(text: string): {
   title: string;
   kind: RequestKind;
+  bug?: boolean;
   excerpt: string;
 } {
   const trimmed = text.trim();
   const firstSentence = /^[^\n]*?[.?!](?=\s|$)/.exec(trimmed)?.[0] ?? trimmed.split("\n")[0]!;
   return {
     title: clampTitle(firstSentence),
-    kind: firstSentence.trim().endsWith("?") ? "question" : "deliverable",
+    kind: firstSentence.trim().endsWith("?") ? "question" : "task",
     excerpt: trimmed,
   };
 }
@@ -95,6 +124,7 @@ export function clampTitle(title: string): string {
 export function formatRequestIssueBody(input: {
   readonly excerpt: string;
   readonly kind: RequestKind;
+  readonly bug?: boolean | undefined;
   readonly threadTitle: string;
   readonly rootTitle: string | null;
   readonly source: ProjectIssueRequestSource;
@@ -111,7 +141,7 @@ export function formatRequestIssueBody(input: {
   return [
     quoted,
     "",
-    `Requested in ${where}. Kind: ${input.kind}. Settled only by the requester, from the project page.`,
+    `Requested in ${where}. Kind: ${input.kind}${input.bug ? " (bug)" : ""}. Settled only by the requester, from the project page.`,
     "",
     formatRequestMarker(input.source),
     "",
@@ -399,7 +429,7 @@ export function buildIntakeBrief(input: {
     'Dashboard guidelines: a question shows its answer first, in 1-3 plain sentences. Work gets an imperative title ("Move the New request box to the top"); a request worded as a question is still a task. Statuses are only Pending, Active, For review and Complete. If ~/maintenance-work/dashboard-guidelines/ exists, follow display.md and taxonomy.md there.',
     "",
     "Steps (N is the task number):",
-    '1. Type it: `t3-thread request type "$T3_THREAD_ID" N <bug|feature|question|deliverable|plan|change|test|maintenance>`.',
+    '1. Type it: `t3-thread request type "$T3_THREAD_ID" N <question|task|epic>`, adding `--bug` when it fixes something broken.',
     '2. Title it: `t3-thread request title "$T3_THREAD_ID" N "<imperative title, or the question>"`.',
     '3. Place it: `t3-thread roadmap move "$T3_THREAD_ID" N next`, or `later` when it is an idea for later.',
     "4. Choose exactly one:",
