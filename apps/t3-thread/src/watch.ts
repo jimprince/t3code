@@ -81,6 +81,7 @@ export function createWatchPoller(factory: WatchClientFactory = createWatchClien
     { until: number; read: Promise<OrchestrationThread>; reason: string }
   >();
   const clientFactory: WatchClientFactory = (environment) => ({
+    listThreads: () => factory(environment).listThreads?.() ?? Promise.resolve([]),
     findThread(threadId) {
       const key = `${environment.name}:${threadId}`;
       const skipped = parked.get(key);
