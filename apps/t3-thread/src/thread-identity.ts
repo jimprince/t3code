@@ -1,4 +1,8 @@
-interface MessageOrigin { source: string; fromThreadId?: string; fromName?: string | null; }
+interface MessageOrigin {
+  source: string;
+  fromThreadId?: string;
+  fromName?: string | null;
+}
 
 export interface ThreadIdentity {
   threadId: string;

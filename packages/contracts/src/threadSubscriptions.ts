@@ -43,6 +43,14 @@ export const THREAD_SUBSCRIPTION_METHODS = {
 } as const;
 
 export const ThreadSubscriptionRpcs = [
-  Rpc.make(THREAD_SUBSCRIPTION_METHODS.serverThreadSubscriptions, { payload: ThreadSubscriptionsInput, success: ThreadSubscriptionsResult, error: Schema.Union([EnvironmentAuthorizationError, ThreadSubscriptionsError]) }),
-  Rpc.make(THREAD_SUBSCRIPTION_METHODS.serverUpdateThreadSubscriptions, { payload: UpdateThreadSubscriptionsInput, success: ThreadSubscriptionsResult, error: Schema.Union([EnvironmentAuthorizationError, ThreadSubscriptionsError]) }),
+  Rpc.make(THREAD_SUBSCRIPTION_METHODS.serverThreadSubscriptions, {
+    payload: ThreadSubscriptionsInput,
+    success: ThreadSubscriptionsResult,
+    error: Schema.Union([EnvironmentAuthorizationError, ThreadSubscriptionsError]),
+  }),
+  Rpc.make(THREAD_SUBSCRIPTION_METHODS.serverUpdateThreadSubscriptions, {
+    payload: UpdateThreadSubscriptionsInput,
+    success: ThreadSubscriptionsResult,
+    error: Schema.Union([EnvironmentAuthorizationError, ThreadSubscriptionsError]),
+  }),
 ] as const;

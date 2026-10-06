@@ -6997,7 +6997,9 @@ export function makeClaudeAdapterV2(
             cwd: turnInput.runtimePolicy.cwd,
             attachmentsDir,
             settings: adapterOptions.settings,
-            environment: withT3ThreadIdentityEnv(adapterOptions.environment, { threadId: turnInput.providerThread.appThreadId ?? input.threadId }),
+            environment: withT3ThreadIdentityEnv(adapterOptions.environment, {
+              threadId: turnInput.providerThread.appThreadId ?? input.threadId,
+            }),
             tools: queryPolicy.tools ?? CLAUDE_CODE_PRESET_TOOLS,
             ...mcpOverrides,
             permissionMode: queryPolicy.permissionMode,
