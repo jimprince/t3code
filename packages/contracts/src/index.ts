@@ -64,3 +64,4 @@ export * from "./worktreeSetup.ts";
 export * from "./embeddedPages.ts";
 
 export * from "./forkThreadMetadata.ts";
+export * from "./forkSupervisionDrag.ts";
