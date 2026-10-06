@@ -10,6 +10,7 @@ import {
 import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as AcpErrors from "effect-acp/errors";
 
 import {
   makeProviderFailure,
@@ -207,3 +208,41 @@ it.effect("keys terminal failure items by provider turn across retries and fallb
     assert.equal(firstAttempt.ordinal, 101);
   }).pipe(Effect.provide(IdAllocator.layer)),
 );
+
+it("preserves Antigravity startup and cancellation transport explanations for every client", () => {
+  for (const tag of ["ProviderAdapterOpenSessionError", "ProviderAdapterInterruptTurnError"]) {
+    const failure = makeProviderFailure({
+      cause: Cause.fail({
+        _tag: tag,
+        driver: "antigravity",
+        cause: new AcpErrors.AcpTransportError({
+          cause: undefined,
+          detail: " The ACP agent did not finish cancellation. Its process was stopped. ",
+        }),
+      }),
+    });
+    assert.equal(
+      failure.message,
+      "The ACP agent did not finish cancellation. Its process was stopped.",
+    );
+  }
+});
+
+it("redacts and bounds native Antigravity details and ignores unrelated transport defects", () => {
+  const cause = new AcpErrors.AcpTransportError({
+    cause: undefined,
+    detail: `Native startup failed: token=private ${"x".repeat(5000)}`,
+  });
+  const failure = makeProviderFailure({
+    cause: { _tag: "ProviderAdapterOpenSessionError", driver: "antigravity", cause },
+  });
+  assert.include(failure.message, "Native startup failed:");
+  assert.notInclude(failure.message, "private");
+  assert.equal(failure.message.length, MAX_PROVIDER_FAILURE_MESSAGE_LENGTH);
+  assert.include(
+    makeProviderFailure({
+      cause: { _tag: "ProviderAdapterOpenSessionError", driver: "opencode", cause },
+    }).message,
+    "provider session could not be opened",
+  );
+});
