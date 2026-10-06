@@ -190,6 +190,10 @@ function verify(databasePath: string, before: Awaited<ReturnType<typeof seed>>) 
       Object.assign(Object.create(null), { name: "MigrateSidebarOrderEvents" }),
     );
     NodeAssert.deepEqual(
+      database.prepare("SELECT name FROM effect_sql_fork_migrations WHERE migration_id = 16").get(),
+      Object.assign(Object.create(null), { name: "ProjectionThreadsSubproject" }),
+    );
+    NodeAssert.deepEqual(
       database
         .prepare(
           "SELECT * FROM effect_sql_migrations WHERE migration_id <= ? ORDER BY migration_id",
@@ -230,7 +234,7 @@ function verify(databasePath: string, before: Awaited<ReturnType<typeof seed>>) 
         )
         .all()
         .map((row) => row.migration_id),
-      [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+      [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
     );
     const v2Ordered = database
       .prepare(
@@ -533,8 +537,10 @@ async function boot(command: readonly string[], cwd: string, home: string, works
 
 /** Exercise released schemas and records with the packaged server, without user data or credentials. */
 export async function smokeThreadHistory(command: readonly string[], cwd: string) {
+  const retainRoots = process.env.T3_HISTORY_SMOKE_RETAIN_ROOTS === "1";
   for (const version of ["1293-fork.2", "1400-fork.1", "m4-cut"]) {
     const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-history-upgrade-"));
+    if (retainRoots) console.log(`${version}: ${root}`);
     try {
       const home = NodePath.join(root, "home");
       const workspace = NodePath.join(root, "workspace");
@@ -551,7 +557,7 @@ export async function smokeThreadHistory(command: readonly string[], cwd: string
         `Historical startup passed: ${version} (migration, replay, preservation, restart).`,
       );
     } finally {
-      await NodeFSP.rm(root, { recursive: true, force: true });
+      if (!retainRoots) await NodeFSP.rm(root, { recursive: true, force: true });
     }
   }
 }
