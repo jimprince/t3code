@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "82bd33b8009013b1525e07c32f6bf4ae6e086d74",
-  "head": "b3adbb42b7652a2f2c1617e608415072f87d0438",
+  "prev": "5a80cafcc126b82df8f395a8d49c5e0f20f31941",
+  "head": "934385b74ee31165fc53fbd706b73e19343be723",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -43,7 +43,9 @@
     "fork-resume-background-work",
     "fork-overnight-updates",
     "fork-spawn-budget",
-    "fork-t3-thread-prebuilt",
+    "fork-t3-thread-prebuilt"
+  ],
+  "unapplied": [
     "fork-cross-project-thread-nesting",
     "fork-launch-health",
     "fork-notification-preferences",
@@ -103,7 +105,6 @@
     "fork-request-titles",
     "fork-pr-widget-refresh"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
