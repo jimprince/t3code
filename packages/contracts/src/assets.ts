@@ -61,6 +61,11 @@ export const AssetResource = Schema.Union([
     cwd: TrimmedNonEmptyString.check(Schema.isMaxLength(ASSET_PATH_MAX_LENGTH)),
     url: TrimmedNonEmptyString.check(Schema.isMaxLength(2048)),
   }),
+  // An upload a Gitea issue body embeds (fork: decision context). Private repositories serve
+  // these only with a credential, so the server fetches them with the configured instance token.
+  Schema.TaggedStruct("gitea-media", {
+    url: TrimmedNonEmptyString.check(Schema.isMaxLength(2048)),
+  }),
 ]);
 export type AssetResource = typeof AssetResource.Type;
 
@@ -314,6 +319,15 @@ export class AssetGitHubMediaUrlValidationError extends Schema.TaggedError<Asset
   }
 }
 
+export class AssetGiteaMediaUrlValidationError extends Schema.TaggedError<AssetGiteaMediaUrlValidationError>()(
+  "AssetGiteaMediaUrlValidationError",
+  {},
+) {
+  override get message(): string {
+    return "Only attachments on a configured Gitea instance can be fetched with its credential.";
+  }
+}
+
 export const AssetAccessError = Schema.Union([
   AssetWorkspaceContextNotFoundError,
   AssetWorkspaceContextResolutionError,
@@ -329,6 +343,7 @@ export const AssetAccessError = Schema.Union([
   AssetProjectFaviconInspectionError,
   AssetProjectFaviconNotFoundError,
   AssetGitHubMediaUrlValidationError,
+  AssetGiteaMediaUrlValidationError,
   AssetSigningKeyLoadError,
 ]);
 export type AssetAccessError = typeof AssetAccessError.Type;
