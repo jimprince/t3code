@@ -35,6 +35,9 @@ const RPC_METHODS = {
   projectDashboardGet: "projectDashboard.get",
   projectDashboardSetWidgets: "projectDashboard.setWidgets",
   projectDashboardSetTracker: "projectDashboard.setTracker",
+  projectRoadmapGet: "projectRoadmap.get",
+  projectRoadmapMove: "projectRoadmap.move",
+  projectRoadmapSaveVersion: "projectRoadmap.saveVersion",
 } as const;
 
 const makeT3RpcClient = RpcClient.make(WsRpcGroup);
