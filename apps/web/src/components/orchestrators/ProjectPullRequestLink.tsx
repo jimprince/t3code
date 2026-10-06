@@ -17,6 +17,7 @@ export function ProjectPullRequestLink({
   const navigate = useNavigate();
   return (
     <InlineButton
+      aria-label={`${pullRequest.repository} #${pullRequest.number}`}
       onClick={() =>
         void navigate({
           to: "/pull-requests",
