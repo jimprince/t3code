@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "2a9b6057eb9461bd6b2f8524abfe3b83df524d9a",
-  "head": "f78c574904ea59e32715dcdc36f564f84231265c",
+  "prev": "d78fcfe63e444e800bd726c3fa3c082bfe97057d",
+  "head": "de52c0a6229539b6df54ec9e0d688882d05f0158",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -104,8 +104,7 @@
     "fork-pr-widget-refresh",
     "fork-decisions-other",
     "fork-cli-project-layout",
-    "fork-session-reconcile",
-    "refresh-temp"
+    "fork-session-reconcile"
   ],
   "unapplied": [],
   "hidden": [],
@@ -147,7 +146,7 @@
       "oid": "3e62829d50a9582df192534ec88a8a6a929ae2ac"
     },
     "fork-cli-project-layout": {
-      "oid": "7d7a88de790cb63298012426357bb94ae7dd06a8"
+      "oid": "eabcad9b6a5d90f74f5d2b98e03d8e77350b611a"
     },
     "fork-codex-goal-visibility": {
       "oid": "14fd617d6a1456bcb1e90228899862fb352d1589"
@@ -162,7 +161,7 @@
       "oid": "8dde8e33d64897b614773b5ee0d770bee4ba8dc9"
     },
     "fork-decisions-other": {
-      "oid": "9ff1cb6e23f92bc49e578d62c3c6c44927d8daef"
+      "oid": "bee0056b627c0077505b291ebf0b177e18ceea3a"
     },
     "fork-desktop-delivery": {
       "oid": "750221f7edd591ce0da5dbb7efe5bffb2bbab6f1"
@@ -249,7 +248,7 @@
       "oid": "05f3d000d46880e092085a1e2a3a97298475427c"
     },
     "fork-pr-widget-refresh": {
-      "oid": "a4d47d107938db6961a548f5f5c715129a912733"
+      "oid": "eb271bc4978aacbf21fe9b79704b19c0c87d41cb"
     },
     "fork-private-connection-defaults": {
       "oid": "8b323f2be26a72f1c6edf56564829e30b57910e2"
@@ -354,7 +353,7 @@
       "oid": "2e1d42ad5b9728cf20818fd1fe636ac993aa7702"
     },
     "fork-session-reconcile": {
-      "oid": "57ed28c2545fec76eed9aaea8a018c324747033f"
+      "oid": "de52c0a6229539b6df54ec9e0d688882d05f0158"
     },
     "fork-sidebar-agent-visibility": {
       "oid": "c901c76eefa15c389a6f2ea50638f95fa0c0fb47"
@@ -415,9 +414,6 @@
     },
     "fork-worktree-cleanup": {
       "oid": "b944a2751d8828af07f0b2402a53eeac5ad02a0c"
-    },
-    "refresh-temp": {
-      "oid": "f78c574904ea59e32715dcdc36f564f84231265c"
     }
   }
 }
