@@ -1,0 +1,4 @@
+id = "cross-project-thread-nesting"
+category = "feature"
+functionality = "threads"
+text = "Nest workers from other projects under a supervisor while retaining each worker’s repository and worktree."
