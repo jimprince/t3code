@@ -1,4 +1,5 @@
 import * as ThreadIssueService from "./forkThreads/ThreadIssueService.ts";
+import * as AutomationEngine from "./automations/AutomationEngine.ts";
 import { makeNamedAgents } from "./forkThreads/NamedAgents.ts";
 import { resourceRecoveryHandlers } from "./resourceRecoveryRpc.ts";
 import { makeMetadataHandlers } from "./forkThreads/MetadataRpc.ts";
@@ -1210,6 +1211,7 @@ const makeWsRpcLayer = (
   ServerWsRpcGroup.toLayer(
     Effect.gen(function* () {
       const namedAgents = yield* makeNamedAgents;
+      const automations = yield* AutomationEngine.AutomationEngine;
       const currentSessionId = currentSession.sessionId;
       const sql = yield* SqlClient.SqlClient;
       const threadManagement = yield* withWorkerSummaries(
@@ -2678,6 +2680,60 @@ const makeWsRpcLayer = (
         [WS_METHODS.serverGetBackgroundPolicy]: (_input) =>
           observeRpcEffect(WS_METHODS.serverGetBackgroundPolicy, backgroundPolicy.snapshot, {
             "rpc.aggregate": "server",
+          }),
+        [WS_METHODS.automationsList]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.automationsList,
+            automations.list(input.projectId).pipe(Effect.map((list) => ({ automations: list }))),
+            { "rpc.aggregate": "automations" },
+          ),
+        [WS_METHODS.automationsSave]: (input) =>
+          observeRpcEffect(WS_METHODS.automationsSave, automations.save(input), {
+            "rpc.aggregate": "automations",
+          }),
+        [WS_METHODS.automationsRemove]: (input) =>
+          observeRpcEffect(WS_METHODS.automationsRemove, automations.remove(input.automationId), {
+            "rpc.aggregate": "automations",
+          }),
+        [WS_METHODS.automationsSetEnabled]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.automationsSetEnabled,
+            automations.setEnabled(input.automationId, input.enabled),
+            { "rpc.aggregate": "automations" },
+          ),
+        [WS_METHODS.automationsRun]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.automationsRun,
+            automations.run(input.automationId, { dryRun: input.dryRun === true }),
+            { "rpc.aggregate": "automations" },
+          ),
+        [WS_METHODS.automationsRuns]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.automationsRuns,
+            automations.runs(input).pipe(Effect.map((runs) => ({ runs }))),
+            { "rpc.aggregate": "automations" },
+          ),
+        [WS_METHODS.automationScriptsList]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.automationScriptsList,
+            automations
+              .listScripts(input.projectId ?? null)
+              .pipe(Effect.map((scripts) => ({ scripts }))),
+            { "rpc.aggregate": "automations" },
+          ),
+        [WS_METHODS.automationScriptsSave]: (input) =>
+          observeRpcEffect(WS_METHODS.automationScriptsSave, automations.saveScript(input), {
+            "rpc.aggregate": "automations",
+          }),
+        [WS_METHODS.automationScriptsRemove]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.automationScriptsRemove,
+            automations.removeScript(input.scriptId),
+            { "rpc.aggregate": "automations" },
+          ),
+        [WS_METHODS.automationScriptsRun]: (input) =>
+          observeRpcEffect(WS_METHODS.automationScriptsRun, automations.runScript(input), {
+            "rpc.aggregate": "automations",
           }),
         "orchestration.listNamedAgents": () => namedAgents.list(),
         "orchestration.resolveNamedAgent": (input) => namedAgents.resolve(input),
