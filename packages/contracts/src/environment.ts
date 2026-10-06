@@ -161,6 +161,7 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   threadNesting: Schema.optionalKey(Schema.Boolean),
   /** Server nests a thread under `parentThreadId` when `orchestration.launchThread` creates it. Absent on older servers, which ignore the field, so clients nest after the launch instead. */
   launchThreadParent: Schema.optionalKey(Schema.Boolean),
+  threadSubprojects: Schema.optionalKey(Schema.Boolean),
   remoteThreadNesting: Schema.optionalKey(Schema.Boolean),
   /** Server understands thread.auto-settle.set (per-thread auto-settle off).
       Same version-skew contract as threadSettlement. */
