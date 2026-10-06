@@ -1,5 +1,6 @@
 import { resourceRecoveryHandlers } from "./resourceRecoveryRpc.ts";
 import { makeMetadataHandlers } from "./forkThreads/MetadataRpc.ts";
+import { makeSupervisionDragHandlers } from "./forkThreads/SupervisionDrag.ts";
 import { withWorkerSummaries } from "./forkThreads/WorkerSummaryService.ts";
 import { threadSubscriptionHandlers } from "./threadSubscriptionHandlers.ts";
 import { makeWorkspaceUploadHandlers } from "./workspace/WorkspaceUploadRpc.ts";
@@ -2666,6 +2667,7 @@ const layerWsRpc = (
             ),
           ),
         ...(yield* makeWorkspaceUploadHandlers),
+        ...(yield* makeSupervisionDragHandlers),
         [WS_METHODS.projectsWriteFile]: (input) =>
           workspaceFileSystem.writeFile(input).pipe(
             Effect.mapError(
