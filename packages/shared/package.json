@@ -478,6 +478,10 @@
     "./threadRoutingState": {
       "types": "./src/threadRoutingState.ts",
       "import": "./src/threadRoutingState.ts"
+    },
+    "./messageOrigin": {
+      "types": "./src/messageOrigin.ts",
+      "default": "./src/messageOrigin.ts"
     }
   },
   "scripts": {
