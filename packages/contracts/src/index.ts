@@ -69,3 +69,5 @@ export * from "./forkThreadOrder.ts";
 
 export * from "./threadIssue.ts";
 export * from "./codexNativeGoal.ts";
+
+export * from "./namedAgents.ts";
