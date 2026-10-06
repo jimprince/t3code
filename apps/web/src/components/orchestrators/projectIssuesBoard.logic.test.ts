@@ -25,7 +25,7 @@ function issue(number: number, overrides: Partial<ProjectIssue> = {}): ProjectIs
 }
 
 describe("groupProjectIssues", () => {
-  it("sorts issues into lanes, with Needs you from the shared source, and folds backlog", () => {
+  it("sorts tasks into the four status lanes from the shared statuses, and folds backlog", () => {
     const { lanes, backlog } = groupProjectIssues(
       [
         issue(1, { status: "needs-review" }),
@@ -34,22 +34,23 @@ describe("groupProjectIssues", () => {
         issue(4, { status: "backlog" }),
         issue(5, { status: "done", closedAt: "2026-10-02T00:00:00.000Z" }),
         issue(6, { status: "archived" }),
-        issue(7, { status: "needs-review" }),
         issue(8),
       ],
       new Map([
-        ["brad/printcell#1", "review"],
-        ["brad/printcell#7", "test"],
-        // A request whose thread replied: pending on the tracker, but waiting on Brad.
-        ["brad/printcell#8", "answers"],
+        ["brad/printcell#1", "for-review"],
+        ["brad/printcell#2", "active"],
+        ["brad/printcell#3", "pending"],
+        ["brad/printcell#4", "pending"],
+        ["brad/printcell#5", "complete"],
+        // A request whose thread answered: pending on the tracker, but for Brad's review.
+        ["brad/printcell#8", "for-review"],
       ]),
     );
-    expect(lanes["needs-you"].map((item) => item.number)).toEqual([1, 8]);
-    expect(lanes.shipped.map((item) => item.number)).toEqual([7]);
-    expect(lanes["in-progress"].map((item) => item.number)).toEqual([2]);
+    expect(lanes["for-review"].map((item) => item.number)).toEqual([1, 8]);
+    expect(lanes.active.map((item) => item.number)).toEqual([2]);
     expect(lanes.pending.map((item) => item.number)).toEqual([3]);
     expect(backlog.map((item) => item.number)).toEqual([4]);
-    expect(lanes.done.map((item) => item.number)).toEqual([5]);
+    expect(lanes.complete.map((item) => item.number)).toEqual([5]);
   });
 
   it("puts the longest-waiting open issue first and the latest closed first", () => {
@@ -60,7 +61,7 @@ describe("groupProjectIssues", () => {
       issue(4, { status: "done", closedAt: "2026-10-03T00:00:00.000Z" }),
     ]);
     expect(lanes.pending.map((item) => item.number)).toEqual([2, 1]);
-    expect(lanes.done.map((item) => item.number)).toEqual([4, 3]);
+    expect(lanes.complete.map((item) => item.number)).toEqual([4, 3]);
   });
 });
 
