@@ -1,4 +1,5 @@
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
+import * as LegacyBackgroundWorkImport from "./fork/recovery/LegacyBackgroundWorkImport.ts";
 import * as RecoveryProcessAccess from "./diagnostics/RecoveryProcessAccess.ts";
 import { configuredGiteaIdentity } from "./sourceControl/ForkGiteaLinkAdapter.ts";
 import type { RelayManagedEndpointRuntimeConfig } from "@t3tools/contracts/relay";
@@ -679,7 +680,9 @@ const layerRuntimeDependencies = SystemRecovery.layer.pipe(
   Layer.provide(RecoveryProcessAccess.layer),
   Layer.provide(ProjectionStoreV2.layer),
   // Recovery uses the memoized V2 provider runtime and projection services.
-  Layer.provideMerge(layerRuntimeCoreDependencies),
+  Layer.provideMerge(
+    LegacyBackgroundWorkImport.layer.pipe(Layer.provideMerge(layerRuntimeCoreDependencies)),
+  ),
   // Misc.
   // Usage reads provider history through the ProviderHost, which needs the
   // background policy below it.
