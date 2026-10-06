@@ -299,11 +299,16 @@ export async function drainQueuedSends(options: {
     }
 
     const quota = threadQuotaBlock(thread);
+    // Read focus-owned provenance when present without adding or changing its storage.
+    const origin = "origin" in head ? head.origin : null;
+    const routedNotification =
+      origin != null && typeof origin === "object" && "source" in origin
+        ? origin.source === "worker-notification"
+        : /^(?:HomeNetwork|T3) orchestrator notification:/.test(head.text);
     if (
-      thread.settledOverride === "settled" ||
-      (/^(?:HomeNetwork|T3) orchestrator notification:/.test(head.text) &&
-        quota &&
-        (quota.resetsAt === null || quota.resetsAt > Date.parse(attemptedAt)))
+      routedNotification &&
+      (thread.settledOverride === "settled" ||
+        (quota && (quota.resetsAt === null || quota.resetsAt > Date.parse(attemptedAt))))
     ) {
       continue;
     }

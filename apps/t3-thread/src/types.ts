@@ -208,6 +208,9 @@ export interface SavedAgent {
 }
 
 export interface SavedSubscription {
+  /** Implicit attention route maintained from organizational metadata. */
+  nestingDerived?: boolean;
+  subscriberEnvironmentId?: string;
   events?: "all" | "attention";
   subscriberThreadId: string;
   subscriberAgentName: string | null;
@@ -249,6 +252,9 @@ export type SavedNotificationStatus =
   | "superseded";
 
 export interface SavedNotification {
+  subscriberEnvironmentId?: string;
+  /** An actionable input/approval for the current organizational parent. */
+  isChildInput?: boolean;
   id: string;
   eventKey: string;
   subscriberThreadId: string;

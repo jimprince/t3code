@@ -1,4 +1,10 @@
-import { recipientKey, sameNotificationRoute } from "./parentRouting.js";
+import {
+  recipientKey,
+  sameNotificationRoute,
+  matchesCurrentParent,
+  mapRouteEnvironment,
+  parentInputRoute,
+} from "./parentRouting.js";
 import * as NodeCrypto from "node:crypto";
 
 import { RemoteEnvironmentClient } from "./client.js";
@@ -17,6 +23,7 @@ import { threadQuotaBlock } from "./quota.js";
 import { isProcessRunning } from "./watcher-process.js";
 import type {
   OrchestrationThread,
+  OrchestrationThreadShell,
   SavedEnvironment,
   SavedNotification,
   StateFile,
@@ -48,6 +55,7 @@ function isNotificationReply(thread: OrchestrationThread): boolean {
 }
 
 export interface WatchClient {
+  listThreads?(): Promise<OrchestrationThreadShell[]>;
   findThread(threadId: string): Promise<OrchestrationThread>;
   /** Result is unused here; `RemoteEnvironmentClient.sendMessage` reports dispatch vs queue. */
   sendMessage(input: {
@@ -131,7 +139,70 @@ function credentialExpiry(environment: SavedEnvironment, nowMs: number): string 
   return environment.expiresAt;
 }
 
+type AttentionScanOptions = {
+  env?: string;
+  clientFactory?: WatchClientFactory;
+  now?: () => string;
+};
+
+/** Metadata reads discover UI-created children too; failures retain existing routes. */
+async function discoverParentRoutes(state: StateFile, options: AttentionScanOptions) {
+  const factory = options.clientFactory ?? createWatchClient;
+  const agents = [...state.agents];
+  const observedSources = new Set<string>();
+  let subscriptions = [...state.subscriptions];
+  for (const environment of state.environments) {
+    if (options.env && environment.name !== options.env) continue;
+    const client = factory(environment);
+    let shells: OrchestrationThreadShell[];
+    try {
+      shells = (await client.listThreads?.()) ?? [];
+    } catch {
+      continue;
+    }
+    for (const shell of shells) {
+      const key = JSON.stringify([environment.name, shell.id]);
+      observedSources.add(key);
+      let source = agents.find(
+        (agent) => agent.environment === environment.name && agent.threadId === shell.id,
+      );
+      if (!source && (shell.parentThreadId || shell.remoteParent) && !shell.archivedAt) {
+        source = {
+          name: shell.id,
+          threadId: shell.id,
+          environment: environment.name,
+          projectId: shell.projectId,
+          title: shell.title,
+          createdAt: shell.createdAt,
+          lastSeenAssistantMessageId: null,
+        };
+        agents.push(source);
+      }
+      subscriptions = subscriptions.filter(
+        (route) =>
+          !route.nestingDerived ||
+          route.sourceEnvironment !== environment.name ||
+          route.sourceThreadId !== shell.id ||
+          matchesCurrentParent(shell, route, state),
+      );
+      if (!source) continue;
+      const parent = parentInputRoute(state, source, shell, (options.now ?? nowIso)());
+      if (parent && !subscriptions.some((route) => sameNotificationRoute(route, parent, state)))
+        subscriptions.push(parent);
+    }
+  }
+  return { state: { ...state, agents, subscriptions }, observedSources };
+}
+
 export async function scanAttentionNotifications(
+  state: StateFile,
+  options: AttentionScanOptions = {},
+): Promise<SavedNotification[]> {
+  const discovered = await discoverParentRoutes(state, options);
+  return scanKnownRoutes(discovered.state, options);
+}
+
+async function scanKnownRoutes(
   state: StateFile,
   options: {
     env?: string;
@@ -180,13 +251,18 @@ export async function scanAttentionNotifications(
     const subscriptions = state.subscriptions.filter(
       (subscription) =>
         subscription.sourceThreadId === sourceAgent.threadId &&
-        subscription.sourceEnvironment === sourceAgent.environment,
+        subscription.sourceEnvironment === sourceAgent.environment &&
+        (!subscription.nestingDerived || matchesCurrentParent(sourceThread, subscription, state)),
     );
     if (subscriptions.length === 0) {
       continue;
     }
 
     for (const subscription of subscriptions) {
+      const isChildInput =
+        ["needs-input", "needs-approval"].includes(overview.state) &&
+        matchesCurrentParent(sourceThread, subscription, state);
+      if (subscription.nestingDerived && !isChildInput) continue;
       if (
         (overview.state === "completed" || overview.state === "idle") &&
         (subscription.events === "attention" || isNotificationReply(sourceThread))
@@ -196,7 +272,8 @@ export async function scanAttentionNotifications(
       // signed up is old news to it; only a later turn is a new transition.
       if (
         subscription.baselineTurnId &&
-        (sourceThread.latestTurn?.turnId ?? null) === subscription.baselineTurnId
+        (sourceThread.latestTurn?.turnId ?? null) === subscription.baselineTurnId &&
+        !isChildInput
       ) {
         continue;
       }
@@ -210,8 +287,8 @@ export async function scanAttentionNotifications(
           );
         }) ?? null;
 
-      scanned.push(
-        buildNotificationRecord({
+      scanned.push({
+        ...buildNotificationRecord({
           sourceAgent,
           subscription,
           overview,
@@ -219,7 +296,9 @@ export async function scanAttentionNotifications(
           now: now(),
           existing,
         }),
-      );
+        isChildInput,
+        subscriberEnvironmentId: mapRouteEnvironment(state, subscription).subscriberEnvironmentId,
+      });
     }
   }
 
@@ -261,11 +340,12 @@ function supersedeOvertakenNotifications(
   notifications: SavedNotification[],
   latest: SavedNotification,
   now: string,
+  state: StateFile,
 ): SavedNotification[] {
   return notifications.map((candidate) => {
     if (
       candidate.eventKey === latest.eventKey ||
-      !sameNotificationRoute(candidate, latest) ||
+      !sameNotificationRoute(candidate, latest, state) ||
       !SUPERSEDABLE_STATUSES.has(candidate.status)
     ) {
       return candidate;
@@ -291,7 +371,7 @@ export async function hasActiveWork(
   options: { env?: string; clientFactory?: WatchClientFactory } = {},
 ): Promise<boolean> {
   const clientFactory = options.clientFactory ?? createWatchClient;
-  const state = await loadState();
+  let state = await loadState();
 
   const undelivered = state.notifications.some(
     (notification) =>
@@ -303,6 +383,7 @@ export async function hasActiveWork(
     return true;
   }
 
+  state = (await discoverParentRoutes(state, options)).state;
   const subscribedSourceThreadIds = new Set(
     state.subscriptions.map((subscription) =>
       JSON.stringify([subscription.sourceEnvironment, subscription.sourceThreadId]),
@@ -341,10 +422,8 @@ export async function detectAttentionEvents(
   } = {},
 ): Promise<SavedNotification[]> {
   const state = await loadState();
-  const scanned = await scanAttentionNotifications(state, options);
-  if (scanned.length === 0) {
-    return [];
-  }
+  const discovered = await discoverParentRoutes(state, options);
+  const scanned = await scanKnownRoutes(discovered.state, options);
 
   return updateState(async (currentState) => {
     const persisted: SavedNotification[] = [];
@@ -355,7 +434,12 @@ export async function detectAttentionEvents(
         notifications.find((candidate) => candidate.eventKey === notification.eventKey) ?? null;
       const merged = mergeDetectedNotification(existing, notification);
       notifications = upsertNotification(notifications, merged);
-      notifications = supersedeOvertakenNotifications(notifications, merged, merged.updatedAt);
+      notifications = supersedeOvertakenNotifications(
+        notifications,
+        merged,
+        merged.updatedAt,
+        currentState,
+      );
       persisted.push(merged);
     }
 
@@ -363,6 +447,25 @@ export async function detectAttentionEvents(
       state: {
         ...currentState,
         notifications,
+        subscriptions: [
+          ...currentState.subscriptions.filter(
+            (route) =>
+              !route.nestingDerived ||
+              !discovered.observedSources.has(
+                JSON.stringify([route.sourceEnvironment, route.sourceThreadId]),
+              ) ||
+              discovered.state.subscriptions.some((observed) =>
+                sameNotificationRoute(route, observed, currentState),
+              ),
+          ),
+          ...discovered.state.subscriptions.filter(
+            (route) =>
+              route.nestingDerived &&
+              !currentState.subscriptions.some((existing) =>
+                sameNotificationRoute(route, existing, currentState),
+              ),
+          ),
+        ].map((route) => mapRouteEnvironment(currentState, route)),
       },
       result: persisted,
     };
@@ -404,7 +507,15 @@ export async function claimPendingNotifications(
           left.eventKey.localeCompare(right.eventKey),
       );
 
-    const claimedSubscribers = new Set<string>();
+    const claimedSubscribers = new Set(
+      state.notifications
+        .filter(
+          (notification) =>
+            notification.status === "delivering" &&
+            !isClaimStale(notification, claimedAtMs, claimTimeoutMs),
+        )
+        .map((notification) => recipientKey(notification, state)),
+    );
     for (const notification of claimable) {
       if (claimedSubscribers.has(recipientKey(notification, state))) {
         continue;
@@ -499,21 +610,40 @@ export async function deliverPendingNotifications(
 
     try {
       const state = await loadState();
-      const subscriptionStillExists = state.subscriptions.some((subscription) => {
-        return sameNotificationRoute(subscription, notification, state);
-      });
+      const subscription = state.subscriptions.find((route) =>
+        sameNotificationRoute(route, notification, state),
+      );
+      const subscriptionStillExists = subscription != null;
 
       const subscriberEnvironment = subscriptionStillExists
-        ? (state.environments.find(
-            (environment) => environment.name === notification.subscriberEnvironment,
+        ? (state.environments.find((environment) =>
+            notification.subscriberEnvironmentId
+              ? environment.environmentId === notification.subscriberEnvironmentId
+              : environment.name === notification.subscriberEnvironment,
           ) ?? null)
         : null;
 
       if (!subscriptionStillExists) {
-        result = terminal("Subscription no longer exists.");
+        result = notification.isChildInput
+          ? {
+              ...notification,
+              status: "superseded",
+              updatedAt: attemptedAt,
+              nextAttemptAt: null,
+              lastError: "Organizational parent route no longer exists.",
+            }
+          : terminal("Subscription no longer exists.");
       } else if (!subscriberEnvironment) {
         // The environment was forgotten; nothing can route this notification again.
-        result = terminal(`Unknown environment '${notification.subscriberEnvironment}'.`);
+        result = notification.subscriberEnvironmentId
+          ? {
+              ...notification,
+              status: "blocked",
+              updatedAt: attemptedAt,
+              nextAttemptAt: null,
+              lastError: `Remote parent environment '${notification.subscriberEnvironmentId}' is not paired.`,
+            }
+          : terminal(`Unknown environment '${notification.subscriberEnvironment}'.`);
       } else if (credentialExpiry(subscriberEnvironment, attemptedAtMs)) {
         // Nothing the watcher can retry into: the pairing has to be renewed by a
         // human. Park the notification instead of burning its attempt budget, and
@@ -527,6 +657,32 @@ export async function deliverPendingNotifications(
           lastError: `Credentials for environment '${subscriberEnvironment.name}' expired at ${subscriberEnvironment.expiresAt}. Re-pair with \`t3-thread pair --name ${subscriberEnvironment.name} ...\` to resume delivery.`,
         };
       } else {
+        if (subscription?.nestingDerived || notification.isChildInput) {
+          const source = await clientFactory(
+            requireEnvironment(state, notification.sourceEnvironment),
+          ).findThread(notification.sourceThreadId);
+          if (
+            !matchesCurrentParent(source, notification, state) ||
+            source.archivedAt ||
+            source.deletedAt ||
+            source.settledOverride === "settled" ||
+            !["needs-input", "needs-approval"].includes(classifyThread(source).state)
+          ) {
+            result = {
+              ...notification,
+              status: "superseded",
+              updatedAt: attemptedAt,
+              nextAttemptAt: null,
+              lastError: "Child no longer needs this parent to act.",
+            };
+            const persisted = await finalizeNotificationAttempt({
+              notification: result,
+              claimId: notification.deliveryClaimId ?? null,
+            });
+            if (persisted) delivered.push(persisted);
+            continue;
+          }
+        }
         const subscriberClient = clientFactory(subscriberEnvironment);
         const subscriberThread = await subscriberClient.findThread(notification.subscriberThreadId);
         const subscriberStatus = classifyThread(subscriberThread);
@@ -536,7 +692,7 @@ export async function deliverPendingNotifications(
           result = terminal(
             `Subscriber thread '${notification.subscriberThreadId}' is archived and can no longer be notified.`,
           );
-        } else if (subscriberThread.settledOverride === "settled") {
+        } else if (subscriberThread.settledOverride === "settled" && !notification.isChildInput) {
           // Delivery starts a turn, and the server unsettles a thread on any
           // turn. Hold the event until the user unsettles the recipient.
           result = {
@@ -559,7 +715,7 @@ export async function deliverPendingNotifications(
             quotaResetAt: quota.resetsAt === null ? null : new Date(quota.resetsAt).toISOString(),
             nextAttemptAt: new Date(attemptedAtMs + SETTLED_RECIPIENT_RECHECK_MS).toISOString(),
           };
-        } else if (subscriberStatus.state === "running") {
+        } else if (["running", "starting"].includes(subscriberStatus.state)) {
           // Expected, not a failure: hold the event and re-offer it shortly.
           // The attempt budget is reserved for real delivery errors.
           result = {
