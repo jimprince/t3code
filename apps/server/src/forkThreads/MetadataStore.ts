@@ -14,7 +14,9 @@ export const initializeMetadata = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
     yield* sql`CREATE TABLE IF NOT EXISTS fork_thread_metadata (thread_id TEXT PRIMARY KEY, payload TEXT NOT NULL)`;
     yield* sql`CREATE TABLE IF NOT EXISTS fork_thread_metadata_receipts (command_id TEXT PRIMARY KEY, payload TEXT NOT NULL)`;
-    const { rows, policies } = yield* readForkThreadMetadata(sql);
+    const legacy = yield* readForkThreadMetadata(sql);
+    if (legacy === null) return;
+    const { rows, policies } = legacy;
     for (const row of rows) {
       const metadata: ForkThreadMetadata = {
         threadId: ThreadId.make(row.thread_id),
@@ -35,7 +37,7 @@ export const initializeMetadata = (sql: SqlClient.SqlClient) =>
       yield* sql`INSERT OR IGNORE INTO fork_thread_metadata (thread_id, payload) VALUES (${row.thread_id}, ${payload})`;
     }
     // Older sidecar rows predate lifecycle policy; explicit V2 values (including null) win.
-    {
+    if (policies !== null) {
       const existing = yield* listMetadata(sql);
       const byId = new Map(existing.map((row) => [String(row.threadId), row]));
       for (const row of policies) {
