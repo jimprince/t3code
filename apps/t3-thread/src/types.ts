@@ -42,6 +42,8 @@ export interface ExecutionEnvironmentDescriptor {
     threadPinReorder?: boolean;
     threadActiveReorder?: boolean;
     threadOrderReset?: boolean;
+    threadNesting?: boolean;
+    remoteThreadNesting?: boolean;
   };
 }
 
@@ -93,7 +95,12 @@ export interface OrchestrationProposedPlan {
 }
 
 export interface OrchestrationThread {
+  hasActionableProposedPlan?: boolean;
+  lastError?: string | null;
   parentThreadId?: string | null;
+  executionParentThreadId?: string | null;
+  remoteParent?: { environmentId: string; threadId: string } | null;
+  scope?: string | null;
   runtimeRequests?: readonly OrchestrationV2RuntimeRequest[];
   projection?: OrchestrationV2ThreadProjection;
   id: string;
@@ -130,7 +137,11 @@ export interface OrchestrationShellSnapshot {
 }
 
 export interface OrchestrationThreadShell {
+  lastError?: string | null;
   parentThreadId?: string | null;
+  executionParentThreadId?: string | null;
+  remoteParent?: { environmentId: string; threadId: string } | null;
+  scope?: string | null;
   id: string;
   projectId: string;
   title: string;

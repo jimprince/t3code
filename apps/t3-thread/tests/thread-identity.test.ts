@@ -1,3 +1,4 @@
+import { descriptorFixture } from "./descriptor-fixture.js";
 import { Schema } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { OrchestrationV2ThreadLaunchInput } from "../../../packages/contracts/src/orchestrationV2.ts";
@@ -23,6 +24,7 @@ function harness(failRename = false) {
   const commands: Array<typeof OrchestrationV2ThreadLaunchInput.Type> = [];
   const dispose = vi.fn(async () => {});
   const client = new RemoteEnvironmentClient(environment, {
+    descriptorFactory: descriptorFixture(environment),
     rpcFactory: () => ({
       request: async (_method, input) => {
         const command = decodeCommand(input);
@@ -97,12 +99,16 @@ describe("worker bootstrap identity", () => {
     expect(command.initialMessage.text).toContain('project_id: "project-1"');
     expect(command.initialMessage.text).toContain('project_title: "Project"');
     expect(command.initialMessage.text).toContain('worktree_path: "/tmp/project"');
-    expect(command.initialMessage.text).toContain(`parent_thread_id: "${nested ? threadId : "none"}"`);
+    expect(command.initialMessage.text).toContain(
+      `parent_thread_id: "${nested ? threadId : "none"}"`,
+    );
     expect(command.initialMessage.text).toContain(
       `parent_send_command: "${nested ? "t3-thread send supervisor ..." : "none"}"`,
     );
     expect(command.initialMessage.text).toContain('notify_level: "attention"');
-    expect(command.initialMessage.text).toContain(`date_utc: "${new Date().toISOString().slice(0, 10)}"`);
+    expect(command.initialMessage.text).toContain(
+      `date_utc: "${new Date().toISOString().slice(0, 10)}"`,
+    );
     expect(command.initialMessage.text.endsWith("--- BRIEF ---\nDo the task")).toBe(true);
   });
 });

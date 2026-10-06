@@ -1,3 +1,4 @@
+import { descriptorFixture } from "./descriptor-fixture.js";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -66,7 +67,10 @@ function makeHarness(thread: OrchestrationThread) {
     dispose: vi.fn(async () => undefined),
   };
   return {
-    client: new RemoteEnvironmentClient(environment, { rpcFactory: () => rpc }),
+    client: new RemoteEnvironmentClient(environment, {
+      descriptorFactory: descriptorFixture(environment),
+      rpcFactory: () => rpc,
+    }),
     commands,
   };
 }

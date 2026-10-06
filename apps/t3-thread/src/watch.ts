@@ -1,3 +1,4 @@
+import { recipientKey, sameNotificationRoute } from "./parentRouting.js";
 import * as NodeCrypto from "node:crypto";
 
 import { RemoteEnvironmentClient } from "./client.js";
@@ -146,6 +147,14 @@ export async function scanAttentionNotifications(
   const scanned: SavedNotification[] = [];
 
   for (const sourceAgent of scopedAgents) {
+    if (
+      !state.subscriptions.some(
+        (subscription) =>
+          subscription.sourceThreadId === sourceAgent.threadId &&
+          subscription.sourceEnvironment === sourceAgent.environment,
+      )
+    )
+      continue;
     const sourceEnvironment = requireEnvironment(state, sourceAgent.environment);
     const sourceClient = clientFactory(sourceEnvironment);
     let sourceThread: OrchestrationThread;
@@ -169,7 +178,9 @@ export async function scanAttentionNotifications(
     }
 
     const subscriptions = state.subscriptions.filter(
-      (subscription) => subscription.sourceThreadId === sourceAgent.threadId,
+      (subscription) =>
+        subscription.sourceThreadId === sourceAgent.threadId &&
+        subscription.sourceEnvironment === sourceAgent.environment,
     );
     if (subscriptions.length === 0) {
       continue;
@@ -192,8 +203,7 @@ export async function scanAttentionNotifications(
       const existing =
         state.notifications.find((notification) => {
           return (
-            notification.subscriberThreadId === subscription.subscriberThreadId &&
-            notification.sourceThreadId === subscription.sourceThreadId &&
+            sameNotificationRoute(notification, subscription, state) &&
             notification.latestAssistantMessageId === overview.latestAssistantMessageId &&
             notification.latestTurnId === (sourceThread.latestTurn?.turnId ?? null) &&
             notification.sourceState === overview.state
@@ -255,8 +265,7 @@ function supersedeOvertakenNotifications(
   return notifications.map((candidate) => {
     if (
       candidate.eventKey === latest.eventKey ||
-      candidate.subscriberThreadId !== latest.subscriberThreadId ||
-      candidate.sourceThreadId !== latest.sourceThreadId ||
+      !sameNotificationRoute(candidate, latest) ||
       !SUPERSEDABLE_STATUSES.has(candidate.status)
     ) {
       return candidate;
@@ -295,14 +304,16 @@ export async function hasActiveWork(
   }
 
   const subscribedSourceThreadIds = new Set(
-    state.subscriptions.map((subscription) => subscription.sourceThreadId),
+    state.subscriptions.map((subscription) =>
+      JSON.stringify([subscription.sourceEnvironment, subscription.sourceThreadId]),
+    ),
   );
   if (subscribedSourceThreadIds.size === 0) {
     return false;
   }
 
   for (const agent of state.agents) {
-    if (!subscribedSourceThreadIds.has(agent.threadId)) {
+    if (!subscribedSourceThreadIds.has(JSON.stringify([agent.environment, agent.threadId]))) {
       continue;
     }
     if (options.env && agent.environment !== options.env) {
@@ -395,10 +406,10 @@ export async function claimPendingNotifications(
 
     const claimedSubscribers = new Set<string>();
     for (const notification of claimable) {
-      if (claimedSubscribers.has(notification.subscriberThreadId)) {
+      if (claimedSubscribers.has(recipientKey(notification, state))) {
         continue;
       }
-      claimedSubscribers.add(notification.subscriberThreadId);
+      claimedSubscribers.add(recipientKey(notification, state));
       claimed.push({
         ...notification,
         status: "delivering",
@@ -489,10 +500,7 @@ export async function deliverPendingNotifications(
     try {
       const state = await loadState();
       const subscriptionStillExists = state.subscriptions.some((subscription) => {
-        return (
-          subscription.subscriberThreadId === notification.subscriberThreadId &&
-          subscription.sourceThreadId === notification.sourceThreadId
-        );
+        return sameNotificationRoute(subscription, notification, state);
       });
 
       const subscriberEnvironment = subscriptionStillExists
@@ -566,10 +574,8 @@ export async function deliverPendingNotifications(
           // Snapshot reads can be slow; an unsubscribe during that read wins.
           const latest = await loadState();
           if (
-            !latest.subscriptions.some(
-              (route) =>
-                route.subscriberThreadId === notification.subscriberThreadId &&
-                route.sourceThreadId === notification.sourceThreadId,
+            !latest.subscriptions.some((route) =>
+              sameNotificationRoute(route, notification, latest),
             ) ||
             latest.notifications.find((event) => event.id === notification.id)?.status !==
               "delivering"

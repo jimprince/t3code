@@ -1,4 +1,5 @@
-import { Schema } from "effect";
+import { descriptorFixture } from "./descriptor-fixture.js";
+import { Schema, DateTime } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { RemoteEnvironmentClient } from "../src/client.js";
@@ -7,17 +8,75 @@ import {
   decodeThreadSnapshotItem,
   encodeClientOrchestrationCommand,
 } from "../src/contracts.js";
-import { ClientOrchestrationCommand as ServerCommand } from "../../../packages/contracts/src/orchestration.js";
+import { OrchestrationV2Command as ServerCommand } from "@t3tools/contracts";
 import type { SavedEnvironment } from "../src/types.js";
 
 const decodeServerCommand = Schema.decodeUnknownSync(ServerCommand);
 const encodeCommand = encodeClientOrchestrationCommand;
-const decodeThread = (input: unknown) =>
+function nativeThread(
+  input: typeof thread & {
+    settledOverride?: "settled" | "active";
+    settledAt?: string | null;
+    unsettledAt?: string | null;
+  },
+) {
+  return {
+    ...input,
+    createdAt: DateTime.makeUnsafe(input.createdAt),
+    updatedAt: DateTime.makeUnsafe(input.updatedAt),
+    archivedAt: input.archivedAt ? DateTime.makeUnsafe(input.archivedAt) : null,
+    deletedAt: null,
+    settledOverride: input.settledOverride ?? null,
+    settledAt: input.settledAt ? DateTime.makeUnsafe(input.settledAt) : null,
+    unsettledAt: input.unsettledAt ? DateTime.makeUnsafe(input.unsettledAt) : null,
+    modelSelection: {
+      instanceId: input.modelSelection.provider,
+      model: input.modelSelection.model,
+    },
+    providerInstanceId: input.modelSelection.provider,
+    activeProviderThreadId: null,
+    lineage: { rootThreadId: input.id, parentThreadId: null, relationshipToParent: null },
+    forkedFrom: null,
+    createdBy: "user",
+    creationSource: "web",
+  };
+}
+const decodeThread = (input: Parameters<typeof nativeThread>[0]) =>
   decodeThreadSnapshotItem({
     kind: "snapshot",
-    snapshot: { snapshotSequence: 0, thread: input },
+    snapshotSequence: 0,
+    projection: {
+      thread: nativeThread(input),
+      runs: [],
+      attempts: [],
+      nodes: [],
+      subagents: [],
+      providerSessions: [],
+      providerThreads: [],
+      providerTurns: [],
+      runtimeRequests: [],
+      messages: [],
+      plans: [],
+      turnItems: [],
+      checkpointScopes: [],
+      checkpoints: [],
+      contextHandoffs: [],
+      contextTransfers: [],
+      visibleTurnItems: [],
+      updatedAt: DateTime.makeUnsafe(timestamp),
+    },
   }).snapshot.thread;
-const decodeShell = decodeThreadShell;
+const decodeShell = (input: Parameters<typeof nativeThread>[0]) =>
+  decodeThreadShell({
+    ...nativeThread(input),
+    latestRunId: null,
+    activeRunId: null,
+    status: "idle",
+    pendingRuntimeRequest: null,
+    latestVisibleMessage: null,
+    itemCount: 0,
+    visibleItemCount: 0,
+  });
 
 const threadId = "22222222-2222-4222-8222-222222222222";
 const timestamp = "2026-09-09T12:00:00.000Z";
@@ -97,7 +156,10 @@ function harness(settledOverride: "settled" | "active", failure?: Error) {
     }),
   }));
   return {
-    client: new RemoteEnvironmentClient(environment, { rpcFactory }),
+    client: new RemoteEnvironmentClient(environment, {
+      descriptorFactory: descriptorFixture(environment),
+      rpcFactory,
+    }),
     request,
     subscribeThreadSnapshot,
     dispose,
@@ -150,7 +212,7 @@ describe("thread settlement", () => {
     expect(h.dispose).toHaveBeenCalledOnce();
   });
 
-  it("preserves lifecycle fields in shell snapshots and defaults older snapshots", () => {
+  it("preserves native lifecycle fields in shell and detail snapshots", () => {
     expect(
       decodeShell({
         ...thread,

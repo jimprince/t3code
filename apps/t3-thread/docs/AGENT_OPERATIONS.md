@@ -789,3 +789,11 @@ t3-thread automation resume <automation-id> --env <name> --project <id>
 t3-thread automation remove <automation-id> --env <name> --project <id>
 t3-thread automation run-now <automation-id> --env <name> --project <id>
 ```
+
+### Calling identity in shared runtimes
+
+`t3-thread caller` reports `identity-unavailable` when the shell has no calling thread identity. Cursor and OpenCode shared runtimes can call the session's `t3_worker_identity` MCP tool to obtain their exact thread ID and environment. Pass its `threadId`, `environmentId` and `environmentName` as `T3_THREAD_ID`, `T3_ENVIRONMENT_ID` and `T3_ENVIRONMENT_NAME` in each operator command's environment. This restores caller notification ownership without changing shared process variables. An external MCP client has no own thread and must use explicit targets.
+
+### Organizational parents
+
+On M2 servers, `create --parent <name-or-uuid>` and `nest <name-or-uuid> --parent <parent>` use the supervision service, including parents in another project or paired environment. `unnest <name-or-uuid>` clears the organizational parent without changing provider execution lineage. Creation defaults to nesting under the caller; `--top-level` keeps it independent. Status includes local and remote parents. The server must advertise `threadNesting` (and `remoteThreadNesting` for remote parents); unsupported explicit requests fail before launch. Automatic-order reset uses the fork ordering service only when `threadOrderReset` is advertised.

@@ -1,3 +1,4 @@
+import { descriptorFixture } from "./descriptor-fixture.js";
 import { DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
 import { Schema } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -87,7 +88,10 @@ function harness() {
     })),
   });
   return {
-    client: new RemoteEnvironmentClient(environment, { rpcFactory }),
+    client: new RemoteEnvironmentClient(environment, {
+      descriptorFactory: descriptorFixture(environment),
+      rpcFactory,
+    }),
     commands,
     thread: () => current,
   };
@@ -118,10 +122,7 @@ describe("worker pinning", () => {
         ...(pin ? { pin: true } : {}),
       });
       expect(created.pinned).toBe(pin);
-      expect(h.commands.map((command) => command.type)).toEqual(
-        pin ? ["thread.pin"] : [],
-      );
-
+      expect(h.commands.map((command) => command.type)).toEqual(pin ? ["thread.pin"] : []);
     },
   );
   it("marks pinned workers in the all-worker status line", () => {

@@ -1,4 +1,3 @@
-
 import type { AgentStatus, OrchestrationThread, OrchestrationThreadShell } from "./types.js";
 
 /**
@@ -28,9 +27,9 @@ export function classifyThread(
   }
 
   const hasActionableProposedPlan =
-    "hasActionableProposedPlan" in thread
+    thread.hasActionableProposedPlan !== undefined
       ? thread.hasActionableProposedPlan
-      : thread.proposedPlans.some((plan) => !plan.implementedAt);
+      : ("proposedPlans" in thread ? thread.proposedPlans : []).some((plan) => !plan.implementedAt);
   if (hasActionableProposedPlan) {
     return {
       state: "needs-plan",
@@ -38,7 +37,10 @@ export function classifyThread(
     };
   }
 
-  const pending = "runtimeRequests" in thread ? (thread.runtimeRequests ?? []).filter(request => request.status === "pending") : [];
+  const pending =
+    "runtimeRequests" in thread
+      ? (thread.runtimeRequests ?? []).filter((request) => request.status === "pending")
+      : [];
   if (
     ("hasPendingApprovals" in thread && thread.hasPendingApprovals) ||
     pending.some((request) => request.kind !== "user_input")
@@ -62,7 +64,7 @@ export function classifyThread(
   if (thread.session?.status === "error" || thread.latestTurn?.state === "error") {
     return {
       state: "error",
-      reason: thread.session?.lastError || "turn failed",
+      reason: thread.lastError || thread.session?.lastError || "turn failed",
     };
   }
 
@@ -124,6 +126,26 @@ export function selectThreadChildren(
   );
 }
 
+export function selectRemoteThreadChildren(
+  threads: readonly OrchestrationThreadShell[],
+  parent: { environmentId: string; threadId: string },
+  recursive = false,
+): OrchestrationThreadShell[] {
+  const direct = threads.filter(
+    (thread) =>
+      thread.remoteParent?.environmentId === parent.environmentId &&
+      thread.remoteParent.threadId === parent.threadId,
+  );
+  if (!recursive) return direct;
+  const ids = new Set(
+    direct.flatMap((thread) => [
+      thread.id,
+      ...selectThreadChildren(threads, thread.id, true).map((child) => child.id),
+    ]),
+  );
+  return threads.filter((thread) => ids.has(thread.id));
+}
+
 export function formatThreadLine(
   thread: OrchestrationThread | OrchestrationThreadShell,
   parentTitle?: string,
@@ -142,6 +164,9 @@ export function formatThreadLine(
     thread.parentThreadId
       ? `parent=${thread.parentThreadId}${parentTitle ? ` (${parentTitle})` : ""}`
       : "parent=none",
+    ...(thread.remoteParent
+      ? [`remote-parent=${thread.remoteParent.environmentId}/${thread.remoteParent.threadId}`]
+      : []),
     status.reason,
   ].join(" ");
 }

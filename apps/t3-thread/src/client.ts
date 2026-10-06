@@ -1,3 +1,4 @@
+import { withThreadMetadata, type ThreadMetadata } from "./v2/nesting.js";
 import { pendingRequests, requirePendingRequest } from "./v2/requests.js";
 import { wrapWithPreamble, type WorkerContext } from "./thread-preamble.js";
 import type { ProjectAutomation } from "./types.js";
@@ -143,10 +144,18 @@ function providerInventoryFromConfig(config: ServerConfig): ProviderModelInvento
 export class RemoteEnvironmentClient {
   readonly environment: SavedEnvironment;
   private readonly rpcFactory: RpcFactory | null;
+  private readonly descriptorFactory: (() => Promise<ExecutionEnvironmentDescriptor>) | null;
 
-  constructor(environment: SavedEnvironment, options: { rpcFactory?: RpcFactory } = {}) {
+  constructor(
+    environment: SavedEnvironment,
+    options: {
+      rpcFactory?: RpcFactory;
+      descriptorFactory?: () => Promise<ExecutionEnvironmentDescriptor>;
+    } = {},
+  ) {
     this.environment = environment;
     this.rpcFactory = options.rpcFactory ?? null;
+    this.descriptorFactory = options.descriptorFactory ?? null;
   }
 
   static async pair(input: {
@@ -189,6 +198,7 @@ export class RemoteEnvironmentClient {
   }
 
   async describe(): Promise<ExecutionEnvironmentDescriptor> {
+    if (this.descriptorFactory) return this.descriptorFactory();
     return fetchEnvironmentDescriptor(this.environment.httpBaseUrl);
   }
 
@@ -228,8 +238,48 @@ export class RemoteEnvironmentClient {
       }
       return {
         projects: item.snapshot.projects,
-        threads: item.snapshot.threads,
+        threads: await this.applyThreadMetadata(item.snapshot.threads, rpc),
       };
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
+  async supportsThreadNesting(): Promise<boolean> {
+    return (await this.describe()).capabilities.threadNesting === true;
+  }
+
+  private async applyThreadMetadata<T extends { id: string; parentThreadId?: string | null }>(
+    threads: T[],
+    rpc: RemoteRpcClient,
+  ): Promise<T[]> {
+    if (!(await this.supportsThreadNesting())) return threads;
+    const rows = await rpc.request<ThreadMetadata[]>("threadMetadataList", {});
+    return threads.map((thread) => withThreadMetadata(thread, rows));
+  }
+
+  async setThreadParent(
+    threadId: string,
+    parentThreadId: string | null,
+    remoteParent: { environmentId: string; threadId: string } | null = null,
+  ): Promise<ThreadMetadata> {
+    const descriptor = await this.describe();
+    if (
+      descriptor.capabilities.threadNesting !== true ||
+      (remoteParent !== null && descriptor.capabilities.remoteThreadNesting !== true)
+    ) {
+      throw new Error(
+        `'${this.environment.name}' runs a server without the required thread nesting capability.`,
+      );
+    }
+    const rpc = await this.openRpc();
+    try {
+      return await rpc.request<ThreadMetadata>("threadMetadataUpdate", {
+        commandId: NodeCrypto.randomUUID(),
+        threadId,
+        parentThreadId,
+        remoteParent,
+      });
     } finally {
       await rpc.dispose();
     }
@@ -250,7 +300,13 @@ export class RemoteEnvironmentClient {
     return project.automations ?? [];
   }
 
-  async dispatchAutomation(_command: { type: string; projectId: string; commandId: string; automation?: unknown; automationId?: string }): Promise<readonly ProjectAutomation[]> {
+  async dispatchAutomation(_command: {
+    type: string;
+    projectId: string;
+    commandId: string;
+    automation?: unknown;
+    automationId?: string;
+  }): Promise<readonly ProjectAutomation[]> {
     throw new Error("Project automation commands require the M3 automation services.");
   }
 
@@ -298,7 +354,12 @@ export class RemoteEnvironmentClient {
 
     const rpc = await this.openRpc();
     try {
-      await rpc.request("projectsMutate", { ...command, ...('defaultModelSelection' in command && command.defaultModelSelection ? { defaultModelSelection: wireModel(command.defaultModelSelection as ModelSelection) } : {}) });
+      await rpc.request("projectsMutate", {
+        ...command,
+        ...("defaultModelSelection" in command && command.defaultModelSelection
+          ? { defaultModelSelection: wireModel(command.defaultModelSelection as ModelSelection) }
+          : {}),
+      });
     } finally {
       await rpc.dispose();
     }
@@ -325,7 +386,13 @@ export class RemoteEnvironmentClient {
 
     const rpc = await this.openRpc();
     try {
-      await rpc.request("projectsMutate", { ...command, type: "project.update", ...('defaultModelSelection' in command && command.defaultModelSelection ? { defaultModelSelection: wireModel(command.defaultModelSelection as ModelSelection) } : {}) });
+      await rpc.request("projectsMutate", {
+        ...command,
+        type: "project.update",
+        ...("defaultModelSelection" in command && command.defaultModelSelection
+          ? { defaultModelSelection: wireModel(command.defaultModelSelection as ModelSelection) }
+          : {}),
+      });
     } finally {
       await rpc.dispose();
     }
@@ -361,7 +428,13 @@ export class RemoteEnvironmentClient {
 
     const rpc = await this.openRpc();
     try {
-      await rpc.request("projectsMutate", { ...command, type: "project.update", ...('defaultModelSelection' in command && command.defaultModelSelection ? { defaultModelSelection: wireModel(command.defaultModelSelection as ModelSelection) } : {}) });
+      await rpc.request("projectsMutate", {
+        ...command,
+        type: "project.update",
+        ...("defaultModelSelection" in command && command.defaultModelSelection
+          ? { defaultModelSelection: wireModel(command.defaultModelSelection as ModelSelection) }
+          : {}),
+      });
     } finally {
       await rpc.dispose();
     }
@@ -393,7 +466,12 @@ export class RemoteEnvironmentClient {
 
     const rpc = await this.openRpc();
     try {
-      await rpc.request("projectsMutate", { ...command, ...('defaultModelSelection' in command && command.defaultModelSelection ? { defaultModelSelection: wireModel(command.defaultModelSelection as ModelSelection) } : {}) });
+      await rpc.request("projectsMutate", {
+        ...command,
+        ...("defaultModelSelection" in command && command.defaultModelSelection
+          ? { defaultModelSelection: wireModel(command.defaultModelSelection as ModelSelection) }
+          : {}),
+      });
     } finally {
       await rpc.dispose();
     }
@@ -418,7 +496,7 @@ export class RemoteEnvironmentClient {
       if (item.kind !== "snapshot") {
         throw new Error(`Expected a thread snapshot for '${threadId}', received '${item.kind}'.`);
       }
-      return item.snapshot.thread;
+      return (await this.applyThreadMetadata([item.snapshot.thread], rpc))[0]!;
     } finally {
       await rpc.dispose();
     }
@@ -436,7 +514,19 @@ export class RemoteEnvironmentClient {
     initialMessage?: string;
     workerContext?: WorkerContext;
     pin?: boolean;
+    parentThreadId?: string;
+    remoteParent?: { environmentId: string; threadId: string };
   }): Promise<{ threadId: string; projectId: string; title: string; pinned: boolean }> {
+    if ((input.parentThreadId || input.remoteParent) && !(await this.supportsThreadNesting())) {
+      throw new Error(
+        `'${this.environment.name}' runs a server without thread nesting. No worker was created.`,
+      );
+    }
+    if (input.remoteParent && (await this.describe()).capabilities.remoteThreadNesting !== true) {
+      throw new Error(
+        `'${this.environment.name}' runs a server without cross-environment nesting. No worker was created.`,
+      );
+    }
     const snapshot = await this.getShellSnapshot();
     const project = snapshot.projects.find((candidate) => candidate.id === input.projectId);
     if (!project) {
@@ -466,19 +556,31 @@ export class RemoteEnvironmentClient {
     const rpc = await this.openRpc();
     try {
       await rpc.request("launchThread", {
-        commandId: NodeCrypto.randomUUID(), threadId, projectId: project.id,
-        title: input.title, generateTitle: false,
-        modelSelection: wireModel(modelSelection), runtimeMode, interactionMode,
+        commandId: NodeCrypto.randomUUID(),
+        threadId,
+        projectId: project.id,
+        title: input.title,
+        generateTitle: false,
+        modelSelection: wireModel(modelSelection),
+        runtimeMode,
+        interactionMode,
         workspaceStrategy: input.branch
           ? { type: "worktree", branch: input.branch, baseRef: input.baseBranch ?? "main" }
           : { type: "root" },
         initialMessage: {
           messageId: NodeCrypto.randomUUID(),
-          text: input.workerContext ? wrapWithPreamble(initialMessage, {
-            ...input.workerContext, threadId, environment: this.environment.name,
-            projectId: project.id, projectTitle: project.title,
-            branch: input.branch ?? null, worktreePath: input.branch ? null : project.workspaceRoot, createdAt,
-          }) : initialMessage,
+          text: input.workerContext
+            ? wrapWithPreamble(initialMessage, {
+                ...input.workerContext,
+                threadId,
+                environment: this.environment.name,
+                projectId: project.id,
+                projectTitle: project.title,
+                branch: input.branch ?? null,
+                worktreePath: input.branch ? null : project.workspaceRoot,
+                createdAt,
+              })
+            : initialMessage,
           attachments: [],
         },
       });
@@ -486,6 +588,20 @@ export class RemoteEnvironmentClient {
       await rpc.dispose();
     }
 
+    if (input.parentThreadId || input.remoteParent) {
+      try {
+        await this.setThreadParent(
+          threadId,
+          input.parentThreadId ?? null,
+          input.remoteParent ?? null,
+        );
+      } catch (error) {
+        throw new Error(
+          `Worker '${threadId}' was created but nesting failed. Attach that thread instead of retrying creation.`,
+          { cause: error },
+        );
+      }
+    }
     const pinState = input.pin ? await this.setThreadPinned(threadId, true) : null;
     return {
       threadId,
@@ -545,11 +661,16 @@ export class RemoteEnvironmentClient {
     const rpc = await this.openRpc();
     try {
       await rpc.request("dispatchCommand", {
-        type: "message.dispatch", commandId: NodeCrypto.randomUUID(), threadId: thread.id,
-        messageId: NodeCrypto.randomUUID(), text: input.text, attachments: [],
-        dispatchMode: input.allowWhileRunning && thread.latestTurn?.state === "running"
-          ? { type: "steer_active", targetRunId: thread.latestTurn.turnId }
-          : { type: "start_immediately" },
+        type: "message.dispatch",
+        commandId: NodeCrypto.randomUUID(),
+        threadId: thread.id,
+        messageId: NodeCrypto.randomUUID(),
+        text: input.text,
+        attachments: [],
+        dispatchMode:
+          input.allowWhileRunning && thread.latestTurn?.state === "running"
+            ? { type: "steer_active", targetRunId: thread.latestTurn.turnId }
+            : { type: "start_immediately" },
       });
     } finally {
       await rpc.dispose();
@@ -586,14 +707,21 @@ export class RemoteEnvironmentClient {
 
       const plan = selectPlanForImplementation(thread, input.planId);
       const modeChanged = thread.interactionMode !== "default";
-      if (modeChanged) await rpc.request("dispatchCommand", {
-        type: "thread.interaction-mode.set", commandId: NodeCrypto.randomUUID(),
-        threadId: thread.id, interactionMode: "default",
-      });
+      if (modeChanged)
+        await rpc.request("dispatchCommand", {
+          type: "thread.interaction-mode.set",
+          commandId: NodeCrypto.randomUUID(),
+          threadId: thread.id,
+          interactionMode: "default",
+        });
       await rpc.request("dispatchCommand", {
-        type: "message.dispatch", commandId: NodeCrypto.randomUUID(), threadId: thread.id,
-        messageId: NodeCrypto.randomUUID(), text: buildPlanImplementationPrompt(plan.planMarkdown),
-        attachments: [], sourcePlanRef: { threadId: thread.id, planId: plan.id },
+        type: "message.dispatch",
+        commandId: NodeCrypto.randomUUID(),
+        threadId: thread.id,
+        messageId: NodeCrypto.randomUUID(),
+        text: buildPlanImplementationPrompt(plan.planMarkdown),
+        attachments: [],
+        sourcePlanRef: { threadId: thread.id, planId: plan.id },
         dispatchMode: { type: "start_immediately" },
       });
 
@@ -607,15 +735,26 @@ export class RemoteEnvironmentClient {
     return pendingRequests(await this.findThread(threadId));
   }
 
-  async respond(input: { threadId: string; requestId: string; decision?: "accept" | "decline" | "cancel"; answers?: Record<string, unknown> }) {
+  async respond(input: {
+    threadId: string;
+    requestId: string;
+    decision?: "accept" | "decline" | "cancel";
+    answers?: Record<string, unknown>;
+  }) {
     const thread = await this.findThread(input.threadId);
     const request = requirePendingRequest(thread, input.requestId);
     if (request.kind === "user_input" ? input.answers === undefined : input.decision === undefined)
       throw new Error("Response must match the request kind.");
     const rpc = await this.openRpc();
     try {
-      return await rpc.request("dispatchCommand", { type: "runtime-request.respond", commandId: NodeCrypto.randomUUID(), ...input });
-    } finally { await rpc.dispose(); }
+      return await rpc.request("dispatchCommand", {
+        type: "runtime-request.respond",
+        commandId: NodeCrypto.randomUUID(),
+        ...input,
+      });
+    } finally {
+      await rpc.dispose();
+    }
   }
 
   async applyThreadOrder(
@@ -660,8 +799,7 @@ export class RemoteEnvironmentClient {
     }
     const rpc = await this.openRpc();
     try {
-      await rpc.request("dispatchCommand", {
-        type: "thread.order.reset",
+      await rpc.request("threadOrderReset", {
         commandId: NodeCrypto.randomUUID(),
         threadId,
       });
@@ -801,4 +939,5 @@ export class RemoteEnvironmentClient {
     });
     return new T3RpcClient(wsUrl);
   }
+
 }

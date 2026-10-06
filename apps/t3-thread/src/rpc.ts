@@ -4,9 +4,17 @@ import { Effect, Exit, Layer, ManagedRuntime, Option, Scope, Stream } from "effe
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import * as Socket from "effect/unstable/socket/Socket";
 
-import { decodeShellSnapshotItem, decodeThreadSnapshotItem, WS_SERVER_GET_CONFIG_METHOD, WsRpcGroup } from "./contracts.js";
+import {
+  decodeShellSnapshotItem,
+  decodeThreadSnapshotItem,
+  WS_SERVER_GET_CONFIG_METHOD,
+  WsRpcGroup,
+} from "./contracts.js";
 
 const RPC_METHODS = {
+  threadMetadataList: "fork.threads.metadata.list",
+  threadMetadataUpdate: "fork.threads.metadata.update",
+  threadOrderReset: "fork.threads.order.reset",
   projectsMutate: "projects.mutate",
   launchThread: ORCHESTRATION_V2_WS_METHODS.launchThread,
   serverGetConfig: WS_SERVER_GET_CONFIG_METHOD,
@@ -41,10 +49,7 @@ export class T3RpcClient {
     this.clientPromise = this.runtime.runPromise(Scope.provide(this.scope)(makeT3RpcClient));
   }
 
-  async request<T>(
-    method: keyof typeof RPC_METHODS,
-    input: unknown,
-  ): Promise<T> {
+  async request<T>(method: keyof typeof RPC_METHODS, input: unknown): Promise<T> {
     const client = (await this.clientPromise) as unknown as Record<
       string,
       (payload: unknown) => Effect.Effect<T, unknown, never>
@@ -57,12 +62,23 @@ export class T3RpcClient {
   }
 
   async subscribeThreadSnapshot<T>(threadId: string): Promise<T> {
-    return decodeThreadSnapshotItem(await this.requestStreamFirst("subscribeThread", { threadId })) as T;
+    return decodeThreadSnapshotItem(
+      await this.requestStreamFirst("subscribeThread", { threadId }),
+    ) as T;
   }
 
-  async waitForThreadEvent(threadId: string, matches: (item: import("@t3tools/contracts").OrchestrationV2ThreadStreamItem) => boolean) {
+  async waitForThreadEvent(
+    threadId: string,
+    matches: (item: import("@t3tools/contracts").OrchestrationV2ThreadStreamItem) => boolean,
+  ) {
     const client = await this.clientPromise;
-    const item = await this.runtime.runPromise(Stream.runHead(client[ORCHESTRATION_V2_WS_METHODS.subscribeThread]({ threadId: ThreadId.make(threadId) }).pipe(Stream.filter(matches))));
+    const item = await this.runtime.runPromise(
+      Stream.runHead(
+        client[ORCHESTRATION_V2_WS_METHODS.subscribeThread]({
+          threadId: ThreadId.make(threadId),
+        }).pipe(Stream.filter(matches)),
+      ),
+    );
     return Option.getOrThrow(item);
   }
 

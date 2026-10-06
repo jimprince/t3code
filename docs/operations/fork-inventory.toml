@@ -157,3 +157,9 @@ id = "v2-port-2689"
 date = "2026-10-05"
 decided = "reconcile-smaller"
 rationale = "Use protocol 2 native launch, message dispatch, runtime requests and scoped projections. Keep operator routing state; isolate subscription handlers from upstream hotspots. Notification and nesting parity remain M2; automations remain M3. V2 has no order-reset operation and Cursor local SDK cannot isolate process identity per concurrent session."
+
+[[patch.decision]]
+id = "v2-port-2689-m2"
+date = "2026-10-05"
+decided = "reconcile-smaller"
+rationale = "Resolve shared-runtime worker identity through the per-session MCP caller, with explicit CLI identity-unavailable fallback. Preserve native held-queue outcomes and actionable plan state for parent notifications. Organizational metadata reads and nest/unnest use the M2 fork sidecar independently of execution lineage. Remote parents and order reset require their advertised capability; project automation remains M3."

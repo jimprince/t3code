@@ -63,13 +63,18 @@ export function buildNotificationRecord(input: {
 }): SavedNotification {
   const eventKey =
     input.existing?.eventKey ??
-    buildNotificationEventKey({
-      subscriberThreadId: input.subscription.subscriberThreadId,
-      sourceThreadId: input.subscription.sourceThreadId,
-      latestAssistantMessageId: input.overview.latestAssistantMessageId,
-      latestTurnId: input.thread.latestTurn?.turnId ?? null,
-      sourceState: input.overview.state,
-    });
+    JSON.stringify([
+      input.subscription.sourceEnvironment,
+      input.subscription.subscriberEnvironment,
+    ]) +
+      ":" +
+      buildNotificationEventKey({
+        subscriberThreadId: input.subscription.subscriberThreadId,
+        sourceThreadId: input.subscription.sourceThreadId,
+        latestAssistantMessageId: input.overview.latestAssistantMessageId,
+        latestTurnId: input.thread.latestTurn?.turnId ?? null,
+        sourceState: input.overview.state,
+      });
 
   return {
     id: input.existing?.id ?? NodeCrypto.randomUUID(),

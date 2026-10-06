@@ -1,3 +1,4 @@
+import { descriptorFixture } from "./descriptor-fixture.js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { RemoteEnvironmentClient } from "../src/client.js";
@@ -80,7 +81,10 @@ function makeHarness(thread: OrchestrationThread) {
     }),
     dispose,
   };
-  const client = new RemoteEnvironmentClient(environment, { rpcFactory: () => rpc });
+  const client = new RemoteEnvironmentClient(environment, {
+    descriptorFactory: descriptorFixture(environment),
+    rpcFactory: () => rpc,
+  });
   return { client, commands, dispose };
 }
 
@@ -97,18 +101,12 @@ describe("RemoteEnvironmentClient.implementPlan", () => {
       interactionMode: "default",
     });
     expect(harness.commands[1]).toMatchObject({
-      type: "thread.turn.start",
+      type: "message.dispatch",
       threadId: "thread-1",
-      message: {
-        role: "user",
-        text: "PLEASE IMPLEMENT THIS PLAN:\n# Add feature\n\n1. edit\n2. test",
-        attachments: [],
-      },
-      modelSelection: { provider: "codex", model: "gpt-5.6-terra" },
-      titleSeed: "Plan worker",
-      runtimeMode: "full-access",
-      interactionMode: "default",
-      sourceProposedPlan: { threadId: "thread-1", planId: "plan-1" },
+      text: "PLEASE IMPLEMENT THIS PLAN:\n# Add feature\n\n1. edit\n2. test",
+      attachments: [],
+      dispatchMode: { type: "start_immediately" },
+      sourcePlanRef: { threadId: "thread-1", planId: "plan-1" },
     });
     expect(harness.commands[1]).not.toHaveProperty("bootstrap");
     expect(result).toEqual({ threadId: "thread-1", planId: "plan-1", modeChanged: true });
@@ -121,7 +119,7 @@ describe("RemoteEnvironmentClient.implementPlan", () => {
     const result = await harness.client.implementPlan({ threadId: "thread-1" });
 
     expect(harness.commands).toHaveLength(1);
-    expect(harness.commands[0]?.type).toBe("thread.turn.start");
+    expect(harness.commands[0]?.type).toBe("message.dispatch");
     expect(result.modeChanged).toBe(false);
   });
 
@@ -141,7 +139,7 @@ describe("RemoteEnvironmentClient.implementPlan", () => {
 
     expect(automaticResult.planId).toBe("plan-current");
     expect(automaticHarness.commands.at(-1)).toMatchObject({
-      sourceProposedPlan: { planId: "plan-current" },
+      sourcePlanRef: { planId: "plan-current" },
     });
 
     const harness = makeHarness(makeThread({ proposedPlans: [older, current] }));
@@ -153,11 +151,11 @@ describe("RemoteEnvironmentClient.implementPlan", () => {
 
     expect(result.planId).toBe("plan-old");
     expect(harness.commands.at(-1)).toMatchObject({
-      sourceProposedPlan: { planId: "plan-old" },
+      sourcePlanRef: { planId: "plan-old" },
     });
   });
 
-  it("reports a partial failure when mode changes but the turn cannot start", async () => {
+  it("propagates a dispatch failure after the accepted mode change", async () => {
     const thread = makeThread();
     const commands: Array<Record<string, unknown>> = [];
     const rpc = {
@@ -173,14 +171,17 @@ describe("RemoteEnvironmentClient.implementPlan", () => {
       }),
       dispose: vi.fn(async () => undefined),
     };
-    const client = new RemoteEnvironmentClient(environment, { rpcFactory: () => rpc });
+    const client = new RemoteEnvironmentClient(environment, {
+      descriptorFactory: descriptorFixture(environment),
+      rpcFactory: () => rpc,
+    });
 
     await expect(client.implementPlan({ threadId: "thread-1" })).rejects.toThrow(
-      "was switched to default mode, but the implementation turn failed to start: provider unavailable",
+      "provider unavailable",
     );
     expect(commands.map((command) => command.type)).toEqual([
       "thread.interaction-mode.set",
-      "thread.turn.start",
+      "message.dispatch",
     ]);
   });
 

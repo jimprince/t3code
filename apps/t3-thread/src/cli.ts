@@ -33,6 +33,7 @@ import {
   classifyThread,
   formatThreadLine,
   selectThreadChildren,
+  selectRemoteThreadChildren,
   subscriptionBaselineTurnId,
 } from "./status.js";
 import {
@@ -55,7 +56,6 @@ import {
   upsertEnvironment,
 } from "./state.js";
 import { cancelQueuedSend, drainQueuedSends, hasQueuedWork, listQueuedSends } from "./sendQueue.js";
-import { wrapWithPreamble } from "./thread-preamble.js";
 import {
   planExplicitThreadOrder,
   planThreadMove,
@@ -75,10 +75,17 @@ import {
 import type { CallerEnvironmentMetadata, SubscriptionEndpoint } from "./state.js";
 import type { SavedAgent, SavedNotification, SavedQueuedSend } from "./types.js";
 
-function resolveParentThreadId(state: Awaited<ReturnType<typeof loadState>>, reference: string, environment: string): string {
-  const agent = state.agents.find(agent => agent.name === reference || agent.threadId === reference);
+function resolveParentThreadId(
+  state: Awaited<ReturnType<typeof loadState>>,
+  reference: string,
+  environment: string,
+): string {
+  const agent = state.agents.find(
+    (agent) => agent.name === reference || agent.threadId === reference,
+  );
   if (agent) {
-    if (agent.environment !== environment) throw new Error("Thread belongs to another environment.");
+    if (agent.environment !== environment)
+      throw new Error("Thread belongs to another environment.");
     return agent.threadId;
   }
   assertThreadSearchUuid(reference);
@@ -174,6 +181,16 @@ async function resolveThreadEndpoint(
   );
 }
 
+async function resolveParentEndpoint(
+  state: Awaited<ReturnType<typeof loadState>>,
+  reference: string,
+): Promise<SubscriptionEndpoint> {
+  const saved = state.agents.find(
+    (agent) => agent.name === reference || agent.threadId === reference,
+  );
+  return saved ? toSubscriptionEndpoint(saved) : resolveThreadEndpoint(state, reference);
+}
+
 async function resolveNotifyEndpoint(
   state: Awaited<ReturnType<typeof loadState>>,
   notify: string | boolean | undefined,
@@ -247,6 +264,8 @@ async function ensureNotificationWatcher(
 const program = new Command();
 const AGENT_COMMAND_ALIASES = new Set([
   "create",
+  "nest",
+  "unnest",
   "attach",
   "list",
   "archive",
@@ -391,14 +410,20 @@ program
     if (options.recursive && !options.parent) {
       throw new Error("--recursive requires --parent");
     }
-    const parentThreadId = options.parent
-      ? resolveParentThreadId(state, options.parent, environment.name)
-      : null;
+    const parent = options.parent ? await resolveParentEndpoint(state, options.parent) : null;
+    const parentEnvironment = parent ? requireEnvironment(state, parent.environment) : null;
     const threads = await client.listThreads();
     const titles = new Map(threads.map((thread) => [thread.id, thread.title]));
-    const selected = parentThreadId
-      ? selectThreadChildren(threads, parentThreadId, Boolean(options.recursive))
-      : threads;
+    const selected =
+      parent && parentEnvironment
+        ? parentEnvironment.environmentId === environment.environmentId
+          ? selectThreadChildren(threads, parent.threadId, Boolean(options.recursive))
+          : selectRemoteThreadChildren(
+              threads,
+              { environmentId: parentEnvironment.environmentId, threadId: parent.threadId },
+              Boolean(options.recursive),
+            )
+        : threads;
     printLines(
       selected.map((thread) => formatThreadLine(thread, titles.get(thread.parentThreadId ?? ""))),
     );
@@ -415,20 +440,42 @@ program
     printJson(await client.listModels());
   });
 
-program.command("pending").argument("<agent-or-thread>").description("Read pending V2 runtime requests").action(async target => {
-  const { agent, client } = await withAgent(target);
-  printJson(await client.pending(agent.threadId));
-});
-for (const [name, decision] of [["approve", "accept"], ["deny", "decline"]] as const) {
-  program.command(name).argument("<agent-or-thread>").argument("<request-id>").action(async (target, requestId) => {
+program
+  .command("pending")
+  .argument("<agent-or-thread>")
+  .description("Read pending V2 runtime requests")
+  .action(async (target) => {
     const { agent, client } = await withAgent(target);
-    printJson(await client.respond({ threadId: agent.threadId, requestId, decision }));
+    printJson(await client.pending(agent.threadId));
   });
+for (const [name, decision] of [
+  ["approve", "accept"],
+  ["deny", "decline"],
+] as const) {
+  program
+    .command(name)
+    .argument("<agent-or-thread>")
+    .argument("<request-id>")
+    .action(async (target, requestId) => {
+      const { agent, client } = await withAgent(target);
+      printJson(await client.respond({ threadId: agent.threadId, requestId, decision }));
+    });
 }
-program.command("answer").argument("<agent-or-thread>").argument("<request-id>").requiredOption("--answers <json>", "question-id to answer map").action(async (target, requestId, options) => {
-  const { agent, client } = await withAgent(target);
-  printJson(await client.respond({ threadId: agent.threadId, requestId, answers: JSON.parse(options.answers) }));
-});
+program
+  .command("answer")
+  .argument("<agent-or-thread>")
+  .argument("<request-id>")
+  .requiredOption("--answers <json>", "question-id to answer map")
+  .action(async (target, requestId, options) => {
+    const { agent, client } = await withAgent(target);
+    printJson(
+      await client.respond({
+        threadId: agent.threadId,
+        requestId,
+        answers: JSON.parse(options.answers),
+      }),
+    );
+  });
 
 const environmentCommands = program.command("env").description("Manage saved environments");
 
@@ -652,25 +699,57 @@ agent
     "--no-notify",
     "disable automatic completion/attention notifications for the created worker",
   )
+  .option("--top-level", "create without an organizational parent or automatic caller subscription")
+  .option("--parent <agent-or-thread>", "organizational parent; defaults to the current caller")
   .option("--pin", "pin the new thread (default: unpinned)")
   .action(async (options) => {
     const state = await loadState();
     const environment = requireEnvironment(state, options.env);
-    const notifyCaller = await resolveNotifyEndpoint(
-      state,
-      options.notify,
-      options.env,
-      options.topLevel === true,
-    );
     if (options.worktree) {
       throw new Error(
         "`--worktree` is no longer supported by agent create. T3 chooses the worktree path; use `--branch` and `--base-branch` only.",
       );
     }
     const client = new RemoteEnvironmentClient(environment);
+    const parentEndpoint = options.parent
+      ? await resolveParentEndpoint(state, options.parent)
+      : options.topLevel
+        ? null
+        : resolveCallerThreadId()
+          ? await resolveThreadEndpoint(
+              state,
+              resolveCallerThreadId()!,
+              undefined,
+              resolveCallerEnvironmentMetadata(),
+            )
+          : null;
+    const notifyCaller =
+      options.notify === undefined && parentEndpoint && options.topLevel !== true
+        ? parentEndpoint
+        : await resolveNotifyEndpoint(
+            state,
+            options.notify,
+            options.env,
+            options.topLevel === true,
+          );
+    if (options.parent && options.topLevel)
+      throw new Error("--parent and --top-level cannot be combined.");
+    const nesting = parentEndpoint !== null && (await client.supportsThreadNesting());
+    if (options.parent && !nesting)
+      throw new Error("This server does not support thread nesting. No worker was created.");
+    const parentEnvironment = parentEndpoint
+      ? requireEnvironment(state, parentEndpoint.environment)
+      : null;
+    const localParent =
+      parentEndpoint && parentEnvironment?.environmentId === environment.environmentId
+        ? parentEndpoint.threadId
+        : undefined;
+    const remoteParent =
+      parentEndpoint && parentEnvironment && !localParent
+        ? { environmentId: parentEnvironment.environmentId, threadId: parentEndpoint.threadId }
+        : undefined;
     // `options.preamble` is false only when `--no-preamble` was passed (Commander convention).
-    const initialMessage =
-      options.preamble === false ? options.message : wrapWithPreamble(options.message);
+    const initialMessage = options.message;
     const created = await client.createAgentThread({
       pin: options.pin === true,
       projectId: options.project,
@@ -682,6 +761,15 @@ agent
       runtimeMode: options.runtimeMode,
       interactionMode: options.interactionMode,
       initialMessage,
+      ...(nesting ? { parentThreadId: localParent, remoteParent } : {}),
+      workerContext:
+        options.preamble === false
+          ? undefined
+          : {
+              name: options.name,
+              parent: parentEndpoint,
+              notifyLevel: "all",
+            },
     });
     const createdAt = new Date().toISOString();
     const savedAgent = {
@@ -725,12 +813,55 @@ agent
       threadId: created.threadId,
       projectId: created.projectId,
       title: created.title,
+      nesting: nesting
+        ? remoteParent
+          ? "remote"
+          : "local"
+        : parentEndpoint
+          ? "unsupported"
+          : "top-level",
+      parentThreadId: nesting ? (localParent ?? null) : null,
+      remoteParent: nesting ? (remoteParent ?? null) : null,
       notifySubscribed: Boolean(notifyCaller),
       notifySubscriberAgentName: notifyCaller?.name ?? null,
       notifySubscriberThreadId: notifyCaller?.threadId ?? null,
       pinned: created.pinned,
     });
   });
+
+for (const command of ["nest", "unnest"] as const) {
+  agent
+    .command(command)
+    .argument("<agent-or-thread>")
+    .option("--parent <agent-or-thread>", "parent thread, defaults to the caller for nest")
+    .action(async (target, options) => {
+      const { agent: child, client } = await withAgent(target);
+      const state = await loadState();
+      const parent =
+        command === "unnest"
+          ? null
+          : options.parent
+            ? await resolveParentEndpoint(state, options.parent)
+            : (await withCallerFromEnv()).caller;
+      const parentEnvironment = parent ? requireEnvironment(state, parent.environment) : null;
+      const sameEnvironment = parentEnvironment?.environmentId === client.environment.environmentId;
+      const metadata = await client.setThreadParent(
+        child.threadId,
+        parent && sameEnvironment ? parent.threadId : null,
+        parent && parentEnvironment && !sameEnvironment
+          ? { environmentId: parentEnvironment.environmentId, threadId: parent.threadId }
+          : null,
+      );
+      const thread = await client.findThread(child.threadId);
+      printJson({
+        threadId: child.threadId,
+        environment: child.environment,
+        parentThreadId: thread.parentThreadId ?? null,
+        remoteParent: thread.remoteParent ?? null,
+        metadata,
+      });
+    });
+}
 
 agent
   .command("attach")
@@ -1004,7 +1135,9 @@ agent
 
 agent
   .command("caller")
-  .description("Resolve the calling thread from T3_THREAD_ID and T3 environment metadata")
+  .description(
+    "Resolve the calling thread; report identity-unavailable when shell identity is absent",
+  )
   .action(async () => {
     const state = await loadState();
     const threadId = resolveCallerThreadId();
@@ -1017,6 +1150,9 @@ agent
         ).catch(() => null)
       : null;
     printJson({
+      status: caller ? "available" : "identity-unavailable",
+      reason: caller ? null : threadId ? "caller-unresolved" : "shell-identity-missing",
+      identityTool: caller ? null : "t3_worker_identity",
       threadId,
       caller: caller
         ? {
@@ -1024,7 +1160,7 @@ agent
             environment: caller.environment,
             saved: caller.name !== null,
           }
-        : null,
+        : { status: "identity-unavailable" },
     });
   });
 
@@ -1362,6 +1498,8 @@ agent
       checkedEnvironments: target.checkedEnvironments,
       unreachableEnvironments: target.unreachableEnvironments,
       parentThreadId,
+      remoteParent: thread.remoteParent ?? null,
+      executionParentThreadId: thread.executionParentThreadId ?? null,
       parentTitle,
       pinned: thread.pinnedAt != null,
       pinnedAt: thread.pinnedAt ?? null,
