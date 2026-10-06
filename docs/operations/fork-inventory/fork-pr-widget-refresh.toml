@@ -1,0 +1,13 @@
+name = "fork-pr-widget-refresh"
+subject = "fix(projects): PR widget resolves alias hosts, refreshes on load and folds closed PRs"
+class = "product"
+purpose = "Keep the project Pull requests widget current (brad/t3code-fork#152): PRs linked through Gitea's public alias host were never refreshed, so merged and closed PRs stayed Open, and Needs you counted PRs Brad was not asked to review."
+retire_when = "Upstream resolves Gitea alias hosts for PR sync and ships an equivalent project PR widget."
+depends_on = [
+  "fork-gitea-pr-browser",
+  "fork-gitea-connections",
+  "fork-project-page-workflow",
+  "fork-gitea-issue-links",
+]
+roles = []
+note = "Built by pr-widget-stale against fork.29 and integrated as ONE top patch rather than folded into the owners: the change spans 17 files whose owners are about 30 patches (ws.ts alone has 27), so folding would push the whole stack through those files. Fold it into fork-gitea-pr-browser, fork-gitea-connections and fork-project-page-workflow at a later stack refresh. Behaviour: alias-host resolution follows the #146 rule (exactly one configured instance confirms) with a 10-minute miss cache; one refresh on dashboard load, at most once a minute; merged/closed PRs fold into 'Recently merged or closed'; a PR not refreshed for 30 minutes is marked 'not refreshed'; Needs you counts only review-requested or needs-review PRs; rows read 'repo#N \u00b7 title \u00b7 state' (repo#N is the human reference Brad asked for). Integration fork.6: adapted replay to preserve UI theme/owner notes alongside BE authoritative contract and helpers. Fork.6 integration: adapt: union inventory, retain earlier integrated owner notes and later stanza (docs/operations/fork-inventory.toml). Retire/narrow/relocate do not apply to these retained UI behaviors or inventory insertions."
