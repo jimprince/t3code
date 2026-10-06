@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "201278cef289cae5f6bd7c0acf3e80ebbd6420ad",
-  "head": "e1793fd04a96f500f9d9dcb60f1fc2fc9d7208a9",
+  "prev": "99da97b13d7a22eff4d74907dbd404d033a375d1",
+  "head": "eae2611be8a144eaa6ee5871c6c3007005923a50",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -62,7 +62,9 @@
     "fork-textgen-own-scope",
     "fork-dev-vm-heavy-check-gate",
     "fork-gitea-issue-links",
-    "fork-orchestrators-view",
+    "fork-orchestrators-view"
+  ],
+  "unapplied": [
     "fork-codex-goal-visibility",
     "fork-named-agents",
     "fork-project-automations",
@@ -73,9 +75,7 @@
     "fork-project-page-workflow",
     "fork-project-canvas",
     "fork-project-task-types",
-    "fork-project-request-box-pinned"
-  ],
-  "unapplied": [
+    "fork-project-request-box-pinned",
     "fork-conversation-fork",
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
