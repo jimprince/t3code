@@ -568,6 +568,28 @@ archived threads are outside this listing. No thread histories are loaded.
 when the parent is outside the active shell snapshot). The all-worker status
 list includes each worker's parent id.
 
+## Retiring Worker Worktrees
+
+Every worker gets its own checkout, and their dependency trees and caches are
+what actually fill a host's disk. Retire them from the machine that owns them:
+
+```bash
+t3-thread worktree gc --env <environment> --local-state-dir <state-dir>                 # report only
+t3-thread worktree gc --env <environment> --local-state-dir <state-dir> --execute       # remove the plan
+t3-thread worktree gc --env <environment> --local-state-dir <state-dir> --recovery-window-days 14
+```
+
+The plan reports each worktree as removable or retained with a reason. A
+checkout is removable only when every T3 thread that used it is archived, none
+reports active work, its newest archive is older than the recovery window
+(seven days by default), and it is a linked git worktree with no tracked or
+untracked changes. Removal never passes `--force`, so git independently refuses
+a dirty checkout, and the branch and its commits survive.
+
+Paths that do not exist on the machine running the command are reported as
+`missing` and never removed, so running this against a remote environment
+simply finds nothing.
+
 ## Replacing A Failed Thread
 
 If a delegated thread is dead or attached to the wrong checkout, do not keep using it.
@@ -707,6 +729,17 @@ build/deploy commands, source development, and stale-build recovery. Watchers
 use the same entry point as their caller. Idle polls back off to one minute;
 missing and archived sources are flagged and parked for the watcher's lifetime.
 
+Detached worktrees are retained even when clean, because their commits may not
+be protected by a branch ref. Attach the work to a branch before retirement.
+
+Worktree cleanup requires the running environment's local state directory (for
+example `~/.t3/userdata`), containing its `environment-id` file. The ID must match
+the selected environment before local paths are inspected. Run cleanup on that
+host; a remote pairing alone does not authorize local deletion. Do not use a
+copied test state directory as proof of the production environment's identity.
+Execution rechecks thread lifecycle and Git state before each non-forced removal.
+This reduces the stale-plan window; it does not lock out concurrent external Git
+operations, so avoid starting work in archived checkouts during cleanup.
 
 ## Pinning workers
 
