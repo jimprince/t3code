@@ -33,6 +33,10 @@ const WINDOWS_COMMAND_NOT_FOUND_PATTERNS = [
   /wird nicht als interner oder externer befehl/i,
 ] as const;
 
+/** Recognizes localized cmd.exe output for a missing executable. */
+export const hasWindowsCommandNotFoundMessage = (output: string): boolean =>
+  WINDOWS_COMMAND_NOT_FOUND_PATTERNS.some((pattern) => pattern.test(output));
+
 /** Whether a Windows exit means the command was not found rather than that it failed. */
 export const isWindowsCommandNotFound = Effect.fn("isWindowsCommandNotFound")(function* (
   code: number | null,
@@ -41,7 +45,7 @@ export const isWindowsCommandNotFound = Effect.fn("isWindowsCommandNotFound")(fu
   const platform = yield* HostProcess.Platform;
   if (platform !== "win32") return false;
   if (code === 9009) return true;
-  return WINDOWS_COMMAND_NOT_FOUND_PATTERNS.some((pattern) => pattern.test(stderr));
+  return hasWindowsCommandNotFoundMessage(stderr);
 });
 
 export const DEFAULT_TIMEOUT_MS = 4_000;
