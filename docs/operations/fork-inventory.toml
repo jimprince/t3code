@@ -1992,3 +1992,18 @@ retire_when = "Upstream provides orchestrator-authored dashboards with their own
 depends_on = ["fork-project-canvas"]
 roles = []
 note = "New intent {type:'t3-canvas', intent:'resize', height} in projectCanvasBridge.logic: height must be a finite number (NaN, Infinity, strings and other types are refused), rounded to a whole number and clamped to 40-600 px (CANVAS_HEIGHT). The widget replaces the preset h-[220|320|420px] class with an inline height for that frame; the presets stay the default until a resize arrives, and the existing drag handle is unchanged. Resizes take their own sliding window (RESIZE_RATE_LIMIT, 10 per 10 s per frame, via takeRateSlot's new limit argument) and never touch the 5-per-10-s action history; over the limit, the newest height is held and applied when the window has passed, so the last resize always wins. They are not logged through projectCanvas.action and show no status line, and a malformed resize is answered on t3-canvas-result without using either budget. The height is remembered on the host in localStorage under t3code:canvas-height:<environmentId>:<rootThreadId>:<canvasId> (canvasHeightKey, readStoredCanvasHeight) and read in the first render, before the iframe mounts; storage errors are ignored and a stored value outside 40-600 is dropped. The sandbox is unchanged (no allow-same-origin, no storage in the page). ProjectCanvasIntent in contracts gains resize; no RPC or schema shape changes. Documented with a collapsible-section example in apps/t3-thread/docs/AGENT_OPERATIONS.md."
+
+[[patch]]
+name = "fork-pr-widget-refresh"
+subject = "fix(projects): PR widget resolves alias hosts, refreshes on load and folds closed PRs"
+class = "product"
+purpose = "Keep the project Pull requests widget current (brad/t3code-fork#152): PRs linked through Gitea's public alias host were never refreshed, so merged and closed PRs stayed Open, and Needs you counted PRs Brad was not asked to review."
+retire_when = "Upstream resolves Gitea alias hosts for PR sync and ships an equivalent project PR widget."
+depends_on = [
+  "fork-gitea-pr-browser",
+  "fork-gitea-connections",
+  "fork-project-page-workflow",
+  "fork-gitea-issue-links",
+]
+roles = []
+note = "Built by pr-widget-stale against fork.29 and integrated as ONE top patch rather than folded into the owners: the change spans 17 files whose owners are about 30 patches (ws.ts alone has 27), so folding would push the whole stack through those files. Fold it into fork-gitea-pr-browser, fork-gitea-connections and fork-project-page-workflow at a later stack refresh. Behaviour: alias-host resolution follows the #146 rule (exactly one configured instance confirms) with a 10-minute miss cache; one refresh on dashboard load, at most once a minute; merged/closed PRs fold into 'Recently merged or closed'; a PR not refreshed for 30 minutes is marked 'not refreshed'; Needs you counts only review-requested or needs-review PRs; rows read 'repo#N · title · state' (repo#N is the human reference Brad asked for)."
