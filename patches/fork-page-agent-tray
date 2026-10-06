@@ -1,6 +1,6 @@
-Bottom: 3855b417ef538e78d3553cf69f9b50160a175fe5
-Top:    f3717aeffce039a9c5079bed156a964a4024835f
+Bottom: d3ddae8f6b25ea6c5fdd68faf65217fb96b820f8
+Top:    766d60a265fad59fadd012647e1b023843c9d7cc
 Author: brad <bradprin@live.com>
-Date:   2026-10-06 18:46:01 +0000
+Date:   2026-10-06 21:30:55 +0000
 
 feat(web): agent tray beside sidebar pages
