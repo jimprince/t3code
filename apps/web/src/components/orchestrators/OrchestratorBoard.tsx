@@ -68,6 +68,7 @@ import { OrchestratorStatus } from "./OrchestratorStatus";
 import { useOrchestratorThreadShells } from "./useOrchestratorThreads";
 import { readOrchestratorLastVisit, recordOrchestratorVisit } from "./orchestratorVisit";
 import { ProjectAutomationsSlot } from "../projects/ProjectAutomationsSlot";
+import { ProjectDecisionsWidget } from "./ProjectDecisionsWidget";
 import { ProjectIssuesBoard } from "./ProjectIssuesBoard";
 import { ProjectTaskPanel } from "./ProjectTaskPanel";
 import { OpenTaskContext } from "./TaskLink";
@@ -329,7 +330,12 @@ function ProjectNeedsYouWidget({
           ))}
         </ul>
       ) : null}
-      <NeedsYouIssueGroups summary={summary} items={items} settle={settle} />
+      <NeedsYouIssueGroups
+        summary={summary}
+        items={items}
+        settle={settle}
+        refresh={query.refresh}
+      />
     </BoardSection>
   );
 }
@@ -545,6 +551,8 @@ function BuiltinWidget({
           pendingPreview={Number(widget.config.pendingPreview ?? 10)}
         />
       );
+    case "decisions":
+      return <ProjectDecisionsWidget summary={summary} />;
     case "needs-you":
       return <ProjectNeedsYouWidget summary={summary} providerEntriesFor={providerEntriesFor} />;
     case "working":

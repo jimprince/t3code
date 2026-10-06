@@ -8,11 +8,13 @@ import {
   intakeModelSelection,
   capturableMessage,
   clampTitle,
+  decisionThreadId,
   fallbackRequestItem,
   formatRequestIssueBody,
   isObviouslyNotARequest,
   formatFollowUpComment,
   parseRequestReference,
+  planDecision,
   planRequestItem,
   progressLineFor,
   requestCandidates,
@@ -142,6 +144,63 @@ describe("progressLineFor", () => {
     expect(progressLineFor("awaiting-release")).toMatch(/next release/);
     expect(progressLineFor("needs-test")).toBeNull();
     expect(progressLineFor(undefined)).toBeNull();
+  });
+});
+
+describe("planDecision", () => {
+  const subject = { title: "V2 port plan", url: "https://git.example/brad/t3code/issues/7" };
+
+  it("approves by starting the work and telling the thread to go ahead", () => {
+    const plan = planDecision({ decision: "approve", ...subject });
+    expect(plan).toMatchObject({ comment: "Approved by Brad", status: "in-progress" });
+    expect(plan?.message).toContain("V2 port plan");
+    expect(plan?.message).toContain(subject.url);
+  });
+
+  it("records the chosen option in the comment and the message", () => {
+    const plan = planDecision({
+      decision: "option",
+      option: "Option B:  port in two steps",
+      ...subject,
+    });
+    expect(plan).toMatchObject({
+      comment: "Brad chose: Option B: port in two steps",
+      status: "in-progress",
+    });
+    expect(plan?.message).toContain("Option B: port in two steps");
+  });
+
+  it("needs an option to choose one", () => {
+    expect(planDecision({ decision: "option", ...subject })).toBeNull();
+    expect(planDecision({ decision: "option", option: "  ", ...subject })).toBeNull();
+  });
+
+  it("sends Not yet back to Pending with the reason and tells no thread", () => {
+    expect(planDecision({ decision: "not-yet", reason: "after the\nV2 port", ...subject })).toEqual(
+      {
+        comment: "Not yet: after the V2 port",
+        status: "pending",
+        message: null,
+      },
+    );
+    expect(planDecision({ decision: "not-yet", ...subject })).toMatchObject({
+      comment: "Not yet",
+      status: "pending",
+    });
+  });
+});
+
+describe("decisionThreadId", () => {
+  const live = new Set(["root", "worker", "other"]);
+
+  it("goes to the linked worker, not the orchestrator", () => {
+    expect(decisionThreadId(["root", "worker", "other"], "root", live)).toBe("worker");
+  });
+
+  it("skips archived or unknown threads and falls back to the orchestrator", () => {
+    expect(decisionThreadId(["gone", "worker"], "root", live)).toBe("worker");
+    expect(decisionThreadId(["gone"], "root", live)).toBe("root");
+    expect(decisionThreadId([], "root", live)).toBe("root");
   });
 });
 
