@@ -18,7 +18,7 @@ function SummaryLine({
 }: {
   readonly title: string;
   readonly children: ReactNode;
-  readonly onOpen: () => void;
+  readonly onOpen: (() => void) | null;
 }) {
   return (
     <section className="flex items-center gap-3 border-t border-border pt-3 text-sm">
@@ -26,10 +26,12 @@ function SummaryLine({
         {title}
       </h2>
       <span className="min-w-0 flex-1 truncate text-foreground/90">{children}</span>
-      <Button size="xs" variant="ghost-muted" onClick={onOpen}>
-        Open {title.toLowerCase()}
-        <ArrowRightIcon />
-      </Button>
+      {onOpen ? (
+        <Button size="xs" variant="ghost-muted" onClick={onOpen}>
+          Open {title.toLowerCase()}
+          <ArrowRightIcon />
+        </Button>
+      ) : null}
     </section>
   );
 }
@@ -40,7 +42,8 @@ export function ProjectRoadmapSummary({
   onOpen,
 }: {
   readonly summary: OrchestratorSummary;
-  readonly onOpen: () => void;
+  /** Null when no tab holds the roadmap board. */
+  readonly onOpen: (() => void) | null;
 }) {
   const roadmap = useEnvironmentQuery(
     projectRoadmapQuery({
@@ -80,23 +83,26 @@ export function ProjectRoadmapSummary({
 export function ProjectIssuesSummary({
   summary,
   onOpen,
+  includeLater = false,
 }: {
   readonly summary: OrchestratorSummary;
-  readonly onOpen: () => void;
+  /** Null when no tab holds the Tasks board. */
+  readonly onOpen: (() => void) | null;
+  readonly includeLater?: boolean;
 }) {
   const { statuses, query } = useTaskStatuses(summary);
   const text = useMemo(() => {
     if (!query.data) return null;
     // Later (parked) issues stay off the Dashboard.
     const open = query.data.issues.filter(
-      (issue) => !issue.labels.some((label) => label.toLowerCase() === "parked"),
+      (issue) => includeLater || !issue.labels.some((label) => label.toLowerCase() === "parked"),
     );
     const { lanes, backlog } = groupProjectIssues(open, statuses);
     return [
       ...PROJECT_ISSUE_LANES.map((lane) => `${lane.title}: ${lanes[lane.lane].length}`),
       `Backlog: ${backlog.length}`,
     ].join(" · ");
-  }, [query.data, statuses]);
+  }, [includeLater, query.data, statuses]);
   return (
     <SummaryLine title="Tasks" onOpen={onOpen}>
       {text ?? (
