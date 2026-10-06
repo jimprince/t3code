@@ -4,8 +4,8 @@ import {
   applyLayoutOps,
   defaultProjectLayoutTabs,
   legacyWidgetOrder,
-  legacyWidgetOrderOps,
   normalizeWidgetConfig,
+  widgetOrderOps,
   type ProjectLayoutTab,
 } from "./projectLayout.ts";
 
@@ -19,6 +19,12 @@ const applied = (
   const result = applyLayoutOps(tabs, ops);
   if ("error" in result) throw new Error(result.error);
   return result.tabs;
+};
+
+const orderOps = (tabs: ReadonlyArray<ProjectLayoutTab>, order: ReadonlyArray<string>) => {
+  const result = widgetOrderOps(tabs, order);
+  if ("error" in result) throw new Error(result.error);
+  return result.ops;
 };
 
 describe("default layout", () => {
@@ -160,15 +166,34 @@ describe("layout ops", () => {
     const configured = applied(base, [
       { op: "setWidgetConfig", widgetId: "requests", config: { includeLater: true } },
     ]);
-    const tabs = applied(
-      configured,
-      legacyWidgetOrderOps(configured, ["release", "requests", "prs"]),
-    );
+    const tabs = applied(configured, orderOps(configured, ["release", "requests", "prs"]));
     expect(tabs[0]!.widgets.map((widget) => [widget.id, widget.config])).toEqual([
       ["release", {}],
       ["requests", { includeLater: true }],
       ["prs", {}],
     ]);
+  });
+
+  it("accepts every registered widget type and older ids in the CLI's widget order", () => {
+    const tabs = applied(
+      base,
+      orderOps(base, ["decisions", "markdown", "links", "canvas-slot", "roadmap", "canvas:funnel"]),
+    );
+    expect(tabs[0]!.widgets.map((widget) => widget.type)).toEqual([
+      "decisions",
+      "markdown",
+      "links",
+      "canvas-slot",
+      "roadmap-summary",
+      "canvas",
+    ]);
+  });
+
+  it("rejects ids that name no widget instead of dropping them", () => {
+    const result = widgetOrderOps(base, ["requests", "decisons", "nope"]);
+    expect(result).toEqual({
+      error: expect.stringContaining("Unknown widget ids: decisons, nope."),
+    });
   });
 });
 
