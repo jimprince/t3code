@@ -62,4 +62,14 @@ describe("roadmap items", () => {
       [7, null, "requested", true],
     ]);
   });
+
+  it("carries an epic's progress onto its item", () => {
+    const epic = { done: 1, total: 4, remaining: [3, 4, 5] };
+    const items = roadmapItems(
+      [issue(8, { labels: ["ask:epic"], epic }), issue(9)],
+      { host: "git.example", repository: "brad/t3code-fork" },
+      [],
+    );
+    expect(items.map((item) => item.epic)).toEqual([epic, undefined]);
+  });
 });
