@@ -61,7 +61,7 @@ it.effect(
       const sql = yield* SqlClient.SqlClient;
       const getShell = (id: ThreadId) =>
         Effect.succeed({ id, projectId: ProjectId.make("project"), archivedAt: null });
-      const service = yield* makeNestingService(sql, getShell);
+      const service = yield* makeNestingService(sql, getShell, () => Effect.void);
       const threadId = ThreadId.make("child");
       const update = (command: string) => ({ commandId: CommandId.make(command), threadId });
       yield* service.update({
@@ -85,7 +85,7 @@ it.effect(
       const reset = yield* service.update({ ...update("default"), settleOnComplete: null });
       assert.equal(reset.settleOnComplete, null);
       yield* service.update({ ...update("enable"), settleOnComplete: true });
-      const restart = yield* makeNestingService(sql, getShell);
+      const restart = yield* makeNestingService(sql, getShell, () => Effect.void);
       assert.deepStrictEqual((yield* restart.list())[0], reset);
       const unnested = yield* restart.update({
         ...update("unnest"),
