@@ -9,6 +9,7 @@ import {
   getDesktopUpdateInstallConfirmationMessage,
   getDesktopUpdateReleaseHistoryUrl,
   getDesktopUpdateReleaseUrl,
+  getDesktopUpdateVersionLabel,
   isDesktopUpdateButtonDisabled,
   resolveDesktopUpdateButtonAction,
   shouldShowArm64IntelBuildWarning,
@@ -345,5 +346,22 @@ describe("getDesktopUpdateButtonTooltip", () => {
     expect(getDesktopUpdateButtonTooltip({ ...baseState, status: "up-to-date" })).toBe(
       "Up to date",
     );
+  });
+});
+
+describe("getDesktopUpdateVersionLabel", () => {
+  it("compacts a nightly fork build to fork.N (base-nightly.date)", () => {
+    expect(getDesktopUpdateVersionLabel("0.0.45-nightly.20261002.2572-fork.30")).toBe(
+      "fork.30 (0.0.45-nightly.20261002)",
+    );
+  });
+
+  it("falls back to 'Version <string>' for a non-nightly-fork version", () => {
+    expect(getDesktopUpdateVersionLabel("1.0.0")).toBe("Version 1.0.0");
+  });
+
+  it("returns null when the version is blank", () => {
+    expect(getDesktopUpdateVersionLabel("")).toBeNull();
+    expect(getDesktopUpdateVersionLabel("   ")).toBeNull();
   });
 });
