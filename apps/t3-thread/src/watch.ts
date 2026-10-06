@@ -9,6 +9,7 @@ import {
 } from "./parentRouting.js";
 import { observeInactivity, inactivityStillCurrent } from "./inactivity.js";
 import { withInputReminder, inputNotificationStillCurrent } from "./inputReminders.js";
+import { notificationOrigin } from "./focusNotifications.js";
 import * as NodeCrypto from "node:crypto";
 
 import { RemoteEnvironmentClient } from "./client.js";
@@ -107,6 +108,7 @@ export interface WatchClient {
     threadId: string;
     text: string;
     queueWhileRunning?: boolean;
+    origin?: import("@t3tools/shared/messageOrigin").MessageOrigin | null;
   }): Promise<unknown>;
 }
 
@@ -1324,6 +1326,7 @@ export async function deliverPendingNotifications(
           await subscriberClient.sendMessage({
             threadId: notification.subscriberThreadId,
             text: buildNotificationMessage(notification, includeOnboarding),
+            origin: notificationOrigin(notification),
             queueWhileRunning: false,
           });
           result = {
