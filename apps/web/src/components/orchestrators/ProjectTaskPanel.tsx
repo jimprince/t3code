@@ -1,0 +1,229 @@
+import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
+import { useNavigate } from "@tanstack/react-router";
+import { ExternalLinkIcon, XIcon } from "lucide-react";
+import { use, useMemo, useState } from "react";
+
+import { projectIssueQuery } from "../../state/projectIssues";
+import { useEnvironmentQuery } from "../../state/query";
+import { resolveThreadIssueBadgeTarget } from "../ThreadIssueBadges";
+import { useEmbeddedPages } from "../embeddedPages/useEmbeddedPages";
+import { Button } from "../ui/button";
+import { formatIssueAge } from "./projectIssuesBoard.logic";
+import { projectReturnState } from "./projectNavigation";
+import { ProjectQueryState } from "./ProjectQueryState";
+import { TASK_STATUS_LABEL } from "./projectRequests.logic";
+import {
+  ReopenButton,
+  SettleButton,
+  useOpenThread,
+  useSettle,
+  useTaskStatuses,
+} from "./ProjectRequestsSection";
+import { OpenTaskContext } from "./TaskLink";
+import { deriveTaskView, type TaskRef } from "./taskView.logic";
+
+const hiddenMarkers = (text: string) => text.replace(/<!--[\s\S]*?-->/g, "").trim();
+
+/**
+ * One task in a right-hand panel over the project page: its status, the answer
+ * or decision, the latest progress, the parts of an epic, its threads, and
+ * Settle or Reopen. Closing it (or Back) returns to the page underneath.
+ */
+export function ProjectTaskPanel({
+  summary,
+  task,
+  onClose,
+}: {
+  readonly summary: OrchestratorSummary;
+  readonly task: TaskRef;
+  readonly onClose: () => void;
+}) {
+  const navigate = useNavigate();
+  const pages = useEmbeddedPages();
+  const { statuses, query: list } = useTaskStatuses(summary);
+  const query = useEnvironmentQuery(
+    projectIssueQuery({
+      environmentId: summary.root.environmentId,
+      input: { rootThreadId: summary.root.id, ...task },
+    }),
+  );
+  const refresh = () => {
+    query.refresh();
+    list.refresh();
+  };
+  const settle = useSettle(summary, refresh);
+  const openThread = useOpenThread(summary);
+  const openTask = use(OpenTaskContext);
+  const [showDetails, setShowDetails] = useState(false);
+  const view = useMemo(
+    () => (query.data ? deriveTaskView(query.data, list.data?.issues ?? [], statuses) : null),
+    [list.data, query.data, statuses],
+  );
+  const threadTitle = (id: string) =>
+    [summary.root, ...summary.descendants].find((thread) => thread.id === id)?.title ?? "Thread";
+  const now = query.dataUpdatedAt ?? 0;
+
+  return (
+    <aside
+      aria-label="Task"
+      className="flex w-[420px] min-w-0 shrink-0 flex-col border-l border-border"
+    >
+      <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">Task</span>
+        <Button size="icon-sm" variant="ghost" aria-label="Close the task" onClick={onClose}>
+          <XIcon />
+        </Button>
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-3">
+        {!view || !query.data ? (
+          <ProjectQueryState what="task" error={query.error} onRetry={refresh} />
+        ) : (
+          <>
+            <div className="flex flex-col gap-1">
+              <h2 className="text-base font-medium">{view.issue.title}</h2>
+              <p className="text-xs text-muted-foreground">
+                {TASK_STATUS_LABEL[view.status]}
+                {view.kind ? ` · ${view.kind}` : ""}
+                {view.issue.milestone ? ` · ${view.issue.milestone.title}` : ""}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {view.status === "complete" ? (
+                <ReopenButton issue={view.issue} settle={settle} />
+              ) : (
+                <SettleButton issues={[view.issue]} settle={settle} />
+              )}
+              {view.threadIds[0] ? (
+                <Button size="xs" variant="outline" onClick={() => openThread(view.threadIds[0]!)}>
+                  Open thread
+                </Button>
+              ) : null}
+            </div>
+            {view.answer ? (
+              <p className="text-sm whitespace-pre-wrap text-foreground/90">{view.answer}</p>
+            ) : null}
+            {view.progress ? (
+              <p className="text-xs text-foreground/80">Latest: {view.progress}</p>
+            ) : null}
+            {view.children.length > 0 ? (
+              <section>
+                <h3 className="mb-1 text-xs text-foreground/80">
+                  Parts{" "}
+                  <span className="tabular-nums text-muted-foreground">
+                    {view.children.filter((child) => child.status === "complete").length} of{" "}
+                    {view.children.length} complete
+                  </span>
+                </h3>
+                <ul className="divide-y divide-border">
+                  {view.children.map((child) => (
+                    <li key={child.issue.number} className="flex items-center gap-3 py-1.5">
+                      <span className="w-20 shrink-0 text-xs text-muted-foreground">
+                        {TASK_STATUS_LABEL[child.status]}
+                      </span>
+                      <button
+                        type="button"
+                        className="line-clamp-2 min-w-0 flex-1 text-left text-sm hover:underline"
+                        onClick={() =>
+                          openTask?.({
+                            host: child.issue.host,
+                            repository: child.issue.repository,
+                            number: child.issue.number,
+                          })
+                        }
+                      >
+                        {child.issue.title}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+            {view.threadIds.length > 0 ? (
+              <section>
+                <h3 className="mb-1 text-xs text-foreground/80">Threads</h3>
+                <ul>
+                  {view.threadIds.map((id) => (
+                    <li key={id}>
+                      <button
+                        type="button"
+                        className="line-clamp-1 max-w-full py-0.5 text-left text-sm hover:underline"
+                        onClick={() => openThread(id)}
+                      >
+                        {threadTitle(id)}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+            <section>
+              <button
+                type="button"
+                className="text-xs text-muted-foreground hover:text-foreground"
+                aria-expanded={showDetails}
+                onClick={() => setShowDetails((value) => !value)}
+              >
+                {showDetails ? "Hide details" : "Details"}
+              </button>
+              {showDetails ? (
+                <div className="mt-2 flex flex-col gap-3">
+                  {hiddenMarkers(query.data.body) ? (
+                    <p className="text-sm whitespace-pre-wrap text-foreground/80">
+                      {hiddenMarkers(query.data.body)}
+                    </p>
+                  ) : null}
+                  {query.data.comments.map((comment) => (
+                    <div
+                      key={comment.createdAt + comment.author}
+                      className="border-l border-border pl-2"
+                    >
+                      <p className="text-xs text-muted-foreground">
+                        {comment.author} · {formatIssueAge(comment.createdAt, now)}
+                      </p>
+                      <p className="text-sm whitespace-pre-wrap text-foreground/80">
+                        {hiddenMarkers(comment.body)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </section>
+            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+              <a
+                href={view.issue.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 hover:text-foreground"
+              >
+                Open in Gitea
+                <ExternalLinkIcon className="size-3" />
+              </a>
+              {(() => {
+                const board = resolveThreadIssueBadgeTarget(pages, view.issue);
+                return board.kind === "embedded" ? (
+                  <button
+                    type="button"
+                    className="hover:text-foreground"
+                    onClick={() =>
+                      void navigate({
+                        to: "/embedded/$pageId",
+                        params: { pageId: board.pageId },
+                        search: { repo: board.repo, issue: board.issue },
+                        state: projectReturnState({
+                          environmentId: summary.root.environmentId,
+                          threadId: summary.root.id,
+                        }),
+                      })
+                    }
+                  >
+                    Status Board
+                  </button>
+                ) : null;
+              })()}
+            </div>
+          </>
+        )}
+      </div>
+    </aside>
+  );
+}
