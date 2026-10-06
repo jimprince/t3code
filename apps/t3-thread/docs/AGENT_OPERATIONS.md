@@ -808,6 +808,22 @@ siblings after them. A move stays within the thread's pinned or active sibling
 section, including nested children. Reset returns each listed thread to automatic
 order. New pins continue to land at the top without rewriting existing slots.
 
+## Worker completion and retention
+
+`create` settles workers after completed turns by default, including top-level workers.
+It inherits the project's **Settle completed workers** default. Use
+`--settle-on-complete` or `--no-settle-on-complete` to override it for the new thread.
+The thread's automatic-settlement opt-out always wins. Pending input, approvals,
+queued starts, and live background work prevent settlement; `send` resumes a settled worker.
+
+Settled nested workers auto-archive after seven days by default. Configure
+**Archive settled subthreads** in environment or project Thread behavior settings;
+disable it to retain them. Pinned threads, threads with auto-settle disabled, and
+ancestors of active descendants are protected. `unarchive` restores the conversation
+and restarts its archive recovery window.
+`t3-thread worktree gc` can then retire archived worktrees under its existing clean-state
+and recovery-window guards; automatic archive does not itself delete a checkout.
+
 ## Notification ownership and handoff
 
 Nested `create` subscribes its caller by default. `create --top-level` does not;
