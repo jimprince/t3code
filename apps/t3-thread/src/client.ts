@@ -1168,6 +1168,30 @@ export class RemoteEnvironmentClient {
     };
   }
 
+  /** Set organizational project scope through the fork metadata seam. */
+  async setThreadSubproject(threadId: string, mode: "on" | "off" | "auto") {
+    if ((await this.describe()).capabilities.threadSubprojects !== true)
+      throw new Error(
+        `'${this.environment.name}' runs a server without subprojects. Update T3 Code there first.`,
+      );
+    const rpc = await this.openRpc();
+    try {
+      await rpc.request("threadMetadataUpdate", {
+        commandId: NodeCrypto.randomUUID(),
+        threadId,
+        subproject: mode,
+      });
+    } finally {
+      await rpc.dispose();
+    }
+    const thread = await this.findThread(threadId);
+    return {
+      threadId: thread.id,
+      environment: this.environment.name,
+      subproject: thread.subproject ?? "auto",
+    };
+  }
+
   async linkIssue(
     threadId: string,
     reference: string,

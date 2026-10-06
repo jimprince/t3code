@@ -1,3 +1,4 @@
+import { assertFixtureMigration16 } from "../persistence/fixtureMigration16.testkit.ts";
 import { assert, it } from "@effect/vitest";
 import { NodeServices } from "@effect/platform-node";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
@@ -16,7 +17,6 @@ import {
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
-import { runMigrations } from "../persistence/Migrations.ts";
 import { runForkMigrations } from "../persistence/ForkMigrations.ts";
 import { layerMemory as SqlitePersistenceMemory } from "../persistence/Sqlite.ts";
 
@@ -67,8 +67,7 @@ if (fixtures) {
           const before = yield* readRows();
           const ledger =
             yield* sql`SELECT migration_id,name FROM effect_sql_fork_migrations WHERE migration_id IN (9,10) ORDER BY migration_id`;
-          yield* runMigrations();
-          assert.deepEqual(yield* runForkMigrations(), []);
+          yield* assertFixtureMigration16;
           assert.deepEqual(yield* readRows(), before);
           assert.deepEqual(
             yield* sql`SELECT migration_id,name FROM effect_sql_fork_migrations WHERE migration_id IN (9,10) ORDER BY migration_id`,

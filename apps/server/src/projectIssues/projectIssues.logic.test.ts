@@ -5,12 +5,14 @@ import {
   collectThreadTree,
   deriveProjectIssueStatus,
   deriveRequestStage,
+  findProjectRootThreadId,
   findRootThreadId,
   formatRequestMarker,
   giteaRepositoryForIdentity,
   isPartOf,
   parseBlockedBy,
   parseRequestMarker,
+  resolveProjectTracker,
   workspaceRepositoryName,
 } from "./projectIssues.logic.ts";
 
@@ -97,6 +99,65 @@ describe("thread tree", () => {
   it("finds a worker's root and treats a standalone thread as its own root", () => {
     expect(findRootThreadId(threads, id("nested"))).toBe("root");
     expect(findRootThreadId(threads, id("other"))).toBe("other");
+  });
+});
+
+describe("subproject boundaries", () => {
+  const threads = [
+    { id: id("top"), parentThreadId: null, projectId: "p1" },
+    { id: id("mid"), parentThreadId: id("top"), projectId: "p1", subproject: "on" as const },
+    { id: id("worker"), parentThreadId: id("mid"), projectId: "p1" },
+    { id: id("deep"), parentThreadId: id("worker"), projectId: "p1" },
+    { id: id("plain"), parentThreadId: id("top"), projectId: "p1", subproject: "off" as const },
+    { id: id("auto"), parentThreadId: id("top"), projectId: "p1", subproject: "auto" as const },
+    { id: id("standalone"), parentThreadId: null, projectId: "p2", subproject: "on" as const },
+  ];
+
+  it("stops the project root at a top-level thread or a flagged ancestor", () => {
+    expect(findProjectRootThreadId(threads, id("top"))).toBe("top");
+    expect(findProjectRootThreadId(threads, id("mid"))).toBe("mid");
+    expect(findProjectRootThreadId(threads, id("worker"))).toBe("mid");
+    expect(findProjectRootThreadId(threads, id("deep"))).toBe("mid");
+    expect(findProjectRootThreadId(threads, id("standalone"))).toBe("standalone");
+    expect(findProjectRootThreadId(threads, id("missing"))).toBe("missing");
+  });
+
+  it("walks past unflagged nested threads, including off and auto", () => {
+    expect(findProjectRootThreadId(threads, id("plain"))).toBe("top");
+    expect(findProjectRootThreadId(threads, id("auto"))).toBe("top");
+  });
+
+  it("keeps findRootThreadId on the topmost thread", () => {
+    expect(findRootThreadId(threads, id("deep"))).toBe("top");
+  });
+
+  it("scopes a tree to the subproject and leaves a subproject out of its parent's tree", () => {
+    const ids = (root: string) => collectThreadTree(threads, id(root)).map((thread) => thread.id);
+    expect(ids("mid")).toEqual(["mid", "worker", "deep"]);
+    expect(ids("top")).toEqual(["top", "plain", "auto"]);
+  });
+
+  it("inherits the enclosing project's tracker unless the subproject has its own", () => {
+    expect(resolveProjectTracker({ p1: "brad/parent" }, threads, id("top"))).toBe("brad/parent");
+    expect(resolveProjectTracker({ p1: "brad/parent" }, threads, id("mid"))).toBe("brad/parent");
+    expect(resolveProjectTracker({ p1: "brad/parent", mid: "brad/own" }, threads, id("mid"))).toBe(
+      "brad/own",
+    );
+    expect(resolveProjectTracker({ mid: "brad/own" }, threads, id("top"))).toBeNull();
+    expect(resolveProjectTracker({ p2: "brad/other" }, threads, id("standalone"))).toBe(
+      "brad/other",
+    );
+    expect(resolveProjectTracker({}, threads, id("mid"))).toBeNull();
+  });
+
+  it("inherits through a chain of subprojects", () => {
+    const chain = [
+      { id: id("a"), parentThreadId: null, projectId: "p1" },
+      { id: id("b"), parentThreadId: id("a"), projectId: "p1", subproject: "on" as const },
+      { id: id("c"), parentThreadId: id("b"), projectId: "p1", subproject: "on" as const },
+    ];
+    expect(resolveProjectTracker({ b: "brad/b" }, chain, id("c"))).toBe("brad/b");
+    expect(resolveProjectTracker({ p1: "brad/a" }, chain, id("c"))).toBe("brad/a");
   });
 });
 
