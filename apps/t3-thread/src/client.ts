@@ -162,6 +162,18 @@ function providerInventoryFromConfig(config: ServerConfig): ProviderModelInvento
   });
 }
 
+export type AutomationRpcMethod =
+  | "automationsList"
+  | "automationsSave"
+  | "automationsRemove"
+  | "automationsSetEnabled"
+  | "automationsRun"
+  | "automationsRuns"
+  | "automationScriptsList"
+  | "automationScriptsSave"
+  | "automationScriptsRemove"
+  | "automationScriptsRun";
+
 export class RemoteEnvironmentClient {
   private currentEnvironment: SavedEnvironment;
   private readonly rpcFactory: RpcFactory | null;
@@ -433,20 +445,17 @@ export class RemoteEnvironmentClient {
     return snapshot.threads;
   }
 
-  async listAutomations(projectId: string): Promise<readonly ProjectAutomation[]> {
-    const project = (await this.listProjects()).find((entry) => entry.id === projectId);
-    if (!project) throw new Error("Project does not exist on this environment.");
-    return project.automations ?? [];
-  }
-
-  async dispatchAutomation(_command: {
-    type: string;
-    projectId: string;
-    commandId: string;
-    automation?: unknown;
-    automationId?: string;
-  }): Promise<readonly ProjectAutomation[]> {
-    throw new Error("Project automation commands require the M3 automation services.");
+  /** Scripts and automation rules; see apps/server/src/automations. */
+  async automationRpc<T = unknown>(
+    method: AutomationRpcMethod,
+    input: Record<string, unknown>,
+  ): Promise<T> {
+    const rpc = await this.openRpc();
+    try {
+      return await rpc.request<T>(method, input);
+    } finally {
+      await rpc.dispose();
+    }
   }
 
   async listWorktreeGcThreads(): Promise<WorktreeGcThread[]> {
