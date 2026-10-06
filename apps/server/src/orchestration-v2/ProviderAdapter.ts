@@ -447,7 +447,7 @@ export interface ProviderAdapterV2ReadThreadSnapshotInput {
 export type ProviderAdapterV2RollbackTarget =
   | {
       readonly type: "thread_start";
-      readonly checkpointId: CheckpointId;
+      readonly checkpointId?: CheckpointId;
       readonly appRunOrdinal: 0;
     }
   | {
