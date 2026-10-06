@@ -236,6 +236,7 @@ import { listLinkedPullRequestThreads } from "./pullRequest/linkedThreads.ts";
 import { pullRequestSyncKey } from "./pullRequest/pullRequestSyncKey.ts";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as PullRequestSyncReactor from "./orchestration-v2/PullRequestSyncReactor.ts";
+import * as ProjectIssuesService from "./projectIssues/ProjectIssuesService.ts";
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as SourceControlBuiltInDrivers from "./sourceControl/builtInDrivers.ts";
@@ -1331,6 +1332,7 @@ const layerWsRpc = (
       const sourceControlRepositories =
         yield* SourceControlRepositoryService.SourceControlRepositoryService;
       const withPullRequestViewer = pullRequests.withRoutingCredential;
+      const projectIssues = yield* ProjectIssuesService.make;
       const bootstrapCredentials = yield* PairingGrantStore.PairingGrantStore;
       const sessions = yield* SessionStore.SessionStore;
       const processDiagnostics = yield* ProcessDiagnostics.ProcessDiagnostics;
@@ -2482,6 +2484,7 @@ const layerWsRpc = (
                 Effect.forkScoped,
               ),
           ),
+        [WS_METHODS.projectIssuesList]: (input) => projectIssues.list(input),
         [WS_METHODS.pullRequestsList]: (input) => pullRequests.list(input),
         [WS_METHODS.pullRequestsListStats]: (input) => pullRequests.listStats(input),
         [WS_METHODS.pullRequestsRoutingIdentity]: (input) => pullRequests.routingIdentity(input),
