@@ -2467,6 +2467,19 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           cause: "A named agent's live thread cannot settle automatically.",
         });
     }
+    if (
+      command.type === "thread.archive" &&
+      command.transferExpectedUpdatedAt !== undefined &&
+      DateTime.toEpochMillis(thread.updatedAt) !==
+        DateTime.toEpochMillis(command.transferExpectedUpdatedAt)
+    ) {
+      return yield* new OrchestratorDispatchError({
+        commandId: command.commandId,
+        commandType: command.type,
+        cause:
+          "Source thread changed after transfer; its durable copy is retained and the source remains active.",
+      });
+    }
     if (command.type === "thread.archive" && command.autoArchiveSettledBefore !== undefined) {
       const active = yield* projectionStore
         .getShellSnapshot()
