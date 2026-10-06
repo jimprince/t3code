@@ -40,6 +40,10 @@ import {
   ProjectDashboardSetTrackerInput,
   ProjectDashboardSetHealthInput,
   ProjectDashboardSetWidgetsInput,
+  ProjectLayout,
+  ProjectLayoutApplyInput,
+  ProjectLayoutError,
+  ProjectLayoutGetInput,
   ProjectRoadmap,
   ProjectRoadmapError,
   ProjectRoadmapGetInput,
@@ -335,6 +339,16 @@ export const WsRpcGroup = RpcGroup.make(
     payload: ProjectDashboardSetHealthInput,
     success: ProjectDashboard,
     error: Schema.Union([ProjectDashboardError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make("projectLayout.get", {
+    payload: ProjectLayoutGetInput,
+    success: ProjectLayout,
+    error: Schema.Union([ProjectLayoutError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make("projectLayout.apply", {
+    payload: ProjectLayoutApplyInput,
+    success: ProjectLayout,
+    error: Schema.Union([ProjectLayoutError, EnvironmentAuthorizationError]),
   }),
   Rpc.make("projectRoadmap.get", {
     payload: ProjectRoadmapGetInput,
