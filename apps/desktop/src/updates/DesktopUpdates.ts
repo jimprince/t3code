@@ -28,10 +28,12 @@ import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopObservability from "../app/DesktopObservability.ts";
 import * as DesktopState from "../app/DesktopState.ts";
+import * as ElectronPowerMonitor from "../electron/ElectronPowerMonitor.ts";
 import * as ElectronUpdater from "../electron/ElectronUpdater.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as IpcChannels from "../ipc/channels.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
+import * as DesktopUpdateRollback from "./DesktopUpdateRollback.ts";
 import { normalizeDesktopUpdateReleaseNotes } from "./releaseNotes.ts";
 import { resolveDefaultDesktopUpdateChannel } from "./updateChannels.ts";
 import {
@@ -189,6 +191,7 @@ export class DesktopUpdates extends Context.Service<
     readonly install: Effect.Effect<DesktopUpdateActionResult>;
     readonly installPrepared: (
       expectedVersion: string,
+      minimumSystemIdleSeconds?: number,
     ) => Effect.Effect<DesktopPreparedUpdateInstallResult>;
   }
 >()("@t3tools/desktop/updates/DesktopUpdates") {}
@@ -288,10 +291,15 @@ export const make = Effect.gen(function* () {
   const pool = yield* DesktopBackendPool.DesktopBackendPool;
   const desktopState = yield* DesktopState.DesktopState;
   const electronUpdater = yield* ElectronUpdater.ElectronUpdater;
+  const powerMonitor = yield* ElectronPowerMonitor.ElectronPowerMonitor;
   const electronWindow = yield* ElectronWindow.ElectronWindow;
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const fileSystem = yield* FileSystem.FileSystem;
   const desktopSettings = yield* DesktopAppSettings.DesktopAppSettings;
+  const updateRollback = yield* DesktopUpdateRollback.make({
+    paths: DesktopUpdateRollback.resolveUpdateRollbackPaths(environment),
+    appVersion: environment.appVersion,
+  });
 
   const appUpdateYmlConfigRef = yield* Ref.make<Option.Option<AppUpdateYmlConfig>>(Option.none());
   const activeUpdateActionRef = yield* Ref.make<Option.Option<UpdateAction>>(Option.none());
@@ -553,6 +561,7 @@ export const make = Effect.gen(function* () {
       finishUpdateAction("install"),
       Ref.set(desktopState.quitting, false),
       removeUpdateRestartMarker,
+      updateRollback.disarm,
     ],
     { discard: true },
   );
@@ -569,6 +578,7 @@ export const make = Effect.gen(function* () {
 
     yield* Ref.set(desktopState.quitting, false);
     yield* removeUpdateRestartMarker;
+    yield* updateRollback.disarm;
     yield* Effect.gen(function* () {
       const instances = yield* pool.list;
       const restartExit = yield* Effect.forEach(instances, (instance) => instance.start, {
@@ -587,7 +597,7 @@ export const make = Effect.gen(function* () {
     );
   });
 
-  const installDownloadedUpdate = (expectedVersion?: string) =>
+  const installDownloadedUpdate = (expectedVersion?: string, minimumSystemIdleSeconds?: number) =>
     Effect.scoped(
       Effect.gen(function* () {
         const actionCompletions = yield* PubSub.subscribe(finishedUpdateActions);
@@ -617,6 +627,13 @@ export const make = Effect.gen(function* () {
                 (state.status === "error" &&
                   (state.errorContext === null || state.errorContext === "install"));
               if (!hasInstallableDownload) return "refused" as const;
+              // Input may have resumed since the renderer sampled system idle time.
+              if (minimumSystemIdleSeconds !== undefined) {
+                const idleSeconds = yield* powerMonitor.getSystemIdleTime;
+                if (!Number.isFinite(idleSeconds) || idleSeconds < minimumSystemIdleSeconds) {
+                  return "refused" as const;
+                }
+              }
               return (yield* tryStartUpdateAction("install"))
                 ? ("admitted" as const)
                 : ("refused" as const);
@@ -647,6 +664,8 @@ export const make = Effect.gen(function* () {
             canRetry: false,
           }));
           yield* writeUpdateRestartMarker;
+          const { downloadedVersion } = yield* Ref.get(updateStateRef);
+          if (downloadedVersion !== null) yield* updateRollback.arm(downloadedVersion);
           // Stop every backend in the pool, not just the primary. With
           // parallel WSL + Windows backends, leaving the WSL instance up
           // means quitAndInstall's app.quit() exits before the pool's
@@ -668,6 +687,12 @@ export const make = Effect.gen(function* () {
           return { accepted: true, completed: false, failed: false };
         }).pipe(
           Effect.catchTags({
+            DesktopUpdateRollbackPreparationError: (error) =>
+              Effect.gen(function* () {
+                yield* recoverFailedInstall(error.message);
+                yield* logUpdaterError(error.message, { errorTag: error._tag });
+                return { accepted: true, completed: false, failed: true };
+              }),
             ElectronUpdaterQuitAndInstallError: Effect.fn("desktop.updates.handleInstallFailure")(
               function* (error) {
                 yield* recoverFailedInstall(error.message);
@@ -702,6 +727,7 @@ export const make = Effect.gen(function* () {
 
   const installWithExpectedVersion = Effect.fn("desktop.updates.install")(function* (
     expectedVersion?: string,
+    minimumSystemIdleSeconds?: number,
   ) {
     if (yield* Ref.get(desktopState.quitting)) {
       return {
@@ -711,7 +737,7 @@ export const make = Effect.gen(function* () {
         state: yield* Ref.get(updateStateRef),
       };
     }
-    const result = yield* installDownloadedUpdate(expectedVersion);
+    const result = yield* installDownloadedUpdate(expectedVersion, minimumSystemIdleSeconds);
     return {
       accepted: result.accepted,
       completed: result.completed,
@@ -759,8 +785,14 @@ export const make = Effect.gen(function* () {
       Effect.flatMap(
         Effect.fn("desktop.updates.applyUpdateAvailable")(function* (info) {
           const state = yield* Ref.get(updateStateRef);
-          if (resolveDefaultDesktopUpdateChannel(info.version) !== state.channel) {
-            yield* logUpdaterInfo("ignoring update that does not match selected channel", {
+          const ignoredReason =
+            resolveDefaultDesktopUpdateChannel(info.version) !== state.channel
+              ? "ignoring update that does not match selected channel"
+              : info.version === (yield* updateRollback.quarantinedVersion)
+                ? "ignoring update that failed to start on this computer"
+                : null;
+          if (ignoredReason !== null) {
+            yield* logUpdaterInfo(ignoredReason, {
               version: info.version,
               channel: state.channel,
             });
@@ -970,7 +1002,12 @@ export const make = Effect.gen(function* () {
   );
 
   return DesktopUpdates.of({
-    getState: Ref.get(updateStateRef),
+    getState: Effect.gen(function* () {
+      return {
+        ...(yield* Ref.get(updateStateRef)),
+        systemIdleSeconds: yield* powerMonitor.getSystemIdleTime,
+      };
+    }),
     isActionActive: activeUpdateAction.pipe(Effect.map(Option.isSome)),
     isInstallActive: activeUpdateAction.pipe(
       Effect.map((action) => Option.isSome(action) && action.value === "install"),
@@ -1006,6 +1043,7 @@ export const make = Effect.gen(function* () {
       yield* setState(
         createBaseUpdateState(settings.updateChannel, enabled, environment, disabledReason),
       );
+      yield* updateRollback.start(pool, settings.localEnvironmentEnabled);
       if (!enabled) {
         return;
       }
@@ -1118,7 +1156,8 @@ export const make = Effect.gen(function* () {
     install: installWithExpectedVersion().pipe(
       Effect.map(({ accepted, completed, state }) => ({ accepted, completed, state })),
     ),
-    installPrepared: (expectedVersion) => installWithExpectedVersion(expectedVersion),
+    installPrepared: (expectedVersion, minimumSystemIdleSeconds) =>
+      installWithExpectedVersion(expectedVersion, minimumSystemIdleSeconds),
   });
 });
 
