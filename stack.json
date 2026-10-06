@@ -1,13 +1,15 @@
 {
   "version": 5,
-  "prev": "0058498f0ad092dd00498e7e8137af5131783bd2",
-  "head": "bfe5467bbdc51ae33203b3da057943fb2682dbf1",
+  "prev": "9c6b11574b2092e9cbd1de8515b87571f0e17843",
+  "head": "58b654802f9e2fbca3539ef2e286594ba36dd4e5",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
-    "fork-general-chat",
+    "fork-general-chat"
+  ],
+  "unapplied": [
     "fork-project-selection",
     "fork-private-connection-defaults",
     "fork-workspace-file-uploads",
@@ -110,7 +112,6 @@
     "fork-phone-side-panels",
     "fork-decision-links"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
