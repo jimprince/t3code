@@ -197,10 +197,11 @@ describe("DesktopUpdates", () => {
           { version: "1.2.4-nightly.20260709.763", items: ["Change 763"], totalItems: 1 },
           { version: "1.2.4-nightly.20260709.762", items: ["Change 762"], totalItems: 1 },
           { version: "1.2.4-nightly.20260709.761", items: ["Change 761"], totalItems: 1 },
+          { version: "1.2.4-nightly.20260709.760", items: ["Change 760"], totalItems: 1 },
         ]);
-        assert.equal(state.omittedReleaseCount, 1);
+        assert.equal(state.omittedReleaseCount, 0);
         assert.deepEqual(harness.sentStates.at(-1)?.releaseNotes, state.releaseNotes);
-        assert.equal(harness.sentStates.at(-1)?.omittedReleaseCount, 1);
+        assert.equal(harness.sentStates.at(-1)?.omittedReleaseCount, 0);
       }),
     ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
   });
