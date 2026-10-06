@@ -92,7 +92,7 @@ export interface ThreadActionMenuState {
   readonly isRegeneratingTitle: boolean;
   /** Archive rejects a thread with an attached provider, so disable it here rather than let the action fail. */
   readonly isRunning: boolean;
-  readonly move?: { readonly up: boolean; readonly down: boolean };
+  readonly move?: { readonly up: boolean; readonly down: boolean } | undefined;
   readonly supports: {
     readonly settlement: boolean;
     /** Server understands thread.auto-settle.set. */
