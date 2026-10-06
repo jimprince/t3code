@@ -36,8 +36,14 @@ import {
 } from "../ui/alert-dialog";
 import { Button } from "../ui/button";
 import { MorphIcon } from "~/components/MorphIcon";
-import { Input } from "../ui/input";
 import { Checkbox } from "../ui/checkbox";
+import {
+  NumberField,
+  NumberFieldDecrement,
+  NumberFieldGroup,
+  NumberFieldIncrement,
+  NumberFieldInput,
+} from "../ui/number-field";
 import { ScrollArea } from "../ui/scroll-area";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { Switch } from "../ui/switch";
@@ -1048,24 +1054,35 @@ export function DiagnosticsSettingsPanel() {
             ["syspolicydGrowthMb", "syspolicyd growth within ten minutes (MiB)"],
             ["spawnAttemptsPerMinute", "Sustained runner attempts per minute"],
           ] as const
-        ).map(([key, label]) => (
+        ).map(([key, label], index) => (
           <SettingsRow
             key={key}
             title={label}
-            description="Provisional early-warning threshold. Samples are recorded once per minute in server diagnostics logs."
+            description={
+              index === 0
+                ? "Early-warning thresholds, sampled once per minute in server diagnostics logs."
+                : undefined
+            }
             control={
-              <Input
-                type="number"
+              <NumberField
+                value={settings.processLaunchWarnings[key]}
                 min={1}
                 step={1}
-                aria-label={label}
-                value={settings.processLaunchWarnings[key]}
-                onChange={(event) => {
-                  const value = Number(event.target.value);
-                  if (Number.isSafeInteger(value) && value > 0)
-                    updateSettings({ processLaunchWarnings: { [key]: value } });
+                size="sm"
+                className="w-32"
+                onValueChange={(value) => {
+                  if (value !== null)
+                    updateSettings({
+                      processLaunchWarnings: { [key]: Math.max(1, Math.round(value)) },
+                    });
                 }}
-              />
+              >
+                <NumberFieldGroup>
+                  <NumberFieldDecrement aria-label={`Decrease ${label}`} />
+                  <NumberFieldInput aria-label={label} />
+                  <NumberFieldIncrement aria-label={`Increase ${label}`} />
+                </NumberFieldGroup>
+              </NumberField>
             }
           />
         ))}

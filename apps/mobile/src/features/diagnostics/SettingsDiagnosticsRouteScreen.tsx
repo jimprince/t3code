@@ -201,19 +201,11 @@ function EnvironmentLaunchHealth({
                 {warning}
               </Text>
             ))}
-            <Text className="text-sm">
-              T3 runner: {health.attemptsPerMinute} attempts/min, {health.failuresPerMinute} spawn
-              failures/min. Agent descendants and direct provider SDK spawns are outside this count.
-            </Text>
-            <Text className="text-sm">
-              syspolicyd:{" "}
+            <Text className="text-sm tabular-nums">
+              {health.attemptsPerMinute} launches/min, {health.failuresPerMinute} failures/min
               {health.syspolicyd
-                ? `${Math.round(health.syspolicyd.residentBytes / 1024 ** 2)} MiB RSS, ${health.syspolicyd.cpuPercent.toFixed(1)}% CPU`
-                : "Unavailable (macOS only)"}
-            </Text>
-            <Text className="text-sm">
-              Sampled {new Date(health.sampledAtUnixMs).toLocaleTimeString()}. Set warning
-              thresholds in the connected server’s web Diagnostics settings.
+                ? `, syspolicyd ${Math.round(health.syspolicyd.residentBytes / 1024 ** 2)} MiB, ${health.syspolicyd.cpuPercent.toFixed(1)}% CPU`
+                : ""}
             </Text>
           </>
         ) : (
