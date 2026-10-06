@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Prints the v* release tags that already cover HEAD: a tag on HEAD itself, or
+# a tag on a prepared release child whose first parent is HEAD. The nightly
+# fork release uses this to decide whether main still needs a tag.
+#
+# Three Git processes regardless of tag count. Resolving each tag with its own
+# rev-parse pair dominated the step once the fork passed ~500 release tags.
+
+head_sha="$(git rev-parse HEAD)"
+
+# "<commit> <tag>" per release tag. Annotated tags peel through the tag object;
+# tags on anything but a commit carry no release and drop out here.
+tagged_commits="$(
+  git for-each-ref \
+    --format='%(refname:strip=2) %(objecttype) %(objectname) %(*objecttype) %(*objectname)' \
+    'refs/tags/v*' \
+    | awk '$4 == "commit" { print $5, $1; next } $2 == "commit" { print $3, $1 }'
+)"
+
+[[ -n "$tagged_commits" ]] || exit 0
+
+# rev-list --parents prints "<commit> <parents...>" for every commit it is
+# handed, so root commits report no parent and never match HEAD.
+# Capture the lookup before joining so a Git failure aborts the scan instead
+# of looking like an empty result through process substitution.
+parents="$(cut -d " " -f 1 <<<"$tagged_commits" | sort -u | git rev-list --no-walk --parents --stdin)"
+
+awk -v head="$head_sha" '
+  NR == FNR { first_parent[$1] = $2; next }
+  $1 == head || first_parent[$1] == head { print $2 }
+' <(printf '%s\n' "$parents") \
+  <(printf '%s\n' "$tagged_commits")
