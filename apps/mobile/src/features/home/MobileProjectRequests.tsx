@@ -1,16 +1,18 @@
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
 import type { ProjectIssue, ProjectRequestStage } from "@t3tools/contracts";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 
+import { AppText as Text } from "../../components/AppText";
 import { mobileProjectIssues } from "../../state/projectRequests";
 import { useEnvironmentQuery } from "../../state/query";
 
+/** The project page's one status vocabulary (web: TASK_STATUS_LABEL via STAGE_STATUS). */
 const STAGE: Partial<Record<ProjectRequestStage, string>> = {
-  requested: "requested",
-  "in-progress": "working",
-  ready: "ready",
-  "awaiting-release": "waiting for release",
-  "needs-test": "shipped, test it",
+  requested: "Pending",
+  "in-progress": "Active",
+  ready: "For review",
+  "awaiting-release": "Active",
+  "needs-test": "For review",
 };
 const ORDER: ReadonlyArray<ProjectRequestStage> = [
   "needs-test",
@@ -29,8 +31,8 @@ function inProject(issue: ProjectIssue, rootThreadId: string): boolean {
 }
 
 /**
- * Read-only Requests and Release lines under a project on mobile: Brad's open
- * asks by stage, what the next release carries, and what shipped for him to test.
+ * Read-only Requests lines under a project on mobile: Brad's open asks, For review
+ * first, each with its status; the rest fold into "N more".
  */
 export function MobileProjectRequests({ summary }: { readonly summary: OrchestratorSummary }) {
   const query = useEnvironmentQuery(
@@ -49,22 +51,19 @@ export function MobileProjectRequests({ summary }: { readonly summary: Orchestra
     )
     .sort((a, b) => ORDER.indexOf(a.stage!) - ORDER.indexOf(b.stage!));
   if (requests.length === 0) return null;
-  const nextRelease = requests.filter((issue) => issue.stage === "awaiting-release").length;
-  const toTest = requests.filter((issue) => issue.stage === "needs-test").length;
+  const more = requests.length - MAX_LINES;
   return (
     <View className="mt-2 gap-0.5">
-      <Text className="text-xs text-foreground-muted">
-        {requests.length} requests · {nextRelease} in next release · {toTest} to test
+      <Text className="text-xs font-semibold tracking-wide text-foreground-muted uppercase">
+        Requests {requests.length}
       </Text>
       {requests.slice(0, MAX_LINES).map((issue) => (
         <View key={`${issue.repository}#${issue.number}`} className="flex-row gap-2">
-          <Text className="w-24 text-xs text-foreground-muted">{STAGE[issue.stage!]}</Text>
-          <Text className="min-w-0 flex-1 text-xs text-foreground" numberOfLines={1}>
-            {issue.title}
-            {issue.stage === "needs-test" && issue.milestone ? ` (${issue.milestone.title})` : ""}
-          </Text>
+          <Text className="w-20 text-xs text-foreground-muted">{STAGE[issue.stage!]}</Text>
+          <Text className="min-w-0 flex-1 text-xs text-foreground">{issue.title}</Text>
         </View>
       ))}
+      {more > 0 ? <Text className="text-xs text-foreground-muted">{more} more</Text> : null}
     </View>
   );
 }
