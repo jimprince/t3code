@@ -1587,3 +1587,24 @@ id = "v2-port-2689"
 date = "2026-10-05"
 decided = "reconcile-smaller"
 rationale = "Retain keyed waiting-note replacement under the local state lock with sender/environment isolation, dispatch through V2 native receipts and preserve unkeyed commands."
+
+[[patch]]
+name = "fork-standing-agent-autosettle"
+subject = "fix(threads): pinned and parent threads never auto-settle; t3-thread auto-settle toggle"
+class = "product"
+purpose = "Stop standing agents (pinned threads and threads with live workers) from settling on their own after a completed turn, and give operators a per-thread toggle (worker standing-agent-autosettle, 2026-10-05)."
+retire_when = "Upstream supplies completion settlement that exempts pinned and parent threads."
+depends_on = [
+  "fork-subthread-lifecycle",
+  "fork-worker-operations",
+  "fork-cross-environment-nesting",
+  "fork-worker-inactivity",
+]
+roles = []
+note = "The decider rejects thread.auto-settle for a pinned thread or one with live children even when a sweep used a stale snapshot; manual settlement still clears pins. Unnesting clears the worker-only settle-on-complete setting. t3-thread auto-settle <thread> --off|--on sets the opt-out; the server refuses --on for a named agent's live top-level thread. t3-thread status no longer reports a running session as errored from an older failed turn. An unpinned childless top-level thread that already has settle-on-complete set still settles; run auto-settle --off on it. watch.ts still delivers a settled worker's final completion to its supervisor, so an orchestrator no longer misses a worker that settled on finishing."
+
+[[patch.decision]]
+id = "v2-standing-auto-settle"
+date = "2026-10-06"
+decided = "relocate"
+rationale = "Native V2 already rejects pinned sweep candidates and clears completion settlement on unnest. Recheck sidecar organizational children against native active rows in serialized automatic dispatch, and suppress completion-sweep candidates through the same query."
