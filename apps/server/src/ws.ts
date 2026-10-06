@@ -1,4 +1,5 @@
 import * as ThreadIssueService from "./forkThreads/ThreadIssueService.ts";
+import * as AutomationEngine from "./automations/AutomationEngine.ts";
 import { makeNamedAgents } from "./forkThreads/NamedAgents.ts";
 import { resourceRecoveryHandlers } from "./resourceRecoveryRpc.ts";
 import { makeMetadataHandlers } from "./forkThreads/MetadataRpc.ts";
@@ -1208,6 +1209,7 @@ const layerWsRpc = (
   ServerWsRpcGroup.toLayer(
     Effect.gen(function* () {
       const namedAgents = yield* makeNamedAgents;
+      const automations = yield* AutomationEngine.AutomationEngine;
       const currentSessionId = currentSession.sessionId;
       const sql = yield* SqlClient.SqlClient;
       const threadManagement = yield* withWorkerSummaries(
@@ -2465,6 +2467,16 @@ const layerWsRpc = (
         [WS_METHODS.serverReportHostPowerState]: (input) =>
           backgroundPolicy.reportHostPowerState(input),
         [WS_METHODS.serverGetBackgroundPolicy]: (_input) => backgroundPolicy.snapshot,
+        [WS_METHODS.automationsList]: (input) => automations.list(input.projectId).pipe(Effect.map((list) => ({ automations: list }))),
+        [WS_METHODS.automationsSave]: (input) => automations.save(input),
+        [WS_METHODS.automationsRemove]: (input) => automations.remove(input.automationId),
+        [WS_METHODS.automationsSetEnabled]: (input) => automations.setEnabled(input.automationId, input.enabled),
+        [WS_METHODS.automationsRun]: (input) => automations.run(input.automationId, { dryRun: input.dryRun === true }),
+        [WS_METHODS.automationsRuns]: (input) => automations.runs(input).pipe(Effect.map((runs) => ({ runs }))),
+        [WS_METHODS.automationScriptsList]: (input) => automations.listScripts(input.projectId ?? null).pipe(Effect.map((scripts) => ({ scripts }))),
+        [WS_METHODS.automationScriptsSave]: (input) => automations.saveScript(input),
+        [WS_METHODS.automationScriptsRemove]: (input) => automations.removeScript(input.scriptId),
+        [WS_METHODS.automationScriptsRun]: (input) => automations.runScript(input),
         "orchestration.listNamedAgents": () => namedAgents.list(),
         "orchestration.resolveNamedAgent": (input) => namedAgents.resolve(input),
         "orchestration.handOverNamedAgent": (input) => namedAgents.handOver(input),
