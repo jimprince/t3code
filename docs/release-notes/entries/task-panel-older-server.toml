@@ -1,0 +1,4 @@
+id = "task-panel-older-server"
+category = "fix"
+functionality = "projects"
+text = "The project page's task panel no longer fails against a server that has not been updated: it shows the task from the task list with a link to Gitea and a note to update the server, and load errors on the project page now wrap in full instead of being cut off."
