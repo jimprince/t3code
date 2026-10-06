@@ -123,11 +123,20 @@ it.effect.each(
         const runtime = yield* makeCodexManagedRuntime({
           instanceId,
           enabled: true,
-          config: decodeSettings({ setupMode: "managed", homePath: sharedHome }),
+          config: decodeSettings({
+            setupMode: "managed",
+            homePath: sharedHome,
+            skillExtraRoots: ["/isolated/skills-B", "/isolated/skills-A", "/isolated/skills-B"],
+          }),
           environment: ambient,
         });
         yield* Effect.gen(function* () {
           const effective = yield* runtime.resolve;
+          assert.deepEqual(effective.config.skillExtraRoots, [
+            "/isolated/skills-B",
+            "/isolated/skills-A",
+            "/isolated/skills-B",
+          ]);
           assert.strictEqual(leases, 1);
           assert.strictEqual(effective.config.binaryPath, executable.executablePath);
           assert.notStrictEqual(effective.config.homePath, ambient.CODEX_HOME);
