@@ -35,6 +35,10 @@
       "types": "./src/namedAgents.ts",
       "import": "./src/namedAgents.ts"
     },
+    "./pageAgents": {
+      "types": "./src/pageAgents.ts",
+      "import": "./src/pageAgents.ts"
+    },
     "./settings": {
       "types": "./src/settings.ts",
       "import": "./src/settings.ts"
