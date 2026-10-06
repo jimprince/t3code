@@ -247,6 +247,7 @@ export const make = Effect.gen(function* () {
       threadSubscriptions: true,
       threadTitleRegeneration: true,
       threadVisitedTracking: true,
+      threadIssues: true,
       threadPullRequests: true,
       threadPullRequestWatch: true,
       pullRequestStackActions: true,

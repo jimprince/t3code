@@ -1,3 +1,5 @@
+import { ThreadIssuesToolkitHandlersLive } from "./toolkits/issues/handlers.ts";
+import { ThreadIssuesToolkit } from "./toolkits/issues/tools.ts";
 import { WorkerIdentityRegistrationLive } from "./WorkerIdentityToolkit.ts";
 import * as NodeCrypto from "node:crypto";
 import * as Cause from "effect/Cause";
@@ -696,6 +698,10 @@ export const PullRequestsToolkitRegistrationLive = McpServer.toolkit(PullRequest
   Layer.provide(PullRequestsToolkitHandlersLive),
 );
 
+const ThreadIssuesToolkitRegistrationLive = McpServer.toolkit(ThreadIssuesToolkit).pipe(
+  Layer.provide(ThreadIssuesToolkitHandlersLive),
+);
+
 const DeviceStandardToolkitRegistrationLive = McpServer.toolkit(DeviceStandardToolkit).pipe(
   Layer.provide(DeviceStandardToolkitHandlersLive),
 );
@@ -727,5 +733,6 @@ export const layer = Layer.mergeAll(
   PreviewControlsRegistrationLive,
   WorktreeToolkitRegistrationLive,
   PullRequestsToolkitRegistrationLive,
+  ThreadIssuesToolkitRegistrationLive,
   DeviceToolkitRegistrationLive,
 ).pipe(Layer.provideMerge(McpTransportLive));
