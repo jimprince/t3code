@@ -7,7 +7,12 @@ import * as SubscriptionRef from "effect/SubscriptionRef";
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
 import type * as EnvironmentRegistry from "../connection/registry.ts";
 import type { EnvironmentThreadShell } from "./models.ts";
-import { supervisionForest, supervisionWorkerLines } from "./forkNesting.ts";
+import {
+  supervisionForest,
+  supervisionWorkerLines,
+  supervisionKey,
+  supervisionThreadKey,
+} from "./forkNesting.ts";
 import { createEnvironmentRpcQueryAtomFamily, followStreamInEnvironment } from "./runtime.ts";
 
 export function supervisionMetadataReady<A, E>(
@@ -79,9 +84,16 @@ export function createSupervisionAtoms<R, ER>(
   );
   const joinedShells = Atom.make((get) => {
     const ready = get(readyHosts);
+    const modes = new Map(
+      get(metadata).map((row) => [
+        supervisionKey(row.environmentId, row.threadId),
+        row.subproject ?? "auto",
+      ]),
+    );
     return get(shells).map((thread) => ({
       ...thread,
       forkMetadataAvailable: ready.has(thread.environmentId),
+      subproject: modes.get(supervisionThreadKey(thread)) ?? "auto",
     }));
   });
   const metadata = Atom.make((get) => {
