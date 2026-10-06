@@ -1,10 +1,10 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { supervisionForest, supervisionKey } from "@t3tools/client-runtime/state/forkNesting";
+import { supervisionThreadKey } from "@t3tools/client-runtime/state/fork-nesting";
 import {
   resolveBackgroundFolds,
   type BackgroundTraffic,
 } from "@t3tools/client-runtime/backgroundTurns";
-import { useThreadShells } from "../../state/entities";
+import { useSupervisionForest } from "../../state/forkSupervision";
 import { deriveMobileBackgroundTraffic } from "./backgroundFeed.logic";
 import type { ThreadFeedEntry } from "../../lib/threadActivity";
 
@@ -14,9 +14,8 @@ export function useMobileBackgroundFeed(input: {
   rootKey: string;
   liveRunId: string | null;
 }) {
-  const shells = useThreadShells();
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
-  const forest = useMemo(() => supervisionForest(shells), [shells]);
+  const forest = useSupervisionForest();
   // "id\ttitle" lines: a string keeps unrelated shell churn from re-deriving traffic.
   const workerLines = useMemo(() => {
     const lines: string[] = [];
@@ -24,7 +23,7 @@ export function useMobileBackgroundFeed(input: {
     while (pending.length) {
       for (const child of forest.children.get(pending.pop()!) ?? []) {
         lines.push(`${child.id}\t${child.title}`);
-        pending.push(supervisionKey(child));
+        pending.push(supervisionThreadKey(child));
       }
     }
     return lines.join("\n");
