@@ -61,6 +61,7 @@ import {
   ThreadRevertedPayload,
   ThreadSessionSetPayload,
   ThreadTurnDiffCompletedPayload,
+  ThreadTurnInterruptRequestedPayload,
 } from "./Schemas.ts";
 
 type ThreadPatch = Partial<Omit<OrchestrationThread, "id" | "projectId">>;
@@ -1067,6 +1068,38 @@ export function projectEvent(
           ...nextBase,
           threads: updateThread(nextBase.threads, payload.threadId, {
             proposedPlans,
+            updatedAt: event.occurredAt,
+          }),
+        };
+      });
+
+    case "thread.turn-interrupt-requested":
+      return Effect.gen(function* () {
+        const payload = yield* decodeForEvent(
+          ThreadTurnInterruptRequestedPayload,
+          event.payload,
+          event.type,
+          "payload",
+        );
+        const thread = nextBase.threads.find((entry) => entry.id === payload.threadId);
+        // Mirror the SQL projection: an interrupt request ends the turn it
+        // names even while the session still reports it running.
+        if (
+          !thread ||
+          payload.turnId === undefined ||
+          thread.latestTurn?.turnId !== payload.turnId ||
+          thread.latestTurn.state !== "running"
+        ) {
+          return nextBase;
+        }
+        return {
+          ...nextBase,
+          threads: updateThread(nextBase.threads, payload.threadId, {
+            latestTurn: {
+              ...thread.latestTurn,
+              state: "interrupted",
+              completedAt: thread.latestTurn.completedAt ?? payload.createdAt,
+            },
             updatedAt: event.occurredAt,
           }),
         };

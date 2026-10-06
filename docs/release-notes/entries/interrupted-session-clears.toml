@@ -1,0 +1,4 @@
+id = "interrupted-session-clears"
+category = "fix"
+functionality = "worker threads"
+text = "An interrupted worker is idle as soon as the provider accepts the interrupt, so queued and direct sends reach it instead of failing as still running, and `t3-thread session reconcile` repairs a session left running after its turn ended."
