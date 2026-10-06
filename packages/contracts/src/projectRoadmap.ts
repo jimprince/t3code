@@ -2,7 +2,7 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import { NonNegativeInt, PositiveInt, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
-import { ProjectRequestStage } from "./projectIssues.ts";
+import { ProjectEpicProgress, ProjectRequestStage } from "./projectIssues.ts";
 
 /** A version on the roadmap: an open Gitea milestone on the project's tracker repository. */
 export const ProjectRoadmapVersion = Schema.Struct({
@@ -12,6 +12,8 @@ export const ProjectRoadmapVersion = Schema.Struct({
   openIssues: NonNegativeInt,
   /** Closed issues in the version: its complete tasks, for the progress line. */
   closedIssues: NonNegativeInt.pipe(Schema.withDecodingDefault(Effect.succeed(0))),
+  /** The milestone's description: the release's outcome, when it has one. */
+  description: Schema.optionalKey(Schema.NullOr(Schema.String)),
 });
 export type ProjectRoadmapVersion = typeof ProjectRoadmapVersion.Type;
 
@@ -28,6 +30,8 @@ export const ProjectRoadmapItem = Schema.Struct({
   stage: Schema.NullOr(ProjectRequestStage),
   versionId: Schema.NullOr(PositiveInt),
   parked: Schema.Boolean,
+  /** Set for epics. */
+  epic: Schema.optionalKey(ProjectEpicProgress),
 });
 export type ProjectRoadmapItem = typeof ProjectRoadmapItem.Type;
 
