@@ -245,21 +245,14 @@ function CompactRow({
  * next and who owns it. His groups first, then work waiting for a release, then
  * work still with the agents (maintenance excepted).
  */
-export function ProjectRequestsSection({
-  summary,
-  header,
-}: {
-  readonly summary: OrchestratorSummary;
-  /** Shown above the requests, such as the request box. */
-  readonly header?: ReactNode;
-}) {
+export function ProjectRequestsSection({ summary }: { readonly summary: OrchestratorSummary }) {
   const environmentId = summary.root.environmentId;
   const { query, requests, now, pending } = useProjectRequests(summary);
   const settle = useSettle(summary, query.refresh);
   const parked = countParked(query.data?.issues ?? [], summary.root.id);
   // Maintenance still with the agents has its own widget below the releases.
   const listed = requests.filter((request) => !isMaintenanceWithAgents(request));
-  if (listed.length === 0 && pending.length === 0 && !header) return null;
+  if (listed.length === 0 && pending.length === 0 && parked === 0) return null;
   const waitingForRelease = listed.filter((request) => request.stage === "awaiting-release");
   const withAgents = listed.filter(
     (request) => request.forYou === null && request.stage !== "awaiting-release",
@@ -268,7 +261,6 @@ export function ProjectRequestsSection({
   return (
     <section className="border-t border-border pt-4">
       <WidgetHeading title="Requests" count={listed.length + pending.length} />
-      {header}
       {parked > 0 ? (
         <p className="mb-2 text-xs text-muted-foreground">
           {parked} {parked === 1 ? "idea" : "ideas"} saved for later on the Roadmap
