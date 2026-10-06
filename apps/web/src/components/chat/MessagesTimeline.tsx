@@ -451,6 +451,7 @@ export interface MessagesTimelineHistoryControls {
 }
 
 interface MessagesTimelineProps {
+  showMinimap?: boolean;
   citationRequest?: AssistantCitationRequest | null;
   citationHistoryLoading?: boolean;
   onCiteAssistantText?: (
@@ -568,6 +569,8 @@ export function MessagesTimeline(props: MessagesTimelineProps) {
 }
 
 const ConversationTimeline = memo(function ConversationTimeline({
+  showMinimap = true,
+
   citationRequest = null,
   citationHistoryLoading = false,
   onCiteAssistantText,
@@ -1105,6 +1108,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   }, [citationAlwaysRender, restoringAlwaysRender, fullscreenAppRowId]);
   const [minimapHitStripWidth, setMinimapHitStripWidth] = useState(0);
   const [minimapCurrentIndex, setMinimapCurrentIndex] = useState<number | null>(null);
+  const dismissMinimapPreviewRef = useRef<(() => void) | null>(null);
   const handleAnchorReady = useCallback(
     (info: { anchorIndex: number | undefined }) => {
       if (anchorMessageId !== null && info.anchorIndex !== undefined) {
@@ -1186,6 +1190,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   }, [cancelContentOverflowFrame, measureContentOverflow, onContentOverflowChange, rows.length]);
 
   const handleScroll = useCallback(() => {
+    dismissMinimapPreviewRef.current?.();
     const state = listRef.current?.getState?.();
     if (restoringThreadPosition || state?.data !== rows) return;
     const isAtEnd = resolveTimelineIsAtEnd(state);
@@ -1642,21 +1647,24 @@ const ConversationTimeline = memo(function ConversationTimeline({
               ListHeaderComponent={listHeader}
               ListFooterComponent={timelineListFooter}
             />
-            <TimelineMinimap
-              items={minimapItems}
-              hasPersistentGutter={minimapHasPersistentGutter}
-              hitStripWidth={minimapHitStripWidth}
-              currentIndex={minimapCurrentIndex}
-              stripMap={minimapStripMap}
-              onSelect={(item) => {
-                onManualNavigation();
-                void listRef.current?.scrollToIndex({
-                  index: item.rowIndex,
-                  animated: true,
-                  viewOffset: 24,
-                });
-              }}
-            />
+            {showMinimap ? (
+              <TimelineMinimap
+                dismissRef={dismissMinimapPreviewRef}
+                items={minimapItems}
+                hasPersistentGutter={minimapHasPersistentGutter}
+                hitStripWidth={minimapHitStripWidth}
+                currentIndex={minimapCurrentIndex}
+                stripMap={minimapStripMap}
+                onSelect={(item) => {
+                  onManualNavigation();
+                  void listRef.current?.scrollToIndex({
+                    index: item.rowIndex,
+                    animated: true,
+                    viewOffset: 24,
+                  });
+                }}
+              />
+            ) : null}
           </TooltipScrollDismissArea>
           </div>
         </TimelineRowActivityCtx>
@@ -1725,6 +1733,7 @@ function timelineMinimapEventTargetsPreview(target: EventTarget): boolean {
 }
 
 function TimelineMinimap({
+  dismissRef,
   hasPersistentGutter,
   hitStripWidth,
   currentIndex,
@@ -1732,6 +1741,7 @@ function TimelineMinimap({
   stripMap,
   onSelect,
 }: {
+  dismissRef: React.RefObject<(() => void) | null>;
   hasPersistentGutter: boolean;
   hitStripWidth: number;
   currentIndex: number | null;
@@ -1740,6 +1750,14 @@ function TimelineMinimap({
   onSelect: (item: TimelineMinimapItem) => void;
 }) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const dismiss = useCallback(() => setActiveIndex(null), []);
+
+  useEffect(() => {
+    dismissRef.current = dismiss;
+    return () => {
+      dismissRef.current = null;
+    };
+  }, [dismiss, dismissRef]);
 
   const resolvedActiveIndex =
     activeIndex !== null && activeIndex < items.length ? activeIndex : null;
@@ -1768,6 +1786,15 @@ function TimelineMinimap({
   const previousItem =
     resolvedCurrentIndex === null ? null : (items[resolvedCurrentIndex - 1] ?? null);
   const nextItem = resolvedCurrentIndex === null ? null : (items[resolvedCurrentIndex + 1] ?? null);
+
+  useEffect(() => {
+    if (resolvedActiveIndex === null) return;
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") dismiss();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [dismiss, resolvedActiveIndex]);
 
   const resolveActiveIndexFromPointer = useCallback(
     (event: MouseEvent<HTMLElement>) => {
@@ -1827,6 +1854,7 @@ function TimelineMinimap({
             height: resolveTimelineMinimapHeightStyle(items.length),
             width: resolveTimelineMinimapInteractiveWidth(hitStripWidth, activeItem !== null),
           }}
+          onPointerLeave={dismiss}
         >
           <TimelineMinimapNavigationButton
             direction="previous"
@@ -1853,7 +1881,11 @@ function TimelineMinimap({
             }}
             onFocus={() => setActiveIndex((current) => current ?? resolvedCurrentIndex ?? 0)}
             onKeyDown={(event) => {
-              if (event.key === "ArrowDown") {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                dismiss();
+                event.currentTarget.blur();
+              } else if (event.key === "ArrowDown") {
                 event.preventDefault();
                 moveActiveIndex(1);
               } else if (event.key === "ArrowUp") {
@@ -1872,7 +1904,7 @@ function TimelineMinimap({
                 }
               }
             }}
-            onMouseLeave={() => setActiveIndex(null)}
+            onMouseLeave={dismiss}
             onMouseMove={updateActiveIndexFromPointer}
             onMouseDown={(event) => {
               if (timelineMinimapEventTargetsPreview(event.target)) {
@@ -1928,6 +1960,7 @@ function TimelineMinimap({
               <span
                 className="pointer-events-auto absolute left-8 w-80 cursor-text select-text"
                 data-minimap-preview
+                onPointerLeave={dismiss}
                 onMouseMove={(event) => event.stopPropagation()}
                 style={{
                   top: `${activeTopPercent}%`,
