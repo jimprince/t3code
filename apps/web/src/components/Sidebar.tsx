@@ -1,7 +1,7 @@
 import { planSupervisionMove } from "@t3tools/client-runtime/state/fork-thread-ordering";
 import { useSupervisionMetadata } from "../state/forkSupervision";
 import { useSupervisionForest } from "../state/forkSupervision";
-import { supervisionRoots } from "@t3tools/client-runtime/state/forkNesting";
+import { supervisionRoots } from "@t3tools/client-runtime/state/fork-nesting";
 import { useSupervisionDrag } from "./sidebar/useSupervisionDrag";
 import { SupervisionThreadRows, useSupervisionSidebar } from "./sidebar/SupervisionThreadRows";
 import { groupChildInputAttention } from "@t3tools/client-runtime/child-attention";
@@ -2334,7 +2334,10 @@ export default function Sidebar() {
   const threads = useThreadShells();
 
   const attentionForest = useSupervisionForest();
-  const childInputAttention = useMemo(() => groupChildInputAttention(threads, attentionForest.parentByKey), [threads, attentionForest]);
+  const childInputAttention = useMemo(
+    () => groupChildInputAttention(threads, attentionForest.parentByKey),
+    [threads, attentionForest],
+  );
   const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
@@ -2618,7 +2621,14 @@ export default function Sidebar() {
         override holds until all of them appear in canonical state. */
     readonly assignedKeys: ReadonlyMap<string, string>;
   } | null>(null);
-  const supervision = useSupervisionSidebar(threads.filter(thread => scopedProjectKeys === null || scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`)), routeThreadKey);
+  const supervision = useSupervisionSidebar(
+    threads.filter(
+      (thread) =>
+        scopedProjectKeys === null ||
+        scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`),
+    ),
+    routeThreadKey,
+  );
   const supervisionDrag = useSupervisionDrag(supervision.forest);
   const {
     pinnedThreads,
@@ -4472,10 +4482,18 @@ export default function Sidebar() {
                     .threadOrderReset === true,
                 titleRegeneration: supportsTitleRegeneration,
               },
-              move: (isPinned ? serverConfigs.get(thread.environmentId)?.environment.capabilities.threadPinReorder : serverConfigs.get(thread.environmentId)?.environment.capabilities.threadActiveReorder) === true && (isPinned || !isSettled) ? {
-                up: planSupervisionMove(threads, orderMetadata, thread, "up") !== null,
-                down: planSupervisionMove(threads, orderMetadata, thread, "down") !== null,
-              } : undefined,
+              move:
+                (isPinned
+                  ? serverConfigs.get(thread.environmentId)?.environment.capabilities
+                      .threadPinReorder
+                  : serverConfigs.get(thread.environmentId)?.environment.capabilities
+                      .threadActiveReorder) === true &&
+                (isPinned || !isSettled)
+                  ? {
+                      up: planSupervisionMove(threads, orderMetadata, thread, "up") !== null,
+                      down: planSupervisionMove(threads, orderMetadata, thread, "down") !== null,
+                    }
+                  : undefined,
               snoozePresets,
             }),
             position,
@@ -4493,10 +4511,22 @@ export default function Sidebar() {
         switch (clicked.value) {
           case "move-up":
           case "move-down": {
-            const assignments = planSupervisionMove(threads, orderMetadata, thread, clicked.value === "move-up" ? "up" : "down");
+            const assignments = planSupervisionMove(
+              threads,
+              orderMetadata,
+              thread,
+              clicked.value === "move-up" ? "up" : "down",
+            );
             for (const assignment of assignments ?? []) {
-              const moved = threads.find(row => scopedThreadKey(scopeThreadRef(row.environmentId, row.id)) === assignment.id);
-              if (moved) await (isPinned ? reorderPinnedThread : reorderActiveThread)(scopeThreadRef(moved.environmentId, moved.id), assignment.orderKey);
+              const moved = threads.find(
+                (row) =>
+                  scopedThreadKey(scopeThreadRef(row.environmentId, row.id)) === assignment.id,
+              );
+              if (moved)
+                await (isPinned ? reorderPinnedThread : reorderActiveThread)(
+                  scopeThreadRef(moved.environmentId, moved.id),
+                  assignment.orderKey,
+                );
             }
             return;
           }
@@ -5005,9 +5035,9 @@ export default function Sidebar() {
                             // Fade between card and compact rows while the outer
                             // sortable wrapper keeps its identity during a drag.
                             key={`${threadKey}:${rowVariant}`}
-                            waitingInputChildren={childInputAttention.get(
-                              `${thread.environmentId}:${thread.id}`,
-                            ) ?? []}
+                            waitingInputChildren={
+                              childInputAttention.get(`${thread.environmentId}:${thread.id}`) ?? []
+                            }
                             thread={thread}
                             variant={rowVariant}
                             // Snoozed rows wake, settled rows un-settle, and cards settle.
