@@ -25,6 +25,18 @@ export function getDesktopUpdateReleaseHistoryUrl(): string {
   return DESKTOP_RELEASE_HISTORY_URL;
 }
 
+const NIGHTLY_FORK_VERSION_PATTERN = /^(\d+\.\d+\.\d+)-nightly\.(\d{8})\.\d+-fork\.(\d+)$/;
+
+/** Compact "fork.N (base-nightly.date)" for a fork nightly build, else "Version <string>"; null when unset. */
+export function getDesktopUpdateVersionLabel(currentVersion: string): string | null {
+  const trimmed = currentVersion.trim();
+  if (!trimmed) return null;
+  const match = trimmed.match(NIGHTLY_FORK_VERSION_PATTERN);
+  if (!match) return `Version ${trimmed}`;
+  const [, base, date, fork] = match;
+  return `fork.${fork} (${base}-nightly.${date})`;
+}
+
 export function resolveDesktopUpdateButtonAction(
   state: DesktopUpdateState,
 ): DesktopUpdateButtonAction {
