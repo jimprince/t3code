@@ -2305,6 +2305,72 @@ it.effect("routes a linked Gitea PR through its target project instead of the th
   }),
 );
 
+it.effect(
+  "reads a Gitea PR linked from the public alias host through the configured instance",
+  () =>
+    Effect.gen(function* () {
+      const seen: Array<{ cwd: string; repository: string; host: string }> = [];
+      const aliases = ["git.bradleyprince.com"];
+      const service = yield* makeService({
+        projects: [
+          project({
+            id: "thread",
+            title: "T3",
+            workspaceRoot: "/t3",
+            repository: "brad/t3code-fork",
+            provider: "gitea",
+            host: "git.home",
+          }),
+        ],
+        providers: [
+          fakeProvider("gitea", {
+            resolveHostAlias: ({ host }) =>
+              Effect.succeed(aliases.includes(host) ? "git.home" : null),
+            getChangeRequestSummary: (input) =>
+              Effect.sync(() => {
+                seen.push({ cwd: input.cwd, repository: input.repository, host: input.host });
+                return {
+                  ...changeRequest(61, "2026-10-04T00:00:00Z"),
+                  url: "https://git.bradleyprince.com/brad/subagents/pulls/61",
+                  state: "merged" as const,
+                  mergedAt: "2026-10-04T00:00:00Z",
+                };
+              }),
+          }),
+        ],
+      });
+
+      const summary = yield* service.summary(
+        {
+          projectId: "thread" as ProjectId,
+          host: "git.bradleyprince.com",
+          repository: "brad/subagents",
+          number: 61,
+        },
+        { recoverTransientFailure: false },
+      );
+
+      assert.deepStrictEqual(seen, [
+        { cwd: "/t3", repository: "brad/subagents", host: "git.home" },
+      ]);
+      assert.strictEqual(summary.state, "merged");
+      assert.strictEqual(summary.url, "https://git.bradleyprince.com/brad/subagents/pulls/61");
+
+      const unknown = yield* Effect.flip(
+        service.summary(
+          {
+            projectId: "thread" as ProjectId,
+            host: "elsewhere.example",
+            repository: "brad/subagents",
+            number: 61,
+          },
+          { recoverTransientFailure: false },
+        ),
+      );
+      assert.strictEqual(unknown._tag, "PullRequestUnavailableError");
+    }),
+);
+
 it.effect("routes Azure reads and writes through the requested organization's checkout", () =>
   Effect.gen(function* () {
     const seen: string[] = [];
