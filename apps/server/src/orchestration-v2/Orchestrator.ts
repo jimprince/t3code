@@ -5,6 +5,7 @@ import { initializeMetadata, listMetadata } from "../forkThreads/MetadataStore.t
 import { readWorkerMetadata } from "../forkThreads/WorkerLifecycleMetadata.ts";
 import { archiveEligible } from "../forkThreads/ArchiveDeadlines.ts";
 import { completionEligible } from "../forkThreads/WorkerLifecyclePolicy.ts";
+import { pinnedReorderUpdatedAt } from "../forkThreads/ThreadOrderReset.ts";
 import { synchronizedLegacyPullRequest } from "../sourceControl/forkPullRequestUrl.ts";
 import {
   latestExecutedRun,
@@ -2845,11 +2846,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           // Idempotent by re-emission (see thread.settle): a duplicate drop on
           // the same slot keeps the existing updatedAt so it projects as a
           // no-op.
-          const keyUnchanged = thread.pinOrderKey === command.orderKey;
           return {
             ...thread,
             pinOrderKey: command.orderKey,
-            updatedAt: keyUnchanged ? thread.updatedAt : now,
+            updatedAt: pinnedReorderUpdatedAt(thread, command.orderKey, now),
           };
         }
         case "thread.active.reorder": {
