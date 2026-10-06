@@ -1,3 +1,4 @@
+import { CodexNativeGoalLine } from "./chat/CodexNativeGoalLine";
 import { ChatCanvas } from "./chat/ChatCanvas";
 import { usageLimitRecoveryBannerItem } from "./chat/UsageLimitRecoveryBanner";
 import {
@@ -7158,30 +7159,27 @@ export default function ChatView(props: ChatViewProps) {
     [environmentId, navigate],
   );
 
+  const activeCodexNativeGoal = activeThreadShell?.codexNativeGoal ?? null;
   const backgroundWorkBannerItem = useMemo<ComposerBannerStackItem | null>(() => {
     const presentation = presentPendingBackgroundWork(activeBackgroundTasks);
-    if (presentation === null || !activeThread) {
+    if ((presentation === null && activeCodexNativeGoal === null) || !activeThread) {
       return null;
     }
     return {
       id: `background-work:${activeThread.id}`,
       variant: "default",
       priority: "activity",
-      // A dev server can run for hours after the agent is done, so only work
-      // that will wake the agent pulses.
-      icon: (
-        <span
-          className={cn(
-            "size-1.5 rounded-full bg-foreground",
-            presentation.waiting && "animate-status-pulse",
-          )}
-          aria-hidden="true"
-        />
+      // Native goals share the background-work banner and keep their status visible.
+      icon: <span className="size-1.5 rounded-full bg-foreground" aria-hidden="true" />,
+      title: activeCodexNativeGoal ? (
+        <CodexNativeGoalLine goal={activeCodexNativeGoal} />
+      ) : (
+        presentation?.title
       ),
-      title: presentation.title,
       // A single named item is already in the title.
       description:
-        presentation.items.length === 1 && presentation.items[0]?.childThreadId === undefined
+        presentation === null ||
+        (presentation.items.length === 1 && presentation.items[0]?.childThreadId === undefined)
           ? undefined
           : presentation.items.map((item, index) => {
               const childThreadId = item.childThreadId;
@@ -7202,19 +7200,21 @@ export default function ChatView(props: ChatViewProps) {
                 </Fragment>
               );
             }),
-      actions: (
-        <Button
-          size="xs"
-          variant="ghost"
-          disabled={isStoppingBackgroundWork}
-          onClick={() => void handleStopBackgroundWork()}
-        >
-          {isStoppingBackgroundWork ? "Stopping..." : "Stop"}
-        </Button>
-      ),
+      actions:
+        presentation === null ? undefined : (
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={isStoppingBackgroundWork}
+            onClick={() => void handleStopBackgroundWork()}
+          >
+            {isStoppingBackgroundWork ? "Stopping..." : "Stop"}
+          </Button>
+        ),
     };
   }, [
     activeBackgroundTasks,
+    activeCodexNativeGoal,
     activeThread,
     handleStopBackgroundWork,
     isStoppingBackgroundWork,
