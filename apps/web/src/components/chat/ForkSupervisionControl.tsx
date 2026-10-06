@@ -7,9 +7,7 @@ import {
 } from "@t3tools/client-runtime/state/thread-sort";
 import { newForkCommandId } from "@t3tools/client-runtime/state/fork-thread-ids";
 import * as Effect from "effect/Effect";
-import {
-  createEnvironmentRpcCommand,
-} from "@t3tools/client-runtime/state/runtime";
+import { createEnvironmentRpcCommand } from "@t3tools/client-runtime/state/runtime";
 import {
   connectedSupervisionParents,
   supervisionKey,

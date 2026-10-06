@@ -2,9 +2,7 @@ import { useSupervisionForest } from "../../state/forkSupervision";
 import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
 import { useMemo, useState } from "react";
 import { useThreadShells, useThreadProjection } from "../../state/entities";
-import {
-  supervisionThreadKey,
-} from "@t3tools/client-runtime/state/fork-nesting";
+import { supervisionThreadKey } from "@t3tools/client-runtime/state/fork-nesting";
 import {
   deriveBackgroundTraffic,
   resolveBackgroundFolds,

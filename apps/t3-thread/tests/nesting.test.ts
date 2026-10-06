@@ -79,17 +79,35 @@ function harness(supported = true, remoteSupported = true) {
 describe("V2 organizational nesting", () => {
   it("claims an empty shell, commits parent and policy, then starts the first turn once", async () => {
     const { client, request } = harness();
-    const created = await client.createAgentThread({ projectId: "project", title: "Worker", initialMessage: "Work", parentThreadId: "parent" });
+    const created = await client.createAgentThread({
+      projectId: "project",
+      title: "Worker",
+      initialMessage: "Work",
+      parentThreadId: "parent",
+    });
     const launches = request.mock.calls.filter(([method]) => method === "launchThread");
     const updates = request.mock.calls.filter(([method]) => method === "threadMetadataUpdate");
     expect(launches).toHaveLength(2);
     expect(updates).toHaveLength(1);
     expect(launches[0]?.[1]).toMatchObject({ threadId: created.threadId });
     expect(launches[0]?.[1]).not.toHaveProperty("initialMessage");
-    expect(updates[0]?.[1]).toMatchObject({ threadId: created.threadId, parentThreadId: "parent", remoteParent: null, settleOnComplete: true });
-    expect(launches[1]?.[1]).toMatchObject({ threadId: created.threadId, initialMessage: { text: "Work" }, reuseExistingThread: true });
-    expect(request.mock.calls.indexOf(launches[0]!)).toBeLessThan(request.mock.calls.indexOf(updates[0]!));
-    expect(request.mock.calls.indexOf(updates[0]!)).toBeLessThan(request.mock.calls.indexOf(launches[1]!));
+    expect(updates[0]?.[1]).toMatchObject({
+      threadId: created.threadId,
+      parentThreadId: "parent",
+      remoteParent: null,
+      settleOnComplete: true,
+    });
+    expect(launches[1]?.[1]).toMatchObject({
+      threadId: created.threadId,
+      initialMessage: { text: "Work" },
+      reuseExistingThread: true,
+    });
+    expect(request.mock.calls.indexOf(launches[0]!)).toBeLessThan(
+      request.mock.calls.indexOf(updates[0]!),
+    );
+    expect(request.mock.calls.indexOf(updates[0]!)).toBeLessThan(
+      request.mock.calls.indexOf(launches[1]!),
+    );
   });
 
   it("keeps ordering inside one environment-qualified remote-parent group", () => {

@@ -43,7 +43,11 @@ describe("V2 organizational supervision", () => {
     expect(
       supervisionVisiblePaths(supervisionForest([root, child]), "local:child").has("local:root"),
     ).toBe(true);
-    const executionChild = presentThreadShell(env, { ...v2ThreadShell, id: ThreadId.make("execution-child"), lineage: { rootThreadId: root.id, parentThreadId: root.id, relationshipToParent: "subagent" } });
+    const executionChild = presentThreadShell(env, {
+      ...v2ThreadShell,
+      id: ThreadId.make("execution-child"),
+      lineage: { rootThreadId: root.id, parentThreadId: root.id, relationshipToParent: "subagent" },
+    });
     expect(buildForest([root, executionChild], []).parentByKey.size).toBe(0);
   });
   it("makes missing parents and cycles reachable roots", () => {
