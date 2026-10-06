@@ -96,6 +96,7 @@ export interface RequestItemsGenerationResult {
   items: ReadonlyArray<{
     title: string;
     kind: RequestKind;
+    bug: boolean;
     excerpt: string;
     existing: number | null;
   }>;
