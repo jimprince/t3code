@@ -133,8 +133,6 @@ export function useOrchestratorFocus(input: {
       }
     }
     for (const entry of input.entries) {
-      if (entry.kind === "proposed-plan" && entry.proposedPlan.runId)
-        attention.add(entry.proposedPlan.runId);
       if (
         entry.kind === "work" &&
         entry.entry.runId &&

@@ -1466,7 +1466,7 @@ note = "Origin rides as one unreferenced t3-origin context record, so it never r
 id = "m3-ui-review-s8-attention"
 date = "2026-10-06"
 decided = "narrow+adapt"
-rationale = "The needs-you count follows V1: pending approvals, user-input requests and proposed plans only. The V2 port also counted every in-progress tool item and every failed or interrupted run, so each live worker-triggered command turn showed \"1 for you\" and a crash-orphaned item kept it. Failed or interrupted runs staying out of the count is a product call kept as in V1; revisit only if Brad wants them surfaced."
+rationale = "The needs-you count is strict V1 parity: pending approval and user-input requests only (an earlier port also counted proposed plans, which V1 never did). The V2 port also counted every in-progress tool item and every failed or interrupted run, so each live worker-triggered command turn showed \"1 for you\" and a crash-orphaned item kept it. Failed or interrupted runs staying out of the count is a product call kept as in V1; revisit only if Brad wants them surfaced."
 
 [[patch.decision]]
 id = "v2-port-2689-m2"
