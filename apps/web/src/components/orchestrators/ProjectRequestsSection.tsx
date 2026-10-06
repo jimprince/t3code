@@ -12,6 +12,7 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { Button } from "../ui/button";
 import { formatIssueAge } from "./projectIssuesBoard.logic";
+import { useNextReleaseItems } from "./ProjectRoadmapWidget";
 import {
   deriveProjectRequests,
   deriveRelease,
@@ -351,14 +352,32 @@ export function ProjectReleaseWidget({ summary }: { readonly summary: Orchestrat
   const { query, requests, now } = useProjectRequests(summary);
   const settle = useSettle(summary, query.refresh);
   const release = useMemo(() => deriveRelease(requests), [requests]);
+  const nextVersion = useNextReleaseItems(summary);
+  // The next version's items feed "Next release" too: release = milestone + stage.
+  const versionOnly = nextVersion.items.filter(
+    (item) =>
+      !release.next.some(
+        (request) =>
+          request.issue.number === item.number &&
+          request.issue.repository === requests[0]?.issue.repository,
+      ),
+  );
   const shippedCount = release.shipped.reduce((total, group) => total + group.items.length, 0);
-  if (release.next.length === 0 && shippedCount === 0) return null;
+  const nextCount = release.next.length + versionOnly.length;
+  if (nextCount === 0 && shippedCount === 0) return null;
   return (
     <section className="border-t border-border pt-4">
-      <WidgetHeading title="Release" count={release.next.length + shippedCount} />
-      {release.next.length > 0 ? (
+      <WidgetHeading title="Release" count={nextCount + shippedCount} />
+      {nextCount > 0 ? (
         <div className="mb-3">
-          <GroupTitle title="Next release" count={release.next.length} />
+          <GroupTitle
+            title={
+              nextVersion.version && nextVersion.version.title.toLowerCase() !== "next release"
+                ? `Next release (${nextVersion.version.title})`
+                : "Next release"
+            }
+            count={nextCount}
+          />
           <ul className="divide-y divide-border">
             {release.next.map((request) => (
               <CompactRow
@@ -366,6 +385,21 @@ export function ProjectReleaseWidget({ summary }: { readonly summary: Orchestrat
                 request={request}
                 now={now}
               />
+            ))}
+            {versionOnly.map((item) => (
+              <li key={item.number} className="flex items-center gap-3 py-1.5">
+                <span className="w-28 shrink-0 text-xs text-muted-foreground">
+                  {item.stage ? (STAGE_LABEL[item.stage] ?? item.stage) : "planned"}
+                </span>
+                <a
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="min-w-0 flex-1 truncate text-sm hover:underline"
+                >
+                  {item.title}
+                </a>
+              </li>
             ))}
           </ul>
         </div>

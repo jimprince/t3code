@@ -9,6 +9,7 @@ const GiteaMilestone = Schema.Struct({
   title: Schema.String,
   state: Schema.optional(Schema.String),
   due_on: Schema.optional(Schema.NullOr(Schema.String)),
+  open_issues: Schema.optional(Schema.Number),
 });
 export type GiteaMilestone = typeof GiteaMilestone.Type;
 const GiteaMilestones = Schema.Array(GiteaMilestone);

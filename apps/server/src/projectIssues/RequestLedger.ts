@@ -566,6 +566,18 @@ export const make = (deps: {
             reference.number,
             milestone.id,
           ).pipe(Effect.mapError((error) => fail(error.detail)));
+          // A shipped release is no longer a roadmap version: close its milestone so the
+          // next open one becomes the next release.
+          if (milestone.state !== "closed") {
+            yield* api
+              .send(
+                target.instance,
+                "PATCH",
+                `${GiteaApi.repositoryPath(target.repository)}/milestones/${milestone.id}`,
+                { state: "closed" },
+              )
+              .pipe(Effect.ignore);
+          }
         }
         if (input.comment?.trim()) {
           yield* api
@@ -692,7 +704,16 @@ export const make = (deps: {
     // A restart or a new connection resumes filing anything left in the outbox.
     yield* startDrain;
 
-    return { observeDispatch, capture, settle, decorate, create, update, listForThread };
+    return {
+      observeDispatch,
+      capture,
+      settle,
+      decorate,
+      create,
+      update,
+      listForThread,
+      resolveThread,
+    };
   });
 
 export type RequestLedger = Effect.Success<ReturnType<typeof make>>;
