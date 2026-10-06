@@ -2,7 +2,6 @@ import { describe, expect, it } from "vite-plus/test";
 import { ThreadId } from "@t3tools/contracts";
 import {
   supervisionParents,
-  connectedSupervisionParents,
   supervisionAttention,
   supervisionSoundEligible,
 } from "./forkNesting.ts";

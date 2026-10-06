@@ -9,6 +9,10 @@ import type { EnvironmentThreadShell } from "./models.ts";
 import { supervisionForest } from "./forkNesting.ts";
 import { createEnvironmentRpcQueryAtomFamily, followStreamInEnvironment } from "./runtime.ts";
 
+export function supervisionMetadataReady<A, E>(connected: boolean, result: AsyncResult.AsyncResult<A, E>) {
+  return connected && AsyncResult.isSuccess(result) && !result.waiting;
+}
+
 /** One sidecar query per host, refreshed by native shell updates and reconnects. */
 export function createSupervisionAtoms<R, ER>(
   runtime: Atom.AtomRuntime<EnvironmentRegistry.EnvironmentRegistry | R, ER>,
@@ -27,10 +31,10 @@ export function createSupervisionAtoms<R, ER>(
       Effect.map(supervisor => SubscriptionRef.changes(supervisor.state).pipe(Stream.map(state => state.phase === "connected"))),
     ))),
   ));
-  const readyHosts = Atom.make(get => new Set(get(shells).map(thread => thread.environmentId).filter(environmentId => {
+  const readyHosts = Atom.make(get => new Set([...new Set(get(shells).map(thread => thread.environmentId))].filter(environmentId => {
     const state = get(connected(environmentId));
     const result = get(query({environmentId, input: {}}));
-    return AsyncResult.isSuccess(state) && state.value && AsyncResult.isSuccess(result) && !result.waiting;
+    return supervisionMetadataReady(AsyncResult.isSuccess(state) && state.value, result);
   })));
   const joinedShells = Atom.make(get => {
     const ready = get(readyHosts);
