@@ -1,4 +1,5 @@
 import { ThreadIssueLink, ThreadIssueKey, ThreadIssueSnapshot } from "./threadIssue.ts";
+import { CodexNativeGoalSummary } from "./codexNativeGoal.ts";
 import { ForkWorkerSummary } from "./forkWorkerSummary.ts";
 import { workerArchiveFields, workerCompletionFields } from "./forkWorkerLifecycle.ts";
 import { OrchestrationMessageContext } from "./composerContext.ts";
@@ -846,6 +847,7 @@ export type OrchestrationV2ProviderThreadNativeMetadata =
   typeof OrchestrationV2ProviderThreadNativeMetadata.Type;
 
 export const OrchestrationV2ProviderThread = Schema.Struct({
+  codexNativeGoal: Schema.optional(Schema.NullOr(CodexNativeGoalSummary)),
   id: ProviderThreadId,
   driver: ProviderDriverKind,
   providerInstanceId: ProviderInstanceId,
@@ -1762,6 +1764,7 @@ export type OrchestrationV2LatestVisibleMessageSummary =
   typeof OrchestrationV2LatestVisibleMessageSummary.Type;
 
 export const OrchestrationV2ThreadShell = Schema.Struct({
+  codexNativeGoal: Schema.optional(Schema.NullOr(CodexNativeGoalSummary)),
   workerSummary: Schema.optional(ForkWorkerSummary),
   ...OrchestrationV2CreationFields,
   id: ThreadId,
