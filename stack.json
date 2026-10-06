@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "d3958b3de2eec0f0e97b0ea0222e3fbe2ededbc5",
-  "head": "a6f4503af8bd4222ed240a976688431ce8a82b82",
+  "prev": "37ec12b6f6abf1fbc16426d7e8fd06c14fdbc0eb",
+  "head": "9c29dfb4279a2a70284c8fc0f1a0e1192305afa9",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -101,12 +101,11 @@
     "fork-queue-idle-dispatch",
     "fork-canvas-resize",
     "fork-request-titles",
-    "fork-pr-widget-refresh"
-  ],
-  "unapplied": [
+    "fork-pr-widget-refresh",
     "fork-decisions-other",
     "fork-cli-project-layout"
   ],
+  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
@@ -146,7 +145,7 @@
       "oid": "b30a3c8888f0c8b896832c5588af0d5954f7261c"
     },
     "fork-cli-project-layout": {
-      "oid": "ab5f253981ed953b98c0f1be6208ff84564a015d"
+      "oid": "9c29dfb4279a2a70284c8fc0f1a0e1192305afa9"
     },
     "fork-codex-goal-visibility": {
       "oid": "c72dee2610d865bd89e9900244fed37db9488a86"
@@ -161,7 +160,7 @@
       "oid": "84834109c33d3a9b37655215e1bd55fa9921d544"
     },
     "fork-decisions-other": {
-      "oid": "4fdcafa9d348aa415e916b1ade9fd5fd38f9f02f"
+      "oid": "af27b009655fa7d9fdd91186ba3355276fe916f7"
     },
     "fork-desktop-delivery": {
       "oid": "750221f7edd591ce0da5dbb7efe5bffb2bbab6f1"
