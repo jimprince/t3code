@@ -1,3 +1,5 @@
+import { projectAutomations } from "../../state/automations";
+import { useEnvironmentQuery } from "../../state/query";
 import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollView";
 import { AppText as Text, AppTextInput } from "../../components/AppText";
 import { ProjectFavicon } from "../../components/ProjectFavicon";
@@ -139,6 +141,11 @@ function ProjectOverviewContent(props: {
         </View>
       </SettingsSection>
 
+      <SettingsSection title="Automations">
+        {props.members.map((member) => (
+          <MemberAutomations key={`${member.environmentId}:${member.id}`} member={member} />
+        ))}
+      </SettingsSection>
       <SettingsSection title="Checkouts">
         {props.members.map((member, index) => {
           const environment = props.environments.find(
@@ -172,4 +179,38 @@ function ProjectOverviewContent(props: {
       </SettingsSection>
     </>
   );
+}
+
+/** One environment's automation rules for this project, newest runs under each. */
+function MemberAutomations({ member }: { readonly member: EnvironmentProject }) {
+  const input = { environmentId: member.environmentId, input: { projectId: member.id } };
+  const list = useEnvironmentQuery(projectAutomations.list(input));
+  const runs = useEnvironmentQuery(
+    projectAutomations.runs({ ...input, input: { projectId: member.id, limit: 50 } }),
+  );
+  return (list.data?.automations ?? []).map((automation) => {
+    const trigger = automation.triggers[0];
+    const schedule = trigger?.type === "schedule" ? trigger.schedule : undefined;
+    return (
+      <View key={automation.id} className="gap-1 p-4">
+        <Text className="text-base text-foreground">{automation.name}</Text>
+        <Text className="text-sm text-foreground-muted">
+          {automation.enabled
+            ? (schedule?.kind ?? (trigger?.type === "event" ? `on ${trigger.event}` : "manual"))
+            : "Paused"}
+          {schedule ? ` · ${schedule.timeZone}` : ""}
+          {automation.nextRunAt ? ` · Next ${new Date(automation.nextRunAt).toLocaleString()}` : ""}
+        </Text>
+        {(runs.data?.runs ?? [])
+          .filter((run) => run.automationId === automation.id)
+          .slice(0, 5)
+          .map((run) => (
+            <Text key={run.id} className="text-sm text-foreground-muted">
+              {new Date(run.createdAt).toLocaleString()} · {run.status}
+              {run.result ? ` · ${run.result}` : ""}
+            </Text>
+          ))}
+      </View>
+    );
+  });
 }

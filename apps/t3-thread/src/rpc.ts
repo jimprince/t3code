@@ -14,6 +14,17 @@ import {
 const RPC_METHODS = {
   threadIssuesLink: "threadIssues.link",
   threadIssuesUnlink: "threadIssues.unlink",
+  automationsList: "automations.list",
+  automationsSave: "automations.save",
+  automationsRemove: "automations.remove",
+  automationsSetEnabled: "automations.setEnabled",
+  automationsRun: "automations.run",
+  automationsRuns: "automations.runs",
+  automationScriptsList: "automationScripts.list",
+  automationScriptsSave: "automationScripts.save",
+  automationScriptsRemove: "automationScripts.remove",
+  automationScriptsRun: "automationScripts.run",
+
   listNamedAgents: "orchestration.listNamedAgents",
   resolveNamedAgent: "orchestration.resolveNamedAgent",
   handOverNamedAgent: "orchestration.handOverNamedAgent",
