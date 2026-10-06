@@ -6,7 +6,7 @@ import { initializeMetadata, listMetadata, writeMetadata } from "./MetadataStore
 
 type NestingShell = Pick<OrchestrationV2ThreadShell, "id" | "projectId" | "archivedAt">;
 /** Only the supervision sidecar changes. Native runs, lineage and workspaces remain owned by V2. */
-export const makeNestingService = <E, R>(sql: SqlClient.SqlClient, getShell: (id: ThreadId) => Effect.Effect<NestingShell | null, E, R>, refreshShell: (command: Extract<OrchestrationV2ServerCommand, { type: "thread.metadata.update" }>) => Effect.Effect<unknown, E, R> = () => Effect.void) => Effect.gen(function* () {
+export const makeNestingService = <E, R, DispatchError = never, DispatchContext = never>(sql: SqlClient.SqlClient, getShell: (id: ThreadId) => Effect.Effect<NestingShell | null, E, R>, refreshShell: (command: Extract<OrchestrationV2ServerCommand, { type: "thread.metadata.update" }>) => Effect.Effect<unknown, DispatchError, DispatchContext> = () => Effect.void) => Effect.gen(function* () {
   yield* initializeMetadata(sql);
   const list = () => listMetadata(sql);
   const update = (input: ForkThreadMetadataUpdate) => sql.withTransaction(Effect.gen(function* () {
