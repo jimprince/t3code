@@ -7,7 +7,10 @@ export function SidebarChildInputAttention(props: {
 }) {
   const child = props.children[0];
   if (!child) return null;
-  const label = `${props.children.length} sub-agent${props.children.length === 1 ? "" : "s"} need${props.children.length === 1 ? "s" : ""} input`;
+  const label =
+    props.children.length === 1
+      ? "1 worker needs input"
+      : `${props.children.length} workers need input`;
   return (
     <button
       type="button"
