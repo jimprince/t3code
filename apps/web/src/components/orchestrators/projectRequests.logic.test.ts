@@ -3,12 +3,15 @@ import type { ProjectIssue } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  deriveCompleted,
+  deriveMaintenance,
   deriveProjectRequests,
-  deriveRelease,
   latestProgressLine,
   countParked,
+  nextReleaseRequests,
   requestKind,
   requestsByWorker,
+  taskKind,
 } from "./projectRequests.logic";
 
 const NOW = Date.parse("2026-10-04T12:00:00.000Z");
@@ -127,6 +130,13 @@ describe("requestKind", () => {
     expect(requestKind(["ask", "ask:test"])).toBe("test");
     expect(requestKind(["ask"])).toBe("deliverable");
   });
+
+  it("reads every task type and leaves untyped issues untyped", () => {
+    expect(taskKind(["ask:bug"])).toBe("bug");
+    expect(taskKind(["ask:feature"])).toBe("feature");
+    expect(taskKind(["ASK:Maintenance"])).toBe("maintenance");
+    expect(taskKind(["bug"])).toBeNull();
+  });
 });
 
 describe("release stages", () => {
@@ -157,9 +167,65 @@ describe("release stages", () => {
       [1, null, null],
       [2, "test", "Open the Blocked list"],
     ]);
-    const release = deriveRelease(items);
-    expect(release.next.map((item) => item.issue.number)).toEqual([1]);
-    expect(release.shipped).toEqual([{ release: "fork.24", items: [items[1]] }]);
+    expect(nextReleaseRequests(items).map((item) => item.issue.number)).toEqual([1]);
+  });
+
+  it("groups completed tasks by the release that shipped them, to-test first", () => {
+    const issues = [
+      shipped(2, "fork.24", "Open the Blocked list"),
+      request(3, {
+        status: "done",
+        closedAt: "2026-10-03T00:00:00.000Z",
+        milestone: { id: 24, title: "fork.24" },
+      }),
+      request(4, {
+        status: "done",
+        closedAt: "2026-10-02T00:00:00.000Z",
+        milestone: { id: 9, title: "fork.9" },
+        labels: ["ask:bug"],
+        isRequest: false,
+        requestSource: null,
+      }),
+      request(5, { status: "done", closedAt: "2026-10-03T00:00:00.000Z" }),
+      // Closed elsewhere in the tracker, with no release and no link to this tree.
+      request(6, {
+        status: "done",
+        closedAt: "2026-10-03T00:00:00.000Z",
+        isRequest: false,
+        requestSource: null,
+      }),
+      request(7, { status: "archived", closedAt: "2026-10-03T00:00:00.000Z" }),
+    ];
+    const items = deriveProjectRequests(issues, [thread()], tree, NOW, "root");
+    const groups = deriveCompleted(issues, items, tree);
+    expect(
+      groups.map((group) => [
+        group.release,
+        group.items.map((task) => [task.issue.number, task.toTest !== null, task.kind]),
+      ]),
+    ).toEqual([
+      [
+        "fork.24",
+        [
+          [2, true, "question"],
+          [3, false, "question"],
+        ],
+      ],
+      ["fork.9", [[4, false, "bug"]]],
+      [null, [[5, false, "question"]]],
+    ]);
+  });
+
+  it("moves maintenance still with the agents out of Requests into Maintenance", () => {
+    const issues = [
+      request(1, { stage: "in-progress", labels: ["ask", "ask:maintenance"] }),
+      request(2, { stage: "ready", status: "needs-review", labels: ["ask", "ask:maintenance"] }),
+      request(3, { isRequest: false, requestSource: null, labels: ["ask:maintenance"] }),
+      request(4, { isRequest: false, requestSource: null, labels: ["ask:bug"] }),
+    ];
+    const items = deriveProjectRequests(issues, [thread()], tree, NOW, "root");
+    // The one needing Brad stays in Requests; the rest is upkeep.
+    expect(deriveMaintenance(issues, items).map((task) => task.issue.number)).toEqual([1, 3]);
   });
 
   it("does not flag waiting-for-release work as left behind", () => {

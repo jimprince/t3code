@@ -2,7 +2,16 @@ import { threadRuntimeIsActive } from "@t3tools/client-runtime/state/models";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import type { ProjectIssue, ProjectRequestStage } from "@t3tools/contracts";
 
-export type RequestKind = "question" | "deliverable" | "plan" | "change" | "test";
+/** Task types, from the `ask:<kind>` label requests and typed issues carry. */
+export type RequestKind =
+  | "bug"
+  | "feature"
+  | "question"
+  | "deliverable"
+  | "plan"
+  | "change"
+  | "test"
+  | "maintenance";
 
 /** What Brad does next with a request that is his to act on. */
 export type ForYouGroup = "answers" | "review" | "approve" | "test";
@@ -32,11 +41,35 @@ export interface ProjectRequest {
 }
 
 const LEFT_BEHIND_MS = 24 * 60 * 60 * 1000;
-const KINDS: ReadonlyArray<RequestKind> = ["question", "deliverable", "plan", "change", "test"];
+const KINDS: ReadonlyArray<RequestKind> = [
+  "bug",
+  "feature",
+  "question",
+  "deliverable",
+  "plan",
+  "change",
+  "test",
+  "maintenance",
+];
+
+/** An issue's task type, or null when it carries no `ask:<kind>` label. */
+export function taskKind(labels: ReadonlyArray<string>): RequestKind | null {
+  const names = new Set(labels.map((label) => label.toLowerCase()));
+  return KINDS.find((kind) => names.has(`ask:${kind}`)) ?? null;
+}
 
 export function requestKind(labels: ReadonlyArray<string>): RequestKind {
-  const names = new Set(labels.map((label) => label.toLowerCase()));
-  return KINDS.find((kind) => names.has(`ask:${kind}`)) ?? "deliverable";
+  return taskKind(labels) ?? "deliverable";
+}
+
+/** The issue belongs to this project tree: asked in it, or linked to one of its threads. */
+function inTree(issue: ProjectIssue, treeThreadIds: ReadonlySet<string>): boolean {
+  const sourceId = issue.requestSource?.threadId;
+  return (
+    (sourceId !== undefined && treeThreadIds.has(sourceId)) ||
+    (issue.requestSource !== null && treeThreadIds.has(issue.requestSource.rootThreadId)) ||
+    issue.linkedThreadIds.some((id) => treeThreadIds.has(id))
+  );
 }
 
 function groupForKind(kind: RequestKind): ForYouGroup {
@@ -79,12 +112,8 @@ export function deriveProjectRequests(
   for (const issue of issues) {
     if (!issue.isRequest || issue.closedAt !== null || issue.status === "done") continue;
     if (issue.status === "archived") continue;
+    if (!inTree(issue, treeThreadIds)) continue;
     const sourceId = issue.requestSource?.threadId;
-    const inTree =
-      (sourceId !== undefined && treeThreadIds.has(sourceId)) ||
-      (issue.requestSource !== null && treeThreadIds.has(issue.requestSource.rootThreadId)) ||
-      issue.linkedThreadIds.some((id) => treeThreadIds.has(id));
-    if (!inTree) continue;
     const thread = (sourceId ? byId.get(sourceId as EnvironmentThreadShell["id"]) : null) ?? null;
     const kind = requestKind(issue.labels);
     const stage = issue.stage ?? "requested";
@@ -146,32 +175,99 @@ export function requestsByWorker(
   return map;
 }
 
-export interface ReleaseView {
-  /** Built and handed over, waiting for the next release batch. */
-  readonly next: ReadonlyArray<ProjectRequest>;
-  /** Shipped and waiting for Brad's test, by release (the request's milestone). */
-  readonly shipped: ReadonlyArray<{
-    readonly release: string;
-    readonly items: ReadonlyArray<ProjectRequest>;
-  }>;
+/** Built and handed over, waiting for the next release batch: derived from stages. */
+export const nextReleaseRequests = (requests: ReadonlyArray<ProjectRequest>) =>
+  requests.filter((request) => request.stage === "awaiting-release");
+
+export interface CompletedTask {
+  readonly issue: ProjectIssue;
+  readonly kind: RequestKind | null;
+  /** Shipped and waiting for Brad's test; the open request to settle. */
+  readonly toTest: ProjectRequest | null;
 }
 
-/** The Release widget, derived from request stages: no second store. */
-export function deriveRelease(requests: ReadonlyArray<ProjectRequest>): ReleaseView {
-  const next = requests.filter((request) => request.stage === "awaiting-release");
-  const byRelease = new Map<string, ProjectRequest[]>();
-  for (const request of requests) {
-    if (request.stage !== "needs-test") continue;
-    const release = request.issue.milestone?.title ?? "Unversioned";
-    byRelease.set(release, [...(byRelease.get(release) ?? []), request]);
-  }
-  return {
-    next,
-    shipped: [...byRelease]
-      .map(([release, items]) => ({ release, items }))
-      .toSorted((a, b) => b.release.localeCompare(a.release, undefined, { numeric: true })),
-  };
+export interface ReleaseGroup {
+  /** The milestone that shipped the tasks; null for work done outside a release. */
+  readonly release: string | null;
+  readonly items: ReadonlyArray<CompletedTask>;
 }
+
+/**
+ * Completed tasks by the release that shipped them, newest release first: shipped
+ * requests waiting for Brad's test, then settled or closed tasks of this project
+ * (asked in or linked to its tree, or in a release milestone). Work completed
+ * without a release comes last.
+ */
+export function deriveCompleted(
+  issues: ReadonlyArray<ProjectIssue>,
+  requests: ReadonlyArray<ProjectRequest>,
+  treeThreadIds: ReadonlySet<string>,
+): ReleaseGroup[] {
+  const byRelease = new Map<string | null, CompletedTask[]>();
+  const add = (task: CompletedTask) => {
+    const release = task.issue.milestone?.title ?? null;
+    byRelease.set(release, [...(byRelease.get(release) ?? []), task]);
+  };
+  for (const request of requests) {
+    if (request.stage === "needs-test")
+      add({ issue: request.issue, kind: request.kind, toTest: request });
+  }
+  for (const issue of issues) {
+    if (issue.status === "archived") continue;
+    if (issue.closedAt === null && issue.status !== "done") continue;
+    if (!inTree(issue, treeThreadIds) && !issue.milestone) continue;
+    add({
+      issue,
+      kind: issue.isRequest ? requestKind(issue.labels) : taskKind(issue.labels),
+      toTest: null,
+    });
+  }
+  return [...byRelease]
+    .map(([release, items]) => ({
+      release,
+      items: items.toSorted(
+        (a, b) =>
+          Number(b.toTest !== null) - Number(a.toTest !== null) ||
+          (b.issue.closedAt ?? "").localeCompare(a.issue.closedAt ?? ""),
+      ),
+    }))
+    .toSorted((a, b) =>
+      a.release === null
+        ? 1
+        : b.release === null
+          ? -1
+          : b.release.localeCompare(a.release, undefined, { numeric: true }),
+    );
+}
+
+export interface MaintenanceTask {
+  readonly issue: ProjectIssue;
+  readonly stage: ProjectRequestStage | null;
+  readonly request: ProjectRequest | null;
+}
+
+/**
+ * Open maintenance tasks that do not need Brad: requests typed maintenance still
+ * with the agents, and open tracker issues typed `ask:maintenance`.
+ */
+export function deriveMaintenance(
+  issues: ReadonlyArray<ProjectIssue>,
+  requests: ReadonlyArray<ProjectRequest>,
+): MaintenanceTask[] {
+  const tasks: MaintenanceTask[] = requests
+    .filter((request) => isMaintenanceWithAgents(request))
+    .map((request) => ({ issue: request.issue, stage: request.stage, request }));
+  for (const issue of issues) {
+    if (issue.isRequest || issue.closedAt !== null) continue;
+    if (issue.status === "done" || issue.status === "archived") continue;
+    if (taskKind(issue.labels) === "maintenance") tasks.push({ issue, stage: null, request: null });
+  }
+  return tasks;
+}
+
+/** Maintenance requests nobody needs Brad for leave the Requests list for Maintenance. */
+export const isMaintenanceWithAgents = (request: ProjectRequest) =>
+  request.kind === "maintenance" && request.forYou === null && request.stage !== "awaiting-release";
 
 /** First line of a comment, without its "Progress:" or "Test:" prefix and markdown. */
 export function latestProgressLine(body: string | null | undefined): string | null {
