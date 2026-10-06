@@ -26,6 +26,27 @@ export function parseTaskRef(value: unknown): TaskRef | null {
   return match && number > 0 ? { host: match[1]!, repository: match[2]!, number } : null;
 }
 
+/** The listed issue a task reference names, for servers that cannot send the whole task. */
+export function findListedIssue(
+  issues: ReadonlyArray<ProjectIssue>,
+  ref: TaskRef,
+): ProjectIssue | null {
+  return (
+    issues.find(
+      (issue) =>
+        issue.host === ref.host &&
+        issue.repository === ref.repository &&
+        issue.number === ref.number,
+    ) ?? null
+  );
+}
+
+/** Why the task panel is short of detail: the server predates it. `fork.26` when the version names one. */
+export function olderServerTaskNote(serverVersion: string | null): string {
+  const label = serverVersion ? (/fork\.\d+/.exec(serverVersion)?.[0] ?? serverVersion) : null;
+  return `This server is older${label ? ` (${label})` : ""}; update it to see full task details.`;
+}
+
 export interface TaskViewChild {
   readonly issue: ProjectIssue;
   readonly status: TaskStatus;
