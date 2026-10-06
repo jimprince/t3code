@@ -19,6 +19,8 @@ import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.t
 import * as ProjectService from "../project/ProjectService.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
 import * as GiteaApi from "../sourceControl/GiteaApi.ts";
+import * as ProjectDashboardStore from "../projectDashboard/ProjectDashboardStore.ts";
+import { resolveTrackerSetting } from "../projectDashboard/projectDashboard.logic.ts";
 import {
   collectThreadTree,
   deriveProjectIssueStatus,
@@ -84,6 +86,7 @@ export const make = Effect.gen(function* () {
   const settings = yield* ServerSettingsService;
   const api = yield* GiteaApi.make;
   const threadIssues = yield* ThreadIssueService.make;
+  const dashboardStore = yield* ProjectDashboardStore.make;
 
   const issueCache = new Map<string, { at: number; issues: ReadonlyArray<GiteaIssue> }>();
   const ownerCache = new Map<string, { at: number; login: string | null }>();
@@ -134,12 +137,23 @@ export const make = Effect.gen(function* () {
    */
   const repositoryForProject = (
     project: {
+      readonly id: string;
       readonly workspaceRoot: string;
       readonly repositoryIdentity?: Parameters<typeof giteaRepositoryForIdentity>[0];
     },
     instances: ReadonlyArray<GiteaInstanceConfig>,
   ) =>
     Effect.gen(function* () {
+      // An explicit tracker wins: code can live elsewhere (GitHub) while issues live on Gitea.
+      const configured = (yield* dashboardStore.read).trackers[project.id];
+      const explicit = configured ? resolveTrackerSetting(configured, instances) : null;
+      if (explicit) {
+        return {
+          instance: explicit.instance,
+          host: instanceHost(explicit.instance),
+          repository: explicit.repository,
+        };
+      }
       const direct = giteaRepositoryForIdentity(project.repositoryIdentity, instances);
       if (direct) return direct;
       const name = workspaceRepositoryName(project.workspaceRoot);
