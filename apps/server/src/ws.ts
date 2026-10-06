@@ -111,6 +111,7 @@ import {
   WsCoreRpcGroup,
   WsForkRpcGroup,
   WsRpcGroup,
+  withoutPageAgentThreads,
 } from "@t3tools/contracts";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
 import {
@@ -146,6 +147,10 @@ import {
   toShellApplicationEvent,
   type ShellApplicationEvent,
 } from "./orchestration-v2/ShellStream.ts";
+import {
+  withoutPageAgentMatches,
+  withoutPageAgentShellEvents,
+} from "./pageAgents/PageAgentVisibilityPolicy.ts";
 import { ORCHESTRATION_V2_PROJECTION_SCHEMA_VERSION } from "./orchestration-v2/ProjectionStore.ts";
 import { bufferLiveStream } from "./orchestration-v2/LiveStreamBudget.ts";
 import { coalesceThreadLiveStream } from "./orchestration-v2/ThreadLiveEventCoalescer.ts";
@@ -991,7 +996,7 @@ export const subscribeOrchestrationV2Shell = Effect.fn("ws.orchestrationV2.subsc
           const threads = yield* threadManagement.getShellSnapshot({ location: "active" });
           return buildActiveShellSnapshot({
             projects: yield* projects.listShells(),
-            threads,
+            threads: withoutPageAgentThreads(threads),
             snapshotSequence: yield* applicationEvents.latestApplicationSequence,
           });
         }),
@@ -1058,7 +1063,7 @@ export const subscribeOrchestrationV2Shell = Effect.fn("ws.orchestrationV2.subsc
     });
 
     const toShellStream = <E, R>(stream: Stream.Stream<ShellApplicationEvent, E, R>) =>
-      stream.pipe(
+      withoutPageAgentShellEvents(stream).pipe(
         Stream.groupedWithin(512, Duration.millis(50)),
         Stream.mapEffect((events) => projectShellItems(Array.from(events))),
         Stream.flatMap(Stream.fromIterable),
@@ -1785,7 +1790,7 @@ const makeWsRpcLayer = (
               schemaVersion: threads.schemaVersion,
               snapshotSequence: yield* applicationEvents.latestApplicationSequence,
               projects: yield* projectStore.listShells(),
-              threads: threads.archivedThreads,
+              threads: withoutPageAgentThreads(threads).archivedThreads,
             } as const;
           }),
         )
@@ -1950,6 +1955,7 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             ORCHESTRATION_V2_WS_METHODS.searchThreads,
             threadSearch.search(input).pipe(
+              Effect.map(withoutPageAgentMatches),
               Effect.mapError(
                 (cause) =>
                   new OrchestrationSearchThreadsError({
