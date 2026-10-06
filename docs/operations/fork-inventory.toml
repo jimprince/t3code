@@ -1428,3 +1428,19 @@ id = "socket-open-209-sidebar-drag-to-nest"
 date = "2026-10-08"
 decided = "adapt"
 rationale = "Initialize metadata explicitly in the isolated raw-SQL drag fixture after moving initialization to persistence startup."
+
+[[patch]]
+name = "fork-worker-inactivity"
+subject = "feat(t3-thread): alert supervisors when active workers go quiet"
+class = "product"
+purpose = "Offer opt-in per-subscription attention alerts after an active worker stops producing observable provider, tool, or reasoning progress."
+retire_when = "Upstream or the operator CLI provides equivalent activity-based inactivity monitoring with episode deduplication and state-safe delivery."
+depends_on = ["fork-notification-preferences"]
+roles = []
+note = "Monitoring is disabled on existing routes until explicitly enabled. A successful observation window, persisted per route, excludes network failures and sleep gaps; current-turn activity identifies one episode across watcher restart. Completed, settled, archived, input-waiting, plan-waiting, stopped and quota-held workers are excluded. Silent tools or hidden reasoning can still be working, so notices report missing evidence and never assert provider failure or perform recovery. Idle missing-result alerts are excluded because assignments do not prove an outstanding result obligation."
+
+[[patch.decision]]
+id = "v2-port-2689"
+date = "2026-10-05"
+decided = "reconcile-smaller"
+rationale = "Observe current V2 run items and their updatedAt timestamps; fresh run ids reset observations without provider restart."
