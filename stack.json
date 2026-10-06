@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "a8428489d5ca5446d53d20bd886aaa39e463d0f8",
-  "head": "d348ce397c03cb592faa7cddb26d16f5543ee6dd",
+  "prev": "7d0e5824b36eba41151ee0574fee987dd357077c",
+  "head": "f0526b2621f273d7f5023fcbaa1ecc58c18fedf8",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -62,10 +62,10 @@
     "fork-textgen-own-scope",
     "fork-dev-vm-heavy-check-gate",
     "fork-gitea-issue-links",
-    "fork-orchestrators-view"
+    "fork-orchestrators-view",
+    "fork-codex-goal-visibility"
   ],
   "unapplied": [
-    "fork-codex-goal-visibility",
     "fork-named-agents",
     "fork-project-automations",
     "fork-project-issues-board",
@@ -149,7 +149,7 @@
       "oid": "ad6047c42767884b82d35ead06deae80b259828e"
     },
     "fork-codex-goal-visibility": {
-      "oid": "0149057b3f36fb78b08292e2dfa3b18ad66c58d0"
+      "oid": "f0526b2621f273d7f5023fcbaa1ecc58c18fedf8"
     },
     "fork-conversation-fork": {
       "oid": "40a64d515cf849fe803c52acfeca6cc0f2f1d5ee"
