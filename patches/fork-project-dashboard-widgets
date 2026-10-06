@@ -1,6 +1,6 @@
-Bottom: 99e3be23c42fa0172ab21a396ec427b720d6dd4c
-Top:    48ba273b42ef59bb6f4315794b40e66b37da2121
+Bottom: aca5d74cfb5abfbe3358db9de8d688a9239d45c6
+Top:    c2ef0ad53dcb9f8e29e11afd4e38792533f2a094
 Author: brad <bradprin@live.com>
-Date:   2026-10-06 11:14:30 +0000
+Date:   2026-10-06 12:04:21 +0000
 
 feat(projects): configurable dashboard widgets
