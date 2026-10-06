@@ -1358,3 +1358,19 @@ id = "v2-port-2689"
 date = "2026-10-05"
 decided = "reconcile-smaller"
 rationale = "Keep operator route policy above V2 reads; request keys use durable runtime request ids and quota holding uses current-run failure items."
+
+[[patch]]
+name = "fork-sidebar-agent-visibility"
+subject = "feat(web): show active sub-agents in the sidebar"
+class = "product"
+purpose = "Show active nested workers on their parent's thread-list row and expand or collapse reachable child threads with remembered device-local state."
+retire_when = "Upstream provides active nested-worker counts and remembered expandable sidebar placement, or the fork stops showing nested workers."
+depends_on = ["fork-nested-threads"]
+roles = []
+note = "Expanded rows recursively render direct children at a compact 12px indent per level. Active counts include all reachable descendants, pinned siblings sort first, and branches containing activity sort before other quiet branches while preserving creation order within each group. A collapsed ancestor retains the path to the open descendant and to any pinned descendant, so a nested pin remains hierarchical instead of being duplicated in the top-level Pinned shelf. Child rows reuse ordinary sidebar status labels; a running turn is only a fallback when session state is absent, because a stopped session is authoritative over a stale running turn. An idle, unsettled parent with active descendants reads Supervising across client thread lists; settled parents keep their settled presentation while existing descendant counts and attention remain visible. The web row reserves a stable trailing status/action slot so hover controls and live labels cannot move the active-count control. The active-count control remains expand/collapse rather than introducing a separate filter mode."
+
+[[patch.decision]]
+id = "v2-port-2689-m2"
+date = "2026-10-05"
+decided = "reconcile-smaller"
+rationale = "Port supervision UI to V2 shells behind fork-owned components; preserve native lineage and run state."
