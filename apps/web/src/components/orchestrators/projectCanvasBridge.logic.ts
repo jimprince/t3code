@@ -10,11 +10,14 @@ export const CANVAS_RESULT_TYPE = "t3-canvas-result";
 const MAX_TEXT = 4_000;
 const MAX_URL = 2_000;
 
+export const CANVAS_HEIGHT = { min: 40, max: 600 } as const;
+
 export type CanvasIntent =
   | { readonly intent: "send"; readonly text: string }
   | { readonly intent: "open-thread"; readonly threadId: string }
   | { readonly intent: "open-issue"; readonly url: string }
-  | { readonly intent: "open-url"; readonly url: string };
+  | { readonly intent: "open-url"; readonly url: string }
+  | { readonly intent: "resize"; readonly height: number };
 
 export type ParsedCanvasMessage =
   | { readonly ok: true; readonly id: string | null; readonly action: CanvasIntent }
@@ -56,9 +59,36 @@ export function parseCanvasMessage(data: unknown): ParsedCanvasMessage | null {
       const url = shortString(data.url, MAX_URL);
       return url ? { ok: true, id, action: { intent, url } } : refuse("missing url");
     }
+    case "resize": {
+      const { height } = data;
+      return typeof height === "number" && Number.isFinite(height)
+        ? { ok: true, id, action: { intent, height: clampCanvasHeight(height) } }
+        : refuse("resize needs a finite height in pixels");
+    }
     default:
       return refuse("unknown intent");
   }
+}
+
+/** A frame height as a whole number of pixels within the allowed range. */
+export function clampCanvasHeight(height: number): number {
+  return Math.min(CANVAS_HEIGHT.max, Math.max(CANVAS_HEIGHT.min, Math.round(height)));
+}
+
+/** Host-side storage key for the last height a canvas set on this device. */
+export function canvasHeightKey(
+  environmentId: string,
+  rootThreadId: string,
+  canvasId: string,
+): string {
+  return `t3code:canvas-height:${environmentId}:${rootThreadId}:${canvasId}`;
+}
+
+/** A stored height back to pixels; null when absent or not a valid height. */
+export function readStoredCanvasHeight(raw: string | null): number | null {
+  if (raw === null || !/^\d+$/.test(raw)) return null;
+  const height = Number(raw);
+  return height >= CANVAS_HEIGHT.min && height <= CANVAS_HEIGHT.max ? height : null;
 }
 
 /** An http(s) URL on one of Brad's known hosts, normalized; null otherwise. */
@@ -97,10 +127,17 @@ export function hostsOf(urls: ReadonlyArray<string>): Set<string> {
 
 export const RATE_LIMIT = { count: 5, windowMs: 10_000 } as const;
 
+/** Resizes have their own, lighter budget so they never use up the actions' one. */
+export const RESIZE_RATE_LIMIT = { count: 10, windowMs: 10_000 } as const;
+
 /** Sliding-window limit per frame: true when one more intent is allowed now. */
-export function takeRateSlot(history: number[], now: number): boolean {
-  while (history.length > 0 && now - history[0]! >= RATE_LIMIT.windowMs) history.shift();
-  if (history.length >= RATE_LIMIT.count) return false;
+export function takeRateSlot(
+  history: number[],
+  now: number,
+  limit: { readonly count: number; readonly windowMs: number } = RATE_LIMIT,
+): boolean {
+  while (history.length > 0 && now - history[0]! >= limit.windowMs) history.shift();
+  if (history.length >= limit.count) return false;
   history.push(now);
   return true;
 }
