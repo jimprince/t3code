@@ -348,6 +348,7 @@ const AGENT_COMMAND_ALIASES = new Set([
   "revise",
   "complete",
   "interrupt",
+  "session",
   "wait",
   "result",
   "ack",
@@ -2486,6 +2487,32 @@ agent
       agent: savedAgent.name,
       threadId: savedAgent.threadId,
       interrupted: true,
+    });
+  });
+
+const agentSession = agent
+  .command("session")
+  .description("Repair a thread's provider session state");
+
+agentSession
+  .command("reconcile")
+  .description(
+    "Clear a session that still reports a running turn after that turn ended (interrupted or completed)",
+  )
+  .argument("<name>", "agent name or raw thread UUID")
+  .action(async (name) => {
+    const { agent: savedAgent, client, saved } = await withAgent(name);
+    await client.reconcileSession(savedAgent.threadId);
+    const thread = await client.findThread(savedAgent.threadId);
+    const status = classifyThread(thread);
+    printJson({
+      agent: saved ? savedAgent.name : null,
+      threadId: savedAgent.threadId,
+      environment: savedAgent.environment,
+      reconciled: true,
+      state: status.state,
+      reason: status.reason,
+      session: thread.session,
     });
   });
 
