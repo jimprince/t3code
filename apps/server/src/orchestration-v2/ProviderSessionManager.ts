@@ -179,6 +179,7 @@ export interface ProviderSessionManagerV2Shape {
   readonly release: (input: {
     readonly providerSessionId: ProviderSessionId;
     readonly reason: ProviderSessionReleaseReason;
+    readonly onlyIfIdleBeforeMs?: number;
     readonly detail?: string;
   }) => Effect.Effect<void, ProviderSessionManagerV2Error>;
   readonly detach: (input: {
@@ -858,6 +859,7 @@ export const layerWithOptions = (
       const removeLiveEntry = (input: {
         readonly providerSessionId: ProviderSessionId;
         readonly onlyIfIdleGeneration?: number;
+        readonly onlyIfIdleBeforeMs?: number;
       }): Effect.Effect<readonly [Option.Option<LiveSessionEntry>, DateTime.Utc]> =>
         Effect.gen(function* () {
           const key = sessionKey(input.providerSessionId);
@@ -870,6 +872,12 @@ export const layerWithOptions = (
               const existing = current.get(key);
               if (existing !== candidate) {
                 return [existing === undefined ? "gone" : "changed", current] as const;
+              }
+              if (
+                input.onlyIfIdleBeforeMs !== undefined &&
+                (existing.busyCount > 0 || existing.lastActivityAtMs > input.onlyIfIdleBeforeMs)
+              ) {
+                return ["kept", current] as const;
               }
               if (
                 input.onlyIfIdleGeneration !== undefined &&
@@ -938,6 +946,7 @@ export const layerWithOptions = (
         readonly detail?: string;
         readonly cancelIdleFiber?: boolean;
         readonly onlyIfIdleGeneration?: number;
+        readonly onlyIfIdleBeforeMs?: number;
         readonly gracefulSubscribers?: boolean;
       }) =>
         Effect.acquireUseRelease(
