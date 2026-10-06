@@ -242,6 +242,7 @@ import * as RequestLedger from "./projectIssues/RequestLedger.ts";
 import * as ProjectDashboardService from "./projectDashboard/ProjectDashboardService.ts";
 import * as ProjectDashboardStore from "./projectDashboard/ProjectDashboardStore.ts";
 import * as ProjectLayoutService from "./projectLayout/ProjectLayoutService.ts";
+import * as RequestIntake from "./projectIssues/RequestIntake.ts";
 import * as ProjectRoadmapService from "./projectRoadmap/ProjectRoadmapService.ts";
 import * as ProjectCanvasService from "./projectCanvas/ProjectCanvasService.ts";
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
@@ -1343,6 +1344,9 @@ const layerWsRpc = (
       const projectIssues = yield* ProjectIssuesService.make;
       const requestLedger = yield* RequestLedger.make({ projectIssues, threadIssues });
       const projectCanvas = yield* ProjectCanvasService.make;
+      const requestIntake = yield* RequestIntake.make({
+        providers: providerRegistry,
+      }).pipe(Effect.provideService(Crypto.Crypto, crypto));
       const projectRoadmap = yield* ProjectRoadmapService.make({
         ledger: requestLedger,
         projectIssues,
@@ -2516,6 +2520,7 @@ const layerWsRpc = (
           ),
         [WS_METHODS.projectIssuesList]: (input) => projectIssues.list(input).pipe(Effect.flatMap((result) => requestLedger.decorate(result, input.rootThreadId))),
         [WS_METHODS.projectRequestsSettle]: (input) => requestLedger.settle(input),
+        [WS_METHODS.projectRequestsStartIntake]: (input) => requestIntake.start(input),
         [WS_METHODS.projectRequestsSubmit]: (input) => requestLedger.submit(input),
         [WS_METHODS.projectRequestsCreate]: (input) => requestLedger.create(input),
         [WS_METHODS.projectRequestsUpdate]: (input) => requestLedger.update(input),
