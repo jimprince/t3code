@@ -1,6 +1,5 @@
 import * as NodeCrypto from "node:crypto";
 
-import * as Schema from "effect/Schema";
 import type { Command } from "commander";
 import { RemoteEnvironmentClient } from "./client.js";
 import { loadState, requireEnvironment } from "./state.js";
@@ -21,19 +20,24 @@ type Options = {
   paused?: boolean;
 };
 
-const decodeDefinition = <T>(definition: T) => definition;
-
 function definition(options: Options) {
   if (options.thread && options.newThread) throw new Error("Choose --thread or --new-thread.");
+  if (!["hourly", "daily", "weekly"].includes(options.schedule))
+    throw new Error("Choose an hourly, daily, or weekly schedule.");
+  if (!/^([01]?\d|2[0-3]):[0-5]\d$/.test(options.time))
+    throw new Error("Time must be HH:MM in the 24-hour clock.");
+  // Intl validates IANA zones using the same runtime that interprets the schedule.
+  new Intl.DateTimeFormat("en", { timeZone: options.timezone });
   const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
   const day = days.indexOf(options.day.toLowerCase().slice(0, 3));
+  if (options.schedule === "weekly" && day < 0) throw new Error("Invalid weekly day.");
   const schedule =
     options.schedule === "hourly"
       ? { kind: "hourly", timeZone: options.timezone }
       : options.schedule === "daily"
         ? { kind: "daily", time: options.time, timeZone: options.timezone }
         : { kind: options.schedule, time: options.time, day, timeZone: options.timezone };
-  return decodeDefinition({
+  return {
     id: NodeCrypto.randomUUID(),
     name: options.name,
     prompt: options.prompt,
@@ -43,7 +47,7 @@ function definition(options: Options) {
       : { kind: "new-thread" },
     enabled: !options.paused,
     ...(options.ownerThread ? { ownerThreadId: options.ownerThread } : {}),
-  });
+  };
 }
 
 /** Registers project automation operations against the same server commands as the clients. */
