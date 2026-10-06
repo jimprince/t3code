@@ -1,5 +1,7 @@
+import { makeNestingService } from "../../../forkThreads/NestingService.ts";
+import * as SqlClient from "effect/sql/SqlClient";
 import {
-  type CommandId,
+  CommandId,
   type RuntimeRequestId,
   ThreadId,
   type OrchestrationV2ThreadProjection,
@@ -295,9 +297,39 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
       targetRunId: input.targetRunId,
     })),
   ),
-  t3_thread_organize: writesThread((input) =>
+  t3_thread_organize: McpToolAccess.writesThreads(
+    (input) => [input.threadId, ...(input.action === "nest" ? [input.parentThreadId] : [])],
+    (input) =>
     Effect.gen(function* () {
-      const { threads, projection, caller } = yield* readThread(input.threadId);
+      const { threads, projection, scope, caller } = yield* readThread(input.threadId);
+      if (input.action === "nest" || input.action === "unnest") {
+        if (input.action === "nest" && input.parentThreadId === undefined)
+          return yield* new OrchestratorMcpFailure({
+            code: "invalid_request",
+            message: "nest requires parentThreadId.",
+          });
+        if (input.action === "nest") yield* readThread(input.parentThreadId);
+        const sql = yield* SqlClient.SqlClient;
+        const nesting = yield* makeNestingService(sql, threads.getThreadShell, threads.dispatch);
+        const commandId =
+          input.clientRequestId === undefined
+            ? yield* newCommandId()
+            : CommandId.make(`mcp:${scope.requestNamespace}:organize:${input.clientRequestId}`);
+        const metadata = yield* nesting
+          .update({
+            commandId,
+            threadId: projection.thread.id,
+            parentThreadId: input.action === "nest" ? input.parentThreadId! : null,
+            remoteParent: null,
+          })
+          .pipe(
+            Effect.mapError(
+              (cause) =>
+                new OrchestratorMcpFailure({ code: "invalid_request", message: String(cause) }),
+            ),
+          );
+        return { metadata };
+      }
       const common = { commandId: yield* newCommandId(), threadId: projection.thread.id };
       if (input.action === "settle") {
         return yield* threads
