@@ -1,5 +1,8 @@
 import { WS_METHODS } from "@t3tools/contracts";
-import { createEnvironmentRpcQueryAtomFamily } from "@t3tools/client-runtime/state/runtime";
+import {
+  createEnvironmentRpcCommand,
+  createEnvironmentRpcQueryAtomFamily,
+} from "@t3tools/client-runtime/state/runtime";
 
 import { connectionAtomRuntime } from "../connection/runtime";
 
@@ -10,4 +13,10 @@ export const projectIssuesQuery = createEnvironmentRpcQueryAtomFamily(connection
   staleTimeMs: 30_000,
   refreshIntervalMs: 60_000,
   idleTtlMs: 0,
+});
+
+/** Brad settles a request: the server closes its issue. */
+export const settleProjectRequest = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "environment-data:project-requests:settle",
+  tag: WS_METHODS.projectRequestsSettle,
 });
