@@ -227,6 +227,38 @@ describe("automation operator commands", () => {
     ]);
   });
 
+  it("re-owns an automation without touching its result modes", async () => {
+    const existing = {
+      id: "a1",
+      projectId: "project-1",
+      name: "Digest",
+      enabled: true,
+      ownerThreadId: "old-orchestrator",
+      triggers: [{ type: "schedule", schedule: { kind: "daily", time: "09:00", timeZone: "UTC" } }],
+      actions: [
+        {
+          type: "agent",
+          prompt: "Summarize",
+          resultMode: "review",
+          target: { kind: "new-thread" },
+        },
+      ],
+      nextRunAt: null,
+      createdAt: "2026-10-01T00:00:00.000Z",
+      updatedAt: "2026-10-01T00:00:00.000Z",
+    };
+    const h = harness([], [existing]);
+    await h.run(["automation", "edit", "a1", "--owner-thread", "new-orchestrator"]);
+    expect(h.calls.at(-1)).toEqual({
+      method: "automationsSave",
+      input: expect.objectContaining({
+        ownerThreadId: "new-orchestrator",
+        actions: [expect.objectContaining({ resultMode: "review" })],
+      }),
+    });
+    await expect(h.run(["automation", "edit", "a1"])).rejects.toThrow(/--owner-thread/);
+  });
+
   it("rejects editing an automation that does not exist", async () => {
     const h = harness();
     await expect(h.run(["automation", "edit", "missing", "--result-mode", "act"])).rejects.toThrow(

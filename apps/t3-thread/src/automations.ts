@@ -215,15 +215,18 @@ export function registerAutomationCommands(
     .action((options: Options) => call(options.env, "automationsSave", definition(options)));
   automation
     .command("edit")
-    .description("Change an existing automation's result mode")
+    .description("Change an existing automation's result mode or owner")
     .argument("<id>", "automation id")
     .requiredOption("--env <name>")
     .option("--project <id>", "accepted for compatibility")
-    .requiredOption(
+    .option(
       "--result-mode <mode>",
       "review, file-only, file-and-settle, or act, applied to every action",
     )
+    .option("--owner-thread <id>", "orchestrator whose Projects page shows it")
     .action(async (id: string, options: Options) => {
+      if (!options.resultMode && !options.ownerThread)
+        throw new Error("Pass --result-mode, --owner-thread, or both.");
       const automations = (
         await (
           await client(options.env)
@@ -239,12 +242,13 @@ export function registerAutomationCommands(
           projectId: current.projectId,
           name: current.name,
           enabled: current.enabled,
-          ...(current.ownerThreadId ? { ownerThreadId: current.ownerThreadId } : {}),
+          ...((options.ownerThread ?? current.ownerThreadId)
+            ? { ownerThreadId: options.ownerThread ?? current.ownerThreadId }
+            : {}),
           triggers: current.triggers,
-          actions: current.actions.map((action) => ({
-            ...action,
-            resultMode: options.resultMode,
-          })),
+          actions: options.resultMode
+            ? current.actions.map((action) => ({ ...action, resultMode: options.resultMode }))
+            : current.actions,
         }),
       );
     });
