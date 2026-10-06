@@ -12,6 +12,7 @@ import {
   requestKind,
   requestsByWorker,
   requestsOfSettledThreads,
+  answerSentences,
   sentRequestStatus,
   taskKind,
 } from "./projectRequests.logic";
@@ -51,6 +52,12 @@ function thread(overrides: Record<string, unknown> = {}): EnvironmentThreadShell
 
 const tree = new Set(["root", "worker"]);
 
+const answer = {
+  text: "Its actions: service calls or scripts. Triggers start it, conditions gate it.",
+  askedAt: "2026-10-04T10:00:00.000Z",
+  answeredAt: "2026-10-04T10:05:00.000Z",
+};
+
 describe("deriveProjectRequests", () => {
   it("puts a request the agent marked ready in Brad's group for its kind", () => {
     const [question, plan] = deriveProjectRequests(
@@ -66,14 +73,10 @@ describe("deriveProjectRequests", () => {
     expect(plan?.forYou).toBe("approve");
   });
 
-  it("treats a thread reply after the request as ready even before the agent marks it", () => {
+  it("treats the thread's answer to the request as ready even before the agent marks it", () => {
     const [item] = deriveProjectRequests(
-      [request(1, { labels: ["ask", "ask:deliverable"] })],
-      [
-        thread({
-          latestRun: { status: "completed", completedAt: "2026-10-04T11:00:00.000Z" },
-        }),
-      ],
+      [request(1, { labels: ["ask", "ask:deliverable"], answer })],
+      [thread()],
       tree,
       NOW,
     );
@@ -295,31 +298,20 @@ describe("latestProgressLine", () => {
 });
 
 describe("thread replied", () => {
-  const replied = thread({
-    latestRun: { status: "completed", completedAt: "2026-10-04T11:00:00.000Z" },
-  });
+  const fromRoot = {
+    threadId: "root" as never,
+    rootThreadId: "root" as never,
+    messageId: "m",
+  };
 
-  it("ignores replies once a request is in progress, and the orchestrator's replies to non-questions", () => {
+  it("ignores answers once a request is in progress, and the orchestrator's replies to non-questions", () => {
     const items = deriveProjectRequests(
       [
-        request(1, { stage: "in-progress", labels: ["ask", "ask:change"] }),
-        request(2, {
-          labels: ["ask", "ask:change"],
-          requestSource: {
-            threadId: "root" as never,
-            rootThreadId: "root" as never,
-            messageId: "m",
-          },
-        }),
-        request(3, {
-          requestSource: {
-            threadId: "root" as never,
-            rootThreadId: "root" as never,
-            messageId: "m",
-          },
-        }),
+        request(1, { stage: "in-progress", labels: ["ask", "ask:change"], answer }),
+        request(2, { labels: ["ask", "ask:change"], requestSource: fromRoot, answer }),
+        request(3, { requestSource: fromRoot, answer }),
       ],
-      [replied, { ...replied, id: "root" } as never],
+      [thread(), thread({ id: "root" })],
       tree,
       NOW,
       "root",
@@ -328,6 +320,32 @@ describe("thread replied", () => {
       [1, null],
       [2, null],
       [3, "answers"],
+    ]);
+  });
+
+  // Regression (fork.26 flicker): the page swapped a question between Needs you and
+  // the Requests list every time the orchestrator started or finished another turn.
+  it("keeps each request in one group whatever its thread is doing", () => {
+    const issues = [
+      request(1, { requestSource: fromRoot, answer }),
+      request(2, { requestSource: fromRoot }),
+    ];
+    const states = [
+      thread({ id: "root", runtime: { status: "running" }, latestRun: { status: "running" } }),
+      thread({
+        id: "root",
+        runtime: { status: "idle" },
+        latestRun: { status: "completed", completedAt: "2026-10-04T11:30:00.000Z" },
+      }),
+      thread({ id: "root", pendingBackgroundTasks: [{}] }),
+    ];
+    const groups = states.map((root) =>
+      deriveProjectRequests(issues, [root], tree, NOW, "root").map((item) => item.forYou),
+    );
+    expect(groups).toEqual([
+      ["answers", null],
+      ["answers", null],
+      ["answers", null],
     ]);
   });
 });
@@ -409,5 +427,14 @@ describe("sent from the request box", () => {
   it("says pending filing while Gitea is down, and nothing more before filing", () => {
     expect(sentRequestStatus("m1", [], [{ messageId: "m1" }])).toEqual({ state: "pending" });
     expect(sentRequestStatus("m1", [filed(5, "m2")], [])).toEqual({ state: "filing" });
+  });
+});
+
+describe("answer sentences", () => {
+  it("keeps up to three whole sentences without markdown and never adds an ellipsis", () => {
+    expect(
+      answerSentences("**Yes.** It runs `nightly`. Then it posts.\n\nMore detail here. And more."),
+    ).toBe("Yes. It runs nightly. Then it posts.");
+    expect(answerSentences("Short answer without a period")).toBe("Short answer without a period");
   });
 });
