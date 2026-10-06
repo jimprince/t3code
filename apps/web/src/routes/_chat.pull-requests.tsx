@@ -24,9 +24,10 @@ import type {
   SourceControlProviderKind,
 } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   ArrowDownUpIcon,
+  ArrowLeftIcon,
   CalendarArrowDownIcon,
   CalendarArrowUpIcon,
   ChevronDownIcon,
@@ -169,6 +170,7 @@ import { Separator } from "~/components/ui/separator";
 import { primaryServerKeybindingsAtom } from "~/state/server";
 import { getSourceControlPresentationForKind } from "~/sourceControlPresentation";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
+import { isProjectPullRequestDetail } from "~/components/orchestrators/projectNavigation";
 
 function getShortcutContext() {
   return {
@@ -356,6 +358,12 @@ function PullRequestsRouteView() {
   const speedMode =
     modifiers.shiftKey && !modifiers.metaKey && !modifiers.ctrlKey && !modifiers.altKey;
   const search = Route.useSearch();
+  const projectReturn = useLocation({ select: (location) => location.state.projectReturn });
+  const projectDetailMode = isProjectPullRequestDetail(
+    projectReturn,
+    search.repository,
+    search.number,
+  );
   const sort = search.sort ?? "ready";
   const statsPolicy: PullRequestStatsPolicy =
     sort === "ready" || sort === "largest" || sort === "smallest" ? "eager" : "visible";
@@ -2233,11 +2241,12 @@ function PullRequestsRouteView() {
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none">
       <div className="relative flex min-h-0 flex-1">
         {pullRequestsSupported && rightPanelPresent ? openPanelControls : null}
-        <PullRequestsColumn {...columnProps} />
+        {projectDetailMode ? null : <PullRequestsColumn {...columnProps} />}
 
         {rightPanelPresent && renderedPullRequestSurface && panelEnvironmentId !== null ? (
           <RightPanelTabs
             mode="inline"
+            maximized={projectDetailMode}
             open={rightPanelState.isOpen}
             widthStorageKey="t3code:pull-request-panel-width"
             // Default to roughly half the viewport: the PR list needs more
@@ -2281,6 +2290,23 @@ function PullRequestsRouteView() {
             pullRequestsAvailable={false}
             deviceAvailable={false}
             pullRequestStatusSeeds={listedPullRequestTabStatuses}
+            layoutControls={
+              projectReturn ? (
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Back to project"
+                  onClick={() =>
+                    void navigate({
+                      to: "/orchestrators/$environmentId/$threadId",
+                      params: projectReturn,
+                    })
+                  }
+                >
+                  <ArrowLeftIcon />
+                </Button>
+              ) : null
+            }
           >
             <PullRequestDetailPanel
               getShortcutContext={getShortcutContext}
