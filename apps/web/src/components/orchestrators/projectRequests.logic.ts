@@ -99,6 +99,8 @@ export function deriveProjectRequests(
   treeThreadIds: ReadonlySet<string>,
   now: number,
   rootThreadId?: string,
+  /** Also list requests saved for later (the layout's Include Later setting). */
+  includeLater = false,
 ): ProjectRequest[] {
   const byId = new Map(threads.map((thread) => [thread.id, thread]));
   const requests: ProjectRequest[] = [];
@@ -111,7 +113,7 @@ export function deriveProjectRequests(
     const kind = requestKind(issue.labels);
     const stage = issue.stage ?? "requested";
     // Saved for later: it waits on the roadmap, not in Brad's request list.
-    if (stage === "requested" && isParked(issue)) continue;
+    if (stage === "requested" && isParked(issue) && !includeLater) continue;
     const withAgents = stage === "requested" || stage === "in-progress";
     // A reply after the request counts as an answer only while nobody has picked it
     // up; the orchestrator's own replies usually mean "on it", so from it only a
@@ -249,12 +251,13 @@ export interface MaintenanceTask {
 export function deriveMaintenance(
   issues: ReadonlyArray<ProjectIssue>,
   requests: ReadonlyArray<ProjectRequest>,
+  includeLater = false,
 ): MaintenanceTask[] {
   const tasks: MaintenanceTask[] = requests
     .filter((request) => isMaintenanceWithAgents(request))
     .map((request) => ({ issue: request.issue, stage: request.stage, request }));
   for (const issue of issues) {
-    if (issue.isRequest || issue.closedAt !== null || isParked(issue)) continue;
+    if (issue.isRequest || issue.closedAt !== null || (isParked(issue) && !includeLater)) continue;
     if (issue.status === "done" || issue.status === "archived") continue;
     if (taskKind(issue.labels) === "maintenance") tasks.push({ issue, stage: null, request: null });
   }
