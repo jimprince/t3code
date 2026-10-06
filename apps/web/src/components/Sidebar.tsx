@@ -103,6 +103,7 @@ import {
   EyeIcon,
   FolderIcon,
   GitBranchIcon,
+  ListIcon,
   MessageCircleQuestionIcon,
   PinIcon,
   PinOffIcon,
@@ -112,6 +113,7 @@ import {
   SquarePenIcon,
   TerminalIcon,
   Undo2Icon,
+  UsersIcon,
   XIcon,
 } from "lucide-react";
 import {
@@ -198,6 +200,8 @@ import { cn } from "~/lib/utils";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { ProjectEnvironmentBadge } from "./ProjectEnvironmentBadge";
 import { ThreadIssueBadges } from "./ThreadIssueBadges";
+import { OrchestratorSidebarList } from "./orchestrators/OrchestratorSidebarList";
+import { useThreadsVisibleInThreadsMode } from "./orchestrators/useOrchestratorThreads";
 import { buildDraftActionMenuItems, buildThreadActionMenuItems } from "./threadActionMenu.logic";
 import {
   animateSidebarLayoutChanges,
@@ -309,6 +313,7 @@ const SETTLED_TAIL_PAGE_COUNT = 25;
 const SETTLED_SHELF_EXPANDED_KEY = "t3code:sidebar:settled-expanded";
 const SNOOZED_SHELF_EXPANDED_KEY = "t3code:sidebar:snoozed-expanded";
 const WORKING_SHELF_EXPANDED_KEY = "t3code:sidebar:working-expanded";
+const SIDEBAR_MODE_SCHEMA = Schema.Literals(["threads", "orchestrators"]);
 
 // Working beta: when this client saw each thread leave the Working shelf.
 // Module scope keeps the inbox order across routes that unmount the sidebar.
@@ -2454,7 +2459,7 @@ export default function Sidebar() {
     [projects],
   );
   const projectOrder = useUiStateStore((store) => store.projectOrder);
-  const threads = useThreadShells();
+  const allThreads = useThreadShells();
 
   const attentionForest = useSupervisionForest();
   const childInputAttention = useMemo(
@@ -2470,6 +2475,14 @@ export default function Sidebar() {
   const sidebarProjectSortOrder = useClientSettings((s) => s.sidebarProjectSortOrder);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
   const workingShelfEnabled = useClientSettings((s) => s.sidebarWorkingShelfEnabled);
+  const orchestratorsEnabled = useClientSettings((s) => s.sidebarOrchestratorsEnabled);
+  const threads = useThreadsVisibleInThreadsMode(allThreads, orchestratorsEnabled);
+  const [sidebarMode, setSidebarMode] = useLocalStorage(
+    "t3code:sidebar:mode",
+    "threads" as const,
+    SIDEBAR_MODE_SCHEMA,
+  );
+  const showOrchestrators = orchestratorsEnabled && sidebarMode === "orchestrators";
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const {
     settleThread,
@@ -5030,7 +5043,36 @@ export default function Sidebar() {
           // Lifted above the stage backdrop, whose fade bleeds below the
           // header and would otherwise paint across the search row's outline.
           <SidebarGroup className="z-[1]">
+            {orchestratorsEnabled ? (
+              <div className="mx-2 mb-1 grid grid-cols-2 rounded-md bg-accent p-0.5 text-xs font-medium">
+                <button
+                  type="button"
+                  aria-pressed={!showOrchestrators}
+                  className={cn(
+                    "flex h-7 cursor-pointer items-center justify-center gap-1.5 rounded-sm text-sidebar-muted-foreground",
+                    !showOrchestrators && "bg-sidebar text-sidebar-foreground",
+                  )}
+                  onClick={() => setSidebarMode("threads")}
+                >
+                  <ListIcon className="size-3.5" />
+                  Threads
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={showOrchestrators}
+                  className={cn(
+                    "flex h-7 cursor-pointer items-center justify-center gap-1.5 rounded-sm text-sidebar-muted-foreground",
+                    showOrchestrators && "bg-sidebar text-sidebar-foreground",
+                  )}
+                  onClick={() => setSidebarMode("orchestrators")}
+                >
+                  <UsersIcon className="size-3.5" />
+                  Projects
+                </button>
+              </div>
+            ) : null}
             <SidebarThreadHeader
+              hidden={showOrchestrators}
               searchFieldRef={headerSearchRef}
               hasProjects={projectGroups.length > 0}
               projectScope={
@@ -5066,7 +5108,8 @@ export default function Sidebar() {
         }
       >
         <SidebarGroup className="flex-1" role="presentation">
-          {isSearchingThreads ? (
+          {showOrchestrators ? <OrchestratorSidebarList /> : null}
+          {!showOrchestrators && isSearchingThreads ? (
             threadSearchResults.length > 0 ? (
               <TooltipProvider
                 key="sidebar-thread-search-tooltips-150"
@@ -5133,7 +5176,7 @@ export default function Sidebar() {
               </p>
             )
           ) : null}
-          {!isSearchingThreads ? (
+          {!showOrchestrators && !isSearchingThreads ? (
             <TooltipProvider
               key="sidebar-thread-tooltips-150"
               delay={150}
@@ -5546,7 +5589,8 @@ export default function Sidebar() {
               </DndContext>
             </TooltipProvider>
           ) : null}
-          {!isSearchingThreads &&
+          {!showOrchestrators &&
+          !isSearchingThreads &&
           visibleDraftSessionCount === 0 &&
           pinnedThreads.length +
             activeThreads.length +
