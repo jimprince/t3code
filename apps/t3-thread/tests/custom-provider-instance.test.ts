@@ -9,10 +9,14 @@ const CUSTOM_INSTANCE_ID = "claudeAgent_ucalgary";
 // and must not be rejected by the operator CLI's snapshot contracts.
 describe("custom provider instance ids", () => {
   it("decodes a shell snapshot thread selecting a custom provider instance", async () => {
-    const item = decodeShellSnapshotItem(shellSnapshot([shell({
-      providerInstanceId: CUSTOM_INSTANCE_ID,
-      modelSelection: { instanceId: CUSTOM_INSTANCE_ID, model: "claude-opus-5" },
-    })]));
+    const item = decodeShellSnapshotItem(
+      shellSnapshot([
+        shell({
+          providerInstanceId: CUSTOM_INSTANCE_ID,
+          modelSelection: { instanceId: CUSTOM_INSTANCE_ID, model: "claude-opus-5" },
+        }),
+      ]),
+    );
 
     expect(item.kind).toBe("snapshot");
     if (item.kind !== "snapshot") {
