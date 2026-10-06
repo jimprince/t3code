@@ -1,0 +1,4 @@
+id = "decision-context-media"
+category = "feature"
+functionality = "projects"
+text = "Decisions show their links and pictures: links in a decision open in a new tab, embedded images appear as thumbnails that open full size (private Gitea uploads load through your server), and long context folds behind More, in Decisions, Needs you and the mobile app."
