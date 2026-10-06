@@ -435,6 +435,12 @@ describe("needs you", () => {
     expect(groups.map((group) => group.requests.map((item) => item.issue.number))).toEqual([
       [1, 2],
     ]);
+    expect(groups[0]?.title).toBe(settled.title);
+    // One request: its own title, not the intake thread's raw "Intake: Hey..." name.
+    const single = requestsOfSettledThreads(
+      deriveProjectRequests([request(1, { stage: "in-progress" })], [settled], tree, NOW, "root"),
+    );
+    expect(single[0]?.title).toBe("Request 1");
     expect(
       requestsOfSettledThreads(deriveProjectRequests([request(3)], [thread()], tree, NOW)),
     ).toEqual([]);
