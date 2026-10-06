@@ -1571,3 +1571,19 @@ note = "Nesting entry points keep V1 parity: thread menus, the command palette a
 id = "v2-port-2689-m2"
 decision = "keep-on-top"
 note = "V2 supervision metadata is separate from native execution lineage; retained behavior and import coverage are recorded in the nesting lane report. Runtime V1 reads are confined to fork-owned legacy readers. ForkMigrations is allowed alongside upstream Migrations solely for shipped schema history: migrations 006 and 012 must preserve idempotent V1 parent-column upgrades."
+
+[[patch]]
+name = "fork-queue-coalesced-notes"
+subject = "feat(threads): let workers replace their own queued status notes"
+class = "product"
+purpose = "Keep a coordinator's send queue from flooding with its workers' progress notes: a sender can mark a recurring note with a coalesce key so a newer note replaces its still-waiting predecessor, and the queue can be summarized by target and sender."
+retire_when = "Upstream or maintained shared tooling provides equivalent supersession for queued thread messages, or workers stop reporting to parents through queued sends."
+depends_on = ["fork-worker-operations"]
+roles = []
+note = "Opt-in only: a send without a key is never dropped or merged, and the replacement is scoped to the same sender, target thread, environment and key. A send a watcher has already claimed is not replaced. The replaced record stays in state as cancelled with the superseding id, so the queue listing explains what happened. --progress is shorthand for the key progress."
+
+[[patch.decision]]
+id = "v2-port-2689"
+date = "2026-10-05"
+decided = "reconcile-smaller"
+rationale = "Retain keyed waiting-note replacement under the local state lock with sender/environment isolation, dispatch through V2 native receipts and preserve unkeyed commands."
