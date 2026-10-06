@@ -158,6 +158,10 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   /** Server persists manual Active order through thread.active.reorder. */
   threadActiveReorder: Schema.optionalKey(Schema.Boolean),
   threadOrderReset: Schema.optionalKey(Schema.Boolean),
+  threadNesting: Schema.optionalKey(Schema.Boolean),
+  /** Server nests a thread under `parentThreadId` when `orchestration.launchThread` creates it. Absent on older servers, which ignore the field, so clients nest after the launch instead. */
+  launchThreadParent: Schema.optionalKey(Schema.Boolean),
+  remoteThreadNesting: Schema.optionalKey(Schema.Boolean),
   /** Server understands thread.auto-settle.set (per-thread auto-settle off).
       Same version-skew contract as threadSettlement. */
   threadAutoSettleOptOut: Schema.optionalKey(Schema.Boolean),
