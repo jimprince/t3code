@@ -180,6 +180,13 @@ import {
   timelineContentOverflowsViewport,
 } from "./timelineScrollAnchoring";
 import { MessageCopyButton } from "./MessageCopyButton";
+import {
+  buildMessageForkContextMenuItems,
+  shouldClaimMessageForkContextMenu,
+  type MessageForkAnchor,
+  type MessageForkWorkspaceMode,
+} from "./forkConversation.logic";
+import { readLocalApi } from "../../localApi";
 import { PierreEntryIcon } from "./PierreEntryIcon";
 import { inferEntryKindFromPath } from "../../pierre-icons";
 import { AssistantSelectionToolbar } from "./AssistantSelectionToolbar";
@@ -313,6 +320,9 @@ interface TimelineRowSharedState {
   onRevertToTurnCount: (targetTurnCount: number, messageId: MessageId) => void;
   onUseArtifactTemplate: (template: CodexArtifactTemplate) => void;
   onRunShellCommand: ((command: string) => void) | undefined;
+  onForkMessage: ((messageId: MessageId, workspaceMode: MessageForkWorkspaceMode) => void) | null;
+  messageForkAnchors: ReadonlyMap<MessageId, MessageForkAnchor>;
+  canForkToNewWorktree: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   displayThreadKey?: string;
   onOpenTurnDiff: (runId: RunId, filePath?: string) => void;
@@ -462,6 +472,9 @@ interface MessagesTimelineProps {
   onRevertToTurnCount: (targetTurnCount: number, messageId: MessageId) => void;
   onUseArtifactTemplate?: (template: CodexArtifactTemplate) => void;
   onRunShellCommand?: (command: string) => void;
+  onForkMessage?: (messageId: MessageId, workspaceMode: MessageForkWorkspaceMode) => void;
+  messageForkAnchors?: ReadonlyMap<MessageId, MessageForkAnchor>;
+  canForkToNewWorktree?: boolean;
   isRevertingCheckpoint: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onFileOpen?: (attachment: ChatFileAttachment) => void;
@@ -538,6 +551,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   onRevertToTurnCount,
   onUseArtifactTemplate = NOOP_USE_ARTIFACT_TEMPLATE,
   onRunShellCommand,
+  onForkMessage,
+  messageForkAnchors = EMPTY_MESSAGE_FORK_ANCHORS,
+  canForkToNewWorktree = false,
   isRevertingCheckpoint,
   onImageExpand,
   onFileOpen = NOOP_OPEN_ATTACHMENT,
@@ -1177,6 +1193,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       activeThreadEnvironmentId,
       onRevertToTurnCount,
       onRunShellCommand,
+      onForkMessage: onForkMessage ?? null,
+      messageForkAnchors,
+      canForkToNewWorktree,
       onImageExpand,
       onFileOpen,
       onUseArtifactTemplate,
@@ -1213,6 +1232,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       activeThreadEnvironmentId,
       onRevertToTurnCount,
       onRunShellCommand,
+      onForkMessage,
+      messageForkAnchors,
+      canForkToNewWorktree,
       onImageExpand,
       onFileOpen,
       onUseArtifactTemplate,
@@ -1800,7 +1822,35 @@ function TimelineMinimapNavigationButton({
 type TimelineWorkEntry = Extract<MessagesTimelineRow, { kind: "work" }>["groupedEntries"][number];
 type TimelineRow = MessagesTimelineRow;
 
+const EMPTY_MESSAGE_FORK_ANCHORS: ReadonlyMap<MessageId, MessageForkAnchor> = new Map();
+
 const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: TimelineRow }) {
+  const forkCtx = use(TimelineRowCtx);
+  const forkActivity = use(TimelineRowActivityCtx);
+  const handleMessageContextMenu = useCallback(
+    async (event: MouseEvent<HTMLDivElement>) => {
+      if (row.kind !== "message" || forkCtx.onForkMessage === null) return;
+      const api = readLocalApi();
+      if (!shouldClaimMessageForkContextMenu(api) || !api) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const anchor = forkCtx.messageForkAnchors.get(row.message.id);
+      const clicked = await api.contextMenu.show(
+        buildMessageForkContextMenuItems({
+          disabled: anchor === undefined || forkActivity.isWorking || row.message.streaming,
+          canForkToNewWorktree: forkCtx.canForkToNewWorktree,
+          ...(anchor === undefined ? {} : { anchor }),
+        }),
+        { x: event.clientX, y: event.clientY },
+      );
+      if (clicked === "fork-current") {
+        forkCtx.onForkMessage(row.message.id, "current");
+      } else if (clicked === "fork-new-worktree") {
+        forkCtx.onForkMessage(row.message.id, "new-worktree");
+      }
+    },
+    [forkActivity.isWorking, forkCtx, row],
+  );
   const isExpandedToolGroup = row.kind === "work" && row.isExpandedToolGroup;
   const isSubagentGroup = row.kind === "event" && row.projectedItem.item.type === "subagent";
   const isWorkLogRow =
@@ -1840,6 +1890,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
         row.kind === "message" || row.kind === "assistant-meta" ? row.message.id : undefined
       }
       data-message-role={row.kind === "message" ? row.message.role : undefined}
+      onContextMenu={row.kind === "message" ? handleMessageContextMenu : undefined}
     >
       {isWorkLogRow ? (
         <WorkLogBlock
