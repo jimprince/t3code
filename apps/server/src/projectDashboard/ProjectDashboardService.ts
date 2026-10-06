@@ -1,12 +1,18 @@
 import {
   ProjectDashboardError,
+  ProjectHealth,
+  type ProjectDashboardSetHealthInput,
   type ProjectDashboard,
   type ProjectDashboardGetInput,
   type ProjectDashboardSetTrackerInput,
   type ProjectDashboardSetWidgetsInput,
   type ThreadId,
 } from "@t3tools/contracts";
+import * as Clock from "effect/Clock";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import { listMetadata } from "../forkThreads/MetadataStore.ts";
@@ -19,6 +25,7 @@ import { normalizeWidgets, resolveTrackerSetting } from "./projectDashboard.logi
 import type { ProjectDashboardStore } from "./ProjectDashboardStore.ts";
 
 const fail = (message: string) => new ProjectDashboardError({ message });
+const decodeHealth = Schema.decodeUnknownOption(ProjectHealth);
 
 /**
  * Reads and writes a project page's Gitea tracker repository, and its first tab's
@@ -70,6 +77,7 @@ export const make = (
               ? legacyWidgetOrder(layout.tabs)
               : (file.dashboards[rootThreadId]?.widgets ?? null),
           tracker: file.trackers[rootProjectId] ?? null,
+          health: Option.getOrNull(decodeHealth(file.health[rootThreadId])),
         } satisfies ProjectDashboard;
       });
 
@@ -120,5 +128,22 @@ export const make = (
         return yield* get(input);
       });
 
-    return { get, setWidgets, setTracker };
+    /** The orchestrator writes the project's health line; the newest one wins. */
+    const setHealth = (input: ProjectDashboardSetHealthInput) =>
+      Effect.gen(function* () {
+        const { rootThreadId } = yield* resolveRoot(input.threadId);
+        const updatedAt = DateTime.formatIso(DateTime.makeUnsafe(yield* Clock.currentTimeMillis));
+        const health: ProjectHealth = {
+          status: input.status,
+          sentence: input.sentence,
+          updatedAt,
+          threadId: input.threadId,
+        };
+        yield* store
+          .modify((file) => ({ ...file, health: { ...file.health, [rootThreadId]: health } }))
+          .pipe(Effect.mapError(() => fail("Could not save the health line.")));
+        return yield* get(input);
+      });
+
+    return { get, setWidgets, setTracker, setHealth };
   });
