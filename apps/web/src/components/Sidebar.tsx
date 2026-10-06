@@ -20,9 +20,17 @@ import { SidebarChildInputAttention } from "./sidebar/SidebarChildInputAttention
 import {
   newForkCommandId,
   readForkNestingSupported,
+  moveThreadToEnvironment,
   readForkOrderResetSupported,
   resetForkThreadOrder,
 } from "./chat/forkThreadCommands";
+import {
+  buildThreadMoveFailureReport,
+  describeThreadMoveOutcome,
+  describeThreadMoveProgress,
+  moveThreadWithBranchFallback,
+  type ThreadMovePhase,
+} from "../lib/threadMove";
 import {
   isThreadNestingMenuId,
   resolveThreadNestingMenuState,
@@ -75,6 +83,7 @@ import {
 import {
   resolveThreadProviderStack,
   threadRuntimeCanArchive,
+  threadRuntimeIsActive,
   type EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/models";
 import {
@@ -2500,6 +2509,9 @@ export default function Sidebar() {
     deleteThread,
   } = useThreadActions();
   const resetOrder = useAtomCommand(resetForkThreadOrder);
+  const moveThreadAcrossEnvironments = useAtomCommand(moveThreadToEnvironment, {
+    reportFailure: false,
+  });
   const { runNestingMenuAction } = useThreadNestingActions();
   const orderMetadata = useSupervisionMetadata();
   const orderReadyHosts = useSupervisionReadyHosts();
@@ -2586,6 +2598,7 @@ export default function Sidebar() {
     [routeDraftThread, routeTarget],
   );
   const routeThreadKey = routeThreadRef ? scopedThreadKey(routeThreadRef) : null;
+  const movingThreadKeys = useRef(new Set<string>());
   const routeTargetRef = useRef(routeTarget);
   routeTargetRef.current = routeTarget;
   // Post-settle navigation validates against the CURRENT route, not the one
@@ -4597,6 +4610,10 @@ export default function Sidebar() {
                 projectRef.projectId === thread.projectId,
             ),
           ) ?? null;
+        const moveTargets =
+          threadProjectGroup?.memberProjects.filter(
+            (member) => member.environmentId !== thread.environmentId,
+          ) ?? [];
         // Filter groups add General chat, which has no project settings or
         // machine moves but can still be filtered to.
         const threadFilterGroup =
@@ -4630,6 +4647,7 @@ export default function Sidebar() {
                 canSnoozeNow: canSnooze(thread, { now: new Date().toISOString() }),
                 isRegeneratingTitle,
                 isRunning: !threadRuntimeCanArchive(thread.runtime),
+                canMoveToMachine: moveTargets.length > 0,
                 supports: {
                   settlement: supportsSettlement,
                   autoSettleOptOut: supportsAutoSettleOptOut,
@@ -4834,6 +4852,123 @@ export default function Sidebar() {
           case "copy-thread-id":
             copyThreadIdToClipboard(thread.id, { threadId: thread.id });
             return;
+          case "move-to-machine": {
+            const targetChoice =
+              moveTargets.length === 1
+                ? { _tag: "Success" as const, value: moveTargets[0]!.physicalProjectKey }
+                : await settlePromise(() =>
+                    api.contextMenu.show(
+                      moveTargets.map((member) => ({
+                        id: member.physicalProjectKey,
+                        label: member.environmentLabel ?? member.workspaceRoot,
+                      })),
+                      position,
+                    ),
+                  );
+            if (targetChoice._tag === "Failure") return;
+            const targetMember = moveTargets.find(
+              (member) => member.physicalProjectKey === targetChoice.value,
+            );
+            if (!targetMember) return;
+
+            const targetLabel = targetMember.environmentLabel ?? targetMember.workspaceRoot;
+            const confirmLines = [`Move thread "${thread.title}" to ${targetLabel}?`];
+            if (threadRuntimeIsActive(thread.runtime)) {
+              confirmLines.push("The active turn will be interrupted before the move.");
+            }
+            const confirmed = await settlePromise(() =>
+              api.dialogs.confirm(confirmLines.join("\n")),
+            );
+            if (confirmed._tag === "Failure" || !confirmed.value) return;
+            const moveKey = scopedThreadKey(threadRef);
+            if (movingThreadKeys.current.has(moveKey)) return;
+            movingThreadKeys.current.add(moveKey);
+
+            const progressToastId = toastManager.add({
+              type: "loading",
+              title: "Moving thread…",
+              description: "Exporting from the source machine",
+              timeout: 0,
+            });
+            let movePhase: ThreadMovePhase | "preparing" = "preparing";
+            const runMove = async (branchConflict: "fail" | "new-worktree") => {
+              const result = await moveThreadAcrossEnvironments({
+                sourceEnvironmentId: threadRef.environmentId,
+                targetEnvironmentId: targetMember.environmentId,
+                sourceThreadId: threadRef.threadId,
+                targetProjectId: targetMember.id,
+                branchConflict,
+                onPhase: (phase) => {
+                  movePhase = phase;
+                  toastManager.update(progressToastId, {
+                    type: "loading",
+                    ...describeThreadMoveProgress(phase, targetLabel),
+                  });
+                },
+              });
+              if (result._tag === "Failure") throw squashAtomCommandFailure(result);
+              return result.value;
+            };
+            try {
+              const moved = await moveThreadWithBranchFallback({
+                run: runMove,
+                branch: thread.branch ?? null,
+                confirmBranchFallback: async (branch) => {
+                  const answer = await settlePromise(() =>
+                    api.dialogs.confirm(
+                      [
+                        `Branch "${branch}" already exists on ${targetLabel}.`,
+                        "Create a new worktree on a fallback branch and continue the thread there instead?",
+                        "The existing branch on the target machine is left untouched.",
+                      ].join("\n"),
+                    ),
+                  );
+                  return answer._tag === "Success" && answer.value;
+                },
+              });
+              toastManager.update(
+                progressToastId,
+                stackedThreadToast({
+                  title: "Thread moved",
+                  ...describeThreadMoveOutcome({
+                    threadTitle: thread.title,
+                    targetLabel,
+                    result: moved,
+                  }),
+                }),
+              );
+              if (routeThreadKeyRef.current === moveKey) {
+                void navigateToThread(scopeThreadRef(targetMember.environmentId, moved.threadId));
+              }
+            } catch (error) {
+              toastManager.update(
+                progressToastId,
+                stackedThreadToast({
+                  type: "error",
+                  title: "Failed to move thread",
+                  description: buildThreadMoveFailureReport({
+                    error,
+                    threadTitle: thread.title,
+                    source: threadRef,
+                    sourceLabel:
+                      threadProjectGroup?.memberProjects.find(
+                        (member) => member.environmentId === thread.environmentId,
+                      )?.environmentLabel ?? null,
+                    target: {
+                      environmentId: targetMember.environmentId,
+                      projectId: targetMember.id,
+                    },
+                    targetLabel,
+                    phase: movePhase,
+                  }),
+                  timeout: 0,
+                }),
+              );
+            } finally {
+              movingThreadKeys.current.delete(moveKey);
+            }
+            return;
+          }
           case "archive": {
             if (confirmThreadArchive) {
               const confirmed = await settlePromise(() =>
@@ -4912,6 +5047,8 @@ export default function Sidebar() {
       hiddenProjectKeys,
       isolatedProjectKey,
       markThreadUnread,
+      moveThreadAcrossEnvironments,
+      navigateToThread,
       openProjectSettings,
       resetOrder,
       runNestingMenuAction,
