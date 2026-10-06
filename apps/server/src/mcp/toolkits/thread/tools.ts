@@ -1,4 +1,5 @@
 import {
+  ForkThreadMetadata,
   ScheduledTaskId,
   ScheduledTask,
   OrchestrationSearchThreadsInput,
@@ -30,10 +31,12 @@ import * as McpInvocationContext from "../../McpInvocationContext.ts";
 
 const ThreadOrganizeTool = Tool.make("t3_thread_organize", {
   description:
-    "Pin, snooze, settle, archive, or mark a thread unread. Omit threadId for this thread. snooze requires snoozedUntil. Existing thread lifecycle rules apply; this does not schedule a future action.",
+    "Nest, unnest, pin, snooze, settle, archive, or mark a thread unread. nest requires parentThreadId. clientRequestId makes nesting retries idempotent. Omit threadId for this thread. snooze requires snoozedUntil. Existing thread lifecycle rules apply; this does not schedule a future action.",
   parameters: Schema.Struct({
     threadId: Schema.optional(ThreadId),
     action: Schema.Literals([
+      "nest",
+      "unnest",
       "pin",
       "unpin",
       "snooze",
@@ -45,13 +48,19 @@ const ThreadOrganizeTool = Tool.make("t3_thread_organize", {
       "mark_unread",
     ]),
     snoozedUntil: Schema.optional(IsoDateTime),
+    parentThreadId: Schema.optional(ThreadId),
+    clientRequestId: Schema.optional(TrimmedNonEmptyString),
   }),
-  success: OrchestrationV2DispatchCommandResult,
+  success: Schema.Union([
+    OrchestrationV2DispatchCommandResult,
+    Schema.Struct({ metadata: ForkThreadMetadata }),
+  ]),
   failure: OrchestratorMcpFailure,
   failureMode: "return" as const,
   dependencies: [
     McpInvocationContext.McpInvocationContext,
     ThreadManagementService.ThreadManagementService,
+    SqlClient.SqlClient,
     Crypto.Crypto,
   ],
 })
