@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "10ad121d9d856cf258d71a09c68149b5ff156d87",
-  "head": "0a3530582e9611435cf559eacf816391425495a1",
+  "prev": "bcf85baa5e5e2da4ec284499bf40d276e54af3e2",
+  "head": "f879dbe11979770fd5dd1549b4d815b06542c8a8",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -11,7 +11,8 @@
     "fork-project-selection",
     "fork-private-connection-defaults",
     "fork-workspace-file-uploads",
-    "fork-attachment-compatibility"
+    "fork-attachment-compatibility",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-remote-file-downloads",
@@ -315,6 +316,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "017d95081da5267eb0d6c95a11c5e1d72c87a0de"
+    },
+    "refresh-temp": {
+      "oid": "f879dbe11979770fd5dd1549b4d815b06542c8a8"
     }
   }
 }
