@@ -1,0 +1,4 @@
+id = "decision-links"
+category = "feature"
+functionality = "projects"
+text = "Links in decisions open: web addresses in a decision's context and options are clickable on the project page, Needs you and the mobile app, opening in a new tab or your system browser."
