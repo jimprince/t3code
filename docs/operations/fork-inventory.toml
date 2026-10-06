@@ -1491,3 +1491,22 @@ note = "The existing pinOrderKey and activeOrderKey remain the only stored order
 id = "v2-port-2689-m2"
 decision = "reconcile-smaller"
 note = "V2 supervision metadata is separate from native execution lineage; retained behavior and import coverage are recorded in the nesting lane report."
+
+[[patch]]
+name = "fork-cross-environment-nesting"
+subject = "feat(threads): nest workers across environments"
+class = "product"
+purpose = "Store remote parent links on child environments and merge connected thread trees in clients and the operator CLI."
+retire_when = "Upstream supports environment-scoped thread parent links, client tree merging, and remote nesting through its operator interface."
+depends_on = [
+  "fork-cross-project-thread-nesting",
+  "fork-worker-operations",
+  "fork-orchestrators-view",
+]
+roles = []
+note = "Remote parents are optional metadata, persisted only by the child server. Disconnected, archived, missing, or cyclic parents do not hide the child. Servers do not traverse or mutate remote descendants; client presentation combines connected environments. Fork migration 12 reserves the nullable JSON column independently of the V1 core replacement."
+
+[[patch.decision]]
+id = "v2-port-2689-m2"
+decision = "keep-on-top"
+note = "V2 supervision metadata is separate from native execution lineage; retained behavior and import coverage are recorded in the nesting lane report."
