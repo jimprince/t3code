@@ -11,7 +11,11 @@ export const makeSupervisionDrop = (
   management: Pick<ThreadManagement.ThreadManagementServiceShape, "getThreadShell" | "dispatch">,
 ) =>
   Effect.gen(function* () {
-    const nesting = yield* makeNestingService(sql, management.getThreadShell, management.dispatch).pipe(Effect.orDie);
+    const nesting = yield* makeNestingService(
+      sql,
+      management.getThreadShell,
+      management.dispatch,
+    ).pipe(Effect.orDie);
     return {
       "fork.threads.supervision.drop": (input: SupervisionDrop) =>
         Effect.gen(function* () {
