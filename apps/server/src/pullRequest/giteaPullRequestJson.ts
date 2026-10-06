@@ -110,6 +110,13 @@ export const toChangeRequest = (pr: typeof PullRequest.Type): ProviderChangeRequ
   closedAt: pr.closed_at ?? null,
   mergedAt: pr.merged_at ?? null,
   reviewRequestLogins: (pr.requested_reviewers ?? []).map((u) => u.login),
+  // Gitea has no aggregate decision; a requested reviewer or a needs-review label is the ask.
+  ...(pr.state === "open" &&
+  !pr.merged &&
+  ((pr.requested_reviewers ?? []).length > 0 ||
+    (pr.labels ?? []).some((l) => l.name.toLowerCase() === "needs-review"))
+    ? { reviewDecision: "review-required" as const }
+    : {}),
   labels: (pr.labels ?? []).map((l) => ({ name: l.name, color: l.color || null })),
 });
 export const toCheck = (

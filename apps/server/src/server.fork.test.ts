@@ -925,6 +925,7 @@ const buildAppUnderTest = (options?: {
             start: () => Effect.void,
             drain: Effect.void,
             requestSync: () => Effect.void,
+            refreshStale: Effect.void,
           }),
         ),
       ),
