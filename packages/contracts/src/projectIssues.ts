@@ -82,6 +82,14 @@ export const ProjectIssue = Schema.Struct({
       Schema.Struct({ author: Schema.String, body: Schema.String, createdAt: IsoDateTime }),
     ),
   ),
+  /**
+   * For an open request: the thread's reply to the message that filed it (the
+   * last assistant message of the turn that message started), so each question
+   * shows its own answer. Absent until that turn has replied.
+   */
+  answer: Schema.optionalKey(
+    Schema.Struct({ text: Schema.String, askedAt: IsoDateTime, answeredAt: IsoDateTime }),
+  ),
 });
 export type ProjectIssue = typeof ProjectIssue.Type;
 
