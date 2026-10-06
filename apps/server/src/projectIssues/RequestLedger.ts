@@ -948,6 +948,7 @@ export const make = (deps: {
       settle,
       submit,
       decorate,
+      withAnswers,
       create,
       update,
       listForThread,
