@@ -79,6 +79,16 @@ describe("fallbackRequestItem", () => {
     expect(fallbackRequestItem("Draft 10 of these\nwith variety").kind).toBe("task");
   });
 
+  it("titles a request phrased as a question as the task it is, never the raw words", () => {
+    expect(
+      fallbackRequestItem("Hey, can you get T3 orchestrator to troubleshoot this?\nIt hangs."),
+    ).toEqual({
+      title: "Get T3 orchestrator to troubleshoot this",
+      kind: "task",
+      excerpt: "Hey, can you get T3 orchestrator to troubleshoot this?\nIt hangs.",
+    });
+  });
+
   it("clamps long titles", () => {
     expect(clampTitle("x".repeat(200))).toHaveLength(90);
   });
@@ -98,7 +108,7 @@ describe("formatRequestIssueBody", () => {
       rootTitle: "Printcell Orchestrator",
       source,
     });
-    expect(body).toContain("> Can we connect the ReSpeaker?");
+    expect(body.startsWith("## Brad's words\n\n> Can we connect the ReSpeaker?")).toBe(true);
     expect(body).toContain("**Audio worker** (under **Printcell Orchestrator**)");
     expect(parseRequestMarker(body)).toEqual(source);
   });
