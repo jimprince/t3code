@@ -25,6 +25,7 @@ import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
+import { threadPullRequestKeysEqual } from "@t3tools/shared/threadPullRequests";
 
 import { PullRequestService } from "../pullRequest/PullRequestService.ts";
 import { ServerActivation } from "../serverActivation.ts";
@@ -884,6 +885,32 @@ describe("PullRequestSyncReactor", () => {
           }).pipe(Effect.provide(fixture.layer));
         }),
       ),
+  );
+
+  it.effect("keeps the linked URL when the host reports the PR under another authority", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(NOW));
+        const link = makeLink(2, null, {
+          host: "git.example.com",
+          url: "https://git.example.com/owner/repository/pulls/2",
+        });
+        // Gitea's html_url uses its ROOT_URL, not the public alias the link was made with.
+        const rootUrl = "http://git.internal:3000/owner/repository/pulls/2";
+        assert.isFalse(threadPullRequestKeysEqual(link, { ...link, url: rootUrl }));
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([makeThread("alias", { pullRequests: [link] })]),
+          summary: (input) => Effect.succeed(makeSummary(input, { url: rootUrl })),
+        });
+        yield* Effect.gen(function* () {
+          yield* startAndSweep(fixture);
+          const [command] = yield* Ref.get(fixture.syncCommands);
+          assert.strictEqual(command?.url, link.url);
+          assert.isTrue(threadPullRequestKeysEqual(link, command!));
+          assert.strictEqual(command?.snapshot.title, "Pull request");
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
   );
 
   it.effect("preserves a refresh requested while an older host read is in flight", () =>
