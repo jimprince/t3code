@@ -1,4 +1,11 @@
 import { normalizeThreadIssueKey, threadIssueKeysEqual } from "@t3tools/shared/threadIssues";
+import {
+  assertRootSlot,
+  isOrganizationalRoot,
+  liveRoots,
+  namedAgentName,
+  withOwnershipLock,
+} from "../forkThreads/NamedAgentPolicy.ts";
 import { conversationBaselineAllowed } from "../fork/recovery/ConversationRewind.ts";
 import { legacyNoticeCanStart } from "../fork/recovery/LegacyBackgroundWorkPolicy.ts";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
@@ -2159,7 +2166,59 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     );
     const now = yield* DateTime.now;
     const emitEvent = emit(events, command);
+    const agentName =
+      command.handoverFromThreadId === undefined
+        ? null
+        : yield* namedAgentName(sql, command.projectId).pipe(mapDispatchError(command));
+    if (command.handoverFromThreadId !== undefined) {
+      const roots = yield* liveRoots(sql, command.projectId, command.threadId).pipe(
+        mapDispatchError(command),
+      );
+      if (
+        agentName === null ||
+        roots.length !== 1 ||
+        roots[0]!.thread_id !== command.handoverFromThreadId
+      )
+        return yield* new OrchestratorDispatchError({
+          commandId: command.commandId,
+          commandType: command.type,
+          cause: "Only a named agent's current live thread can be handed over.",
+        });
+      const previous = yield* projectionStore
+        .getThreadRecords(command.handoverFromThreadId, [
+          "runs",
+          "runtimeRequests",
+          "providerSessions",
+          "providerThreads",
+        ])
+        .pipe(mapDispatchError(command));
+      if (
+        previous.runs.some((run) =>
+          ["queued", "preparing", "starting", "running", "waiting"].includes(run.status),
+        ) ||
+        previous.runtimeRequests.some((request) => request.status === "pending") ||
+        previous.providerThreads.some(
+          (thread) =>
+            thread.status === "active" ||
+            (thread.pendingBackgroundTasks?.length ?? 0) > 0 ||
+            thread.codexNativeGoal?.status === "active",
+        )
+      )
+        return yield* new OrchestratorDispatchError({
+          commandId: command.commandId,
+          commandType: command.type,
+          cause: `Named agent '${agentName}' is busy in ${previous.thread.id}; hand over after its turn finishes.`,
+        });
+      yield* emitEvent({
+        type: "thread.archived",
+        threadId: previous.thread.id,
+        providerInstanceId: previous.thread.providerInstanceId,
+        occurredAt: now,
+        payload: { ...previous.thread, archivedAt: now, updatedAt: now },
+      });
+    }
     const thread: OrchestrationV2AppThread = {
+      ...(agentName === null ? {} : { autoSettleDisabledAt: now }),
       createdBy: command.createdBy,
       creationSource: command.creationSource,
       id: command.threadId,
@@ -2377,6 +2436,33 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           }),
       ),
     );
+    if (command.type === "thread.unarchive") {
+      const metadata = (yield* listMetadata(sql).pipe(mapDispatchError(command))).find(
+        (row) => row.threadId === thread.id,
+      );
+      if (
+        thread.lineage.parentThreadId === null &&
+        metadata?.parentThreadId == null &&
+        metadata?.remoteParent == null
+      )
+        yield* assertRootSlot(sql, thread.projectId, thread.id).pipe(mapDispatchError(command));
+    }
+    if (command.type === "thread.auto-settle.set" && command.enabled) {
+      const metadata = (yield* listMetadata(sql).pipe(mapDispatchError(command))).find(
+        (row) => row.threadId === thread.id,
+      );
+      if (
+        thread.lineage.parentThreadId === null &&
+        metadata?.parentThreadId == null &&
+        metadata?.remoteParent == null &&
+        (yield* namedAgentName(sql, thread.projectId).pipe(mapDispatchError(command))) !== null
+      )
+        return yield* new OrchestratorDispatchError({
+          commandId: command.commandId,
+          commandType: command.type,
+          cause: "A named agent's live thread cannot settle automatically.",
+        });
+    }
     if (command.type === "thread.archive" && command.autoArchiveSettledBefore !== undefined) {
       const active = yield* projectionStore
         .getShellSnapshot()
@@ -9698,6 +9784,20 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             cause: "Pinned threads and parents with live children never settle automatically.",
           });
         }
+        const organization = (yield* listMetadata(sql).pipe(mapDispatchError(command))).find(
+          (row) => row.threadId === thread.id,
+        );
+        if (
+          thread.lineage.parentThreadId === null &&
+          organization?.parentThreadId == null &&
+          organization?.remoteParent == null &&
+          (yield* namedAgentName(sql, thread.projectId).pipe(mapDispatchError(command))) !== null
+        )
+          return yield* new OrchestratorDispatchError({
+            commandId: command.commandId,
+            commandType: command.type,
+            cause: "A named agent's live thread cannot settle automatically.",
+          });
         if (command.completionRunId !== undefined) {
           const current = yield* projectionStore
             .getThreadProjection(command.threadId)
@@ -9808,6 +9908,27 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             commandId: command.commandId,
             threadId: command.threadId,
           });
+        }
+        if (
+          (yield* namedAgentName(sql, thread.projectId).pipe(mapDispatchError(command))) !== null &&
+          (yield* isOrganizationalRoot(sql, thread).pipe(mapDispatchError(command)))
+        ) {
+          const name = yield* assertRootSlot(sql, thread.projectId, thread.id).pipe(
+            mapDispatchError(command),
+          );
+          if (name !== null && thread.autoSettleDisabledAt == null) {
+            const now = yield* DateTime.now;
+            yield* emit(
+              events,
+              command,
+            )({
+              type: "thread.auto-settle-set",
+              threadId: thread.id,
+              providerInstanceId: thread.providerInstanceId,
+              occurredAt: now,
+              payload: { ...thread, autoSettleDisabledAt: now, updatedAt: now },
+            });
+          }
         }
         yield* dispatchMessage(command, events, effects);
         break;
@@ -10133,8 +10254,26 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     } satisfies OrchestratorV2DispatchResult;
   });
 
-  const dispatchWithReceipt = (command: OrchestrationV2ServerCommand) =>
-    threadDispatch.withLock(commandThreadId(command), dispatchWithReceiptEffect(command));
+  const dispatchWithReceipt = (command: OrchestrationV2ServerCommand) => {
+    const dispatch = threadDispatch.withLock(
+      commandThreadId(command),
+      dispatchWithReceiptEffect(command),
+    );
+    if (
+      command.type === "thread.create" ||
+      command.type === "thread.unarchive" ||
+      command.type === "message.dispatch" ||
+      command.type === "thread.auto-settle" ||
+      command.type === "thread.auto-settle.set"
+    ) {
+      const guarded =
+        command.type === "thread.create" && command.handoverFromThreadId !== undefined
+          ? threadDispatch.withLock(command.handoverFromThreadId, dispatch)
+          : dispatch;
+      return withOwnershipLock(sql, guarded);
+    }
+    return dispatch;
+  };
 
   const handleTerminalRun = (stored: OrchestrationV2StoredEvent) =>
     Effect.gen(function* () {
