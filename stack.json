@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "728de1701d9076f419b90d717e1e07647e559afa",
-  "head": "9be1eb6fed7deeccdb3b4a5b584d4e4f2d544f57",
+  "prev": "d70fc4fca924f6c7c17ae8371b349c892d56f084",
+  "head": "247d16ad517fec6021b53ae1d3428198675efdfe",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -109,10 +109,10 @@
     "fork-dashboard-polish",
     "fork-phone-side-panels",
     "fork-decision-links",
-    "fork-decision-discuss"
+    "fork-decision-discuss",
+    "fork-decision-context-media"
   ],
   "unapplied": [
-    "fork-decision-context-media",
     "fork-subprojects-server"
   ],
   "hidden": [],
@@ -175,7 +175,7 @@
       "oid": "a283574e92055dd3746cbe04000e0f529bdbb96a"
     },
     "fork-decision-context-media": {
-      "oid": "22815b6c0cd82a0498e0f3dca805863fcbc55e7b"
+      "oid": "247d16ad517fec6021b53ae1d3428198675efdfe"
     },
     "fork-decision-discuss": {
       "oid": "9be1eb6fed7deeccdb3b4a5b584d4e4f2d544f57"
