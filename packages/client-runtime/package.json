@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./decision-context": {
+      "types": "./src/decisionContext.ts",
+      "default": "./src/decisionContext.ts"
+    },
     "./state/orchestrators": {
       "types": "./src/state/orchestrators.ts",
       "default": "./src/state/orchestrators.ts"
