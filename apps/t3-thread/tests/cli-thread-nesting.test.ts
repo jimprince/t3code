@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import type { OrchestrationThreadShell, StateFile } from "../src/types.js";
-import { selectThreadChildren } from "../src/status.js";
+import { selectThreadChildren, formatThreadLine } from "../src/status.js";
 
 const fixture = vi.hoisted(() => ({ state: null as StateFile | null }));
 vi.mock("../src/state.js", async (original) => ({
@@ -154,10 +154,18 @@ async function run(args: string[]) {
 }
 
 describe("CLI nesting readback", () => {
+  it("prints remote ownership with its stable descriptor", () => {
+    expect(
+      formatThreadLine({
+        ...shell(childId, null, "Worker"),
+        remoteParent: { environmentId: "remote-descriptor", threadId: rootId },
+      }),
+    ).toContain(`parent=remote-descriptor/${rootId}`);
+  });
   it("lists parent ids and available titles with state, settlement and pins from shells", async () => {
     const { output, detail } = await run(["threads", "--env", "local"]);
     expect(output).toContain(
-      `${childId} [idle] Worker project settled=true pinned=true parent=${rootId} (Supervisor)`,
+      `${childId} [idle] Worker project settled=true pinned=true order=pinned:automatic parent=${rootId} (Supervisor)`,
     );
     expect(output).toContain(`parent=${childId} (Worker)`);
     expect(output).toContain("parent=none");
