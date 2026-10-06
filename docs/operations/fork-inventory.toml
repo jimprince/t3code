@@ -1856,3 +1856,13 @@ retire_when = "The request ledger is retired, or upstream tracks requests with e
 depends_on = ["fork-request-ledger", "fork-project-task-types", "fork-project-request-box-pinned"]
 roles = []
 note = "Before splitting, the drain re-reads the tracker and offers the model up to 40 open issues (the thread's linked ones first, marked as this conversation, then the project's open requests); each split item names the one it continues (existing) or null. planRequestItem: an explicit entry (projectRequests.submit, sent by the New request box just before its message is dispatched) files every item; a chat question is skipped; an item naming an offered issue becomes a 'Follow-up from Brad' comment with a hidden t3-request-followup marker on that issue and links the thread; without a model the unsplit item follows the thread's newest linked issue; anything else is filed. An explicit submit upgrades a not-yet-split capture of the same message. projectRequests.update now accepts any open tracker issue (start, note, ready, shipped), and projectRequests.settle closes or (reopen) reopens any of the project's issues from its row."
+
+[[patch]]
+name = "fork-roadmap-next-later"
+subject = "feat(projects): automatic next version and a Later bucket on the roadmap"
+class = "product"
+purpose = "Make the Roadmap tab plan by default (brad/t3code-fork#119): a next version that exists and fills itself with current work, an add-version action, and a Later bucket kept off the Dashboard; never an empty pane while it loads."
+retire_when = "Upstream provides equivalent milestone planning, or the project page is retired."
+depends_on = ["fork-project-roadmap", "fork-project-page-workflow", "fork-request-followups"]
+roles = []
+note = "Columns: the next version (the first open milestone, or a virtual Next version when none exists) holds that milestone's items plus every open unversioned item that is not parked; then each later milestone; then Later, unversioned parked items. ProjectRoadmapItem gains parked; projectRoadmap.move takes later (clear the milestone and add the parked label) and version null now means the automatic next version (clear the milestone and unpark). CLI roadmap move accepts next and later; roadmap list reports next, versions and later. ProjectQueryState shows Loading, or the error with Retry, wherever a project view waits on a query, so a failed Gitea call no longer leaves a blank Roadmap or a Loading line forever."
