@@ -106,7 +106,6 @@ describe("buildThreadActionMenuItems", () => {
   });
 
   it("offers automatic order only for a manually ordered thread in a supported orderable section", () => {
-
     const supports = { ...baseState.supports, orderReset: true };
     const manual = { ...baseState, supports, orderIsManual: true };
     expect(ids(manual)).toContain("order-reset");
@@ -163,6 +162,11 @@ describe("buildThreadActionMenuItems", () => {
     expect(items[filterIndex]).toMatchObject({ label: "Show all projects", icon: "folder-tree" });
     expect(items[filterIndex - 1]?.id).toBe("mark-unread");
     expect(items[filterIndex + 1]?.id).toBe("auto-settle");
+  });
+
+  it("offers a machine move only when another environment hosts the project", () => {
+    expect(ids(baseState)).not.toContain("move-to-machine");
+    expect(ids({ ...baseState, canMoveToMachine: true })).toContain("move-to-machine");
   });
 
   it("includes branch items only for threads with a branch", () => {
