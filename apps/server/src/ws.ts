@@ -1,3 +1,4 @@
+import { resourceRecoveryHandlers } from "./resourceRecoveryRpc.ts";
 import { threadSubscriptionHandlers } from "./threadSubscriptionHandlers.ts";
 import { makeWorkspaceUploadHandlers } from "./workspace/WorkspaceUploadRpc.ts";
 import { headlessDeliveryHandlers } from "./headlessDeliveryRpc.ts";
@@ -2435,6 +2436,7 @@ const layerWsRpc = (
           backgroundPolicy.reportHostPowerState(input),
         [WS_METHODS.serverGetBackgroundPolicy]: (_input) => backgroundPolicy.snapshot,
         ...headlessDeliveryHandlers(),
+        ...resourceRecoveryHandlers(),
         [WS_METHODS.cloudGetRelayClientStatus]: (_input) => relayClient.resolve,
         [WS_METHODS.cloudInstallRelayClient]: (_input) =>
           Stream.callback<RelayClientInstallProgressEvent, RelayClientInstallFailedError>((queue) =>
