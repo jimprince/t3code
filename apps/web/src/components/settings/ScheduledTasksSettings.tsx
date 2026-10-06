@@ -461,7 +461,9 @@ function ScheduledTaskRow({
                   : "Not scheduled"}
           </span>
           {task.lastRunStatus !== "never" ? (
-            <Badge variant={statusVariant(task.lastRunStatus)}>{task.lastRunStatus}</Badge>
+            <Badge variant={statusVariant(task.lastRunStatus)}>
+              {task.lastRunStatus === "skipped" ? "skipped: thread settled" : task.lastRunStatus}
+            </Badge>
           ) : null}
           {task.lastRunError ? <span className="text-destructive">{task.lastRunError}</span> : null}
         </div>
