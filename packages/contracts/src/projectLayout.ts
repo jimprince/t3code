@@ -73,7 +73,8 @@ export const PROJECT_WIDGET_TYPES: ReadonlyArray<ProjectWidgetType> = [
   {
     type: "release",
     title: "Release",
-    description: "Completed tasks by the release that shipped them, and the next release.",
+    description:
+      "Completed tasks by the release that shipped them, and what is built and awaiting release.",
     fields: [],
   },
   {
@@ -122,7 +123,7 @@ export const PROJECT_WIDGET_TYPES: ReadonlyArray<ProjectWidgetType> = [
   {
     type: "working",
     title: "Working",
-    description: "Workers running now, with their latest line.",
+    description: "Workers running now, each as its task, status and next step.",
     fields: [],
   },
   { type: "blocked", title: "Blocked", description: "Workers that are blocked.", fields: [] },
