@@ -57,9 +57,42 @@ import { ProjectIssuesBoard } from "./ProjectIssuesBoard";
 import { ProjectReleaseWidget, ProjectRequestsSection } from "./ProjectRequestsSection";
 import { ProjectWidgetList, WorkerRequestTag } from "./ProjectWidgetList";
 import { ProjectRoadmapWidget, SaveForLater } from "./ProjectRoadmapWidget";
+import { ProjectPullRequestsWidget } from "./ProjectPullRequestsWidget";
+import { ProjectRequestBox } from "./ProjectRequestBox";
+import { ProjectIssuesSummary, ProjectRoadmapSummary } from "./ProjectTabSummaries";
+import { PROJECT_TABS, resolveProjectTab, type ProjectTab } from "./projectTabs.logic";
 import type { ProjectWidgetId } from "./projectWidgets.logic";
 import { projectReturnState } from "./projectNavigation";
-import { ProjectPullRequestLink } from "./ProjectPullRequestLink";
+
+/** Dashboard | Roadmap | Issues. */
+function ProjectTabBar({
+  tab,
+  onSelect,
+}: {
+  readonly tab: ProjectTab;
+  readonly onSelect: (tab: ProjectTab) => void;
+}) {
+  return (
+    <div role="tablist" aria-label="Project views" className="flex gap-4 border-b border-border">
+      {PROJECT_TABS.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          role="tab"
+          aria-selected={tab === item.id}
+          className={`-mb-px border-b-2 px-0.5 pb-2 text-sm ${
+            tab === item.id
+              ? "border-foreground text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+          onClick={() => onSelect(item.id)}
+        >
+          {item.title}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function BoardSection({
   title,
@@ -151,10 +184,25 @@ function ThreadProviderModel({
 export function OrchestratorBoard({
   environmentId,
   threadId,
+  tab: tabFromUrl = null,
+  onTabChange,
 }: {
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
+  /** The tab in the URL, or null to use the tab this device last used for the project. */
+  readonly tab?: ProjectTab | null;
+  readonly onTabChange?: (tab: ProjectTab) => void;
 }) {
+  const [rememberedTab, setRememberedTab] = useLocalStorage(
+    `t3code:projects:tab:${environmentId}:${threadId}`,
+    "dashboard",
+    Schema.String,
+  );
+  const tab = resolveProjectTab(tabFromUrl, rememberedTab);
+  const selectTab = (next: ProjectTab) => {
+    setRememberedTab(next);
+    onTabChange?.(next);
+  };
   const projects = useProjects();
   const threads = useOrchestratorThreadShells();
   const serverConfigs = useServerConfigs();
@@ -279,9 +327,14 @@ export function OrchestratorBoard({
   };
 
   const widgetViews: Partial<Record<ProjectWidgetId, ReactNode>> = {
-    requests: <ProjectRequestsSection summary={summary} />,
+    requests: (
+      <ProjectRequestsSection
+        summary={summary}
+        header={<ProjectRequestBox summary={summary} onSent={revealSentMessage} />}
+      />
+    ),
     release: <ProjectReleaseWidget summary={summary} />,
-    roadmap: <ProjectRoadmapWidget summary={summary} />,
+    roadmap: <ProjectRoadmapSummary summary={summary} onOpen={() => selectTab("roadmap")} />,
     "needs-you": (
       <BoardSection title="Needs you" count={summary.needsYou.length}>
         {summary.needsYou.length === 0 ? (
@@ -413,25 +466,8 @@ export function OrchestratorBoard({
         </div>
       </BoardSection>
     ),
-    issues: (
-      <BoardSection title="Issues">
-        <ProjectIssuesBoard summary={summary} />
-      </BoardSection>
-    ),
-    prs:
-      summary.pullRequests.length > 0 ? (
-        <BoardSection title="Pull requests" count={summary.pullRequests.length}>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-            {summary.pullRequests.map((pullRequest) => (
-              <ProjectPullRequestLink
-                key={`${pullRequest.host}/${pullRequest.repository}#${pullRequest.number}`}
-                summary={summary}
-                pullRequest={pullRequest}
-              />
-            ))}
-          </div>
-        </BoardSection>
-      ) : null,
+    issues: <ProjectIssuesSummary summary={summary} onOpen={() => selectTab("issues")} />,
+    prs: <ProjectPullRequestsWidget summary={summary} />,
     automations: (
       <ProjectAutomationsSlot
         project={{
@@ -523,7 +559,16 @@ export function OrchestratorBoard({
                 </span>
               </div>
 
-              <ProjectWidgetList summary={summary} views={widgetViews} />
+              <ProjectTabBar tab={tab} onSelect={selectTab} />
+              {tab === "roadmap" ? (
+                <ProjectRoadmapWidget summary={summary} />
+              ) : tab === "issues" ? (
+                <BoardSection title="Issues">
+                  <ProjectIssuesBoard summary={summary} />
+                </BoardSection>
+              ) : (
+                <ProjectWidgetList summary={summary} views={widgetViews} />
+              )}
             </WorkspacePageContainer>
           </div>
           {chatOpen ? (
