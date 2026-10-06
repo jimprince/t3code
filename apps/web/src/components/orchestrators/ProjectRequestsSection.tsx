@@ -17,6 +17,8 @@ import {
   deriveProjectRequests,
   deriveRelease,
   FOR_YOU_GROUPS,
+  latestProgressLine,
+  countParked,
   type ProjectRequest,
 } from "./projectRequests.logic";
 
@@ -152,6 +154,12 @@ function ServedBy({ request }: { readonly request: ProjectRequest }) {
   );
 }
 
+/** The newest progress line an agent recorded on the request's issue. */
+function LatestProgress({ request }: { readonly request: ProjectRequest }) {
+  const line = latestProgressLine(request.issue.latestComment?.body);
+  return line ? <span className="truncate text-xs text-foreground/80">latest: {line}</span> : null;
+}
+
 function IssueLink({ request }: { readonly request: ProjectRequest }) {
   return (
     <a
@@ -217,6 +225,7 @@ function CompactRow({
       <span className="flex min-w-0 flex-1 flex-col">
         <IssueLink request={request} />
         <ServedBy request={request} />
+        <LatestProgress request={request} />
       </span>
       <span className="text-xs text-muted-foreground">{request.kind}</span>
       <span className="w-8 text-right text-xs tabular-nums text-muted-foreground">
@@ -232,11 +241,19 @@ function CompactRow({
  * next and who owns it. His groups first, then work waiting for a release, then
  * work still with the agents.
  */
-export function ProjectRequestsSection({ summary }: { readonly summary: OrchestratorSummary }) {
+export function ProjectRequestsSection({
+  summary,
+  header,
+}: {
+  readonly summary: OrchestratorSummary;
+  /** Shown above the requests, such as the request box. */
+  readonly header?: ReactNode;
+}) {
   const environmentId = summary.root.environmentId;
   const { query, requests, now, pending } = useProjectRequests(summary);
   const settle = useSettle(summary, query.refresh);
-  if (requests.length === 0 && pending.length === 0) return null;
+  const parked = countParked(query.data?.issues ?? [], summary.root.id);
+  if (requests.length === 0 && pending.length === 0 && !header) return null;
   const waitingForRelease = requests.filter((request) => request.stage === "awaiting-release");
   const withAgents = requests.filter(
     (request) => request.forYou === null && request.stage !== "awaiting-release",
@@ -245,6 +262,12 @@ export function ProjectRequestsSection({ summary }: { readonly summary: Orchestr
   return (
     <section className="border-t border-border pt-4">
       <WidgetHeading title="Requests" count={requests.length + pending.length} />
+      {header}
+      {parked > 0 ? (
+        <p className="mb-2 text-xs text-muted-foreground">
+          {parked} {parked === 1 ? "idea" : "ideas"} saved for later on the Roadmap
+        </p>
+      ) : null}
       {pending.length > 0 ? (
         <div className="mb-3">
           <GroupTitle title="Pending filing" count={pending.length} />
