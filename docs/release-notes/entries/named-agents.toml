@@ -1,0 +1,4 @@
+id = "named-agents"
+category = "feature"
+functionality = "named agents"
+text = "Named agents give a resource such as a printer or a deployment exactly one owner: one live thread at a time, a folder holding its charter and briefing, `t3-thread agents` to list them, and `t3-thread send <name>` to reach or start one."
