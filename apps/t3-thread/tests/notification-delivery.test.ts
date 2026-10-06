@@ -502,6 +502,7 @@ describe("settled recipients", () => {
       });
       expect(sent).toHaveLength(1);
       expect(sent[0]?.text).toContain("Worker turn 2 finished.");
+      expect(sent[0]?.text).toContain("Thread communication quick start");
       state = await loadState();
       expect(state.notifications.map((notification) => notification.status)).toEqual([
         "superseded",
@@ -596,5 +597,132 @@ describe("watcher expiry", () => {
         await expect(hasActiveWork({ env: "retired-vm", clientFactory })).resolves.toBe(false);
       },
     );
+  });
+});
+
+describe("notification onboarding", () => {
+  it("onboards a subscriber only on its first successful delivery across workers and resubscription", async () => {
+    await withState(makeState(), async () => {
+      const threads = {
+        "thread-worker-a": makeCompletedThread(),
+        "thread-coordinator-a": makeCompletedThread({
+          id: "thread-coordinator-a",
+          latestTurn: null,
+          messages: [],
+        }),
+      };
+      let failing = true;
+      const { clientFactory, sent } = createClientFactory({
+        threads,
+        onSend: () => {
+          if (failing) throw new Error("transport failed");
+        },
+      });
+      await detectAttentionEvents({ env: "dev-vm", clientFactory });
+      await deliverPendingNotifications({ env: "dev-vm", clientFactory });
+      expect(sent).toHaveLength(0);
+      failing = false;
+      await deliverPendingNotifications({
+        env: "dev-vm",
+        clientFactory,
+        now: () => new Date(Date.now() + 3_600_000).toISOString(),
+      });
+      expect(sent[0]?.text).toContain("Thread communication quick start");
+      expect(sent[0]?.text).toContain("t3-thread result worker-a");
+      expect(sent[0]?.text).toContain("t3-thread queue");
+      expect(sent[0]?.text).toContain("THREAD_COMMUNICATION.md");
+      expect(sent[0]!.text.split("\n").length).toBeLessThanOrEqual(15);
+      threads["thread-worker-a"] = makeCompletedThread({
+        latestTurn: {
+          ...threads["thread-worker-a"].latestTurn!,
+          turnId: "next-turn",
+          assistantMessageId: "next-message",
+        },
+        messages: [
+          { ...threads["thread-worker-a"].messages[0]!, id: "next-message", turnId: "next-turn" },
+        ],
+      });
+      await detectAttentionEvents({ env: "dev-vm", clientFactory });
+      await deliverPendingNotifications({ env: "dev-vm", clientFactory });
+      expect(sent).toHaveLength(2);
+      expect(sent[1]?.text).not.toContain("Thread communication quick start");
+      const persisted = await loadState();
+      // Replacing the route models unsubscribe/resubscribe; onboarding history
+      // belongs to the subscriber, not this route or the watcher's process.
+      await saveState({
+        ...persisted,
+        agents: [...persisted.agents, makeAgent({ name: "worker-b", threadId: "thread-worker-b" })],
+        subscriptions: [
+          makeSubscription({ sourceAgentName: "worker-b", sourceThreadId: "thread-worker-b" }),
+        ],
+      });
+      const next = createClientFactory({
+        threads: { ...threads, "thread-worker-b": makeCompletedThread({ id: "thread-worker-b" }) },
+      });
+      await detectAttentionEvents({ env: "dev-vm", clientFactory: next.clientFactory });
+      await deliverPendingNotifications({ env: "dev-vm", clientFactory: next.clientFactory });
+      expect(next.sent).toHaveLength(1);
+      expect(next.sent[0]?.text).not.toContain("Thread communication quick start");
+      expect(next.sent[0]?.text).toContain("worker-b completed a turn");
+    });
+  });
+
+  it("does not claim another event for a recipient while its first delivery is in flight", async () => {
+    await withState(makeState(), async () => {
+      const { clientFactory } = createClientFactory({});
+      await detectAttentionEvents({ env: "dev-vm", clientFactory });
+      const first = await claimPendingNotifications({ env: "dev-vm" });
+      const persisted = await loadState();
+      await saveState({
+        ...persisted,
+        notifications: [
+          ...persisted.notifications,
+          {
+            ...first[0]!,
+            id: "second-event",
+            eventKey: "second-event",
+            status: "pending",
+            sourceThreadId: "thread-worker-b",
+            deliveryClaimId: null,
+            deliveryClaimPid: null,
+          },
+        ],
+      });
+      expect(await claimPendingNotifications({ env: "dev-vm" })).toEqual([]);
+    });
+  });
+});
+
+describe("subscriber onboarding isolation", () => {
+  it("gives a different subscriber its own guide", async () => {
+    await withState(makeState(), async () => {
+      const first = createClientFactory({});
+      await detectAttentionEvents({ env: "dev-vm", clientFactory: first.clientFactory });
+      await deliverPendingNotifications({ env: "dev-vm", clientFactory: first.clientFactory });
+      const persisted = await loadState();
+      await saveState({
+        ...persisted,
+        subscriptions: [
+          makeSubscription({
+            subscriberThreadId: "thread-coordinator-b",
+            subscriberAgentName: "coordinator-b",
+          }),
+        ],
+      });
+      const second = createClientFactory({
+        threads: {
+          "thread-worker-a": makeCompletedThread(),
+          "thread-coordinator-b": makeCompletedThread({
+            id: "thread-coordinator-b",
+            latestTurn: null,
+            messages: [],
+          }),
+        },
+      });
+      await detectAttentionEvents({ env: "dev-vm", clientFactory: second.clientFactory });
+      await deliverPendingNotifications({ env: "dev-vm", clientFactory: second.clientFactory });
+      expect(first.sent[0]?.text).toContain("Thread communication quick start");
+      expect(second.sent[0]?.text).toContain("Thread communication quick start");
+    });
   });
 });
