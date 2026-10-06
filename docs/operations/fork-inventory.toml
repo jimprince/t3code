@@ -2404,4 +2404,9 @@ note = "Fixes the server-side variant of brad/t3code-fork#150. The release waits
 [[patch.decision]]
 id = "v2-m5-session-reconcile"
 decision = "adapt"
-note = "V2 has runs and shared runtime session records, not V1 session summaries. Successful provider interrupt effects already dispatch thread.background-work.settle; its receipt now settles the exact interrupted run, attempt and nodes and clears the matching session. A fork RPC preserves t3-thread session reconcile and refuses live/newer runs. Startup recovery already stops all process-bound sessions; no new migration is needed. OpenCode shutdown does not send another interrupt after the server has acknowledged Stop while its native terminal event is still queued."
+note = "V2 has runs and shared runtime session records, not V1 session summaries. Successful provider interrupt effects already dispatch thread.background-work.settle; its receipt now settles the exact interrupted run, attempt and nodes and clears the matching session. A fork RPC preserves t3-thread session reconcile and refuses live/newer runs. Startup recovery already stops all process-bound sessions; no new migration is needed. Replay teardown waits for the native terminal receipt after an acknowledged Stop; upstream OpenCode interrupt and external-server shutdown stay unchanged."
+
+[[patch.decision]]
+id = "v2-ci3-native-stop-replay-drain"
+decision = "adapt"
+note = "The fork terminalizes the run on Stop ACK, while native terminal receipts still arrive in production because the session event scope stays open. Replay teardown drains the acknowledged OpenCode native terminal receipt before closing that scope; upstream adapter behavior and exhaustive transcript assertComplete stay unchanged."
