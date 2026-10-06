@@ -32,6 +32,9 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
+import type * as SqlError from "effect/unstable/sql/SqlError";
+import { readForkHistory } from "./legacy/ForkHistoryRead.ts";
 
 import * as Orchestrator from "./Orchestrator.ts";
 import { projectTurnItemForDetail } from "./WireProjection.ts";
@@ -783,3 +786,20 @@ export const layerWithLegacyImporter: Layer.Layer<
   never,
   LegacyV1ThreadImporter.LegacyV1ThreadImporter | Orchestrator.OrchestratorV2
 > = Layer.effect(ThreadManagementService, make);
+
+/** Read-only evidence access stays behind the existing V1 import boundary. */
+export class LegacyHistoryAccess extends Context.Service<
+  LegacyHistoryAccess,
+  {
+    readonly read: (
+      threadId: ThreadId,
+    ) => Effect.Effect<Record<string, unknown>, SqlError.SqlError>;
+  }
+>()("t3/orchestration-v2/ThreadManagementService/LegacyHistoryAccess") {}
+export const legacyHistoryLayer = Layer.effect(
+  LegacyHistoryAccess,
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    return LegacyHistoryAccess.of({ read: (threadId) => readForkHistory(sql, threadId) });
+  }),
+);
