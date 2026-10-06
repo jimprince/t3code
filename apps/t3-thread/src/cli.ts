@@ -2627,7 +2627,9 @@ registerAutomationCommands(program);
 // The watcher dies with whatever process tree started it, so a server restart leaves
 // queued sends with no one to drain them until some command revives it. Any command
 // that finds work waiting does so, instead of waiting for a send to enqueue more.
-program.hook("preAction", async (_command, action) => {
+// It runs after a successful action: the liveness check rewrites the state file, so a
+// refused command (env forget without --force) must leave the file untouched.
+program.hook("postAction", async (_command, action) => {
   if (action.name() === "watch") return;
   try {
     if (hasQueuedWork(await loadState())) await ensureNotificationWatcher();
