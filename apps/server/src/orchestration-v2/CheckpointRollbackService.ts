@@ -1,4 +1,10 @@
 import {
+  makeConversationRewind,
+  type ConversationBaseline,
+  type ConversationRewindError,
+} from "../fork/recovery/ConversationRewind.ts";
+import * as ThreadCommandExecutor from "./ThreadCommandExecutor.ts";
+import {
   CheckpointId,
   CheckpointScopeId,
   latestProviderTurnForAttempt,
@@ -66,6 +72,9 @@ export class CheckpointRollbackExecutionError extends Schema.TaggedError<Checkpo
 const isCheckpointRollbackExecutionError = Schema.is(CheckpointRollbackExecutionError);
 
 export interface CheckpointRollbackServiceV2Shape {
+  readonly rewindConversation: (
+    input: ConversationBaseline,
+  ) => Effect.Effect<void, ConversationRewindError>;
   readonly execute: (input: {
     readonly threadId: ThreadId;
     readonly providerThreadId: ProviderThreadId;
@@ -106,6 +115,14 @@ export const layer: Layer.Layer<
     const projects = yield* ProjectStore.ProjectStoreV2;
     const path = yield* Path.Path;
     const threadCommands = yield* ThreadCommandExecutor.ThreadCommandExecutor;
+    const rewindConversation = makeConversationRewind({
+      projections,
+      sessions,
+      eventSink,
+      ids,
+      runtimePolicy,
+      threadLock: threadCommands,
+    });
 
     const execute = Effect.fn("orchestrationV2.checkpointRollback.execute")(function* (input: {
       readonly threadId: ThreadId;
@@ -354,6 +371,7 @@ export const layer: Layer.Layer<
     });
 
     return CheckpointRollbackServiceV2.of({
+      rewindConversation,
       execute: (input) =>
         execute(input).pipe(
           Effect.mapError((cause) =>
@@ -370,4 +388,4 @@ export const layer: Layer.Layer<
         ),
     });
   }),
-);
+).pipe(Layer.provide(ThreadCommandExecutor.layer));

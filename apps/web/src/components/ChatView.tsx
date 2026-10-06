@@ -8389,6 +8389,7 @@ export default function ChatView(props: ChatViewProps) {
     turnCount: number;
     messageId: MessageId;
     routeThreadKey: string;
+    canRestoreFiles: boolean;
   } | null>(null);
 
   if (pendingRevert && pendingRevert.routeThreadKey !== routeThreadKey) {
@@ -8440,7 +8441,15 @@ export default function ChatView(props: ChatViewProps) {
         return;
       }
       if (restoreFiles === undefined) {
-        setPendingRevert({ turnCount, messageId, routeThreadKey });
+        setPendingRevert({
+          turnCount,
+          messageId,
+          routeThreadKey,
+          canRestoreFiles: turnDiffSummaries.some(
+            (checkpoint) =>
+              checkpoint.status === "ready" && checkpoint.checkpointTurnCount === turnCount,
+          ),
+        });
         return;
       }
 
@@ -8474,7 +8483,7 @@ export default function ChatView(props: ChatViewProps) {
         await waitForRevertedMessage(routeThreadRef, messageId, turnCount, commandId, async () => {
           const result = await revertThreadCheckpoint({
             environmentId,
-            input: { commandId, threadId: activeThread.id, turnCount, restoreFiles },
+            input: { commandId, threadId: activeThread.id, turnCount, restoreFiles, messageId },
           });
           if (result._tag === "Failure") throw squashAtomCommandFailure(result);
         });
@@ -12057,6 +12066,7 @@ export default function ChatView(props: ChatViewProps) {
             <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
             <Button
               variant="destructive"
+              disabled={!pendingRevert?.canRestoreFiles}
               onClick={() => {
                 if (!pendingRevert || pendingRevert.routeThreadKey !== routeThreadKey) return;
                 setPendingRevert(null);
