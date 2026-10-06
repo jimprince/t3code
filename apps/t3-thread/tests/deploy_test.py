@@ -66,6 +66,63 @@ class DeployTest(unittest.TestCase):
     def events(self):
         return (self.root / "events").read_text() if (self.root / "events").exists() else ""
 
+    def commit_source_fixture(self, *paths):
+        subprocess.run(["git", "-C", self.repo, "add", "--", *paths], check=True)
+        subprocess.run(["git", "-C", self.repo, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "source fixture"], check=True)
+        return subprocess.check_output(["git", "-C", self.repo, "rev-parse", "HEAD"], text=True).strip()
+
+    def assert_nonmutating_new_ref_dry_run(self, requested):
+        target = self.snap / requested[:8]
+        self.assertFalse(target.exists())
+        before = sorted(p.name for p in self.snap.iterdir())
+        result = self.deploy("--dry-run", "--retain-snapshots", "--ref", requested)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("bun install --frozen-lockfile", result.stdout, "dry-run must use requested-ref manager, not HEAD or worktree")
+        self.assertNotIn("pnpm install --frozen-lockfile", result.stdout)
+        self.assertIn("would verify:", result.stdout)
+        self.assertIn("would restart and verify:", result.stdout)
+        self.assertEqual(sorted(p.name for p in self.snap.iterdir()), before)
+        self.assertFalse(target.exists(), "dry-run created a destination directory")
+        self.assertEqual(os.readlink(self.snap / "current"), "old")
+        self.assertEqual((self.snap / "old/keep").read_text(), "old runtime")
+        self.assertNotIn("build", self.events())
+        self.assertNotIn("restart", self.events())
+
+    def test_dry_run_new_snapshot_reads_exact_requested_ref(self):
+        package = self.repo / "package.json"
+        package.write_text('{"packageManager":"bun@1.3.0"}')
+        requested = self.commit_source_fixture("package.json")
+        package.write_text('{"packageManager":"pnpm@11.10.0"}')
+        self.commit_source_fixture("package.json")
+        self.assert_nonmutating_new_ref_dry_run(requested)
+
+    def test_dry_run_lockfile_fallback_reads_exact_requested_ref(self):
+        (self.repo / "package.json").write_text("{}")
+        (self.repo / "bun.lock").write_text("fixture lock")
+        requested = self.commit_source_fixture("package.json", "bun.lock")
+        (self.repo / "bun.lock").unlink()
+        (self.repo / "pnpm-lock.yaml").write_text("fixture lock")
+        self.commit_source_fixture("bun.lock", "pnpm-lock.yaml")
+        self.assert_nonmutating_new_ref_dry_run(requested)
+
+    def test_ordinary_install_uses_checked_out_requested_ref(self):
+        (self.repo / "apps/t3-thread").mkdir(parents=True)
+        (self.repo / "apps/t3-thread/package.json").write_text("{}")
+        (self.repo / "package.json").write_text('{"packageManager":"bun@1.3.0"}')
+        requested = self.commit_source_fixture("package.json", "apps/t3-thread/package.json")
+        (self.repo / "package.json").write_text('{"packageManager":"pnpm@11.10.0"}')
+        self.commit_source_fixture("package.json")
+        self.stub("bun", 'echo install-bun >> "$TEST_LOG"')
+        self.stub("pnpm", 'echo install-pnpm >> "$TEST_LOG"; exit 99')
+        self.env["TEST_LOADED"] = "not-found"
+        result = self.deploy("--retain-snapshots", "--ref", requested)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("install-bun", self.events())
+        self.assertNotIn("install-pnpm", self.events())
+        self.assertEqual(os.readlink(self.snap / "current"), requested[:8])
+        self.assertEqual((self.snap / requested[:8] / "package.json").read_text(), '{"packageManager":"bun@1.3.0"}')
+        self.assertEqual((self.snap / "old/keep").read_text(), "old runtime")
+
     def prepare_failing_new_snapshot(self):
         self.stop_watcher()
         shutil.rmtree(self.snap / self.sha)

@@ -324,7 +324,9 @@ before changing `current`; the wrapper still accepts `T3_THREAD_REPO` and
 stamp unable to run until they are explicitly built or redeployed.
 
 Use `t3-thread-deploy --retain-snapshots --from <checkout> --ref <reviewed-ref>`
-when runtime directories must be preserved. It still builds, verifies, promotes
+when runtime directories must be preserved. Preview with `--dry-run`; dependency
+commands come from the requested Git ref even before its snapshot exists.
+It still builds, verifies, promotes
 and restarts the managed watcher, but skips pruning (including `--prune-only`)
 and retains a newly created snapshot if preparation fails. Inspect and repair
 an incomplete snapshot before retrying: a retained directory is not proof of a

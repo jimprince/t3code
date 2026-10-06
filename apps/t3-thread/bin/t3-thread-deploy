@@ -53,11 +53,21 @@ esac
 # bun during 2026, and old snapshots still install with pnpm. Follow the tree
 # being deployed instead of pinning one.
 install_deps() {
-  local dest="$1" manager
-  manager="$(sed -n 's/.*"packageManager"[[:space:]]*:[[:space:]]*"\([a-z]*\)@.*/\1/p' "$dest/package.json" 2>/dev/null | head -1)"
-  if [ -z "$manager" ]; then
-    if [ -f "$dest/bun.lock" ] || [ -f "$dest/bun.lockb" ]; then manager=bun
-    elif [ -f "$dest/pnpm-lock.yaml" ]; then manager=pnpm
+  local dest="$1" target_ref="$2" manager
+  if [ "$DRY_RUN" -eq 1 ]; then
+    # Dry-run has no destination yet. Read the same committed tree we would clone.
+    manager="$(git -C "$SOURCE_REPO" show "$target_ref:package.json" | sed -n 's/.*"packageManager"[[:space:]]*:[[:space:]]*"\([a-z]*\)@.*/\1/p' | head -1)"
+    if [ -z "$manager" ]; then
+      if git -C "$SOURCE_REPO" cat-file -e "$target_ref:bun.lock" 2>/dev/null || git -C "$SOURCE_REPO" cat-file -e "$target_ref:bun.lockb" 2>/dev/null; then manager=bun
+      elif git -C "$SOURCE_REPO" cat-file -e "$target_ref:pnpm-lock.yaml" 2>/dev/null; then manager=pnpm
+      fi
+    fi
+  else
+    manager="$(sed -n 's/.*"packageManager"[[:space:]]*:[[:space:]]*"\([a-z]*\)@.*/\1/p' "$dest/package.json" 2>/dev/null | head -1)"
+    if [ -z "$manager" ]; then
+      if [ -f "$dest/bun.lock" ] || [ -f "$dest/bun.lockb" ]; then manager=bun
+      elif [ -f "$dest/pnpm-lock.yaml" ]; then manager=pnpm
+      fi
     fi
   fi
   case "$manager" in
@@ -98,7 +108,7 @@ deploy() {
       echo "t3-thread-deploy: $target_ref ($sha) has no apps/t3-thread workspace; deploy a ref with the fork patch stack applied" >&2
       false
     fi
-    install_deps "$dest"
+    install_deps "$dest" "$sha"
     trap - ERR
   fi
 
