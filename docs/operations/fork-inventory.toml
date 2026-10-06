@@ -1280,6 +1280,12 @@ roles = []
 note = "The shared runner caches ENOENT only when executable resolution confirms absence, keyed by executable environment and provider settings generation. Successful PATH resolutions are reused. Explicit provider contexts include cwd, remote, requested authority, and settings/environment in a single-flight cache; each PR sweep retains refinements until all its repository groups complete. PR sweeps and periodic VCS refreshes opt into a shared five-attempts/second limit; interactive work keeps its own deadlines. Last-minute executable counters cover ProcessRunner's direct spawn calls, not vendor descendants or all host processes. The existing root resolver already caches null roots for one minute. Internal VcsProcess Git calls resolve once per executable environment to a path outside agent safety wrapper directories, preferring system Git on macOS and rejecting wrapper symlink aliases; agent shells retain their PATH."
 
 [[patch.decision]]
+id = "v2-port-2689-m2"
+date = "2026-10-06"
+decided = "reconcile-smaller"
+rationale = "V2 port: one fork decorator on the native process runner owns the execution-context-keyed missing-binary cache (bounded at 2048) and background pacing; interactive launches bypass pacing, and a newly found binary clears its negative entry at once. The provider-refinement cache scopes native PR sweeps without replacing native refresh."
+
+[[patch.decision]]
 id = "upstream14673-sweep-scope"
 date = "2026-10-02"
 decided = "adapt"
