@@ -1046,6 +1046,13 @@ captured requests.
 
 ## Project page widgets and tracker repository
 
+A project (a Projects sidebar entry with its own page) is a top-level thread with workers, or a
+pinned top-level thread: `t3-thread pin <thread>` makes the chief of staff a project without
+nesting the other orchestrators under it. Pinned projects are listed first, in pin order
+(`t3-thread move <thread> --top`). A pinned project's own row also stays in the Threads
+sidebar's Pinned section (its workers stay under Projects), so the same pin order puts it at
+the top of both lists.
+
 Brad's project page calls the tracker's issues Tasks, and every task has one of four statuses,
 the same on the Tasks board, the Roadmap and in Needs you: Pending, Active (marked in progress,
 or a worker thread linked to it is working), For review (waiting on Brad, shipped work to test
