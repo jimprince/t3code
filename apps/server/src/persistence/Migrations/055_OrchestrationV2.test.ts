@@ -26,7 +26,7 @@ layer("055_OrchestrationV2", (it) => {
       const executed = yield* runMigrations();
       assert.deepStrictEqual(executed, [
         [59, "ProjectionThreadsAutoSettleDisabledAt"],
-        [60, "ProjectionThreadIssues"] ,
+        [60, "ProjectionThreadIssues"],
         [61, "OrchestrationV2"],
         [62, "RemoveRedundantProjectionIndexes"],
       ]);
