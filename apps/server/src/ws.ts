@@ -1,5 +1,6 @@
 import { resourceRecoveryHandlers } from "./resourceRecoveryRpc.ts";
 import { makeMetadataHandlers } from "./forkThreads/MetadataRpc.ts";
+import { withWorkerSummaries } from "./forkThreads/WorkerSummaryService.ts";
 import { threadSubscriptionHandlers } from "./threadSubscriptionHandlers.ts";
 import { makeWorkspaceUploadHandlers } from "./workspace/WorkspaceUploadRpc.ts";
 import { headlessDeliveryHandlers } from "./headlessDeliveryRpc.ts";
@@ -752,7 +753,9 @@ export const subscribeOrchestrationV2Thread = Effect.fn("ws.orchestrationV2.subs
     readonly requestCompletionMarker?: boolean;
     readonly acceptBoundedSnapshot?: boolean;
   }) {
-    const threadManagement = yield* ThreadManagementService.ThreadManagementService;
+    const threadManagement = yield* withWorkerSummaries(
+      ThreadManagementService.ThreadManagementService,
+    );
     const applicationEvents = yield* OrchestrationEventStore.OrchestrationEventStore;
 
     yield* Effect.annotateCurrentSpan({
@@ -943,7 +946,9 @@ export const subscribeOrchestrationV2Shell = Effect.fn("ws.orchestrationV2.subsc
     readonly requestCompletionMarker?: boolean;
   }) {
     const sql = yield* SqlClient.SqlClient;
-    const threadManagement = yield* ThreadManagementService.ThreadManagementService;
+    const threadManagement = yield* withWorkerSummaries(
+      ThreadManagementService.ThreadManagementService,
+    );
     const applicationEvents = yield* OrchestrationEventStore.OrchestrationEventStore;
     const projects = yield* ProjectStore.ProjectStoreV2;
     const projectService = yield* ProjectService.ProjectService;
@@ -1191,7 +1196,9 @@ const makeWsRpcLayer = (
     Effect.gen(function* () {
       const currentSessionId = currentSession.sessionId;
       const sql = yield* SqlClient.SqlClient;
-      const threadManagement = yield* ThreadManagementService.ThreadManagementService;
+      const threadManagement = yield* withWorkerSummaries(
+        ThreadManagementService.ThreadManagementService,
+      );
       const intakeContext = yield* Effect.context<
         | ThreadManagementService.ThreadManagementService
         | ThreadLaunchService.ThreadLaunchService
