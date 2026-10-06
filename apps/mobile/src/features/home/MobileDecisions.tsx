@@ -11,6 +11,7 @@ import { useState } from "react";
 import { Pressable, TextInput, View } from "react-native";
 
 import { AppText as Text } from "../../components/AppText";
+import { MobileLinkifiedText } from "./MobileLinkifiedText";
 import { mobileDecideProjectRequest, mobileProjectIssues } from "../../state/projectRequests";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -63,7 +64,9 @@ function DecisionCard({
     <View className="gap-1 border-t border-border pt-2">
       <Text className="text-sm text-foreground">{issue.title}</Text>
       {decision.context ? (
-        <Text className="text-xs text-foreground-muted">{decision.context}</Text>
+        <Text className="text-xs text-foreground-muted">
+          <MobileLinkifiedText text={decision.context} />
+        </Text>
       ) : null}
       {sent ? (
         <Text className="text-sm text-foreground">{decisionSendStrip("sent", waiting).text}</Text>
@@ -81,7 +84,9 @@ function DecisionCard({
                     onPress={() => setSelected({ kind: "option", option: option.text })}
                     className={`min-h-11 flex-row items-center gap-2 rounded-md border px-2 py-2 ${active ? "border-foreground" : "border-border"}`}
                   >
-                    <Text className="min-w-0 flex-1 text-sm text-foreground">{option.text}</Text>
+                    <Text className="min-w-0 flex-1 text-sm text-foreground">
+                      <MobileLinkifiedText text={option.text} />
+                    </Text>
                     {option.recommended ? (
                       <Text className="text-xs text-foreground-muted">Recommended</Text>
                     ) : null}
