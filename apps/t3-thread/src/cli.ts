@@ -38,6 +38,13 @@ import {
 } from "./monitor.js";
 import { parseNotificationLevel } from "./notifications.js";
 import {
+  addWidgetOp,
+  dashboardSetOps,
+  describeLayout,
+  parseLayoutOps,
+  parseWidgetIds,
+} from "./projectLayout.js";
+import {
   classifyThread,
   formatThreadLine,
   selectThreadChildren,
@@ -110,6 +117,7 @@ function resolveParentThreadId(
   assertThreadSearchUuid(reference);
   return reference;
 }
+import type { ProjectLayout } from "@t3tools/contracts";
 
 function printJson(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
@@ -712,6 +720,90 @@ projectTracker
         threadId: target.threadId,
         tracker: null,
       }),
+    );
+  });
+
+const projectLayout = project
+  .command("layout")
+  .description(
+    "The project page's layout: tabs of widgets, changed with the same ops as Brad's drag and drop",
+  );
+
+projectLayout
+  .command("get")
+  .argument("<thread>", "saved agent name or raw thread UUID in the project")
+  .description("Every tab with every widget (id, type, size, config) and the current revision")
+  .action(async (reference) => {
+    const { agent: target, client } = await withAgent(reference);
+    printJson(
+      describeLayout(
+        await client.projectLayout<ProjectLayout>("projectLayoutGet", {
+          threadId: target.threadId,
+        }),
+      ),
+    );
+  });
+
+projectLayout
+  .command("apply")
+  .argument("<thread>", "saved agent name or raw thread UUID in the project")
+  .requiredOption(
+    "--ops <json>",
+    'JSON array of layout ops, e.g. [{"op":"addWidget","tabId":"dashboard","widget":{"type":"decisions"}}]; all apply or none',
+  )
+  .option(
+    "--base-revision <n>",
+    "the revision the ops were made against (default: the current one)",
+  )
+  .option("--reason <text>", "why, shown beside the change in the page's history (max 200 chars)")
+  .action(async (reference, options: { ops: string; baseRevision?: string; reason?: string }) => {
+    const ops = parseLayoutOps(options.ops);
+    const { agent: target, client } = await withAgent(reference);
+    const baseRevision =
+      options.baseRevision === undefined
+        ? (
+            await client.projectLayout<ProjectLayout>("projectLayoutGet", {
+              threadId: target.threadId,
+            })
+          ).revision
+        : Number(options.baseRevision);
+    if (!Number.isInteger(baseRevision) || baseRevision < 0) {
+      throw new Error("--base-revision must be a whole number.");
+    }
+    printJson(
+      describeLayout(
+        await client.projectLayout<ProjectLayout>("projectLayoutApply", {
+          threadId: target.threadId,
+          baseRevision,
+          ops,
+          ...(options.reason ? { reason: options.reason } : {}),
+        }),
+      ),
+    );
+  });
+
+projectLayout
+  .command("add")
+  .argument("<thread>", "saved agent name or raw thread UUID in the project")
+  .argument("<type>", "widget type, e.g. decisions, markdown, links, working")
+  .option("--tab <id>", "tab id to add it to", "dashboard")
+  .option("--reason <text>", "why, shown beside the change in the page's history (max 200 chars)")
+  .description("Add one widget at the end of a tab")
+  .action(async (reference, type: string, options: { tab: string; reason?: string }) => {
+    const op = addWidgetOp(type, options.tab);
+    const { agent: target, client } = await withAgent(reference);
+    const current = await client.projectLayout<ProjectLayout>("projectLayoutGet", {
+      threadId: target.threadId,
+    });
+    printJson(
+      describeLayout(
+        await client.projectLayout<ProjectLayout>("projectLayoutApply", {
+          threadId: target.threadId,
+          baseRevision: current.revision,
+          ops: [op],
+          ...(options.reason ? { reason: options.reason } : {}),
+        }),
+      ),
     );
   });
 
@@ -1986,10 +2078,20 @@ const dashboard = agent
 
 dashboard
   .command("show")
+  .description(
+    "Every widget on every tab (tabs), plus the first tab's older widget ids (widgets) for scripts",
+  )
   .argument("<thread>", "saved agent name or raw thread UUID in the project")
   .action(async (reference) => {
     const { agent: target, client } = await withAgent(reference);
-    printJson(await client.projectDashboard("projectDashboardGet", { threadId: target.threadId }));
+    const dashboardState = await client.projectDashboard<Record<string, unknown>>(
+      "projectDashboardGet",
+      { threadId: target.threadId },
+    );
+    const layout = await client.projectLayout<ProjectLayout>("projectLayoutGet", {
+      threadId: target.threadId,
+    });
+    printJson({ ...dashboardState, ...describeLayout(layout) });
   });
 
 dashboard
@@ -1997,22 +2099,34 @@ dashboard
   .argument("<thread>", "saved agent name or raw thread UUID in the project")
   .option(
     "--widgets <ids>",
-    "comma-separated widget ids in order, e.g. requests,release,needs-you,working,roadmap,canvas",
+    "comma-separated widget ids in order for the first tab: any widget type (decisions, markdown, ...) or older id (roadmap, canvas, canvas:<id>); an unknown id is an error",
   )
   .option("--reset", "restore the default widgets and order")
   .action(async (reference, options: { widgets?: string; reset?: boolean }) => {
     if (!options.reset && !options.widgets) throw new Error("Pass --widgets <ids> or --reset.");
     const { agent: target, client } = await withAgent(reference);
+    if (options.reset) {
+      printJson(
+        await client.projectDashboard("projectDashboardSetWidgets", {
+          threadId: target.threadId,
+          widgets: null,
+        }),
+      );
+      return;
+    }
+    const layout = await client.projectLayout<ProjectLayout>("projectLayoutGet", {
+      threadId: target.threadId,
+    });
+    const ops = dashboardSetOps(layout, parseWidgetIds(options.widgets!));
     printJson(
-      await client.projectDashboard("projectDashboardSetWidgets", {
-        threadId: target.threadId,
-        widgets: options.reset
-          ? null
-          : options
-              .widgets!.split(",")
-              .map((widget) => widget.trim())
-              .filter(Boolean),
-      }),
+      describeLayout(
+        await client.projectLayout<ProjectLayout>("projectLayoutApply", {
+          threadId: target.threadId,
+          baseRevision: layout.revision,
+          ops,
+          reason: "dashboard set",
+        }),
+      ),
     );
   });
 
