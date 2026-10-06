@@ -82,6 +82,7 @@ import { useAtomValue } from "@effect/atom-react";
 
 import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
 import { useDesktopLocalBootstraps } from "../connection/useDesktopLocalBootstraps";
+import { useThreadNestingPaletteItems } from "../hooks/useThreadNesting";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
@@ -745,6 +746,7 @@ function OpenCommandPaletteDialog(props: {
   const availableSettingsSearchItems = useAvailableSettingsSearchItems();
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread } =
     useHandleNewThread();
+  const threadNestingPaletteItems = useThreadNestingPaletteItems(activeThread);
   const projects = useProjects();
   const referenceThreadRef =
     pathname === "/pull-requests"
@@ -1960,6 +1962,8 @@ function OpenCommandPaletteDialog(props: {
       run: () => startScratchThread(scratchTargetEnvironmentId),
     });
   }
+
+  actionItems.push(...threadNestingPaletteItems);
 
   if (activeThreadReferenceCopyTarget !== null) {
     actionItems.push({
