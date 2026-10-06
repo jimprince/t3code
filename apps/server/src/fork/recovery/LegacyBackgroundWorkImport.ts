@@ -6,6 +6,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
+import { readForkBackgroundWork } from "../../orchestration-v2/legacy/ForkBackgroundWorkRead.ts";
 import * as ThreadManagement from "../../orchestration-v2/ThreadManagementService.ts";
 import * as ServerSettings from "../../serverSettings.ts";
 import { legacyNoticeCanStart } from "./LegacyBackgroundWorkPolicy.ts";
@@ -43,14 +44,7 @@ const make = Effect.gen(function* () {
   const recover = Effect.gen(function* () {
     if (!(yield* automaticStartupResumeAllowed)) return;
     const settings = yield* settingsService.getSettings;
-    const rows = yield* sql<{ thread_id: string; tasks_json: string; updated_at: string }>`
-      SELECT work.thread_id, work.tasks_json, work.updated_at FROM fork_thread_background_work work
-      LEFT JOIN projection_thread_sessions session ON session.thread_id = work.thread_id
-      LEFT JOIN projection_threads thread ON thread.thread_id = work.thread_id
-      LEFT JOIN projection_turns turn ON turn.thread_id = thread.thread_id AND turn.turn_id = thread.latest_turn_id
-      WHERE COALESCE(session.status, '') NOT IN ('stopped', 'interrupted', 'error')
-        AND COALESCE(turn.state, '') NOT IN ('interrupted', 'error')
-    `;
+    const rows = yield* readForkBackgroundWork(sql);
     for (const row of rows) {
       yield* Effect.gen(function* () {
         const tasks = decodeTasks(row.tasks_json);
