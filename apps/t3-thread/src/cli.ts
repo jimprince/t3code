@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { registerAutomationCommands } from "./automations.js";
 
+import { parseInactivityMinutes } from "./inactivity.js";
 import { Command } from "commander";
 
 import { readSavedStatus } from "./saved-status.js";
@@ -762,6 +763,11 @@ agent
     "all",
   )
   .option(
+    "--inactivity-minutes <minutes>",
+    "active worker silence threshold; recommend 15; 0 disables",
+    parseInactivityMinutes,
+  )
+  .option(
     "--input-reminder-minutes <minutes>",
     "unanswered child reminder interval; 0 disables reminders",
     parseInputReminderMinutes,
@@ -860,6 +866,7 @@ agent
           buildSubscriptionRecord(notifyCaller, savedAgent, createdAt, existing, {
             level: options.notifyLevel,
             inputReminderMinutes: options.inputReminderMinutes,
+            inactivityMinutes: options.inactivityMinutes,
           }),
         );
       }
@@ -1269,6 +1276,11 @@ agent
   .requiredOption("--watch <name>", "saved source agent name or raw thread UUID to watch")
   .option("--level <level>", "all, attention, or none", parseNotificationLevel)
   .option(
+    "--inactivity-minutes <minutes>",
+    "active worker silence threshold; recommend 15; 0 disables",
+    parseInactivityMinutes,
+  )
+  .option(
     "--input-reminder-minutes <minutes>",
     "unanswered child reminder interval; 0 disables reminders",
     parseInputReminderMinutes,
@@ -1308,6 +1320,7 @@ agent
         baselineTurnId: existing ? existing.baselineTurnId : baselineTurnId,
         level: options.level,
         inputReminderMinutes: options.inputReminderMinutes,
+        inactivityMinutes: options.inactivityMinutes,
       });
       return {
         state: {
