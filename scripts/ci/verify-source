@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Shared by CI, release fallback, and complete-stack verification. Install and
+# platform build prerequisites belong to the caller; failures are never waived.
+phase="${1:-all}"
+if [[ $# -gt 0 ]]; then shift; fi
+failure=0
+
+# Report independent failures together so one repair can address them all.
+# Keep the first failing status; collecting diagnostics never permits promotion.
+run_check() {
+  local code
+  if "$@"; then
+    return 0
+  else
+    code=$?
+    if [[ "$failure" == 0 ]]; then failure="$code"; fi
+    printf 'Verification command failed (exit %s): %s\n' "$code" "$*" >&2
+  fi
+}
+
+# One phase per CI job, each self-contained so a job needs no setup step of its
+# own, plus the aggregates a local complete-tip run and the release fallback use.
+case "$phase" in
+  lint)
+    vp run --filter @t3tools/desktop ensure:electron
+    vp run --filter @t3tools/oxlint-plugin-t3code build
+    run_check vp run knip:check
+    run_check vp check
+    ;;
+  typecheck)
+    vp run --filter @t3tools/desktop ensure:electron
+    run_check vp run --concurrency-limit 2 --filter '!@t3tools/monorepo' --filter '!@t3tools/scripts' --filter '!t3code-relay' --filter '!@t3tools/oxlint-plugin-t3code' typecheck
+    # Keep verification tooling covered when another workspace fails first.
+    for workspace in @t3tools/scripts t3code-relay @t3tools/oxlint-plugin-t3code; do
+      run_check vp run --filter "$workspace" typecheck
+    done
+    ;;
+  check)
+    run_check "$0" lint
+    run_check "$0" typecheck
+    ;;
+  build)
+    vp run --filter @t3tools/desktop ensure:electron
+    run_check vp run build:desktop
+    run_check node apps/desktop/scripts/verify-preload-bundle.mjs
+    ;;
+  release-smoke)
+    node scripts/release-smoke.ts
+    ;;
+  test-other)
+    vp run --filter @t3tools/desktop ensure:electron
+    run_check python3 -B .github/scripts/stage-preview-bundle.test.py
+    run_check node --test .github/scripts/check-nightly-release.test.cjs
+    run_check vp run --parallel --concurrency-limit 4 --filter '!t3' --filter '!@t3tools/monorepo' --filter '!@t3tools/web' --filter '!@t3tools/scripts' --filter '!t3code-relay' --filter '!@t3tools/oxlint-plugin-t3code' test
+    # The package runner can stop scheduling after a failure. Collect the
+    # shared tooling and relay results independently of app/provider failures.
+    for workspace in @t3tools/scripts t3code-relay @t3tools/oxlint-plugin-t3code; do
+      run_check vp run --filter "$workspace" test
+    done
+    ;;
+  test-web)
+    vp run --filter @t3tools/web test
+    ;;
+  test-server)
+    node apps/server/node_modules/playwright-core/cli.js install --with-deps --only-shell chromium
+    vp run --filter t3 test --bail=1 "$@"
+    ;;
+  test)
+    run_check "$0" test-other
+    run_check "$0" test-web
+    run_check "$0" test-server
+    ;;
+  all)
+    run_check "$0" check
+    run_check "$0" test
+    run_check "$0" build
+    run_check "$0" release-smoke
+    ;;
+  *) echo "Unknown verification phase: $phase" >&2; exit 2 ;;
+esac
+exit "$failure"
