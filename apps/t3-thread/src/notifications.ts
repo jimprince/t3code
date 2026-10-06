@@ -1,7 +1,13 @@
 import * as NodeCrypto from "node:crypto";
+import { pendingRequests } from "./v2/requests.js";
 
-import { summarizeMessageText, type AgentOverview } from "./monitor.js";
+import {
+  getLatestTurnAssistantMessage,
+  summarizeMessageText,
+  type AgentOverview,
+} from "./monitor.js";
 import type {
+  NotificationLevel,
   OrchestrationThread,
   SavedAgent,
   SavedNotification,
@@ -61,22 +67,38 @@ export function buildNotificationRecord(input: {
   now: string;
   existing?: SavedNotification | null;
 }): SavedNotification {
+  const baseKey = buildNotificationEventKey({
+    subscriberThreadId: input.subscription.subscriberThreadId,
+    sourceThreadId: input.subscription.sourceThreadId,
+    latestAssistantMessageId: input.overview.latestAssistantMessageId,
+    latestTurnId: input.thread.latestTurn?.turnId ?? null,
+    sourceState: input.overview.state,
+  });
+  const requiresRequestKey = ["needs-approval", "needs-input", "needs-plan"].includes(
+    input.overview.state,
+  );
+  const pendingIds = requiresRequestKey
+    ? pendingRequests(input.thread)
+        .map((request) => `${request.kind}:${request.id}`)
+        .sort()
+    : [];
+  const routeKey = requiresRequestKey
+    ? `${baseKey}:${input.overview.state}:${JSON.stringify(pendingIds)}:${JSON.stringify(
+        input.thread.proposedPlans
+          .filter((plan) => !plan.implementedAt)
+          .map((plan) => plan.id)
+          .sort(),
+      )}`
+    : baseKey;
+  // Environment-scoped so identical thread ids on different hosts never share an event.
   const eventKey =
     input.existing?.eventKey ??
-    JSON.stringify([
-      input.subscription.sourceEnvironment,
-      input.subscription.subscriberEnvironment,
-    ]) +
+    JSON.stringify([input.subscription.sourceEnvironment, input.subscription.subscriberEnvironment]) +
       ":" +
-      buildNotificationEventKey({
-        subscriberThreadId: input.subscription.subscriberThreadId,
-        sourceThreadId: input.subscription.sourceThreadId,
-        latestAssistantMessageId: input.overview.latestAssistantMessageId,
-        latestTurnId: input.thread.latestTurn?.turnId ?? null,
-        sourceState: input.overview.state,
-      });
+      routeKey;
 
   return {
+    completionDisposition: turnResultDisposition(input.thread),
     id: input.existing?.id ?? NodeCrypto.randomUUID(),
     eventKey,
     subscriberThreadId: input.subscription.subscriberThreadId,
@@ -94,6 +116,7 @@ export function buildNotificationRecord(input: {
     createdAt: input.existing?.createdAt ?? input.now,
     updatedAt: input.now,
     deliveredAt: input.existing?.deliveredAt ?? null,
+    onboardingDelivered: input.existing?.onboardingDelivered,
     lastAttemptedAt: input.existing?.lastAttemptedAt ?? null,
     lastError: input.existing?.lastError ?? null,
     deliveryClaimId: input.existing?.deliveryClaimId ?? null,
@@ -119,6 +142,7 @@ export function mergeDetectedNotification(
     status: existing.status,
     createdAt: existing.createdAt,
     deliveredAt: existing.deliveredAt ?? null,
+    onboardingDelivered: existing.onboardingDelivered,
     lastAttemptedAt: existing.lastAttemptedAt ?? null,
     lastError: existing.lastError ?? null,
     deliveryClaimId: existing.deliveryClaimId ?? null,
@@ -133,13 +157,17 @@ export function mergeDetectedNotification(
  * supervisor to decide whether the worker is finished, because nothing else
  * settles a quiet worker before automatic settlement days later.
  */
-export function buildNotificationMessage(notification: SavedNotification): string {
+export function buildNotificationMessage(
+  notification: SavedNotification,
+  includeOnboarding = false,
+): string {
   const sourceLabel = notification.sourceAgentName ?? notification.sourceThreadId;
   const preview = notification.preview ? summarizeMessageText(notification.preview, 120) : null;
-  return [
+  const notice = [
     `T3 orchestrator notification: ${sourceLabel} ${notification.sourceState === "completed" ? "completed a turn" : "needs attention"}.`,
     `State: ${notification.sourceState}.`,
     `Reason: ${notification.reason}.`,
+    (notification.occurrences ?? 1) > 1 ? `Occurrences: ${notification.occurrences}.` : null,
     preview ? `Latest output: ${preview}.` : null,
     notification.sourceState === "completed"
       ? `Decide whether ${sourceLabel} is finished: if so, settle it with \`t3-thread settle ${sourceLabel}\`; if not, send it the follow-up.`
