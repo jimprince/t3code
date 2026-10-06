@@ -332,8 +332,16 @@ service-health failure stops pruning and retains the previous runtime; repair
 the unit or atomically repoint `current` to the retained snapshot and restart
 only the watcher. `--dry-run` and `--prune-only` never restart it. An installed
 unit with an unavailable user bus fails closed. Hosts without this managed unit
-keep on-demand watcher behavior; explicitly stop/relaunch an unmanaged watcher
-before deploying or pruning its runtime. Never delete routing state or leases.
+keep on-demand watcher behavior. Every pruning path, including `--prune-only`,
+checks the routing-state lease before deletion. On Linux a live boot/start lease
+whose cwd is inside any predecessor blocks all pruning; stop/relaunch that
+watcher explicitly before retrying. Unknown or live legacy leases fail closed.
+Provably stale Linux leases and live watchers in the retained current runtime
+do not block pruning; the guard never removes leases or signals their owners.
+On other platforms a present lease blocks pruning until the watcher is stopped
+and its lease released through normal CLI lifecycle. These are point-in-time
+checks, not a lock against concurrent watcher startup; serialize deployment and
+watcher launch. Never delete routing state or leases.
 
 For a persistent Linux watcher, use a user unit enabled under `default.target`
 with `ExecStart=<shared-bin>/t3-thread watch --interval 5 --idle-exit 0

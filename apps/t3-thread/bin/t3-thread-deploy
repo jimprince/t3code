@@ -176,6 +176,54 @@ restart_managed_watcher() {
   fi
 }
 
+# Never remove a runtime still used by a leased watcher, including unmanaged
+# and prune-only paths. Read only: lease reclamation remains the CLI's job.
+check_prune_watcher() {
+  local state_file="${T3_AGENT_STATE_FILE:-$HOME/.config/t3-remote-agents/state.json}"
+  node - "${state_file%/*}/watch.pid" "$@" <<'NODE'
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const [leasePath, ...predecessors] = process.argv.slice(2);
+async function check() {
+  let raw;
+  try { raw = (await fs.readFile(leasePath, 'utf8')).trim(); }
+  catch (error) { if (error.code === 'ENOENT') return; throw error; }
+  const legacy = /^[1-9][0-9]*$/.test(raw);
+  let lease;
+  try { lease = legacy ? { pid: Number(raw) } : JSON.parse(raw); }
+  catch { throw new Error('Malformed watcher lease; refusing to prune'); }
+  if (!lease || !Number.isSafeInteger(lease.pid) || lease.pid <= 0 ||
+      (!legacy && (typeof lease.bootId !== 'string' || !lease.bootId ||
+                   typeof lease.startTime !== 'string' || !/^[0-9]+$/.test(lease.startTime)))) {
+    throw new Error('Cannot verify watcher lease; refusing to prune');
+  }
+  // The Linux deployment guard uses the same boot/start identity as the CLI.
+  // Other platforms with a lease need explicit watcher shutdown before pruning.
+  if (process.platform !== 'linux') throw new Error('Cannot verify watcher cwd on this platform; refusing to prune');
+  if (!legacy && !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(lease.bootId)) throw new Error('Invalid Linux boot identity; refusing to prune');
+  const boot = (await fs.readFile('/proc/sys/kernel/random/boot_id', 'utf8')).trim();
+  if (!legacy && lease.bootId !== boot) return;
+  let stat;
+  try { stat = await fs.readFile(`/proc/${lease.pid}/stat`, 'utf8'); }
+  catch (error) { if (error.code === 'ENOENT') return; throw error; }
+  const start = stat.slice(stat.lastIndexOf(')') + 2).trim().split(/\s+/)[19];
+  if (!/^[0-9]+$/.test(start)) throw new Error('Cannot verify watcher process; refusing to prune');
+  if (legacy) throw new Error('Live legacy watcher lease needs owner inspection; refusing to prune');
+  if (lease.startTime !== start) return;
+  let cwd;
+  try { cwd = await fs.readlink(`/proc/${lease.pid}/cwd`); }
+  catch (error) { if (error.code === 'ENOENT') return; throw error; }
+  for (const entry of predecessors) {
+    const runtime = await fs.realpath(entry);
+    if (cwd === runtime || cwd.startsWith(runtime + path.sep) || cwd === runtime + ' (deleted)') {
+      throw new Error('Live watcher uses a predecessor runtime; stop that watcher before pruning');
+    }
+  }
+}
+check().catch(error => { console.error(`t3-thread-deploy: ${error.message}`); process.exitCode = 1; });
+NODE
+}
+
 prune() {
   local current_target
   current_target="$(readlink "$SNAP_ROOT/current" 2>/dev/null || true)"
@@ -185,15 +233,23 @@ prune() {
   fi
 
   local entry name pruned=0
+  local candidates=()
   for entry in "$SNAP_ROOT"/*/; do
     [ -d "$entry" ] || continue
     name="$(basename "$entry")"
     [ "$name" = "$current_target" ] && continue
     [ "$name" = "current" ] && continue
-    echo "pruning superseded snapshot $name"
-    # /bin/rm directly: the shared rm wrapper's two-phase confirmation is for
-    # interactive callers, and this path is already guarded above.
-    run /bin/rm -rf "${SNAP_ROOT:?}/$name"
+    candidates+=("${SNAP_ROOT:?}/$name")
+  done
+  # Preflight all predecessors before any deletion, then narrow the race window
+  # by rereading the lease immediately before each individual deletion.
+  if [ "${#candidates[@]}" -gt 0 ]; then
+    check_prune_watcher "${candidates[@]}"
+  fi
+  for entry in "${candidates[@]}"; do
+    check_prune_watcher "$entry"
+    echo "pruning superseded snapshot $(basename "$entry")"
+    run /bin/rm -rf "$entry"
     pruned=$((pruned + 1))
   done
   [ "$pruned" -eq 0 ] && echo "nothing to prune; current ($current_target) is the only snapshot"
