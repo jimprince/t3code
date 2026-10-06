@@ -1,0 +1,4 @@
+id = "decisions-other"
+category = "feature"
+functionality = "projects"
+text = "Decisions are easier to answer: every decision with options now has Other... for your own answer, options show a send icon, and after you pick, the decision says Sent to the waiting agent with Undo, then Sent. Add a note with the Add note link, including after you pick. The mobile app gets Other..., Add note and a Sent confirmation too."
