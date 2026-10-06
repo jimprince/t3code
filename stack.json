@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "4e687f9ea4c9afa30e8c6ee975796f5e807f211e",
+  "prev": "80bd7999582dd1b9149dd7ef97b89645ae1cc93d",
   "head": "dcff0a5b85ca62e0047a27c72bdc4da44f778742",
   "applied": [
     "fork-build-ci-compat",
@@ -74,7 +74,6 @@
     "fork-maintenance-automation",
     "fork-page-agent-tray",
     "fork-antigravity-errors",
-    "fork-project-automations",
     "fork-project-issues-board",
     "fork-request-ledger",
     "fork-project-dashboard-widgets",
@@ -209,9 +208,6 @@
     },
     "fork-private-connection-defaults": {
       "oid": "863504962e435c2f7eba6f7fc1d68e5dbdfa5179"
-    },
-    "fork-project-automations": {
-      "oid": "5af468b49f442f8627f3e48e4da0558cb43bd60d"
     },
     "fork-project-canvas": {
       "oid": "345b41bf5ed5c35b75faae553029ee8cdec5818e"
