@@ -1,30 +1,11 @@
 import { useMemo } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { supervisionForest, supervisionKey } from "@t3tools/client-runtime/state/forkNesting";
 import { useThreadShells, useServerConfigs, useProjects } from "../../state/entities";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { ThreadDetailsSection } from "./ThreadDetailsSection";
 
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-
-/** Organizational workers are distinct from native fork/subagent Lineage. */
-export function SupervisionRows(props: { environmentId: EnvironmentId; threadId: ThreadId }) {
-  const shells = useThreadShells();
-  const forest = useMemo(() => supervisionForest(shells), [shells]);
-  const children = (forest.children.get(`${props.environmentId}:${props.threadId}`) ?? []).toSorted(
-    (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
-  );
-  if (children.length === 0) return null;
-  return (
-    <ThreadDetailsSection headingId="supervision-heading" title="Supervision">
-      {children.map((child) => (
-        <SupervisionWorkerRow key={supervisionKey(child)} child={child} />
-      ))}
-    </ThreadDetailsSection>
-  );
-}
 
 /** The nesting controls can reuse this row without another worker roster. */
 export function SupervisionWorkerRow({ child }: { child: EnvironmentThreadShell }) {

@@ -3,7 +3,6 @@ import { create, type ReactTestRenderer } from "react-test-renderer";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { afterEach, expect, it, vi } from "vite-plus/test";
 import {
-  supervisionForest,
   type ScopedSupervisionMetadata,
 } from "@t3tools/client-runtime/state/fork-nesting";
 import { makeThreadFixture } from "../../test-fixtures";
@@ -18,10 +17,16 @@ vi.mock("../../state/entities", () => ({
   useProjects: () => [],
 }));
 vi.mock("../../state/forkSupervision", () => ({
-  useSupervisionForest: () => supervisionForest(state.shells, state.metadata),
+  supervision: { query: vi.fn() },
+  useSupervisionMetadata: () => state.metadata,
 }));
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => state.navigate }));
-import { SupervisionRows } from "./SupervisionRows";
+vi.mock("../../connection/runtime", () => ({ connectionAtomRuntime: {} }));
+vi.mock("@t3tools/client-runtime/state/runtime", () => ({ createEnvironmentRpcCommand: vi.fn() }));
+vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
+import { SupervisionWorkerRow } from "./SupervisionRows";
+import { ForkSupervisionControl } from "./ForkSupervisionControl";
+const renderWorker = (child: ReturnType<typeof makeThreadFixture>) => <SupervisionWorkerRow child={child} />;
 let renderer: ReactTestRenderer;
 afterEach(async () => {
   await act(async () => renderer?.unmount());
@@ -59,7 +64,7 @@ it("updates output and attention without reordering completed workers or reading
     ...children,
   ];
   await act(async () => {
-    renderer = create(<SupervisionRows environmentId={env} threadId={ThreadId.make("parent")} />);
+    renderer = create(<ForkSupervisionControl environmentId={env} threadId={ThreadId.make("parent")} renderRow={renderWorker} />);
   });
   expect(JSON.stringify(renderer.toJSON())).toContain("Checking");
   state.shells = state.shells.map((t) =>
@@ -72,12 +77,12 @@ it("updates output and attention without reordering completed workers or reading
       : t,
   );
   await act(async () =>
-    renderer.update(<SupervisionRows environmentId={env} threadId={ThreadId.make("parent")} />),
+    renderer.update(<ForkSupervisionControl environmentId={env} threadId={ThreadId.make("parent")} renderRow={renderWorker} />),
   );
   const text = JSON.stringify(renderer.toJSON());
   expect(text).toContain("Done");
   expect(text).toContain("Needs input");
-  const buttons = renderer.root.findAllByType("button");
+  const buttons = renderer.root.findAllByType("button").filter((button) => button.findAllByType("span").length > 0);
   expect(buttons.map((b) => b.findAllByType("span")[0]!.children[0])).toEqual(["first", "second"]);
   expect(text).toContain("2 messages · 1 tools");
 });
