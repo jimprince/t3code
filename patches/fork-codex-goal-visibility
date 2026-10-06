@@ -1,6 +1,6 @@
-Bottom: c7fc18f29c08a80789def017ce9ecc0ce5bcac27
-Top:    35f6eb3e6e8be69097b15228bdfd31e8180eb199
+Bottom: aba7c0ff88f6863f89327534e9563b0958fd5867
+Top:    1dae76ad6e28fb1dec32680ddcfcef3107002a45
 Author: brad <bradprin@live.com>
-Date:   2026-10-06 23:19:08 +0000
+Date:   2026-10-06 23:33:12 +0000
 
 feat(codex): surface active goals in thread status

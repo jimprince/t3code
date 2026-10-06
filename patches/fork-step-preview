@@ -1,6 +1,6 @@
-Bottom: 3862d13aecaa05d35f0343c43cf4dfa3c2f274eb
-Top:    1216583d9105a6a139ea6300b4e1b7fa4afda6d0
+Bottom: 59630c6cfac31fc8b5ad847890d36440ae16603c
+Top:    ecfd6f78ca8fb834d9573f0b5551ee36d4958b1d
 Author: brad <bradprin@live.com>
-Date:   2026-10-06 23:19:00 +0000
+Date:   2026-10-06 23:33:12 +0000
 
 feat(models): preview STEP files inline
