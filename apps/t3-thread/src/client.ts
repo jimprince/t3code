@@ -1193,6 +1193,19 @@ export class RemoteEnvironmentClient {
     }
   }
 
+  /** Project page widgets and the project's Gitea tracker repository. */
+  async projectDashboard<T>(
+    method: "projectDashboardGet" | "projectDashboardSetWidgets" | "projectDashboardSetTracker",
+    input: Record<string, unknown>,
+  ): Promise<T> {
+    const rpc = await this.openRpc();
+    try {
+      return await rpc.request<T>(method, input);
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
   async settleThread(threadId: string, options: { self?: boolean } = {}) {
     if (threadId === resolveCallerThreadId() && !options.self) {
       throw new Error(
