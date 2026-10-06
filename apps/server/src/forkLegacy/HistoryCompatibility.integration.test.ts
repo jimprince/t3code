@@ -1,3 +1,4 @@
+import { assertFixtureMigration16 } from "../persistence/fixtureMigration16.testkit.ts";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeCrypto from "node:crypto";
 import * as NodeFSP from "node:fs/promises";
@@ -17,6 +18,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import { v2Projection } from "../../../../packages/client-runtime/src/state/orchestrationV2TestFixtures.ts";
 import {
   makeSqlitePersistenceLive,
@@ -75,7 +77,9 @@ const snapshotLegacy = (file: string) => {
           ? " WHERE application_event_version = 1"
           : table === "effect_sql_migrations"
             ? " WHERE migration_id <= 60"
-            : "";
+            : table === "effect_sql_fork_migrations"
+              ? " WHERE migration_id <= 15"
+              : "";
         const selected = columns
           .filter((column) => column !== "application_event_version")
           .join(", ");
@@ -196,6 +200,9 @@ describe.runIf(fixtures !== undefined)("copied shipped legacy history", () => {
           }
         });
         const before = snapshotLegacy(file);
+        yield* assertFixtureMigration16.pipe(
+          Effect.provide(NodeSqliteClient.layer({ filename: file })),
+        );
         for (const restart of [false, true]) {
           const db = makeSqlitePersistenceLive(file).pipe(Layer.provide(NodeServices.layer));
           const runtime = makeOrchestratorV2ReplayLayerWithRegistry(
@@ -329,6 +336,9 @@ describe.runIf(fixtures !== undefined)("copied shipped legacy history", () => {
         }
       });
       const before = snapshotLegacy(file);
+      yield* assertFixtureMigration16.pipe(
+        Effect.provide(NodeSqliteClient.layer({ filename: file })),
+      );
       for (const restart of [false, true]) {
         const db = makeSqlitePersistenceLive(file).pipe(Layer.provide(NodeServices.layer));
         const runtime = makeOrchestratorV2ReplayLayerWithRegistry(
@@ -419,6 +429,9 @@ describe.runIf(fixtures !== undefined)("copied shipped legacy history", () => {
           }
         });
         const before = snapshotLegacy(file);
+        yield* assertFixtureMigration16.pipe(
+          Effect.provide(NodeSqliteClient.layer({ filename: file })),
+        );
         const db = makeSqlitePersistenceLive(file).pipe(Layer.provide(NodeServices.layer));
         yield* Effect.gen(function* () {
           const importer = yield* Legacy.LegacyV1ThreadImporter;
@@ -512,6 +525,9 @@ describe.runIf(fixtures !== undefined)("copied shipped legacy history", () => {
           }
         });
         const before = snapshotLegacy(file);
+        yield* assertFixtureMigration16.pipe(
+          Effect.provide(NodeSqliteClient.layer({ filename: file })),
+        );
         const db = makeSqlitePersistenceLive(file).pipe(Layer.provide(NodeServices.layer));
         yield* Effect.gen(function* () {
           const sql = yield* SqlClient.SqlClient;
@@ -523,7 +539,7 @@ describe.runIf(fixtures !== undefined)("copied shipped legacy history", () => {
           const forkLedger =
             yield* sql`SELECT * FROM effect_sql_fork_migrations ORDER BY migration_id`;
           assert.equal(main.at(-1)?.migration_id, 62);
-          assert.equal(forkLedger.at(-1)?.migration_id, 15);
+          assert.equal(forkLedger.at(-1)?.migration_id, 16);
           yield* importer.reconcileShells;
           const ids = yield* sql<{
             thread_id: string;
