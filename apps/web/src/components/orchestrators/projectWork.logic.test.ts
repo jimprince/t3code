@@ -61,7 +61,7 @@ function blocked(
 }
 
 describe("deriveBlocked", () => {
-  it("lists a task whose blocker is still open, with an Open #N button", () => {
+  it("lists a task whose blocker is still open, named by its title, with an Open blocker button", () => {
     const worker = thread("w1");
     const rows = blocked(
       [
@@ -75,10 +75,10 @@ describe("deriveBlocked", () => {
         key: "blocked-by:brad/printcell#5",
         kind: "blocked-by",
         title: "Task 5",
-        cause: "Blocked by #9",
+        cause: "Blocked by Task 9",
         owner: { id: "w1", title: "Worker w1" },
-        next: "Finish #9",
-        action: { label: "Open #9", url: "https://git.example/brad/printcell/issues/9" },
+        next: null,
+        action: { label: "Open blocker", url: "https://git.example/brad/printcell/issues/9" },
       },
     ]);
   });
