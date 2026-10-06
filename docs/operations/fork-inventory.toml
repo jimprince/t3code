@@ -2536,3 +2536,13 @@ id = "v2-discussion-native-thread"
 date = "2026-10-06"
 decided = "adapt"
 rationale = "Create through native V2 thread management, persist organizational parent through the existing fork nesting service, then message.dispatch. A failed seed remains best effort after creation and nesting. Real web/mobile render hunks are handed to the UI lane."
+
+[[patch]]
+name = "fork-decision-context-media"
+subject = "feat(projects): decisions show their links, pictures and full context"
+class = "product"
+purpose = "Make a decision's context readable where Brad decides: links open, embedded pictures show as thumbnails that open full size, and long context folds behind More, on the Decisions widget, Needs you decision rows and mobile (brad/t3code-fork#169)."
+retire_when = "Upstream renders Gitea issue Markdown with authenticated media on the project page, or the Decisions widget and Needs you decisions are retired."
+depends_on = ["fork-decision-links", "fork-decision-discuss"]
+roles = []
+note = "parseDecisionContext (packages/client-runtime/src/decisionContext.ts, export './decision-context') splits context into text and link runs (Markdown links, and bare URLs through fork-decision-links' linkifyText) and lifts Markdown and <img> pictures out as thumbnails; relative URLs resolve against the issue URL, so Gitea's /attachments/<uuid> works; non-web schemes stay text. Pictures load through a new 'gitea-media' asset kind (upstream's github-media pattern, kept in its own GiteaMediaFetch.ts because upstream owns GitHubMediaFetch.ts): assetsCreateUrl matches the URL to exactly one configured Gitea instance (host, web or API origin hostname) and an attachment path (giteaMediaFetchTarget), signs {url via the API origin, instanceId} and never the token; the asset route looks the instance up again, sends 'token <t>' only to the instance's API origin across up to three redirects, and serves only png/jpeg/gif/webp/avif/bmp (no SVG). A picture the server will not mint (not a Gitea upload) falls back to its direct URL. Web DecisionContext clamps to three lines with More/Less when long; Needs you rows keep their two-sentence summary collapsed and show the comment's whole non-option text (NeedsYouDecision.detail) on More. Mobile MobileDecisionContext uses expo-image thumbnails and the markdown-link external URL path."
