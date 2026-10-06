@@ -100,6 +100,7 @@ const answer14 = (
   make({
     projectIssues: {
       repositoryForProject: () => Effect.succeed(target),
+      trackerForRoot: () => Effect.succeed(null),
       invalidate: () => undefined,
     } as never,
     threadIssues: {} as never,

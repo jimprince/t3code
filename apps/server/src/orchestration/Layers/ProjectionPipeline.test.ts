@@ -617,6 +617,29 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
       `;
       assert.deepEqual(scopeRows, [{ scope: "Coordinates the entire repo" }]);
 
+      yield* eventStore.append({
+        type: "thread.subproject-set",
+        eventId: EventId.make("evt-thread-subproject"),
+        aggregateKind: "thread",
+        aggregateId: ThreadId.make("thread-1"),
+        occurredAt: "2026-01-01T00:00:00.650Z",
+        commandId: CommandId.make("cmd-thread-subproject"),
+        causationEventId: null,
+        correlationId: null,
+        metadata: {},
+        payload: {
+          threadId: ThreadId.make("thread-1"),
+          mode: "on",
+          source: "auto",
+          updatedAt: orderUpdatedAt,
+        },
+      });
+      yield* projectionPipeline.bootstrap;
+      const subprojectRows = yield* sql<{ readonly subproject: string | null }>`
+        SELECT subproject FROM projection_threads WHERE thread_id = 'thread-1'
+      `;
+      assert.deepEqual(subprojectRows, [{ subproject: "on" }]);
+
       // Settled lifecycle through the DB pipeline: thread.settled writes the
       // override + timestamp, thread.unsettled(user) flips to the active pin.
       yield* eventStore.append({

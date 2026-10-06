@@ -39,7 +39,7 @@ import { TextGeneration } from "../textGeneration/TextGeneration.ts";
 import type { ProjectIssuesService } from "./ProjectIssuesService.ts";
 import type { RequestCandidate, RequestKind } from "../textGeneration/RequestItemsPrompt.ts";
 import {
-  findRootThreadId,
+  findProjectRootThreadId,
   REQUEST_LABEL,
   repositoryKey,
   STATUS_LABELS,
@@ -271,13 +271,14 @@ export const make = (deps: {
           .pipe(Effect.mapError(() => fail("Could not read threads.")));
         const thread = snapshot.threads.find((candidate) => candidate.id === threadId);
         if (!thread) return null;
-        const rootThreadId = findRootThreadId(snapshot.threads, thread.id);
+        const rootThreadId = findProjectRootThreadId(snapshot.threads, thread.id);
         const root = snapshot.threads.find((candidate) => candidate.id === rootThreadId) ?? thread;
         const project = snapshot.projects.find((candidate) => candidate.id === root.projectId);
         if (!project) return null;
         const target = yield* deps.projectIssues.repositoryForProject(
           project,
           config.giteaInstances,
+          yield* deps.projectIssues.trackerForRoot(snapshot.threads, root.id),
         );
         return target ? { config, thread, root, project, target } : null;
       });
@@ -590,7 +591,7 @@ export const make = (deps: {
           enqueue(outbox, {
             messageId: input.messageId,
             threadId: input.threadId,
-            rootThreadId: findRootThreadId(snapshot.threads, input.threadId),
+            rootThreadId: findProjectRootThreadId(snapshot.threads, input.threadId),
             text: input.text,
             capturedAt: DateTime.formatIso(DateTime.makeUnsafe(now)),
             items: null,
@@ -684,7 +685,7 @@ export const make = (deps: {
           enqueue(outbox, {
             messageId,
             threadId: input.threadId,
-            rootThreadId: findRootThreadId(snapshot.threads, input.threadId),
+            rootThreadId: findProjectRootThreadId(snapshot.threads, input.threadId),
             text: item.excerpt,
             capturedAt: DateTime.formatIso(DateTime.makeUnsafe(stamp)),
             items: [item],
@@ -1144,7 +1145,7 @@ export const make = (deps: {
         const snapshot = yield* snapshots
           .getShellSnapshot()
           .pipe(Effect.mapError(() => fail("Could not read threads.")));
-        const rootThreadId = findRootThreadId(snapshot.threads, input.threadId);
+        const rootThreadId = findProjectRootThreadId(snapshot.threads, input.threadId);
         const result = yield* deps.projectIssues.list({ rootThreadId });
         return { ...result, issues: result.issues.filter((issue) => issue.isRequest) };
       });

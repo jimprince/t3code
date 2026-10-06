@@ -265,6 +265,16 @@ export function applyThreadDetailEvent(
         },
       };
 
+    case "thread.subproject-set":
+      return {
+        kind: "updated",
+        thread: {
+          ...thread,
+          subproject: event.payload.mode,
+          updatedAt: event.payload.updatedAt,
+        },
+      };
+
     // ── Thread metadata ─────────────────────────────────────────────
     case "thread.meta-updated":
       return {
