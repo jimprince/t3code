@@ -1,4 +1,6 @@
 import { type EnvironmentId } from "@t3tools/contracts";
+import { supervisionRoots } from "@t3tools/client-runtime/state/forkNesting";
+import { SupervisionThreadRows, useSupervisionSidebar } from "./sidebar/SupervisionThreadRows";
 import { SidebarProjectSelection, useSidebarProjectSelection } from "./SidebarProjectSelection";
 
 import { ThreadHoverCard, ThreadHoverCardPopup } from "./ThreadHoverCard";
@@ -2372,6 +2374,7 @@ export default function Sidebar() {
   );
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const threads = useThreadShells();
+
   const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
@@ -2675,6 +2678,7 @@ export default function Sidebar() {
         override holds until all of them appear in canonical state. */
     readonly assignedKeys: ReadonlyMap<string, string>;
   } | null>(null);
+  const supervision = useSupervisionSidebar(threads, routeThreadKey);
   const {
     pinnedThreads,
     draggableThreadKeys,
@@ -2693,7 +2697,7 @@ export default function Sidebar() {
     const preciseNow = new Date().toISOString();
     // Subagent child threads live in the parent's Agents surface, not the
     // sidebar roster (v2 models them as real threads with lineage).
-    const visible = filterSidebarV2VisibleThreads(threads, scopedProjectKeys);
+    const visible = supervisionRoots(filterSidebarV2VisibleThreads(threads, scopedProjectKeys), supervision.forest);
     inboxReturns.observe(workingShelfEnabled ? threads : null);
     const pinned: EnvironmentThreadShell[] = [];
     const active: EnvironmentThreadShell[] = [];
@@ -2800,6 +2804,7 @@ export default function Sidebar() {
     serverConfigs,
     snoozeWakeTick,
     threads,
+    supervision.forest,
     workingShelfEnabled,
   ]);
 
@@ -5194,7 +5199,7 @@ export default function Sidebar() {
                       ];
                       for (const item of sidebarListItems) {
                         if (item.kind === "thread") {
-                          items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
+                          items.push(<SupervisionThreadRows key={item.key} thread={threadByKey.get(item.key)!} supervision={supervision} renderRow={(child) => renderThreadRowInner(child, child.pinnedAt !== null ? "pinned" : child.settledOverride === "settled" ? "settled" : "active")}>{renderThreadRow(threadByKey.get(item.key)!, item.section)}</SupervisionThreadRows>);
                           continue;
                         }
                         switch (item.marker) {
