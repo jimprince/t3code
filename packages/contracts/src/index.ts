@@ -84,3 +84,4 @@ export * from "./projectRoadmap.ts";
 export * from "./projectCanvas.ts";
 
 export * from "./automations.ts";
+export * from "./pageAgents.ts";
