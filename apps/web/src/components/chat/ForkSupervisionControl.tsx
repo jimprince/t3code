@@ -1,3 +1,4 @@
+import { SupervisionWorkerRow } from "./SupervisionRows";
 import { newForkCommandId } from "@t3tools/client-runtime/state/fork-thread-ids";
 import * as Effect from "effect/Effect";
 import { useAtomValue } from "@effect/atom-react";
@@ -32,9 +33,7 @@ export function ForkSupervisionControl(props: { environmentId: EnvironmentId; th
     await update({ environmentId: props.environmentId, input: { commandId: newForkCommandId(), threadId: props.threadId, parentThreadId } });
   };
   return <ThreadDetailsSection headingId="fork-supervision-heading" title="Workers">
-    {rows.map(thread => <button type="button" key={thread.id} onClick={() => { void navigate({ to: "/thread/$environmentId/$threadId", params: buildThreadRouteParams(scopeThreadRef(props.environmentId, thread.id)) }); }} className="block w-full truncate px-1.5 py-1 text-left text-xs">
-      {thread.title} · {projects.find(project => project.id === thread.projectId)?.title ?? thread.projectId}{thread.settledAt ? " · settled" : ""}
-    </button>)}
+    {rows.map(thread => <SupervisionWorkerRow key={thread.id} child={thread} />)}
     <form onSubmit={event => { event.preventDefault(); void setParentId(parent ? ThreadId.make(parent) : null); }}>
       <label className="text-xs">Parent thread <select value={parent} onChange={event => setParent(event.target.value)} className="w-full bg-transparent text-xs">
         <option value="">Top level</option>{threads.filter(thread => thread.id !== props.threadId && thread.archivedAt === null).map(thread => <option key={thread.id} value={thread.id}>{thread.title}</option>)}
