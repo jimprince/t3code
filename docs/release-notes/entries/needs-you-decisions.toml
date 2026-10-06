@@ -1,0 +1,4 @@
+id = "needs-you-decisions"
+category = "feature"
+functionality = "projects"
+text = "Decide from the project page: Needs you rows that ask for approval or a choice get Approve, Not yet and one button per option, and a new Decisions widget lists the questions agents filed for you with their options and who is waiting. Answers have a 5 second Undo, reach the waiting agent, and the mobile app can answer them too."
