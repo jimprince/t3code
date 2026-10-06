@@ -1,9 +1,17 @@
+import { appAtomRegistry } from "../rpc/atomRegistry";
+import { planSupervisionMove } from "@t3tools/client-runtime/state/fork-thread-ordering";
+import { supervision as forkSupervision, useSupervisionReadyHosts, useSupervisionMetadata } from "../state/forkSupervision";
 import { useSupervisionForest } from "../state/forkSupervision";
 import { supervisionRoots } from "@t3tools/client-runtime/state/forkNesting";
 import { useSupervisionDrag } from "./sidebar/useSupervisionDrag";
 import { SupervisionThreadRows, useSupervisionSidebar } from "./sidebar/SupervisionThreadRows";
 import { groupSupervisionChildInputAttention } from "@t3tools/client-runtime/child-attention";
 import { SidebarChildInputAttention } from "./sidebar/SidebarChildInputAttention";
+import {
+  newForkCommandId,
+  readForkOrderResetSupported,
+  resetForkThreadOrder,
+} from "./chat/forkThreadCommands";
 import { SidebarProjectSelection, useSidebarProjectSelection } from "./SidebarProjectSelection";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "./ThreadHoverCard";
 import { CollapsibleSectionHeader } from "./ui/collapsible-section-header";
@@ -2356,6 +2364,9 @@ export default function Sidebar() {
     archiveThread,
     deleteThread,
   } = useThreadActions();
+  const resetOrder = useAtomCommand(resetForkThreadOrder);
+  const orderMetadata = useSupervisionMetadata();
+  const orderReadyHosts = useSupervisionReadyHosts();
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
@@ -4462,8 +4473,13 @@ export default function Sidebar() {
                 autoSettleOptOut: supportsAutoSettleOptOut,
                 snooze: supportsSnooze,
                 pinning: supportsPinning,
+                orderReset: readForkOrderResetSupported(thread.environmentId),
                 titleRegeneration: supportsTitleRegeneration,
               },
+              move: (isPinned ? serverConfigs.get(thread.environmentId)?.environment.capabilities.threadPinReorder : serverConfigs.get(thread.environmentId)?.environment.capabilities.threadActiveReorder) === true && (isPinned || !isSettled) ? {
+                up: planSupervisionMove(threads, orderMetadata, thread, "up", orderReadyHosts) !== null,
+                down: planSupervisionMove(threads, orderMetadata, thread, "down", orderReadyHosts) !== null,
+              } : undefined,
               snoozePresets,
             }),
             position,
@@ -4479,6 +4495,22 @@ export default function Sidebar() {
           return;
         }
         switch (clicked.value) {
+          case "move-up":
+          case "move-down": {
+            const assignments = planSupervisionMove(threads, orderMetadata, thread, clicked.value === "move-up" ? "up" : "down", appAtomRegistry.get(forkSupervision.readyHosts));
+            for (const assignment of assignments ?? []) {
+              const moved = threads.find(row => scopedThreadKey(scopeThreadRef(row.environmentId, row.id)) === assignment.id);
+              if (moved) await (isPinned ? reorderPinnedThread : reorderActiveThread)(scopeThreadRef(moved.environmentId, moved.id), assignment.orderKey);
+            }
+            return;
+          }
+          case "order-reset":
+            if (!appAtomRegistry.get(forkSupervision.readyHosts).has(thread.environmentId)) return;
+            await resetOrder({
+              environmentId: thread.environmentId,
+              input: { threadId: thread.id, commandId: newForkCommandId() },
+            });
+            return;
           case "filter-by-project":
             // This item is the only filter control here, so picking the
             // already-isolated project again is the way back to all projects.
@@ -4675,6 +4707,12 @@ export default function Sidebar() {
       isolatedProjectKey,
       markThreadUnread,
       openProjectSettings,
+      resetOrder,
+      orderMetadata,
+      orderReadyHosts,
+      threads,
+      reorderPinnedThread,
+      reorderActiveThread,
       projectByKey,
       serverConfigs,
       setHiddenProjectKeys,
