@@ -359,6 +359,42 @@ export const executorLayer: Layer.Layer<
                     }),
                 ),
               );
+          case "provider-thread.conversation-rewind":
+            return checkpointRollback
+              .rewindConversation({
+                ...effect.request,
+                threadId: effect.threadId,
+                commandId: effect.commandId,
+              })
+              .pipe(
+                Effect.tapCause((cause) =>
+                  willRetry || Cause.hasInterruptsOnly(cause)
+                    ? Effect.void
+                    : threads
+                        .dispatch({
+                          type: "checkpoint.rollback.fail",
+                          commandId: CommandId.make(`${effect.commandId}:rollback-failed`),
+                          threadId: effect.threadId,
+                          requestId: effect.commandId,
+                          message: CheckpointRollbackService.ROLLBACK_FAILED_MESSAGE,
+                        })
+                        .pipe(
+                          Effect.catchCause((recordCause) =>
+                            Effect.logWarning("Failed to record conversation rewind failure", {
+                              cause: recordCause,
+                            }),
+                          ),
+                        ),
+                ),
+                Effect.mapError(
+                  (cause) =>
+                    new OrchestrationEffectExecutionError({
+                      effectId: effect.id,
+                      effectType: effect.request.type,
+                      cause,
+                    }),
+                ),
+              );
           case "provider-thread.rollback":
             return checkpointRollback
               .execute({
