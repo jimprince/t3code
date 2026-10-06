@@ -57,7 +57,7 @@ export function foldBackgroundRows(
 }
 
 /** Brad view / All traffic switch and the needs-you count, above the timeline. */
-export function OrchestratorFocusBar(props: {
+function OrchestratorFocusBar(props: {
   readonly traffic: BackgroundTraffic;
   readonly allTraffic: boolean;
   readonly onAllTrafficChange: (allTraffic: boolean) => void;

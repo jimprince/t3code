@@ -285,29 +285,3 @@ export function resolveBackgroundFolds(
   return { runByAnchorMessageId, hiddenMessageIds, hiddenTurnIds };
 }
 
-/** Thread ids below `rootThreadId` in the nesting tree. */
-export function collectDescendantThreadIds(
-  rootThreadId: string,
-  threads: ReadonlyArray<{
-    readonly id: string;
-    readonly parentThreadId?: string | null | undefined;
-  }>,
-): Set<string> {
-  const childrenByParent = new Map<string, string[]>();
-  for (const thread of threads) {
-    if (!thread.parentThreadId) continue;
-    const siblings = childrenByParent.get(thread.parentThreadId);
-    if (siblings) siblings.push(thread.id);
-    else childrenByParent.set(thread.parentThreadId, [thread.id]);
-  }
-  const descendants = new Set<string>();
-  const pending = [rootThreadId];
-  while (pending.length > 0) {
-    for (const child of childrenByParent.get(pending.pop()!) ?? []) {
-      if (descendants.has(child) || child === rootThreadId) continue;
-      descendants.add(child);
-      pending.push(child);
-    }
-  }
-  return descendants;
-}
