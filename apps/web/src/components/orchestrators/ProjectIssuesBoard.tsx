@@ -1,18 +1,14 @@
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
 import type { ProjectIssue } from "@t3tools/contracts";
-import { useNavigate } from "@tanstack/react-router";
 import { MessageSquareIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { resolveThreadIssueBadgeTarget } from "../ThreadIssueBadges";
-import { useEmbeddedPages } from "../embeddedPages/useEmbeddedPages";
 import {
   formatIssueAge,
   groupProjectIssues,
   PROJECT_ISSUE_LANES,
   type ProjectIssueLane,
 } from "./projectIssuesBoard.logic";
-import { projectReturnState, type ProjectReturnLocation } from "./projectNavigation";
 import { ProjectQueryState } from "./ProjectQueryState";
 import { issueKey, taskKind } from "./projectRequests.logic";
 import {
@@ -23,6 +19,7 @@ import {
   useTaskStatuses,
   type SettleControls,
 } from "./ProjectRequestsSection";
+import { TaskTitle } from "./TaskLink";
 
 const DONE_PREVIEW = 8;
 const PENDING_PREVIEW = 10;
@@ -30,48 +27,25 @@ const PENDING_PREVIEW = 10;
 function IssueRow({
   issue,
   now,
-  projectReturn,
   settle,
   onOpenThread,
 }: {
   readonly issue: ProjectIssue;
   readonly now: number;
-  readonly projectReturn: ProjectReturnLocation;
   readonly settle: SettleControls;
   readonly onOpenThread: (threadId: string) => void;
 }) {
-  const navigate = useNavigate();
-  const pages = useEmbeddedPages();
-  const target = resolveThreadIssueBadgeTarget(pages, issue);
   const thread = issue.requestSource?.threadId ?? issue.linkedThreadIds[0];
   const closed = issue.closedAt !== null || issue.status === "done";
   return (
     <li className="border-b border-border/60 py-1.5 last:border-b-0">
-      {target.kind === "external" ? (
-        <a
-          href={target.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="line-clamp-2 text-sm text-foreground hover:underline"
-        >
-          {issue.title}
-        </a>
-      ) : (
-        <button
-          type="button"
-          className="line-clamp-2 max-w-full text-left text-sm text-foreground hover:underline"
-          onClick={() =>
-            void navigate({
-              to: "/embedded/$pageId",
-              params: { pageId: target.pageId },
-              search: { repo: target.repo, issue: target.issue },
-              state: projectReturnState(projectReturn),
-            })
-          }
-        >
-          {issue.title}
-        </button>
-      )}
+      <TaskTitle
+        task={{ host: issue.host, repository: issue.repository, number: issue.number }}
+        url={issue.url}
+        className="line-clamp-2 max-w-full text-sm text-foreground hover:underline"
+      >
+        {issue.title}
+      </TaskTitle>
       {issue.labels.some((label) => label.toLowerCase() === "needs-test") ? (
         <span className="block text-xs text-foreground/80">
           Shipped{issue.milestone ? ` in ${issue.milestone.title}` : ""}, test it
@@ -140,7 +114,6 @@ export function ProjectIssuesBoard({
   );
   const now = query.dataUpdatedAt ?? 0;
   const failed = (query.data?.repositories ?? []).filter((repository) => repository.error);
-  const projectReturn = { environmentId: summary.root.environmentId, threadId: summary.root.id };
 
   if (query.data === null) {
     return <ProjectQueryState what="tasks" error={query.error} onRetry={query.refresh} />;
@@ -156,7 +129,6 @@ export function ProjectIssuesBoard({
       key={issueKey(issue)}
       issue={issue}
       now={now}
-      projectReturn={projectReturn}
       settle={settle}
       onOpenThread={openThread}
     />
