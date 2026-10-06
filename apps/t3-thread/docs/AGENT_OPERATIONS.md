@@ -801,6 +801,10 @@ to change existing threads. `status <name-or-thread-id>` reports `pinned` and `p
 the all-worker status list marks pinned threads. Pinning uses the server's existing
 lifecycle; manual settlement removes a pin.
 
+Automatic settlement can be switched off for an existing thread with
+`auto-settle <name-or-thread-id> --off` and back on with `--on`; `--off` is the
+server's hard opt-out and wins over any completion setting.
+
 Arrange pinned or active siblings through the same persisted order the clients use:
 
 ```bash
@@ -822,7 +826,8 @@ order. New pins continue to land at the top without rewriting existing slots.
 `create` settles workers after completed turns by default, including top-level workers.
 It inherits the project's **Settle completed workers** default. Use
 `--settle-on-complete` or `--no-settle-on-complete` to override it for the new thread.
-The thread's automatic-settlement opt-out always wins. Pending input, approvals,
+The thread's automatic-settlement opt-out always wins. Pinned threads and threads with live
+children never settle automatically, and unnesting a thread clears its completion setting. Pending input, approvals,
 queued starts, and live background work prevent settlement; `send` resumes a settled worker.
 
 Settled nested workers auto-archive after seven days by default. Configure
