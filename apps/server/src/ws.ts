@@ -9,6 +9,7 @@ import { threadSubscriptionHandlers } from "./threadSubscriptionHandlers.ts";
 import { makeWorkspaceUploadHandlers } from "./workspace/WorkspaceUploadRpc.ts";
 import { headlessDeliveryHandlers } from "./headlessDeliveryRpc.ts";
 import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
+import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
 
@@ -110,6 +111,8 @@ import {
   type TerminalMetadataStreamEvent,
   type PullRequestRef,
   WS_METHODS,
+  WsCoreRpcGroup,
+  WsForkRpcGroup,
   WsRpcGroup,
 } from "@t3tools/contracts";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
@@ -1208,7 +1211,7 @@ const layerWsRpc = (
   previewAutomationBroker: PreviewAutomationBroker.PreviewAutomationBroker["Service"],
   serverBrowser: ServerBrowser.ServerBrowser["Service"],
 ) =>
-  ServerWsRpcGroup.toLayer(
+  Layer.effectContext(
     Effect.gen(function* () {
       const namedAgents = yield* makeNamedAgents;
       const automations = yield* AutomationEngine.AutomationEngine;
@@ -1852,8 +1855,7 @@ const layerWsRpc = (
         return result;
       });
 
-      const handlers = ServerWsRpcGroup.of({
-        ...threadSubscriptionHandlers(threadManagement),
+      const handlers = WsCoreRpcGroup.of({
         [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command) =>
           Effect.annotateCurrentSpan({
             "orchestration_v2.command_id": command.commandId,
@@ -2474,24 +2476,6 @@ const layerWsRpc = (
         [WS_METHODS.serverReportHostPowerState]: (input) =>
           backgroundPolicy.reportHostPowerState(input),
         [WS_METHODS.serverGetBackgroundPolicy]: (_input) => backgroundPolicy.snapshot,
-        [WS_METHODS.automationsList]: (input) => automations.list(input.projectId).pipe(Effect.map((list) => ({ automations: list }))),
-        [WS_METHODS.automationsSave]: (input) => automations.save(input),
-        [WS_METHODS.automationsRemove]: (input) => automations.remove(input.automationId),
-        [WS_METHODS.automationsSetEnabled]: (input) => automations.setEnabled(input.automationId, input.enabled),
-        [WS_METHODS.automationsRun]: (input) => automations.run(input.automationId, { dryRun: input.dryRun === true }),
-        [WS_METHODS.automationsRuns]: (input) => automations.runs(input).pipe(Effect.map((runs) => ({ runs }))),
-        [WS_METHODS.automationScriptsList]: (input) => automations.listScripts(input.projectId ?? null).pipe(Effect.map((scripts) => ({ scripts }))),
-        [WS_METHODS.automationScriptsSave]: (input) => automations.saveScript(input),
-        [WS_METHODS.automationScriptsRemove]: (input) => automations.removeScript(input.scriptId),
-        [WS_METHODS.automationScriptsRun]: (input) => automations.runScript(input),
-        "orchestration.listNamedAgents": () => namedAgents.list(),
-        "orchestration.resolveNamedAgent": (input) => namedAgents.resolve(input),
-        "orchestration.handOverNamedAgent": (input) => namedAgents.handOver(input),
-        ...(yield* makeMetadataHandlers),
-        [WS_METHODS.threadIssuesLink]: (input) => threadIssues.link(input),
-        [WS_METHODS.threadIssuesUnlink]: (input) => threadIssues.unlink(input),
-        ...headlessDeliveryHandlers(),
-        ...resourceRecoveryHandlers(),
         [WS_METHODS.cloudGetRelayClientStatus]: (_input) => relayClient.resolve,
         [WS_METHODS.cloudInstallRelayClient]: (_input) =>
           Stream.callback<RelayClientInstallProgressEvent, RelayClientInstallFailedError>((queue) =>
@@ -2518,28 +2502,6 @@ const layerWsRpc = (
                 Effect.forkScoped,
               ),
           ),
-        [WS_METHODS.projectIssuesList]: (input) => projectIssues.list(input).pipe(Effect.flatMap((result) => requestLedger.decorate(result, input.rootThreadId))),
-        [WS_METHODS.projectIssuesGet]: (input) => projectIssues.get(input).pipe(Effect.flatMap((result) => requestLedger.withAnswers([result.issue]).pipe(Effect.map(([issue]) => ({ ...result, issue: issue ?? result.issue }))))),
-        [WS_METHODS.projectRequestsSettle]: (input) => requestLedger.settle(input),
-        [WS_METHODS.projectRequestsStartIntake]: (input) => requestIntake.start(input),
-        [WS_METHODS.projectRequestsSubmit]: (input) => requestLedger.submit(input),
-        [WS_METHODS.projectRequestsCreate]: (input) => requestLedger.create(input),
-        [WS_METHODS.projectRequestsUpdate]: (input) => requestLedger.update(input),
-        [WS_METHODS.projectCanvasRead]: (input) => projectCanvas.read(input),
-        [WS_METHODS.projectCanvasAction]: (input) => projectCanvas.logAction(input),
-        [WS_METHODS.projectRoadmapGet]: (input) => projectRoadmap.get(input),
-        [WS_METHODS.projectRoadmapMove]: (input) => projectRoadmap.move(input),
-        [WS_METHODS.projectRoadmapSaveVersion]: (input) => projectRoadmap.saveVersion(input),
-        [WS_METHODS.projectDashboardGet]: (input) => projectDashboard.get(input),
-        [WS_METHODS.projectDashboardSetWidgets]: (input) => projectDashboard.setWidgets(input),
-        [WS_METHODS.projectDashboardSetTracker]: (input) => projectDashboard.setTracker(input),
-        [WS_METHODS.projectDashboardSetHealth]: (input) => projectDashboard.setHealth(input),
-        [WS_METHODS.projectLayoutGet]: (input) => projectLayout.get(input.threadId),
-        [WS_METHODS.projectLayoutApply]: (input) => projectLayout.apply(input, { kind: "user", threadId: null, reason: null }),
-        [WS_METHODS.projectLayoutRevert]: (input) => projectLayout.revert(input, { kind: "user", threadId: null, reason: null }),
-        [WS_METHODS.projectLayoutHistory]: (input) => projectLayout.history(input),
-        [WS_METHODS.subscribeProjectLayout]: (input) => projectLayout.stream(input.threadId),
-        [WS_METHODS.projectRequestsList]: (input) => requestLedger.listForThread(input),
         [WS_METHODS.pullRequestsList]: (input) => pullRequests.list(input),
         [WS_METHODS.pullRequestsListStats]: (input) => pullRequests.listStats(input),
         [WS_METHODS.pullRequestsRoutingIdentity]: (input) => pullRequests.routingIdentity(input),
@@ -2733,8 +2695,6 @@ const layerWsRpc = (
                 }),
             ),
           ),
-        ...(yield* makeWorkspaceUploadHandlers),
-        ...(yield* makeSupervisionDragHandlers),
         [WS_METHODS.projectsWriteFile]: (input) =>
           workspaceFileSystem.writeFile(input).pipe(
             Effect.mapError(
@@ -3200,7 +3160,78 @@ const layerWsRpc = (
             ),
           ),
       });
-      return handlers;
+      const forkHandlers = WsForkRpcGroup.of({
+        ...threadSubscriptionHandlers(threadManagement),
+        [WS_METHODS.automationsList]: (input) =>
+          automations.list(input.projectId).pipe(Effect.map((list) => ({ automations: list }))),
+        [WS_METHODS.automationsSave]: (input) => automations.save(input),
+        [WS_METHODS.automationsRemove]: (input) => automations.remove(input.automationId),
+        [WS_METHODS.automationsSetEnabled]: (input) =>
+          automations.setEnabled(input.automationId, input.enabled),
+        [WS_METHODS.automationsRun]: (input) =>
+          automations.run(input.automationId, { dryRun: input.dryRun === true }),
+        [WS_METHODS.automationsRuns]: (input) =>
+          automations.runs(input).pipe(Effect.map((runs) => ({ runs }))),
+        [WS_METHODS.automationScriptsList]: (input) =>
+          automations
+            .listScripts(input.projectId ?? null)
+            .pipe(Effect.map((scripts) => ({ scripts }))),
+        [WS_METHODS.automationScriptsSave]: (input) => automations.saveScript(input),
+        [WS_METHODS.automationScriptsRemove]: (input) => automations.removeScript(input.scriptId),
+        [WS_METHODS.automationScriptsRun]: (input) => automations.runScript(input),
+        "orchestration.listNamedAgents": () => namedAgents.list(),
+        "orchestration.resolveNamedAgent": (input) => namedAgents.resolve(input),
+        "orchestration.handOverNamedAgent": (input) => namedAgents.handOver(input),
+        ...(yield* makeMetadataHandlers),
+        [WS_METHODS.threadIssuesLink]: (input) => threadIssues.link(input),
+        [WS_METHODS.threadIssuesUnlink]: (input) => threadIssues.unlink(input),
+        ...headlessDeliveryHandlers(),
+        ...resourceRecoveryHandlers(),
+        [WS_METHODS.projectIssuesList]: (input) =>
+          projectIssues
+            .list(input)
+            .pipe(Effect.flatMap((result) => requestLedger.decorate(result, input.rootThreadId))),
+        [WS_METHODS.projectRequestsSettle]: (input) => requestLedger.settle(input),
+        [WS_METHODS.projectRequestsCreate]: (input) => requestLedger.create(input),
+        [WS_METHODS.projectRequestsUpdate]: (input) => requestLedger.update(input),
+        [WS_METHODS.projectCanvasRead]: (input) => projectCanvas.read(input),
+        [WS_METHODS.projectCanvasAction]: (input) => projectCanvas.logAction(input),
+        [WS_METHODS.projectRoadmapGet]: (input) => projectRoadmap.get(input),
+        [WS_METHODS.projectRoadmapMove]: (input) => projectRoadmap.move(input),
+        [WS_METHODS.projectRoadmapSaveVersion]: (input) => projectRoadmap.saveVersion(input),
+        [WS_METHODS.projectDashboardGet]: (input) => projectDashboard.get(input),
+        [WS_METHODS.projectDashboardSetWidgets]: (input) => projectDashboard.setWidgets(input),
+        [WS_METHODS.projectDashboardSetTracker]: (input) => projectDashboard.setTracker(input),
+        [WS_METHODS.projectRequestsList]: (input) => requestLedger.listForThread(input),
+        ...(yield* makeWorkspaceUploadHandlers),
+        ...(yield* makeSupervisionDragHandlers),
+        [WS_METHODS.projectIssuesGet]: (input) =>
+          projectIssues
+            .get(input)
+            .pipe(
+              Effect.flatMap((result) =>
+                requestLedger
+                  .withAnswers([result.issue])
+                  .pipe(Effect.map(([issue]) => ({ ...result, issue: issue ?? result.issue }))),
+              ),
+            ),
+        [WS_METHODS.projectRequestsSubmit]: (input) => requestLedger.submit(input),
+        [WS_METHODS.projectRequestsStartIntake]: (input) => requestIntake.start(input),
+        [WS_METHODS.projectDashboardSetHealth]: (input) => projectDashboard.setHealth(input),
+        // Brad's edits from a client; the orchestrator edits through the MCP tools.
+        [WS_METHODS.projectLayoutGet]: (input) => projectLayout.get(input.threadId),
+        [WS_METHODS.projectLayoutApply]: (input) =>
+          projectLayout.apply(input, { kind: "user", threadId: null, reason: null }),
+        [WS_METHODS.projectLayoutRevert]: (input) =>
+          projectLayout.revert(input, { kind: "user", threadId: null, reason: null }),
+        [WS_METHODS.projectLayoutHistory]: (input) => projectLayout.history(input),
+        [WS_METHODS.subscribeProjectLayout]: (input) => projectLayout.stream(input.threadId),
+        [WS_METHODS.projectRequestsDecide]: (input) => requestLedger.decide(input),
+      });
+      return Context.merge(
+        yield* WsCoreRpcGroup.toHandlers(handlers),
+        yield* WsForkRpcGroup.toHandlers(forkHandlers),
+      );
     }),
   );
 
