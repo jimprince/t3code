@@ -14,6 +14,7 @@ import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSn
 import type { ProviderRegistryShape } from "../provider/Services/ProviderRegistry.ts";
 import { findRootThreadId } from "./projectIssues.logic.ts";
 import { buildIntakeBrief, clampTitle, intakeModelSelection } from "./requestLedger.logic.ts";
+import { deriveRequestTitle } from "./requestTitle.logic.ts";
 
 const fail = (message: string) => new ProjectIssuesError({ message });
 
@@ -46,14 +47,15 @@ export const make = (deps: {
         const providers = yield* deps.providers.getProviders;
         const modelSelection = intakeModelSelection(providers, root.modelSelection);
         const threadId = ThreadId.make(yield* newId);
-        const firstLine = input.title.split("\n")[0]!.trim() || "New request";
+        // Name the thread for what is asked, not Brad's raw opening words.
+        const asked = deriveRequestTitle(input.title).title;
         yield* deps.engine
           .dispatch({
             type: "thread.create",
             commandId: CommandId.make(yield* newId),
             threadId,
             projectId: project.id,
-            title: clampTitle(`Intake: ${firstLine}`).slice(0, 80),
+            title: clampTitle(`Intake: ${asked}`).slice(0, 80),
             modelSelection: modelSelection as typeof root.modelSelection,
             runtimeMode: "full-access",
             interactionMode: "default",
