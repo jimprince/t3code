@@ -56,6 +56,7 @@ import { ProjectAutomationsSlot } from "../projects/ProjectAutomationsSlot";
 import { ProjectIssuesBoard } from "./ProjectIssuesBoard";
 import { ProjectReleaseWidget, ProjectRequestsSection } from "./ProjectRequestsSection";
 import { ProjectWidgetList, WorkerRequestTag } from "./ProjectWidgetList";
+import { ProjectRoadmapWidget, SaveForLater } from "./ProjectRoadmapWidget";
 import type { ProjectWidgetId } from "./projectWidgets.logic";
 import { projectReturnState } from "./projectNavigation";
 import { ProjectPullRequestLink } from "./ProjectPullRequestLink";
@@ -280,6 +281,7 @@ export function OrchestratorBoard({
   const widgetViews: Partial<Record<ProjectWidgetId, ReactNode>> = {
     requests: <ProjectRequestsSection summary={summary} />,
     release: <ProjectReleaseWidget summary={summary} />,
+    roadmap: <ProjectRoadmapWidget summary={summary} />,
     "needs-you": (
       <BoardSection title="Needs you" count={summary.needsYou.length}>
         {summary.needsYou.length === 0 ? (
@@ -406,6 +408,9 @@ export function OrchestratorBoard({
             />
           </div>
         )}
+        <div className="mt-2">
+          <SaveForLater summary={summary} />
+        </div>
       </BoardSection>
     ),
     issues: (
