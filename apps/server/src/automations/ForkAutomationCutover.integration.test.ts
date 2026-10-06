@@ -39,7 +39,7 @@ it.effect(
     }).pipe(Effect.provide(storeLayer.pipe(Layer.provideMerge(SqlitePersistenceMemory)))),
 );
 
-const fixtures = process.env.T3_AUTOMATION_FIXTURES;
+const fixtures = process.env.T3_LIFECYCLE_FIXTURES;
 if (fixtures) {
   it.effect.each(["dev-vm", "local-mbp", "synthetic-edges"])(
     "preserves scripts, tombstones, run history, source baselines and ledgers from copied %s state",
@@ -86,4 +86,6 @@ if (fixtures) {
         }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: copy })));
       }).pipe(Effect.provide(NodeServices.layer)),
   );
+} else {
+  it.effect.skip("copied-state fixtures require T3_LIFECYCLE_FIXTURES", () => Effect.void);
 }
