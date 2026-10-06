@@ -178,8 +178,9 @@ export function deriveBlocked(input: {
 
 /**
  * Working now as outcomes: the task each worker is on (its thread's title when
- * it has none), what it does next, and the worker's name; the requests it
- * serves ride along for the "for:" link.
+ * it has none), what it does next from the task's Progress note (never the
+ * worker's own prose), and the worker's name; the requests it serves ride along
+ * for the "for:" link.
  */
 export function deriveWorkingNow(
   working: ReadonlyArray<OrchestratorWorkingItem>,
@@ -187,7 +188,7 @@ export function deriveWorkingNow(
   requests: ReadonlyArray<ProjectRequest>,
 ): WorkingRow[] {
   const served = requestsByWorker(requests);
-  return working.map(({ thread, latestLine }) => {
+  return working.map(({ thread }) => {
     const task = tasksOfWorker(thread.id, issues)[0];
     const title = task?.title ?? thread.title;
     return {
@@ -195,7 +196,7 @@ export function deriveWorkingNow(
       threadId: thread.id,
       title,
       worker: task ? thread.title : null,
-      next: progressNote(task?.latestComment?.body) ?? shortLine(latestLine),
+      next: progressNote(task?.latestComment?.body),
       forRequests: (served.get(thread.id) ?? [])
         .map((request) => request.issue.title)
         .filter((requestTitle) => requestTitle !== title),
