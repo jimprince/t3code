@@ -1,10 +1,12 @@
 {
   "version": 5,
-  "prev": "950ab91bc1c4d1bbfcbef1eedd28f016343445a2",
-  "head": "3a0f2e6542c4f076fc5bbcbe720d7d022fbb7fc0",
+  "prev": "0006c30b1758a77ed4170f850b7f30ff4b047c16",
+  "head": "99050eb559c2ea4c7adc0b9e0595b008c4aaae2b",
   "applied": [
     "fork-build-ci-compat",
-    "fork-worker-operations",
+    "fork-worker-operations"
+  ],
+  "unapplied": [
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
     "fork-general-chat",
@@ -30,9 +32,7 @@
     "fork-step-preview",
     "fork-t3-thread-prebuilt",
     "fork-embedded-pages",
-    "fork-sandbox-session-recovery"
-  ],
-  "unapplied": [
+    "fork-sandbox-session-recovery",
     "fork-thread-client-recovery",
     "fork-conversation-fork",
     "fork-thread-transfer",
