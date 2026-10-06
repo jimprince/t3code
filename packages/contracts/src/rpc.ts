@@ -1,3 +1,4 @@
+import { LegacyHistoryRpc } from "./forkLegacyHistory.ts";
 import { ThreadTransferRpcs } from "./threadTransfer.ts";
 import { ForkConversationRpc } from "./forkConversation.ts";
 import {
@@ -2273,6 +2274,7 @@ export const WsCoreRpcGroup = RpcGroup.make(
 export const WsForkRpcGroup = RpcGroup.make(
   ForkConversationRpc,
   ...ThreadTransferRpcs,
+  LegacyHistoryRpc,
   WsProjectIssuesGetRpc,
   WsProjectRequestsSubmitRpc,
   WsProjectRequestsStartIntakeRpc,
