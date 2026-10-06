@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Renders the fork's own new-since-last-release change notes. See
+# scripts/ci/lib/fork-release-notes.ts for the entry format and selection
+# rules, and docs/release-notes/entries/README.md for authoring guidance.
+#
+# Optional env:
+#   RELEASE_PREVIOUS_TAG                    previous fork release tag
+#   RELEASE_NOTES_ENTRIES_DIR               override entries directory
+#   RELEASE_NOTES_PREVIOUS_ENTRY_IDS_JSON   offline test seam: JSON array of ids
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+exec bun "$script_dir/render-fork-release-notes.ts" "$@"
