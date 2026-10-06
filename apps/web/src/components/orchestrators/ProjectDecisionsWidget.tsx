@@ -21,7 +21,12 @@ import { LinkifiedText, OptionLinks } from "./LinkifiedText";
 import { formatIssueAge } from "./projectIssuesBoard.logic";
 import { issueKey } from "./projectRequests.logic";
 import { ProjectSection } from "./ProjectSection";
-import { useDecide, useProjectRequests, useUndoableActions } from "./ProjectRequestsSection";
+import {
+  useDecide,
+  useDiscuss,
+  useProjectRequests,
+  useUndoableActions,
+} from "./ProjectRequestsSection";
 
 const pickText = (pick: DecisionPick) => (pick.kind === "option" ? pick.option : pick.text);
 
@@ -38,25 +43,30 @@ interface AnsweredState {
  * failed with Retry) and never the options again unless the answer is dropped.
  * A note can be added before picking or, until the hold ends, after: it is read
  * when the answer is sent.
+ * Discuss opens a thread to talk it through first; the decision stays here.
  */
 function DecisionAnswer({
   decision,
   waiting,
   answered,
+  discussing,
   onAnswer,
   onUndo,
   onRetry,
   onDrop,
+  onDiscuss,
 }: {
   readonly decision: NonNullable<ProjectIssue["decision"]>;
   /** Who the answer goes to, in words. */
   readonly waiting: string;
   readonly answered: AnsweredState | null;
+  readonly discussing: boolean;
   readonly onAnswer: (pick: DecisionPick, readNote: () => string) => void;
   readonly onUndo: () => void;
   readonly onRetry: () => void;
   /** Gives up on a failed answer and shows the options again. */
   readonly onDrop: () => void;
+  readonly onDiscuss: () => void;
 }) {
   const [note, setNote] = useState("");
   const [noteOpen, setNoteOpen] = useState(false);
@@ -213,7 +223,12 @@ function DecisionAnswer({
         </>
       )}
       {noteField}
-      {noteLink}
+      <span className="flex items-center gap-3 text-xs">
+        {noteLink}
+        <InlineButton tone="muted" disabled={discussing} onClick={onDiscuss}>
+          {discussing ? "Opening..." : "Discuss"}
+        </InlineButton>
+      </span>
     </span>
   );
 }
@@ -229,6 +244,7 @@ export function ProjectDecisionsWidget({ summary }: { readonly summary: Orchestr
   const { query, now } = useProjectRequests(summary);
   const actions = useUndoableActions();
   const decide = useDecide(summary, query.refresh);
+  const discuss = useDiscuss(summary);
   const decisions = useMemo(() => deriveDecisions(query.data?.issues ?? []), [query.data]);
   const live = useMemo(() => new Set(decisions.map(issueKey)), [decisions]);
   const [answers, setAnswers] = useState<ReadonlyMap<string, DecisionAnswerRecord<ProjectIssue>>>(
@@ -314,10 +330,12 @@ export function ProjectDecisionsWidget({ summary }: { readonly summary: Orchestr
                 decision={decision}
                 waiting={waiting}
                 answered={answeredOf(key)}
+                discussing={discuss.pending === key}
                 onAnswer={(pick, readNote) => answer(issue, key, pick, readNote)}
                 onUndo={() => actions.undo(key)}
                 onRetry={() => retry(key)}
                 onDrop={() => record(key, null)}
+                onDiscuss={() => void discuss.start(issue)}
               />
             </li>
           );
