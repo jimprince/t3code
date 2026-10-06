@@ -1,0 +1,4 @@
+id = "operator-thread-titles"
+category = "feature"
+functionality = "worker-threads"
+text = "Agents can rename threads by saved name or UUID, and explicit creation titles remain unchanged by automatic first-message titling."
