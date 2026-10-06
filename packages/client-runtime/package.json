@@ -427,6 +427,10 @@
       "types": "./src/state/forkNestingQuery.ts",
       "default": "./src/state/forkNestingQuery.ts"
     },
+    "./fork/thread-transfer": {
+      "types": "./src/fork/threadTransfer.ts",
+      "default": "./src/fork/threadTransfer.ts"
+    },
     "./fork/server-restart": {
       "types": "./src/fork/serverRestart.ts",
       "default": "./src/fork/serverRestart.ts"
