@@ -86,11 +86,11 @@ const codexModelSelection = {
 
 /**
  * A V1 database as it exists on disk before a V2 server first opens it: schema
- * through migration 40 plus the 42-49 tail. Slot 41 carries a site-local
+ * through migration 45 plus the 47-54 tail. Slot 46 carries a site-local
  * `ThreadSummaryTimeline` migration, matching production databases where local
  * builds recorded extra names under the shared id sequence. The V2 runner only
  * applies migrations past the recorded maximum id, so the cutover in this test
- * applies 050, 051 and 052 on top of the untouched copy — the same path the
+ * applies the remaining V1 migrations and V2 migrations 061 and 062 on top of the untouched copy — the same path the
  * real upgrade takes.
  */
 const seedV1Database = (fixturePath: string, workspace: string) =>
@@ -100,10 +100,10 @@ const seedV1Database = (fixturePath: string, workspace: string) =>
       yield* sql`PRAGMA busy_timeout = 5000;`;
       yield* sql`PRAGMA foreign_keys = ON;`;
       yield* sql`PRAGMA journal_mode = WAL;`;
-      yield* runMigrations({ toMigrationInclusive: 40 });
+      yield* runMigrations({ toMigrationInclusive: 45 });
       yield* sql`
         INSERT INTO effect_sql_migrations (migration_id, name)
-        VALUES (41, 'ThreadSummaryTimeline')
+        VALUES (46, 'ThreadSummaryTimeline')
       `;
       yield* sql`
         CREATE TABLE thread_summary_timeline_entries (
@@ -113,14 +113,14 @@ const seedV1Database = (fixturePath: string, workspace: string) =>
         )
       `;
       const tailMigrations = [
-        [42, "ProjectionThreadLinkedPullRequest", Migration0042],
-        [43, "ProjectionThreadsUnsettledAt", Migration0043],
-        [44, "ClearAutomaticProjectModelDefaults", Migration0044],
-        [45, "ProjectionProjectsAutoPull", Migration0045],
-        [46, "RepairAutomaticSettlementTimestamps", Migration0046],
-        [47, "ProjectionProjectIcon", Migration0047],
-        [48, "ProjectionThreadBranchPullRequest", Migration0048],
-        [49, "ProjectionThreadsActiveOrderKey", Migration0049],
+        [47, "ProjectionThreadLinkedPullRequest", Migration0042],
+        [48, "ProjectionThreadsUnsettledAt", Migration0043],
+        [49, "ClearAutomaticProjectModelDefaults", Migration0044],
+        [50, "ProjectionProjectsAutoPull", Migration0045],
+        [51, "RepairAutomaticSettlementTimestamps", Migration0046],
+        [52, "ProjectionProjectIcon", Migration0047],
+        [53, "ProjectionThreadBranchPullRequest", Migration0048],
+        [54, "ProjectionThreadsActiveOrderKey", Migration0049],
       ] as const;
       for (const [id, name, migration] of tailMigrations) {
         yield* migration;
@@ -892,8 +892,8 @@ describe("orchestration v2 legacy v1 cutover", () => {
               const legacyThreadCount = yield* sql<{ readonly count: number }>`
               SELECT COUNT(*) AS count FROM projection_threads
             `;
-              const recordedMigration41 = yield* sql<{ readonly name: string }>`
-              SELECT name FROM effect_sql_migrations WHERE migration_id = 41
+              const recordedMigration46 = yield* sql<{ readonly name: string }>`
+              SELECT name FROM effect_sql_migrations WHERE migration_id = 46
             `;
               const authSessionColumns = yield* sql<{ readonly name: string }>`
               PRAGMA table_info(auth_sessions)
@@ -904,7 +904,7 @@ describe("orchestration v2 legacy v1 cutover", () => {
                 legacyMessageCount: legacyMessageCount[0]?.count ?? 0,
                 legacyThreadCount: legacyThreadCount[0]?.count ?? 0,
                 longProjection: continuedAgain,
-                migration41Name: recordedMigration41[0]?.name ?? null,
+                migration46Name: recordedMigration46[0]?.name ?? null,
                 authSessionColumnNames: authSessionColumns.map((column) => column.name),
               };
             }).pipe(
@@ -923,7 +923,7 @@ describe("orchestration v2 legacy v1 cutover", () => {
             ),
           );
 
-          // The copied database recorded a site-local migration under id 41, so
+          // The copied database recorded a site-local migration under id 46, so
           // the migrator skipped this build's AuthSessionClientConnection by
           // id. The divergence is surfaced at startup while the rest of the
           // cutover still runs.
@@ -931,9 +931,9 @@ describe("orchestration v2 legacy v1 cutover", () => {
             String(log.message).includes("migration history diverges"),
           );
           assert.deepStrictEqual(divergenceLog?.annotations.divergent, [
-            "41:ThreadSummaryTimeline (this build: AuthSessionClientConnection)",
+            "46:ThreadSummaryTimeline (this build: AuthSessionClientConnection)",
           ]);
-          assert.equal(firstBoot.migration41Name, "ThreadSummaryTimeline");
+          assert.equal(firstBoot.migration46Name, "ThreadSummaryTimeline");
           // The skipped migration's columns never landed; the schema gap is
           // what the startup warning points at.
           assert.notInclude(firstBoot.authSessionColumnNames, "client_surface");

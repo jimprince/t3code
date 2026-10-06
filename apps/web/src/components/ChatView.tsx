@@ -8419,6 +8419,7 @@ export default function ChatView(props: ChatViewProps) {
       return;
     }
     if (activePendingProgress) {
+      if (activePendingIsResponding) return;
       if (directAnnotation) {
         notifyDirectAnnotationAttached();
         return;
