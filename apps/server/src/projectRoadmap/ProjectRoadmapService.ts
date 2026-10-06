@@ -66,6 +66,7 @@ export const make = (deps: {
             dueOn: milestone.due_on ?? null,
             openIssues: Math.max(0, milestone.open_issues ?? 0),
             closedIssues: Math.max(0, milestone.closed_issues ?? 0),
+            description: milestone.description?.trim() || null,
           })),
           items: roadmapItems(listing.issues, target, milestones),
         } satisfies ProjectRoadmap;
