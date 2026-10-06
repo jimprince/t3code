@@ -1,3 +1,4 @@
+import { isRecoveredRunSettled } from "@t3tools/client-runtime/fork/thread-recovery";
 import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
 import {
   type AssetResource,
@@ -195,16 +196,7 @@ export function isLatestRunSettled(
   latestRun: Pick<ThreadRunSummary, "runId" | "startedAt" | "completedAt" | "status"> | null,
   runtime: Pick<ThreadRuntimeSummary, "status" | "activeRunId"> | null,
 ): boolean {
-  if (latestRun === null) return false;
-  if (
-    latestRun.status === "preparing" ||
-    latestRun.status === "queued" ||
-    latestRun.status === "starting" ||
-    latestRun.status === "running" ||
-    latestRun.status === "waiting"
-  )
-    return false;
-  return runtime?.activeRunId !== latestRun.runId;
+  return isRecoveredRunSettled(latestRun, runtime);
 }
 
 export function deriveActiveWorkStartedAt(
