@@ -1,0 +1,4 @@
+id = "update-pill-shows-version"
+category = "feature"
+functionality = "desktop updates"
+text = "Hovering the sidebar update button now shows the installed version on a second line, in every state."
