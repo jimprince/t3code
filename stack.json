@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "ab232825ebf4a8e3eb64f63e15048f384b073851",
-  "head": "f7232e586b866e371f95639511f3ea5820476f6e",
+  "prev": "c536cd92d9dc4e74ca88605cce2d7b070dda6b88",
+  "head": "5f172416b0d12fc3d08ee78d59a2cfbd642a62c2",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -24,14 +24,14 @@
     "fork-mobile-delivery",
     "fork-gitea-pr-browser",
     "fork-auth-session-refresh",
-    "fork-inline-3d-objects"
-  ],
-  "unapplied": [
+    "fork-inline-3d-objects",
     "fork-orcaslicer-handoff",
     "fork-3mf-preview",
     "fork-step-preview",
     "fork-t3-thread-prebuilt",
-    "fork-embedded-pages",
+    "fork-embedded-pages"
+  ],
+  "unapplied": [
     "fork-sandbox-session-recovery",
     "fork-thread-client-recovery",
     "fork-resource-recovery",
@@ -110,7 +110,7 @@
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
-      "oid": "33f0a41ccd09a1e8e0bad8c0d449ac61eb121aef"
+      "oid": "69cbc0ff37c5332649b41b822ba3c02b30af8abe"
     },
     "fork-agent-panel-thread-details": {
       "oid": "0a4fdef9df098fd782e563cb507a78d2aa2b4b72"
@@ -170,7 +170,7 @@
       "oid": "ddd099a385b93e3391f8230947233d6858949f12"
     },
     "fork-embedded-pages": {
-      "oid": "919b1f81699cb39530aae146b44fbf1bf1c79734"
+      "oid": "5f172416b0d12fc3d08ee78d59a2cfbd642a62c2"
     },
     "fork-enter-sends-queued": {
       "oid": "e8dc70787dd124e6b5da0f6669c704e0b76ab6eb"
@@ -227,7 +227,7 @@
       "oid": "5afeaa00efcfbd10d774bc5655dddc9336872de8"
     },
     "fork-orcaslicer-handoff": {
-      "oid": "9c454c3039517f94262bd2cb4630ae140baebf3c"
+      "oid": "e77edd968327868ea14ff208c225ca2b93bfff22"
     },
     "fork-orchestrator-focus": {
       "oid": "bd10e1b21b4f4716940c72b44f3a15678a11d1cf"
@@ -368,13 +368,13 @@
       "oid": "6df403150251393cdb8ff6e316d5f0745a8ef10e"
     },
     "fork-step-preview": {
-      "oid": "12da9d957ae770e067addd574ec95884424cbbc5"
+      "oid": "079d65d8ae0565132dd63d5e02eb09c32b88f812"
     },
     "fork-subthread-lifecycle": {
       "oid": "649467ac414bdf6b16b5e5f3ed833cdd64ae9fe1"
     },
     "fork-t3-thread-prebuilt": {
-      "oid": "c92c61f1b46d0924f91fecf6993be970f6241294"
+      "oid": "84c6e07931bfc9d3af7ad0d49a8671ddd7804402"
     },
     "fork-task-view": {
       "oid": "06af0cc1df843d5d8a8ee34a94d43a73a084a561"
