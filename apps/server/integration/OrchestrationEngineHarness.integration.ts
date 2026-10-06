@@ -437,6 +437,7 @@ export const makeOrchestrationIntegrationHarness = (
           start: () => Effect.void,
           drain: Effect.void,
           requestSync: () => Effect.void,
+          refreshStale: Effect.void,
         }),
       ),
       Layer.provideMerge(
