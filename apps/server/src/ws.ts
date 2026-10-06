@@ -127,6 +127,8 @@ import * as ThreadManagementService from "./orchestration-v2/ThreadManagementSer
 import * as McpAppRequests from "./mcpApps/McpAppRequests.ts";
 import * as ProviderSessionManager from "./orchestration-v2/ProviderSessionManager.ts";
 import * as ThreadLaunchService from "./orchestration-v2/ThreadLaunchService.ts";
+import { launchNesting as launchNestingFor } from "./forkThreads/LaunchNesting.ts";
+import { makeNestingService } from "./forkThreads/NestingService.ts";
 import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
@@ -1243,6 +1245,11 @@ const layerWsRpc = (
         }
       };
       const threadLaunch = yield* ThreadLaunchService.ThreadLaunchService;
+      const launchNesting = yield* makeNestingService(
+        sql,
+        threadManagement.getThreadShell,
+        threadManagement.dispatch,
+      ).pipe(Effect.orDie);
       const providerSessionManager = yield* ProviderSessionManager.ProviderSessionManagerV2;
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
       const secretRequests = yield* SecretRequests.SecretRequests;
@@ -1964,11 +1971,34 @@ const layerWsRpc = (
                 ),
             ),
           ),
-        [ORCHESTRATION_V2_WS_METHODS.launchThread]: (input) =>
-          Effect.annotateCurrentSpan({
+        [ORCHESTRATION_V2_WS_METHODS.launchThread]: (input) => {
+          const nested =
+            input.parentThreadId === undefined
+              ? null
+              : launchNestingFor(launchNesting, threadManagement.getThreadShell, {
+                  commandId: input.commandId,
+                  parentThreadId: input.parentThreadId,
+                });
+          return Effect.annotateCurrentSpan({
             "orchestration_v2.command_id": input.commandId,
             "orchestration_v2.project_id": input.projectId,
           }).pipe(
+            // A parent that is gone fails here, before any thread or turn exists.
+            Effect.andThen(
+              nested === null
+                ? Effect.void
+                : nested.check.pipe(
+                    Effect.mapError(
+                      (cause) =>
+                        new OrchestrationV2ThreadLaunchError({
+                          commandId: input.commandId,
+                          projectId: input.projectId,
+                          message: cause.message,
+                          cause,
+                        }),
+                    ),
+                  ),
+            ),
             Effect.andThen(
               startup
                 .enqueueCommand(
@@ -2001,6 +2031,8 @@ const layerWsRpc = (
                               : { context: input.initialMessage.context }),
                           },
                         }),
+                    // Filed under its parent after it exists and before its first turn starts.
+                    ...(nested === null ? {} : { afterClaim: nested.afterClaim }),
                     createdBy: "user",
                     creationSource: input.creationSource ?? "web",
                   }).pipe(Effect.provide(intakeContext)),
@@ -2034,7 +2066,10 @@ const layerWsRpc = (
                       new OrchestrationV2ThreadLaunchError({
                         commandId: input.commandId,
                         projectId: input.projectId,
-                        message: "Failed to launch thread",
+                        message:
+                          cause.operation === "nest-thread"
+                            ? "Could not nest the new thread under its parent"
+                            : "Failed to launch thread",
                         cause,
                       }),
                     ServerRuntimeStartupError: (cause) =>
@@ -2047,7 +2082,8 @@ const layerWsRpc = (
                   }),
                 ),
             ),
-          ),
+          );
+        },
         [ORCHESTRATION_V2_WS_METHODS.subscribeArchivedShell]: (_input) =>
           Stream.unwrap(subscribeOrchestrationV2ArchivedShell()),
         [ORCHESTRATION_V2_WS_METHODS.subscribeShell]: (input) =>
