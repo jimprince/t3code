@@ -19,6 +19,8 @@ const legacyReaders = ["orchestration-v2/legacy/", "persistence/Migrations/"] as
 const legacyReaderFiles: Record<string, string> = {
   "fork/recovery/LegacyBackgroundWorkImport.ts": "one-time stopped background work notice import guarded by native receipts",
   "persistence/ForkMigrations/006_ProjectionThreadsParentThread.ts": "shipped legacy parent schema history",
+  "persistence/ForkMigrations/012_ProjectionThreadsRemoteParent.ts": "shipped legacy remote parent schema history",
+  "forkThreads/MetadataStore.ts": "one-time sidecar import; existing V2 metadata wins",
   "forkLegacy/AttachmentImport.ts": "attachment recovery used only by the V1 importer",
   "persistence/ForkMigrations/003_ProjectionThreadMessageFileAttachments.ts":
     "shipped legacy attachment schema history",
