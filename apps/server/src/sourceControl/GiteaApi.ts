@@ -71,5 +71,37 @@ export const make = Effect.gen(function* () {
         ),
       ),
     );
-  return { request, text };
+  /** A write whose response body is not needed, such as closing an issue (fork: request ledger). */
+  const send = (
+    instance: GiteaInstanceConfig,
+    method: "POST" | "PATCH" | "PUT" | "DELETE",
+    path: string,
+    body?: unknown,
+  ) =>
+    client
+      .execute(
+        HttpClientRequest.make(method)(`${instance.apiOrigin.replace(/\/$/, "")}/api/v1${path}`, {
+          headers: instance.token
+            ? { authorization: `token ${instance.token}`, accept: "application/json" }
+            : { accept: "application/json" },
+        }).pipe((req) => (body === undefined ? req : HttpClientRequest.bodyJsonUnsafe(req, body))),
+      )
+      .pipe(
+        Effect.provideService(FetchHttpClient.RequestInit, { redirect: "manual" }),
+        Effect.timeout("10 seconds"),
+        Effect.mapError(
+          () => new GiteaApiError({ detail: "Could not reach the configured Gitea API." }),
+        ),
+        Effect.flatMap((result) =>
+          result.status >= 200 && result.status < 300
+            ? Effect.void
+            : Effect.fail(
+                new GiteaApiError({
+                  status: result.status,
+                  detail: `Gitea API returned HTTP ${result.status}.`,
+                }),
+              ),
+        ),
+      );
+  return { request, text, send };
 });
