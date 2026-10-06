@@ -39,6 +39,20 @@ export function isThreadWorking(
   );
 }
 
+/**
+ * Effective visited watermark for a thread. Servers with visited tracking project `lastVisitedAt`
+ * on the shell and are authoritative, including a `null` for "never visited" and the explicit
+ * rewind of mark-unread, which a newer browser-local watermark must not mask. Pre-tracking
+ * servers omit the field, and the browser's locally persisted watermark keeps working there.
+ */
+export function resolveThreadLastVisitedAt(
+  serverLastVisitedAt: string | null | undefined,
+  localLastVisitedAt: string | undefined,
+): string | undefined {
+  if (serverLastVisitedAt === undefined) return localLastVisitedAt;
+  return serverLastVisitedAt ?? undefined;
+}
+
 /** When a thread last did something, which the V2 `updatedAt` is not (settling and pinning bump it). */
 export function lastActivityAt(
   thread: Pick<
@@ -388,9 +402,10 @@ export function buildStandaloneThreadGroups(
     if (hasPlanReady(thread)) return "plan";
     const display = resolveThreadDisplayStatus({ ...thread, hasActiveDescendants: false });
     if (display === "working" || display === "monitoring") return "working";
-    // The server's watermark wins; the browser-local one only carries servers that do not
-    // track visits (same rule as resolveThreadLastVisitedAt in the sidebar).
-    const visitedAt = thread.lastVisitedAt ?? lastVisitedAtByThreadKey[threadActivityKey(thread)];
+    const visitedAt = resolveThreadLastVisitedAt(
+      thread.lastVisitedAt,
+      lastVisitedAtByThreadKey[threadActivityKey(thread)],
+    );
     const completedAt = thread.latestRun?.completedAt;
     return visitedAt && completedAt && Date.parse(completedAt) > Date.parse(visitedAt)
       ? "completed"

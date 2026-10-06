@@ -339,8 +339,9 @@ describe("buildStandaloneThreadGroups", () => {
     ]);
   });
 
-  it("surfaces a standalone unseen completion from device-local visit state", () => {
-    const completed = thread("completed", null, {
+  it("surfaces a standalone unseen completion from device-local visit state on a pre-V2 server", () => {
+    // A pre-V2 server never projects the field at all.
+    const { lastVisitedAt: _omitted, ...completed } = thread("completed", null, {
       latestTurn: {
         turnId: "turn-completed" as never,
         state: "completed",
@@ -381,6 +382,14 @@ describe("buildStandaloneThreadGroups", () => {
     expect(groups[0]?.threads.map(({ thread, status }) => [thread.id, status])).toEqual([
       ["seen-before", "completed"],
     ]);
+  });
+
+  it("treats a server null as never visited, not as a cue to read the browser-local watermark", () => {
+    const rewound = thread("rewound", null, { ...completedRun, lastVisitedAt: null });
+    const groups = buildStandaloneThreadGroups([rewound], [project("project-a")], {
+      "env-1:rewound": "2026-10-01T03:00:00.000Z",
+    });
+    expect(groups).toHaveLength(0);
   });
 
   it("lets the server watermark win over a stale browser-local one", () => {
