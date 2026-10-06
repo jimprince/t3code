@@ -3,6 +3,11 @@ import {
   ThreadIssueLinkResult,
   ThreadIssueUnlinkResult,
   ThreadIssueOperationError,
+  NamedAgentError,
+  ListNamedAgentsResult,
+  ResolveNamedAgentInput,
+  HandOverNamedAgentInput,
+  NamedAgentThreadResult,
 } from "@t3tools/contracts";
 import { NestingRpcs } from "./v2/nesting.js";
 import * as Effect from "effect/Effect";
@@ -114,7 +119,25 @@ export function encodeClientOrchestrationCommand(input: unknown) {
   return encodeCommand(decodeCommand(input));
 }
 const schema = OrchestrationV2RpcSchemas;
+const namedAgentRpcs = [
+  Rpc.make("orchestration.listNamedAgents", {
+    payload: Schema.Struct({}),
+    success: ListNamedAgentsResult,
+    error: Schema.Union([NamedAgentError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make("orchestration.resolveNamedAgent", {
+    payload: ResolveNamedAgentInput,
+    success: NamedAgentThreadResult,
+    error: Schema.Union([NamedAgentError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make("orchestration.handOverNamedAgent", {
+    payload: HandOverNamedAgentInput,
+    success: NamedAgentThreadResult,
+    error: Schema.Union([NamedAgentError, EnvironmentAuthorizationError]),
+  }),
+];
 export const WsRpcGroup = RpcGroup.make(
+  ...namedAgentRpcs,
   ...NestingRpcs,
   Rpc.make("threadIssues.link", {
     payload: ThreadIssueReferenceInput,
