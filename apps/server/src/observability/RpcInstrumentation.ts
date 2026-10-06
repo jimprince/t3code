@@ -15,6 +15,8 @@ type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
  * prefix. Adding an RPC to `WsRpcGroup` without a label is a type error.
  */
 const RPC_AGGREGATES = {
+  "projectCanvas.action": "project-canvas",
+  "projectCanvas.read": "project-canvas",
   "projectRoadmap.get": "project-roadmap",
   "projectRoadmap.move": "project-roadmap",
   "projectRoadmap.saveVersion": "project-roadmap",
