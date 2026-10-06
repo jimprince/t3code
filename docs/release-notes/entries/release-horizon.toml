@@ -1,0 +1,4 @@
+id = "release-horizon"
+category = "feature"
+functionality = "projects"
+text = "The project Dashboard now shows where you're going: the next release with its outcome, how many tasks are done and what lands next, each epic as '1 of 4 · Building', and everything later as one 'Later (68)' line."
