@@ -14,7 +14,13 @@ export interface OutboxEntry {
   readonly text: string;
   readonly capturedAt: string;
   /** Requests split from the message; null until the split has run. */
-  readonly items: ReadonlyArray<{ title: string; kind: RequestKind; excerpt: string }> | null;
+  readonly items: ReadonlyArray<{
+    title: string;
+    kind: RequestKind;
+    excerpt: string;
+    /** Saved for later: filed with the parked label, off the active request list. */
+    parked?: boolean;
+  }> | null;
   /** Indexes of `items` already filed as issues. */
   readonly filed: ReadonlyArray<number>;
   readonly attempts: number;
