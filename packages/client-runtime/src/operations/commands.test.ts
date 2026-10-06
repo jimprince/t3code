@@ -361,6 +361,48 @@ describe("V2 environment commands", () => {
     }).pipe(Effect.provide(layerTestCrypto)),
   );
 
+  it.effect("sends the parent with a first-message launch so the server nests the new thread", () =>
+    Effect.gen(function* () {
+      const launches: OrchestrationV2ThreadLaunchInput[] = [];
+      const supervisor = yield* makeSupervisor({ commands: [], projects: [], launches });
+      const launch = (parentThreadId?: ThreadId) =>
+        startThreadTurn({
+          commandId: CommandId.make(
+            parentThreadId === undefined ? "launch-plain" : "launch-nested",
+          ),
+          threadId: v2ThreadId,
+          message: {
+            messageId: MessageId.make("message-nested"),
+            role: "user",
+            text: "Look into this",
+            attachments: [],
+          },
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          titleSeed: "Look into this",
+          ...(parentThreadId === undefined ? {} : { parentThreadId }),
+          bootstrap: {
+            createThread: {
+              projectId: ProjectId.make("project-1"),
+              title: "Thread",
+              modelSelection: v2Projection.thread.modelSelection,
+              runtimeMode: "full-access",
+              interactionMode: "default",
+              branch: null,
+              worktreePath: null,
+              createdAt: "2026-06-20T00:00:00.000Z",
+            },
+          },
+        }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
+
+      yield* launch(ThreadId.make("thread-head"));
+      yield* launch();
+
+      expect(launches[0]).toMatchObject({ parentThreadId: "thread-head" });
+      expect(launches[1]).not.toHaveProperty("parentThreadId");
+    }).pipe(Effect.provide(layerTestCrypto)),
+  );
+
   it.effect("provisions an origin-based worktree for an existing empty thread", () =>
     Effect.gen(function* () {
       const launches: OrchestrationV2ThreadLaunchInput[] = [];
