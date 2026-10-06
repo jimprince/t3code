@@ -2,6 +2,7 @@ import {
   AuthOrchestrationReadScope,
   EnvironmentHttpApi,
   type OrchestrationProjectShell,
+  withoutPageAgentThreads,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Predicate from "effect/Predicate";
@@ -79,7 +80,9 @@ export const layer = HttpApiBuilder.group(
       const base = buildActiveShellSnapshot(
         yield* loadShellSnapshotParts({
           sql,
-          readThreads: threadManagement.readShellSnapshot({ location: "active" }),
+          readThreads: threadManagement
+            .readShellSnapshot({ location: "active" })
+            .pipe(Effect.map(Effect.map(withoutPageAgentThreads))),
           listProjects: projectStore.listShells(),
           latestSequence: applicationEvents.latestApplicationSequence,
         }),
