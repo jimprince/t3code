@@ -749,6 +749,8 @@ agent
   )
   .option("--top-level", "create without an organizational parent or automatic caller subscription")
   .option("--parent <agent-or-thread>", "organizational parent; defaults to the current caller")
+  .option("--parent <agent-or-thread>", "supervising thread")
+  .option("--top-level", "create without a supervision parent")
   .option("--pin", "pin the new thread (default: unpinned)")
   .action(async (options) => {
     const state = await loadState();
@@ -799,6 +801,7 @@ agent
     // `options.preamble` is false only when `--no-preamble` was passed (Commander convention).
     const initialMessage = options.message;
     const created = await client.createAgentThread({
+      parentThreadId: options.topLevel ? null : options.parent ? resolveParentThreadId(state, options.parent, environment.name) : (resolveCallerThreadId(process.env) ?? null),
       pin: options.pin === true,
       projectId: options.project,
       title: options.title,
@@ -1032,6 +1035,7 @@ for (const operation of ["pin", "unpin"] as const) {
       printJson(await client.setThreadPinned(savedAgent.threadId, operation === "pin"));
     });
 }
+
 
 agent
   .command("order")
