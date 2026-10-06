@@ -1040,6 +1040,11 @@ function EnvironmentTasks({
                     ? ` · ${formatNextScheduledTaskRun(task.nextRunAt, now)}`
                     : ""}
               </Text>
+              {task.lastRunStatus === "skipped" ? (
+                <Text className="text-sm text-foreground-muted" numberOfLines={2}>
+                  Last run skipped: thread settled
+                </Text>
+              ) : null}
               {task.lastRunError ? (
                 <Text className="text-sm text-danger-foreground" numberOfLines={2}>
                   Last run failed: {task.lastRunError}
