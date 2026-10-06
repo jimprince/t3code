@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { moveEmbeddedPage, resolveEmbeddedPageHost } from "./embeddedPages.logic";
+import {
+  moveEmbeddedPage,
+  resolveEmbeddedPageHost,
+  statusBoardIssueUrl,
+} from "./embeddedPages.logic";
 
 const page = (id: string) => ({ id, name: id, url: `https://${id}.example`, icon: "globe" });
 
@@ -37,5 +41,22 @@ describe("moveEmbeddedPage", () => {
     expect(moveEmbeddedPage(pages, 2, -1).map((entry) => entry.id)).toEqual(["a", "c", "b"]);
     expect(moveEmbeddedPage(pages, 0, -1)).toBe(pages);
     expect(moveEmbeddedPage(pages, 2, 1)).toBe(pages);
+  });
+});
+
+describe("statusBoardIssueUrl", () => {
+  it("never puts a query on the board's root, which answers not found", () => {
+    expect(statusBoardIssueUrl("https://control.example:8450/", "t3code-fork", "88")).toBe(
+      "https://control.example:8450/index?repo=t3code-fork&issue=88",
+    );
+    expect(statusBoardIssueUrl("https://control.example:8450", "t3code-fork", "88")).toBe(
+      "https://control.example:8450/index?repo=t3code-fork&issue=88",
+    );
+  });
+
+  it("keeps a configured path and its own query", () => {
+    expect(statusBoardIssueUrl("https://control.example/board?view=all", "a b", "1")).toBe(
+      "https://control.example/board?view=all&repo=a+b&issue=1",
+    );
   });
 });
