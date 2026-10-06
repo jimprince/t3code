@@ -91,6 +91,7 @@ function useCanvasBridge(
   const [pending, setPending] = useState<{ id: string | null; text: string } | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const history = useRef<number[]>([]);
+  const sending = useRef(false);
   const statusTimer = useRef<number | null>(null);
   const reply = (id: string | null, ok: boolean, reason?: string) =>
     frame.current?.contentWindow?.postMessage(
@@ -191,13 +192,26 @@ function useCanvasBridge(
     [],
   );
 
-  const confirm = () => {
-    if (!pending) return;
-    const sent = sendToOrchestrator(summary, pending.text);
-    record("send", pending.text, "done");
-    reply(pending.id, true);
-    setPending(null);
-    flash(sent.queued ? "Queued for the orchestrator" : "Sent to the orchestrator");
+  const confirm = async () => {
+    if (!pending || sending.current) return;
+    const current = pending;
+    sending.current = true;
+    try {
+      const sent = sendToOrchestrator(summary, current.text);
+      const outcome = await sent.done;
+      if (outcome.ok) {
+        record("send", current.text, "done");
+        reply(current.id, true);
+        flash(sent.queued ? "Queued for the orchestrator" : "Sent to the orchestrator");
+      } else {
+        record("send", current.text, "rejected", outcome.reason);
+        reply(current.id, false, outcome.reason);
+        flash(`Not sent: ${outcome.reason}`);
+      }
+      setPending(null);
+    } finally {
+      sending.current = false;
+    }
   };
   const cancel = () => {
     if (!pending) return;
@@ -247,7 +261,7 @@ export function ProjectCanvasWidget({
             <span className="text-muted-foreground">Send to the orchestrator: </span>
             {bridge.pending.text}
           </p>
-          <Button size="xs" onClick={bridge.confirm}>
+          <Button size="xs" onClick={() => void bridge.confirm()}>
             Send
           </Button>
           <Button size="xs" variant="outline" onClick={bridge.cancel}>
