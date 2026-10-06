@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "877ac743fc49da62e2b9f68bc9b8c2a70eb7de28",
-  "head": "bbeb995cf112ca658167067bae417c68898fc5f7",
+  "prev": "a5875c7d305bcaeee128dac701d9b52ff8ea5c42",
+  "head": "899972f37611f65e379d8d9d4d3322c925b43726",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -61,13 +61,13 @@
     "fork-textgen-tempfile-cause",
     "fork-textgen-own-scope",
     "fork-dev-vm-heavy-check-gate",
-    "fork-gitea-issue-links",
+    "fork-gitea-issue-links"
+  ],
+  "unapplied": [
     "fork-orchestrators-view",
     "fork-codex-goal-visibility",
     "fork-named-agents",
-    "fork-project-automations"
-  ],
-  "unapplied": [
+    "fork-project-automations",
     "fork-conversation-fork",
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
