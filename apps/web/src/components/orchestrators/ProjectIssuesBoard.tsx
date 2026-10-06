@@ -18,9 +18,9 @@ import { issueKey, taskKind } from "./projectRequests.logic";
 import {
   ReopenButton,
   SettleButton,
-  useNeedsYou,
   useOpenThread,
   useSettle,
+  useTaskStatuses,
   type SettleControls,
 } from "./ProjectRequestsSection";
 
@@ -72,6 +72,11 @@ function IssueRow({
           {issue.title}
         </button>
       )}
+      {issue.labels.some((label) => label.toLowerCase() === "needs-test") ? (
+        <span className="block text-xs text-foreground/80">
+          Shipped{issue.milestone ? ` in ${issue.milestone.title}` : ""}, test it
+        </span>
+      ) : null}
       {/* The same tags, in the same order, on every card; nothing is clipped. */}
       <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
         <span className="break-all">
@@ -111,31 +116,27 @@ function IssueRow({
 }
 
 /**
- * The project's Gitea issues as a board: Needs you (the Dashboard's list),
- * Shipped, test it, Working, Pending and Done, for every repository the
- * orchestrator tree works in, requests included. Every card can be settled or
- * reopened in place.
+ * The project's tasks (its Gitea issues, requests included) as a board in the
+ * four statuses: For review (the Dashboard's Needs you), Active, Pending and
+ * Complete, for every repository the orchestrator tree works in. Every card
+ * can be settled or reopened in place.
  */
 export function ProjectIssuesBoard({ summary }: { readonly summary: OrchestratorSummary }) {
-  const { items, query } = useNeedsYou(summary);
+  const { statuses, query } = useTaskStatuses(summary);
   const settle = useSettle(summary, query.refresh);
   const openThread = useOpenThread(summary);
   const [showBacklog, setShowBacklog] = useState(false);
   const [expanded, setExpanded] = useState<ReadonlySet<ProjectIssueLane>>(new Set());
   const grouped = useMemo(
-    () =>
-      groupProjectIssues(
-        query.data?.issues ?? [],
-        new Map(items.map((item) => [issueKey(item.issue), item.group])),
-      ),
-    [items, query.data],
+    () => groupProjectIssues(query.data?.issues ?? [], statuses),
+    [query.data, statuses],
   );
   const now = query.dataUpdatedAt ?? 0;
   const failed = (query.data?.repositories ?? []).filter((repository) => repository.error);
   const projectReturn = { environmentId: summary.root.environmentId, threadId: summary.root.id };
 
   if (query.data === null) {
-    return <ProjectQueryState what="issues" error={query.error} onRetry={query.refresh} />;
+    return <ProjectQueryState what="tasks" error={query.error} onRetry={query.refresh} />;
   }
   if (query.data.repositories.length === 0) {
     return (
@@ -155,10 +156,11 @@ export function ProjectIssuesBoard({ summary }: { readonly summary: Orchestrator
   );
   return (
     <div className="flex flex-col gap-2">
-      <div className="grid grid-cols-1 gap-px overflow-hidden border border-border bg-border sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid grid-cols-1 gap-px overflow-hidden border border-border bg-border sm:grid-cols-2 xl:grid-cols-4">
         {PROJECT_ISSUE_LANES.map(({ lane, title }) => {
           const all = grouped.lanes[lane];
-          const preview = lane === "done" ? DONE_PREVIEW : lane === "pending" ? PENDING_PREVIEW : 0;
+          const preview =
+            lane === "complete" ? DONE_PREVIEW : lane === "pending" ? PENDING_PREVIEW : 0;
           const folded = preview > 0 && !expanded.has(lane) && all.length > preview;
           return (
             <section key={lane} className="min-w-0 bg-background px-2.5 py-2">
