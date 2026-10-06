@@ -9,6 +9,7 @@ import { threadSubscriptionHandlers } from "./threadSubscriptionHandlers.ts";
 import { makeWorkspaceUploadHandlers } from "./workspace/WorkspaceUploadRpc.ts";
 import { headlessDeliveryHandlers } from "./headlessDeliveryRpc.ts";
 import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
+import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
 import * as NodeCrypto from "node:crypto";
@@ -107,6 +108,8 @@ import {
   type TerminalMetadataStreamEvent,
   type PullRequestRef,
   WS_METHODS,
+  WsCoreRpcGroup,
+  WsForkRpcGroup,
   WsRpcGroup,
 } from "@t3tools/contracts";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
@@ -1204,7 +1207,7 @@ const makeWsRpcLayer = (
   clientAnalyticsProps: Readonly<Record<string, unknown>>,
   previewAutomationBroker: PreviewAutomationBroker.PreviewAutomationBroker["Service"],
 ) =>
-  ServerWsRpcGroup.toLayer(
+  Layer.effectContext(
     Effect.gen(function* () {
       const namedAgents = yield* makeNamedAgents;
       const automations = yield* AutomationEngine.AutomationEngine;
@@ -1835,7 +1838,7 @@ const makeWsRpcLayer = (
         return result;
       });
 
-      const handlers = ServerWsRpcGroup.of({
+      const handlers = WsCoreRpcGroup.of({
         ...threadSubscriptionHandlers(threadManagement),
         [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command) =>
           observeRpcEffect(
@@ -2792,30 +2795,8 @@ const makeWsRpcLayer = (
               .pipe(Effect.flatMap((result) => requestLedger.decorate(result, input.rootThreadId))),
             { "rpc.aggregate": "project-issues" },
           ),
-        [WS_METHODS.projectIssuesGet]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.projectIssuesGet,
-            projectIssues
-              .get(input)
-              .pipe(
-                Effect.flatMap((result) =>
-                  requestLedger
-                    .withAnswers([result.issue])
-                    .pipe(Effect.map(([issue]) => ({ ...result, issue: issue ?? result.issue }))),
-                ),
-              ),
-            { "rpc.aggregate": "project-issues" },
-          ),
         [WS_METHODS.projectRequestsSettle]: (input) =>
           observeRpcEffect(WS_METHODS.projectRequestsSettle, requestLedger.settle(input), {
-            "rpc.aggregate": "project-issues",
-          }),
-        [WS_METHODS.projectRequestsStartIntake]: (input) =>
-          observeRpcEffect(WS_METHODS.projectRequestsStartIntake, requestIntake.start(input), {
-            "rpc.aggregate": "project-issues",
-          }),
-        [WS_METHODS.projectRequestsSubmit]: (input) =>
-          observeRpcEffect(WS_METHODS.projectRequestsSubmit, requestLedger.submit(input), {
             "rpc.aggregate": "project-issues",
           }),
         [WS_METHODS.projectRequestsCreate]: (input) =>
@@ -2863,39 +2844,6 @@ const makeWsRpcLayer = (
             WS_METHODS.projectDashboardSetTracker,
             projectDashboard.setTracker(input),
             { "rpc.aggregate": "project-dashboard" },
-          ),
-        [WS_METHODS.projectDashboardSetHealth]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.projectDashboardSetHealth,
-            projectDashboard.setHealth(input),
-            { "rpc.aggregate": "project-dashboard" },
-          ),
-        // Brad's edits from a client; the orchestrator edits through the MCP tools.
-        [WS_METHODS.projectLayoutGet]: (input) =>
-          observeRpcEffect(WS_METHODS.projectLayoutGet, projectLayout.get(input.threadId), {
-            "rpc.aggregate": "project-layout",
-          }),
-        [WS_METHODS.projectLayoutApply]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.projectLayoutApply,
-            projectLayout.apply(input, { kind: "user", threadId: null, reason: null }),
-            { "rpc.aggregate": "project-layout" },
-          ),
-        [WS_METHODS.projectLayoutRevert]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.projectLayoutRevert,
-            projectLayout.revert(input, { kind: "user", threadId: null, reason: null }),
-            { "rpc.aggregate": "project-layout" },
-          ),
-        [WS_METHODS.projectLayoutHistory]: (input) =>
-          observeRpcEffect(WS_METHODS.projectLayoutHistory, projectLayout.history(input), {
-            "rpc.aggregate": "project-layout",
-          }),
-        [WS_METHODS.subscribeProjectLayout]: (input) =>
-          observeRpcStream(
-            WS_METHODS.subscribeProjectLayout,
-            projectLayout.stream(input.threadId),
-            { "rpc.aggregate": "project-layout" },
           ),
         [WS_METHODS.projectRequestsList]: (input) =>
           observeRpcEffect(WS_METHODS.projectRequestsList, requestLedger.listForThread(input), {
@@ -3979,7 +3927,71 @@ const makeWsRpcLayer = (
             { "rpc.aggregate": "server" },
           ),
       });
-      return handlers;
+      const forkHandlers = WsForkRpcGroup.of({
+        [WS_METHODS.projectIssuesGet]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectIssuesGet,
+            projectIssues
+              .get(input)
+              .pipe(
+                Effect.flatMap((result) =>
+                  requestLedger
+                    .withAnswers([result.issue])
+                    .pipe(Effect.map(([issue]) => ({ ...result, issue: issue ?? result.issue }))),
+                ),
+              ),
+            { "rpc.aggregate": "project-issues" },
+          ),
+        [WS_METHODS.projectRequestsSubmit]: (input) =>
+          observeRpcEffect(WS_METHODS.projectRequestsSubmit, requestLedger.submit(input), {
+            "rpc.aggregate": "project-issues",
+          }),
+        [WS_METHODS.projectRequestsStartIntake]: (input) =>
+          observeRpcEffect(WS_METHODS.projectRequestsStartIntake, requestIntake.start(input), {
+            "rpc.aggregate": "project-issues",
+          }),
+        [WS_METHODS.projectDashboardSetHealth]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectDashboardSetHealth,
+            projectDashboard.setHealth(input),
+            { "rpc.aggregate": "project-dashboard" },
+          ),
+        // Brad's edits from a client; the orchestrator edits through the MCP tools.
+        [WS_METHODS.projectLayoutGet]: (input) =>
+          observeRpcEffect(WS_METHODS.projectLayoutGet, projectLayout.get(input.threadId), {
+            "rpc.aggregate": "project-layout",
+          }),
+        [WS_METHODS.projectLayoutApply]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectLayoutApply,
+            projectLayout.apply(input, { kind: "user", threadId: null, reason: null }),
+            { "rpc.aggregate": "project-layout" },
+          ),
+        [WS_METHODS.projectLayoutRevert]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectLayoutRevert,
+            projectLayout.revert(input, { kind: "user", threadId: null, reason: null }),
+            { "rpc.aggregate": "project-layout" },
+          ),
+        [WS_METHODS.projectLayoutHistory]: (input) =>
+          observeRpcEffect(WS_METHODS.projectLayoutHistory, projectLayout.history(input), {
+            "rpc.aggregate": "project-layout",
+          }),
+        [WS_METHODS.subscribeProjectLayout]: (input) =>
+          observeRpcStream(
+            WS_METHODS.subscribeProjectLayout,
+            projectLayout.stream(input.threadId),
+            { "rpc.aggregate": "project-layout" },
+          ),
+        [WS_METHODS.projectRequestsDecide]: (input) =>
+          observeRpcEffect(WS_METHODS.projectRequestsDecide, requestLedger.decide(input), {
+            "rpc.aggregate": "project-issues",
+          }),
+      });
+      return Context.merge(
+        yield* WsCoreRpcGroup.toHandlers(handlers),
+        yield* WsForkRpcGroup.toHandlers(forkHandlers),
+      );
     }),
   );
 
