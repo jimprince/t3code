@@ -1,3 +1,4 @@
+import { ForkWorkerSummary } from "./forkWorkerSummary.ts";
 import { OrchestrationMessageContext } from "./composerContext.ts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -1836,6 +1837,11 @@ export type OrchestrationV2LatestVisibleMessageSummary =
   typeof OrchestrationV2LatestVisibleMessageSummary.Type;
 
 export const OrchestrationV2ThreadShell = Schema.Struct({
+  workerSummary: Schema.optional(ForkWorkerSummary),
+  parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  remoteParent: Schema.optional(
+    Schema.NullOr(Schema.Struct({ environmentId: Schema.String, threadId: ThreadId })),
+  ),
   ...OrchestrationV2CreationFields,
   id: ThreadId,
   projectId: ProjectId,
