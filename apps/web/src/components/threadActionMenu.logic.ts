@@ -94,6 +94,8 @@ export interface ThreadActionMenuState {
   /** Archive rejects a thread with an attached provider, so disable it here rather than let the action fail. */
   readonly isRunning: boolean;
   readonly move?: { readonly up: boolean; readonly down: boolean } | undefined;
+  /** The thread holds a manual order slot; reset has nothing to do for an automatic one. */
+  readonly orderIsManual?: boolean | undefined;
   readonly supports: {
     readonly settlement: boolean;
     /** Server understands thread.auto-settle.set. */
@@ -145,8 +147,10 @@ export function buildThreadActionMenuItems(
             : { id: "pin" as const, label: "Pin thread", icon: "pin" },
         ]
       : []),
-    ...(state.supports.orderReset === true && (state.isPinned || !state.isSettled)
-      ? [{ id: "order-reset" as const, label: "Return to automatic order", icon: "list" }]
+    ...(state.supports.orderReset === true &&
+    state.orderIsManual === true &&
+    (state.isPinned || !state.isSettled)
+      ? [{ id: "order-reset" as const, label: "Reset to automatic order", icon: "list" }]
       : []),
     ...(state.move
       ? [
