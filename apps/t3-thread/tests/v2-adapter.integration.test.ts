@@ -290,9 +290,9 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
     expect(decodeThreadSnapshotItem(encoded).snapshot.thread.messages[0]?.attachments).toEqual([
       file,
     ]);
-    expect((await NodeFSP.readFile(NodePath.join(directory, "identity"), "utf8")).split("\n")).toContain(
-      created.threadId,
-    );
+    expect(
+      (await NodeFSP.readFile(NodePath.join(directory, "identity"), "utf8")).split("\n"),
+    ).toContain(created.threadId);
     const queued = await client.sendMessage({ threadId: created.threadId, text: "Follow-up" });
     expect(queued.queued).toBe(true);
     const sender = { source: "thread-send", fromThreadId: "sender" };
