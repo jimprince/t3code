@@ -1,0 +1,4 @@
+id = "sidebar-nested-agent-status"
+category = "feature"
+functionality = "web sidebar"
+text = "See active nested agents first in an expanded sidebar group, with the same static working and attention signals as other threads."
