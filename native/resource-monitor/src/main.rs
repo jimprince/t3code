@@ -180,6 +180,16 @@ impl ProcessSample {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct SyspolicydSample {
+    sampled_at_unix_ms: u64,
+    pid: u32,
+    start_time_ms: u64,
+    resident_bytes: u64,
+    cpu_percent: f32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct SnapshotEvent {
     version: u32,
     #[serde(rename = "type")]
@@ -194,6 +204,7 @@ struct SnapshotEvent {
     request_id: Option<String>,
     external_processes: Vec<ExternalProcess>,
     processes: Vec<ProcessSample>,
+    syspolicyd: Option<SyspolicydSample>,
 }
 
 impl SnapshotEvent {
@@ -354,6 +365,8 @@ struct Collector {
     system: System,
     sequence: u64,
     cpu_baseline_refreshed_at: Option<Instant>,
+    syspolicyd_refreshed_at: Option<Instant>,
+    syspolicyd: Option<SyspolicydSample>,
 }
 
 impl Collector {
@@ -362,6 +375,8 @@ impl Collector {
             system: System::new(),
             sequence: 0,
             cpu_baseline_refreshed_at: None,
+            syspolicyd_refreshed_at: None,
+            syspolicyd: None,
         }
     }
 
@@ -422,6 +437,24 @@ impl Collector {
             process_discovery_refresh_kind(),
         );
         self.cpu_baseline_refreshed_at = Some(Instant::now());
+
+        // sysinfo uses native process APIs. Reuse the discovery table, never spawn ps/pgrep.
+        if cfg!(target_os = "macos")
+            && self
+                .syspolicyd_refreshed_at
+                .is_none_or(|at| at.elapsed() >= Duration::from_secs(60))
+        {
+            self.syspolicyd = self.system.processes().iter().find_map(|(pid, process)| {
+                (process.name() == "syspolicyd" && process.memory() > 0).then(|| SyspolicydSample {
+                    sampled_at_unix_ms: unix_time_ms(),
+                    pid: pid.as_u32(),
+                    start_time_ms: process.start_time().saturating_mul(1_000),
+                    resident_bytes: process.memory(),
+                    cpu_percent: process.cpu_usage(),
+                })
+            });
+            self.syspolicyd_refreshed_at = Some(Instant::now());
+        }
 
         let rows = self
             .system
@@ -556,6 +589,7 @@ impl Collector {
             request_id,
             external_processes,
             processes,
+            syspolicyd: self.syspolicyd.clone(),
         }
     }
 }
@@ -969,6 +1003,38 @@ mod tests {
     use super::*;
 
     #[test]
+    fn native_sampling_has_no_subprocess_launcher() {
+        // Guard the entire helper: spawning an OS process must never enter its sampling path.
+        let source = include_str!("main.rs");
+        for forbidden in [
+            ["std::process::", "Command"].concat(),
+            ["Command::", "new("].concat(),
+            ["libc::", "fork("].concat(),
+            ["libc::", "posix_spawn"].concat(),
+        ] {
+            assert!(
+                !source.contains(&forbidden),
+                "sampling contains a subprocess launcher"
+            );
+        }
+        let mut collector = Collector::new();
+        let snapshot = collector.sample(
+            &CollectorConfig {
+                root_pid: std::process::id(),
+                sample_interval: None,
+                external_processes: HashMap::new(),
+            },
+            None,
+        );
+        assert!(
+            snapshot
+                .processes
+                .iter()
+                .any(|row| row.pid == std::process::id() && row.resident_bytes > 0)
+        );
+    }
+
+    #[test]
     fn selects_roots_and_all_descendants() {
         let rows = vec![
             (10, 1, 1_000),
@@ -1140,6 +1206,7 @@ mod tests {
                     start_time_ms: Some(1_000),
                 }],
                 processes: Vec::new(),
+                syspolicyd: None,
             });
         }
 
@@ -1178,6 +1245,7 @@ mod tests {
             request_id: None,
             external_processes: Vec::new(),
             processes: Vec::new(),
+            syspolicyd: None,
         };
         history.record(&snapshot);
 
@@ -1230,6 +1298,7 @@ mod tests {
                     inaccessible_process_count: 0,
                     request_id: None,
                     external_processes: Vec::new(),
+                    syspolicyd: None,
                     processes: vec![ProcessSample {
                         pid: sequence as u32 + 1,
                         start_time_ms: sequence * 1_000,
@@ -1271,6 +1340,7 @@ mod tests {
             request_id: None,
             external_processes,
             processes: Vec::new(),
+            syspolicyd: None,
         };
         let snapshot_bytes = snapshot.estimated_history_bytes();
         let snapshot_entries = snapshot.retained_entry_count();
