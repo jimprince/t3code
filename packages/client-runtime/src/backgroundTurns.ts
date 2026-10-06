@@ -284,4 +284,3 @@ export function resolveBackgroundFolds(
   }
   return { runByAnchorMessageId, hiddenMessageIds, hiddenTurnIds };
 }
-
