@@ -1,6 +1,9 @@
 import { assert, it } from "@effect/vitest";
 import { CommandId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import { ForkThreadMetadataUpdate } from "@t3tools/contracts";
+import type { ForkThreadMetadata } from "@t3tools/contracts";
 import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
@@ -23,7 +26,7 @@ const layer = Layer.merge(
 ).pipe(Layer.provideMerge(database));
 
 it.effect(
-  "metadata updates publish one native shell event after commit and recover refresh on retry",
+  "CLI metadata updates publish native shell events; receipts repair interrupted refresh exactly once",
   () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
@@ -101,6 +104,71 @@ it.effect(
           events.readByCommandId({ commandId: CommandId.make("unnest-refresh:shell-refresh") }),
         )).length,
         1,
+      );
+      const cliRequests: ForkThreadMetadataUpdate[] = [];
+      const cliArguments = [
+        {
+          name: "cli-refresh",
+          httpBaseUrl: "http://127.0.0.1:1",
+          wsBaseUrl: "ws://127.0.0.1:1",
+          environmentId: "cli-refresh",
+          label: "CLI test",
+          serverVersion: "test",
+          bearerToken: "test",
+          expiresAt: "2099-01-01T00:00:00.000Z",
+          pairedAt: "2026-10-06T00:00:00.000Z",
+        },
+        {
+          descriptorFactory: async () => ({
+            environmentId: "cli-refresh",
+            label: "CLI test",
+            serverVersion: "test",
+            capabilities: { threadNesting: true },
+          }),
+          rpcFactory: () => ({
+            request: async <T>(method: string, payload: unknown): Promise<T> => {
+              assert.equal(method, "threadMetadataUpdate");
+              const value = Schema.decodeUnknownSync(ForkThreadMetadataUpdate)(payload);
+              cliRequests.push(value);
+              return (await Effect.runPromise(service.update(value))) as T;
+            },
+            subscribeShellSnapshot: async <T>(): Promise<T> => {
+              throw new Error("Unused snapshot");
+            },
+            subscribeThreadSnapshot: async <T>(): Promise<T> => {
+              throw new Error("Unused snapshot");
+            },
+            dispose: async () => {},
+          }),
+        },
+      ] as const;
+      // Load CLI under its own workspace boundary, rather than server compiler policy.
+      const cliModulePath = "../../../t3-thread/src/client.ts";
+      const cliModule = (yield* Effect.promise(() => import(cliModulePath))) as {
+        RemoteEnvironmentClient: new (
+          environment: (typeof cliArguments)[0],
+          options: (typeof cliArguments)[1],
+        ) => {
+          setThreadParent: (
+            threadId: string,
+            parentThreadId: string | null,
+          ) => Promise<ForkThreadMetadata>;
+        };
+      };
+      const cli = new cliModule.RemoteEnvironmentClient(...cliArguments);
+      const cliResult = yield* Effect.tryPromise(() => cli.setThreadParent(threadId, parentId));
+      assert.equal(cliResult.parentThreadId, parentId);
+      assert.equal(cliRequests.length, 1);
+      const cliRefresh = yield* Stream.runCollect(
+        events.readByCommandId({
+          commandId: CommandId.make(`${cliRequests[0]!.commandId}:shell-refresh`),
+        }),
+      );
+      assert.equal(cliRefresh.length, 1);
+      assert.equal(cliRefresh[0]?.event.type, "thread.metadata-updated");
+      assert.equal(
+        (yield* service.list()).find((row) => row.threadId === threadId)?.parentThreadId,
+        parentId,
       );
       const invalid = {
         ...input,
