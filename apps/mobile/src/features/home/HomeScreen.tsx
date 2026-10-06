@@ -6,6 +6,7 @@ import {
   buildOrchestratorSummaries,
   type OrchestratorSummary,
 } from "@t3tools/client-runtime/state/orchestrators";
+import { MobileDecisions } from "./MobileDecisions";
 import { MobileProjectRequests } from "./MobileProjectRequests";
 import {
   type EnvironmentProject,
@@ -320,6 +321,7 @@ function MobileOrchestratorList({
               </Text>
             ) : null}
             <MobileProjectRequests summary={summary} />
+            <MobileDecisions summary={summary} />
           </Pressable>
         );
       })}
