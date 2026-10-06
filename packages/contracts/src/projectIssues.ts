@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema";
+import * as SchemaTransformation from "effect/SchemaTransformation";
 
 import {
   IsoDateTime,
@@ -167,19 +168,46 @@ export const ProjectIssuesGetResult = Schema.Struct({
 export type ProjectIssuesGetResult = typeof ProjectIssuesGetResult.Type;
 
 /**
- * Task types, stored as `ask:<kind>` labels on requests and issues alike; each has
- * its own lifecycle on the project page.
+ * Item types, stored as `ask:<kind>` labels on requests and issues alike; each has
+ * its own lifecycle on the project page. A task may also carry a `bug` tag.
  */
+const ProjectRequestKindCurrent = Schema.Literals(["question", "task", "epic"]);
+
+/** The earlier item types and the type each one is read as. */
+const LEGACY_REQUEST_KINDS = {
+  bug: "task",
+  feature: "task",
+  deliverable: "task",
+  change: "task",
+  test: "task",
+  maintenance: "task",
+  plan: "epic",
+} as const;
+
+type LegacyRequestKind = keyof typeof LEGACY_REQUEST_KINDS;
+type CurrentRequestKind = typeof ProjectRequestKindCurrent.Type;
+
+/** The current type for a stored or received type, mapping an earlier one. */
+export const normalizeRequestKind = (kind: string): CurrentRequestKind =>
+  Object.hasOwn(LEGACY_REQUEST_KINDS, kind)
+    ? LEGACY_REQUEST_KINDS[kind as LegacyRequestKind]
+    : (kind as CurrentRequestKind);
+
+/** Decodes the three types, and maps an earlier type from an older client or outbox entry. */
 export const ProjectRequestKind = Schema.Literals([
-  "bug",
-  "feature",
   "question",
-  "deliverable",
-  "plan",
-  "change",
-  "test",
-  "maintenance",
-]);
+  "task",
+  "epic",
+  ...(Object.keys(LEGACY_REQUEST_KINDS) as LegacyRequestKind[]),
+]).pipe(
+  Schema.decodeTo(
+    ProjectRequestKindCurrent,
+    SchemaTransformation.transform({
+      decode: (kind: CurrentRequestKind | LegacyRequestKind) => normalizeRequestKind(kind),
+      encode: (kind: CurrentRequestKind): CurrentRequestKind | LegacyRequestKind => kind,
+    }),
+  ),
+);
 export type ProjectRequestKind = typeof ProjectRequestKind.Type;
 
 /** A captured request not yet filed, usually because Gitea was unreachable; retried. */
@@ -189,6 +217,8 @@ export const ProjectPendingRequest = Schema.Struct({
   title: Schema.String,
   /** Null until the message has been split into requests. */
   kind: Schema.NullOr(ProjectRequestKind),
+  /** The split tagged it a bug. */
+  bug: Schema.optionalKey(Schema.Boolean),
   capturedAt: IsoDateTime,
   attempts: NonNegativeInt,
   lastError: Schema.NullOr(Schema.String),
@@ -282,6 +312,8 @@ export const ProjectRequestCreateInput = Schema.Struct({
   threadId: ThreadId,
   title: TrimmedNonEmptyString,
   kind: ProjectRequestKind,
+  /** Tags a task `bug`. */
+  bug: Schema.optionalKey(Schema.Boolean),
   detail: Schema.optionalKey(Schema.String),
   /** Save for later: filed parked, so it waits on the roadmap instead of the request list. */
   park: Schema.optionalKey(Schema.Boolean),
@@ -309,10 +341,15 @@ export const ProjectRequestUpdateInput = Schema.Struct({
   comment: Schema.optionalKey(Schema.String),
   /** Release the request shipped in, recorded as its milestone (with `needs-test`). */
   release: Schema.optionalKey(TrimmedNonEmptyString),
-  /** Retypes the task: replaces its `ask:<kind>` label. Any tracker issue can be typed. */
+  /**
+   * Retypes the item: swaps among `ask:question`, `ask:task` and `ask:epic`, keeping
+   * any earlier `ask:*` label as history. Any tracker issue can be typed.
+   */
   kind: Schema.optionalKey(ProjectRequestKind),
   /** Retitles the task (an imperative for work, the question for a question). */
   title: Schema.optionalKey(TrimmedNonEmptyString.check(Schema.isMaxLength(200))),
+  /** Adds or removes the `bug` tag. */
+  bug: Schema.optionalKey(Schema.Boolean),
 });
 export type ProjectRequestUpdateInput = typeof ProjectRequestUpdateInput.Type;
 
