@@ -1299,3 +1299,27 @@ decided = "adapt"
 rationale = "The rollback coverage waited for the healthy-version marker with existsSync, but writeText is a plain writeFile that creates the file before its bytes land, so a loaded runner read an empty marker and the case failed with expected '' to equal '1.2.3' in candidate CI while passing locally. Wait for the written version instead. Production keeps the plain write: the watchdog already re-reads the marker with cat on every five-second attempt."
 
 # v2-port-2689-m2: V2 hosted-work boundary guard and native staged install reservation; fork rollback keeps binary backup only.
+
+[[patch]]
+name = "fork-spawn-budget"
+subject = "fix(server): prevent background process launch storms"
+class = "upstream-bound"
+purpose = "Suppress repeated missing executable launches, share provider refinement across repository PR links, pace background process attempts, and expose direct launch counts without sampling subprocesses."
+retire_when = "Upstream caches missing executables and explicit provider discovery, bounds background launch attempts, and exposes equivalent launch diagnostics."
+depends_on = ["fork-gitea-connections", "fork-unsupported-pr-hosts"]
+roles = []
+note = "The shared runner caches ENOENT only when executable resolution confirms absence, keyed by executable environment and provider settings generation. Successful PATH resolutions are reused. Explicit provider contexts include cwd, remote, requested authority, and settings/environment in a single-flight cache; each PR sweep retains refinements until all its repository groups complete. PR sweeps and periodic VCS refreshes opt into a shared five-attempts/second limit; interactive work keeps its own deadlines. Last-minute executable counters cover ProcessRunner's direct spawn calls, not vendor descendants or all host processes. The existing root resolver already caches null roots for one minute. Internal VcsProcess Git calls resolve once per executable environment to a path outside agent safety wrapper directories, preferring system Git on macOS and rejecting wrapper symlink aliases; agent shells retain their PATH."
+
+[[patch.decision]]
+id = "v2-port-2689-m2"
+date = "2026-10-06"
+decided = "reconcile-smaller"
+rationale = "V2 port: one fork decorator on the native process runner owns the execution-context-keyed missing-binary cache (bounded at 2048) and background pacing; interactive launches bypass pacing, and a newly found binary clears its negative entry at once. The provider-refinement cache scopes native PR sweeps without replacing native refresh."
+
+[[patch.decision]]
+id = "upstream14673-sweep-scope"
+date = "2026-10-02"
+decided = "adapt"
+rationale = "Upstream 10ac2f2ba replaced the sweep's per-key argument with a scope plus the shared requested map so a burst of links shares one batched summary read. Gate the fork's repository grouping on that scope instead, and keep the two-repository/four-group pacing: batched GraphQL cuts host calls but still leaves the sweep free to spawn 25 processes at once, which is the launch storm this concern bounds."
+
+# v2-port-2689-m2: runner/registry fork decorators retain native PR host batching.
