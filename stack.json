@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "23ef1421146e7addd58cc33c261e377530a09230",
+  "prev": "347a54522f7622e305c9aadb4d3d815595926335",
   "head": "54ebc9e982a6babbef67917a249402501cc1b917",
   "applied": [
     "fork-build-ci-compat",
@@ -73,7 +73,6 @@
     "fork-maintenance-automation",
     "fork-page-agent-tray",
     "fork-antigravity-errors",
-    "fork-named-agents",
     "fork-project-automations",
     "fork-project-issues-board",
     "fork-request-ledger",
@@ -176,9 +175,6 @@
     },
     "fork-mobile-delivery": {
       "oid": "7da16e155fa41290187e029e94b043d4d561ce07"
-    },
-    "fork-named-agents": {
-      "oid": "d03883a78b1420b2d316456988a8c43c5eb3f9ba"
     },
     "fork-nested-threads": {
       "oid": "b9b039fb54281763641ce9363b36bb86ce6c0778"
