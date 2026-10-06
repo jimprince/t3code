@@ -12,6 +12,7 @@ export const archiveDeadline = (thread: Thread, days: number) =>
 
 export function hasActiveWork(thread: Thread): boolean {
   return (
+    thread.codexNativeGoal?.status === "active" ||
     thread.pendingRuntimeRequest != null ||
     thread.hasActionableProposedPlan ||
     ["running", "queued", "waiting", "starting"].includes(thread.status) ||
