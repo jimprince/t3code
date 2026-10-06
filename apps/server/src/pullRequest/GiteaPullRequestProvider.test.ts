@@ -288,4 +288,73 @@ describe("Gitea pull request browser", () => {
       expect(encodeJson(error)).not.toContain("secret-one");
     }),
   );
+  it.effect("serves links made from the public address the instance reports for itself", () =>
+    Effect.gen(function* () {
+      const publicHost = "git.example.com";
+      const other = { ...pr, base: { ...pr.base, repo: { full_name: "brad/other" } } };
+      const h = harness((url) =>
+        url.pathname.includes("/pulls/") ? other : { full_name: url.pathname.split("/repos/")[1] },
+      );
+      const ref = { ...input, repository: "brad/other", host: publicHost };
+      const { first, second, summary } = yield* h.run((p) =>
+        Effect.gen(function* () {
+          const first = yield* p.resolveHostAlias!({ host: publicHost, repository: "brad/other" });
+          // The host is now known, so another repository needs no probe.
+          const second = yield* p.resolveHostAlias!({ host: publicHost, repository: "brad/third" });
+          // The checkout belongs to a different repository, so this needs the host alone.
+          return { first, second, summary: yield* p.getChangeRequestSummary!(ref) };
+        }),
+      );
+      expect([first, second]).toEqual(["git.home", "git.home"]);
+      expect(summary.number).toBe(42);
+      expect(h.requests.map(({ url, authorization }) => ({ url, authorization }))).toEqual([
+        { url: "https://api.home/api/v1/repos/brad/other", authorization: "token secret-one" },
+        {
+          url: "https://api.home/api/v1/repos/brad/other/pulls/42",
+          authorization: "token secret-one",
+        },
+      ]);
+    }),
+  );
+  it.effect(
+    "does not claim a host whose repository no instance serves, and remembers the miss",
+    () =>
+      Effect.gen(function* () {
+        const h = harness(() => ({}), 404);
+        const answers = yield* h.run((p) =>
+          Effect.all([
+            p.resolveHostAlias!({ host: "unknown.example", repository: "brad/repo" }),
+            p.resolveHostAlias!({ host: "unknown.example", repository: "brad/repo" }),
+          ]),
+        );
+        expect(answers).toEqual([null, null]);
+        expect(h.requests).toHaveLength(1);
+      }),
+  );
+  it.effect("never offers another forge's host to the instance", () =>
+    Effect.gen(function* () {
+      const h = harness(() => ({ full_name: "brad/repo" }));
+      expect(
+        yield* h.run((p) => p.resolveHostAlias!({ host: "github.com", repository: "brad/repo" })),
+      ).toBeNull();
+      expect(h.requests).toHaveLength(0);
+    }),
+  );
+  it.effect("reports a review request as the review decision of an open pull request", () =>
+    Effect.gen(function* () {
+      const summaryOf = (raw: unknown) =>
+        harness(() => raw).run((p) => p.getChangeRequestSummary!(input));
+      expect((yield* summaryOf(pr)).reviewDecision).toBe("review-required");
+      expect(
+        (yield* summaryOf({ ...pr, requested_reviewers: [], labels: [{ name: "Needs-Review" }] }))
+          .reviewDecision,
+      ).toBe("review-required");
+      expect(
+        (yield* summaryOf({ ...pr, requested_reviewers: [], labels: [] })).reviewDecision,
+      ).toBeUndefined();
+      expect(
+        (yield* summaryOf({ ...pr, state: "closed", merged: true })).reviewDecision,
+      ).toBeUndefined();
+    }),
+  );
 });
