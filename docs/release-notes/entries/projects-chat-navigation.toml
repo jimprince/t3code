@@ -1,0 +1,4 @@
+id = "projects-chat-navigation"
+category = "fix"
+functionality = "projects"
+text = "Project chat no longer traps message-navigation previews at the panel edge, interrupted worker turns no longer appear as blocked work, and project links open pull requests and issues in the main area with a Back control."
