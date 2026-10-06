@@ -10,7 +10,7 @@ const PROJECT_WIDGETS = [
   { id: "done", title: "Done since your last visit" },
   // The embedded orchestrator composer; the request box in Requests replaces it by default.
   { id: "new-request", title: "Orchestrator composer", hiddenByDefault: true },
-  { id: "issues", title: "Issues" },
+  { id: "issues", title: "Tasks" },
   { id: "prs", title: "Pull requests" },
   { id: "canvas", title: "Canvas" },
   { id: "automations", title: "Automations" },
