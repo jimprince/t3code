@@ -2404,4 +2404,4 @@ note = "Fixes the server-side variant of brad/t3code-fork#150. The release waits
 [[patch.decision]]
 id = "v2-m5-session-reconcile"
 decision = "adapt"
-note = "V2 has runs and shared runtime session records, not V1 session summaries. Successful provider interrupt effects already dispatch thread.background-work.settle; its receipt now settles the exact interrupted run, attempt and nodes and clears the matching session. A fork RPC preserves t3-thread session reconcile and refuses live/newer runs. Startup recovery already stops all process-bound sessions; no new migration is needed."
+note = "V2 has runs and shared runtime session records, not V1 session summaries. Successful provider interrupt effects already dispatch thread.background-work.settle; its receipt now settles the exact interrupted run, attempt and nodes and clears the matching session. A fork RPC preserves t3-thread session reconcile and refuses live/newer runs. Startup recovery already stops all process-bound sessions; no new migration is needed. OpenCode shutdown does not send another interrupt after the server has acknowledged Stop while its native terminal event is still queued."
