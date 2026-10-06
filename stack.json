@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "f4365c3869fe6fca385f25f0a519952d5cd4e824",
-  "head": "6db34aae2dcb74304b5fc11df0ac2ae9c4777cfd",
+  "prev": "6ad0c6643b1e4aedcb80d6c272f79a3cd675e765",
+  "head": "3a80b7a7a7037a84829341f1d3a0e254bda77dd8",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -105,7 +105,8 @@
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
     "fork-session-reconcile",
-    "fork-codex-extra-skill-roots"
+    "fork-codex-extra-skill-roots",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-dashboard-polish",
@@ -443,6 +444,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "8f47b4fd223b5dfd1ccde1c616d15d4498f3ae92"
+    },
+    "refresh-temp": {
+      "oid": "3a80b7a7a7037a84829341f1d3a0e254bda77dd8"
     }
   }
 }
