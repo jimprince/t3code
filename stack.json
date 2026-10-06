@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "858a1bdc033be3974b97bf17cf0ff74fb7bd34b7",
+  "prev": "e02d2600eeba2b8c1d924e726b5a5c07d7434b1f",
   "head": "359bc6c4dabea1eae26d940251e5d10fb1532c34",
   "applied": [
     "fork-build-ci-compat",
@@ -38,7 +38,6 @@
     "fork-conversation-fork",
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
-    "fork-worktree-cleanup",
     "fork-release-publication",
     "fork-maintenance-automation",
     "fork-codex-goal-visibility",
@@ -312,9 +311,6 @@
     },
     "fork-workspace-file-uploads": {
       "oid": "6b13fad36b9c64177a72956543b1f7a51587a0e4"
-    },
-    "fork-worktree-cleanup": {
-      "oid": "b944a2751d8828af07f0b2402a53eeac5ad02a0c"
     }
   }
 }
