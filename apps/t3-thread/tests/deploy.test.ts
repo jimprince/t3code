@@ -4,7 +4,8 @@ import * as NodeURL from "node:url";
 import * as NodeUtil from "node:util";
 import { expect, it } from "vite-plus/test";
 
-// The fixture verifies real Linux procfs identities and captured child processes.
+// The fixture verifies real Linux procfs identities and captured child processes; its 21 Python
+// cases take about 20 s on the dev VM, so the default 15 s budget is too tight.
 it.skipIf(!NodeFS.existsSync("/proc/sys/kernel/random/boot_id"))(
   "deploys the verified runtime and preserves leased watchers before pruning",
   async () => {
@@ -14,5 +15,5 @@ it.skipIf(!NodeFS.existsSync("/proc/sys/kernel/random/boot_id"))(
     ]);
     expect(result.stderr).toContain("OK");
   },
-  15_000,
+  60_000,
 );
