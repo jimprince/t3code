@@ -206,11 +206,7 @@ export function useUndoableActions() {
 }
 
 /** What is waiting to be sent, each with its Undo. */
-export function UndoLines({
-  actions,
-}: {
-  readonly actions: ReturnType<typeof useUndoableActions>;
-}) {
+function UndoLines({ actions }: { readonly actions: ReturnType<typeof useUndoableActions> }) {
   if (actions.queued.length === 0) return null;
   return (
     <ul className="mt-2 border-t border-border pt-1">
