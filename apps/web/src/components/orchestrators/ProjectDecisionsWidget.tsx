@@ -1,53 +1,129 @@
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
+import {
+  decisionAnswerInput,
+  decisionSendStrip,
+  keptDecisionAnswers,
+  sentDelivery,
+  type DecisionAnswerInput,
+  type DecisionAnswerRecord,
+  type DecisionDelivery,
+  type DecisionPick,
+} from "@t3tools/client-runtime/decision-answer";
 import type { ProjectIssue } from "@t3tools/contracts";
-import { SendIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { RotateCcwIcon, SendIcon } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { deriveDecisions } from "./decisions.logic";
 import { formatIssueAge } from "./projectIssuesBoard.logic";
 import { issueKey } from "./projectRequests.logic";
-import {
-  UndoLines,
-  useDecide,
-  useProjectRequests,
-  useUndoableActions,
-} from "./ProjectRequestsSection";
+import { useDecide, useProjectRequests, useUndoableActions } from "./ProjectRequestsSection";
 
-type Pick = { readonly option: string } | { readonly answer: string };
+const pickText = (pick: DecisionPick) => (pick.kind === "option" ? pick.option : pick.text);
 
-/** One decision's buttons (or answer box for an open question) and optional note. */
+const linkButton = "text-xs text-muted-foreground underline-offset-2 hover:underline";
+
+/** An answered card: what was picked and where the answer is, until the card leaves. */
+interface AnsweredState {
+  readonly answered: string;
+  readonly state: "held" | DecisionDelivery;
+}
+
+/**
+ * One decision's answer controls. Options send on click; from then on the row shows
+ * the answer with its status (held with Undo, sending, sent, or failed with Retry)
+ * and never the options again unless the answer is dropped. A note can be added
+ * before picking or, until the hold ends, after: it is read when the answer is sent.
+ */
 function DecisionAnswer({
   decision,
+  answered,
   onAnswer,
+  onUndo,
+  onRetry,
+  onDrop,
 }: {
   readonly decision: NonNullable<ProjectIssue["decision"]>;
-  readonly onAnswer: (pick: Pick, note: string) => void;
+  readonly answered: AnsweredState | null;
+  readonly onAnswer: (pick: DecisionPick, readNote: () => string) => void;
+  readonly onUndo: () => void;
+  readonly onRetry: () => void;
+  /** Gives up on a failed answer and shows the options again. */
+  readonly onDrop: () => void;
 }) {
   const [note, setNote] = useState("");
+  const [noteOpen, setNoteOpen] = useState(false);
   const [text, setText] = useState("");
-  const send = () => text.trim() && onAnswer({ answer: text.trim() }, note.trim());
+  const [otherOpen, setOtherOpen] = useState(false);
+  const noteRef = useRef("");
+  const open = decision.options.length === 0;
+  const answer = (pick: DecisionPick) => {
+    if (!decisionAnswerInput(pick, "")) return;
+    onAnswer(pick, () => noteRef.current);
+  };
+  const changeNote = (value: string) => {
+    noteRef.current = value;
+    setNote(value);
+  };
+  const noteField = noteOpen ? (
+    <Input
+      size="sm"
+      value={note}
+      maxLength={500}
+      placeholder="Note"
+      aria-label="Note"
+      autoFocus
+      onChange={(event) => changeNote(event.target.value)}
+    />
+  ) : null;
+  const noteLink = noteOpen ? null : (
+    <button type="button" className={linkButton} onClick={() => setNoteOpen(true)}>
+      Add note
+    </button>
+  );
+  if (answered) {
+    const strip = decisionSendStrip(answered.state, decision.waiting);
+    return (
+      <span className="flex w-60 shrink-0 flex-col gap-1">
+        <span className="flex items-center gap-2 text-xs">
+          <span className="min-w-0 flex-1 truncate text-foreground">{answered.answered}</span>
+          {strip.undoable ? (
+            <Button size="xs" variant="ghost-muted" onClick={onUndo}>
+              <RotateCcwIcon />
+              Undo
+            </Button>
+          ) : null}
+        </span>
+        <span
+          role={strip.retryable ? "alert" : "status"}
+          className={`text-xs ${strip.retryable ? "text-destructive" : "text-muted-foreground"}`}
+        >
+          {strip.text}
+        </span>
+        {strip.retryable ? (
+          <span className="flex gap-1">
+            <Button size="xs" variant="outline" onClick={onRetry}>
+              <RotateCcwIcon />
+              Retry
+            </Button>
+            <Button size="xs" variant="ghost-muted" onClick={onDrop}>
+              Choose again
+            </Button>
+          </span>
+        ) : null}
+        {answered.state === "held" ? (
+          <>
+            {noteField}
+            {noteLink}
+          </>
+        ) : null}
+      </span>
+    );
+  }
   return (
     <span className="flex w-60 shrink-0 flex-col gap-1">
-      {decision.options.length > 0 ? (
-        <span className="flex flex-wrap gap-1">
-          {decision.options.map((option) => (
-            <Button
-              key={option.text}
-              size="sm-multiline"
-              variant={option.recommended ? "default" : "outline"}
-              className="max-w-full text-left"
-              onClick={() => onAnswer({ option: option.text }, note.trim())}
-            >
-              {option.text}
-              {option.recommended ? (
-                <span className="text-xs font-normal opacity-70">recommended</span>
-              ) : null}
-            </Button>
-          ))}
-        </span>
-      ) : (
+      {open ? (
         <span className="flex gap-1">
           <Input
             size="sm"
@@ -57,38 +133,149 @@ function DecisionAnswer({
             aria-label="Answer"
             onChange={(event) => setText(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter") send();
+              if (event.key === "Enter") answer({ kind: "open", text });
             }}
           />
-          <Button size="xs" variant="outline" disabled={!text.trim()} onClick={send}>
+          <Button
+            size="xs"
+            variant="outline"
+            disabled={!text.trim()}
+            onClick={() => answer({ kind: "open", text })}
+          >
             <SendIcon />
             Send
           </Button>
         </span>
+      ) : (
+        <>
+          <span className="flex flex-wrap gap-1">
+            {decision.options.map((option) => (
+              <Button
+                key={option.text}
+                size="sm-multiline"
+                variant={option.recommended ? "default" : "outline"}
+                className="max-w-full text-left"
+                onClick={() => answer({ kind: "option", option: option.text })}
+              >
+                {option.text}
+                {option.recommended ? (
+                  <span className="text-xs font-normal opacity-70">recommended</span>
+                ) : null}
+                <SendIcon className="size-3 shrink-0 opacity-60" />
+              </Button>
+            ))}
+            <Button
+              size="sm-multiline"
+              variant="ghost-muted"
+              aria-expanded={otherOpen}
+              onClick={() => setOtherOpen((current) => !current)}
+            >
+              Other...
+            </Button>
+          </span>
+          {otherOpen ? (
+            <span className="flex gap-1">
+              <Input
+                size="sm"
+                value={text}
+                maxLength={2000}
+                placeholder="Your answer"
+                aria-label="Other answer"
+                autoFocus
+                onChange={(event) => setText(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") answer({ kind: "other", text });
+                }}
+              />
+              <Button
+                size="xs"
+                variant="outline"
+                disabled={!text.trim()}
+                onClick={() => answer({ kind: "other", text })}
+              >
+                <SendIcon />
+                Send
+              </Button>
+            </span>
+          ) : null}
+        </>
       )}
-      <Input
-        size="sm"
-        value={note}
-        maxLength={500}
-        placeholder="Note (optional)"
-        aria-label="Note"
-        onChange={(event) => setNote(event.target.value)}
-      />
+      {noteField}
+      {noteLink}
     </span>
   );
 }
 
 /**
  * Decisions waiting on Brad: open `needs-brad` issues in the fixed decision format.
- * One click answers (with an optional note); the answer is held for a few seconds
- * with Undo, then commented on the issue and sent to the waiting thread.
+ * Picking an option (or Other...) holds the answer for a few seconds with Undo, then
+ * comments it on the issue and sends it to the waiting thread. The row keeps showing
+ * the answer until a list read after it was sent no longer has the issue; a failure
+ * stays on the row with the server's reason and Retry.
  */
 export function ProjectDecisionsWidget({ summary }: { readonly summary: OrchestratorSummary }) {
   const { query, now } = useProjectRequests(summary);
   const actions = useUndoableActions();
   const decide = useDecide(summary, query.refresh);
   const decisions = useMemo(() => deriveDecisions(query.data?.issues ?? []), [query.data]);
-  const shown = decisions.filter((issue) => !actions.isGone(issueKey(issue)));
+  const live = useMemo(() => new Set(decisions.map(issueKey)), [decisions]);
+  const [answers, setAnswers] = useState<ReadonlyMap<string, DecisionAnswerRecord<ProjectIssue>>>(
+    new Map(),
+  );
+  // Answers whose card has left are forgotten on each new list read, so a question
+  // asked again shows its options.
+  const [prunedAt, setPrunedAt] = useState(now);
+  if (prunedAt !== now) {
+    setPrunedAt(now);
+    setAnswers((current) => keptDecisionAnswers(current, live, now));
+  }
+  const kept = keptDecisionAnswers(answers, live, now);
+  const record = (key: string, entry: DecisionAnswerRecord<ProjectIssue> | null) =>
+    setAnswers((current) => {
+      const next = new Map(current);
+      if (entry) next.set(key, entry);
+      else next.delete(key);
+      return next;
+    });
+  const send = async (key: string, entry: Omit<DecisionAnswerRecord<ProjectIssue>, "delivery">) => {
+    record(key, { ...entry, delivery: { phase: "sending" } });
+    const { input } = entry;
+    const outcome = await decide(entry.issue, input.decision, {
+      ...(input.option ? { option: input.option } : {}),
+      ...(input.answer ? { answer: input.answer } : {}),
+      ...(input.reason ? { reason: input.reason } : {}),
+    });
+    record(key, {
+      ...entry,
+      delivery: outcome.sent
+        ? sentDelivery(outcome.notified)
+        : { phase: "failed", error: outcome.error },
+    });
+  };
+  const held = new Map(actions.queued.map((entry) => [entry.key, entry.label]));
+  const shown = [
+    ...decisions,
+    ...[...kept].filter(([key]) => !live.has(key)).map(([, entry]) => entry.issue),
+  ].toSorted((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const answeredOf = (key: string): AnsweredState | null => {
+    const label = held.get(key);
+    if (label) return { answered: label, state: "held" };
+    const entry = kept.get(key);
+    return entry ? { answered: entry.answered, state: entry.delivery } : null;
+  };
+  const answer = (issue: ProjectIssue, key: string, pick: DecisionPick, readNote: () => string) => {
+    const answered = `Answered: ${pickText(pick).trim()}`;
+    actions.run(key, answered, async () => {
+      const input: DecisionAnswerInput | null = decisionAnswerInput(pick, readNote());
+      if (!input) return false;
+      await send(key, { issue, answered, input });
+      return true;
+    });
+  };
+  const retry = (key: string) => {
+    const entry = kept.get(key);
+    if (entry) void send(key, entry);
+  };
   return (
     <section className="border-t border-border pt-4 first:border-t-0 first:pt-0">
       <h2 className="mb-2 flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
@@ -125,24 +312,17 @@ export function ProjectDecisionsWidget({ summary }: { readonly summary: Orchestr
                 </span>
                 <DecisionAnswer
                   decision={decision}
-                  onAnswer={(pick, note) =>
-                    actions.run(
-                      key,
-                      "option" in pick ? `Chose: ${pick.option}` : `Answered: ${pick.answer}`,
-                      () =>
-                        decide(issue, "option" in pick ? "option" : "answer", {
-                          ...pick,
-                          ...(note ? { reason: note } : {}),
-                        }),
-                    )
-                  }
+                  answered={answeredOf(key)}
+                  onAnswer={(pick, readNote) => answer(issue, key, pick, readNote)}
+                  onUndo={() => actions.undo(key)}
+                  onRetry={() => retry(key)}
+                  onDrop={() => record(key, null)}
                 />
               </li>
             );
           })}
         </ul>
       )}
-      <UndoLines actions={actions} />
     </section>
   );
 }
