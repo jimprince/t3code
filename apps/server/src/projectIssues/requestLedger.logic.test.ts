@@ -4,6 +4,8 @@ import { describe, expect, it } from "vite-plus/test";
 import { parseRequestMarker } from "./projectIssues.logic.ts";
 import {
   answerToMessage,
+  buildIntakeBrief,
+  intakeModelSelection,
   capturableMessage,
   clampTitle,
   fallbackRequestItem,
@@ -293,5 +295,57 @@ describe("each question's own answer", () => {
       message("later", "assistant", null, 3, "Something else."),
     ];
     expect(answerToMessage(untracked, "q")?.text).toBe("Yes.");
+  });
+});
+
+describe("New request intake", () => {
+  const provider = (
+    instanceId: string,
+    driver: string,
+    slugs: ReadonlyArray<string>,
+    usable = true,
+  ) => ({
+    instanceId,
+    driver,
+    enabled: usable,
+    installed: usable,
+    models: slugs.map((slug) => ({ slug })),
+  });
+  const orchestrators = { instanceId: "codex", model: "gpt-6.1-sol" };
+
+  it("triages with Sonnet 5.5 when offered, another Claude Sonnet next, else the orchestrator's model", () => {
+    expect(
+      intakeModelSelection(
+        [
+          provider("codex", "codex", ["gpt-6.1-sol"]),
+          provider("claude", "claude", ["claude-opus-5-5", "claude-sonnet-5-5"]),
+        ],
+        orchestrators,
+      ),
+    ).toEqual({ instanceId: "claude", model: "claude-sonnet-5-5" });
+    expect(
+      intakeModelSelection([provider("claude", "claude", ["claude-sonnet-5"])], orchestrators),
+    ).toEqual({ instanceId: "claude", model: "claude-sonnet-5" });
+    expect(
+      intakeModelSelection(
+        [provider("claude", "claude", ["claude-sonnet-5-5"], false)],
+        orchestrators,
+      ),
+    ).toBe(orchestrators);
+  });
+
+  it("briefs the intake to triage, settle itself and only hand on what cannot wait", () => {
+    const brief = buildIntakeBrief({
+      projectTitle: "t3code-fork",
+      orchestratorThreadId: "root-1",
+      orchestratorTitle: "T3 Orchestrator",
+      projectId: "project-1",
+    });
+    expect(brief).toContain('t3-thread request type "$T3_THREAD_ID" N');
+    expect(brief).toContain('t3-thread roadmap move "$T3_THREAD_ID" N next');
+    expect(brief).toContain("--parent root-1 --notify root-1 --notify-level attention");
+    expect(brief).toContain("Do not message the orchestrator.");
+    expect(brief).toContain('t3-thread settle "$T3_THREAD_ID" --self');
+    expect(brief.trimEnd().endsWith("Brad's request:")).toBe(true);
   });
 });
