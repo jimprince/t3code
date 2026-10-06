@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "046d4a8f50fe9ec5e6e365c615696080b6907307",
-  "head": "da89713ed7385b0309b38e74ecf0ff0b490e3988",
+  "prev": "0058498f0ad092dd00498e7e8137af5131783bd2",
+  "head": "bfe5467bbdc51ae33203b3da057943fb2682dbf1",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -103,15 +103,14 @@
     "fork-antigravity-errors",
     "fork-conversation-fork",
     "fork-thread-transfer",
-    "fork-thread-history-compatibility"
-  ],
-  "unapplied": [
+    "fork-thread-history-compatibility",
     "fork-session-reconcile",
     "fork-codex-extra-skill-roots",
     "fork-dashboard-polish",
     "fork-phone-side-panels",
     "fork-decision-links"
   ],
+  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
@@ -154,7 +153,7 @@
       "oid": "5c0581ee7c1f18f46d586ae0b8d7a328a200fbc7"
     },
     "fork-codex-extra-skill-roots": {
-      "oid": "643111cd6a39a411c66f93085c8fa8885903142f"
+      "oid": "1601c76396a1f8e213023fa073e3071505af18f2"
     },
     "fork-codex-goal-visibility": {
       "oid": "1d493037fdb376a7aa64e70cbdf8e7627e5ef918"
@@ -169,10 +168,10 @@
       "oid": "b0c9032c448135268c1afc2dc4721d2f5258c3a6"
     },
     "fork-dashboard-polish": {
-      "oid": "ce07ccdab0a52fa2ae8fb273e3b12333e741f686"
+      "oid": "98c65bc9c6a3a1260db0c8af4bc93445cddafbfc"
     },
     "fork-decision-links": {
-      "oid": "fbcfeb2921903a9b53b4c4aa02191a7b26a01eda"
+      "oid": "bfe5467bbdc51ae33203b3da057943fb2682dbf1"
     },
     "fork-decisions-other": {
       "oid": "473c8ccf6f0f2f7b0059c3ee416abadb2a576113"
@@ -256,7 +255,7 @@
       "oid": "136ba65eedc9ecf9c3ca8796a9a8766cb06c9d48"
     },
     "fork-phone-side-panels": {
-      "oid": "60fcc7e0dab50456f39e25faba1423fe6e74c1ea"
+      "oid": "979fb8926bb2a21d36cb116949f8078e227572e3"
     },
     "fork-pr-dismissal": {
       "oid": "15d656b24d6947935bf55d9460bf784924d37b6e"
@@ -370,7 +369,7 @@
       "oid": "ae2ed6dd5ed896017b39d520e159291d8d389e0a"
     },
     "fork-session-reconcile": {
-      "oid": "08977a031cd01ae23193d26184f4dc718cd3c24f"
+      "oid": "21ebe8a92934a4885ac542377a643590ee614ef2"
     },
     "fork-sidebar-agent-visibility": {
       "oid": "a6a4f66e5548815c130ecd9798a8b0c6ddfb22d5"
