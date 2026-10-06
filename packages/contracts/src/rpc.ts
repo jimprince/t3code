@@ -67,6 +67,8 @@ import {
   ProjectRequestCreateInput,
   ProjectRequestCreateResult,
   ProjectRequestDecideInput,
+  ProjectRequestDiscussInput,
+  ProjectRequestDiscussResult,
   ProjectRequestDecideResult,
   ProjectRequestRef,
   ProjectRequestSettleInput,
@@ -627,6 +629,7 @@ export const WS_METHODS = {
   projectIssuesGet: "projectIssues.get",
   projectRequestsSettle: "projectRequests.settle",
   projectRequestsDecide: "projectRequests.decide",
+  projectRequestsDiscuss: "projectRequests.discuss",
   projectRequestsSubmit: "projectRequests.submit",
   projectRequestsStartIntake: "projectRequests.startIntake",
   projectRequestsCreate: "projectRequests.create",
@@ -1063,6 +1066,12 @@ const WsProjectRequestsSettleRpc = Rpc.make(WS_METHODS.projectRequestsSettle, {
 const WsProjectRequestsDecideRpc = Rpc.make(WS_METHODS.projectRequestsDecide, {
   payload: ProjectRequestDecideInput,
   success: ProjectRequestDecideResult,
+  error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectRequestsDiscussRpc = Rpc.make(WS_METHODS.projectRequestsDiscuss, {
+  payload: ProjectRequestDiscussInput,
+  success: ProjectRequestDiscussResult,
   error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
 });
 
@@ -2278,6 +2287,7 @@ export const WsSessionReconcileRpc = Rpc.make("fork.session.reconcile", {
 });
 
 export const WsForkRpcGroup = RpcGroup.make(
+  WsProjectRequestsDiscussRpc,
   WsSessionReconcileRpc,
   ForkConversationRpc,
   ...ThreadTransferRpcs,
