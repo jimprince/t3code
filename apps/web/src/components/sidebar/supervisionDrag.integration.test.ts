@@ -1,12 +1,12 @@
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import { supervisionForest } from "@t3tools/client-runtime/state/forkNesting";
+import { supervisionForest } from "@t3tools/client-runtime/state/fork-nesting";
 import { expect, it } from "vite-plus/test";
 import { supervisionDragIntent, canSupervise } from "./supervisionDragIntent";
 import { makeThreadFixture } from "../../test-fixtures";
 
 it("requires explicit nesting intent and rejects cycles", () => {
   const threads = ["a", "b"].map((id) =>
-    makeThreadFixture({environmentId: EnvironmentId.make("env"), id: ThreadId.make(id)}),
+    makeThreadFixture({ environmentId: EnvironmentId.make("env"), id: ThreadId.make(id) }),
   );
   const forest = supervisionForest(threads);
   const input = { sourceKey: "env:a", overKey: "env:b", forest };
