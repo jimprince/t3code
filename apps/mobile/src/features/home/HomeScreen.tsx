@@ -3,6 +3,10 @@ import type { ThreadMoveDestination } from "../threads/threadOrder";
 import { computeThreadMoveAvailability } from "../threads/threadOrder";
 import { LegendList, type LegendListRef } from "@legendapp/list/react-native";
 import {
+  buildOrchestratorSummaries,
+  type OrchestratorSummary,
+} from "@t3tools/client-runtime/state/orchestrators";
+import {
   type EnvironmentProject,
   type EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/shell";
@@ -17,6 +21,7 @@ import { use, useCallback, useEffect, useMemo, useRef, useState, type ComponentP
 import {
   ActivityIndicator,
   Platform,
+  Pressable,
   ScrollView,
   View,
   type ScrollViewProps,
@@ -30,6 +35,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { cn } from "../../lib/cn";
 import { EmptyState } from "../../components/EmptyState";
+import { AppText as Text } from "../../components/AppText";
+import { SegmentedControl } from "../../components/SegmentedControl";
+import { ProjectFavicon } from "../../components/ProjectFavicon";
 import { MaterialFloatingActionButton } from "../../components/MaterialFloatingActionButton";
 import type { WorkspaceEnvironment, WorkspaceState } from "../../state/workspaceModel";
 import type { SavedRemoteConnection } from "../../lib/connection";
@@ -43,6 +51,7 @@ import {
 import { NATIVE_LIQUID_GLASS_SUPPORTED } from "../../native/native-glass";
 import { useNativeWorkspaceColumnsSupported } from "../../native/NativeWorkspaceColumns";
 import { useThreadSearch } from "../../state/queries";
+import { useSupervisionMetadata } from "../../state/forkSupervision";
 import { useThreadJumpShortcuts } from "../keyboard/threadKeyboardShortcuts";
 import { usePendingThreadOrder } from "../../state/thread-order";
 import { threadListEnvironmentsAtom } from "../../state/server";
@@ -266,6 +275,119 @@ function renderHomeScrollView(props: ScrollViewProps) {
   return <HomeScrollView {...props} />;
 }
 
+function MobileOrchestratorList({
+  summaries,
+  onSelectThread,
+  header,
+}: {
+  readonly header: ComponentProps<typeof View>["children"];
+  readonly summaries: readonly OrchestratorSummary[];
+  readonly onSelectThread: (thread: EnvironmentThreadShell) => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const primaryColumn = use(NativePrimaryColumnContext);
+  const columnMetrics = useNativeColumnLayoutMetrics();
+  const screenMetrics = useNativeLayoutMetrics();
+  const sideInsets = useNativeWorkspaceColumnsSupported()
+    ? (columnMetrics ?? screenMetrics)?.safeArea
+    : undefined;
+  return (
+    <HomeScrollView
+      className="flex-1"
+      contentInset={Platform.OS === "ios" ? { top: insets.top } : undefined}
+      contentContainerStyle={{
+        flexGrow: 1,
+        paddingLeft: sideInsets?.left ?? 0,
+        paddingRight: sideInsets?.right ?? 0,
+        paddingBottom: Math.max(columnMetrics?.safeArea.bottom ?? insets.bottom, 24) + 72,
+      }}
+    >
+      {header}
+      {summaries.length === 0 ? (
+        <View className="flex-1 items-center justify-center px-8">
+          <EmptyState
+            title="No projects"
+            detail="Projects appear when a top-level thread has workers."
+            variant={Platform.OS === "android" ? "plain" : undefined}
+          />
+        </View>
+      ) : null}
+      {summaries.map((summary) => {
+        const project =
+          summary.projects.find(
+            (candidate) =>
+              candidate.environmentId === summary.root.environmentId &&
+              candidate.id === summary.root.projectId,
+          ) ?? summary.projects[0];
+        return (
+          <Pressable
+            key={`${summary.root.environmentId}:${summary.root.id}`}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${summary.root.title}`}
+            className="border-b border-border px-2 py-3 active:bg-card"
+            style={{ marginHorizontal: primaryColumn ? 8 : 12 }}
+            onPress={() => onSelectThread(summary.root)}
+          >
+            <View className="flex-row items-center gap-2">
+              {project ? (
+                <ProjectFavicon
+                  environmentId={project.environmentId}
+                  projectTitle={project.title}
+                  workspaceRoot={project.workspaceRoot}
+                  faviconPath={project.faviconPath}
+                  projectIcon={project.projectIcon}
+                  size={20}
+                />
+              ) : null}
+              <Text
+                className="min-w-0 flex-1 text-sm font-t3-medium text-foreground"
+                numberOfLines={1}
+              >
+                {summary.root.title}
+              </Text>
+              {summary.needsYou.length > 0 ? (
+                <Text className="text-xs text-warning-foreground">
+                  {summary.needsYou.length} need you
+                </Text>
+              ) : null}
+            </View>
+            <View className="mt-1.5 flex-row items-center gap-2">
+              <Text
+                className={cn(
+                  "text-xs",
+                  summary.status === "working" || summary.status === "supervising"
+                    ? "text-adaptive-sky-600-400"
+                    : summary.status === "approval" || summary.status === "input"
+                      ? "text-warning-foreground"
+                      : "text-foreground-muted",
+                )}
+              >
+                {summary.status === "supervising"
+                  ? "◌ Supervising"
+                  : summary.status === "working"
+                    ? "◌ Working"
+                    : summary.status === "approval"
+                      ? "Needs approval"
+                      : summary.status === "input"
+                        ? "Needs input"
+                        : "Idle"}
+              </Text>
+              <Text className="text-xs text-foreground-muted">
+                {summary.activeWorkerCount} active
+              </Text>
+            </View>
+            {summary.projects.length > 0 ? (
+              <Text className="mt-1 text-xs text-foreground-muted" numberOfLines={1}>
+                {summary.projects.map((project) => project.title).join(" · ")}
+              </Text>
+            ) : null}
+          </Pressable>
+        );
+      })}
+    </HomeScrollView>
+  );
+}
+
 /* ─── Main screen ────────────────────────────────────────────────────── */
 
 export function HomeScreen(props: HomeScreenProps) {
@@ -279,6 +401,13 @@ export function HomeScreen(props: HomeScreenProps) {
   const columnMetrics = useNativeColumnLayoutMetrics();
   const selectedThreadKey = primaryColumn?.selectedThreadKey ?? null;
   const fullSwipeWidth = primaryColumn && columnMetrics ? columnMetrics.width - 20 : undefined;
+
+  const [homeMode, setHomeMode] = useState<"threads" | "orchestrators">("threads");
+  const supervisionMetadata = useSupervisionMetadata();
+  const orchestrators = useMemo(
+    () => buildOrchestratorSummaries(props.threads, props.projects, supervisionMetadata),
+    [props.projects, props.threads, supervisionMetadata],
+  );
   const queuedThreadKeys = useQueuedThreadKeys();
   const openSwipeableRef = useRef<SwipeableMethods | null>(null);
   const insets = useSafeAreaInsets();
@@ -956,11 +1085,31 @@ export function HomeScreen(props: HomeScreenProps) {
     );
   }
 
+  const homeModeSelector = (
+    <View className="px-3 pt-2 pb-1">
+      <SegmentedControl
+        options={[
+          { value: "threads", label: "Threads" },
+          { value: "orchestrators", label: "Projects" },
+        ]}
+        selected={homeMode}
+        onSelect={setHomeMode}
+        size="compact"
+        role="tab"
+      />
+    </View>
+  );
+
   const listHeader = Platform.OS === "ios" ? undefined : <HomeTopContentSpacer />;
 
   // Project scoping lives in the header filter menu (no inline chip row on
   // mobile — the menu is the one filter surface).
-  const v2ListHeader = listHeader;
+  const v2ListHeader = (
+    <>
+      {homeModeSelector}
+      {listHeader}
+    </>
+  );
 
   // Use the v2 project scope for its empty state. Snoozed threads need no
   // special empty state: their shelf header is a list row even while collapsed.
@@ -991,13 +1140,14 @@ export function HomeScreen(props: HomeScreenProps) {
       />
     );
 
-  if (Platform.OS === "android" && threadListV2Items.length === 0) {
+  if (homeMode === "threads" && Platform.OS === "android" && threadListV2Items.length === 0) {
     return (
       <View className="flex-1 bg-header">
         <View
           className="flex-1 items-center justify-center overflow-hidden rounded-t-[28px] bg-screen px-4"
           style={{ paddingBottom: insets.bottom }}
         >
+          <View className="absolute inset-x-0 top-0">{homeModeSelector}</View>
           {v2ListEmpty}
         </View>
       </View>
@@ -1016,53 +1166,61 @@ export function HomeScreen(props: HomeScreenProps) {
         {/* Shared with the iPad sidebar: cells are reused across data
             rebuilds and `itemsAreEqual` keeps a minute tick (or an unrelated
             shell update) from re-rendering untouched rows. */}
-        <SwipeableScrollGateProvider enabled={swipeEnabled} activation={swipeRowActivation}>
-          <LegendList
-            ref={listRef}
-            onLoad={() => activateVisibleRows(threadListV2Items)}
-            onTouchStart={(event) => trackListTouches(event, true)}
-            onTouchEnd={(event) => trackListTouches(event, false)}
-            onTouchCancel={(event) => trackListTouches(event, false)}
-            renderScrollComponent={Platform.OS === "ios" ? renderHomeScrollView : undefined}
-            data={threadListV2Items}
-            renderItem={renderV2Item}
-            keyExtractor={v2KeyExtractor}
-            getItemType={(item) => item.type}
-            itemsAreEqual={threadListV2ListItemsAreEqual}
-            estimatedItemSize={ESTIMATED_THREAD_LIST_V2_ROW_HEIGHT}
-            drawDistance={THREAD_LIST_V2_DRAW_DISTANCE}
-            recycleItems
-            extraData={v2ExtraData}
-            ListHeaderComponent={v2ListHeader}
-            ListFooterComponent={
-              settledShelfExpanded && threadListV2Layout.hiddenSettledCount > 0 ? (
-                <ThreadListV2ShowMoreRow
-                  hiddenCount={threadListV2Layout.hiddenSettledCount}
-                  onPress={showMoreSettled}
-                />
-              ) : null
-            }
-            ListEmptyComponent={v2ListEmpty}
-            style={{ flex: 1 }}
-            automaticallyAdjustsScrollIndicatorInsets={Platform.OS === "ios"}
-            contentInsetAdjustmentBehavior="never"
-            contentInset={Platform.OS === "ios" ? { top: insets.top } : undefined}
-            contentInsetStartAdjustment={Platform.OS === "ios" ? insets.top : 0}
-            showsVerticalScrollIndicator={false}
-            keyboardDismissMode="on-drag"
-            keyboardShouldPersistTaps="handled"
-            {...scrollGateHandlers}
-            scrollEventThrottle={16}
-            contentContainerStyle={{
-              paddingLeft: (contentSideInsets?.left ?? 0) + (primaryColumn ? 8 : 0),
-              paddingRight: (contentSideInsets?.right ?? 0) + (primaryColumn ? 8 : 0),
-              paddingBottom:
-                Platform.OS === "ios"
-                  ? iosBottomClearance
-                  : Math.max(insets.bottom, 16) + (Platform.OS === "android" ? fabClearance : 88),
-            }}
+        {homeMode === "orchestrators" ? (
+          <MobileOrchestratorList
+            summaries={orchestrators}
+            onSelectThread={props.onSelectThread}
+            header={homeModeSelector}
           />
-        </SwipeableScrollGateProvider>
+        ) : (
+          <SwipeableScrollGateProvider enabled={swipeEnabled} activation={swipeRowActivation}>
+            <LegendList
+              ref={listRef}
+              onLoad={() => activateVisibleRows(threadListV2Items)}
+              onTouchStart={(event) => trackListTouches(event, true)}
+              onTouchEnd={(event) => trackListTouches(event, false)}
+              onTouchCancel={(event) => trackListTouches(event, false)}
+              renderScrollComponent={Platform.OS === "ios" ? renderHomeScrollView : undefined}
+              data={threadListV2Items}
+              renderItem={renderV2Item}
+              keyExtractor={v2KeyExtractor}
+              getItemType={(item) => item.type}
+              itemsAreEqual={threadListV2ListItemsAreEqual}
+              estimatedItemSize={ESTIMATED_THREAD_LIST_V2_ROW_HEIGHT}
+              drawDistance={THREAD_LIST_V2_DRAW_DISTANCE}
+              recycleItems
+              extraData={v2ExtraData}
+              ListHeaderComponent={v2ListHeader}
+              ListFooterComponent={
+                settledShelfExpanded && threadListV2Layout.hiddenSettledCount > 0 ? (
+                  <ThreadListV2ShowMoreRow
+                    hiddenCount={threadListV2Layout.hiddenSettledCount}
+                    onPress={showMoreSettled}
+                  />
+                ) : null
+              }
+              ListEmptyComponent={v2ListEmpty}
+              style={{ flex: 1 }}
+              automaticallyAdjustsScrollIndicatorInsets={Platform.OS === "ios"}
+              contentInsetAdjustmentBehavior="never"
+              contentInset={Platform.OS === "ios" ? { top: insets.top } : undefined}
+              contentInsetStartAdjustment={Platform.OS === "ios" ? insets.top : 0}
+              showsVerticalScrollIndicator={false}
+              keyboardDismissMode="on-drag"
+              keyboardShouldPersistTaps="handled"
+              {...scrollGateHandlers}
+              scrollEventThrottle={16}
+              contentContainerStyle={{
+                paddingLeft: (contentSideInsets?.left ?? 0) + (primaryColumn ? 8 : 0),
+                paddingRight: (contentSideInsets?.right ?? 0) + (primaryColumn ? 8 : 0),
+                paddingBottom:
+                  Platform.OS === "ios"
+                    ? iosBottomClearance
+                    : Math.max(insets.bottom, 16) + (Platform.OS === "android" ? fabClearance : 88),
+              }}
+            />
+          </SwipeableScrollGateProvider>
+        )}
       </View>
     </View>
   );
