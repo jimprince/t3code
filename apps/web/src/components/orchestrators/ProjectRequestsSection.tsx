@@ -14,11 +14,15 @@ import { Button } from "../ui/button";
 import { formatIssueAge } from "./projectIssuesBoard.logic";
 import { useNextReleaseItems } from "./ProjectRoadmapWidget";
 import {
+  deriveCompleted,
+  deriveMaintenance,
   deriveProjectRequests,
-  deriveRelease,
   FOR_YOU_GROUPS,
+  isMaintenanceWithAgents,
   latestProgressLine,
   countParked,
+  nextReleaseRequests,
+  type CompletedTask,
   type ProjectRequest,
 } from "./projectRequests.logic";
 
@@ -239,7 +243,7 @@ function CompactRow({
 /**
  * The Requests widget: each of Brad's asks with its stage, grouped by what is
  * next and who owns it. His groups first, then work waiting for a release, then
- * work still with the agents.
+ * work still with the agents (maintenance excepted).
  */
 export function ProjectRequestsSection({
   summary,
@@ -253,15 +257,17 @@ export function ProjectRequestsSection({
   const { query, requests, now, pending } = useProjectRequests(summary);
   const settle = useSettle(summary, query.refresh);
   const parked = countParked(query.data?.issues ?? [], summary.root.id);
-  if (requests.length === 0 && pending.length === 0 && !header) return null;
-  const waitingForRelease = requests.filter((request) => request.stage === "awaiting-release");
-  const withAgents = requests.filter(
+  // Maintenance still with the agents has its own widget below the releases.
+  const listed = requests.filter((request) => !isMaintenanceWithAgents(request));
+  if (listed.length === 0 && pending.length === 0 && !header) return null;
+  const waitingForRelease = listed.filter((request) => request.stage === "awaiting-release");
+  const withAgents = listed.filter(
     (request) => request.forYou === null && request.stage !== "awaiting-release",
   );
 
   return (
     <section className="border-t border-border pt-4">
-      <WidgetHeading title="Requests" count={requests.length + pending.length} />
+      <WidgetHeading title="Requests" count={listed.length + pending.length} />
       {header}
       {parked > 0 ? (
         <p className="mb-2 text-xs text-muted-foreground">
@@ -367,30 +373,94 @@ export function ProjectRequestsSection({
   );
 }
 
+/** One completed task: shipped and waiting for Brad's test, or settled. */
+function CompletedRow({
+  task,
+  now,
+  settle,
+}: {
+  readonly task: CompletedTask;
+  readonly now: number;
+  readonly settle: ReturnType<typeof useSettle>;
+}) {
+  return (
+    <li className="flex items-center gap-3 py-1.5">
+      <span
+        className={`w-28 shrink-0 text-xs ${task.toTest ? "text-foreground/90" : "text-muted-foreground"}`}
+      >
+        {task.toTest ? "to test" : task.issue.isRequest ? "settled" : "closed"}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <a
+          href={task.issue.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block truncate text-sm hover:underline"
+        >
+          {task.issue.title}
+        </a>
+        {task.toTest ? (
+          <span className="truncate text-xs text-foreground/90">
+            {task.toTest.testStep ? `Test: ${task.toTest.testStep}` : "No test step posted"}
+          </span>
+        ) : null}
+      </span>
+      {task.kind ? <span className="text-xs text-muted-foreground">{task.kind}</span> : null}
+      <span className="w-8 text-right text-xs tabular-nums text-muted-foreground">
+        {formatIssueAge(task.issue.closedAt ?? task.issue.updatedAt, now)}
+      </span>
+      {task.toTest ? <SettleButton request={task.toTest} settle={settle} /> : null}
+    </li>
+  );
+}
+
 /**
- * The Release widget, derived from request stages: what the next release batch
- * will carry, and what shipped and waits for Brad's test until he settles it.
+ * The Release widget, derived from stages and milestones: completed tasks by the
+ * release that shipped them (shipped ones wait for Brad's test until he settles
+ * them), then what the next release batch will carry.
  */
 export function ProjectReleaseWidget({ summary }: { readonly summary: OrchestratorSummary }) {
   const { query, requests, now } = useProjectRequests(summary);
   const settle = useSettle(summary, query.refresh);
-  const release = useMemo(() => deriveRelease(requests), [requests]);
+  const completed = useMemo(() => {
+    const threadIds = new Set([summary.root.id, ...summary.descendants.map((thread) => thread.id)]);
+    return deriveCompleted(query.data?.issues ?? [], requests, threadIds);
+  }, [query.data, requests, summary.descendants, summary.root.id]);
+  const next = useMemo(() => nextReleaseRequests(requests), [requests]);
   const nextVersion = useNextReleaseItems(summary);
   // The next version's items feed "Next release" too: release = milestone + stage.
   const versionOnly = nextVersion.items.filter(
     (item) =>
-      !release.next.some(
+      !next.some(
         (request) =>
           request.issue.number === item.number &&
           request.issue.repository === requests[0]?.issue.repository,
       ),
   );
-  const shippedCount = release.shipped.reduce((total, group) => total + group.items.length, 0);
-  const nextCount = release.next.length + versionOnly.length;
-  if (nextCount === 0 && shippedCount === 0) return null;
+  const completedCount = completed.reduce((total, group) => total + group.items.length, 0);
+  const nextCount = next.length + versionOnly.length;
+  if (nextCount === 0 && completedCount === 0) return null;
   return (
     <section className="border-t border-border pt-4">
-      <WidgetHeading title="Release" count={nextCount + shippedCount} />
+      <WidgetHeading title="Release" count={nextCount + completedCount} />
+      {completed.map((group) => (
+        <div key={group.release ?? ""} className="mb-3">
+          <GroupTitle
+            title={group.release ? `Completed in ${group.release}` : "Completed outside a release"}
+            count={group.items.length}
+          />
+          <ul className="divide-y divide-border">
+            {group.items.map((task) => (
+              <CompletedRow
+                key={`${task.issue.repository}#${task.issue.number}`}
+                task={task}
+                now={now}
+                settle={settle}
+              />
+            ))}
+          </ul>
+        </div>
+      ))}
       {nextCount > 0 ? (
         <div className="mb-3">
           <GroupTitle
@@ -402,7 +472,7 @@ export function ProjectReleaseWidget({ summary }: { readonly summary: Orchestrat
             count={nextCount}
           />
           <ul className="divide-y divide-border">
-            {release.next.map((request) => (
+            {next.map((request) => (
               <CompactRow
                 key={`${request.issue.repository}#${request.issue.number}`}
                 request={request}
@@ -427,30 +497,57 @@ export function ProjectReleaseWidget({ summary }: { readonly summary: Orchestrat
           </ul>
         </div>
       ) : null}
-      {release.shipped.map((group) => (
-        <div key={group.release} className="mb-3">
-          <GroupTitle
-            title={`Shipped in ${group.release}, please test`}
-            count={group.items.length}
-          />
-          <ul className="divide-y divide-border">
-            {group.items.map((request) => (
-              <li
-                key={`${request.issue.repository}#${request.issue.number}`}
-                className="flex items-center gap-3 py-1.5"
+    </section>
+  );
+}
+
+/** Open maintenance tasks that do not need Brad: upkeep kept out of the Requests list. */
+export function ProjectMaintenanceWidget({ summary }: { readonly summary: OrchestratorSummary }) {
+  const environmentId = summary.root.environmentId;
+  const { query, requests, now } = useProjectRequests(summary);
+  const tasks = useMemo(
+    () => deriveMaintenance(query.data?.issues ?? [], requests),
+    [query.data, requests],
+  );
+  if (tasks.length === 0) return null;
+  return (
+    <section className="border-t border-border pt-4">
+      <WidgetHeading title="Maintenance" count={tasks.length} />
+      <ul className="divide-y divide-border">
+        {tasks.map((task) =>
+          task.request ? (
+            <CompactRow
+              key={`${task.issue.repository}#${task.issue.number}`}
+              request={task.request}
+              now={now}
+            >
+              {task.request.thread ? (
+                <OpenThread environmentId={environmentId} threadId={task.request.thread.id} />
+              ) : null}
+            </CompactRow>
+          ) : (
+            <li
+              key={`${task.issue.repository}#${task.issue.number}`}
+              className="flex items-center gap-3 py-1.5"
+            >
+              <span className="w-28 shrink-0 text-xs text-muted-foreground">
+                {task.issue.status === "in-progress" ? "in progress" : "open"}
+              </span>
+              <a
+                href={task.issue.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="min-w-0 flex-1 truncate text-sm hover:underline"
               >
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <IssueLink request={request} />
-                  <span className="truncate text-xs text-foreground/90">
-                    {request.testStep ? `Test: ${request.testStep}` : "No test step posted"}
-                  </span>
-                </span>
-                <SettleButton request={request} settle={settle} />
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
+                {task.issue.title}
+              </a>
+              <span className="w-8 text-right text-xs tabular-nums text-muted-foreground">
+                {formatIssueAge(task.issue.createdAt, now)}
+              </span>
+            </li>
+          ),
+        )}
+      </ul>
     </section>
   );
 }
