@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "9546441082978971daf585237da733adc6adba44",
-  "head": "57ed28c2545fec76eed9aaea8a018c324747033f",
+  "prev": "2a9b6057eb9461bd6b2f8524abfe3b83df524d9a",
+  "head": "f78c574904ea59e32715dcdc36f564f84231265c",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -104,7 +104,8 @@
     "fork-pr-widget-refresh",
     "fork-decisions-other",
     "fork-cli-project-layout",
-    "fork-session-reconcile"
+    "fork-session-reconcile",
+    "refresh-temp"
   ],
   "unapplied": [],
   "hidden": [],
@@ -414,6 +415,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "b944a2751d8828af07f0b2402a53eeac5ad02a0c"
+    },
+    "refresh-temp": {
+      "oid": "f78c574904ea59e32715dcdc36f564f84231265c"
     }
   }
 }
