@@ -13,6 +13,7 @@ import * as DesktopTelemetryReceiver from "../resourceTelemetry/DesktopTelemetry
 import * as NativeTelemetryClient from "../resourceTelemetry/NativeTelemetryClient.ts";
 import * as ResourceAttribution from "../resourceTelemetry/ResourceAttribution.ts";
 import * as ResourceTelemetry from "../resourceTelemetry/ResourceTelemetry.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import * as ProcessDiagnostics from "./ProcessDiagnostics.ts";
 
 function makeNativeSnapshot(
@@ -57,7 +58,14 @@ function makeTelemetryLayer(
       })
     : DesktopTelemetryReceiver.layerTest();
   return ResourceTelemetry.layer.pipe(
-    Layer.provide(Layer.mergeAll(nativeLayer, desktopLayer, ResourceAttribution.layer)),
+    Layer.provide(
+      Layer.mergeAll(
+        nativeLayer,
+        desktopLayer,
+        ResourceAttribution.layer,
+        ServerSettings.layerTest(),
+      ),
+    ),
   );
 }
 
