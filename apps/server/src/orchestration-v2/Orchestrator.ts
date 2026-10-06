@@ -1,3 +1,4 @@
+import { conversationBaselineAllowed } from "../fork/recovery/ConversationRewind.ts";
 import { legacyNoticeCanStart } from "../fork/recovery/LegacyBackgroundWorkPolicy.ts";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { listMetadata } from "../forkThreads/MetadataStore.ts";
@@ -430,6 +431,7 @@ function commandThreadId(command: OrchestrationV2ServerCommand): ThreadId {
     case "queued-run.edit":
     case "runtime-request.respond":
     case "thread.user-input.dismiss":
+    case "conversation.rewind":
     case "checkpoint.rollback":
     case "checkpoint.rollback.fail":
     case "thread.background-work.settle":
@@ -4383,8 +4385,15 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   ) =>
     Effect.gen(function* () {
       let projection = yield* getProjectionWithPendingEvents(command.threadId, events);
-      if (command.recoveryExpectedUpdatedAt !== undefined && !legacyNoticeCanStart(projection, command.recoveryExpectedUpdatedAt)) {
-        return yield* new OrchestratorDispatchError({ commandId: command.commandId, commandType: command.type, cause: "Recovery notice no longer matches idle thread state." });
+      if (
+        command.recoveryExpectedUpdatedAt !== undefined &&
+        !legacyNoticeCanStart(projection, command.recoveryExpectedUpdatedAt)
+      ) {
+        return yield* new OrchestratorDispatchError({
+          commandId: command.commandId,
+          commandType: command.type,
+          cause: "Recovery notice no longer matches idle thread state.",
+        });
       }
       if (command.manualContinuationOfRunId !== undefined) {
         const source = projection.runs.find((run) => run.id === command.manualContinuationOfRunId);
@@ -8480,6 +8489,71 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       return undefined;
     });
 
+  const dispatchConversationRewind = (
+    command: Extract<OrchestrationV2Command, { type: "conversation.rewind" }>,
+    events: Ref.Ref<Array<OrchestrationV2DomainEvent>>,
+    effects: Ref.Ref<Array<PendingOrchestrationEffectV2>>,
+  ) =>
+    Effect.gen(function* () {
+      const projection = yield* getProjectionWithPendingEvents(command.threadId, events);
+      if (!conversationBaselineAllowed(projection, command))
+        return yield* new OrchestratorDispatchError({
+          commandId: command.commandId,
+          commandType: command.type,
+          cause: "Conversation rewind no longer matches the latest terminal run and provider.",
+        });
+      const capabilities = yield* providerAdapters.get(command.providerInstanceId).pipe(
+        Effect.flatMap((adapter) => adapter.getCapabilities()),
+        Effect.mapError(
+          (cause) =>
+            new OrchestratorProviderAdapterError({
+              commandId: command.commandId,
+              providerInstanceId: command.providerInstanceId,
+              cause,
+            }),
+        ),
+      );
+      yield* enforceCommandPolicy(command)(
+        commandPolicy.ensureRollback({
+          commandId: command.commandId,
+          threadId: command.threadId,
+          providerInstanceId: command.providerInstanceId,
+          capabilities,
+        }),
+      );
+      const now = yield* DateTime.now;
+      yield* emit(
+        events,
+        command,
+      )({
+        type: "thread.metadata-updated",
+        threadId: command.threadId,
+        providerInstanceId: command.providerInstanceId,
+        occurredAt: now,
+        payload: {
+          ...projection.thread,
+          rollbackRequestId: command.commandId,
+          rollbackFailure: null,
+          updatedAt: now,
+        },
+      });
+      yield* Ref.update(effects, (existing) => [
+        ...existing,
+        {
+          id: `effect:${command.commandId}:conversation-rewind`,
+          commandId: command.commandId,
+          threadId: command.threadId,
+          request: {
+            type: "provider-thread.conversation-rewind",
+            runId: command.runId,
+            messageId: command.messageId,
+            providerThreadId: command.providerThreadId,
+            providerInstanceId: command.providerInstanceId,
+          },
+        } satisfies PendingOrchestrationEffectV2,
+      ]);
+    });
+
   const dispatchCheckpointRollback = (
     command: Extract<OrchestrationV2Command, { readonly type: "checkpoint.rollback" }>,
     events: Ref.Ref<Array<OrchestrationV2DomainEvent>>,
@@ -9756,6 +9830,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         break;
       case "queued-run.edit":
         yield* dispatchQueuedRunEdit(command, events);
+        break;
+      case "conversation.rewind":
+        yield* dispatchConversationRewind(command, events, effects);
         break;
       case "checkpoint.rollback":
         yield* dispatchCheckpointRollback(command, events, effects);
