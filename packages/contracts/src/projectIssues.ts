@@ -7,6 +7,7 @@ import {
   ThreadId,
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
+import { ModelSelection } from "./modelSelection.ts";
 
 /**
  * Board lanes, derived from Gitea issue state and labels exactly as the Agent
@@ -170,6 +171,26 @@ export const ProjectRequestSubmitInput = Schema.Struct({
 });
 export type ProjectRequestSubmitInput = typeof ProjectRequestSubmitInput.Type;
 
+/**
+ * The New request box: start a short-lived intake thread under the project's
+ * orchestrator to triage one request, instead of sending it to the orchestrator.
+ */
+export const ProjectRequestStartIntakeInput = Schema.Struct({
+  /** Any thread of the project; the intake nests under its orchestrator. */
+  threadId: ThreadId,
+  /** The request's first line, for the intake thread's title. */
+  title: Schema.String.check(Schema.isMaxLength(200)),
+});
+export type ProjectRequestStartIntakeInput = typeof ProjectRequestStartIntakeInput.Type;
+
+export const ProjectRequestStartIntakeResult = Schema.Struct({
+  threadId: ThreadId,
+  modelSelection: ModelSelection,
+  /** The fixed triage brief to send ahead of Brad's words. */
+  brief: Schema.String,
+});
+export type ProjectRequestStartIntakeResult = typeof ProjectRequestStartIntakeResult.Type;
+
 /** An agent files a request on Brad's behalf, in the tracker of its thread's project tree. */
 export const ProjectRequestCreateInput = Schema.Struct({
   threadId: ThreadId,
@@ -204,6 +225,8 @@ export const ProjectRequestUpdateInput = Schema.Struct({
   release: Schema.optionalKey(TrimmedNonEmptyString),
   /** Retypes the task: replaces its `ask:<kind>` label. Any tracker issue can be typed. */
   kind: Schema.optionalKey(ProjectRequestKind),
+  /** Retitles the task (an imperative for work, the question for a question). */
+  title: Schema.optionalKey(TrimmedNonEmptyString.check(Schema.isMaxLength(200))),
 });
 export type ProjectRequestUpdateInput = typeof ProjectRequestUpdateInput.Type;
 
