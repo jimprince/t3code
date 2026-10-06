@@ -728,6 +728,31 @@ describe("DesktopUpdates", () => {
     ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
   });
 
+  it.effect(
+    "rechecks system idle time before a daytime install, then admits it at the threshold",
+    () => {
+      let idleSeconds = 900;
+      const harness = makeHarness({ systemIdleTime: Effect.sync(() => idleSeconds) });
+      return Effect.scoped(
+        Effect.gen(function* () {
+          const updates = yield* DesktopUpdates.DesktopUpdates;
+          const desktopState = yield* DesktopState.DesktopState;
+          yield* updates.configure;
+          harness.emit("update-downloaded", { version: "1.2.4" });
+          yield* flushCallbacks;
+          assert.equal((yield* updates.getState).systemIdleSeconds, 900);
+          idleSeconds = 899;
+          assert.isFalse((yield* updates.installPrepared("1.2.4", 900)).accepted);
+          assert.isFalse(yield* Ref.get(desktopState.quitting));
+          assert.deepEqual(harness.installSteps, []);
+          idleSeconds = 900;
+          assert.isTrue((yield* updates.installPrepared("1.2.4", 900)).accepted);
+          assert.equal(harness.quitAndInstalls(), 1);
+        }),
+      ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+    },
+  );
+
   it.effect("rejects a prepared install when the downloaded version changed", () => {
     const harness = makeHarness();
 
