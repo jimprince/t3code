@@ -2792,6 +2792,20 @@ const makeWsRpcLayer = (
               .pipe(Effect.flatMap((result) => requestLedger.decorate(result, input.rootThreadId))),
             { "rpc.aggregate": "project-issues" },
           ),
+        [WS_METHODS.projectIssuesGet]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectIssuesGet,
+            projectIssues
+              .get(input)
+              .pipe(
+                Effect.flatMap((result) =>
+                  requestLedger
+                    .withAnswers([result.issue])
+                    .pipe(Effect.map(([issue]) => ({ ...result, issue: issue ?? result.issue }))),
+                ),
+              ),
+            { "rpc.aggregate": "project-issues" },
+          ),
         [WS_METHODS.projectRequestsSettle]: (input) =>
           observeRpcEffect(WS_METHODS.projectRequestsSettle, requestLedger.settle(input), {
             "rpc.aggregate": "project-issues",
