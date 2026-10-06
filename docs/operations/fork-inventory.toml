@@ -1880,3 +1880,19 @@ retire_when = "Upstream provides equivalent milestone planning, or the project p
 depends_on = ["fork-project-roadmap", "fork-project-page-workflow", "fork-request-followups"]
 roles = []
 note = "Columns: the next version (the first open milestone, or a virtual Next version when none exists) holds that milestone's items plus every open unversioned item that is not parked; then each later milestone; then Later, unversioned parked items. ProjectRoadmapItem gains parked; projectRoadmap.move takes later (clear the milestone and add the parked label) and version null now means the automatic next version (clear the milestone and unpark). CLI roadmap move accepts next and later; roadmap list reports next, versions and later. ProjectQueryState shows Loading, or the error with Retry, wherever a project view waits on a query, so a failed Gitea call no longer leaves a blank Roadmap or a Loading line forever. Integration fork.6: adapted replay to preserve UI theme/owner notes alongside BE authoritative contract and helpers. Fork.6 integration: adapt: union inventory, retain earlier integrated owner notes and later stanza (docs/operations/fork-inventory.toml). Retire/narrow/relocate do not apply to these retained UI behaviors or inventory insertions."
+[[patch]]
+name = "fork-project-page-usability"
+subject = "feat(projects): project page usability pass"
+class = "product"
+purpose = "Act on Brad's requests and the fork.24 usability review of the project page: one Needs you source, a New request box on every tab (brad/t3code-fork#118), the selected project in the sidebar (#117), Shipped, test it apart from Done, settle or reopen from any row, and tighter, consistent rows."
+retire_when = "Upstream or another fork concern provides an equivalent project page."
+depends_on = [
+  "fork-orchestrators-view",
+  "fork-project-issues-board",
+  "fork-project-page-workflow",
+  "fork-project-request-box-pinned",
+  "fork-request-followups",
+  "fork-roadmap-next-later",
+]
+roles = []
+note = "deriveNeedsYou (requests in Brad's groups plus open non-request issues marked needs-review or needs-test, parked excluded) feeds the Dashboard's Needs you widget (threads needing approval, input or a plan review first), the status-line count, and the Issues board, whose lanes are Needs you, Shipped, test it, Working, Pending (folded after 10) and Done; cards wrap two-line titles and show repo#N, type, comments, age and thread in that order, with Settle or Reopen. The Requests widget keeps work with the agents and waiting for release, groups requests of settled threads and threads with several open requests behind Settle all, and drops the saved-for-later count (Later stays off the Dashboard). The New request box sits above the tabs as one line that opens on focus, submits the explicit request before its message, and folds after sending or on Escape. Customize moved to the tab row; Chat is the one chat control (the panel links to the full thread); a release line shows the running version and the next release; Working, Blocked, Done and Needs you rows open their thread anywhere on the row; times are relative; empty sections hide; one word per status (working, waiting for release, shipped, test it) on web and mobile. The Projects sidebar marks the project whose page or thread is open and shows one open-issue count instead of issue chips. Integration fork.6: adapted replay to preserve UI theme/owner notes alongside BE authoritative contract and helpers. Fork.6 integration: adapt: union inventory, retain earlier integrated owner notes and later stanza (docs/operations/fork-inventory.toml). Retire/narrow/relocate do not apply to these retained UI behaviors or inventory insertions."
