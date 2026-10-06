@@ -1,6 +1,7 @@
+import { useSupervisionForest } from "../../state/forkSupervision";
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { supervisionForest, supervisionKey } from "@t3tools/client-runtime/state/forkNesting";
+import { supervisionThreadKey } from "@t3tools/client-runtime/state/fork-nesting";
 import { useThreadShells } from "../../state/entities";
 import { deriveMobileBackgroundFolds } from "./backgroundFeed.logic";
 import type { ThreadFeedEntry } from "../../lib/threadActivity";
@@ -13,14 +14,14 @@ export function useMobileBackgroundFeed(input: {
   const shells = useThreadShells();
   const [allTraffic, setAllTraffic] = useState(false);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
-  const forest = useMemo(() => supervisionForest(shells), [shells]);
+  const forest = useSupervisionForest();
   const workerIds = useMemo(() => {
     const result = new Set<string>();
     const pending = [input.rootKey];
     while (pending.length) {
       for (const t of forest.children.get(pending.pop()!) ?? []) {
         result.add(t.id);
-        pending.push(supervisionKey(t));
+        pending.push(supervisionThreadKey(t));
       }
     }
     return result;

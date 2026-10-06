@@ -1,0 +1,93 @@
+import type { EnvironmentId } from "@t3tools/contracts";
+import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import * as Effect from "effect/Effect";
+import * as Stream from "effect/Stream";
+import * as SubscriptionRef from "effect/SubscriptionRef";
+import * as EnvironmentSupervisor from "../connection/supervisor.ts";
+import type * as EnvironmentRegistry from "../connection/registry.ts";
+import type { EnvironmentThreadShell } from "./models.ts";
+import { supervisionForest } from "./forkNesting.ts";
+import { createEnvironmentRpcQueryAtomFamily, followStreamInEnvironment } from "./runtime.ts";
+
+export function supervisionMetadataReady<A, E>(
+  connected: boolean,
+  result: AsyncResult.AsyncResult<A, E>,
+) {
+  return connected && AsyncResult.isSuccess(result) && !result.waiting;
+}
+
+/**
+ * Nesting can change only when a thread appears or disappears (nest commands
+ * refresh the query themselves), so the refresh trigger is the host's id set,
+ * which stays equal across status, approval and timestamp churn.
+ */
+export function createHostThreadIdsKey(shells: Atom.Atom<ReadonlyArray<EnvironmentThreadShell>>) {
+  return Atom.family((environmentId: EnvironmentId) =>
+    Atom.make((get) =>
+      [
+        ...get(shells)
+          .filter((thread) => thread.environmentId === environmentId)
+          .map((thread) => thread.id),
+      ]
+        .sort()
+        .join("\n"),
+    ),
+  );
+}
+
+/** One sidecar query per host, refreshed by native shell updates and reconnects. */
+export function createSupervisionAtoms<R, ER>(
+  runtime: Atom.AtomRuntime<EnvironmentRegistry.EnvironmentRegistry | R, ER>,
+  shells: Atom.Atom<ReadonlyArray<EnvironmentThreadShell>>,
+) {
+  const hostThreadIds = createHostThreadIdsKey(shells);
+  const query = createEnvironmentRpcQueryAtomFamily(runtime, {
+    label: "fork-supervision",
+    tag: "fork.threads.metadata.list",
+    refreshTrigger: ({ environmentId }) => hostThreadIds(environmentId),
+  });
+  const connected = Atom.family((environmentId: EnvironmentId) =>
+    runtime.atom(
+      followStreamInEnvironment(
+        environmentId,
+        Stream.unwrap(
+          EnvironmentSupervisor.EnvironmentSupervisor.pipe(
+            Effect.map((supervisor) =>
+              SubscriptionRef.changes(supervisor.state).pipe(
+                Stream.map((state) => state.phase === "connected"),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  const readyHosts = Atom.make(
+    (get) =>
+      new Set(
+        [...new Set(get(shells).map((thread) => thread.environmentId))].filter((environmentId) => {
+          const state = get(connected(environmentId));
+          const result = get(query({ environmentId, input: {} }));
+          return supervisionMetadataReady(AsyncResult.isSuccess(state) && state.value, result);
+        }),
+      ),
+  );
+  const joinedShells = Atom.make((get) => {
+    const ready = get(readyHosts);
+    return get(shells).map((thread) => ({
+      ...thread,
+      forkMetadataAvailable: ready.has(thread.environmentId),
+    }));
+  });
+  const metadata = Atom.make((get) => {
+    const environments = new Set(get(shells).map((thread) => thread.environmentId));
+    return [...environments].flatMap((environmentId) => {
+      const result = get(query({ environmentId, input: {} }));
+      return AsyncResult.isSuccess(result)
+        ? result.value.map((row) => ({ ...row, environmentId }))
+        : [];
+    });
+  });
+  const forest = Atom.make((get) => supervisionForest(get(joinedShells), get(metadata)));
+  return { query, metadata, forest, readyHosts };
+}
