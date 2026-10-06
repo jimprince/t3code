@@ -1,0 +1,4 @@
+id = "legacy-history-heartbeat-stalls"
+category = "fix"
+functionality = "connections"
+text = "Keep desktop and remote connections responsive when checking legacy history in large databases."
