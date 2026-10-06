@@ -347,12 +347,21 @@ t3-thread queue                     # inspect held sends
 t3-thread queue <agent> --open      # only what is still waiting
 t3-thread dequeue <queued-send-id>  # drop one before it lands
 t3-thread send <agent> --no-queue "..."   # fail instead of holding
+t3-thread send <agent> --progress "..."   # status note: replaces your still-queued note
+t3-thread send <agent> --coalesce <key> "..."   # same, with your own key
+t3-thread queue --summary                 # open sends by target thread and sender
 ```
 
 Queue rules:
 
 - FIFO per thread, one dispatched message per turn boundary. Sends are never
   merged into one prompt.
+- `--coalesce <key>` (`--progress` is `--coalesce progress`) is the one opt-in
+  exception: a newer send replaces your own still-waiting send to the same
+  thread with the same key, which is cancelled as superseded and listed in the
+  output as `supersededSendIds`. Other senders, other keys, and a send a watcher
+  already claimed are untouched. Use it for recurring status notes so a parent
+  sees one pending note per worker, never for a decision or a final result.
 - The queue lives in `~/.config/t3-remote-agents/state.json`, so it survives the
   CLI exiting, the watcher exiting, machine sleep, and reboot. It drains only
   while a watcher is running on this machine; `send` ensures one.
