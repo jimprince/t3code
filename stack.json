@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "fac50630022d93a60b9ebbe25e7d41bf2c59bda4",
-  "head": "ab5f253981ed953b98c0f1be6208ff84564a015d",
+  "prev": "9d5f8ff8f44c288c1e7e1337237482f0a33e9606",
+  "head": "2c817ba05d7a72b65c672746582b9dae4af405f9",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -101,11 +101,12 @@
     "fork-queue-idle-dispatch",
     "fork-canvas-resize",
     "fork-request-titles",
-    "fork-pr-widget-refresh",
+    "fork-pr-widget-refresh"
+  ],
+  "unapplied": [
     "fork-decisions-other",
     "fork-cli-project-layout"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
