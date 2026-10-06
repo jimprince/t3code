@@ -48,6 +48,13 @@ import {
   ProjectRequestUpdateInput,
 } from "./projectIssues.ts";
 import {
+  ProjectDashboard,
+  ProjectDashboardError,
+  ProjectDashboardGetInput,
+  ProjectDashboardSetTrackerInput,
+  ProjectDashboardSetWidgetsInput,
+} from "./projectDashboard.ts";
+import {
   CodexAuthCallbackInput,
   CodexAuthCallbackState,
   ProviderAuthCancelInput,
@@ -557,6 +564,9 @@ export const WS_METHODS = {
   projectRequestsCreate: "projectRequests.create",
   projectRequestsUpdate: "projectRequests.update",
   projectRequestsList: "projectRequests.list",
+  projectDashboardGet: "projectDashboard.get",
+  projectDashboardSetWidgets: "projectDashboard.setWidgets",
+  projectDashboardSetTracker: "projectDashboard.setTracker",
 
   // Source control methods
   sourceControlLookupRepository: "sourceControl.lookupRepository",
@@ -975,6 +985,23 @@ const WsProjectRequestsUpdateRpc = Rpc.make(WS_METHODS.projectRequestsUpdate, {
   payload: ProjectRequestUpdateInput,
   success: ProjectRequestRef,
   error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+});
+
+const projectDashboardError = Schema.Union([ProjectDashboardError, EnvironmentAuthorizationError]);
+const WsProjectDashboardGetRpc = Rpc.make(WS_METHODS.projectDashboardGet, {
+  payload: ProjectDashboardGetInput,
+  success: ProjectDashboard,
+  error: projectDashboardError,
+});
+const WsProjectDashboardSetWidgetsRpc = Rpc.make(WS_METHODS.projectDashboardSetWidgets, {
+  payload: ProjectDashboardSetWidgetsInput,
+  success: ProjectDashboard,
+  error: projectDashboardError,
+});
+const WsProjectDashboardSetTrackerRpc = Rpc.make(WS_METHODS.projectDashboardSetTracker, {
+  payload: ProjectDashboardSetTrackerInput,
+  success: ProjectDashboard,
+  error: projectDashboardError,
 });
 
 const WsProjectRequestsListRpc = Rpc.make(WS_METHODS.projectRequestsList, {
@@ -1911,6 +1938,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectRequestsCreateRpc,
   WsProjectRequestsUpdateRpc,
   WsProjectRequestsListRpc,
+  WsProjectDashboardGetRpc,
+  WsProjectDashboardSetWidgetsRpc,
+  WsProjectDashboardSetTrackerRpc,
   WsSourceControlLookupRepositoryRpc,
   WsSourceControlCloneRepositoryRpc,
   WsSourceControlPublishRepositoryRpc,
