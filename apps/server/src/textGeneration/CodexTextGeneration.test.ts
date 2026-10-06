@@ -191,6 +191,34 @@ it.layer(CodexTextGenerationTestLayer)("CodexTextGeneration", (it) => {
           }),
       ),
   );
+  // fork.26 dev VM: "Failed to write temp file" with no reason; the detail now names it.
+  it.effect("says why a temp file could not be written", () =>
+    withFakeCodexEnv({ output: JSON.stringify({ title: "unused" }) }, (textGeneration) =>
+      Effect.gen(function* () {
+        const previous = process.env.TMPDIR;
+        process.env.TMPDIR = "/nonexistent/t3code-temp-test";
+        const error = yield* textGeneration
+          .generateThreadTitle({
+            cwd: process.cwd(),
+            message: "Describe this change",
+            modelSelection: createModelSelection(ProviderInstanceId.make("codex"), "gpt-5.6-luna"),
+          })
+          .pipe(
+            Effect.flip,
+            Effect.ensuring(
+              Effect.sync(() => {
+                if (previous === undefined) delete process.env.TMPDIR;
+                else process.env.TMPDIR = previous;
+              }),
+            ),
+          );
+        expect(error.detail).toContain(
+          "Failed to write temp file in /nonexistent/t3code-temp-test",
+        );
+        expect(error.detail).toContain("NotFound");
+      }),
+    ),
+  );
   it.effect("generates and sanitizes commit messages without branch by default", () =>
     withFakeCodexEnv(
       {
