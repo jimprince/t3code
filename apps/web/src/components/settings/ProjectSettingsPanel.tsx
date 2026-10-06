@@ -2,6 +2,7 @@ import { useComposerMenuState } from "../chat/useComposerMenuState";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
 import { AuthOrchestrationOperateScope } from "@t3tools/contracts";
 import { useEnvironmentsWithScope, readEnvironmentScope } from "../../state/session";
+import { ProjectAutomationsPanel } from "../projects/ProjectAutomationsPanel";
 import {
   isAtomCommandInterrupted,
   mapAtomCommandResult,
@@ -538,6 +539,13 @@ function ProjectDetail({
         </SettingsSection>
         <ProjectDefaultsSettings category="project" />
         <ProjectActionsSettings />
+        {group.memberProjects.map((member) => (
+          <ProjectAutomationsPanel
+            key={memberKey(member)}
+            environmentId={member.environmentId}
+            projectId={member.id}
+          />
+        ))}
         {hasMultipleCheckouts ? checkoutChoices : null}
         <SettingsSection title="Danger">
           <SettingsRow
