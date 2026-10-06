@@ -9,12 +9,14 @@ export type DesktopWorkThread = Pick<
   | "hasPendingApprovals"
   | "hasPendingUserInput"
   | "pendingBackgroundTasks"
+  | "codexNativeGoal"
 >;
 /** Native runtime shells include queued/preparing work even before a provider exists. */
 export function desktopThreadHasWork(
   thread: DesktopWorkThread,
   resumesMonitoring = false,
 ): boolean {
+  if (thread.codexNativeGoal?.status === "active") return true;
   if (thread.pendingBackgroundTasks.some((task) => task.kind !== "monitor" || !resumesMonitoring))
     return true;
   if (thread.hasPendingApprovals || thread.hasPendingUserInput) return false;
