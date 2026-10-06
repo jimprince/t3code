@@ -94,19 +94,10 @@ export const withWorkerSummaries = Effect.fn("WorkerSummary.withShellReads")(fun
       );
       return shells.map((shell) => {
         const summary = summaries.get(shell.id);
-        const parent = parents.get(shell.id);
-        const enriched =
-          parent === undefined
-            ? shell
-            : {
-                ...shell,
-                parentThreadId: parent.parentThreadId ?? null,
-                remoteParent: parent.remoteParent ?? null,
-              };
         return summary === undefined
-          ? enriched
+          ? shell
           : {
-              ...enriched,
+              ...shell,
               workerSummary: {
                 ...summary,
                 history:
