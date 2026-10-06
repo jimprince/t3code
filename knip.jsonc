@@ -27,6 +27,7 @@
         "ci/check-stgit-stack.ts",
         "ci/create-stgit-candidate-manifest.ts",
         "ci/deploy-stgit-concern.ts",
+        "ci/heavy-gate.ts",
         "ci/prepare-stgit-agent-worktree.ts",
       ],
     },
@@ -116,16 +117,20 @@
     "packages/*": {
       // These workspace packages are private to this monorepo.
       "includeEntryExports": true,
+      // Test scripts reach vp through scripts/ci/heavy-gate.ts, which knip cannot follow.
+      "ignoreDependencies": ["vite-plus"],
     },
     "packages/effect-acp": {
       "includeEntryExports": true,
       "entry": ["test/fixtures/*.ts"],
+      "ignoreDependencies": ["vite-plus"],
       // Generated upstream protocol definitions are retained as a complete set.
       "ignoreIssues": { "src/_generated/**": ["exports", "types"] },
     },
     "packages/effect-codex-app-server": {
       "includeEntryExports": true,
       "entry": ["test/fixtures/*.ts"],
+      "ignoreDependencies": ["vite-plus"],
       "ignoreIssues": { "src/_generated/**": ["exports", "types"] },
     },
   },
