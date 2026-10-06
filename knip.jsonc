@@ -29,6 +29,7 @@
         "ci/create-stgit-candidate-manifest.ts",
         "ci/deploy-stgit-concern.ts",
         "ci/heavy-gate.ts",
+        "ci/integrate-stgit-concerns.ts",
         "ci/prepare-stgit-agent-worktree.ts",
         "ci/render-fork-release-notes.ts",
       ],
