@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off
-import * as FS from "node:fs";
-import * as OS from "node:os";
-import * as Path from "node:path";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 import { expect } from "vite-plus/test";
 import { it } from "@effect/vitest";
 import * as TestClock from "effect/testing/TestClock";
@@ -13,11 +13,11 @@ import { releaseThreadLogs } from "./LogLifecycle.ts";
 
 it.effect("flushes final lifecycle frames before evicting a stopped or archived thread sink", () =>
   Effect.gen(function* () {
-    const directory = FS.mkdtempSync(Path.join(OS.tmpdir(), "fork-log-lifecycle-"));
+    const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "fork-log-lifecycle-"));
     try {
       yield* Effect.gen(function* () {
         yield* TestClock.setTime(1_800_000_000_000);
-        const store = yield* makeEventNdjsonLogStore(Path.join(directory, "provider.ndjson"), {
+        const store = yield* makeEventNdjsonLogStore(NodePath.join(directory, "provider.ndjson"), {
           batchWindowMs: 0,
           maxAgeMs: 1,
           retentionCheckIntervalMs: 1,
@@ -31,23 +31,23 @@ it.effect("flushes final lifecycle frames before evicting a stopped or archived 
           yield* releaseThreadLogs([id]).pipe(
             Effect.provideService(ProviderEventLoggers.ProviderEventLoggers, { native, canonical }),
           );
-          const path = Path.join(directory, `provider.${id}.log`);
-          expect(FS.readFileSync(path, "utf8")).toContain("native-final");
-          expect(FS.readFileSync(path, "utf8")).toContain(status);
+          const path = NodePath.join(directory, `provider.${id}.log`);
+          expect(NodeFS.readFileSync(path, "utf8")).toContain("native-final");
+          expect(NodeFS.readFileSync(path, "utf8")).toContain(status);
           yield* TestClock.adjust("2 millis");
           yield* canonical.write({ type: "retention-trigger" }, ThreadId.make(`other-${status}`));
-          expect(FS.existsSync(path)).toBe(false);
+          expect(NodeFS.existsSync(path)).toBe(false);
           // A later explicit turn can acquire a writer again after retention.
           yield* canonical.write({ type: "turn.started" }, id);
           yield* releaseThreadLogs([id]).pipe(
             Effect.provideService(ProviderEventLoggers.ProviderEventLoggers, { native, canonical }),
           );
-          expect(FS.readFileSync(path, "utf8")).toContain("turn.started");
+          expect(NodeFS.readFileSync(path, "utf8")).toContain("turn.started");
         }
         yield* store.close();
       }).pipe(Effect.scoped);
     } finally {
-      FS.rmSync(directory, { recursive: true, force: true });
+      NodeFS.rmSync(directory, { recursive: true, force: true });
     }
   }),
 );
