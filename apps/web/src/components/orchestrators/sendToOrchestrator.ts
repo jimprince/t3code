@@ -21,10 +21,13 @@ export function useSendToOrchestrator() {
       summary: OrchestratorSummary,
       prompt: string,
       images: ComposerImageAttachment[] = [],
+      /** Runs with the message id before it is dispatched, such as marking it a request. */
+      beforeSend?: (messageId: MessageId) => Promise<unknown>,
     ): { readonly messageId: MessageId; readonly queued: boolean } => {
       const messageId = newMessageId();
       const queued = threadRuntimeIsActive(summary.root.runtime);
       void (async () => {
+        await beforeSend?.(messageId);
         const attachments = await Promise.all(
           images.map(async (image) => ({
             type: "image" as const,
