@@ -79,7 +79,7 @@ export const make = (deps: {
           return yield* fail(`Versions belong to ${target.repository}; that issue is elsewhere.`);
         }
         let milestoneId: number | null = null;
-        if (input.version !== null) {
+        if (input.version !== null && !input.later) {
           const milestones = yield* listMilestones(
             api,
             target.instance,
@@ -97,10 +97,11 @@ export const make = (deps: {
           reference.number,
           milestoneId,
         ).pipe(Effect.mapError((error) => fail(error.detail)));
-        // Planning an idea into a version takes it off the shelf.
-        if (milestoneId !== null) {
-          yield* deps.ledger.unpark(target, reference.number).pipe(Effect.ignore);
-        }
+        // Later parks the item; anywhere else (a version or the automatic next one)
+        // takes it off the shelf.
+        yield* (input.later ? deps.ledger.park : deps.ledger.unpark)(target, reference.number).pipe(
+          Effect.ignore,
+        );
         deps.projectIssues.invalidate(target);
         return yield* get(input);
       });
