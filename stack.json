@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "35716b3772224da432d7036782cb6b2199b42261",
-  "head": "bce55b6c2f27979a750273f01ba06b8d8aa5a9fa",
+  "prev": "407f06633d8fb5f6aa6478c74329dd3d0984d14f",
+  "head": "6325cdbd16407e0addfdeb1f544f163766902c27",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -59,8 +59,7 @@
     "fork-standing-agent-autosettle",
     "fork-queue-idle-dispatch",
     "fork-textgen-tempfile-cause",
-    "fork-textgen-own-scope",
-    "refresh-temp"
+    "fork-textgen-own-scope"
   ],
   "unapplied": [
     "fork-dev-vm-heavy-check-gate",
@@ -401,7 +400,7 @@
       "oid": "b1d076df89fa7282f6f4c2e583dc8c1a02b9c69e"
     },
     "fork-textgen-own-scope": {
-      "oid": "35d15202981587a40f11147975e7abbb70b3eab5"
+      "oid": "6325cdbd16407e0addfdeb1f544f163766902c27"
     },
     "fork-textgen-tempfile-cause": {
       "oid": "4d9ebf2badfb75b97cb88761fa6c4c575061380b"
@@ -432,9 +431,6 @@
     },
     "fork-worktree-cleanup": {
       "oid": "7d11da466d331462c6048f3d254d8aa68d1fb29f"
-    },
-    "refresh-temp": {
-      "oid": "bce55b6c2f27979a750273f01ba06b8d8aa5a9fa"
     }
   }
 }
