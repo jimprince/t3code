@@ -66,3 +66,5 @@ export * from "./worktreeSetup.ts";
 export * from "./secretRequest.ts";
 export * from "./clientRpcPermissions.ts";
 export * from "./embeddedPages.ts";
+
+export * from "./forkThreadMetadata.ts";
