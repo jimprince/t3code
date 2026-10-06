@@ -305,6 +305,7 @@ const AGENT_COMMAND_ALIASES = new Set([
   "create",
   "nest",
   "unnest",
+  "issue",
   "rename",
   "nest",
   "unnest",
@@ -1758,7 +1759,28 @@ agent
       hasNewOutput: saved ? hasNewAssistantOutput(savedAgent, thread) : null,
       latestAssistantMessageId: latestAssistant?.id ?? null,
       latestAssistantPreview: latestAssistant ? summarizeMessageText(latestAssistant.text) : null,
+      issues: thread.issues ?? [],
     });
+  });
+
+const issue = agent.command("issue").description("Manage Gitea issues linked to a thread");
+
+issue
+  .command("link")
+  .argument("<thread>", "saved agent name or raw thread UUID")
+  .argument("<issue>", "owner/repo#N or configured Gitea issue URL")
+  .action(async (reference, issueReference) => {
+    const { agent: target, client } = await withAgent(reference);
+    printJson(await client.linkIssue(target.threadId, issueReference));
+  });
+
+issue
+  .command("unlink")
+  .argument("<thread>", "saved agent name or raw thread UUID")
+  .argument("<issue>", "owner/repo#N or configured Gitea issue URL")
+  .action(async (reference, issueReference) => {
+    const { agent: target, client } = await withAgent(reference);
+    printJson(await client.unlinkIssue(target.threadId, issueReference));
   });
 
 agent
