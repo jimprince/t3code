@@ -1,3 +1,4 @@
+import * as ForkWorkspace from "./forkThreads/ForkWorkspaceService.ts";
 import * as ThreadIssueService from "./forkThreads/ThreadIssueService.ts";
 import * as AutomationEngine from "./automations/AutomationEngine.ts";
 import { makeNamedAgents } from "./forkThreads/NamedAgents.ts";
@@ -1000,7 +1001,9 @@ export const subscribeOrchestrationV2Shell = Effect.fn("ws.orchestrationV2.subsc
       const base = buildActiveShellSnapshot(
         yield* loadShellSnapshotParts({
           sql,
-          readThreads: threadManagement.readShellSnapshot({ location: "active" }).pipe(Effect.map(Effect.map(withoutPageAgentThreads))),
+          readThreads: threadManagement
+            .readShellSnapshot({ location: "active" })
+            .pipe(Effect.map(Effect.map(withoutPageAgentThreads))),
           listProjects: projects.listShells(),
           latestSequence: applicationEvents.latestApplicationSequence,
         }),
@@ -3174,6 +3177,7 @@ const layerWsRpc = (
             ),
           ),
       });
+      const conversationFork = yield* ForkWorkspace.ForkWorkspaceService;
       const forkHandlers = WsForkRpcGroup.of({
         ...threadSubscriptionHandlers(threadManagement),
         [WS_METHODS.automationsList]: (input) =>
@@ -3220,6 +3224,7 @@ const layerWsRpc = (
         [WS_METHODS.projectRequestsList]: (input) => requestLedger.listForThread(input),
         ...(yield* makeWorkspaceUploadHandlers),
         ...(yield* makeSupervisionDragHandlers),
+        "orchestration.forkThread": (input) => conversationFork.fork(input),
         [WS_METHODS.projectIssuesGet]: (input) =>
           projectIssues
             .get(input)
