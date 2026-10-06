@@ -1892,3 +1892,18 @@ depends_on = [
 ]
 roles = []
 note = "requestTitle.logic.ts holds the pure title rules. cleanRequestTitle turns model output or a sentence into a board title: URLs become their host, emoji and markdown chrome go, leading greetings, filler, please and request frames (can/could/would you, I want to, let's, we should) are peeled off for work (a question keeps its wording), a task loses its trailing period or question mark, the first letter is capitalized, and the title is capped at 70 characters at a word boundary with no dangling connector. deriveRequestTitle is the no-model fallback (fallbackRequestItem, and the Pending filing row): the first sentence that says something, cleaned; 'Can you X?' is a task, 'X?' a question, a stored kind wins. The request-items prompt asks the model for the same short deliverable title and splitMessage cleans what comes back (falling back to the derivation when it is empty). New request issues open with a '## Brad's words' heading above the quote; the t3-request marker is unchanged and requestWords also reads the leading quote of older bodies. RequestLedger.update retitles a captured chat request when an agent starts or links it (request start, request note) and no explicit title is given: planRetitle replaces the title only when it is still Brad's raw first line or first sentence (whole or a '...' cut), so a title anyone set is kept, and skips agent-filed requests (message id agent:). The intake brief now asks for the short deliverable title. No new RPC, contract or setting; the request-items schema is unchanged because a length check would reject model output the cleaner can repair."
+
+[[patch]]
+name = "fork-pr-widget-refresh"
+subject = "fix(projects): PR widget resolves alias hosts, refreshes on load and folds closed PRs"
+class = "product"
+purpose = "Keep the project Pull requests widget current (brad/t3code-fork#152): PRs linked through Gitea's public alias host were never refreshed, so merged and closed PRs stayed Open, and Needs you counted PRs Brad was not asked to review."
+retire_when = "Upstream resolves Gitea alias hosts for PR sync and ships an equivalent project PR widget."
+depends_on = [
+  "fork-gitea-pr-browser",
+  "fork-gitea-connections",
+  "fork-project-page-workflow",
+  "fork-gitea-issue-links",
+]
+roles = []
+note = "Built by pr-widget-stale against fork.29 and integrated as ONE top patch rather than folded into the owners: the change spans 17 files whose owners are about 30 patches (ws.ts alone has 27), so folding would push the whole stack through those files. Fold it into fork-gitea-pr-browser, fork-gitea-connections and fork-project-page-workflow at a later stack refresh. Behaviour: alias-host resolution follows the #146 rule (exactly one configured instance confirms) with a 10-minute miss cache; one refresh on dashboard load, at most once a minute; merged/closed PRs fold into 'Recently merged or closed'; a PR not refreshed for 30 minutes is marked 'not refreshed'; Needs you counts only review-requested or needs-review PRs; rows read 'repo#N · title · state' (repo#N is the human reference Brad asked for)."

@@ -1,11 +1,17 @@
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import type {
+  GiteaInstanceConfig,
   PullRequestCapabilities,
   PullRequestComment,
   PullRequestViewerPermissions,
 } from "@t3tools/contracts";
-import { resolveGiteaRemote } from "@t3tools/shared/sourceControl";
+import {
+  detectSourceControlProviderFromRemoteUrl,
+  resolveGiteaRemote,
+} from "@t3tools/shared/sourceControl";
 import { ServerSettingsService } from "../serverSettings.ts";
 import { SourceControlProviderRegistry } from "../sourceControl/SourceControlProviderRegistry.ts";
 import * as GiteaApi from "../sourceControl/GiteaApi.ts";
@@ -44,32 +50,104 @@ const fail = (operation: string, detail: string, status?: number) =>
     reason: status === 401 ? "unauthenticated" : status === 429 ? "rate-limited" : "failed",
   });
 
+const RepositoryName = Schema.Struct({ full_name: Schema.String });
+// A miss says nothing lasting about a host (the repository may simply not exist yet), so it
+// is only remembered for a while rather than learned.
+const ALIAS_MISS_TTL_MS = 10 * 60 * 1000;
+// Hosts of other forges are never an address of a Gitea instance, whatever repositories it holds.
+const FOREIGN_FORGES = new Set(["github", "gitlab", "azure-devops", "bitbucket"]);
+
+const hostOfUrl = (url: string) => {
+  try {
+    return new URL(url).host.toLowerCase();
+  } catch {
+    return null;
+  }
+};
+const instanceNames = (instance: GiteaInstanceConfig) =>
+  [instance.host, hostOfUrl(instance.webOrigin), ...instance.sshAliases].flatMap((name) =>
+    name === null ? [] : [name.toLowerCase()],
+  );
+
 export const make = Effect.gen(function* () {
   const settings = yield* ServerSettingsService;
   const registry = yield* SourceControlProviderRegistry;
   const api = yield* GiteaApi.make;
+  // Public hosts a proxy serves an instance on, learned when the instance serves the repository
+  // a link names on that host. Gitea builds its URLs from the request, so it cannot report them.
+  const learnedHosts = new Map<string, string>();
+  const aliasMisses = new Map<string, number>();
   const resolve = Effect.fn("GiteaPullRequest.resolve")(function* (input: {
     cwd: string;
     repository?: string;
+    host?: string;
   }) {
-    const handle = yield* registry
-      .resolveHandle(input)
-      .pipe(Effect.mapError(() => fail("resolve", "Could not resolve the repository remote.")));
     const config = yield* settings.getSettings.pipe(
       Effect.mapError(() => fail("resolve", "Could not read Gitea settings.")),
     );
+    const handle = yield* registry
+      .resolveHandle(input)
+      .pipe(Effect.option, Effect.map(Option.getOrUndefined));
     const remote =
-      handle.context && resolveGiteaRemote(handle.context.remoteUrl, config.giteaInstances);
+      handle?.context && resolveGiteaRemote(handle.context.remoteUrl, config.giteaInstances);
     if (
-      !remote ||
-      (input.repository !== undefined &&
-        remote.repository.toLowerCase() !== input.repository.toLowerCase())
+      remote &&
+      (input.repository === undefined ||
+        remote.repository.toLowerCase() === input.repository.toLowerCase())
     )
-      return yield* fail(
-        "resolve",
-        "No unambiguous configured Gitea instance matches this repository.",
-      );
-    return remote;
+      return remote;
+    // A reference to another repository on a configured instance needs no checkout of it.
+    const host = input.host?.toLowerCase();
+    const named =
+      host === undefined || input.repository === undefined
+        ? []
+        : config.giteaInstances.filter(
+            (instance) =>
+              instanceNames(instance).includes(host) || learnedHosts.get(host) === instance.id,
+          );
+    if (named.length === 1) return { instance: named[0]!, repository: input.repository! };
+    return yield* fail(
+      "resolve",
+      "No unambiguous configured Gitea instance matches this repository.",
+    );
+  });
+  const resolveHostAlias = Effect.fn("GiteaPullRequest.resolveHostAlias")(function* (input: {
+    host: string;
+    repository: string;
+  }) {
+    const host = input.host.trim().toLowerCase();
+    const config = yield* settings.getSettings.pipe(
+      Effect.mapError(() => fail("resolve", "Could not read Gitea settings.")),
+    );
+    const matches = config.giteaInstances.filter(
+      (instance) =>
+        instanceNames(instance).includes(host) || learnedHosts.get(host) === instance.id,
+    );
+    if (matches.length > 0) return matches.length === 1 ? matches[0]!.host.toLowerCase() : null;
+    if (
+      FOREIGN_FORGES.has(detectSourceControlProviderFromRemoteUrl(`https://${host}/`)?.kind ?? "")
+    )
+      return null;
+    const key = `${host}|${input.repository.toLowerCase()}`;
+    const now = yield* Clock.currentTimeMillis;
+    if ((aliasMisses.get(key) ?? 0) > now) return null;
+    // The host proves nothing, so the instances are candidates and the one that serves the
+    // repository is the answer; two serving it leave the host ambiguous.
+    const serving = yield* Effect.filter(
+      config.giteaInstances,
+      (instance) =>
+        api.request(instance, GiteaApi.repositoryPath(input.repository), RepositoryName).pipe(
+          Effect.map((found) => found.full_name.toLowerCase() === input.repository.toLowerCase()),
+          Effect.orElseSucceed(() => false),
+        ),
+      { concurrency: "unbounded" },
+    );
+    if (serving.length === 1) {
+      learnedHosts.set(host, serving[0]!.id);
+      return serving[0]!.host.toLowerCase();
+    }
+    aliasMisses.set(key, now + ALIAS_MISS_TTL_MS);
+    return null;
   });
   const request = <S extends Schema.Top>(
     remote: Effect.Success<ReturnType<typeof resolve>>,
@@ -118,6 +196,7 @@ export const make = Effect.gen(function* () {
   const provider: PullRequestProviderApi = {
     kind: "gitea",
     capabilities,
+    resolveHostAlias,
     getViewer: (input) =>
       resolve(input).pipe(
         Effect.flatMap((remote) => request(remote, "/user", Json.User)),
