@@ -148,6 +148,8 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   /** Server understands thread.auto-settle.set (per-thread auto-settle off).
       Same version-skew contract as threadSettlement. */
   threadAutoSettleOptOut: Schema.optionalKey(Schema.Boolean),
+  /** Server understands thread.subproject.set and sends `subproject` on threads. */
+  threadSubprojects: Schema.optionalKey(Schema.Boolean),
   /** Server stores parentThreadId and understands thread.parent.set. */
   threadNesting: Schema.optionalKey(Schema.Boolean),
   remoteThreadNesting: Schema.optionalKey(Schema.Boolean),

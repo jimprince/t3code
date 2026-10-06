@@ -23,6 +23,7 @@ import { resolveTrackerSetting } from "../projectDashboard/projectDashboard.logi
 import { epicProgress, parseEpicChecklist } from "./epicProgress.logic.ts";
 import {
   collectThreadTree,
+  resolveProjectTracker,
   deriveProjectIssueStatus,
   deriveRequestStage,
   giteaRepositoryForIdentity,
@@ -152,10 +153,11 @@ export const make = Effect.gen(function* () {
       readonly repositoryIdentity?: Parameters<typeof giteaRepositoryForIdentity>[0];
     },
     instances: ReadonlyArray<GiteaInstanceConfig>,
+    trackerOverride?: string | null,
   ) =>
     Effect.gen(function* () {
       // An explicit tracker wins: code can live elsewhere (GitHub) while issues live on Gitea.
-      const configured = (yield* dashboardStore.read).trackers[project.id];
+      const configured = trackerOverride ?? (yield* dashboardStore.read).trackers[project.id];
       const explicit = configured ? resolveTrackerSetting(configured, instances) : null;
       if (explicit) {
         return {
@@ -179,6 +181,15 @@ export const make = Effect.gen(function* () {
       return null;
     });
 
+  /** A subproject's tracker is its own, else the enclosing project's. */
+  const trackerForRoot = (
+    threads: Parameters<typeof resolveProjectTracker>[1],
+    rootThreadId: ThreadId,
+  ) =>
+    dashboardStore.read.pipe(
+      Effect.map((file) => resolveProjectTracker(file.trackers, threads, rootThreadId)),
+    );
+
   const instancesOrFail = settings.getSettings.pipe(
     Effect.map((config) => config.giteaInstances),
     Effect.mapError(() => fail("Could not read configured Gitea connections.")),
@@ -198,11 +209,14 @@ export const make = Effect.gen(function* () {
       const projects = snapshot.projects
         .filter((project) => projectIds.has(project.id))
         .toSorted((a, b) => Number(b.id === rootProjectId) - Number(a.id === rootProjectId));
+      const rootTracker = yield* trackerForRoot(snapshot.threads, rootThreadId);
       const targets = new Map<string, GiteaRepositoryTarget>();
       for (const project of projects) {
-        const target = yield* repositoryForProject(project, instances).pipe(
-          Effect.orElseSucceed(() => null),
-        );
+        const target = yield* repositoryForProject(
+          project,
+          instances,
+          project.id === rootProjectId ? rootTracker : null,
+        ).pipe(Effect.orElseSucceed(() => null));
         if (target) targets.set(repositoryKey(target), target);
       }
       const linkedThreads = new Map<string, ThreadId[]>();
@@ -410,7 +424,15 @@ export const make = Effect.gen(function* () {
       } satisfies ProjectIssuesGetResult;
     });
 
-  return { list, get, resolveProject, repositoryForProject, invalidate, instancesOrFail };
+  return {
+    list,
+    get,
+    resolveProject,
+    repositoryForProject,
+    trackerForRoot,
+    invalidate,
+    instancesOrFail,
+  };
 });
 
 export type ProjectIssuesService = Effect.Success<typeof make>;

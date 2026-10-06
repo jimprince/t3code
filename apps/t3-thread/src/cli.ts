@@ -344,6 +344,7 @@ const AGENT_COMMAND_ALIASES = new Set([
   "pin",
   "unpin",
   "auto-settle",
+  "orchestrator",
   "order",
   "move",
   "forget",
@@ -976,6 +977,7 @@ agent
   .option("--settle-on-complete", "settle when a turn completes without pending input")
   .option("--no-settle-on-complete", "disable completion settlement for this worker")
   .option("--top-level", "list the worker in the sidebar instead of nesting it")
+  .option("--subproject", "make the new thread a subproject with its own page data")
   .action(async (options) => {
     const state = await loadState();
     const environment = requireEnvironment(state, options.env);
@@ -1093,6 +1095,15 @@ agent
         result: null,
       };
     });
+    if (options.subproject) {
+      await client.setThreadSubproject(created.threadId, "on").catch((error: unknown) => {
+        throw new Error(
+          `Created '${options.name}' (${created.threadId}) but could not mark it as a subproject: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      });
+    }
     if (notifyCaller) {
       void ensureNotificationWatcher({ env: options.env }).catch(() => {});
     }
@@ -1110,6 +1121,7 @@ agent
       nestedUnder: nesting.parentThreadId,
       remoteParent: "remoteParent" in nesting ? nesting.remoteParent : null,
       nesting: nesting.reason,
+      subproject: options.subproject === true,
     });
   });
 
@@ -1292,6 +1304,25 @@ agent
     const { agent: savedAgent, client } = await withAgent(name);
     printJson(await client.setThreadAutoSettle(savedAgent.threadId, options.on === true));
   });
+
+const orchestrator = agent
+  .command("orchestrator")
+  .description("Choose whether a nested thread is a subproject with its own page data");
+
+for (const [verb, mode, description] of [
+  ["mark", "on", "Make a nested thread a subproject"],
+  ["unmark", "off", "Keep a thread a plain worker; auto-promotion never applies"],
+  ["auto", "auto", "Let the server promote the thread when it gets its own workers"],
+] as const) {
+  orchestrator
+    .command(verb)
+    .description(description)
+    .argument("<thread>", "saved agent name or raw thread UUID")
+    .action(async (reference) => {
+      const { agent: target, client } = await withAgent(reference);
+      printJson(await client.setThreadSubproject(target.threadId, mode));
+    });
+}
 
 agent
   .command("order")
