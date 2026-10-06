@@ -1,0 +1,4 @@
+id = "nested-thread-parent-status"
+category = "feature"
+functionality = "threads"
+text = "A thread's sidebar row shows Working or Monitoring while one of its nested threads is working or monitoring."
