@@ -1,0 +1,4 @@
+id = "orchestrators-view"
+category = "feature"
+functionality = "projects"
+text = "See orchestrated projects and actionable standalone threads in one sidebar view, then open a project page for work that needs you, active or blocked workers, new requests, recent completions, links, and automations."
