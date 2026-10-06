@@ -1,0 +1,13 @@
+name = "fork-notification-preferences"
+subject = "feat(t3-thread): control worker notification preferences"
+class = "product"
+purpose = "Choose per-route notification levels, suppress quiet or directly reported completions, and collapse repeated identical worker errors."
+retire_when = "Upstream or shared worker tooling offers equivalent notification preference and deduplication behavior."
+depends_on = ["fork-worker-operations"]
+roles = []
+
+[[decision]]
+id = "v2-port-2689"
+date = "2026-10-05"
+decided = "reconcile-smaller"
+rationale = "Keep operator route policy above V2 reads; request keys use durable runtime request ids and quota holding uses current-run failure items."
