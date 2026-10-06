@@ -188,7 +188,8 @@ it.layer(NodeServices.layer)("session reconcile decider", (it) => {
       expect(projected.threads[0]?.session?.status).toBe("running");
 
       const decided = yield* reconcile(projected);
-      expect(Array.isArray(decided) ? decided[0]?.type : decided.type).toBe("thread.session-set");
+      const events = Array.isArray(decided) ? decided : [decided];
+      expect(events[0]).toMatchObject({ type: "thread.session-set" });
     }),
   );
 });
