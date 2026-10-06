@@ -78,14 +78,15 @@ export const PROJECT_WIDGET_TYPES: ReadonlyArray<ProjectWidgetType> = [
   {
     type: "roadmap-summary",
     title: "Roadmap summary",
-    description: "One line of version counts linking to a tab with the roadmap board.",
+    description:
+      "Where we're going: the next release (outcome, N of M done, next task), its epics with progress and phase, and Later as one count, linking to a tab with the roadmap board.",
     fields: [],
   },
   {
     type: "roadmap-board",
     title: "Roadmap",
     description:
-      "The roadmap board: next version, later versions and Later, each task with its status and each version with a progress line.",
+      "The roadmap board: next version, later versions and Later, each task with its status (an epic with its progress and phase) and each version with a progress line.",
     fields: [],
   },
   {
