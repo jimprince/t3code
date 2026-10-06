@@ -70,23 +70,23 @@ export function ForkSupervisionControl(props: {
     });
   };
   const renderDefaultRow = (thread: ForkSupervisionRow) => (
-      <button
-        type="button"
-        onClick={() => {
-          void navigate({
-            to: "/$environmentId/$threadId",
-            params: buildThreadRouteParams(scopeThreadRef(thread.environmentId, thread.id)),
-          });
-        }}
-        className="block w-full truncate px-1.5 py-1 text-left text-xs"
-      >
-        {thread.title} ·{" "}
-        {projects.find(
-          (project) =>
-            project.environmentId === thread.environmentId && project.id === thread.projectId,
-        )?.title ?? thread.projectId}
-      </button>
-    );
+    <button
+      type="button"
+      onClick={() => {
+        void navigate({
+          to: "/$environmentId/$threadId",
+          params: buildThreadRouteParams(scopeThreadRef(thread.environmentId, thread.id)),
+        });
+      }}
+      className="block w-full truncate px-1.5 py-1 text-left text-xs"
+    >
+      {thread.title} ·{" "}
+      {projects.find(
+        (project) =>
+          project.environmentId === thread.environmentId && project.id === thread.projectId,
+      )?.title ?? thread.projectId}
+    </button>
+  );
   const renderRow = (thread: ForkSupervisionRow) => (
     <Fragment key={supervisionKey(thread.environmentId, thread.id)}>
       {props.renderRow ? props.renderRow(thread) : renderDefaultRow(thread)}
