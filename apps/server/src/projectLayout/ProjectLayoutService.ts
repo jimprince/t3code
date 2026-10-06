@@ -26,7 +26,7 @@ import * as Stream from "effect/Stream";
 
 import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as ProjectDashboardStore from "../projectDashboard/ProjectDashboardStore.ts";
-import { findRootThreadId } from "../projectIssues/projectIssues.logic.ts";
+import { findProjectRootThreadId } from "../projectIssues/projectIssues.logic.ts";
 
 const fail = (message: string, layout?: ProjectLayout) =>
   new ProjectLayoutError({ message, ...(layout ? { layout } : {}) });
@@ -69,7 +69,7 @@ const make = Effect.gen(function* () {
     snapshots.getShellSnapshot().pipe(
       Effect.mapError(() => fail("Could not read threads.")),
       Effect.flatMap((snapshot) => {
-        const rootThreadId = findRootThreadId(snapshot.threads, threadId);
+        const rootThreadId = findProjectRootThreadId(snapshot.threads, threadId);
         return snapshot.threads.some((thread) => thread.id === rootThreadId)
           ? Effect.succeed(rootThreadId)
           : Effect.fail(fail(`Thread '${threadId}' was not found.`));

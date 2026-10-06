@@ -12,7 +12,7 @@ import * as Effect from "effect/Effect";
 import type { OrchestrationEngineShape } from "../orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
 import type { ProviderRegistryShape } from "../provider/Services/ProviderRegistry.ts";
-import { findRootThreadId } from "./projectIssues.logic.ts";
+import { findProjectRootThreadId } from "./projectIssues.logic.ts";
 import { buildIntakeBrief, clampTitle, intakeModelSelection } from "./requestLedger.logic.ts";
 import { deriveRequestTitle } from "./requestTitle.logic.ts";
 
@@ -38,7 +38,7 @@ export const make = (deps: {
         const snapshot = yield* snapshots
           .getShellSnapshot()
           .pipe(Effect.mapError(() => fail("Could not read threads.")));
-        const rootThreadId = findRootThreadId(snapshot.threads, input.threadId);
+        const rootThreadId = findProjectRootThreadId(snapshot.threads, input.threadId);
         const root = snapshot.threads.find((thread) => thread.id === rootThreadId);
         const project = root
           ? snapshot.projects.find((candidate) => candidate.id === root.projectId)
