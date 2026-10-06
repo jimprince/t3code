@@ -1,0 +1,4 @@
+id = "nested-threads"
+category = "feature"
+functionality = "threads"
+text = "Nest threads under an orchestrating thread: nested threads leave the sidebar and appear in the parent's Agents panel, and t3-thread workers nest under the thread that started them."
