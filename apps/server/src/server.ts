@@ -1,3 +1,7 @@
+import * as AgentGateway from "./automations/AgentGateway.ts";
+import * as AutomationEngine from "./automations/AutomationEngine.ts";
+import * as AutomationStore from "./automations/AutomationStore.ts";
+import * as ReleaseFeed from "./automations/ReleaseFeed.ts";
 import * as LegacyBackgroundWorkImport from "./fork/recovery/LegacyBackgroundWorkImport.ts";
 import * as RecoveryProcessAccess from "./diagnostics/RecoveryProcessAccess.ts";
 import * as WorkerLifecycle from "./forkThreads/WorkerLifecycle.ts";
@@ -521,7 +525,17 @@ const ProviderInstallationRefreshLive = Layer.effectDiscard(
   }),
 );
 
+const AutomationServicesLive = AutomationEngine.layer.pipe(
+  Layer.provide(Layer.mergeAll(AgentGateway.layer, AutomationStore.layer, ReleaseFeed.layer)),
+);
+const AutomationWorkerLive = Layer.effectDiscard(
+  Effect.gen(function* () {
+    yield* (yield* AutomationEngine.AutomationEngine).start();
+  }),
+).pipe(Layer.provideMerge(AutomationServicesLive));
+
 const RuntimeCoreDependenciesBaseLive = Layer.mergeAll(
+  AutomationWorkerLive,
   AgentAwarenessRelay.layer,
   ThreadSettlementWorkerLive,
   WorkerLifecycle.live,
