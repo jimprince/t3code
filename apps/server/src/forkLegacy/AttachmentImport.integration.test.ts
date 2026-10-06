@@ -70,7 +70,6 @@ describe("historical attachment import", () => {
         const sql = yield* SqlClient.SqlClient;
         const config = yield* ServerConfig.ServerConfig;
         const recoverHistoricalAttachmentRows = yield* makeHistoricalAttachmentRecovery;
-        yield* sql`ALTER TABLE projection_thread_messages ADD COLUMN file_attachments_json TEXT`;
         const source = NodePath.join(config.attachmentsDir, "old-upload.tmp");
         const bytes = Buffer.from([0, 255, 128]);
         yield* Effect.promise(() => NodeFSP.mkdir(config.attachmentsDir, { recursive: true }));
