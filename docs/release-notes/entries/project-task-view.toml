@@ -1,0 +1,4 @@
+id = "project-task-view"
+category = "feature"
+functionality = "projects"
+text = "Clicking a task on the project page now opens it in a side panel with its status, the answer, the latest progress, the parts of an epic and its threads, with Settle or Reopen and Open thread. Back closes it; Open in Gitea is still one click away."
