@@ -50,5 +50,6 @@ export function roadmapItems(
       stage: issue.stage ?? null,
       versionId: issue.milestone?.id ?? null,
       parked: issue.labels.some((label) => label.toLowerCase() === "parked"),
+      ...(issue.epic ? { epic: issue.epic } : {}),
     }));
 }
