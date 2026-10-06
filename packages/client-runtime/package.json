@@ -434,6 +434,10 @@
     "./fork/disconnected-composer": {
       "types": "./src/fork/disconnectedComposer.ts",
       "default": "./src/fork/disconnectedComposer.ts"
+    },
+    "./decision-answer": {
+      "types": "./src/decisionAnswer.ts",
+      "default": "./src/decisionAnswer.ts"
     }
   },
   "scripts": {
