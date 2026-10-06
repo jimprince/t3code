@@ -2,11 +2,15 @@ import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestr
 import {
   decisionAnswerInput,
   decisionSendStrip,
+  keptDecisionAnswers,
+  sentDelivery,
   type DecisionAnswerInput,
+  type DecisionAnswerRecord,
   type DecisionPick,
 } from "@t3tools/client-runtime/decision-answer";
+import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import type { ProjectIssue } from "@t3tools/contracts";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Pressable, TextInput, View } from "react-native";
 
 import { AppText as Text } from "../../components/AppText";
@@ -15,7 +19,6 @@ import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 
 const MAX_NOTE = 500;
-const SENT_LINGER_MS = 1500;
 
 const issueKey = (issue: ProjectIssue) => `${issue.repository}#${issue.number}`;
 
@@ -23,12 +26,18 @@ type Selection = { readonly kind: "option"; readonly option: string } | { readon
 
 function DecisionCard({
   issue,
-  sent,
+  answer,
   onSend,
+  onRetry,
+  onDrop,
 }: {
   readonly issue: ProjectIssue;
-  readonly sent: boolean;
-  readonly onSend: (input: DecisionAnswerInput) => Promise<boolean>;
+  /** The answer given on this card, shown instead of the options until the card leaves. */
+  readonly answer: DecisionAnswerRecord<ProjectIssue> | null;
+  readonly onSend: (answered: string, input: DecisionAnswerInput) => void;
+  readonly onRetry: () => void;
+  /** Gives up on a failed answer and shows the options again. */
+  readonly onDrop: () => void;
 }) {
   const decision = issue.decision!;
   const open = decision.options.length === 0;
@@ -36,7 +45,6 @@ function DecisionCard({
   const [text, setText] = useState("");
   const [note, setNote] = useState("");
   const [noteOpen, setNoteOpen] = useState(false);
-  const [sending, setSending] = useState(false);
   const pick: DecisionPick | null = open
     ? { kind: "open", text }
     : selected?.kind === "option"
@@ -45,12 +53,11 @@ function DecisionCard({
         ? { kind: "other", text }
         : null;
   const input = pick ? decisionAnswerInput(pick, note) : null;
-  const send = async () => {
-    if (!input || sending) return;
-    setSending(true);
-    await onSend(input);
-    setSending(false);
+  const send = () => {
+    if (!pick || !input) return;
+    onSend(`Answered: ${(pick.kind === "option" ? pick.option : pick.text).trim()}`, input);
   };
+  const strip = answer ? decisionSendStrip(answer.delivery, decision.waiting) : null;
   const showText = open || selected?.kind === "other";
   return (
     <View className="gap-1 border-t border-border pt-2">
@@ -60,10 +67,29 @@ function DecisionCard({
           {decision.context}
         </Text>
       ) : null}
-      {sent ? (
-        <Text className="text-sm text-foreground">
-          {decisionSendStrip("sent", decision.waiting).text}
-        </Text>
+      {answer && strip ? (
+        <>
+          <Text className="text-sm text-foreground">{answer.answered}</Text>
+          <Text
+            className={`text-xs ${strip.retryable ? "text-danger-foreground" : "text-foreground-muted"}`}
+          >
+            {strip.text}
+          </Text>
+          {strip.retryable ? (
+            <View className="flex-row items-center gap-3">
+              <Pressable
+                accessibilityRole="button"
+                onPress={onRetry}
+                className="rounded-md border border-foreground px-3 py-1.5"
+              >
+                <Text className="text-sm text-foreground">Retry</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" onPress={onDrop}>
+                <Text className="text-xs text-foreground-muted">Choose again</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </>
       ) : (
         <>
           {open
@@ -120,11 +146,11 @@ function DecisionCard({
           <View className="flex-row items-center gap-3">
             <Pressable
               accessibilityRole="button"
-              disabled={!input || sending}
-              onPress={() => void send()}
-              className={`rounded-md border border-foreground px-3 py-1.5 ${!input || sending ? "opacity-40" : ""}`}
+              disabled={!input}
+              onPress={send}
+              className={`rounded-md border border-foreground px-3 py-1.5 ${!input ? "opacity-40" : ""}`}
             >
-              <Text className="text-sm text-foreground">{sending ? "Sending" : "Send"}</Text>
+              <Text className="text-sm text-foreground">Send</Text>
             </Pressable>
             {noteOpen ? null : (
               <Pressable accessibilityRole="button" onPress={() => setNoteOpen(true)}>
@@ -144,8 +170,9 @@ function DecisionCard({
 /**
  * Decisions waiting on Brad (open needs-brad issues) under a project: pick an
  * option, Other... or type an answer, optionally add a note, and Send. The answer is
- * commented on the issue and sent to the waiting thread; the card reads Sent before
- * it leaves.
+ * commented on the issue and sent to the waiting thread; the card shows the answer
+ * until a list read after it was sent no longer has the issue, and a failure stays on
+ * the card with the server's reason and Retry.
  */
 export function MobileDecisions({ summary }: { readonly summary: OrchestratorSummary }) {
   const query = useEnvironmentQuery(
@@ -155,49 +182,77 @@ export function MobileDecisions({ summary }: { readonly summary: OrchestratorSum
     }),
   );
   const decide = useAtomCommand(mobileDecideProjectRequest, "Decide");
-  const [sent, setSent] = useState<ReadonlyMap<string, ProjectIssue>>(new Map());
-  const waiting = (query.data?.issues ?? []).filter(
-    (issue) => issue.decision !== undefined && issue.closedAt === null,
+  const [answers, setAnswers] = useState<ReadonlyMap<string, DecisionAnswerRecord<ProjectIssue>>>(
+    new Map(),
   );
-  const live = new Set(waiting.map(issueKey));
+  const waiting = useMemo(
+    () =>
+      (query.data?.issues ?? []).filter(
+        (issue) => issue.decision !== undefined && issue.closedAt === null,
+      ),
+    [query.data],
+  );
+  const live = useMemo(() => new Set(waiting.map(issueKey)), [waiting]);
+  const readAt = query.dataUpdatedAt ?? 0;
+  // Answers whose card has left are forgotten on each new list read, so a question
+  // asked again shows its options.
+  const [prunedAt, setPrunedAt] = useState(readAt);
+  if (prunedAt !== readAt) {
+    setPrunedAt(readAt);
+    setAnswers((current) => keptDecisionAnswers(current, live, readAt));
+  }
+  const kept = keptDecisionAnswers(answers, live, readAt);
+  const record = (key: string, entry: DecisionAnswerRecord<ProjectIssue> | null) =>
+    setAnswers((current) => {
+      const next = new Map(current);
+      if (entry) next.set(key, entry);
+      else next.delete(key);
+      return next;
+    });
+  const send = async (entry: Omit<DecisionAnswerRecord<ProjectIssue>, "delivery">) => {
+    const key = issueKey(entry.issue);
+    record(key, { ...entry, delivery: { phase: "sending" } });
+    const result = await decide({
+      environmentId: summary.root.environmentId,
+      input: { threadId: summary.root.id, reference: key, ...entry.input },
+    });
+    query.refresh();
+    const error = result._tag === "Success" ? null : squashAtomCommandFailure(result);
+    record(key, {
+      ...entry,
+      delivery:
+        result._tag === "Success"
+          ? sentDelivery(result.value.notifiedThreadId !== null)
+          : {
+              phase: "failed",
+              error:
+                error instanceof Error && error.message
+                  ? error.message
+                  : "Could not reach the server.",
+            },
+    });
+  };
   const decisions = [
     ...waiting,
-    ...[...sent.values()].filter((issue) => !live.has(issueKey(issue))),
+    ...[...kept].filter(([key]) => !live.has(key)).map(([, entry]) => entry.issue),
   ].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   if (decisions.length === 0) return null;
   return (
     <View className="mt-2 gap-2">
       <Text className="text-xs text-foreground-muted">{decisions.length} decisions waiting</Text>
-      {decisions.map((issue) => (
-        <DecisionCard
-          key={issueKey(issue)}
-          issue={issue}
-          sent={sent.has(issueKey(issue))}
-          onSend={async (input) => {
-            const result = await decide({
-              environmentId: summary.root.environmentId,
-              input: {
-                threadId: summary.root.id,
-                reference: issueKey(issue),
-                ...input,
-              },
-            });
-            if (result._tag !== "Success") return false;
-            setSent((current) => new Map(current).set(issueKey(issue), issue));
-            query.refresh();
-            setTimeout(
-              () =>
-                setSent((current) => {
-                  const next = new Map(current);
-                  next.delete(issueKey(issue));
-                  return next;
-                }),
-              SENT_LINGER_MS,
-            );
-            return true;
-          }}
-        />
-      ))}
+      {decisions.map((issue) => {
+        const answer = kept.get(issueKey(issue)) ?? null;
+        return (
+          <DecisionCard
+            key={issueKey(issue)}
+            issue={issue}
+            answer={answer}
+            onSend={(answered, input) => void send({ issue, answered, input })}
+            onRetry={() => answer && void send(answer)}
+            onDrop={() => record(issueKey(issue), null)}
+          />
+        );
+      })}
     </View>
   );
 }
