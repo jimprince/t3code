@@ -17,6 +17,7 @@ import {
   CircleAlertIcon,
   MessageSquareIcon,
   PencilIcon,
+  SlidersHorizontalIcon,
   UsersIcon,
   XIcon,
 } from "lucide-react";
@@ -35,6 +36,7 @@ import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { randomUUID } from "../../lib/utils";
 import { buildThreadRouteParams } from "../../threadRoutes";
+import { formatRelativeTimeLabel } from "../../timestampFormat";
 import ChatView from "../ChatView";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { getTriggerDisplayModelLabel } from "../chat/providerIconUtils";
@@ -54,9 +56,15 @@ import { readOrchestratorLastVisit, recordOrchestratorVisit } from "./orchestrat
 import { ProjectAutomationsSlot } from "../projects/ProjectAutomationsSlot";
 import { ProjectIssuesBoard } from "./ProjectIssuesBoard";
 import {
+  ClickableRow,
+  NeedsYouIssueGroups,
   ProjectMaintenanceWidget,
+  ProjectReleaseLine,
   ProjectReleaseWidget,
   ProjectRequestsSection,
+  useNeedsYou,
+  useOpenThread,
+  useSettle,
 } from "./ProjectRequestsSection";
 import { ProjectWidgetList, WorkerRequestTag } from "./ProjectWidgetList";
 import { ProjectRoadmapWidget, SaveForLater } from "./ProjectRoadmapWidget";
@@ -67,32 +75,37 @@ import { PROJECT_TABS, resolveProjectTab, type ProjectTab } from "./projectTabs.
 import type { ProjectWidgetId } from "./projectWidgets.logic";
 import { projectReturnState } from "./projectNavigation";
 
-/** Dashboard | Roadmap | Issues. */
+/** Dashboard | Issues | Roadmap, with the tab's own actions (Customize) at the right. */
 function ProjectTabBar({
   tab,
   onSelect,
+  actions,
 }: {
   readonly tab: ProjectTab;
   readonly onSelect: (tab: ProjectTab) => void;
+  readonly actions?: ReactNode;
 }) {
   return (
-    <div role="tablist" aria-label="Project views" className="flex gap-4 border-b border-border">
-      {PROJECT_TABS.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          role="tab"
-          aria-selected={tab === item.id}
-          className={`-mb-px border-b-2 px-0.5 pb-2 text-sm ${
-            tab === item.id
-              ? "border-foreground text-foreground"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-          onClick={() => onSelect(item.id)}
-        >
-          {item.title}
-        </button>
-      ))}
+    <div className="flex items-end gap-4 border-b border-border">
+      <div role="tablist" aria-label="Project views" className="flex gap-4">
+        {PROJECT_TABS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === item.id}
+            className={`-mb-px border-b-2 px-0.5 pb-2 text-sm ${
+              tab === item.id
+                ? "border-foreground text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => onSelect(item.id)}
+          >
+            {item.title}
+          </button>
+        ))}
+      </div>
+      <div className="ml-auto pb-1">{actions}</div>
     </div>
   );
 }
@@ -116,35 +129,6 @@ function BoardSection({
       </h2>
       {children}
     </section>
-  );
-}
-
-function OpenThreadButton({
-  summary,
-  threadId,
-}: {
-  readonly summary: OrchestratorSummary;
-  readonly threadId: ThreadId;
-}) {
-  const navigate = useNavigate();
-  return (
-    <Button
-      size="xs"
-      variant="ghost-muted"
-      onClick={() =>
-        void navigate({
-          to: "/$environmentId/$threadId",
-          params: buildThreadRouteParams(scopeThreadRef(summary.root.environmentId, threadId)),
-          state: projectReturnState({
-            environmentId: summary.root.environmentId,
-            threadId: summary.root.id,
-          }),
-        })
-      }
-    >
-      Open thread
-      <ArrowUpRightIcon />
-    </Button>
   );
 }
 
@@ -181,6 +165,105 @@ function ThreadProviderModel({
       ) : null}
       <span className="max-w-32 truncate">{modelLabel}</span>
     </span>
+  );
+}
+
+/**
+ * Everything waiting on Brad, from one source: threads asking for an approval,
+ * an answer or a plan review, then the requests and issues the Issues board's
+ * Needs you lane shows. Hidden when nothing waits.
+ */
+function ProjectNeedsYouWidget({
+  summary,
+  providerEntriesFor,
+}: {
+  readonly summary: OrchestratorSummary;
+  readonly providerEntriesFor: (
+    thread: EnvironmentThreadShell,
+  ) => ReadonlyMap<string, ProviderInstanceEntry>;
+}) {
+  const { items, query } = useNeedsYou(summary);
+  const settle = useSettle(summary, query.refresh);
+  const openThread = useOpenThread(summary);
+  const count = summary.needsYou.length + items.length;
+  if (count === 0) return null;
+  return (
+    <BoardSection title="Needs you" count={count}>
+      {summary.needsYou.length > 0 ? (
+        <ul className="mb-3 divide-y divide-border">
+          {summary.needsYou.map((item) => (
+            <ClickableRow
+              key={`${item.kind}:${item.thread.id}`}
+              label={`Open ${item.thread.title}`}
+              onOpen={() => openThread(item.thread.id)}
+              className="items-center py-2"
+            >
+              <CircleAlertIcon className="size-4 shrink-0 text-warning-foreground" />
+              <span className="min-w-0 flex-1 truncate text-sm">{item.thread.title}</span>
+              <span className="text-xs text-muted-foreground">
+                {item.kind === "approval"
+                  ? "Approval"
+                  : item.kind === "input"
+                    ? "Question"
+                    : "Plan ready"}
+              </span>
+              <ThreadProviderModel thread={item.thread} entries={providerEntriesFor(item.thread)} />
+            </ClickableRow>
+          ))}
+        </ul>
+      ) : null}
+      <NeedsYouIssueGroups summary={summary} items={items} settle={settle} />
+    </BoardSection>
+  );
+}
+
+/** "N need you" in the status line: the same count as the Needs you widget. */
+function NeedsYouCount({ summary }: { readonly summary: OrchestratorSummary }) {
+  const { items } = useNeedsYou(summary);
+  const count = summary.needsYou.length + items.length;
+  if (count === 0) return null;
+  return (
+    <span className="inline-flex items-center gap-1.5 text-warning-foreground">
+      <CircleAlertIcon className="size-4" />
+      {count} need you
+    </span>
+  );
+}
+
+/** A worker row (Working, Blocked, Done) that opens its thread when clicked. */
+function WorkerRow({
+  summary,
+  thread,
+  latestLine,
+  tone = "default",
+  trailing,
+}: {
+  readonly summary: OrchestratorSummary;
+  readonly thread: EnvironmentThreadShell;
+  readonly latestLine?: string | null;
+  readonly tone?: "default" | "error";
+  readonly trailing: ReactNode;
+}) {
+  const openThread = useOpenThread(summary);
+  return (
+    <ClickableRow
+      label={`Open ${thread.title}`}
+      onOpen={() => openThread(thread.id)}
+      className="items-start py-2"
+    >
+      <span className="min-w-0 flex-1">
+        <span
+          className={`block truncate text-sm font-medium ${tone === "error" ? "text-error" : ""}`}
+        >
+          {thread.title}
+        </span>
+        {latestLine ? (
+          <span className="mt-0.5 block truncate text-xs text-muted-foreground">{latestLine}</span>
+        ) : null}
+        <WorkerRequestTag summary={summary} threadId={thread.id} />
+      </span>
+      {trailing}
+    </ClickableRow>
   );
 }
 
@@ -225,6 +308,7 @@ export function OrchestratorBoard({
     import("@t3tools/contracts").MessageId | null
   >(null);
   const [editing, setEditing] = useState(false);
+  const [customizing, setCustomizing] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editScope, setEditScope] = useState("");
   const summary = useMemo(
@@ -331,113 +415,77 @@ export function OrchestratorBoard({
     maintenance: <ProjectMaintenanceWidget summary={summary} />,
     roadmap: <ProjectRoadmapSummary summary={summary} onOpen={() => selectTab("roadmap")} />,
     "needs-you": (
-      <BoardSection title="Needs you" count={summary.needsYou.length}>
-        {summary.needsYou.length === 0 ? (
-          <Empty>Nothing is waiting on you.</Empty>
-        ) : (
-          <ul className="divide-y divide-border">
-            {summary.needsYou.map((item) => (
-              <li key={`${item.kind}:${item.thread.id}`} className="flex items-center gap-3 py-2">
-                <CircleAlertIcon className="size-4 shrink-0 text-warning-foreground" />
-                <span className="min-w-0 flex-1 truncate text-sm">{item.thread.title}</span>
-                <span className="text-xs text-muted-foreground">
-                  {item.kind === "approval"
-                    ? "Approval"
-                    : item.kind === "input"
-                      ? "Question"
-                      : "Plan ready"}
-                </span>
-                <ThreadProviderModel
-                  thread={item.thread}
-                  entries={providerEntriesFor(item.thread)}
-                />
-                <OpenThreadButton summary={summary} threadId={item.thread.id} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </BoardSection>
+      <ProjectNeedsYouWidget summary={summary} providerEntriesFor={providerEntriesFor} />
     ),
-    working: (
-      <BoardSection title="Working" count={summary.working.length}>
-        {summary.working.length === 0 ? (
-          <Empty>No workers are active.</Empty>
-        ) : (
+    working:
+      summary.working.length > 0 ? (
+        <BoardSection title="Working" count={summary.working.length}>
           <ul className="divide-y divide-border">
             {summary.working.map((item) => (
-              <li key={item.thread.id} className="flex items-start gap-3 py-2">
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">{item.thread.title}</span>
-                  {item.latestLine ? (
-                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                      {item.latestLine}
-                    </span>
-                  ) : null}
-                  <WorkerRequestTag summary={summary} threadId={item.thread.id} />
-                </span>
-                <ThreadProviderModel
-                  thread={item.thread}
-                  entries={providerEntriesFor(item.thread)}
-                />
-                <OpenThreadButton summary={summary} threadId={item.thread.id} />
-              </li>
+              <WorkerRow
+                key={item.thread.id}
+                summary={summary}
+                thread={item.thread}
+                latestLine={item.latestLine}
+                trailing={
+                  <ThreadProviderModel
+                    thread={item.thread}
+                    entries={providerEntriesFor(item.thread)}
+                  />
+                }
+              />
             ))}
           </ul>
-        )}
-      </BoardSection>
-    ),
+        </BoardSection>
+      ) : null,
     blocked:
       summary.blocked.length > 0 ? (
         <BoardSection title="Blocked" count={summary.blocked.length}>
           <ul className="divide-y divide-border">
             {summary.blocked.map((item) => (
-              <li key={item.thread.id} className="flex items-start gap-3 py-2">
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-error">
-                    {item.thread.title}
-                  </span>
-                  {item.latestLine ? (
-                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                      {item.latestLine}
-                    </span>
-                  ) : null}
-                  <WorkerRequestTag summary={summary} threadId={item.thread.id} />
-                </span>
-                <time className="text-xs text-muted-foreground">
-                  {new Date(item.thread.updatedAt).toLocaleString()}
-                </time>
-                <ThreadProviderModel
-                  thread={item.thread}
-                  entries={providerEntriesFor(item.thread)}
-                />
-                <OpenThreadButton summary={summary} threadId={item.thread.id} />
-              </li>
+              <WorkerRow
+                key={item.thread.id}
+                summary={summary}
+                thread={item.thread}
+                latestLine={item.latestLine}
+                tone="error"
+                trailing={
+                  <>
+                    <time className="text-xs text-muted-foreground">
+                      {formatRelativeTimeLabel(
+                        item.thread.updatedAt,
+                      )}
+                    </time>
+                    <ThreadProviderModel
+                      thread={item.thread}
+                      entries={providerEntriesFor(item.thread)}
+                    />
+                  </>
+                }
+              />
             ))}
           </ul>
         </BoardSection>
       ) : null,
-    done: (
-      <BoardSection title="Done since your last visit" count={done.length}>
-        {done.length === 0 ? (
-          <Empty>No newly completed workers.</Empty>
-        ) : (
+    done:
+      done.length > 0 ? (
+        <BoardSection title="Done since your last visit" count={done.length}>
           <ul className="divide-y divide-border">
             {done.map((item) => (
-              <li key={item.thread.id} className="flex items-center gap-3 py-2">
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-sm">{item.thread.title}</span>
-                  <WorkerRequestTag summary={summary} threadId={item.thread.id} />
-                </span>
-                <time className="text-xs text-muted-foreground" dateTime={item.completedAt}>
-                  {new Date(item.completedAt).toLocaleString()}
-                </time>
-                <OpenThreadButton summary={summary} threadId={item.thread.id} />
-              </li>
+              <WorkerRow
+                key={item.thread.id}
+                summary={summary}
+                thread={item.thread}
+                trailing={
+                  <time className="text-xs text-muted-foreground" dateTime={item.completedAt}>
+                    {formatRelativeTimeLabel(item.completedAt)}
+                  </time>
+                }
+              />
             ))}
           </ul>
-        )}
-      </BoardSection>
-    ),
+        </BoardSection>
+      ) : null,
     "new-request": (
       <BoardSection title="New request">
         {chatOpen ? (
@@ -463,14 +511,18 @@ export function OrchestratorBoard({
     ),
     issues: <ProjectIssuesSummary summary={summary} onOpen={() => selectTab("issues")} />,
     prs: <ProjectPullRequestsWidget summary={summary} />,
+    // The panel is shared with project settings; here its heading matches the
+    // page's other widget headings.
     automations: (
-      <ProjectAutomationsSlot
-        project={{
-          environmentId: summary.root.environmentId,
-          rootThreadId: summary.root.id,
-          rootProjectId: summary.root.projectId,
-        }}
-      />
+      <div className="border-t border-border pt-4 [&_h2]:font-semibold [&_h2]:tracking-wide [&_h2]:text-muted-foreground">
+        <ProjectAutomationsSlot
+          project={{
+            environmentId: summary.root.environmentId,
+            rootThreadId: summary.root.id,
+            rootProjectId: summary.root.projectId,
+          }}
+        />
+      </div>
     ),
   };
 
@@ -504,25 +556,6 @@ export function OrchestratorBoard({
             <MessageSquareIcon />
             {chatOpen ? "Hide chat" : "Chat"}
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() =>
-              void navigate({
-                to: "/$environmentId/$threadId",
-                params: buildThreadRouteParams(
-                  scopeThreadRef(summary.root.environmentId, summary.root.id),
-                ),
-                state: projectReturnState({
-                  environmentId: summary.root.environmentId,
-                  threadId: summary.root.id,
-                }),
-              })
-            }
-          >
-            Open orchestrator
-            <ArrowUpRightIcon />
-          </Button>
         </WorkspacePageHeader>
         <div className="flex min-h-0 flex-1 border-t border-border">
           <div className="topbar-scroll-fade min-h-0 min-w-0 flex-1 overflow-y-auto">
@@ -531,14 +564,9 @@ export function OrchestratorBoard({
                 <OrchestratorStatus status={summary.status} />
                 <span className="inline-flex items-center gap-1.5 text-muted-foreground">
                   <UsersIcon className="size-4" />
-                  {summary.activeWorkerCount} active
+                  {summary.activeWorkerCount} working
                 </span>
-                {summary.needsYou.length > 0 ? (
-                  <span className="inline-flex items-center gap-1.5 text-warning-foreground">
-                    <CircleAlertIcon className="size-4" />
-                    {summary.needsYou.length} need you
-                  </span>
-                ) : null}
+                <NeedsYouCount summary={summary} />
                 {summary.blocked.length > 0 ? (
                   <span className="text-error">{summary.blocked.length} blocked</span>
                 ) : null}
@@ -554,19 +582,37 @@ export function OrchestratorBoard({
                 </span>
               </div>
 
-              <ProjectTabBar tab={tab} onSelect={selectTab} />
+              <ProjectReleaseLine
+                summary={summary}
+                runningVersion={
+                  serverConfigs.get(summary.root.environmentId)?.environment.serverVersion ?? null
+                }
+              />
+              {/* On every tab, above the tabs: one line until it is used. */}
+              <ProjectRequestBox summary={summary} />
+              <ProjectTabBar
+                tab={tab}
+                onSelect={selectTab}
+                actions={
+                  tab === "dashboard" ? (
+                    <Button size="xs" variant="ghost-muted" onClick={() => setCustomizing(true)}>
+                      <SlidersHorizontalIcon />
+                      Customize
+                    </Button>
+                  ) : null
+                }
+              />
               {tab === "roadmap" ? (
                 <ProjectRoadmapWidget summary={summary} />
               ) : tab === "issues" ? (
-                <BoardSection title="Issues">
-                  <ProjectIssuesBoard summary={summary} />
-                </BoardSection>
+                <ProjectIssuesBoard summary={summary} />
               ) : (
-                <>
-                  {/* Pinned first on the Dashboard, outside the widget order. */}
-                  <ProjectRequestBox summary={summary} onOpenChat={() => setChatOpen(true)} />
-                  <ProjectWidgetList summary={summary} views={widgetViews} />
-                </>
+                <ProjectWidgetList
+                  summary={summary}
+                  views={widgetViews}
+                  customizing={customizing}
+                  onCustomizingChange={setCustomizing}
+                />
               )}
             </WorkspacePageContainer>
           </div>
@@ -577,6 +623,23 @@ export function OrchestratorBoard({
                 <span className="min-w-0 flex-1 truncate text-sm font-medium">
                   {summary.root.title}
                 </span>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Open the full orchestrator thread"
+                  onClick={() =>
+                    void navigate({
+                      to: "/$environmentId/$threadId",
+                      params: buildThreadRouteParams(rootRef),
+                      state: projectReturnState({
+                        environmentId: summary.root.environmentId,
+                        threadId: summary.root.id,
+                      }),
+                    })
+                  }
+                >
+                  <ArrowUpRightIcon />
+                </Button>
                 <Button
                   size="icon-sm"
                   variant="ghost"

@@ -20,7 +20,7 @@ export const FOR_YOU_GROUPS: ReadonlyArray<{ group: ForYouGroup; title: string }
   { group: "answers", title: "Answers ready" },
   { group: "review", title: "Review" },
   { group: "approve", title: "Approve" },
-  { group: "test", title: "Test" },
+  { group: "test", title: "Shipped, test it" },
 ];
 
 export interface ProjectRequest {
@@ -258,7 +258,7 @@ export function deriveMaintenance(
     .filter((request) => isMaintenanceWithAgents(request))
     .map((request) => ({ issue: request.issue, stage: request.stage, request }));
   for (const issue of issues) {
-    if (issue.isRequest || issue.closedAt !== null) continue;
+    if (issue.isRequest || issue.closedAt !== null || isParked(issue)) continue;
     if (issue.status === "done" || issue.status === "archived") continue;
     if (taskKind(issue.labels) === "maintenance") tasks.push({ issue, stage: null, request: null });
   }
@@ -286,19 +286,6 @@ export function latestProgressLine(body: string | null | undefined): string | nu
 const isParked = (issue: Pick<ProjectIssue, "labels">) =>
   issue.labels.some((label) => label.toLowerCase() === "parked");
 
-/** Open requests saved for later in this project, shown as a count under Requests. */
-export function countParked(issues: ReadonlyArray<ProjectIssue>, rootThreadId: string): number {
-  return issues.filter(
-    (issue) =>
-      issue.isRequest &&
-      issue.closedAt === null &&
-      (issue.stage ?? "requested") === "requested" &&
-      isParked(issue) &&
-      (issue.requestSource?.rootThreadId === rootThreadId ||
-        issue.linkedThreadIds.some((id) => id === rootThreadId)),
-  ).length;
-}
-
 export type SentRequestStatus =
   | { readonly state: "filing" }
   | { readonly state: "pending" }
@@ -319,4 +306,60 @@ export function sentRequestStatus(
   return pending.some((item) => item.messageId === messageId)
     ? { state: "pending" }
     : { state: "filing" };
+}
+
+/** Issue identity across repositories, for the Needs you lane and rows. */
+export const issueKey = (issue: Pick<ProjectIssue, "repository" | "number">) =>
+  `${issue.repository}#${issue.number}`;
+
+export interface NeedsYouItem {
+  readonly issue: ProjectIssue;
+  /** The request behind it, when Brad asked for it. */
+  readonly request: ProjectRequest | null;
+  readonly group: ForYouGroup;
+}
+
+/**
+ * Everything on the tracker waiting on Brad, from one source for the Dashboard's
+ * Needs you and the Issues board's Needs you lane: requests in his groups, and
+ * any other open issue marked for review or shipped for him to test. Parked
+ * (Later) items stay off.
+ */
+export function deriveNeedsYou(
+  issues: ReadonlyArray<ProjectIssue>,
+  requests: ReadonlyArray<ProjectRequest>,
+): NeedsYouItem[] {
+  const items: NeedsYouItem[] = requests.flatMap((request) =>
+    request.forYou === null ? [] : [{ issue: request.issue, request, group: request.forYou }],
+  );
+  const seen = new Set(items.map((item) => issueKey(item.issue)));
+  for (const issue of issues) {
+    if (issue.isRequest || seen.has(issueKey(issue)) || issue.closedAt !== null) continue;
+    if (isParked(issue)) continue;
+    const labels = new Set(issue.labels.map((label) => label.toLowerCase()));
+    if (labels.has("needs-test")) items.push({ issue, request: null, group: "test" });
+    else if (issue.status === "needs-review") items.push({ issue, request: null, group: "review" });
+  }
+  return items;
+}
+
+/**
+ * Open requests whose thread Brad already settled: the work there is over, so
+ * the page offers to settle them together instead of one by one.
+ */
+export function requestsOfSettledThreads(
+  requests: ReadonlyArray<ProjectRequest>,
+): Array<{ readonly thread: EnvironmentThreadShell; readonly requests: ProjectRequest[] }> {
+  const byThread = new Map<
+    string,
+    { thread: EnvironmentThreadShell; requests: ProjectRequest[] }
+  >();
+  for (const request of requests) {
+    const thread = request.thread;
+    if (!thread?.settledAt) continue;
+    const group = byThread.get(thread.id) ?? { thread, requests: [] };
+    group.requests.push(request);
+    byThread.set(thread.id, group);
+  }
+  return [...byThread.values()];
 }
