@@ -2651,6 +2651,7 @@ export const OrchestrationV2Command = Schema.Union([
   }),
   Schema.Struct({
     type: Schema.Literal("thread.archive"),
+    transferExpectedUpdatedAt: Schema.optional(Schema.DateTimeUtc),
     ...workerArchiveFields,
     commandId: CommandId,
     threadId: ThreadId,
