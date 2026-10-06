@@ -1,0 +1,4 @@
+id = "agent-panel-thread-details"
+category = "feature"
+functionality = "worker supervision"
+text = "Nested workers in the Agents panel now show their state, latest output, model and effort, provider pool, tokens and tools, duration, last activity and workspace. Workers from other projects carry a project badge."
