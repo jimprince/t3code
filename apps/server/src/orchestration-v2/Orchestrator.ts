@@ -1,3 +1,4 @@
+import { normalizeThreadIssueKey, threadIssueKeysEqual } from "@t3tools/shared/threadIssues";
 import { conversationBaselineAllowed } from "../fork/recovery/ConversationRewind.ts";
 import { legacyNoticeCanStart } from "../fork/recovery/LegacyBackgroundWorkPolicy.ts";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
@@ -402,6 +403,9 @@ function commandThreadId(command: OrchestrationV2ServerCommand): ThreadId {
     case "thread.active.reorder":
     case "thread.visit":
     case "thread.mark-unread":
+    case "thread.issue.link":
+    case "thread.issue.unlink":
+    case "thread.issue.sync":
     case "thread.metadata.update":
     case "thread.pull-request.link":
     case "thread.pull-request.unlink":
@@ -2343,6 +2347,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           | "thread.pin.reorder"
           | "thread.active.reorder"
           | "thread.mark-unread"
+          | "thread.issue.link"
+          | "thread.issue.unlink"
+          | "thread.issue.sync"
           | "thread.metadata.update"
           | "thread.pull-request.link"
           | "thread.pull-request.unlink"
@@ -2458,6 +2465,22 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         commandType: command.type,
         cause: `Thread ${command.threadId} worktree changed before the metadata update could be applied.`,
       });
+    }
+    if (
+      command.type === "thread.issue.link" ||
+      command.type === "thread.issue.unlink" ||
+      command.type === "thread.issue.sync"
+    ) {
+      const key = normalizeThreadIssueKey(
+        command.type === "thread.issue.link" ? command.link : command,
+      );
+      const exists = (thread.issues ?? []).some((link) => threadIssueKeysEqual(link, key));
+      if (command.type === "thread.issue.link" ? exists : !exists)
+        return yield* new OrchestratorDispatchError({
+          commandId: command.commandId,
+          commandType: command.type,
+          cause: `Issue ${key.host}/${key.repository}#${key.number} is ${exists ? "already" : "not"} linked to thread ${command.threadId}.`,
+        });
     }
     if (command.type === "thread.metadata.update" && command.expectedEmpty === true) {
       const records = yield* projectionStore
@@ -2868,6 +2891,42 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         }
         case "thread.mark-unread":
           return { ...thread, lastVisitedAt: markUnreadVisitedAt };
+        case "thread.issue.link":
+        case "thread.issue.unlink":
+        case "thread.issue.sync": {
+          const links = thread.issues ?? [];
+          const key = normalizeThreadIssueKey(
+            command.type === "thread.issue.link" ? command.link : command,
+          );
+          const existing = links.find((link) => threadIssueKeysEqual(link, key));
+          if (command.type === "thread.issue.link") {
+            if (existing) return thread;
+            return { ...thread, issues: [...links, { ...command.link, ...key }], updatedAt: now };
+          }
+          if (!existing) return thread;
+          if (command.type === "thread.issue.unlink") {
+            return {
+              ...thread,
+              issues: links.filter((link) => !threadIssueKeysEqual(link, key)),
+              updatedAt: now,
+            };
+          }
+          if (
+            existing.url === command.url &&
+            existing.snapshot.title === command.snapshot.title &&
+            existing.snapshot.state === command.snapshot.state
+          )
+            return thread;
+          return {
+            ...thread,
+            issues: links.map((link) =>
+              threadIssueKeysEqual(link, key)
+                ? { ...link, url: command.url, snapshot: command.snapshot }
+                : link,
+            ),
+            updatedAt: now,
+          };
+        }
         case "thread.metadata.update": {
           const previousRecovery =
             thread.limitRecovery?.runId === command.limitRecovery?.runId &&
@@ -3176,6 +3235,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           return "thread.active-reordered" as const;
         case "thread.mark-unread":
           return "thread.marked-unread" as const;
+        case "thread.issue.link":
+        case "thread.issue.unlink":
+        case "thread.issue.sync":
         case "thread.metadata.update":
         case "thread.title.regeneration.complete":
           return "thread.metadata-updated" as const;
@@ -9708,6 +9770,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       case "thread.pin.reorder":
       case "thread.active.reorder":
       case "thread.mark-unread":
+      case "thread.issue.link":
+      case "thread.issue.unlink":
+      case "thread.issue.sync":
       case "thread.metadata.update":
       case "thread.pull-request.link":
       case "thread.pull-request.unlink":
