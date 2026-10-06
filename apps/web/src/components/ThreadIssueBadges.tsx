@@ -22,7 +22,7 @@ export type ThreadIssueBadgeTarget =
 
 export function resolveThreadIssueBadgeTarget(
   pages: readonly EmbeddedPage[],
-  issue: ThreadIssueLink,
+  issue: Pick<ThreadIssueLink, "repository" | "number" | "url">,
 ): ThreadIssueBadgeTarget {
   const board = pages.find((page) => {
     try {

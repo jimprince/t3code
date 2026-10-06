@@ -40,7 +40,6 @@ import ChatView from "../ChatView";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { getTriggerDisplayModelLabel } from "../chat/providerIconUtils";
 import { ProjectFavicon } from "../ProjectFavicon";
-import { ThreadIssueBadges } from "../ThreadIssueBadges";
 import { Button } from "../ui/button";
 import { Dialog, DialogFooter, DialogHeader, DialogPopup, DialogTitle } from "../ui/dialog";
 import { Input } from "../ui/input";
@@ -54,6 +53,7 @@ import { OrchestratorStatus } from "./OrchestratorStatus";
 import { useOrchestratorThreadShells } from "./useOrchestratorThreads";
 import { readOrchestratorLastVisit, recordOrchestratorVisit } from "./orchestratorVisit";
 import { ProjectAutomationsSlot } from "../projects/ProjectAutomationsSlot";
+import { ProjectIssuesBoard } from "./ProjectIssuesBoard";
 import { projectReturnState } from "./projectNavigation";
 import { ProjectPullRequestLink } from "./ProjectPullRequestLink";
 
@@ -478,21 +478,13 @@ export function OrchestratorBoard({
                 )}
               </BoardSection>
 
-              <BoardSection
-                title="Issues & PRs"
-                count={summary.issues.length + summary.pullRequests.length}
-              >
-                {summary.issues.length + summary.pullRequests.length === 0 ? (
-                  <Empty>No linked issues or pull requests.</Empty>
-                ) : (
+              <BoardSection title="Issues">
+                <ProjectIssuesBoard summary={summary} />
+              </BoardSection>
+
+              {summary.pullRequests.length > 0 ? (
+                <BoardSection title="Pull requests" count={summary.pullRequests.length}>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-                    <ThreadIssueBadges
-                      issues={summary.issues}
-                      projectReturn={{
-                        environmentId: summary.root.environmentId,
-                        threadId: summary.root.id,
-                      }}
-                    />
                     {summary.pullRequests.map((pullRequest) => (
                       <ProjectPullRequestLink
                         key={`${pullRequest.host}/${pullRequest.repository}#${pullRequest.number}`}
@@ -501,8 +493,8 @@ export function OrchestratorBoard({
                       />
                     ))}
                   </div>
-                )}
-              </BoardSection>
+                </BoardSection>
+              ) : null}
 
               <ProjectAutomationsSlot
                 project={{
