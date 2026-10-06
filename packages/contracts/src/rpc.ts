@@ -36,6 +36,11 @@ import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import * as RpcMiddleware from "effect/unstable/rpc/RpcMiddleware";
 import { NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import {
+  ProjectIssuesError,
+  ProjectIssuesListInput,
+  ProjectIssuesListResult,
+} from "./projectIssues.ts";
+import {
   CodexAuthCallbackInput,
   CodexAuthCallbackState,
   ProviderAuthCancelInput,
@@ -540,6 +545,7 @@ export const WS_METHODS = {
 
   threadIssuesLink: "threadIssues.link",
   threadIssuesUnlink: "threadIssues.unlink",
+  projectIssuesList: "projectIssues.list",
 
   // Source control methods
   sourceControlLookupRepository: "sourceControl.lookupRepository",
@@ -934,6 +940,12 @@ const WsThreadIssuesUnlinkRpc = Rpc.make(WS_METHODS.threadIssuesUnlink, {
   payload: ThreadIssueReferenceInput,
   success: ThreadIssueUnlinkResult,
   error: Schema.Union([ThreadIssueOperationError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectIssuesListRpc = Rpc.make(WS_METHODS.projectIssuesList, {
+  payload: ProjectIssuesListInput,
+  success: ProjectIssuesListResult,
+  error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
 });
 
 /**
@@ -1859,6 +1871,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsPullRequestsSetLabelsRpc,
   WsThreadIssuesLinkRpc,
   WsThreadIssuesUnlinkRpc,
+  WsProjectIssuesListRpc,
   WsSourceControlLookupRepositoryRpc,
   WsSourceControlCloneRepositoryRpc,
   WsSourceControlPublishRepositoryRpc,
