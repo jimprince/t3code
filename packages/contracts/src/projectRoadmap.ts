@@ -1,3 +1,4 @@
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import { NonNegativeInt, PositiveInt, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
@@ -9,6 +10,8 @@ export const ProjectRoadmapVersion = Schema.Struct({
   title: TrimmedNonEmptyString,
   dueOn: Schema.NullOr(Schema.String),
   openIssues: NonNegativeInt,
+  /** Closed issues in the version: its complete tasks, for the progress line. */
+  closedIssues: NonNegativeInt.pipe(Schema.withDecodingDefault(Effect.succeed(0))),
 });
 export type ProjectRoadmapVersion = typeof ProjectRoadmapVersion.Type;
 
