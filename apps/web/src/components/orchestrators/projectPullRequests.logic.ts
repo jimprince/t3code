@@ -1,6 +1,6 @@
 import type { ThreadPullRequestLink } from "@t3tools/contracts";
 
-export type PullRequestRowState = "draft" | "open" | "merged" | "closed";
+export type PullRequestRowState = "draft" | "open" | "merged" | "closed" | "unconfirmed";
 export type PullRequestGroup = "needs-you" | "open" | "recent" | "hidden";
 
 export interface ProjectPullRequestRow {
@@ -19,6 +19,8 @@ export interface ProjectPullRequestRow {
 }
 
 const RECENT_MS = 7 * 24 * 60 * 60 * 1000;
+// Open pull requests are re-read every minute, so a snapshot this old means the host stopped answering.
+const STALE_SNAPSHOT_MS = 30 * 60 * 1000;
 
 interface ThreadWithPullRequests {
   readonly id: string;
@@ -29,10 +31,12 @@ const keyOf = (link: Pick<ThreadPullRequestLink, "host" | "repository" | "number
   `${link.host.toLowerCase()}/${link.repository.toLowerCase()}#${link.number}`;
 
 /**
- * What each of the project's pull requests needs: Brad's review or merge, still
- * open on CI or agents, or recently merged or closed. Older merged and closed
- * ones are hidden, and one replaced by a later pull request from the same thread
- * or branch is marked superseded.
+ * What each of the project's pull requests needs: Brad's review, still open on
+ * CI or agents, or recently merged or closed. Only an open, clean pull request
+ * that asks for a review is waiting on Brad. One never read from the host, or
+ * not read for a long while, is unconfirmed rather than open. Older merged and
+ * closed ones are hidden, and one replaced by a later pull request from the same
+ * thread or branch is marked superseded.
  */
 export function derivePullRequestRows(
   threads: ReadonlyArray<ThreadWithPullRequests>,
@@ -57,14 +61,19 @@ export function derivePullRequestRows(
   return entries
     .map(({ link, threadIds }): ProjectPullRequestRow => {
       const snapshot = link.snapshot;
+      const unconfirmed =
+        snapshot === null ||
+        (snapshot.state === "open" && now - Date.parse(snapshot.syncedAt) > STALE_SNAPSHOT_MS);
       const state: PullRequestRowState =
         snapshot?.state === "merged"
           ? "merged"
           : snapshot?.state === "closed"
             ? "closed"
-            : snapshot?.isDraft
-              ? "draft"
-              : "open";
+            : unconfirmed
+              ? "unconfirmed"
+              : snapshot?.isDraft
+                ? "draft"
+                : "open";
       // A later pull request on the same branch replaces this one; from the same
       // worker thread it does only once this one was closed without merging (a
       // worker may keep several independent pull requests open). The orchestrator
@@ -98,11 +107,11 @@ export function derivePullRequestRows(
       const checks = snapshot?.checksState ?? null;
       const changedAt =
         snapshot?.mergedAt ?? snapshot?.closedAt ?? snapshot?.updatedAt ?? link.linkedAt;
-      const open = state === "open" || state === "draft";
+      const open = state === "open" || state === "draft" || state === "unconfirmed";
       const group: PullRequestGroup = open
         ? state === "open" &&
           !superseded &&
-          review !== "changes-requested" &&
+          review === "needs-review" &&
           checks !== "failing" &&
           checks !== "pending" &&
           snapshot?.mergeability !== "conflicting"
