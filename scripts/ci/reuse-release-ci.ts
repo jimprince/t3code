@@ -28,7 +28,38 @@ export const requiredJobs = [
   "Test Server 5",
   "Test Server 6",
   "Release Smoke",
+  "Transfer report artifact",
+  "Rust",
+  "Check",
 ];
+export const candidateJobs = [...requiredJobs, "Fork patch policy"];
+// The step that proves a job ran its verification phase on the pushed source.
+// `Rust`, `Release Smoke` and `Fork patch policy` run no phase of their own.
+const verificationSteps: Record<string, string> = {
+  Lint: "Check source",
+  Typecheck: "Check source",
+  Build: "Build desktop pipeline",
+  Test: "Test",
+  "Test Web": "Test",
+};
+
+/** Steps a candidate CI job must have completed for its evidence to count. */
+export const candidateJobSteps = (job: string): readonly string[] => {
+  if (job === "Transfer report artifact") return ["Require transfer measurements"];
+  if (job === "Check") return ["Require every job to pass"];
+  if (job === "Build")
+    return [
+      "Build desktop pipeline",
+      "Verify preload bundle output",
+      "Smoke packaged server history",
+      "Build CLI single-executable",
+      "Build headless artifact",
+      "Smoke headless artifact",
+      "Check verified source unchanged",
+    ];
+  const step = verificationSteps[job] ?? (job.startsWith("Test Server ") ? "Test" : undefined);
+  return step === undefined ? [] : [step, "Check verified source unchanged"];
+};
 const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -63,6 +94,108 @@ const github = (endpoint: string): unknown =>
       stdio: ["ignore", "pipe", "pipe"],
     }),
   );
+
+/** The candidate uses this same workflow, source, toolchain and hosted Linux job profile. */
+export async function reuseCandidateCI(options: {
+  repository: string;
+  source: string;
+  maxWaitMs?: number;
+  query?: (endpoint: string) => unknown;
+  sleep?: (ms: number) => Promise<void>;
+}): Promise<{ reused: boolean; reason: string; runUrl?: string }> {
+  const fallback = (reason: string) => ({ reused: false, reason });
+  try {
+    if (!/^[0-9a-f]{40}$/.test(options.source)) return fallback("Invalid candidate commit.");
+    const query = options.query ?? github;
+    const sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+    const deadline = Date.now() + (options.maxWaitMs ?? 0);
+    const discoveryDeadline = Math.min(deadline, Date.now() + 120_000);
+    const branch = `ci-candidate/${options.source}`;
+    for (;;) {
+      const response = query(
+        `repos/${options.repository}/actions/workflows/ci.yml/runs?head_sha=${options.source}&branch=${encodeURIComponent(branch)}&per_page=1`,
+      );
+      if (!record(response) || !Array.isArray(response.workflow_runs))
+        return fallback("Candidate CI run evidence unavailable.");
+      const run = response.workflow_runs[0];
+      if (run === undefined) {
+        if (Date.now() >= discoveryDeadline)
+          return fallback(
+            "No candidate CI run. Candidate pushes require credentials that trigger Actions.",
+          );
+      } else {
+        if (
+          !record(run) ||
+          run.head_sha !== options.source ||
+          !["push", "workflow_dispatch"].includes(String(run.event)) ||
+          run.head_branch !== branch ||
+          run.path !== ".github/workflows/ci.yml" ||
+          !record(run.repository) ||
+          run.repository.full_name !== options.repository ||
+          typeof run.id !== "number" ||
+          !Number.isSafeInteger(run.id) ||
+          run.id <= 0 ||
+          typeof run.run_attempt !== "number" ||
+          !Number.isSafeInteger(run.run_attempt) ||
+          run.run_attempt <= 0
+        )
+          return fallback("Candidate CI provenance does not match.");
+        if (run.status === "completed") {
+          if (run.conclusion !== "success") return fallback("Candidate CI did not succeed.");
+          const evidence = query(
+            `repos/${options.repository}/actions/runs/${run.id}/attempts/${run.run_attempt}/jobs?per_page=100`,
+          );
+          if (
+            !record(evidence) ||
+            !Array.isArray(evidence.jobs) ||
+            evidence.total_count !== evidence.jobs.length
+          )
+            return fallback("Candidate CI job evidence is incomplete.");
+          for (const name of candidateJobs) {
+            const matches = evidence.jobs.filter((job) => record(job) && job.name === name);
+            const job = matches[0];
+            if (
+              matches.length !== 1 ||
+              !record(job) ||
+              job.status !== "completed" ||
+              job.conclusion !== "success" ||
+              !Array.isArray(job.labels) ||
+              !job.labels.includes("ubuntu-24.04")
+            )
+              return fallback(`Candidate CI job did not pass on the expected runner: ${name}.`);
+            const required = candidateJobSteps(name);
+            const steps = job.steps;
+            if (
+              required.length > 0 &&
+              (!Array.isArray(steps) ||
+                !required.every((step) =>
+                  steps.some(
+                    (item) =>
+                      record(item) &&
+                      item.name === step &&
+                      item.status === "completed" &&
+                      item.conclusion === "success",
+                  ),
+                ))
+            )
+              return fallback(`Candidate CI did not execute source verification: ${name}.`);
+          }
+          return {
+            reused: true,
+            reason: `Reusing candidate CI for exact source ${options.source}; workflow and toolchain are from that commit.`,
+            runUrl: `https://github.com/${options.repository}/actions/runs/${run.id}/attempts/${run.run_attempt}`,
+          };
+        }
+        if (!["queued", "in_progress", "waiting", "pending"].includes(String(run.status)))
+          return fallback("Candidate CI has an unexpected status.");
+      }
+      if (Date.now() >= deadline) return fallback("Candidate CI is not ready.");
+      await sleep(Math.min(15_000, Math.max(0, deadline - Date.now())));
+    }
+  } catch {
+    return fallback("Could not establish candidate CI evidence.");
+  }
+}
 
 /** Reuse a completed, successful main-push CI attempt, otherwise run release verification. */
 export async function reuseReleaseCI(options: {
@@ -128,11 +261,11 @@ export async function reuseReleaseCI(options: {
             )
             .map((job) => job.name),
         );
-        if (!requiredJobs.every((name) => completed.has(name)))
-          return {
-            reused: false,
-            reason: "Required CI jobs did not all succeed; running release verification.",
-          };
+        if (!requiredJobs.every((name) => completed.has(name))) {
+          // A promoted candidate skips duplicate jobs on main. Dereference the
+          // actual candidate run; a green evidence job alone is not proof.
+          return reuseCandidateCI({ repository: options.repository, source, query });
+        }
         return {
           reused: true,
           reason: `Reusing successful CI source verification for ${source}.`,
@@ -156,17 +289,33 @@ export async function reuseReleaseCI(options: {
 }
 
 if (import.meta.main) {
-  const result = await reuseReleaseCI({
-    repository: process.env.GITHUB_REPOSITORY ?? "",
-    ref: process.env.RELEASE_REF ?? "HEAD",
-    version: process.env.RELEASE_VERSION ?? "",
-  });
+  const candidate = process.argv.includes("--candidate");
+  const wait = process.argv.includes("--wait");
+  const repository = process.env.GITHUB_REPOSITORY ?? "";
+  const result = candidate
+    ? await reuseCandidateCI({
+        repository,
+        source: process.env.CI_CANDIDATE_SHA ?? "",
+        maxWaitMs: wait ? 1_500_000 : 0,
+      })
+    : await reuseReleaseCI({
+        repository,
+        ref: process.env.RELEASE_REF ?? "HEAD",
+        version: process.env.RELEASE_VERSION ?? "",
+      });
   console.log(result.reason);
   if (result.runUrl) console.log(result.runUrl);
-  NodeFS.appendFileSync(process.env.GITHUB_OUTPUT!, `reused=${result.reused}\n`);
+  if (process.env.GITHUB_OUTPUT)
+    NodeFS.appendFileSync(process.env.GITHUB_OUTPUT, `reused=${result.reused}\n`);
+  if (process.env.GITHUB_OUTPUT && result.runUrl)
+    NodeFS.appendFileSync(
+      process.env.GITHUB_OUTPUT,
+      `run_id=${result.runUrl.match(/\/actions\/runs\/(\d+)/)?.[1] ?? ""}\n`,
+    );
   if (process.env.GITHUB_STEP_SUMMARY)
     NodeFS.appendFileSync(
       process.env.GITHUB_STEP_SUMMARY,
       `${result.reason}${result.runUrl ? ` [CI run](${result.runUrl})` : ""}\n`,
     );
+  if (wait && !result.reused) process.exitCode = 1;
 }
