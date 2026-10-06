@@ -34,7 +34,12 @@ for (const name of ["dev-vm.small.sanitized.sqlite", "local-mbp.small.sanitized.
             yield* runMigrations(),
             migrationManifest.filter(([id]) => id > 60),
           );
-          assert.deepEqual(yield* runForkMigrations(), []);
+          const legacyThreads = yield* sql`SELECT * FROM projection_threads ORDER BY thread_id`;
+          assert.deepEqual(yield* runForkMigrations(), [[16, "ProjectionThreadsSubproject"]]);
+          assert.deepEqual(
+            yield* sql`SELECT * FROM projection_threads ORDER BY thread_id`,
+            legacyThreads,
+          );
           const mainAfter =
             yield* sql`SELECT migration_id, name FROM effect_sql_migrations ORDER BY migration_id`;
           assert.deepEqual(
@@ -42,7 +47,7 @@ for (const name of ["dev-vm.small.sanitized.sqlite", "local-mbp.small.sanitized.
             mainBefore,
           );
           assert.deepEqual(
-            yield* sql`SELECT migration_id, name FROM effect_sql_fork_migrations ORDER BY migration_id`,
+            yield* sql`SELECT migration_id, name FROM effect_sql_fork_migrations WHERE migration_id <= 15 ORDER BY migration_id`,
             forkBefore,
           );
           assert.deepEqual(yield* runMigrations(), []);

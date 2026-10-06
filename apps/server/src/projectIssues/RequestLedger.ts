@@ -45,7 +45,7 @@ import { TextGeneration } from "../textGeneration/TextGeneration.ts";
 import type { ProjectIssuesService } from "./ProjectIssuesService.ts";
 import type { RequestCandidate, RequestKind } from "../textGeneration/RequestItemsPrompt.ts";
 import {
-  findRootThreadId,
+  findProjectRootThreadId,
   REQUEST_LABEL,
   repositoryKey,
   STATUS_LABELS,
@@ -188,13 +188,14 @@ export const make = (deps: {
       const parents = new Map(
         (yield* listMetadata(sql).pipe(
           Effect.mapError(() => fail("Could not read thread parents.")),
-        )).map((row) => [row.threadId, row.parentThreadId]),
+        )).map((row) => [row.threadId, row]),
       );
       return [...snapshot.threads, ...snapshot.archivedThreads].map((thread) => ({
         ...thread,
         updatedAt: DateTime.formatIso(thread.updatedAt),
         archivedAt: thread.archivedAt === null ? null : DateTime.formatIso(thread.archivedAt),
-        parentThreadId: parents.get(thread.id) ?? null,
+        parentThreadId: parents.get(thread.id)?.parentThreadId ?? null,
+        subproject: parents.get(thread.id)?.subproject ?? "auto",
       }));
     });
     const labelIds = new Map<string, Map<string, number>>();
@@ -285,7 +286,7 @@ export const make = (deps: {
         const threads = yield* readThreads;
         const thread = threads.find((candidate) => candidate.id === threadId);
         if (!thread) return null;
-        const rootThreadId = findRootThreadId(threads, thread.id);
+        const rootThreadId = findProjectRootThreadId(threads, thread.id);
         const root = threads.find((candidate) => candidate.id === rootThreadId) ?? thread;
         const project = Option.getOrNull(
           yield* projectService
@@ -296,6 +297,7 @@ export const make = (deps: {
         const target = yield* deps.projectIssues.repositoryForProject(
           project,
           config.giteaInstances,
+          yield* deps.projectIssues.trackerForRoot(threads, root.id),
         );
         return target ? { config, thread, root, project, target } : null;
       });
@@ -606,7 +608,7 @@ export const make = (deps: {
           enqueue(outbox, {
             messageId: input.messageId,
             threadId: input.threadId,
-            rootThreadId: findRootThreadId(threads, input.threadId),
+            rootThreadId: findProjectRootThreadId(threads, input.threadId),
             text: input.text,
             capturedAt: DateTime.formatIso(DateTime.makeUnsafe(now)),
             items: null,
@@ -698,7 +700,7 @@ export const make = (deps: {
           enqueue(outbox, {
             messageId,
             threadId: input.threadId,
-            rootThreadId: findRootThreadId(threads, input.threadId),
+            rootThreadId: findProjectRootThreadId(threads, input.threadId),
             text: item.excerpt,
             capturedAt: DateTime.formatIso(DateTime.makeUnsafe(stamp)),
             items: [item],
@@ -1152,7 +1154,7 @@ export const make = (deps: {
     const listForThread = (input: ProjectRequestsListInput) =>
       Effect.gen(function* () {
         const threads = yield* readThreads;
-        const rootThreadId = findRootThreadId(threads, input.threadId);
+        const rootThreadId = findProjectRootThreadId(threads, input.threadId);
         const result = yield* deps.projectIssues.list({ rootThreadId });
         return { ...result, issues: result.issues.filter((issue) => issue.isRequest) };
       });
