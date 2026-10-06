@@ -1310,3 +1310,18 @@ decided = "adapt"
 rationale = "Upstream 10ac2f2ba replaced the sweep's per-key argument with a scope plus the shared requested map so a burst of links shares one batched summary read. Gate the fork's repository grouping on that scope instead, and keep the two-repository/four-group pacing: batched GraphQL cuts host calls but still leaves the sweep free to spawn 25 processes at once, which is the launch storm this concern bounds."
 
 # v2-port-2689-m2: runner/registry fork decorators retain native PR host batching.
+
+[[patch]]
+name = "fork-cross-project-thread-nesting"
+subject = "feat(threads): nest workers across projects"
+class = "product"
+purpose = "Place workers from different repositories under a supervisor while retaining each child's own project and execution workspace."
+retire_when = "Upstream supports cross-project nesting with independent execution workspaces and reachable fallback placement, or cross-project supervision is no longer wanted."
+depends_on = ["fork-nested-threads"]
+roles = []
+note = "Parentage only controls placement and attention rollup in the same environment. The child's project controls execution, defaults, search, and project filters. Cross-project children remain visible with their project label; an unreachable parent returns them to top level. Parent archive, settlement, and project deletion do not cascade across projects. Mobile retains its existing flat project-owned listing."
+
+[[patch.decision]]
+id = "v2-port-2689-m2"
+decision = "reconcile-smaller"
+note = "V2 supervision metadata is separate from native execution lineage; retained behavior and import coverage are recorded in the nesting lane report."
