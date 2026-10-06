@@ -23,7 +23,11 @@ import {
 } from "../ui/alert-dialog";
 import { Button } from "../ui/button";
 import { stackedThreadToast, toastManager } from "../ui/toast";
-import { countAgentsBlockingIdleRestart, makeResumesMonitoring, IDLE_RESTART_GRACE_MS } from "./desktopIdleRestart.logic";
+import {
+  countAgentsBlockingIdleRestart,
+  makeResumesMonitoring,
+  IDLE_RESTART_GRACE_MS,
+} from "./desktopIdleRestart.logic";
 
 function isLocalConnectionTarget(target: ConnectionCatalogEntry["target"]): boolean {
   return target._tag === "PrimaryConnectionTarget" || isDesktopLocalConnectionTarget(target);
@@ -43,7 +47,12 @@ export function useLocalAgentsBlockingRestart(): number {
     [environments],
   );
   return useMemo(
-    () => countAgentsBlockingIdleRestart({ threads, localEnvironmentIds, resumesMonitoring: makeResumesMonitoring(environments) }),
+    () =>
+      countAgentsBlockingIdleRestart({
+        threads,
+        localEnvironmentIds,
+        resumesMonitoring: makeResumesMonitoring(environments),
+      }),
     [threads, localEnvironmentIds, environments],
   );
 }
@@ -62,21 +71,25 @@ export const useIdleRestartStore = create<{
 }));
 
 /** Restarts into the downloaded update, reporting a failure as a toast. */
-function installDownloadedUpdate(expectedVersion?: string): Promise<void> {
+export function installDownloadedUpdate(
+  options?: Parameters<NonNullable<Window["desktopBridge"]>["installUpdate"]>[0],
+): Promise<boolean> {
   const bridge = window.desktopBridge;
-  if (!bridge) return Promise.resolve();
+  if (!bridge) return Promise.resolve(false);
   const reportFailure = (description: string) =>
     toastManager.add(
       stackedThreadToast({ type: "error", title: "Could not install update", description }),
     );
   return bridge
-    .installUpdate(expectedVersion === undefined ? undefined : { expectedVersion })
+    .installUpdate(options)
     .then((result) => {
       const actionError = getDesktopUpdateActionError(result);
       if (actionError) reportFailure(actionError);
+      return result.accepted;
     })
     .catch((error: unknown) => {
       reportFailure(error instanceof Error ? error.message : "An unexpected error occurred.");
+      return false;
     });
 }
 
@@ -96,15 +109,25 @@ function IdleRestartWatcher() {
   const busyAgentCount = useLocalAgentsBlockingRestart();
   const canInstall =
     updateState !== null && resolveDesktopUpdateButtonAction(updateState) === "install";
-  const ready = scheduled && canInstall && updateState?.downloadedVersion === expectedVersion && busyAgentCount === 0;
+  const ready =
+    scheduled &&
+    canInstall &&
+    updateState?.downloadedVersion === expectedVersion &&
+    busyAgentCount === 0;
 
   useEffect(() => {
     if (!ready) return;
     const timer = window.setTimeout(() => {
       const intent = useIdleRestartStore.getState();
-      if (!intent.scheduled || intent.expectedVersion !== expectedVersion || readLocalAgentsBlockingRestart() !== 0) return;
+      if (
+        expectedVersion === null ||
+        !intent.scheduled ||
+        intent.expectedVersion !== expectedVersion ||
+        readLocalAgentsBlockingRestart() !== 0
+      )
+        return;
       useIdleRestartStore.getState().cancel();
-      void installDownloadedUpdate(expectedVersion ?? undefined);
+      void installDownloadedUpdate({ expectedVersion });
     }, IDLE_RESTART_GRACE_MS);
     return () => window.clearTimeout(timer);
   }, [ready, expectedVersion]);
