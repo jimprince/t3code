@@ -47,6 +47,7 @@ export function withInputReminder(
   };
 }
 
+/** Caller validates the organizational parent with parentRouting.matchesCurrentParent first. */
 export function inputNotificationStillCurrent(
   notification: SavedNotification,
   thread: OrchestrationThread,
@@ -55,7 +56,24 @@ export function inputNotificationStillCurrent(
     !thread.archivedAt &&
     !thread.deletedAt &&
     thread.settledOverride !== "settled" &&
-    (!notification.isChildInput || thread.parentThreadId === notification.subscriberThreadId) &&
-    pendingInputKey(thread) === notification.pendingInputRequestKey
+    notification.pendingInputRequestKey != null &&
+    pendingKeysStillCurrent(notification.pendingInputRequestKey, thread)
   );
+}
+
+/** Accept aggregate legacy keys and individual durable V2 user-input/approval keys. */
+function pendingKeysStillCurrent(key: string, thread: OrchestrationThread): boolean {
+  const pending = new Set(
+    pendingRequests(thread).flatMap((request) => [request.id, `${request.kind}:${request.id}`]),
+  );
+  try {
+    const keys: unknown = JSON.parse(key);
+    return (
+      Array.isArray(keys) &&
+      keys.length > 0 &&
+      keys.every((id) => typeof id === "string" && pending.has(id))
+    );
+  } catch {
+    return false;
+  }
 }
