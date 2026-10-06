@@ -300,6 +300,8 @@ report a cumulative processed-token count.
 
 On a project page, **Discuss** on a decision opens a thread nested under the agent waiting on it, briefed with the question and its options. When you settle on an answer there, the agent records it as if you had picked it. Discuss again returns to the same thread until you archive it.
 
+Decision context keeps its links and shows attached pictures as thumbnails. Expand long context to read it in full.
+
 ### Named agents
 
 Some resources must have exactly one owner: a 3D printer, a production
