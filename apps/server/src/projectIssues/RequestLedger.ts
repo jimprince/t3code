@@ -43,6 +43,7 @@ import {
 } from "./projectIssues.logic.ts";
 import { ensureMilestone, setIssueMilestone } from "./giteaMilestones.ts";
 import {
+  answerToMessage,
   formatFollowUpComment,
   planRequestItem,
   progressLineFor,
@@ -88,6 +89,9 @@ const RECENT_MESSAGE_LIMIT = 500;
 type LatestComment = { author: string; body: string; createdAt: string } | null;
 /** Each request's newest comment, kept until the issue's updated_at moves (process-wide). */
 const latestCommentCache = new Map<string, { updatedAt: string; comment: LatestComment }>();
+type Answer = NonNullable<ProjectIssuesListResult["issues"][number]["answer"]>;
+/** Found answers never change, so they are kept for the life of the process. */
+const answerCache = new Map<string, Answer>();
 const COMMENT_EXCERPT_CHARS = 1_200;
 
 const fail = (message: string) => new ProjectIssuesError({ message });
@@ -874,7 +878,60 @@ export const make = (deps: {
           },
           { concurrency: 4 },
         );
-        return { ...result, issues, pendingRequests };
+        return { ...result, issues: yield* withAnswers(issues), pendingRequests };
+      });
+
+    /**
+     * Adds each open request's own answer: the reply to the message that filed it.
+     * A thread's messages are read only when one of its requests has a finished
+     * reply that is not cached yet, and at most once per listing.
+     */
+    const withAnswers = (issues: ReadonlyArray<ProjectIssuesListResult["issues"][number]>) =>
+      Effect.gen(function* () {
+        const waiting = issues.filter(
+          (issue) =>
+            issue.isRequest &&
+            issue.closedAt === null &&
+            issue.requestSource !== null &&
+            !answerCache.has(issue.requestSource.messageId),
+        );
+        if (waiting.length > 0) {
+          const shells = new Map(
+            (yield* readThreads).map((thread) => [thread.id as string, thread]),
+          );
+          const threadsToRead = new Set<string>();
+          for (const issue of waiting) {
+            const shell = shells.get(issue.requestSource!.threadId);
+            if (shell && shell.latestRunId !== null && shell.activeRunId === null) {
+              threadsToRead.add(shell.id);
+            }
+          }
+          for (const threadId of threadsToRead) {
+            const projection = yield* engine
+              .getThreadProjection(threadId as ThreadId)
+              .pipe(Effect.orElseSucceed(() => null));
+            if (projection === null) continue;
+            const messages = projection.messages.map((message) => ({
+              messageId: message.id as string,
+              turnId: message.runId as string | null,
+              role: message.role,
+              text: message.text,
+              isStreaming: message.streaming,
+              createdAt: DateTime.formatIso(message.createdAt),
+            }));
+            for (const issue of waiting) {
+              if (issue.requestSource?.threadId !== threadId) continue;
+              const answer = answerToMessage(messages, issue.requestSource.messageId);
+              if (answer) answerCache.set(issue.requestSource.messageId, answer);
+            }
+          }
+        }
+        return issues.map((issue) => {
+          const answer = issue.requestSource
+            ? answerCache.get(issue.requestSource.messageId)
+            : undefined;
+          return answer && issue.closedAt === null ? { ...issue, answer } : issue;
+        });
       });
 
     // A restart or a new connection resumes filing anything left in the outbox.
