@@ -1133,7 +1133,6 @@ for (const operation of ["pin", "unpin"] as const) {
     });
 }
 
-
 agent
   .command("order")
   .description("Put listed sibling threads first; unlisted siblings retain their relative order")

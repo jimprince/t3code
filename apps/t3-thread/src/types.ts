@@ -1,4 +1,6 @@
-export type QueuedSendOrigin = import("@t3tools/shared/messageOrigin").MessageOrigin & { senderEnvironment?: string };
+export type QueuedSendOrigin = import("@t3tools/shared/messageOrigin").MessageOrigin & {
+  senderEnvironment?: string;
+};
 import type {
   OrchestrationV2RuntimeRequest,
   OrchestrationV2ThreadProjection,

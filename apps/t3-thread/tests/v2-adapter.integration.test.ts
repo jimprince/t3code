@@ -176,7 +176,10 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
       );
     });
 
-    const paired = await RemoteEnvironmentClient.pair({ name: "fixture", ...resolvePairingTarget({ pairingUrl }) });
+    const paired = await RemoteEnvironmentClient.pair({
+      name: "fixture",
+      ...resolvePairingTarget({ pairingUrl }),
+    });
     const operatorState = await loadState();
     await saveState({ ...operatorState, environments: [paired] });
     const client = new RemoteEnvironmentClient(paired);
@@ -360,8 +363,12 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
       ),
     ).toBe(false);
     await client.interrupt(created.threadId);
-    expect(await client.settleThread(created.threadId)).toMatchObject({ settledOverride: "settled" });
-    expect(await client.unsettleThread(created.threadId)).toMatchObject({ settledOverride: "active" });
+    expect(await client.settleThread(created.threadId)).toMatchObject({
+      settledOverride: "settled",
+    });
+    expect(await client.unsettleThread(created.threadId)).toMatchObject({
+      settledOverride: "active",
+    });
     // The integrated M2 tip advertises the real sidecar; M1 retains its explicit capability gap.
     const descriptor = await client.describe();
     expect(descriptor.capabilities.threadNesting).toBe(true);
@@ -379,8 +386,9 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
         executionParentThreadId: null,
         session: null,
       });
-      const shellRefresh = rpc.waitForThreadEvent(child.threadId, item =>
-        item.kind === "event" && item.event.type === "thread.metadata-updated",
+      const shellRefresh = rpc.waitForThreadEvent(
+        child.threadId,
+        (item) => item.kind === "event" && item.event.type === "thread.metadata-updated",
       );
       await client.setThreadParent(child.threadId, null);
       await shellRefresh;
