@@ -1,4 +1,5 @@
-import type { ForkThreadMetadata, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ThreadId, type ForkThreadMetadata } from "@t3tools/contracts";
+import { scopedThreadKey, scopeThreadRef } from "../environment/index.ts";
 
 export interface SupervisionThread {
   readonly id: ThreadId;
@@ -6,42 +7,107 @@ export interface SupervisionThread {
   readonly archivedAt: unknown | null;
 }
 /** Hidden, archived, absent and cyclic parents cannot make a visible child unreachable. */
-export function supervisionParents<T extends SupervisionThread>(threads: readonly T[], metadata: readonly ForkThreadMetadata[]) {
-  const visible = new Map(threads.filter(thread => thread.archivedAt === null).map(thread => [thread.id, thread]));
-  const raw = new Map(metadata.map(row => [row.threadId, row.parentThreadId]));
-  const parents = new Map<ThreadId, ThreadId | null>();
-  for (const id of visible.keys()) {
-    const immediate = raw.get(id) ?? null;
-    parents.set(id, immediate);
-    // The walk terminating at a root differs from termination at an invalid edge.
-    if (immediate !== null) {
-      let node: ThreadId | null = immediate;
-      const visited = new Set<ThreadId>([id]);
-      while (node !== null) {
-        if (!visible.has(node) || visited.has(node)) { parents.set(id, null); break; }
-        visited.add(node);
-        node = raw.get(node) ?? null;
+function reachableParents<K>(visible: ReadonlySet<K>, raw: ReadonlyMap<K, K | null>) {
+  const parents = new Map<K, K | null>();
+  for (const id of visible) {
+    const parent = raw.get(id) ?? null;
+    parents.set(id, parent !== null && visible.has(parent) ? parent : null);
+  }
+  const processed = new Set<K>();
+  for (const id of visible) {
+    if (processed.has(id)) continue;
+    const path: K[] = [];
+    const positions = new Map<K, number>();
+    let cursor: K | null = id;
+    while (cursor !== null && !processed.has(cursor)) {
+      const cycleStart = positions.get(cursor);
+      if (cycleStart !== undefined) {
+        for (const member of path.slice(cycleStart)) parents.set(member, null);
+        break;
       }
+      positions.set(cursor, path.length);
+      path.push(cursor);
+      cursor = parents.get(cursor) ?? null;
     }
+    for (const member of path) processed.add(member);
   }
   return parents;
 }
-export function supervisionDescendants(parents: ReadonlyMap<ThreadId, ThreadId | null>, parentId: ThreadId) {
+export function supervisionParents<T extends SupervisionThread>(
+  threads: readonly T[],
+  metadata: readonly ForkThreadMetadata[],
+) {
+  const visible = new Set(
+    threads.filter((thread) => thread.archivedAt === null).map((thread) => thread.id),
+  );
+  return reachableParents(
+    visible,
+    new Map(metadata.map((row) => [row.threadId, row.parentThreadId])),
+  );
+}
+export function supervisionDescendants(
+  parents: ReadonlyMap<ThreadId, ThreadId | null>,
+  parentId: ThreadId,
+) {
   const children = new Map<ThreadId, ThreadId[]>();
-  for (const [id, parent] of parents) if (parent !== null) children.set(parent, [...(children.get(parent) ?? []), id]);
+  for (const [id, parent] of parents) {
+    if (parent === null) continue;
+    const siblings = children.get(parent);
+    if (siblings) siblings.push(id);
+    else children.set(parent, [id]);
+  }
   const result: ThreadId[] = [];
   const seen = new Set<ThreadId>([parentId]);
   const pending = [...(children.get(parentId) ?? [])];
   for (let i = 0; i < pending.length; i++) {
     const id = pending[i]!;
     if (seen.has(id)) continue;
-    seen.add(id); result.push(id); pending.push(...(children.get(id) ?? []));
+    seen.add(id);
+    result.push(id);
+    pending.push(...(children.get(id) ?? []));
   }
   return result;
 }
 /** Roll up attention without treating a child's execution as a parent result or sound. */
-export function supervisionAttention(parents: ReadonlyMap<ThreadId, ThreadId | null>, attention: ReadonlySet<ThreadId>, parentId: ThreadId) {
-  return supervisionDescendants(parents, parentId).some(id => attention.has(id));
+export function supervisionAttention(
+  parents: ReadonlyMap<ThreadId, ThreadId | null>,
+  attention: ReadonlySet<ThreadId>,
+  parentId: ThreadId,
+) {
+  return supervisionDescendants(parents, parentId).some((id) => attention.has(id));
+}
+export const supervisionSoundEligible = (
+  parents: ReadonlyMap<ThreadId, ThreadId | null>,
+  id: ThreadId,
+) => (parents.get(id) ?? null) === null;
+
+export interface ScopedSupervisionThread extends SupervisionThread {
+  readonly environmentId: string;
+}
+export interface ScopedSupervisionMetadata extends ForkThreadMetadata {
+  readonly environmentId: string;
+}
+/** Stable descriptor IDs disambiguate colliding thread IDs across connected hosts. */
+export const supervisionKey = (environmentId: string, threadId: string) =>
+  scopedThreadKey(scopeThreadRef(EnvironmentId.make(environmentId), ThreadId.make(threadId)));
+export function connectedSupervisionParents(
+  threads: readonly ScopedSupervisionThread[],
+  metadata: readonly ScopedSupervisionMetadata[],
+) {
+  const visible = new Set(
+    threads.filter((t) => t.archivedAt === null).map((t) => supervisionKey(t.environmentId, t.id)),
+  );
+  const raw = new Map(
+    metadata.map((row) => [
+      supervisionKey(row.environmentId, row.threadId),
+      row.remoteParent
+        ? supervisionKey(row.remoteParent.environmentId, row.remoteParent.threadId)
+        : row.parentThreadId
+          ? supervisionKey(row.environmentId, row.parentThreadId)
+          : null,
+    ]),
+  );
+  return reachableParents(visible, raw);
 }
 export const supervisionSoundEligible = (parents: ReadonlyMap<ThreadId, ThreadId | null>, id: ThreadId) => (parents.get(id) ?? null) === null;
 import type { EnvironmentThreadShell } from "./models.ts";
