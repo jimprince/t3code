@@ -65,3 +65,11 @@ notification levels still deliver input escalations. The interval and delivery
 history survive watcher restart. Answering, settling, archiving or unnesting the
 worker stops reminders; unsubscribe also removes the route. A busy or settled
 parent retains the latest pending notice under the usual delivery rules.
+
+For a worker that should still be actively working, opt into one alert per
+silence episode with `t3-thread subscribe --watch <source> --level attention
+--inactivity-minutes 15`. Tool progress and reasoning count as activity. Completed
+workers and those waiting for input or quota are excluded. Use
+`--inactivity-minutes 0` to disable it. See
+[Active-worker inactivity monitoring](AGENT_OPERATIONS.md#active-worker-inactivity-monitoring)
+for restart, network, and silent-tool limits.
