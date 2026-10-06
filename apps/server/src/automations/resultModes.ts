@@ -16,7 +16,6 @@ const INSTRUCTIONS: Record<AutomationResultMode, readonly string[]> = {
     ...FILE,
     'Then, as your very last action, settle this thread: `t3-thread settle "$T3_THREAD_ID" --self`.',
   ],
-  act: [],
 };
 
 /** Appends the run's result mode and what it requires, so the agent can read it from its prompt. */
