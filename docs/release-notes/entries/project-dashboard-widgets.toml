@@ -1,0 +1,4 @@
+id = "project-dashboard-widgets"
+category = "feature"
+functionality = "projects"
+text = "Project pages are now widgets you can reorder or hide: Requests shows each of your asks with its stage and who is on it, Release lists what the next release carries and what shipped for you to test, and worker rows show which request they serve. Projects whose code is not on Gitea can name their Gitea tracker repository."
