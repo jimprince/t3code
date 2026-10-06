@@ -1911,3 +1911,13 @@ retire_when = "Upstream or another fork concern provides explicit project orderi
 depends_on = ["fork-orchestrators-view"]
 roles = []
 note = "buildOrchestratorSummaries and threadsVisibleInThreadsMode treat a pinned top-level thread as a project root even without workers; sortOrchestratorSummariesForSidebar puts pinned projects first in pin order, then the rest by bucket. threadsVisibleInThreadsMode keeps a pinned project root's own row (not its descendants) in the Threads sidebar, so one pin order (pinOrderKey) tops both lists; Brad asked for the chief of staff at the top of both (2026-10-05). No new setting: the chief of staff (ff38df95, already pinned on dev-vm) appears first; t3-thread move --top orders pins. On dev-vm only T3 Orchestrator, Deployment Orchestrator and Chief of Staff are pinned top-level threads."
+
+[[patch]]
+name = "fork-project-health"
+subject = "feat(projects): orchestrator-written health line on the project page"
+class = "product"
+purpose = "Answer 'are we OK, where are we going' on the first screen: a status chip, one sentence and an as-of time written by the orchestrator (dashboard redesign, synthesis.md section 1, approved 2026-10-05)."
+retire_when = "Upstream ships a project status line the orchestrator can write."
+depends_on = ["fork-project-dashboard-widgets", "fork-project-layout"]
+roles = []
+note = "Stored per root thread in the dashboard settings file (health record next to widgets and tracker). projectDashboard.setHealth (operate scope) and t3-thread project health set/show write and read it. The page shows it as stale when it is older than a day or older than the newest descendant thread update or task link; the curator checks freshness, nothing auto-clears it."
