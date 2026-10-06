@@ -509,12 +509,7 @@ subject = "fix(chat): preserve legacy attachment history and older clients"
 class = "divergence"
 purpose = "Read historical file handoff records and accept legacy fork clients while current clients use upstream attachment uploads and display once."
 retire_when = "Support for legacy file handoff clients and their persisted message metadata has explicitly ended or been losslessly migrated."
-depends_on = [
-  "fork-provider-turn-safety",
-  "fork-thread-transfer",
-  "fork-resource-recovery",
-  "fork-workspace-file-uploads",
-]
+depends_on = ["fork-provider-turn-safety", "fork-workspace-file-uploads"]
 roles = []
 note = "Legacy uploads use native durable storage, retention and provider file input while keeping the parallel path-bearing field for old clients and historical messages. Available historical temporary objects materialize lazily into durable storage; no old metadata or migration IDs are removed. Partial upload/dispatch failures clean newly created files, and revert preserves referenced legacy objects. Current clients retain one upload and one display entry. The narrow turn-start query preserves legacy file handoffs. Legacy handoffs join the provider attachment list on dispatch, so they are budgeted with upstream's shared attachment-limit helper against decoded bytes rather than a fork-local cap."
 
