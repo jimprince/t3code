@@ -105,7 +105,9 @@ export const layer = HttpApiBuilder.group(
       const base = buildActiveShellSnapshot(
         yield* loadShellSnapshotParts({
           sql,
-          readThreads: threadManagement.readShellSnapshot({ location: "active" }),
+          readThreads: threadManagement
+            .readShellSnapshot({ location: "active" })
+            .pipe(Effect.map(Effect.map(withoutPageAgentThreads))),
           listProjects: projectStore.listShells(),
           latestSequence: applicationEvents.latestApplicationSequence,
         }),
