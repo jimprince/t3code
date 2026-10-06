@@ -39,6 +39,7 @@ export const layer = Layer.effect(
               effect.request.type.startsWith("provider-turn.") ||
               effect.request.type === "provider-runtime.continue" ||
               effect.request.type === "provider-thread.rollback" ||
+              effect.request.type === "provider-thread.conversation-rewind" ||
               effect.request.type === "thread-title.generate" ||
               effect.request.type === "runtime-request.respond";
             return (
@@ -60,18 +61,16 @@ export const executorLayer = Layer.effect(
     const policy = yield* StartupResumePolicy;
     return EffectWorker.OrchestrationEffectExecutorV2.of({
       execute: (effect, options) =>
-        policy
-          .permits(effect)
-          .pipe(
-            Effect.flatMap((allowed) =>
-              allowed
-                ? executor.execute(effect, options)
-                : Effect.logInfo("sandbox.startup-effect-withheld", {
-                    effectId: effect.id,
-                    type: effect.request.type,
-                  }),
-            ),
+        policy.permits(effect).pipe(
+          Effect.flatMap((allowed) =>
+            allowed
+              ? executor.execute(effect, options)
+              : Effect.logInfo("sandbox.startup-effect-withheld", {
+                  effectId: effect.id,
+                  type: effect.request.type,
+                }),
           ),
+        ),
     });
   }),
 );
