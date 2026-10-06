@@ -53,6 +53,7 @@ import { useOrchestratorThreadShells } from "./useOrchestratorThreads";
 import { readOrchestratorLastVisit, recordOrchestratorVisit } from "./orchestratorVisit";
 import { ProjectAutomationsSlot } from "../projects/ProjectAutomationsSlot";
 import { ProjectIssuesBoard } from "./ProjectIssuesBoard";
+import { ProjectRequestsSection } from "./ProjectRequestsSection";
 import { projectReturnState } from "./projectNavigation";
 import { ProjectPullRequestLink } from "./ProjectPullRequestLink";
 
@@ -378,6 +379,8 @@ export function OrchestratorBoard({
                   </ul>
                 )}
               </BoardSection>
+
+              <ProjectRequestsSection summary={summary} />
 
               <BoardSection title="Working" count={summary.working.length}>
                 {summary.working.length === 0 ? (
