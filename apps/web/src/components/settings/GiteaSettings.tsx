@@ -5,6 +5,7 @@ import * as Schema from "effect/Schema";
 import { usePrimarySettings, useUpdatePrimarySettings } from "../../hooks/useSettings";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { Switch } from "../ui/switch";
 import { SettingsSection } from "./settingsLayout";
 
 const decodeGiteaInstance = Schema.decodeUnknownSync(GiteaInstanceConfig);
@@ -135,7 +136,7 @@ function GiteaInstanceForm({
 }
 
 export function GiteaSettingsSection() {
-  const { giteaInstances } = usePrimarySettings();
+  const { giteaInstances, requestLedgerEnabled } = usePrimarySettings();
   const update = useUpdatePrimarySettings();
   const [draft, setDraft] = useState<GiteaInstanceConfig | null>(null);
   return (
@@ -144,6 +145,20 @@ export function GiteaSettingsSection() {
         Configure this server’s Gitea hosts for branch pull-request badges. Tokens stay on the
         server.
       </p>
+      <label className="flex items-center justify-between gap-3 text-sm">
+        <span>
+          Track requests as issues
+          <span className="block text-xs text-muted-foreground">
+            Requests you type in a thread are filed as Gitea issues labeled ask in the project’s
+            repository and listed on its project page until you settle them.
+          </span>
+        </span>
+        <Switch
+          checked={requestLedgerEnabled}
+          aria-label="Track requests as issues"
+          onCheckedChange={(checked) => void update({ requestLedgerEnabled: checked })}
+        />
+      </label>
       {[...giteaInstances, ...(draft ? [draft] : [])].map((instance) => (
         <GiteaInstanceForm
           key={`${instance.id}:${instance.token}:${instance.webOrigin}:${instance.host}`}
