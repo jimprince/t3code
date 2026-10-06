@@ -2330,7 +2330,7 @@ export default function Sidebar() {
   const threads = useThreadShells();
 
   const attentionForest = useSupervisionForest();
-  const childInputAttention = useMemo(() => groupChildInputAttention(threads, attentionForest.parentByKey), [threads, attentionForest]);
+  const childInputAttention = useMemo(() => groupChildInputAttention([...attentionForest.byKey.values()], attentionForest.parentByKey), [threads, attentionForest]);
   const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
