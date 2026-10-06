@@ -1,3 +1,7 @@
+import {
+  applyCodexSkillExtraRoots,
+  resolveCodexSkillExtraRoots,
+} from "../../provider/CodexSkillExtraRoots.ts";
 import { toCodexNativeGoalSummary } from "../../provider/CodexNativeGoal.ts";
 import type { CodexNativeGoalSummary } from "@t3tools/contracts";
 import { withT3ThreadIdentityEnv } from "../../provider/t3ThreadIdentityEnv.ts";
@@ -1702,12 +1706,25 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                     }),
                 ),
               );
+        const effectiveSettings = resolvedRuntime?.config ?? adapterOptions.settings;
+        const skillExtraRoots = yield* resolveCodexSkillExtraRoots(
+          effectiveSettings.skillExtraRoots,
+        ).pipe(
+          Effect.mapError(
+            (cause) =>
+              new ProviderAdapter.ProviderAdapterOpenSessionError({
+                driver: CODEX_PROVIDER,
+                providerSessionId: input.providerSessionId,
+                cause,
+              }),
+          ),
+        );
         const client = yield* clientFactory.open({
           instanceId: adapterOptions.instanceId,
           threadId: input.threadId,
           providerSessionId: input.providerSessionId,
           runtimePolicy: input.runtimePolicy,
-          settings: resolvedRuntime?.config ?? adapterOptions.settings,
+          settings: effectiveSettings,
           environment: withT3ThreadIdentityEnv(
             resolvedRuntime?.environment ?? adapterOptions.environment,
             { threadId: input.threadId },
@@ -1787,6 +1804,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                 }),
               );
             yield* client.notify("initialized", undefined);
+            yield* applyCodexSkillExtraRoots(client, skillExtraRoots);
             yield* Ref.set(initialized, true);
           }),
         );
@@ -1892,7 +1910,6 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
         const goalStops = new Map<string, number>();
         const latestGoalTurnId = (providerTurnId: ProviderTurnId) =>
           goalRuns.get(providerTurnId)?.at(-1)?.providerTurnId ?? providerTurnId;
-
 
         const goalThreads = new Map<string, OrchestrationV2ProviderThread>();
         const goalRevisions = new Map<string, number>();
