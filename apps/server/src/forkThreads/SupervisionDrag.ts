@@ -11,7 +11,7 @@ export const makeSupervisionDrop = (
   management: Pick<ThreadManagement.ThreadManagementServiceShape, "getThreadShell" | "dispatch">,
 ) =>
   Effect.gen(function* () {
-    const nesting = yield* makeNestingService(sql, management.getThreadShell).pipe(Effect.orDie);
+    const nesting = yield* makeNestingService(sql, management.getThreadShell, management.dispatch).pipe(Effect.orDie);
     return {
       "fork.threads.supervision.drop": (input: SupervisionDrop) =>
         Effect.gen(function* () {
@@ -79,11 +79,6 @@ export const makeSupervisionDrop = (
                 orderKey: input.orderKey,
               });
           }
-          yield* management.dispatch({
-            type: "thread.metadata.update",
-            commandId: CommandId.make(`${input.commandId}:refresh`),
-            threadId: input.threadId,
-          });
         }).pipe(Effect.mapError((cause) => new SupervisionDropError({ message: String(cause) }))),
     };
   });

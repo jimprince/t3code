@@ -28,7 +28,7 @@ it.effect(
       yield* drop(input);
       yield* drop(input);
       expect((yield* listMetadata(sql)).find((t) => t.threadId === a)?.parentThreadId).toBe(b);
-      expect(commands.map((c) => c.commandId)).toEqual(["nest:refresh", "nest:refresh"]);
+      expect(commands.map((c) => c.commandId)).toEqual(["nest:parent:shell-refresh", "nest:parent:shell-refresh"]);
       const cycle = yield* Effect.result(
         drop({ commandId: CommandId.make("cycle"), threadId: b, parentThreadId: a }),
       );
@@ -42,10 +42,10 @@ it.effect(
       });
       expect((yield* listMetadata(sql)).find((t) => t.threadId === a)?.parentThreadId).toBeNull();
       expect(commands.slice(2).map((c) => c.type)).toEqual([
+        "thread.metadata.update",
         "thread.unsettle",
         "thread.unsnooze",
         "thread.unpin",
-        "thread.metadata.update",
       ]);
     }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
 );
