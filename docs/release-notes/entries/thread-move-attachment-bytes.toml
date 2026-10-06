@@ -1,0 +1,4 @@
+id = "thread-move-attachment-bytes"
+category = "fix"
+functionality = "thread moves"
+text = "Moving a thread between updated environments now carries its attached files and reports any historical files that are no longer available."
