@@ -105,14 +105,18 @@ describe("buildThreadActionMenuItems", () => {
     expect(allowed.every((item) => !item.disabled)).toBe(true);
   });
 
-  it("offers automatic order only in a supported orderable section", () => {
+  it("offers automatic order only for a manually ordered thread in a supported orderable section", () => {
+
     const supports = { ...baseState.supports, orderReset: true };
-    expect(ids({ ...baseState, supports })).toContain("order-reset");
-    expect(ids({ ...baseState, supports, isSettled: true })).not.toContain("order-reset");
-    expect(ids({ ...baseState, supports, isSettled: true, isPinned: true })).toContain(
-      "order-reset",
-    );
-    expect(ids(baseState)).not.toContain("order-reset");
+    const manual = { ...baseState, supports, orderIsManual: true };
+    expect(ids(manual)).toContain("order-reset");
+    expect(
+      buildThreadActionMenuItems(manual).find((item) => item.id === "order-reset")?.label,
+    ).toBe("Reset to automatic order");
+    expect(ids({ ...baseState, supports })).not.toContain("order-reset");
+    expect(ids({ ...manual, isSettled: true })).not.toContain("order-reset");
+    expect(ids({ ...manual, isSettled: true, isPinned: true })).toContain("order-reset");
+    expect(ids({ ...baseState, orderIsManual: true })).not.toContain("order-reset");
   });
   it("hides lifecycle items when the environment lacks the capabilities", () => {
     expect(
