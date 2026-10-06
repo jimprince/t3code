@@ -5,7 +5,7 @@ import { OrchestratorBoard } from "../components/orchestrators/OrchestratorBoard
 import { isProjectTab, type ProjectTab } from "../components/orchestrators/projectTabs.logic";
 
 export interface OrchestratorSearch {
-  /** The project page tab; absent means the tab this device last used for the project. */
+  /** The project layout tab id; absent means the tab this device last used for the project. */
   readonly tab?: ProjectTab;
 }
 
