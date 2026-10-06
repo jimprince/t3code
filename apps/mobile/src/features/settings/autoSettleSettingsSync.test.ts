@@ -34,6 +34,8 @@ describe("auto-settle settings sync", () => {
 
     expect(plan.mismatches).toEqual([]);
     expect(plan.patch).toEqual({
+      subthreadSettleOnComplete: true,
+      settledSubthreadArchiveAfterDays: 7,
       sidebarAutoSettleAfterDays: 7,
       sidebarAutoSettleOnMerge: true,
     });
