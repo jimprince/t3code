@@ -18,7 +18,10 @@ import * as SqlClient from "effect/sql/SqlClient";
 import { listMetadata } from "../forkThreads/MetadataStore.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
-import { findRootThreadId } from "../projectIssues/projectIssues.logic.ts";
+import {
+  findProjectRootThreadId,
+  resolveProjectTracker,
+} from "../projectIssues/projectIssues.logic.ts";
 import { legacyWidgetOrder, widgetOrderOps } from "@t3tools/contracts";
 import type * as ProjectLayoutService from "../projectLayout/ProjectLayoutService.ts";
 import { normalizeWidgets, resolveTrackerSetting } from "./projectDashboard.logic.ts";
@@ -50,21 +53,27 @@ export const make = (
         const parents = new Map(
           (yield* listMetadata(sql).pipe(
             Effect.mapError(() => fail("Could not read thread parents.")),
-          )).map((row) => [row.threadId, row.parentThreadId]),
+          )).map((row) => [row.threadId, row]),
         );
         const threads = [...snapshot.threads, ...snapshot.archivedThreads].map((thread) => ({
           ...thread,
-          parentThreadId: parents.get(thread.id) ?? null,
+          parentThreadId: parents.get(thread.id)?.parentThreadId ?? null,
+          subproject: parents.get(thread.id)?.subproject ?? "auto",
         }));
-        const rootThreadId = findRootThreadId(threads, threadId);
+        const rootThreadId = findProjectRootThreadId(threads, threadId);
         const root = threads.find((thread) => thread.id === rootThreadId);
         if (!root) return yield* fail(`Thread '${threadId}' was not found.`);
-        return { rootThreadId: root.id, rootProjectId: root.projectId };
+        return {
+          rootThreadId: root.id,
+          rootProjectId: root.projectId,
+          trackerKey: root.parentThreadId ? root.id : root.projectId,
+          threads,
+        };
       });
 
     const get = (input: ProjectDashboardGetInput) =>
       Effect.gen(function* () {
-        const { rootThreadId, rootProjectId } = yield* resolveRoot(input.threadId);
+        const { rootThreadId, rootProjectId, threads } = yield* resolveRoot(input.threadId);
         const file = yield* store.read;
         const layout = yield* layouts
           .get(rootThreadId)
@@ -76,7 +85,7 @@ export const make = (
             layout.revision > 0
               ? legacyWidgetOrder(layout.tabs)
               : (file.dashboards[rootThreadId]?.widgets ?? null),
-          tracker: file.trackers[rootProjectId] ?? null,
+          tracker: resolveProjectTracker(file.trackers, threads, rootThreadId),
           health: Option.getOrNull(decodeHealth(file.health[rootThreadId])),
         } satisfies ProjectDashboard;
       });
@@ -105,7 +114,7 @@ export const make = (
 
     const setTracker = (input: ProjectDashboardSetTrackerInput) =>
       Effect.gen(function* () {
-        const { rootProjectId } = yield* resolveRoot(input.threadId);
+        const { trackerKey } = yield* resolveRoot(input.threadId);
         if (input.tracker !== null) {
           const config = yield* settings.getSettings.pipe(
             Effect.mapError(() => fail("Could not read configured Gitea connections.")),
@@ -119,8 +128,8 @@ export const make = (
         yield* store
           .modify((file) => {
             const trackers = { ...file.trackers };
-            if (input.tracker === null) delete trackers[rootProjectId];
-            else trackers[rootProjectId] = input.tracker.trim();
+            if (input.tracker === null) delete trackers[trackerKey];
+            else trackers[trackerKey] = input.tracker.trim();
             return { ...file, trackers };
           })
           .pipe(Effect.mapError(() => fail("Could not save the tracker repository.")));
