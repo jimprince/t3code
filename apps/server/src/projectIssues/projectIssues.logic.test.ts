@@ -9,6 +9,7 @@ import {
   formatRequestMarker,
   giteaRepositoryForIdentity,
   isPartOf,
+  parseBlockedBy,
   parseRequestMarker,
   workspaceRepositoryName,
 } from "./projectIssues.logic.ts";
@@ -136,5 +137,18 @@ describe("repository resolution", () => {
     expect(workspaceRepositoryName("/Users/brad/Programming/t3code-fork/")).toBe("t3code-fork");
     expect(workspaceRepositoryName("C:\\work\\PrintCell")).toBe("printcell");
     expect(workspaceRepositoryName("/")).toBeNull();
+  });
+});
+
+describe("parseBlockedBy", () => {
+  it("reads every same-repository reference after 'Blocked by'", () => {
+    expect(parseBlockedBy("Blocked by #12, #14 and #12.\nSee #99.")).toEqual([12, 14]);
+    expect(parseBlockedBy("blocked by: the auth work (#7)")).toEqual([7]);
+  });
+
+  it("ignores cross-repository references and text without the phrase", () => {
+    expect(parseBlockedBy("Blocked by brad/other#5")).toEqual([]);
+    expect(parseBlockedBy("Follows #3")).toEqual([]);
+    expect(parseBlockedBy(null)).toEqual([]);
   });
 });
