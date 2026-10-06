@@ -1,4 +1,14 @@
+import {
+  supervision as forkSupervision,
+  useSupervisionReadyHosts,
+} from "../../state/forkSupervision";
 import { useSupervisionStatus } from "./useSupervisionStatus";
+import {
+  newForkCommandId,
+  resetForkThreadOrder,
+  useForkOrderResetSupported,
+} from "./fork/orderReset";
+import { useAtomCommand } from "../../state/use-atom-command";
 import type { ThreadRowProviderInstance } from "./thread-provider-instance";
 import {
   THREAD_LIST_V2_MONO_FONT as MONO_FONT,
@@ -584,6 +594,9 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   readonly searchQuery?: string;
   readonly simultaneousSwipeGesture?: ComponentProps<typeof ThreadSwipeable>["simultaneousWith"];
 }) {
+  const resetOrder = useAtomCommand(resetForkThreadOrder);
+  const orderResetSupported = useForkOrderResetSupported(props.thread.environmentId);
+  const orderMetadataReady = useSupervisionReadyHosts().has(props.thread.environmentId);
   const { width: windowWidth } = useWindowDimensions();
   const {
     thread,
@@ -678,8 +691,14 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     (enabled: boolean) => onSetThreadAutoSettle(thread, enabled),
     [onSetThreadAutoSettle, thread],
   );
-  const handleMoveUp = useCallback(() => onMoveThread?.(thread, "up"), [onMoveThread, thread]);
-  const handleMoveDown = useCallback(() => onMoveThread?.(thread, "down"), [onMoveThread, thread]);
+  const handleMoveUp = useCallback(() => {
+    if (appAtomRegistry.get(forkSupervision.readyHosts).has(thread.environmentId))
+      return onMoveThread?.(thread, "up");
+  }, [onMoveThread, thread]);
+  const handleMoveDown = useCallback(() => {
+    if (appAtomRegistry.get(forkSupervision.readyHosts).has(thread.environmentId))
+      return onMoveThread?.(thread, "down");
+  }, [onMoveThread, thread]);
   const handleArchive = useCallback(() => onArchiveThread(thread), [onArchiveThread, thread]);
 
   // Swipe: the v2 primary action is the lifecycle transition. Un-settling a
@@ -725,17 +744,26 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       ...(props.reorderSupported === true
         ? [
             { id: "arrange", title: "Arrange threads…", image: "line.3.horizontal" },
+            ...(orderResetSupported && (thread.pinnedAt != null || thread.settledOverride !== "settled")
+              ? [
+                  {
+                    id: "order-reset",
+                    title: "Return to automatic order",
+                    image: "arrow.uturn.backward",
+                  },
+                ]
+              : []),
             {
               id: "move-up",
               title: "Move up",
               image: "arrow.up",
-              attributes: { disabled: props.canMoveUp !== true },
+              attributes: { disabled: !orderMetadataReady || props.canMoveUp !== true },
             } satisfies MenuAction,
             {
               id: "move-down",
               title: "Move down",
               image: "arrow.down",
-              attributes: { disabled: props.canMoveDown !== true },
+              attributes: { disabled: !orderMetadataReady || props.canMoveDown !== true },
             } satisfies MenuAction,
           ]
         : []),
@@ -748,11 +776,14 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         : []),
     ],
     [
+      orderResetSupported,
+      orderMetadataReady,
       props.canMoveDown,
       props.canMoveUp,
       props.reorderSupported,
       props.pinningSupported,
       thread.pinnedAt,
+      thread.settledOverride,
       variant,
     ],
   );
@@ -862,6 +893,14 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       if (nativeEvent.event === "auto-settle:enabled") handleSetAutoSettle(true);
       if (nativeEvent.event === "auto-settle:disabled") handleSetAutoSettle(false);
       if (nativeEvent.event === "arrange") appAtomRegistry.set(threadArrangementOpenAtom, true);
+      if (
+        nativeEvent.event === "order-reset" &&
+        appAtomRegistry.get(forkSupervision.readyHosts).has(thread.environmentId)
+      )
+        void resetOrder({
+          environmentId: thread.environmentId,
+          input: { threadId: thread.id, commandId: newForkCommandId() },
+        });
       if (nativeEvent.event === "move-up") handleMoveUp();
       if (nativeEvent.event === "move-down") handleMoveDown();
       if (nativeEvent.event === "archive") handleArchive();
@@ -888,6 +927,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     },
     [
       onNewThreadOnBranch,
+      resetOrder,
       thread,
       handleArchive,
       handleDelete,
@@ -1038,6 +1078,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             {supervision.count > 0 ? ` · ${supervision.count} workers` : ""}
           </Text>
         )}
+
       </View>
       <Text
         className={cn(
