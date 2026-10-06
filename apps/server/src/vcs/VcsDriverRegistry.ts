@@ -17,7 +17,8 @@ const DETECTION_CACHE_CAPACITY = 2_048;
 // Status polls detect every open cwd each tick, and detection costs three git
 // processes. `detect` re-checks each hit against the disk, so this TTL only
 // bounds rare changes those stats cannot see.
-const DETECTION_CACHE_TTL = Duration.minutes(5);
+// Finished turns detect the same checkout from several independent workers.
+const DETECTION_CACHE_TTL = Duration.seconds(30);
 
 export interface VcsDriverResolveInput {
   readonly cwd: string;

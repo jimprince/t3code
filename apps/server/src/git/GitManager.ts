@@ -5,6 +5,7 @@ import {
 } from "@t3tools/shared/sourceControl";
 import * as Arr from "effect/Array";
 import * as Cache from "effect/Cache";
+import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as ByteSize from "effect/ByteSize";
@@ -2293,7 +2294,7 @@ export const make = Effect.gen(function* () {
     });
     return mergeGitStatusParts(local, remote);
   });
-  const branchPullRequest: GitManager["Service"]["branchPullRequest"] = Effect.fn(
+  const lookupBranchPullRequest: GitManager["Service"]["branchPullRequest"] = Effect.fn(
     "branchPullRequest",
   )(function* ({ cwd, branch }, options) {
     const cacheCwd = yield* normalizeStatusCacheKey(cwd);
@@ -2447,6 +2448,30 @@ export const make = Effect.gen(function* () {
       repositoryKey: pullRequestRepositoryKey(latest.url),
     };
   });
+  // A branch lookup that fails before reaching the PR cache (a worktree whose branch git cannot
+  // read, an unverifiable remote) fails the same way on every background sweep. Replay the
+  // failure under the PR cache's backoff instead of re-running its git commands each time.
+  const failedBranchLookups = new Map<
+    string,
+    { readonly until: number; readonly streak: number; readonly error: GitManagerServiceError }
+  >();
+  const branchPullRequest: GitManager["Service"]["branchPullRequest"] = (input, options) =>
+    Effect.gen(function* () {
+      const key = `${input.cwd}\u0000${input.branch}`;
+      const nowMs = yield* Clock.currentTimeMillis;
+      const failed = failedBranchLookups.get(key);
+      if (failed !== undefined && nowMs < failed.until) return yield* failed.error;
+      return yield* lookupBranchPullRequest(input, options).pipe(
+        Effect.tap(() => Effect.sync(() => failedBranchLookups.delete(key))),
+        Effect.tapError((error) =>
+          Effect.sync(() => {
+            const streak = (failed?.streak ?? 0) + 1;
+            const ttl = Duration.toMillis(prLookupFailureTtl(streak));
+            failedBranchLookups.set(key, { until: nowMs + ttl, streak, error });
+          }),
+        ),
+      );
+    });
   const invalidateLocalStatus: GitManager["Service"]["invalidateLocalStatus"] = Effect.fn(
     "invalidateLocalStatus",
   )(function* (cwd) {
