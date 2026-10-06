@@ -22,8 +22,8 @@ describe("roadmap columns", () => {
     const roadmap = {
       tracker,
       versions: [
-        { id: 3, title: "fork.25", dueOn: null, openIssues: 1 },
-        { id: 5, title: "fork.26", dueOn: null, openIssues: 0 },
+        { id: 3, title: "fork.25", dueOn: null, openIssues: 1, closedIssues: 4 },
+        { id: 5, title: "fork.26", dueOn: null, openIssues: 0, closedIssues: 0 },
       ],
       items: [item(1, null), item(2, 3), item(4, null, true), item(6, 5)],
     };
