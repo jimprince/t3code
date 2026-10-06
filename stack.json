@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "081bd13c0c4762ced99c3713efe4d37c28268ae3",
-  "head": "5be0288927058621d34b0f46839d7e1a53ebbcda",
+  "prev": "33916c533fb5428fdd89cfcbfd7176974879a4d7",
+  "head": "d0f7e3a2c9d749e9877aa0d5da012d1cbd59a3e1",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -95,10 +95,10 @@
     "fork-project-workstreams",
     "fork-item-types",
     "fork-board-declutter",
-    "fork-dev-vm-heavy-check-gate"
+    "fork-dev-vm-heavy-check-gate",
+    "fork-textgen-own-scope"
   ],
   "unapplied": [
-    "fork-textgen-own-scope",
     "fork-project-skew-gate",
     "fork-queue-idle-dispatch",
     "fork-canvas-resize",
@@ -372,7 +372,7 @@
       "oid": "2bfb62f04abfd37e3d5841b3c4e05a144b47ebe8"
     },
     "fork-textgen-own-scope": {
-      "oid": "c2dffe7219be31e00acd00e0be47843bd3a42681"
+      "oid": "d0f7e3a2c9d749e9877aa0d5da012d1cbd59a3e1"
     },
     "fork-textgen-tempfile-cause": {
       "oid": "cce6cbe77ec19bfb622fc84934ca128f2c4e6afb"
