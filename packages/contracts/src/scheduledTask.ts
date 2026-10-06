@@ -157,7 +157,13 @@ export const ScheduledTaskUpsertSchedule = Schema.Union([
 });
 export type ScheduledTaskUpsertSchedule = typeof ScheduledTaskUpsertSchedule.Type;
 
-export const ScheduledTaskRunStatus = Schema.Literals(["never", "running", "succeeded", "failed"]);
+export const ScheduledTaskRunStatus = Schema.Literals([
+  "never",
+  "running",
+  "succeeded",
+  "failed",
+  "skipped",
+]);
 export type ScheduledTaskRunStatus = typeof ScheduledTaskRunStatus.Type;
 
 /** Where a webhook task receives requests. Present only on webhook tasks. */
