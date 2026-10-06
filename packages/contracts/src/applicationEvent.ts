@@ -1,3 +1,4 @@
+import { ProjectAutomation } from "./projectAutomations.ts";
 import { PermanentAgent } from "./namedAgents.ts";
 import * as Schema from "effect/Schema";
 
@@ -61,6 +62,7 @@ export const ApplicationProjectCreatedPayload = Schema.Struct({
 export type ApplicationProjectCreatedPayload = typeof ApplicationProjectCreatedPayload.Type;
 
 export const ApplicationProjectMetaUpdatedPayload = Schema.Struct({
+  automations: Schema.optional(Schema.Array(ProjectAutomation)),
   permanentAgent: Schema.optional(Schema.NullOr(PermanentAgent)),
   projectId: ProjectId,
   title: Schema.optional(TrimmedNonEmptyString),
