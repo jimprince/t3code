@@ -2335,7 +2335,7 @@ export default function Sidebar() {
 
   const attentionForest = useSupervisionForest();
   const childInputAttention = useMemo(
-    () => groupChildInputAttention(threads, attentionForest.parentByKey),
+    () => groupChildInputAttention([...attentionForest.byKey.values()], attentionForest.parentByKey),
     [threads, attentionForest],
   );
   const router = useRouter();

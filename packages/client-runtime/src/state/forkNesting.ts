@@ -78,6 +78,7 @@ export const supervisionSoundEligible = <K>(parents: ReadonlyMap<K, K | null>, i
 
 export interface ScopedSupervisionThread extends SupervisionThread {
   readonly environmentId: string;
+  readonly forkMetadataAvailable?: boolean;
 }
 export interface ScopedSupervisionMetadata extends ForkThreadMetadata {
   readonly environmentId: string;
@@ -90,7 +91,7 @@ export function connectedSupervisionParents(
   metadata: readonly ScopedSupervisionMetadata[],
 ) {
   const visible = new Set(
-    threads.filter((t) => t.archivedAt === null).map((t) => supervisionKey(t.environmentId, t.id)),
+    threads.filter((t) => t.archivedAt === null && t.forkMetadataAvailable !== false).map((t) => supervisionKey(t.environmentId, t.id)),
   );
   const raw = new Map(
     metadata.map((row) => [

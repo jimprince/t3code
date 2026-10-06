@@ -82,3 +82,22 @@ describe("organizational child-input attention", () => {
     expect(group([waiting("a"), thread("b")], [link("a", "b"), link("b", "a")]).size).toBe(0);
   });
 });
+
+it("cuts unavailable cached hosts while reachable grandchildren still target their nearest root", () => {
+  const parent = { ...thread("parent", "offline"), forkMetadataAvailable: false };
+  const child = { ...thread("child", "online"), forkMetadataAvailable: true };
+  const grandchild = { ...waiting("grandchild", "online"), forkMetadataAvailable: true };
+  const unavailableInput = { ...waiting("input", "offline"), forkMetadataAvailable: false };
+  const threads = [parent, child, grandchild, unavailableInput];
+  const metadata = [
+    { ...link("child", null, "online"), remoteParent: { environmentId: "offline", threadId: parent.id } },
+    link("grandchild", "child", "online"),
+    { ...link("input", null, "offline"), remoteParent: { environmentId: "online", threadId: child.id } },
+  ];
+  const parents = connectedSupervisionParents(threads, metadata);
+  expect(parents.get("online:child")).toBeNull();
+  expect(parents.get("online:grandchild")).toBe("online:child");
+  expect([...groupSupervisionChildInputAttention(threads, parents)]).toEqual([["online:child", [grandchild]]]);
+  const staleParents = new Map([["online:child", "offline:parent"], ["online:grandchild", "online:child"], ["offline:input", "online:child"]]);
+  expect([...groupSupervisionChildInputAttention(threads, staleParents)]).toEqual([["online:child", [grandchild]]]);
+});
