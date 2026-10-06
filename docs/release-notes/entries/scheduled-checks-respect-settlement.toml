@@ -1,0 +1,4 @@
+id = "scheduled-checks-respect-settlement"
+category = "fix"
+functionality = "thread lifecycle"
+text = "Scheduled checks skip settled threads with a visible status, Run now reopens a settled thread, and follow-up messages preserve an explicit choice to keep a thread active."
