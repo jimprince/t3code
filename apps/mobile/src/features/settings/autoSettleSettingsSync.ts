@@ -2,7 +2,10 @@ import type { EnvironmentId, ProjectId, ServerSettings } from "@t3tools/contract
 
 export type AutoSettleSettings = Pick<
   ServerSettings,
-  "sidebarAutoSettleAfterDays" | "sidebarAutoSettleOnMerge"
+  | "sidebarAutoSettleAfterDays"
+  | "sidebarAutoSettleOnMerge"
+  | "subthreadSettleOnComplete"
+  | "settledSubthreadArchiveAfterDays"
 >;
 
 interface AutoSettleSyncTarget {
@@ -22,6 +25,8 @@ export function planAutoSettleSettingsSync(
   targets: readonly AutoSettleSyncTarget[],
 ) {
   const patch: AutoSettleSettings = {
+    subthreadSettleOnComplete: reference.settings.subthreadSettleOnComplete,
+    settledSubthreadArchiveAfterDays: reference.settings.settledSubthreadArchiveAfterDays,
     sidebarAutoSettleAfterDays: reference.settings.sidebarAutoSettleAfterDays,
     sidebarAutoSettleOnMerge: reference.settings.sidebarAutoSettleOnMerge,
   };
@@ -30,7 +35,10 @@ export function planAutoSettleSettingsSync(
       (target.environmentId !== reference.environmentId ||
         target.projectId !== reference.projectId) &&
       target.settings !== null &&
-      (target.settings.sidebarAutoSettleAfterDays !== patch.sidebarAutoSettleAfterDays ||
+      (target.settings.subthreadSettleOnComplete !== patch.subthreadSettleOnComplete ||
+        target.settings.settledSubthreadArchiveAfterDays !==
+          patch.settledSubthreadArchiveAfterDays ||
+        target.settings.sidebarAutoSettleAfterDays !== patch.sidebarAutoSettleAfterDays ||
         target.settings.sidebarAutoSettleOnMerge !== patch.sidebarAutoSettleOnMerge),
   );
   return { patch, mismatches };
