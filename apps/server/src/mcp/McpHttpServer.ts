@@ -1,3 +1,5 @@
+import { DecisionsToolkitHandlersLive } from "./toolkits/decisions/handlers.ts";
+import { DecisionsToolkit } from "./toolkits/decisions/tools.ts";
 import { ThreadIssuesToolkitHandlersLive } from "./toolkits/issues/handlers.ts";
 import { ThreadIssuesToolkit } from "./toolkits/issues/tools.ts";
 import { WorkerIdentityToolkit, WorkerIdentityHandlersLive } from "./WorkerIdentityToolkit.ts";
@@ -843,6 +845,8 @@ export const layerAttachmentToolkit = toolkitRegistration(
   AttachmentHandlers.layer,
 );
 
+const layerDecisionsToolkit = toolkitRegistration(DecisionsToolkit, DecisionsToolkitHandlersLive);
+
 export const layerPullRequestsToolkit = toolkitRegistration(
   PullRequestsToolkit,
   PullRequestsHandlers.layer,
@@ -887,6 +891,7 @@ export const layer = Layer.mergeAll(
   layerWorktreeToolkitRegistration,
   layerPullRequestsToolkit,
   layerThreadIssuesToolkit,
+  layerDecisionsToolkit,
   layerProjectLayoutToolkit,
   layerDeviceToolkit,
   layerHtmlToolkit,
