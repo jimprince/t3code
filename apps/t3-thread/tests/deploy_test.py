@@ -66,6 +66,106 @@ class DeployTest(unittest.TestCase):
     def events(self):
         return (self.root / "events").read_text() if (self.root / "events").exists() else ""
 
+    def commit_source_fixture(self, *paths):
+        subprocess.run(["git", "-C", self.repo, "add", "--", *paths], check=True)
+        subprocess.run(["git", "-C", self.repo, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "source fixture"], check=True)
+        return subprocess.check_output(["git", "-C", self.repo, "rev-parse", "HEAD"], text=True).strip()
+
+    def assert_nonmutating_new_ref_dry_run(self, requested):
+        target = self.snap / requested[:8]
+        self.assertFalse(target.exists())
+        before = sorted(p.name for p in self.snap.iterdir())
+        result = self.deploy("--dry-run", "--retain-snapshots", "--ref", requested)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("bun install --frozen-lockfile", result.stdout, "dry-run must use requested-ref manager, not HEAD or worktree")
+        self.assertNotIn("pnpm install --frozen-lockfile", result.stdout)
+        self.assertIn("would verify:", result.stdout)
+        self.assertIn("would restart and verify:", result.stdout)
+        self.assertEqual(sorted(p.name for p in self.snap.iterdir()), before)
+        self.assertFalse(target.exists(), "dry-run created a destination directory")
+        self.assertEqual(os.readlink(self.snap / "current"), "old")
+        self.assertEqual((self.snap / "old/keep").read_text(), "old runtime")
+        self.assertNotIn("build", self.events())
+        self.assertNotIn("restart", self.events())
+
+    def test_dry_run_new_snapshot_reads_exact_requested_ref(self):
+        package = self.repo / "package.json"
+        package.write_text('{"packageManager":"bun@1.3.0"}')
+        requested = self.commit_source_fixture("package.json")
+        package.write_text('{"packageManager":"pnpm@11.10.0"}')
+        self.commit_source_fixture("package.json")
+        self.assert_nonmutating_new_ref_dry_run(requested)
+
+    def test_dry_run_lockfile_fallback_reads_exact_requested_ref(self):
+        (self.repo / "package.json").write_text("{}")
+        (self.repo / "bun.lock").write_text("fixture lock")
+        requested = self.commit_source_fixture("package.json", "bun.lock")
+        (self.repo / "bun.lock").unlink()
+        (self.repo / "pnpm-lock.yaml").write_text("fixture lock")
+        self.commit_source_fixture("bun.lock", "pnpm-lock.yaml")
+        self.assert_nonmutating_new_ref_dry_run(requested)
+
+    def test_ordinary_install_uses_checked_out_requested_ref(self):
+        (self.repo / "apps/t3-thread").mkdir(parents=True)
+        (self.repo / "apps/t3-thread/package.json").write_text("{}")
+        (self.repo / "package.json").write_text('{"packageManager":"bun@1.3.0"}')
+        requested = self.commit_source_fixture("package.json", "apps/t3-thread/package.json")
+        (self.repo / "package.json").write_text('{"packageManager":"pnpm@11.10.0"}')
+        self.commit_source_fixture("package.json")
+        self.stub("bun", 'echo install-bun >> "$TEST_LOG"')
+        self.stub("pnpm", 'echo install-pnpm >> "$TEST_LOG"; exit 99')
+        self.env["TEST_LOADED"] = "not-found"
+        result = self.deploy("--retain-snapshots", "--ref", requested)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("install-bun", self.events())
+        self.assertNotIn("install-pnpm", self.events())
+        self.assertEqual(os.readlink(self.snap / "current"), requested[:8])
+        self.assertEqual((self.snap / requested[:8] / "package.json").read_text(), '{"packageManager":"bun@1.3.0"}')
+        self.assertEqual((self.snap / "old/keep").read_text(), "old runtime")
+
+    def prepare_failing_new_snapshot(self):
+        self.stop_watcher()
+        shutil.rmtree(self.snap / self.sha)
+        # The real clone succeeds, then the helper rejects the missing workspace.
+        # That production ERR-trap path normally removes the partial snapshot.
+
+    def test_retain_snapshots_promotes_and_restarts_without_pruning(self):
+        result = self.deploy("--retain-snapshots")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(os.readlink(self.snap / "current"), self.sha)
+        self.assertTrue((self.snap / "old/keep").is_file(), "successful retained deployment deleted its predecessor")
+        self.assertEqual((self.snap / "old/keep").read_text(), "old runtime")
+        self.assertTrue((self.snap / self.sha / "apps/t3-thread").is_dir())
+        self.assertIn("--user restart t3-thread-watcher.service", self.events())
+
+    def test_retain_snapshots_preserves_partial_and_current_on_workspace_failure(self):
+        self.prepare_failing_new_snapshot()
+        result = self.deploy("--retain-snapshots")
+        self.assertNotEqual(result.returncode, 0, "missing workspace must stop deployment")
+        self.assertTrue((self.snap / self.sha / "fixture").is_file(), "failed new snapshot was deleted despite retention")
+        self.assertEqual(os.readlink(self.snap / "current"), "old")
+        self.assertEqual((self.snap / "old/keep").read_text(), "old runtime")
+        self.assertIn("has no apps/t3-thread workspace", result.stderr)
+        self.assertNotIn("restart", self.events())
+
+    def test_default_workspace_failure_removes_partial_and_keeps_current(self):
+        self.prepare_failing_new_snapshot()
+        result = self.deploy()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.snap / self.sha).exists(), "default failed-snapshot cleanup changed")
+        self.assertEqual(os.readlink(self.snap / "current"), "old")
+        self.assertEqual((self.snap / "old/keep").read_text(), "old runtime")
+        self.assertIn("has no apps/t3-thread workspace", result.stderr)
+        self.assertNotIn("restart", self.events())
+
+    def test_retain_snapshots_prune_only_preserves_all_snapshots(self):
+        result = self.deploy("--retain-snapshots", "--prune-only")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(os.readlink(self.snap / "current"), "old")
+        self.assertEqual((self.snap / "old/keep").read_text(), "old runtime")
+        self.assertTrue((self.snap / self.sha / "apps/t3-thread").is_dir())
+        self.assertEqual(self.events(), "")
+
     def test_restart_after_promotion_before_prune(self):
         result = self.deploy()
         self.assertEqual(result.returncode, 0, result.stderr)

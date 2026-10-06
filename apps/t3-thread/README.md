@@ -306,6 +306,18 @@ before changing `current`; the wrapper still accepts `T3_THREAD_REPO` and
 `T3_THREAD_NODE_BIN`. Updating the wrapper alone leaves old snapshots without a
 stamp unable to run until they are explicitly built or redeployed.
 
+Use `t3-thread-deploy --retain-snapshots --from <checkout> --ref <reviewed-ref>`
+when runtime directories must be preserved. Preview with `--dry-run`; dependency
+commands come from the requested Git ref even before its snapshot exists.
+It still builds, verifies, promotes
+and restarts the managed watcher, but skips pruning (including `--prune-only`)
+and retains a newly created snapshot if preparation fails. Inspect and repair
+an incomplete snapshot before retrying: a retained directory is not proof of a
+working build. Without the option, existing pruning and cleanup behavior applies.
+Keep exact unit, wrapper and `current` receipts for rollback; retained snapshots
+stay at their original paths, so no full runtime backup is required. Never remove
+one without explicit authorization.
+
 When a Linux user `t3-thread-watcher.service` is loaded, deployment restarts it
 through the user bus after promoting the verified snapshot and before pruning.
 It then checks the service PID against the boot/start lease and promoted runtime
