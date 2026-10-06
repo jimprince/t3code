@@ -93,6 +93,21 @@ export function parseRequestMarker(
   }
 }
 
+/**
+ * Same-repository issue numbers a text says it is blocked by ("Blocked by #12,
+ * #14"). Cross-repository references (owner/repo#12) are not followed.
+ */
+export function parseBlockedBy(text: string | null | undefined): number[] {
+  const numbers = new Set<number>();
+  for (const match of (text ?? "").matchAll(/\bblocked by\b:?([^\n.]*)/gi)) {
+    for (const ref of match[1]!.matchAll(/(?<![\w/])#(\d+)/g)) {
+      const number = Number(ref[1]);
+      if (Number.isSafeInteger(number) && number > 0) numbers.add(number);
+    }
+  }
+  return [...numbers];
+}
+
 interface TreeThread {
   readonly id: ThreadId;
   readonly parentThreadId?: ThreadId | null | undefined;
