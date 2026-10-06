@@ -426,6 +426,10 @@
     "./backgroundTurns": {
       "types": "./src/backgroundTurns.ts",
       "default": "./src/backgroundTurns.ts"
+    },
+    "./state/fork-thread-ordering": {
+      "types": "./src/state/forkThreadOrdering.ts",
+      "default": "./src/state/forkThreadOrdering.ts"
     }
   },
   "scripts": {
