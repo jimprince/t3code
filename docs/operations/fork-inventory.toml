@@ -1515,3 +1515,19 @@ id = "v2-port-2689-m2"
 date = "2026-10-05"
 decided = "reconcile-smaller"
 rationale = "Port supervision UI to V2 shells behind fork-owned components; preserve native lineage and run state."
+
+[[patch]]
+name = "fork-sidebar-nested-tidiness"
+subject = "feat(sidebar): fold quiet nested threads"
+class = "product"
+purpose = "Keep expanded orchestrators scannable by folding quiet children, grouping untouched creation bursts, and labeling only cross-project children."
+retire_when = "Upstream offers equivalent nested-thread folding and burst grouping without repeating project headers."
+depends_on = ["fork-sidebar-agent-visibility"]
+roles = []
+note = "Pinned, active, input-blocked, currently viewed, and ancestor-of-active rows remain individually visible. Other quiet siblings fold into one reversible done row, except untouched siblings created within the same two-minute window, which form their own reversible burst row. Grouping is derived from shell timestamps and status only, so activity immediately removes a child. Nested rows suppress repeated project headers and show a compact badge only when their direct parent belongs to another project."
+
+[[patch.decision]]
+id = "v2-port-2689-m2"
+date = "2026-10-05"
+decided = "keep-on-top"
+rationale = "Port supervision UI to V2 shells behind fork-owned components; preserve native lineage and run state."
