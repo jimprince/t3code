@@ -931,6 +931,22 @@ describe("resolveSidebarThreadStatus", () => {
     ).toBe("ready");
   });
 
+  it("lets a failed or usage-limited run show through an active goal", () => {
+    const goal = { ...idle, codexNativeGoal: { objective: "Ship it", status: "active" as const } };
+    expect(
+      resolveSidebarThreadStatus({
+        ...goal,
+        runtime: { ...runtime, status: "failed", lastErrorClass: "provider_error" },
+      }),
+    ).toBe("failed");
+    expect(
+      resolveSidebarThreadStatus({
+        ...goal,
+        runtime: { ...runtime, status: "failed", lastErrorClass: "usage_limit" },
+      }),
+    ).toBe("limited");
+  });
+
   it("reports working for running and starting runtimes", () => {
     expect(resolveSidebarThreadStatus({ ...idle, runtime })).toBe("working");
     expect(

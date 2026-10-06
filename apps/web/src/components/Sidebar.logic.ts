@@ -981,18 +981,19 @@ export function resolveSidebarThreadStatus(thread: SidebarThreadStatusInput): Si
   if (thread.hasPendingUserInput) {
     return "input";
   }
-  if (thread.codexNativeGoal?.status === "active") return "working";
   if (
     thread.runtime !== null &&
     ["preparing", "queued", "starting", "running", "waiting"].includes(thread.runtime.status)
   ) {
     return "working";
   }
-  if (thread.runtime?.status === "idle") {
-    return "waiting";
-  }
   if (thread.runtime?.status === "failed") {
     return thread.runtime.lastErrorClass === "usage_limit" ? "limited" : "failed";
+  }
+  // After failure: a goal that is still marked active must not hide a failed or limited run.
+  if (thread.codexNativeGoal?.status === "active") return "working";
+  if (thread.runtime?.status === "idle") {
+    return "waiting";
   }
   return "ready";
 }
