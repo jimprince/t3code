@@ -7,12 +7,14 @@ import { EnvironmentAuthorizationError } from "./auth.ts";
 export const ForkThreadMetadata = Schema.Struct({
   threadId: ThreadId,
   parentThreadId: Schema.NullOr(ThreadId),
+  scope: Schema.optionalKey(Schema.NullOr(Schema.String)),
 });
 export type ForkThreadMetadata = typeof ForkThreadMetadata.Type;
 export const ForkThreadMetadataUpdate = Schema.Struct({
   commandId: CommandId,
   threadId: ThreadId,
   parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  scope: Schema.optional(Schema.NullOr(Schema.String)),
 });
 export type ForkThreadMetadataUpdate = typeof ForkThreadMetadataUpdate.Type;
 export class ForkThreadMetadataError extends Schema.TaggedError<ForkThreadMetadataError>()(
