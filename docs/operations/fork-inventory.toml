@@ -1484,3 +1484,25 @@ note = "V2 launch opts out of generated titles for explicit creation; native thr
 id = "v2-port-2689-m2"
 decision = "reconcile-smaller"
 note = "V2 supervision metadata is separate from native execution lineage; retained behavior and import coverage are recorded in the nesting lane report."
+
+[[patch]]
+name = "fork-subthread-lifecycle"
+subject = "feat(threads): settle completed workers and archive settled subthreads"
+class = "product"
+purpose = "Settle agent-created workers at completed turn boundaries and archive eligible settled subthreads after a configurable recovery period."
+retire_when = "Upstream supplies per-worker completion settlement and guarded deadline-based subthread archiving across server, settings, and operator CLI."
+depends_on = ["fork-nested-threads", "fork-worker-operations"]
+roles = []
+note = "Completion settlement reuses thread.auto-settle, ThreadSettlementPolicy, and autoSettleDisabledAt; the opt-out always wins. UI top-level threads default off, nested threads inherit the project default, and CLI workers capture the project default with explicit override flags. Archiving uses normal archive events and a nearest-deadline timer, never a periodic sweep, and revalidates pinning, opt-out, and all descendants at dispatch. Automatic settlement preserves pins; manual settlement clears them. Unarchive starts a fresh retention window. Mobile gets the same project/environment controls; desktop shares web settings."
+
+[[patch.decision]]
+id = "v2-port-2689"
+date = "2026-10-05"
+decided = "reconcile-smaller"
+rationale = "Persist completion preference in V2 thread payloads, import ledger 8 values and run completion/archive policy through native commands with guarded pin preservation."
+
+[[patch.decision]]
+id = "socket-open-209-subthread-lifecycle"
+date = "2026-10-08"
+decided = "adapt"
+rationale = "Use persistence startup metadata initialization instead of repeating the historical import in the orchestrator."
