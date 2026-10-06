@@ -19,6 +19,7 @@ import {
   ProjectIssuesError,
   ProjectIssuesListResult,
   ProjectRequestCreateInput,
+  ProjectRequestKind,
   ProjectRequestCreateResult,
   ProjectRequestRef,
   ProjectRequestsListInput,
@@ -457,8 +458,13 @@ const WsThreadIssuesUnlinkRpc = Rpc.make(WS_METHODS.threadIssuesUnlink, {
 
 // Request ledger: agents list, file, start and hand back Brad's requests.
 const projectRequestError = Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]);
+// The kind goes out as the wire form so an earlier kind reaches a server that predates
+// question, task and epic; the typed form only admits the current three.
 const WsProjectRequestsCreateRpc = Rpc.make(WS_METHODS.projectRequestsCreate, {
-  payload: ProjectRequestCreateInput,
+  payload: Schema.Struct({
+    ...ProjectRequestCreateInput.fields,
+    kind: Schema.toEncoded(ProjectRequestKind),
+  }),
   success: ProjectRequestCreateResult,
   error: projectRequestError,
 });
