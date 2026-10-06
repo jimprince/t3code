@@ -640,8 +640,26 @@ describe("needsYouDecision", () => {
     });
     expect(needsYouDecision(needsYou(issue))).toEqual({
       summary: "",
+      detail: "",
       recommendation: null,
       options: [],
     });
+  });
+});
+
+describe("parseDecisionComment detail", () => {
+  it("keeps every non-option line, links and pictures included, for More", () => {
+    const parsed = parseDecisionComment(
+      [
+        "The jaw slips. Two fixes. A third sentence the summary drops.",
+        "![jaw](/attachments/1b2c3d4e-0000)",
+        "Option A: reprint it",
+        "Option B: glue an insert",
+        "Details: https://example.com/jaw",
+      ].join("\n"),
+    );
+    expect(parsed.detail).toBe(
+      "The jaw slips. Two fixes. A third sentence the summary drops.\n![jaw](/attachments/1b2c3d4e-0000)\nDetails: https://example.com/jaw",
+    );
   });
 });
