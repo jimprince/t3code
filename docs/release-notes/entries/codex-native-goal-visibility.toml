@@ -1,0 +1,4 @@
+id = "codex-native-goal-visibility"
+category = "feature"
+functionality = "Codex goals"
+text = "Active Codex goals now appear in thread status with their objective, lifecycle state, and token progress."
