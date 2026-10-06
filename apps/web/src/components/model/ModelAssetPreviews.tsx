@@ -133,7 +133,7 @@ export function ChatMarkdownAssetModel(props: {
   );
 }
 
-export function AttachmentModelPreview({
+function AttachmentModelPreview({
   file,
   environmentId,
   onDownload,
