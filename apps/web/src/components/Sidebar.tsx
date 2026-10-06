@@ -2598,6 +2598,7 @@ export default function Sidebar() {
     [routeDraftThread, routeTarget],
   );
   const routeThreadKey = routeThreadRef ? scopedThreadKey(routeThreadRef) : null;
+  const movingThreadKeys = useRef(new Set<string>());
   const routeTargetRef = useRef(routeTarget);
   routeTargetRef.current = routeTarget;
   // Post-settle navigation validates against the CURRENT route, not the one
@@ -4879,6 +4880,9 @@ export default function Sidebar() {
               api.dialogs.confirm(confirmLines.join("\n")),
             );
             if (confirmed._tag === "Failure" || !confirmed.value) return;
+            const moveKey = scopedThreadKey(threadRef);
+            if (movingThreadKeys.current.has(moveKey)) return;
+            movingThreadKeys.current.add(moveKey);
 
             const progressToastId = toastManager.add({
               type: "loading",
@@ -4933,6 +4937,9 @@ export default function Sidebar() {
                   }),
                 }),
               );
+              if (routeThreadKeyRef.current === moveKey) {
+                void navigateToThread(scopeThreadRef(targetMember.environmentId, moved.threadId));
+              }
             } catch (error) {
               toastManager.update(
                 progressToastId,
@@ -4957,6 +4964,8 @@ export default function Sidebar() {
                   timeout: 0,
                 }),
               );
+            } finally {
+              movingThreadKeys.current.delete(moveKey);
             }
             return;
           }
@@ -5039,6 +5048,7 @@ export default function Sidebar() {
       isolatedProjectKey,
       markThreadUnread,
       moveThreadAcrossEnvironments,
+      navigateToThread,
       openProjectSettings,
       resetOrder,
       runNestingMenuAction,
