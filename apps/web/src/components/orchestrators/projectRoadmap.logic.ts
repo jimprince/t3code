@@ -14,6 +14,8 @@ export interface RoadmapColumn {
   readonly versionId: number | null;
   readonly target: RoadmapTarget;
   readonly items: ReadonlyArray<ProjectRoadmapItem>;
+  /** Closed tasks of the column's version, counted as Complete in its progress line. */
+  readonly completeCount: number;
 }
 
 /**
@@ -29,6 +31,7 @@ export function roadmapColumns(roadmap: ProjectRoadmap): RoadmapColumn[] {
     title: first ? first.title : "Next version",
     versionId: first?.id ?? null,
     target: first ? { kind: "version", title: first.title } : { kind: "next" },
+    completeCount: first?.closedIssues ?? 0,
     items: [
       ...(first ? roadmap.items.filter((item) => item.versionId === first.id) : []),
       ...unversioned.filter((item) => !item.parked),
@@ -41,6 +44,7 @@ export function roadmapColumns(roadmap: ProjectRoadmap): RoadmapColumn[] {
       title: version.title,
       versionId: version.id,
       target: { kind: "version", title: version.title } as const,
+      completeCount: version.closedIssues,
       items: roadmap.items.filter((item) => item.versionId === version.id),
     })),
     {
@@ -48,6 +52,7 @@ export function roadmapColumns(roadmap: ProjectRoadmap): RoadmapColumn[] {
       title: "Later",
       versionId: null,
       target: { kind: "later" },
+      completeCount: 0,
       items: unversioned.filter((item) => item.parked),
     },
   ];
