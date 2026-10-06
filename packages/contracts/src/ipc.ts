@@ -105,7 +105,13 @@ export const DesktopUpdateStatusSchema = Schema.Literals([
 export const DesktopRuntimeArchSchema = Schema.Literals(["arm64", "x64", "other"]);
 export const DesktopThemeSchema = Schema.Literals(["light", "dark", "system"]);
 export const DesktopUpdateChannelSchema = Schema.Literals(["latest", "nightly"]);
-export const DesktopAppStageLabelSchema = Schema.Literals(["Alpha", "Dev", "Nightly", "Fork", "Fork Dev"]);
+export const DesktopAppStageLabelSchema = Schema.Literals([
+  "Alpha",
+  "Dev",
+  "Nightly",
+  "Fork",
+  "Fork Dev",
+]);
 
 export interface DesktopAppBranding {
   baseName: string;
@@ -276,7 +282,16 @@ export interface DesktopRuntimeInfo {
   runningUnderArm64Translation: boolean;
 }
 
+export const DesktopIdleUpdateInstallOptionsSchema = Schema.Struct({
+  expectedVersion: Schema.String,
+  minimumSystemIdleSeconds: Schema.optional(
+    Schema.Int.check(Schema.isBetween({ minimum: 60, maximum: 86400 })),
+  ),
+});
+export type DesktopIdleUpdateInstallOptions = typeof DesktopIdleUpdateInstallOptionsSchema.Type;
+
 export interface DesktopUpdateState {
+  systemIdleSeconds?: number;
   enabled: boolean;
   status: DesktopUpdateStatus;
   channel: DesktopUpdateChannel;
@@ -308,6 +323,7 @@ export const DesktopUpdateReleaseNoteSchema = Schema.Struct({
 });
 
 export const DesktopUpdateStateSchema = Schema.Struct({
+  systemIdleSeconds: Schema.optionalKey(Schema.Number),
   enabled: Schema.Boolean,
   status: DesktopUpdateStatusSchema,
   channel: DesktopUpdateChannelSchema,
@@ -1264,7 +1280,7 @@ export interface DesktopBridge {
   setUpdateChannel: (channel: DesktopUpdateChannel) => Promise<DesktopUpdateState>;
   checkForUpdate: () => Promise<DesktopUpdateCheckResult>;
   downloadUpdate: () => Promise<DesktopUpdateActionResult>;
-  installUpdate: (options?: { readonly expectedVersion: string }) => Promise<DesktopUpdateActionResult>;
+  installUpdate: (options?: DesktopIdleUpdateInstallOptions) => Promise<DesktopUpdateActionResult>;
   onUpdateState: (listener: (state: DesktopUpdateState) => void) => () => void;
   /** Present when the desktop shell accepts `t3 app` activation requests. */
   appActivation?: {
