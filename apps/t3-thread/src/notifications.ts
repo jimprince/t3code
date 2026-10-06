@@ -94,7 +94,10 @@ export function buildNotificationRecord(input: {
   // Environment-scoped so identical thread ids on different hosts never share an event.
   const eventKey =
     input.existing?.eventKey ??
-    JSON.stringify([input.subscription.sourceEnvironment, input.subscription.subscriberEnvironment]) +
+    JSON.stringify([
+      input.subscription.sourceEnvironment,
+      input.subscription.subscriberEnvironment,
+    ]) +
       ":" +
       routeKey;
 
