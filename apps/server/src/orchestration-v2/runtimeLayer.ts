@@ -1,3 +1,4 @@
+import * as LegacyHistory from "../forkLegacy/HistoryReader.ts";
 import * as ThreadTransfer from "../forkThreads/TransferService.ts";
 import * as TransferWorkspace from "../forkThreads/TransferWorkspace.ts";
 import * as TransferAttachments from "../forkThreads/TransferAttachments.ts";
@@ -340,6 +341,9 @@ const forkTransferProvided = ThreadTransfer.layer.pipe(
   ),
 );
 export const OrchestrationV2ProductionLayerLive = Layer.mergeAll(
+  LegacyHistory.layer.pipe(
+    Layer.provide(Layer.merge(storesLayer, legacyHistoryLayer.pipe(Layer.provide(storesLayer)))),
+  ),
   forkTransferProvided,
   ForkWorkspace.layer.pipe(
     Layer.provide(
