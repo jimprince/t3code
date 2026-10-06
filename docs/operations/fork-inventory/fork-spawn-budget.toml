@@ -1,0 +1,22 @@
+name = "fork-spawn-budget"
+subject = "fix(server): prevent background process launch storms"
+class = "upstream-bound"
+purpose = "Suppress repeated missing executable launches, share provider refinement across repository PR links, pace background process attempts, and expose direct launch counts without sampling subprocesses."
+retire_when = "Upstream caches missing executables and explicit provider discovery, bounds background launch attempts, and exposes equivalent launch diagnostics."
+depends_on = ["fork-gitea-connections", "fork-unsupported-pr-hosts"]
+roles = []
+note = "The shared runner caches ENOENT only when executable resolution confirms absence, keyed by executable environment and provider settings generation. Successful PATH resolutions are reused. Explicit provider contexts include cwd, remote, requested authority, and settings/environment in a single-flight cache; each PR sweep retains refinements until all its repository groups complete. PR sweeps and periodic VCS refreshes opt into a shared five-attempts/second limit; interactive work keeps its own deadlines. Last-minute executable counters cover ProcessRunner's direct spawn calls, not vendor descendants or all host processes. The existing root resolver already caches null roots for one minute. Internal VcsProcess Git calls resolve once per executable environment to a path outside agent safety wrapper directories, preferring system Git on macOS and rejecting wrapper symlink aliases; agent shells retain their PATH. Load hotfix 2026-10-10 (fork.10 server saturation): a PR sweep sets aside a host whose read says provider-unsupported for 30 minutes and warns once, instead of re-resolving every project's provider for each of its links every minute; GitManager.branchPullRequest replays a failed lookup under prLookupFailureTtl's per-branch backoff (refreshes included, as the PR cache already does), so settlement and branch-PR sweeps stop re-running git for a branch git cannot read. VcsDriverRegistry keeps a positive repository detection for 30 seconds (upstream: 2), so one finished turn's finalization, PR discovery and settlement share a single rev-parse trio per cwd; negative detections are still never cached."
+
+[[decision]]
+id = "v2-port-2689-m2"
+date = "2026-10-06"
+decided = "reconcile-smaller"
+rationale = "V2 port: one fork decorator on the native process runner owns the execution-context-keyed missing-binary cache (bounded at 2048) and background pacing; interactive launches bypass pacing, and a newly found binary clears its negative entry at once. The provider-refinement cache scopes native PR sweeps without replacing native refresh."
+
+[[decision]]
+id = "upstream14673-sweep-scope"
+date = "2026-10-02"
+decided = "adapt"
+rationale = "Upstream 10ac2f2ba replaced the sweep's per-key argument with a scope plus the shared requested map so a burst of links shares one batched summary read. Gate the fork's repository grouping on that scope instead, and keep the two-repository/four-group pacing: batched GraphQL cuts host calls but still leaves the sweep free to spawn 25 processes at once, which is the launch storm this concern bounds."
+
+# v2-port-2689-m2: runner/registry fork decorators retain native PR host batching.
