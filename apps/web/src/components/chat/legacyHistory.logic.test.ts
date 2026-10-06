@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
 
+import { formatDayAwareTimestamp } from "../../timestampFormat";
 import {
   describeLegacyRecord,
+  diffLineTone,
   formatLegacyTimestamp,
+  legacyHistoryPageSize,
   legacyHistorySectionLabel,
+  legacyHistoryTitle,
   orderLegacyHistorySections,
 } from "./legacyHistory.logic";
 
@@ -26,10 +30,46 @@ describe("legacyHistorySectionLabel", () => {
 });
 
 describe("formatLegacyTimestamp", () => {
-  it("trims ISO timestamps to the minute and keeps other values", () => {
-    expect(formatLegacyTimestamp("2026-05-01T09:30:12.000Z")).toBe("2026-05-01 09:30");
-    expect(formatLegacyTimestamp("yesterday")).toBe("yesterday");
-    expect(formatLegacyTimestamp(null)).toBeNull();
+  const now = Date.parse("2026-05-01T20:00:00.000Z");
+  it("formats like the timeline and reads zoneless SQLite values as UTC", () => {
+    expect(formatLegacyTimestamp("2026-05-01T09:30:12.000Z", "12-hour", now)).toBe(
+      formatLegacyTimestamp("2026-05-01 09:30:12", "12-hour", now),
+    );
+    expect(formatLegacyTimestamp("2026-05-01T09:30:12.000Z", "12-hour", now)).toBe(
+      formatDayAwareTimestamp("2026-05-01T09:30:12.000Z", "12-hour", now),
+    );
+  });
+
+  it("keeps unparseable values and nulls", () => {
+    expect(formatLegacyTimestamp("yesterday", "12-hour", now)).toBe("yesterday");
+    expect(formatLegacyTimestamp(null, "12-hour", now)).toBeNull();
+  });
+});
+
+describe("legacyHistoryPageSize", () => {
+  it("loads blob-heavy sections in small pages", () => {
+    expect(legacyHistoryPageSize("diffs")).toBe(10);
+    expect(legacyHistoryPageSize("events")).toBe(10);
+    expect(legacyHistoryPageSize("messages")).toBe(50);
+  });
+});
+
+describe("legacyHistoryTitle", () => {
+  it("names a native transfer snapshot as an earlier copy", () => {
+    expect(legacyHistoryTitle("transfer")).toBe("Earlier copy");
+    expect(legacyHistoryTitle("v1")).toBe("V1 history");
+    expect(legacyHistoryTitle(undefined)).toBe("V1 history");
+  });
+});
+
+describe("diffLineTone", () => {
+  it("tones added, removed and hunk lines but not file headers", () => {
+    expect(diffLineTone("+added")).toBe("add");
+    expect(diffLineTone("-removed")).toBe("remove");
+    expect(diffLineTone("@@ -1 +1 @@")).toBe("hunk");
+    expect(diffLineTone("+++ b/file")).toBeNull();
+    expect(diffLineTone("--- a/file")).toBeNull();
+    expect(diffLineTone(" context")).toBeNull();
   });
 });
 
@@ -51,7 +91,7 @@ describe("describeLegacyRecord", () => {
       key: "m1",
       label: "assistant",
       detail: null,
-      at: "2026-05-01 09:30",
+      at: "2026-05-01T09:30:12.000Z",
       body: "Done",
     });
   });
@@ -63,7 +103,7 @@ describe("describeLegacyRecord", () => {
       1,
     );
     expect(row.key).toBe("m2");
-    expect(row.at).toBe("2026-05-01 10:00");
+    expect(row.at).toBe("2026-05-01 10:00:00");
   });
 
   it("falls back to the index when a record carries no id", () => {
@@ -90,7 +130,7 @@ describe("describeLegacyRecord", () => {
     expect(row.label).toBe("Checkpoint 3");
     expect(row.detail).toBe("completed · ready · refs/checkpoints/3 · 2 files");
     expect(row.body).toBe("src/a.ts +2 -1\nsrc/b.ts");
-    expect(row.at).toBe("2026-05-01 09:31");
+    expect(row.at).toBe("2026-05-01T09:31:00.000Z");
   });
 
   it("labels diffs by their turn range and keeps the patch body", () => {
@@ -118,6 +158,18 @@ describe("describeLegacyRecord", () => {
     expect(row.label).toBe("Ran bash");
     expect(row.detail).toBe("tool.completed · tool");
     expect(row.body).toBe('{\n  "command": "ls"\n}');
+  });
+
+  it("reads native transfer tool items by tool name and input", () => {
+    const row = describeLegacyRecord(
+      "tools",
+      { type: "command_execution", toolName: "bash", input: { command: "ls" }, output: "a.ts" },
+      2,
+    );
+    expect(row.key).toBe("activity-2");
+    expect(row.label).toBe("bash");
+    expect(row.detail).toBe("command_execution");
+    expect(row.body).toBe('{\n  "command": "ls"\n}\n\na.ts');
   });
 
   it("marks implemented plans", () => {

@@ -1,8 +1,10 @@
 import type { EnvironmentId, LegacyHistorySection, ThreadId } from "@t3tools/contracts";
 import { useState } from "react";
 
+import { useClientSettings } from "~/hooks/useSettings";
 import { useEnvironmentQuery } from "../../state/query";
 import { legacyHistoryQuery } from "../../state/legacyHistory";
+import ChatMarkdown from "../ChatMarkdown";
 import { Button } from "../ui/button";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
 import {
@@ -15,9 +17,12 @@ import {
 } from "../ui/dialog";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import {
-  LEGACY_HISTORY_PAGE_SIZE,
   describeLegacyRecord,
+  diffLineTone,
+  formatLegacyTimestamp,
+  legacyHistoryPageSize,
   legacyHistorySectionLabel,
+  legacyHistoryTitle,
   orderLegacyHistorySections,
   type LegacyHistoryRow,
 } from "./legacyHistory.logic";
@@ -27,18 +32,63 @@ const INLINE_BODY_SECTIONS: ReadonlySet<LegacyHistorySection> = new Set([
   "plans",
   "goals",
 ]);
+const MARKDOWN_SECTIONS: ReadonlySet<LegacyHistorySection> = new Set(["messages", "plans"]);
+
+const DIFF_TONE_CLASS = {
+  add: "text-success",
+  remove: "text-destructive",
+  hunk: "font-medium",
+} as const;
+
+function LegacyHistoryBody({
+  section,
+  body,
+}: {
+  readonly section: LegacyHistorySection;
+  readonly body: string;
+}) {
+  if (MARKDOWN_SECTIONS.has(section)) return <ChatMarkdown text={body} cwd={undefined} />;
+  if (section === "diffs") {
+    return (
+      <pre className="overflow-x-auto whitespace-pre font-mono text-xs">
+        {body.split("\n").map((line, index) => {
+          const tone = diffLineTone(line);
+          return (
+            <span
+              key={index}
+              className={tone === null ? "block" : `block ${DIFF_TONE_CLASS[tone]}`}
+            >
+              {line.length > 0 ? line : " "}
+            </span>
+          );
+        })}
+      </pre>
+    );
+  }
+  return (
+    <pre
+      className={
+        INLINE_BODY_SECTIONS.has(section)
+          ? "whitespace-pre-wrap break-words font-mono text-xs"
+          : "overflow-x-auto whitespace-pre font-mono text-xs"
+      }
+    >
+      {body}
+    </pre>
+  );
+}
 
 function LegacyHistoryRowView({
+  section,
   row,
-  inlineBody,
 }: {
+  readonly section: LegacyHistorySection;
   readonly row: LegacyHistoryRow;
-  readonly inlineBody: boolean;
 }) {
-  const body =
-    row.body === null ? null : (
-      <pre className="whitespace-pre-wrap break-words font-mono text-xs">{row.body}</pre>
-    );
+  const timestampFormat = useClientSettings((settings) => settings.timestampFormat);
+  const [open, setOpen] = useState(false);
+  const at = formatLegacyTimestamp(row.at, timestampFormat);
+  const body = row.body === null ? null : <LegacyHistoryBody section={section} body={row.body} />;
   return (
     <li className="flex flex-col gap-1 border-b border-border py-2">
       <div className="flex min-w-0 items-baseline gap-2 text-sm">
@@ -46,16 +96,16 @@ function LegacyHistoryRowView({
         {row.detail !== null ? (
           <span className="min-w-0 truncate text-xs text-muted-foreground">{row.detail}</span>
         ) : null}
-        {row.at !== null ? (
-          <span className="ml-auto shrink-0 text-xs text-muted-foreground">{row.at}</span>
+        {at !== null ? (
+          <span className="ml-auto shrink-0 text-xs text-muted-foreground">{at}</span>
         ) : null}
       </div>
-      {body === null ? null : inlineBody ? (
+      {body === null ? null : INLINE_BODY_SECTIONS.has(section) ? (
         body
       ) : (
-        <Collapsible>
+        <Collapsible open={open} onOpenChange={setOpen}>
           <CollapsibleTrigger render={<Button size="xs" variant="ghost" />}>
-            Show
+            {open ? "Hide" : "Show"}
           </CollapsibleTrigger>
           <CollapsiblePanel animate={false}>{body}</CollapsiblePanel>
         </Collapsible>
@@ -79,7 +129,7 @@ function LegacyHistoryPage({
   const query = useEnvironmentQuery(
     legacyHistoryQuery({
       environmentId,
-      input: { threadId, section, offset, limit: LEGACY_HISTORY_PAGE_SIZE },
+      input: { threadId, section, offset, limit: legacyHistoryPageSize(section) },
     }),
   );
   if (query.data === null) {
@@ -105,8 +155,8 @@ function LegacyHistoryPage({
             return (
               <LegacyHistoryRowView
                 key={`${row.key}:${offset + index}`}
+                section={section}
                 row={row}
-                inlineBody={INLINE_BODY_SECTIONS.has(section)}
               />
             );
           })}
@@ -146,12 +196,13 @@ export function LegacyHistoryButton({
   const sections = orderLegacyHistorySections(probe.data?.sections ?? []);
   const section = chosen !== null && sections.includes(chosen) ? chosen : sections[0];
   if (probe.data === null || section === undefined) return null;
+  const title = legacyHistoryTitle(probe.data.origin);
   return (
     <Dialog>
-      <DialogTrigger render={<Button size="xs" variant="ghost" />}>V1 history</DialogTrigger>
+      <DialogTrigger render={<Button size="xs" variant="ghost" />}>{title}</DialogTrigger>
       <DialogPopup className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>V1 history (read-only)</DialogTitle>
+          <DialogTitle>{title} (read-only)</DialogTitle>
         </DialogHeader>
         <DialogPanel>
           {probe.data.sourceThreadId !== threadId ? (

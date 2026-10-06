@@ -13,11 +13,11 @@ import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as Projections from "../orchestration-v2/ProjectionStore.ts";
-import * as Threads from "../orchestration-v2/ThreadManagementService.ts";
 import {
   initializeTransferHistory,
   readTransferHistory,
 } from "../forkThreads/TransferHistoryStore.ts";
+import { openHistory, withoutLegacyKeys } from "./HistoryPaging.ts";
 
 type Sections = Record<LegacyHistorySection, Array<Record<string, unknown>>>;
 const historicalPayload = Schema.decodeUnknownOption(
@@ -86,7 +86,11 @@ function appendTransferEvidence(sections: Sections, raw: Record<string, unknown>
     if (Predicate.isObject(projection.thread)) sections.thread.push(projection.thread);
     sections.messages.push(...records(projection.messages));
     sections.turns.push(...records(projection.checkpoints));
-    sections.tools.push(...records(projection.turnItems));
+    sections.tools.push(
+      ...records(projection.turnItems).filter(
+        (item) => !(typeof item.type === "string" && item.type.endsWith("_message")),
+      ),
+    );
     sections.plans.push(...records(projection.plans));
     sections.provenance.push({
       sourceThread: projection.thread,
@@ -108,12 +112,11 @@ export class HistoryReader extends Context.Service<
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const projections = yield* Projections.ProjectionStoreV2;
-  const legacyHistory = yield* Threads.LegacyHistoryAccess;
   const get = Effect.fn("HistoryReader.get")(function* (input: LegacyHistoryInput) {
     yield* initializeTransferHistory(sql);
     let sourceThreadId = input.threadId;
     const seen = new Set<ThreadId>();
-    let sections: Sections;
+    let history: Effect.Success<ReturnType<typeof openHistory>>;
     while (true) {
       if (seen.has(sourceThreadId))
         return yield* new LegacyHistoryError({
@@ -128,10 +131,14 @@ const make = Effect.gen(function* () {
           cause: "Thread is missing.",
         });
       const transferred = yield* readTransferHistory(sql, sourceThreadId);
-      const legacy = yield* legacyHistory.read(sourceThreadId);
-      sections = historySections({ ...transferred, ...legacy });
+      history = yield* openHistory(
+        sql,
+        sourceThreadId,
+        transferred,
+        historySections(withoutLegacyKeys(transferred)),
+      );
       if (
-        Object.values(sections).some((rows) => rows.length > 0) ||
+        history.sections.length > 0 ||
         shell.lineage.relationshipToParent !== "fork" ||
         shell.lineage.parentThreadId === null
       )
@@ -141,18 +148,19 @@ const make = Effect.gen(function* () {
     const section = input.section ?? "thread";
     const offset = input.offset ?? 0;
     const limit = input.limit ?? 50;
-    const rows = sections[section];
+    const page = history.sections.includes(section)
+      ? yield* history.page(section, offset, limit)
+      : { records: [], nextOffset: null };
     return {
       threadId: input.threadId,
       sourceThreadId,
       readOnly: true as const,
       restoreAllowed: false as const,
-      sections: (Object.keys(sections) as Array<LegacyHistorySection>).filter(
-        (key) => sections[key].length > 0,
-      ),
+      sections: history.sections,
+      origin: history.v1Origin ? ("v1" as const) : ("transfer" as const),
       section,
-      records: rows.slice(offset, offset + limit),
-      nextOffset: offset + limit < rows.length ? offset + limit : null,
+      records: page.records,
+      nextOffset: page.nextOffset,
     };
   });
   return HistoryReader.of({

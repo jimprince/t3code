@@ -15,6 +15,8 @@ export const LegacyHistorySection = Schema.Literals([
   "provenance",
 ]);
 export type LegacyHistorySection = typeof LegacyHistorySection.Type;
+export const LegacyHistoryOrigin = Schema.Literals(["v1", "transfer"]);
+export type LegacyHistoryOrigin = typeof LegacyHistoryOrigin.Type;
 export const LegacyHistoryInput = Schema.Struct({
   threadId: ThreadId,
   section: Schema.optional(LegacyHistorySection),
@@ -28,6 +30,7 @@ export const LegacyHistoryResult = Schema.Struct({
   readOnly: Schema.Literal(true),
   restoreAllowed: Schema.Literal(false),
   sections: Schema.Array(LegacyHistorySection),
+  origin: Schema.optional(LegacyHistoryOrigin),
   section: LegacyHistorySection,
   records: Schema.Array(Schema.Record(Schema.String, Schema.Unknown)),
   nextOffset: Schema.NullOr(NonNegativeInt),

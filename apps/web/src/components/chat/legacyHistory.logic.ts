@@ -1,6 +1,25 @@
-import type { LegacyHistorySection } from "@t3tools/contracts";
+import type { LegacyHistoryOrigin, LegacyHistorySection } from "@t3tools/contracts";
+import type { TimestampFormat } from "@t3tools/contracts/settings";
 
-export const LEGACY_HISTORY_PAGE_SIZE = 50;
+import { formatDayAwareTimestamp } from "../../timestampFormat";
+
+const LEGACY_HISTORY_PAGE_SIZE = 50;
+const LARGE_BODY_PAGE_SIZE = 10;
+const LARGE_BODY_SECTIONS: ReadonlySet<LegacyHistorySection> = new Set([
+  "diffs",
+  "events",
+  "tools",
+]);
+
+/** Sections whose rows carry large blobs load in small pages. */
+export function legacyHistoryPageSize(section: LegacyHistorySection): number {
+  return LARGE_BODY_SECTIONS.has(section) ? LARGE_BODY_PAGE_SIZE : LEGACY_HISTORY_PAGE_SIZE;
+}
+
+/** Imported V1 rows are V1 history; a thread moved between V2 machines keeps an earlier copy. */
+export function legacyHistoryTitle(origin: LegacyHistoryOrigin | undefined): string {
+  return origin === "transfer" ? "Earlier copy" : "V1 history";
+}
 
 const SECTION_ORDER: ReadonlyArray<LegacyHistorySection> = [
   "messages",
@@ -45,6 +64,7 @@ export interface LegacyHistoryRow {
   readonly key: string;
   readonly label: string;
   readonly detail: string | null;
+  /** Raw stored timestamp; format it for display with `formatLegacyTimestamp`. */
   readonly at: string | null;
   readonly body: string | null;
 }
@@ -91,10 +111,36 @@ function pretty(value: unknown): string | null {
   }
 }
 
-export function formatLegacyTimestamp(value: string | null): string | null {
+/** V1 stored UTC; SQLite rows may omit the zone designator. */
+export function formatLegacyTimestamp(
+  value: string | null,
+  timestampFormat: TimestampFormat,
+  nowMs?: number,
+): string | null {
   if (value === null) return null;
-  const match = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/.exec(value);
-  return match ? `${match[1]} ${match[2]}` : value;
+  const iso =
+    /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(value) && !/(Z|[+-]\d{2}:?\d{2})$/.test(value)
+      ? `${value.replace(" ", "T")}Z`
+      : value;
+  const formatted = formatDayAwareTimestamp(iso, timestampFormat, nowMs);
+  return formatted.length > 0 ? formatted : value;
+}
+
+export type DiffLineTone = "add" | "remove" | "hunk" | null;
+
+export function diffLineTone(line: string): DiffLineTone {
+  if (line.startsWith("+++") || line.startsWith("---")) return null;
+  if (line.startsWith("+")) return "add";
+  if (line.startsWith("-")) return "remove";
+  return line.startsWith("@@") ? "hunk" : null;
+}
+
+/** Native transfer evidence stores turn items as `{type, toolName, input, output, text}`. */
+function nativeToolBody(record: RawRecord): string | null {
+  const input = pretty(record.input);
+  const output = pretty(record.output ?? record.text);
+  if (input !== null && output !== null) return `${input}\n\n${output}`;
+  return input ?? output;
 }
 
 const joinDetail = (parts: ReadonlyArray<string | null>): string | null => {
@@ -128,7 +174,7 @@ function goalRow(record: RawRecord, key: string): LegacyHistoryRow {
       key,
       label: "Goal",
       detail: joinDetail([text(goal, "status")]),
-      at: formatLegacyTimestamp(text(goal, "updated_at") ?? text(goal, "created_at")),
+      at: text(goal, "updated_at") ?? text(goal, "created_at"),
       body: objective ?? pretty(goal),
     };
   }
@@ -158,7 +204,7 @@ export function describeLegacyRecord(
         key: text(record, "thread_id") ?? `thread-${index}`,
         label: text(record, "title") ?? "Thread",
         detail: joinDetail([text(record, "branch"), text(record, "worktree_path")]),
-        at: formatLegacyTimestamp(text(record, "created_at")),
+        at: text(record, "created_at"),
         body: null,
       };
     case "messages":
@@ -166,7 +212,7 @@ export function describeLegacyRecord(
         key: text(record, "message_id") ?? `message-${index}`,
         label: text(record, "role") ?? "message",
         detail: field(record, "is_streaming") === true ? "streaming" : null,
-        at: formatLegacyTimestamp(text(record, "created_at")),
+        at: text(record, "created_at"),
         body: text(record, "text"),
       };
     case "turns": {
@@ -181,7 +227,7 @@ export function describeLegacyRecord(
           text(record, "checkpoint_ref"),
           files.length > 0 ? `${files.length} files` : null,
         ]),
-        at: formatLegacyTimestamp(text(record, "completed_at") ?? text(record, "requested_at")),
+        at: text(record, "completed_at") ?? text(record, "requested_at"),
         body: files.length > 0 ? files.join("\n") : null,
       };
     }
@@ -192,24 +238,29 @@ export function describeLegacyRecord(
         key: `diff-${from ?? ""}-${to ?? ""}-${index}`,
         label: from !== null && to !== null ? `Turns ${from} to ${to}` : "Diff",
         detail: null,
-        at: formatLegacyTimestamp(text(record, "created_at")),
+        at: text(record, "created_at"),
         body: text(record, "diff"),
       };
     }
     case "tools":
       return {
-        key: text(record, "activity_id") ?? `activity-${index}`,
-        label: text(record, "summary") ?? text(record, "kind") ?? "Activity",
-        detail: joinDetail([text(record, "kind"), text(record, "tone")]),
-        at: formatLegacyTimestamp(text(record, "created_at")),
-        body: pretty(field(record, "payload_json") ?? record.payload),
+        key: text(record, "activity_id") ?? text(record, "id") ?? `activity-${index}`,
+        label:
+          text(record, "summary") ??
+          text(record, "toolName") ??
+          text(record, "kind") ??
+          text(record, "type") ??
+          "Activity",
+        detail: joinDetail([text(record, "kind") ?? text(record, "type"), text(record, "tone")]),
+        at: text(record, "created_at"),
+        body: pretty(field(record, "payload_json") ?? record.payload) ?? nativeToolBody(record),
       };
     case "plans":
       return {
         key: text(record, "plan_id") ?? `plan-${index}`,
         label: "Plan",
         detail: text(record, "implemented_at") !== null ? "implemented" : null,
-        at: formatLegacyTimestamp(text(record, "updated_at") ?? text(record, "created_at")),
+        at: text(record, "updated_at") ?? text(record, "created_at"),
         body: text(record, "plan_markdown") ?? text(record, "markdown"),
       };
     case "goals":
@@ -219,7 +270,7 @@ export function describeLegacyRecord(
         key: text(record, "event_id") ?? `event-${index}`,
         label: text(record, "type") ?? text(record, "kind") ?? "Event",
         detail: null,
-        at: formatLegacyTimestamp(text(record, "occurred_at") ?? text(record, "created_at")),
+        at: text(record, "occurred_at") ?? text(record, "created_at"),
         body: pretty(record),
       };
     case "provenance":

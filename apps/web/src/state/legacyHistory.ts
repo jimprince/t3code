@@ -6,6 +6,5 @@ import { connectionAtomRuntime } from "../connection/runtime";
 export const legacyHistoryQuery = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
   label: "environment-data:legacy-history:get",
   tag: "orchestration.getLegacyHistory",
-  staleTimeMs: 60_000,
-  idleTtlMs: 0,
+  staleTimeMs: 300_000,
 });
