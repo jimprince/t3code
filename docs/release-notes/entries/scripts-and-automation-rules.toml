@@ -1,0 +1,4 @@
+id = "scripts-and-automation-rules"
+category = "feature"
+functionality = "projects"
+text = "Save reusable prompts as scripts in a project or for every project, start from a library of quality reviews, choose whether a run only reports, files its findings, or files them and settles, run scripts by hand or on a schedule, schedule automations on selected weekdays or with a cron expression, and dry-run an automation to see what it would start."
