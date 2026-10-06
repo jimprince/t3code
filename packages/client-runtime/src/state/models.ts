@@ -87,6 +87,7 @@ function threadRunStatusIsActive(status: ThreadRuntimeSummary["status"]): boolea
 }
 
 export interface EnvironmentThreadShell {
+  readonly codexNativeGoal?: OrchestrationV2ThreadShell["codexNativeGoal"];
   readonly environmentId: EnvironmentId;
   readonly id: ThreadId;
   readonly projectId: ProjectId;
@@ -262,6 +263,7 @@ export function presentThreadShell(
       thread.pendingRuntimeRequest.kind !== "auth_refresh",
     hasPendingUserInput: thread.pendingRuntimeRequest?.kind === "user_input",
     hasActionableProposedPlan: thread.hasActionableProposedPlan,
+    codexNativeGoal: thread.codexNativeGoal ?? null,
     pendingBackgroundTasks: thread.pendingBackgroundTasks ?? [],
     providerInstanceHistory: thread.providerInstanceHistory ?? [],
     goal: thread.goal ?? null,
