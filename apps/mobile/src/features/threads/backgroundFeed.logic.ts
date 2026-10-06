@@ -1,17 +1,19 @@
 import {
   deriveBackgroundTraffic,
-  resolveBackgroundFolds,
+  stabilizeBackgroundTraffic,
   type BackgroundFolds,
+  type BackgroundTraffic,
 } from "@t3tools/client-runtime/backgroundTurns";
 import type { ThreadFeedEntry } from "../../lib/threadActivity";
 
 type BackgroundFoldEntry = Extract<ThreadFeedEntry, { readonly type: "background-fold" }>;
 
-export function deriveMobileBackgroundFolds(input: {
+/** Streaming re-derives this on every delta; `previous` keeps unchanged runs referentially equal. */
+export function deriveMobileBackgroundTraffic(input: {
   feed: ReadonlyArray<ThreadFeedEntry>;
   workerIds: ReadonlySet<string>;
   liveRunId: string | null;
-  expanded: ReadonlySet<string>;
+  previous: BackgroundTraffic | null;
   labelForThread?: (id: string) => string | undefined;
 }) {
   const attention = new Set<string>();
@@ -23,17 +25,16 @@ export function deriveMobileBackgroundFolds(input: {
     )
       attention.add(entry.runId);
   }
-  const traffic = deriveBackgroundTraffic({
-    messages: input.feed.flatMap((entry) => (entry.type === "message" ? [entry.message] : [])),
-    workerThreadIds: input.workerIds,
-    liveTurnId: input.liveRunId,
-    attentionTurnIds: attention,
-    labelForThread: input.labelForThread,
-  });
-  return {
-    traffic,
-    folds: traffic.runs.length > 0 ? resolveBackgroundFolds(traffic.runs, input.expanded) : null,
-  };
+  return stabilizeBackgroundTraffic(
+    input.previous,
+    deriveBackgroundTraffic({
+      messages: input.feed.flatMap((entry) => (entry.type === "message" ? [entry.message] : [])),
+      workerThreadIds: input.workerIds,
+      liveTurnId: input.liveRunId,
+      attentionTurnIds: attention,
+      labelForThread: input.labelForThread,
+    }),
+  );
 }
 
 function entryRunId(entry: ThreadFeedEntry): string | null {

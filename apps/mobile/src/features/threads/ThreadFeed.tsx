@@ -3191,7 +3191,6 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
                 {setupAnchorIndex < 0 && props.worktreeSetup ? (
                   <WorktreeSetupCard key={props.threadId} {...props.worktreeSetup} />
                 ) : null}
-                {background.control}
                 {props.historyControls ? (
                   <ThreadFeedLoadEarlierControl {...props.historyControls} />
                 ) : null}
