@@ -6,6 +6,7 @@ import type {
   ProjectRequestStage,
   RepositoryIdentity,
   ThreadId,
+  ThreadSubprojectMode,
 } from "@t3tools/contracts";
 
 import { parsePartOf } from "./epicProgress.logic.ts";
@@ -111,16 +112,21 @@ export function parseBlockedBy(text: string | null | undefined): number[] {
 interface TreeThread {
   readonly id: ThreadId;
   readonly parentThreadId?: ThreadId | null | undefined;
+  readonly subproject?: ThreadSubprojectMode | null | undefined;
 }
 
-/** The root thread and every descendant, following parentThreadId links. */
+/**
+ * The root thread and every descendant, following parentThreadId links. A
+ * descendant marked as a subproject (and everything under it) belongs to that
+ * subproject's own tree, so it is left out; the root itself is always included.
+ */
 export function collectThreadTree<T extends TreeThread>(
   threads: ReadonlyArray<T>,
   rootThreadId: ThreadId,
 ): T[] {
   const children = new Map<ThreadId, T[]>();
   for (const thread of threads) {
-    if (!thread.parentThreadId) continue;
+    if (!thread.parentThreadId || thread.subproject === "on") continue;
     const siblings = children.get(thread.parentThreadId) ?? [];
     siblings.push(thread);
     children.set(thread.parentThreadId, siblings);
@@ -152,6 +158,50 @@ export function findRootThreadId(threads: ReadonlyArray<TreeThread>, threadId: T
     current = parent;
   }
   return current?.id ?? threadId;
+}
+
+/**
+ * The thread's project root: the first thread walking up that is top-level or
+ * marked as a subproject. Project-scoped data (page settings, layout, canvas,
+ * request ledger, Decisions) is keyed by it.
+ */
+export function findProjectRootThreadId(
+  threads: ReadonlyArray<TreeThread>,
+  threadId: ThreadId,
+): ThreadId {
+  const byId = new Map(threads.map((thread) => [thread.id, thread]));
+  let current = byId.get(threadId);
+  const seen = new Set<ThreadId>();
+  while (current?.parentThreadId && current.subproject !== "on" && !seen.has(current.id)) {
+    seen.add(current.id);
+    const parent = byId.get(current.parentThreadId);
+    if (!parent) break;
+    current = parent;
+  }
+  return current?.id ?? threadId;
+}
+
+/**
+ * The configured tracker for a project root. A subproject's own entry is keyed
+ * by its thread id; without one it inherits the enclosing project's, and a
+ * top-level thread reads its T3 project's entry as before.
+ */
+export function resolveProjectTracker(
+  trackers: Readonly<Record<string, string>>,
+  threads: ReadonlyArray<TreeThread & { readonly projectId: string }>,
+  rootThreadId: ThreadId,
+): string | null {
+  const byId = new Map(threads.map((thread) => [thread.id, thread]));
+  const seen = new Set<ThreadId>();
+  let current = byId.get(rootThreadId);
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    const configured = trackers[current.id] ?? trackers[current.projectId];
+    if (configured) return configured;
+    if (!current.parentThreadId) return null;
+    current = byId.get(findProjectRootThreadId(threads, current.parentThreadId));
+  }
+  return null;
 }
 
 export interface GiteaRepositoryTarget {
