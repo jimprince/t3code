@@ -115,6 +115,16 @@ it.effect(
       const lifecycle = yield* WorkerLifecycle.WorkerLifecycle;
       yield* lifecycle.drain;
       assert.equal((yield* store.getThreadProjection(threadId)).thread.settledOverride, null);
+      // Native idle/PR settlement must honor the same pin protection as completion.
+      const pinnedExit = yield* Effect.exit(
+        orchestrator.dispatch({
+          type: "thread.auto-settle",
+          commandId: CommandId.make("auto-pinned"),
+          threadId,
+          snapshotAt: projection.thread.updatedAt,
+        }),
+      );
+      assert.equal(pinnedExit._tag, "Failure");
       yield* orchestrator.dispatch({
         type: "thread.unpin",
         commandId: CommandId.make("unpin"),
@@ -137,6 +147,42 @@ it.effect(
         completionEligible(unpinned, runId, { ...metadata, settleOnComplete: false }),
         false,
       );
+      const childId = ThreadId.make("standing-child");
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("create-standing-child"),
+        threadId: childId,
+        projectId: ProjectId.make("project"),
+        title: "Child",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+        createdBy: "user",
+        creationSource: "web",
+      });
+      yield* writeMetadata(sql, { threadId: childId, parentThreadId: threadId });
+      yield* lifecycle.drain;
+      assert.equal((yield* store.getThread(threadId)).settledOverride, null);
+      // Both completion and idle/PR commands re-read sidecar supervision while locked.
+      for (const completionRunId of [undefined, runId]) {
+        const rejected = yield* Effect.exit(
+          orchestrator.dispatch({
+            type: "thread.auto-settle",
+            commandId: CommandId.make(`auto-parent-${completionRunId ?? "idle"}`),
+            threadId,
+            snapshotAt: unpinned.thread.updatedAt,
+            ...(completionRunId ? { completionRunId } : {}),
+          }),
+        );
+        assert.equal(rejected._tag, "Failure");
+      }
+      yield* orchestrator.dispatch({
+        type: "thread.archive",
+        commandId: CommandId.make("archive-standing-child"),
+        threadId: childId,
+      });
       yield* lifecycle.drain;
       yield* lifecycle.drain;
 
