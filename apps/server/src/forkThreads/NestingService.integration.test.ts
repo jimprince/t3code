@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import { CommandId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { layerMemory as SqlitePersistenceMemory } from "../persistence/Sqlite.ts";
+import { listMetadata } from "./MetadataStore.ts";
 import { makeNestingService } from "./NestingService.ts";
 
 const id = ThreadId.make;
@@ -22,10 +23,10 @@ it.effect("reparent, unnest and receipts survive restart without changing native
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const getShell = (threadId: ThreadId) => Effect.succeed(shells.get(threadId) ?? null);
-    const service = yield* makeNestingService(sql, getShell);
+    const service = yield* makeNestingService(sql, getShell, () => Effect.void);
     yield* service.update(input("child", "parent"));
     yield* service.update(input("grandchild", "child"));
-    const restart = yield* makeNestingService(sql, getShell);
+    const restart = yield* makeNestingService(sql, getShell, () => Effect.void);
     assert.equal(
       (yield* restart.list()).find((row) => row.threadId === id("grandchild"))?.parentThreadId,
       id("child"),
@@ -54,12 +55,16 @@ it.effect("legacy edges import once, including missing parents and nulls", () =>
     const sql = yield* SqlClient.SqlClient;
 
     // Only fields required by the retained V1 table are populated through the fixture test below.
-    const service = yield* makeNestingService(sql, (threadId) =>
-      Effect.succeed(shells.get(threadId) ?? null),
+    const service = yield* makeNestingService(
+      sql,
+      (threadId) => Effect.succeed(shells.get(threadId) ?? null),
+      () => Effect.void,
     );
     yield* service.update(input("child", "parent", "import-edit"));
-    const restart = yield* makeNestingService(sql, (threadId) =>
-      Effect.succeed(shells.get(threadId) ?? null),
+    const restart = yield* makeNestingService(
+      sql,
+      (threadId) => Effect.succeed(shells.get(threadId) ?? null),
+      () => Effect.void,
     );
     assert.equal(
       (yield* restart.list()).find((row) => row.threadId === id("child"))?.parentThreadId,
@@ -85,8 +90,11 @@ it.effect(
         worktreePath: "/worker",
         modelSelection: "worker-default",
       };
-      const service = yield* makeNestingService(sql, (threadId) =>
-        Effect.succeed(threadId === parent.id ? parent : threadId === child.id ? child : null),
+      const service = yield* makeNestingService(
+        sql,
+        (threadId) =>
+          Effect.succeed(threadId === parent.id ? parent : threadId === child.id ? child : null),
+        () => Effect.void,
       );
       yield* service.update(input("worker", "supervisor", "cross-project"));
       parent.archivedAt = DateTime.makeUnsafe(0);
@@ -141,9 +149,15 @@ it.effect(
       }
       const before = (yield* management.getThreadShell(id("native-child")))!;
       const nativeEvents: string[] = [];
-      const service = yield* makeNestingService(sql, management.getThreadShell, command => management.dispatch(command).pipe(Effect.tap(receipt => Effect.sync(() => {
-        nativeEvents.push(...receipt.storedEvents.map(event => event.type));
-      }))));
+      const service = yield* makeNestingService(sql, management.getThreadShell, (command) =>
+        management.dispatch(command).pipe(
+          Effect.tap((receipt) =>
+            Effect.sync(() => {
+              nativeEvents.push(...receipt.storedEvents.map((event) => event.event.type));
+            }),
+          ),
+        ),
+      );
       yield* service.update(input("native-child", "native-parent", "native-nest"));
       yield* service.update(input("native-grandchild", "native-child", "native-deep"));
       assert.deepStrictEqual(nativeEvents, ["thread.metadata-updated", "thread.metadata-updated"]);
@@ -152,7 +166,7 @@ it.effect(
         input("native-parent", "native-grandchild", "native-cycle"),
       ])
         assert.equal((yield* Effect.exit(service.update(edge)))._tag, "Failure");
-      const restart = yield* makeNestingService(sql, management.getThreadShell);
+      const restart = yield* makeNestingService(sql, management.getThreadShell, () => Effect.void);
       assert.equal(
         (yield* restart.list()).find((row) => row.threadId === id("native-child"))?.parentThreadId,
         id("native-parent"),
@@ -184,10 +198,11 @@ it.effect(
         (threadId) => Effect.succeed(shells.get(threadId) ?? null),
         (command) =>
           Effect.gen(function* () {
-            const rows = yield* sql<{
-              payload: string;
-            }>`SELECT payload FROM fork_thread_metadata WHERE thread_id = ${command.threadId}`;
-            assert.equal(JSON.parse(rows[0]!.payload).parentThreadId, "parent");
+            assert.equal(
+              (yield* listMetadata(sql)).find((row) => row.threadId === command.threadId)
+                ?.parentThreadId,
+              "parent",
+            );
             events.push(`${command.type}:${command.commandId}`);
           }),
       );
