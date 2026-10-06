@@ -562,7 +562,7 @@ export class RemoteEnvironmentClient {
     const rpc = await this.openRpc();
     try {
       if (title !== undefined) await rpc.request("dispatchCommand", { type: "thread.metadata.update", commandId: NodeCrypto.randomUUID(), threadId: input.threadId, title });
-      if (scope !== undefined) await rpc.request("forkMetadataUpdate", { commandId: NodeCrypto.randomUUID(), threadId: input.threadId, scope });
+      if (scope !== undefined) await rpc.request("threadMetadataUpdate", { commandId: NodeCrypto.randomUUID(), threadId: input.threadId, scope });
     } finally { await rpc.dispose(); }
     const thread = await this.findThread(input.threadId);
     if (title !== undefined && thread.title !== title) throw new Error("Thread title readback did not match.");
