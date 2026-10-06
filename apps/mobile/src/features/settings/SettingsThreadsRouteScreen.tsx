@@ -201,7 +201,7 @@ function AutoSettleSettingsRows() {
         />
         <SettingsSwitchRow
           icon="archivebox"
-          label="Archive settled subthreads"
+          label="Archive settled workers"
           value={referenceSettings.settledSubthreadArchiveAfterDays !== null}
           disabled={disabled}
           onValueChange={(value) =>

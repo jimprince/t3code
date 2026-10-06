@@ -322,7 +322,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "archive-settled-subthreads",
-    title: "Archive settled subthreads",
+    title: "Archive settled workers",
     to: "/settings/general",
     searchTerms: ["agent worker archive days retention"],
     requiresThreadAutoSettlement: true,

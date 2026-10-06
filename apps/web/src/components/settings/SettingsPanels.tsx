@@ -2473,7 +2473,7 @@ export function GeneralSettingsPanel() {
               serverScoped
               settingKeys={["settledSubthreadArchiveAfterDays"]}
               {...searchableSetting("archive-settled-subthreads")}
-              description="Archive settled subthreads after this many days. Pinned threads, threads with auto-settle off, and parents of active descendants stay available."
+              description="Archive settled workers after this many days. Pinned threads, threads with auto-settle off, and parents of active descendants stay available."
               control={
                 <ScopedSwitch
                   settingKeys={["settledSubthreadArchiveAfterDays"]}
@@ -2481,7 +2481,7 @@ export function GeneralSettingsPanel() {
                   onCheckedChange={(checked) =>
                     updateSettings({ settledSubthreadArchiveAfterDays: checked ? 7 : null })
                   }
-                  aria-label="Archive settled subthreads"
+                  aria-label="Archive settled workers"
                 />
               }
             />
@@ -2489,7 +2489,7 @@ export function GeneralSettingsPanel() {
               <SettingsRow
                 serverScoped
                 settingKeys={["settledSubthreadArchiveAfterDays"]}
-                title="Days before subthread archive"
+                title="Days before worker archive"
                 description="Archived threads can be restored from the archive."
                 control={
                   <AutoSettleDaysInput
