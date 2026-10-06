@@ -1,5 +1,9 @@
 import { openRpcConnection } from "./openRpc.js";
 import { withThreadMetadata, type ThreadMetadata } from "./v2/nesting.js";
+import { projectionHasWork } from "./v2/workState.js";
+import { threadShell as gcThreadShell } from "./v2/reads.js";
+import type { WorktreeGcThread } from "./worktreeGc.js";
+import type { OrchestrationV2ShellSnapshot } from "@t3tools/contracts";
 import { refreshSavedEnvironmentSession } from "./sessionRefresh.js";
 import { pendingRequests, requirePendingRequest } from "./v2/requests.js";
 import { wrapWithPreamble, type WorkerContext } from "./thread-preamble.js";
@@ -314,6 +318,48 @@ export class RemoteEnvironmentClient {
     automationId?: string;
   }): Promise<readonly ProjectAutomation[]> {
     throw new Error("Project automation commands require the M3 automation services.");
+  }
+
+  async listWorktreeGcThreads(): Promise<WorktreeGcThread[]> {
+    const rpc = await this.openRpc();
+    try {
+      const archived = await rpc.request<OrchestrationV2ShellSnapshot>(
+        "getArchivedShellSnapshot",
+        {},
+      );
+      const rows: WorktreeGcThread[] = [];
+      for (const raw of archived.threads) {
+        const thread = gcThreadShell(raw);
+        if (!thread.worktreePath) continue;
+        // Native thread snapshots retain active execution entities. Read them
+        // before planning, and again through this method before each removal.
+        const detail = await rpc.subscribeThreadSnapshot<{
+          kind: "snapshot";
+          snapshot: { thread: OrchestrationThread };
+        }>(thread.id);
+        if (!detail.snapshot.thread.projection)
+          throw new Error("GC requires a V2 execution projection.");
+        rows.push({
+          id: thread.id,
+          worktreePath: thread.worktreePath,
+          archivedAt: thread.archivedAt,
+          workActive: projectionHasWork(detail.snapshot.thread.projection),
+        });
+      }
+      // A just-unarchived thread vetoes every alias of its checkout.
+      const active = await this.listThreads();
+      return [
+        ...rows,
+        ...active.map((thread) => ({
+          id: thread.id,
+          worktreePath: thread.worktreePath,
+          archivedAt: null,
+          workActive: true,
+        })),
+      ];
+    } finally {
+      await rpc.dispose();
+    }
   }
 
   async listProjects(): Promise<OrchestrationProjectShell[]> {
@@ -951,5 +997,4 @@ export class RemoteEnvironmentClient {
     if (this.rpcFactory) return;
     this.currentEnvironment = await refreshSavedEnvironmentSession(this.currentEnvironment);
   }
-
 }
