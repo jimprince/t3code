@@ -506,11 +506,12 @@ worker CLI has queued sends. Configure the real database in
 `~/.config/t3code/headless-upgrade.env`, used by cron and systemd:
 
 ```sh
-T3CODE_HEADLESS_STATE_DB="$HOME/.local/share/t3code-dev/userdata/state.sqlite"
+T3CODE_HEADLESS_STATE_DB="$HOME/.local/share/t3code-dev/userdata/statev2.sqlite"
 ```
 
-The default is `$T3CODE_HOME/userdata/state.sqlite`, or `~/.t3/userdata/state.sqlite`.
-Missing or unreadable state refuses the update. `--check-idle` exits 0 for idle,
+The default is `$T3CODE_HOME/userdata/statev2.sqlite`, or
+`~/.t3/userdata/statev2.sqlite`. Use `state.sqlite` only as an explicit
+pre-cutover V1 override. Missing or unreadable state refuses the update. `--check-idle` exits 0 for idle,
 75 for busy, and 1 for an unknown state. Checks run before download and immediately
 before changing `current`. Deferred checks leave an `update-pending` marker. A
 five-minute cron entry can retry that marker without other network checks:
@@ -729,8 +730,11 @@ Each case verifies HTTP readiness, imports transcripts through the packaged V2
 projection RPC, preserves historical events, legacy goals and file handoffs, and
 checks native ordering/messages and a second startup of `statev2.sqlite`. The
 M4 fixture starts at main ledger 60 and fork ledger 1-3,5-15; the upgrade must
-append main migrations 61/62 without rerunning shipped identities. The fixtures include the pre-1346
-sidebar events that broke startup in 1400-fork.1 and the pre-migration-5 ledger.
+append main migrations 61–66 and fork migrations 16/17 without rerunning
+shipped identities. Main 61/62 retain V2/index cleanup; upstream migrations
+57–60 retain the fork ledger wrapper's +6 mapping to main 63–66. Fork recovery
+appends 17. The fixtures include the pre-1346 sidebar events that broke startup
+in 1400-fork.1 and the pre-migration-5 ledger.
 Failure blocks the release; never use `--skip-serve` in a release job. Keep
 source/fixture failures separate from signing or artifact acquisition failures.
 
