@@ -447,6 +447,7 @@ export function layerWithRegistry<Error>(
         layerProviderSessionManagerProvided,
         layerProviderSwitchServiceProvided,
         layerRunExecutionServiceProvided,
+        layerDatabase,
         ThreadForkService.layer,
       ),
     ),
