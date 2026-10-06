@@ -195,4 +195,93 @@ describe("V2 orchestration model option compatibility", () => {
       event: { type: "thread.archived" },
     });
   });
+  // M3 obligation: fork-thread-goals must port goal recovery into the V2 projection and legacy history view.
+  it.skip("preserves historical goals and both attachment generations while defaulting lifecycle", () => {
+    const parsed = decodeThreadStreamItem({
+      kind: "snapshot",
+      snapshot: {
+        snapshotSequence: 7,
+        thread: {
+          id: "thread-history",
+          projectId: "project-history",
+          title: "Historical thread",
+          modelSelection: {
+            provider: "claudeAgent",
+            model: "claude-opus-5",
+            options: { effort: "high" },
+          },
+          runtimeMode: "full-access",
+          branch: null,
+          worktreePath: "/tmp/history",
+          latestTurn: null,
+          goal: {
+            goal: "Finish the migration",
+            status: "active",
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+            achievedAt: null,
+            lastEvaluatedAt: null,
+            lastReason: null,
+            lastTurnId: null,
+            continuationCount: 2,
+          },
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+          deletedAt: null,
+          messages: [
+            {
+              id: "message-history",
+              role: "user",
+              text: "Inspect both files",
+              attachments: [
+                {
+                  type: "file",
+                  id: "current-file",
+                  name: "current.txt",
+                  mimeType: "text/plain",
+                  sizeBytes: 12,
+                },
+              ],
+              fileAttachments: [
+                {
+                  type: "file",
+                  id: "legacy-file",
+                  name: "legacy.txt",
+                  mimeType: "text/plain",
+                  sizeBytes: 12,
+                  path: "/tmp/t3-file-attachments/legacy.txt",
+                },
+              ],
+              turnId: null,
+              streaming: false,
+              createdAt: "2026-01-01T00:00:00.000Z",
+              updatedAt: "2026-01-01T00:00:00.000Z",
+            },
+          ],
+          proposedPlans: [],
+          activities: [],
+          checkpoints: [],
+          session: null,
+        },
+      },
+    });
+
+    expect(parsed.snapshot.thread).toMatchObject({
+      interactionMode: "default",
+      archivedAt: null,
+      settledOverride: null,
+      settledAt: null,
+      goal: { goal: "Finish the migration", continuationCount: 2 },
+      modelSelection: {
+        provider: "claudeAgent",
+        model: "claude-opus-5",
+        options: { effort: "high" },
+      },
+    });
+    expect(parsed.snapshot.thread.messages[0]).toMatchObject({
+      attachments: [{ id: "current-file", type: "file" }],
+      fileAttachments: [{ id: "legacy-file", path: "/tmp/t3-file-attachments/legacy.txt" }],
+    });
+  });
+
 });
