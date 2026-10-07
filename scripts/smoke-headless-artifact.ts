@@ -230,7 +230,7 @@ async function smokeServe(
       "--port",
       String(port),
       "--no-browser",
-      "--home-dir",
+      "--base-dir",
       baseDir,
       workspaceDir,
     ],
