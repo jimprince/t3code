@@ -329,3 +329,8 @@ decided = "narrow"
 rationale = "Retire the fork's generic synchronous turn-diff path in favor of upstream's ordered diff worker. Keep only the OpenCode missing-terminal fallback, relocate its repository probe to that non-blocking worker, settle the lifecycle first, and reject late placeholders once a newer turn becomes latest."
 
 # Cache-removal tests await refresh completion and persisted update events, avoiding fixed clock-poll loops.
+[[patch.decision]]
+id = "v2-preview-ledger-compatibility"
+date = "2026-10-07"
+decided = "adapt"
+rationale = "Restore upstream published-preview upgrades behind the exact named V2 ledger marker at 53/54. Atomically translate upstream history into immutable fork ids, preserve V2/import progress at 61 and optional cleanup at 62, and add missing fork schema. Normal V1 fork ledger 60 has no preview marker and must execute 61/62."
