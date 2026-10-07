@@ -1,6 +1,6 @@
-Bottom: eda9614b7fed60e9f643fe1bbf871531fe7afb0d
-Top:    280cbb783db35cae60efbfde9861eb7a9920061d
+Bottom: 1beac48605a1d77902eab64abe0f68d7de5b5b51
+Top:    9b302f188153ac5a519380ba5daacd641d7cf2a3
 Author: User <user@example.com>
-Date:   2026-10-07 00:38:56 +0000
+Date:   2026-10-07 00:54:22 +0000
 
 feat(projects): decisions show their links, pictures and full context
