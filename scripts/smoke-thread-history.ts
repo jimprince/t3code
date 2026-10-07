@@ -314,7 +314,7 @@ async function importPackagedHistory(
   const output = await new Promise<string>((resolve, reject) => {
     NodeChildProcess.execFile(
       command[0]!,
-      [...command.slice(1), "pair", "--home-dir", home],
+      [...command.slice(1), "pair", "--base-dir", home],
       {
         cwd,
         env: { ...process.env, HOME: home, T3CODE_HOME: home, ELECTRON_RUN_AS_NODE: "1" },
@@ -406,7 +406,7 @@ async function boot(command: readonly string[], cwd: string, home: string, works
       "--port",
       String(port),
       "--no-browser",
-      "--home-dir",
+      "--base-dir",
       home,
       workspace,
     ],
