@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "aa45ee9138f9a0c29f1b16072b92932379a8fe4b",
-  "head": "0ad6184beb90dd4d60f178dddc5e6f1bc59189ab",
+  "prev": "bdbe44601f95656ea1c60d35d5899bfd26ec9355",
+  "head": "17a17bea0f59fd61710a19ada81573680bc2c53c",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -19,7 +19,8 @@
     "fork-gitea-connections",
     "fork-gitea-pr-actions",
     "fork-pr-project-exclusions",
-    "fork-headless-delivery"
+    "fork-headless-delivery",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-desktop-delivery",
@@ -443,6 +444,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "3720b11fa6472becb10611d1d00c29f654c3c73f"
+    },
+    "refresh-temp": {
+      "oid": "17a17bea0f59fd61710a19ada81573680bc2c53c"
     }
   }
 }
