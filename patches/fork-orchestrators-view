@@ -1,6 +1,6 @@
-Bottom: e757d485381e6323b4b0a95d1cf7c926cd59b0e4
-Top:    aadd6b070d44bee190711a96a609ab90c80f1cfa
+Bottom: 81210a0bc9c20af0ace0f03117e1a5054f3cc0c5
+Top:    3bbb6a8fb8bb5eea321faff3cd1bdc55221b15a8
 Author: brad <bradprin@live.com>
-Date:   2026-10-07 00:54:50 +0000
+Date:   2026-10-07 20:03:35 +0000
 
 feat(web): add orchestrators view
