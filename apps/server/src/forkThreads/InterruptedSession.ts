@@ -12,7 +12,7 @@ import type * as DateTime from "effect/DateTime";
 const active = (status: string) =>
   ["queued", "preparing", "starting", "running", "waiting"].includes(status);
 
-/** The Stop effect calls this only after the provider acknowledges the interrupt. */
+/** Records Stop ACK separately; only the delayed fallback settles missing native finalization. */
 export function interruptedSessionEvents(input: {
   readonly projection: Pick<
     OrchestrationV2ThreadProjection,
@@ -30,6 +30,7 @@ export function interruptedSessionEvents(input: {
   readonly commandId: CommandId;
   readonly now: DateTime.Utc;
   readonly resultItemId?: TurnItemId | undefined;
+  readonly acknowledgeOnly?: boolean;
 }): OrchestrationV2DomainEvent[] {
   const p = input.projection;
   const providerThread = p.providerThreads.find((thread) => thread.id === input.providerThreadId);
@@ -43,6 +44,26 @@ export function interruptedSessionEvents(input: {
   if (run.activeAttemptId !== attempt.id || providerThread.lastRunOrdinal !== run.ordinal)
     return [];
   if (p.runs.some((other) => other.id !== run.id && active(other.status))) return [];
+  if (input.acknowledgeOnly) {
+    const request = p.turnItems.find(
+      (item) => item.runId === run.id && item.type === "run_interrupt_request",
+    );
+    return request
+      ? [
+          {
+            id: EventId.make(`${input.commandId}:ack`),
+            type: "turn-item.updated",
+            threadId: p.thread.id,
+            runId: run.id,
+            occurredAt: input.now,
+            payload: { ...request, title: "Stop acknowledged", updatedAt: input.now },
+          },
+        ]
+      : [];
+  }
+  // A native terminal receipt may precede its checkpoint and run settlement.
+  // Preserve that native outcome while finalization is still in progress.
+  if (active(run.status) && !active(turn.status)) return [];
   const events: OrchestrationV2DomainEvent[] = [];
   const base = {
     threadId: p.thread.id,

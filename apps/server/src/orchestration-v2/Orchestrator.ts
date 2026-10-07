@@ -8244,6 +8244,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       const stoppedRun = projection.runs.find((run) => run.id === stoppedRunId);
       const now = yield* DateTime.now;
       const reconciled = interruptedSessionEvents({
+        acknowledgeOnly: command.interruptAcknowledged,
         projection,
         providerThreadId: command.providerThreadId,
         providerTurnId: command.providerTurnId,
@@ -8259,6 +8260,25 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       });
       if (reconciled.length > 0)
         yield* Ref.update(events, (existing) => [...existing, ...reconciled]);
+      if (command.interruptAcknowledged) {
+        // The receipt and delayed fallback commit atomically. The existing exact-run
+        // guard is checked again when this replay-safe effect becomes claimable.
+        yield* Ref.update(effects, (existing) => [
+          ...existing,
+          {
+            id: `effect:interrupt-settle:${command.commandId}`,
+            commandId: CommandId.make(`command:interrupt-settle:${command.commandId}`),
+            threadId: command.threadId,
+            availableAt: DateTime.add(now, { milliseconds: 10_000 }),
+            request: {
+              type: "provider-turn.interrupt-settle",
+              providerThreadId: command.providerThreadId,
+              providerTurnId: command.providerTurnId,
+            },
+          } satisfies PendingOrchestrationEffectV2,
+        ]);
+        return;
+      }
       const root = projection.nodes.find((node) => node.id === stoppedRun?.rootNodeId);
       const checkpointScopeId = root?.checkpointScopeId;
       if (

@@ -1,9 +1,6 @@
 import type * as Duration from "effect/Duration";
 
 export interface ProviderReplayGate {
-  /** Drain adapter-native receipts before closing the replay runtime scope. */
-  readonly addDrain: (drain: () => Promise<void>) => void;
-  readonly drain: () => Promise<void>;
   readonly beforeEmit: (label: string | undefined, signal?: AbortSignal) => Promise<void>;
   readonly waitForReached: (label: string) => Promise<boolean>;
   readonly hasReached: (label: string) => boolean;
@@ -53,17 +50,10 @@ export function makeProviderReplayGate(labels: ReadonlyArray<string>): ProviderR
     });
   }
 
-  const drains: Array<() => Promise<void>> = [];
   const finishArmed: Array<Duration.Input> = [];
   const finishArmedWaiters: Array<() => void> = [];
 
   return {
-    addDrain: (drain) => {
-      drains.push(drain);
-    },
-    drain: async () => {
-      await Promise.all(drains.map((drain) => drain()));
-    },
     recordFinishArmed: (debounce) => {
       finishArmed.push(debounce);
       for (const wake of finishArmedWaiters.splice(0)) wake();
