@@ -157,7 +157,7 @@ function verify(databasePath: string, before: Awaited<ReturnType<typeof seed>>) 
       .all();
     NodeAssert.equal(events.length, before.events.length, "Historical event loss");
     for (const [index, original] of before.events.entries()) {
-      const expected = { ...original, application_event_version: 1 };
+      const expected: Record<string, unknown> = { ...original, application_event_version: 1 };
       if (original.event_type === "thread.sidebar-reordered") {
         const { orderKey, ...payload } = JSON.parse(String(original.payload_json));
         expected.event_type = "thread.meta-updated";
