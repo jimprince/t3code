@@ -127,8 +127,6 @@ const result = await Effect.runPromise(
     }
     for (const fiber of fibers) yield* Fiber.interrupt(fiber);
     return { checkpoints };
-  }).pipe(
-    Effect.provide(Logger.layer([Logger.withConsoleError(Logger.formatLogFmt)])),
-  ),
+  }).pipe(Effect.provide(Logger.layer([Logger.withConsoleError(Logger.formatLogFmt)]))),
 );
 console.log(JSON.stringify(result));
