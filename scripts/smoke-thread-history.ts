@@ -164,10 +164,12 @@ function verify(databasePath: string, before: Awaited<ReturnType<typeof seed>>) 
         expected.payload_json = JSON.stringify({ ...payload, activeOrderKey: orderKey });
       }
       const actual = events[index]!;
+      const actualRow = { ...actual, payload_json: JSON.parse(String(actual.payload_json)) };
+      const expectedRow = { ...expected, payload_json: JSON.parse(String(expected.payload_json)) };
       NodeAssert.deepEqual(
-        { ...actual, payload_json: JSON.parse(String(actual.payload_json)) },
-        { ...expected, payload_json: JSON.parse(String(expected.payload_json)) },
-        "Historical event changed unexpectedly",
+        actualRow,
+        expectedRow,
+        `Historical event changed unexpectedly: ${JSON.stringify({ actual: actualRow, expected: expectedRow })}`,
       );
     }
     NodeAssert.deepEqual(
@@ -276,10 +278,18 @@ function verify(databasePath: string, before: Awaited<ReturnType<typeof seed>>) 
     }
     // TODO(fork-thread-history-compatibility): after the threads lane is integrated,
     // assert the historical achieved/cleared goals through its read-only history RPC.
+    const actualMessages = database
+      .prepare("SELECT * FROM projection_thread_messages ORDER BY message_id")
+      .all()
+      .map((row) => ({ ...row }));
+    // Migration 051 adds nullable context_json only when the legacy column is absent.
+    const expectedMessages = before.legacyMessages.map((row) =>
+      Object.hasOwn(row, "context_json") ? { ...row } : { ...row, context_json: null },
+    );
     NodeAssert.deepEqual(
-      database.prepare("SELECT * FROM projection_thread_messages ORDER BY message_id").all(),
-      before.legacyMessages,
-      "Legacy messages/file handoffs were modified by V2 import",
+      actualMessages,
+      expectedMessages,
+      `Legacy messages/file handoffs were modified by V2 import: ${JSON.stringify({ actual: actualMessages, expected: expectedMessages })}`,
     );
     NodeAssert.equal(
       database.prepare("SELECT count(*) AS count FROM projection_turns").get()?.count,
