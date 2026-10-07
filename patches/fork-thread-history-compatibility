@@ -1,6 +1,6 @@
 Bottom: 5c176e602aa601535c990857efa4ecc2888d68e3
-Top:    5c176e602aa601535c990857efa4ecc2888d68e3
+Top:    16a807cf9b37620c2bbf4df0ebd6cee7093720d3
 Author: brad <bradprin@live.com>
-Date:   2026-10-07 21:26:59 +0000
+Date:   2026-10-07 21:31:15 +0000
 
 fix(threads): preserve historical goal data without goal automation
