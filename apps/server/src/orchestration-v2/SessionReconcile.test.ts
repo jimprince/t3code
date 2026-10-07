@@ -379,6 +379,27 @@ const reconcileScenario = (
           occurredAt: now,
           payload: { ...acknowledged.runs[0]!, activeAttemptId: RunAttemptId.make("new-attempt") },
         });
+        const newItemId = TurnItemId.make("new-attempt-background-work");
+        const oldItem = acknowledged.turnItems.find((item) => item.type === "command_execution")!;
+        yield* projections.apply({
+          id: EventId.make("new-attempt-background-work"),
+          type: "turn-item.updated",
+          threadId,
+          occurredAt: now,
+          payload: { ...oldItem, id: newItemId, status: "running", completedAt: null },
+        });
+        // A late old ACK must not settle background work belonging to a retry.
+        yield* orchestrator.dispatch({
+          ...settle,
+          commandId: CommandId.make("late-old-ack-during-retry"),
+          interruptAcknowledged: true,
+        });
+        assert.equal(
+          (yield* projections.getThreadProjection(threadId)).turnItems.find(
+            (item) => item.id === newItemId,
+          )?.status,
+          "running",
+        );
       }
       if (duringGrace === "ordinal") {
         yield* projections.apply({
@@ -418,6 +439,14 @@ const reconcileScenario = (
           assert.equal(preserved.providerSessions[0]?.lastError, "native marker");
         }
         if (duringGrace === "newer") assert.equal(preserved.runs[1]?.status, "running");
+        if (duringGrace === "attempt") {
+          assert.equal(
+            preserved.turnItems.find(
+              (item) => item.id === TurnItemId.make("new-attempt-background-work"),
+            )?.status,
+            "running",
+          );
+        }
         return;
       }
     } else {

@@ -8244,7 +8244,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       const stoppedRun = projection.runs.find((run) => run.id === stoppedRunId);
       const now = yield* DateTime.now;
       const reconciled = interruptedSessionEvents({
-        acknowledgeOnly: command.interruptAcknowledged,
+        acknowledgeOnly: command.interruptAcknowledged === true,
         projection,
         providerThreadId: command.providerThreadId,
         providerTurnId: command.providerTurnId,
@@ -8277,7 +8277,6 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             },
           } satisfies PendingOrchestrationEffectV2,
         ]);
-        return;
       }
       const root = projection.nodes.find((node) => node.id === stoppedRun?.rootNodeId);
       const checkpointScopeId = root?.checkpointScopeId;
@@ -8303,6 +8302,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       // A new turn may have started since Stop; its work is not this Stop's.
       if (
         stoppedRun === undefined ||
+        stoppedRun.activeAttemptId !== stopped.providerTurn?.runAttemptId ||
         projection.runs.some(
           (run) =>
             run.id !== stoppedRun.id &&
