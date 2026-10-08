@@ -90,3 +90,5 @@ export * from "./forkLegacyHistory.ts";
 
 export * from "./sessionReconcile.ts";
 export * from "./handoffs.ts";
+
+export * from "./notification.ts";
