@@ -94,14 +94,52 @@ export function sendTransportCause(
   return "TRANSPORT_ERROR";
 }
 
+/** Only structural evidence of failure before admission permits another automatic attempt. */
+export function sendWasNeverSubmitted(error: unknown): boolean {
+  const chain: Record<string, unknown>[] = [];
+  let current = error;
+  for (let depth = 0; depth < 4 && Predicate.isObject(current); depth++) {
+    chain.push(current);
+    current = current.cause ?? current.reason;
+  }
+  // An open timeout can actually be RpcClient's heartbeat failure on an OPEN socket.
+  if (
+    chain.some((value) => {
+      const tag = value._tag ?? value.name;
+      return (
+        tag === "TimeoutError" ||
+        tag === "AbortError" ||
+        tag === "InterruptedException" ||
+        value.code === "ETIMEDOUT" ||
+        (tag === "SocketOpenError" && value.kind === "Timeout") ||
+        ["SocketReadError", "SocketWriteError", "SocketCloseError"].includes(String(tag))
+      );
+    })
+  )
+    return false;
+  return chain.some((value) => {
+    const tag = value._tag ?? value.name;
+    return (
+      (tag === "SocketOpenError" && value.kind === "Unknown") ||
+      tag === "EnvironmentAuthorizationError" ||
+      (["ECONNREFUSED", "EHOSTUNREACH", "ENOTFOUND"].includes(String(value.code)) &&
+        ["connect", "getaddrinfo"].includes(String(value.syscall)))
+    );
+  });
+}
+
 /** Watcher callers must preserve uncertainty instead of treating a returned result as delivery. */
-export function sendOutcomeFailure(
-  outcome: unknown,
-): { status: "uncertain" | "undeliverable"; causeCode: string; sendId?: string } | null {
+export function sendOutcomeFailure(outcome: unknown): {
+  status: "uncertain" | "undeliverable";
+  retryable: boolean;
+  causeCode: string;
+  sendId?: string;
+} | null {
   if (!Predicate.isObject(outcome) || outcome.dispatched !== false || outcome.queued !== false)
     return null;
   return {
     status: outcome.uncertain === true ? "uncertain" : "undeliverable",
+    retryable: outcome.uncertain !== true && outcome.retryable === true,
     causeCode: isHandoffCause(outcome.causeCode) ? outcome.causeCode : "TRANSPORT_ERROR",
     ...(typeof outcome.sendId === "string" ? { sendId: outcome.sendId } : {}),
   };
