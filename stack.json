@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "3486310b81e5140bb66f3a5651e72bb6202e2404",
-  "head": "be382b1ede85490294eec91369b86970e085708d",
+  "prev": "01749fd9f9b4b5fa16e2e52817b260a8e011feb8",
+  "head": "c66e3dcfae873562b627f084ce76e0bb52d920ca",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -131,7 +131,8 @@
     "fork-chat-workspace-startup",
     "fork-message-forward",
     "fork-publish-task-plan",
-    "fork-dash-layout-retire"
+    "fork-dash-layout-retire",
+    "refresh-temp"
   ],
   "unapplied": [],
   "hidden": [],
@@ -522,6 +523,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "59f5bb3765528295ed47a214763443995570f33c"
+    },
+    "refresh-temp": {
+      "oid": "c66e3dcfae873562b627f084ce76e0bb52d920ca"
     }
   }
 }
