@@ -11,7 +11,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
-    yield* initializeMetadata(sql);
+      yield* initializeMetadata(sql);
       const commands: OrchestrationV2ServerCommand[] = [];
       const a = ThreadId.make("a"),
         b = ThreadId.make("b");
