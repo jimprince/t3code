@@ -1,4 +1,5 @@
 import { SessionReconcileInput, SessionReconcileError } from "./sessionReconcile.ts";
+import { HandoffRpcs } from "./handoffs.ts";
 import { LegacyHistoryRpc } from "./forkLegacyHistory.ts";
 import { ThreadTransferRpcs } from "./threadTransfer.ts";
 import { ForkConversationRpc } from "./forkConversation.ts";
@@ -2374,6 +2375,7 @@ export const WsSessionReconcileRpc = Rpc.make("fork.session.reconcile", {
 // Every fork RPC lives here, not in WsCoreRpcGroup: past upstream's own methods, the core
 // group's toHandlers type hits TS2589 and the server's handler-service types resolve to any in R.
 export const WsForkRpcGroup = RpcGroup.make(
+  ...HandoffRpcs,
   WsProjectRequestsDiscussRpc,
   WsSessionReconcileRpc,
   WsAutomationsListRpc,
