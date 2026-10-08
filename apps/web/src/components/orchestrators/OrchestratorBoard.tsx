@@ -34,6 +34,7 @@ import { isElectron } from "../../env";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { useProjects, useServerConfigs } from "../../state/entities";
 import { updateProjectScopeCommand } from "../../state/forkProjectScope";
+import { setThreadSubprojectCommand } from "../../state/forkSubproject";
 import { useSupervisionReadyHosts } from "../../state/forkSupervision";
 import { threadEnvironment } from "../../state/threads";
 import { applyProjectLayout, useProjectLayout } from "../../state/projectLayout";
@@ -86,6 +87,12 @@ import { resolveProjectTab, type ProjectTab } from "./projectTabs.logic";
 import { HEALTH_LABEL, isHealthStale, latestWorkChangeAt } from "./projectHealth.logic";
 import { deriveBlocked, type BlockedRow } from "./projectWork.logic";
 import { projectReturnState } from "./projectNavigation";
+import {
+  projectTrail,
+  subprojectBlocked,
+  subprojectIsActive,
+  subprojectNeedsYou,
+} from "./projectSubprojects.logic";
 
 /**
  * The layout's tabs, with the page's actions (Edit layout) at the right. In edit
@@ -269,10 +276,13 @@ function ProjectNeedsYouWidget({ summary }: { readonly summary: OrchestratorSumm
   );
 }
 
-/** "N need you" in the status line: the same count as the Needs you widget. */
+/**
+ * "N need you" in the status line: the Needs you widget's count, plus what is waiting on a
+ * thread inside each subproject (its own requests show on its page).
+ */
 function NeedsYouCount({ summary }: { readonly summary: OrchestratorSummary }) {
   const { items } = useNeedsYou(summary);
-  const count = summary.needsYou.length + items.length;
+  const count = summary.needsYou.length + items.length + subprojectNeedsYou(summary);
   if (count === 0) return null;
   return (
     <span className="inline-flex items-center gap-1.5 text-warning-foreground">
@@ -303,10 +313,82 @@ function useBlockedRows(summary: OrchestratorSummary): BlockedRow[] {
   );
 }
 
-/** "N blocked" in the status line: the blocked tags and notes under Workstreams, counted. */
+/** "N blocked" in the status line: the blocked tags and notes under Workstreams, counted, plus blocked threads inside subprojects. */
 function BlockedCount({ summary }: { readonly summary: OrchestratorSummary }) {
-  const count = useBlockedRows(summary).length;
+  const count = useBlockedRows(summary).length + subprojectBlocked(summary);
   return count > 0 ? <span className="text-error">{count} blocked</span> : null;
+}
+
+/** A subproject's health chip and sentence, from its own page data. */
+function SubprojectHealth({ summary }: { readonly summary: OrchestratorSummary }) {
+  const dashboard = useEnvironmentQuery(
+    projectDashboardQuery({
+      environmentId: summary.root.environmentId,
+      input: { threadId: summary.root.id },
+    }),
+  );
+  const health = dashboard.data?.health ?? null;
+  if (health === null) return null;
+  return (
+    <>
+      <span
+        className={`rounded-sm px-1.5 py-0.5 text-xs font-medium ${HEALTH_TONE[health.status]}`}
+      >
+        {HEALTH_LABEL[health.status]}
+      </span>
+      <span className="min-w-0 truncate text-muted-foreground">{health.sentence}</span>
+    </>
+  );
+}
+
+/**
+ * One row per direct subproject: its health, what waits on you inside it, who is
+ * working and when it last moved. A row opens the subproject's own page.
+ */
+function ProjectSubprojects({ summary }: { readonly summary: OrchestratorSummary }) {
+  const navigate = useNavigate();
+  if (summary.subprojects.length === 0) return null;
+  return (
+    <ProjectSection title="Subprojects" count={summary.subprojects.length}>
+      <ul className="divide-y divide-border">
+        {summary.subprojects.map((sub) => (
+          <ClickableRow
+            key={`${sub.root.environmentId}:${sub.root.id}`}
+            label={`Open ${sub.root.title} subproject`}
+            onOpen={() =>
+              void navigate({
+                to: "/orchestrators/$environmentId/$threadId",
+                params: { environmentId: sub.root.environmentId, threadId: sub.root.id },
+              })
+            }
+            className="items-baseline gap-x-3 py-1.5 text-sm"
+          >
+            <span className="shrink-0 font-medium">
+              <span className="text-muted-foreground">/ </span>
+              {sub.root.title}
+            </span>
+            <span className="flex min-w-0 flex-1 items-baseline gap-2">
+              <SubprojectHealth summary={sub} />
+            </span>
+            {sub.rollup.blocked > 0 ? <span className="shrink-0 text-error">Blocked</span> : null}
+            {sub.rollup.needsYou > 0 ? (
+              <span className="shrink-0 text-warning-foreground">
+                {sub.rollup.needsYou} need you
+              </span>
+            ) : null}
+            {sub.rollup.working > 0 ? (
+              <span className="shrink-0 text-muted-foreground">{sub.rollup.working} working</span>
+            ) : subprojectIsActive(sub) ? (
+              <span className="shrink-0 text-muted-foreground">Working</span>
+            ) : null}
+            <span className="shrink-0 text-xs text-muted-foreground">
+              {formatRelativeTimeLabel(sub.rollup.latestActivityAt)}
+            </span>
+          </ClickableRow>
+        ))}
+      </ul>
+    </ProjectSection>
+  );
 }
 
 /**
@@ -590,6 +672,7 @@ export function OrchestratorBoard({
   const updateProjectScope = useAtomCommand(updateProjectScopeCommand, {
     reportFailure: false,
   });
+  const setSubproject = useAtomCommand(setThreadSubprojectCommand, "Change subproject");
   const [chatOpen, setChatOpen] = useLocalStorage(
     `t3code:projects:orchestrator-chat-open:${environmentId}:${threadId}`,
     false,
@@ -607,12 +690,20 @@ export function OrchestratorBoard({
     projectDashboardQuery({ environmentId, input: { threadId } }),
   );
   const saveTracker = useAtomCommand(setProjectDashboardTracker, "Save task repository");
+  const summaries = useMemo(
+    () => buildOrchestratorSummaries(threads, projects),
+    [projects, threads],
+  );
   const summary = useMemo(
     () =>
-      buildOrchestratorSummaries(threads, projects).find(
+      summaries.find(
         (item) => item.root.environmentId === environmentId && item.root.id === threadId,
       ) ?? null,
-    [environmentId, projects, threadId, threads],
+    [environmentId, summaries, threadId],
+  );
+  const trail = useMemo(
+    () => (summary === null ? [] : projectTrail(summaries, summary)),
+    [summaries, summary],
   );
   const previousVisit = useMemo(
     () =>
@@ -698,6 +789,28 @@ export function OrchestratorBoard({
     }
     setEditing(false);
   };
+  /** Turns a subproject back into a plain worker of its parent; its page goes away. */
+  const showAsWorker = async () => {
+    const result = await setSubproject({
+      environmentId: summary.root.environmentId,
+      input: {
+        commandId: CommandId.make(randomUUID()),
+        threadId: summary.root.id,
+        subproject: "off",
+      },
+    });
+    if (result._tag === "Failure") return;
+    setEditing(false);
+    const parent = trail.at(-1);
+    void navigate(
+      parent
+        ? {
+            to: "/orchestrators/$environmentId/$threadId",
+            params: { environmentId: parent.root.environmentId, threadId: parent.root.id },
+          }
+        : { to: "/" },
+    );
+  };
   const revealSentMessage = (messageId: import("@t3tools/contracts").MessageId) => {
     setRevealedMessageId(messageId);
     setChatOpen(true);
@@ -727,6 +840,28 @@ export function OrchestratorBoard({
           <WorkspacePageHeader electron={isElectron} className="bg-background">
             {rootProject ? <ProjectFavicon project={rootProject} className="size-5" /> : null}
             <WorkspaceBreadcrumb ariaLabel="Project breadcrumb">
+              {trail.map((ancestor) => (
+                <WorkspaceBreadcrumbItem key={`${ancestor.root.environmentId}:${ancestor.root.id}`}>
+                  <button
+                    type="button"
+                    className="max-w-48 cursor-pointer truncate hover:text-foreground hover:underline"
+                    onClick={() =>
+                      void navigate({
+                        to: "/orchestrators/$environmentId/$threadId",
+                        params: {
+                          environmentId: ancestor.root.environmentId,
+                          threadId: ancestor.root.id,
+                        },
+                      })
+                    }
+                  >
+                    {ancestor.root.title}
+                  </button>
+                  <span aria-hidden className="pl-2 sm:pl-3">
+                    /
+                  </span>
+                </WorkspaceBreadcrumbItem>
+              ))}
               <WorkspaceBreadcrumbItem current>
                 <span className="flex min-w-0 flex-col">
                   <h1>{summary.root.title}</h1>
@@ -757,10 +892,10 @@ export function OrchestratorBoard({
               <WorkspacePageContainer width="wide" className="gap-5">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
                   <OrchestratorStatus status={summary.status} />
-                  {summary.activeWorkerCount > 0 ? (
+                  {summary.rollup.working > 0 ? (
                     <span className="inline-flex items-center gap-1.5 text-muted-foreground">
                       <UsersIcon className="size-4" />
-                      {summary.activeWorkerCount} working
+                      {summary.rollup.working} working
                     </span>
                   ) : null}
                   <NeedsYouCount summary={summary} />
@@ -771,6 +906,7 @@ export function OrchestratorBoard({
                 </div>
 
                 <ProjectHealthLine summary={summary} />
+                {tab === "dashboard" ? <ProjectSubprojects summary={summary} /> : null}
                 {tab === "dashboard" ? (
                   <ProjectWorkstreams summary={summary} since={previousVisit} />
                 ) : null}
@@ -900,6 +1036,11 @@ export function OrchestratorBoard({
               </label>
             </div>
             <DialogFooter>
+              {summary.parentProjectKey !== null ? (
+                <Button variant="ghost" className="mr-auto" onClick={() => void showAsWorker()}>
+                  Show as worker
+                </Button>
+              ) : null}
               <Button variant="outline" onClick={() => setEditing(false)}>
                 Cancel
               </Button>
