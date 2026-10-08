@@ -629,3 +629,29 @@ layer("CommandPolicyV2", (it) => {
     }),
   );
 });
+
+it("queues ordinary handoffs instead of interrupting tools or restarting an unsupported provider", () => {
+  for (const supportsActiveSteering of [false, true]) {
+    const projection = dispatchProjection(
+      capabilities((current) => ({
+        ...current,
+        turns: {
+          ...current.turns,
+          supportsActiveSteering,
+          activeSteeringInterruptsTools: true,
+          supportsQueuedMessages: false,
+          supportsSteeringByInterruptRestart: true,
+        },
+      })),
+    );
+    assert.deepEqual(
+      CommandPolicy.resolveMessageDispatchIntent(
+        projection,
+        { type: "start_immediately" },
+        "auto",
+        false,
+      ),
+      { type: "queue_after_active" },
+    );
+  }
+});

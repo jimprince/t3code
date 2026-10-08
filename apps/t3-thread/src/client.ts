@@ -1,5 +1,13 @@
 import { openRpcConnection } from "./openRpc.js";
 import type { NamedAgentSummary } from "./namedAgents.js";
+import {
+  HandoffError,
+  EnvironmentAuthorizationError,
+  type HandoffReceipt,
+  type HandoffLookupInput,
+  type HandoffLookupResult,
+} from "@t3tools/contracts";
+import { persistSendIntent, sendTransportCause } from "./sendIntents.js";
 import { withThreadMetadata, type ThreadMetadata } from "./v2/nesting.js";
 import { projectionHasWork } from "./v2/workState.js";
 import { threadShell as gcThreadShell } from "./v2/reads.js";
@@ -11,7 +19,6 @@ import type { QueuedSendOrigin } from "./types.js";
 import { refreshSavedEnvironmentSession } from "./sessionRefresh.js";
 import { pendingRequests, requirePendingRequest } from "./v2/requests.js";
 import { wrapWithPreamble, type WorkerContext } from "./thread-preamble.js";
-import type { ProjectAutomation } from "./types.js";
 import { wireModel } from "./v2/commands.js";
 import * as NodeCrypto from "node:crypto";
 
@@ -61,7 +68,7 @@ type RemoteRpcClient = Pick<
 type RpcFactory = (wsUrl: string) => RemoteRpcClient;
 
 /** Result of `RemoteEnvironmentClient.sendMessage`. Exactly one of the two shapes. */
-export type SendMessageOutcome =
+export type SendMessageOutcome = (
   | { dispatched: true; queued: false }
   | {
       dispatched: false;
@@ -69,7 +76,10 @@ export type SendMessageOutcome =
       queuedSendId: string;
       sequence: number;
       supersededSendIds?: string[];
-    };
+    }
+  | { dispatched: false; queued: false; uncertain: true; sendId: string; causeCode: string }
+  | { dispatched: false; queued: false; uncertain: false; sendId: string; causeCode: string }
+) & { receipt?: HandoffReceipt; sendId?: string };
 
 function buildPlanImplementationPrompt(planMarkdown: string): string {
   return `PLEASE IMPLEMENT THIS PLAN:\n${planMarkdown.trim()}`;
@@ -799,17 +809,9 @@ export class RemoteEnvironmentClient {
     };
   }
 
-  /**
-   * Send a follow-up message to a thread.
-   *
-   * A send to a thread whose turn is still running is *accepted and queued* rather
-   * than rejected: it is held in durable local state and dispatched by the watcher
-   * at the next turn boundary (see `sendQueue.ts`). The caller is told which
-   * happened so it is never misled into thinking the worker has already seen it.
-   *
-   * - `allowWhileRunning` forces a concurrent dispatch (steering); it never queues.
-   * - `queueWhileRunning: false` restores the historical hard rejection for callers
-   *   that need a mid-turn send to fail loudly instead of being held.
+  /** Persist identity before transport; native V2 admission chooses steering or queueing.
+   * Acceptance is durable dispatch, not proof that the agent has read the message.
+   * Explicit control can interrupt tools; normal handoffs never interrupt/restart.
    */
   async sendMessage(input: {
     commandId?: string;
@@ -824,69 +826,188 @@ export class RemoteEnvironmentClient {
     coalesceKey?: string | null;
     senderEnvironment?: string;
   }): Promise<SendMessageOutcome> {
-    const thread = await this.findThread(input.threadId);
-    if (thread.archivedAt || thread.deletedAt) {
-      throw new Error(`Thread '${thread.id}' is archived and cannot receive messages.`);
-    }
-
-    const status = classifyThread(thread);
-    if (status.state === "running" && !input.allowWhileRunning) {
-      if (input.queueWhileRunning === false) {
-        throw new Error(
-          `Thread '${thread.id}' is still running. Use interrupt first or pass a force path in code if you really want concurrent sends.`,
-        );
-      }
-
-      const { queued, superseded } = await enqueueSend({
-        threadId: thread.id,
-        agentName: input.agentName ?? null,
+    const sendId = input.commandId ?? NodeCrypto.randomUUID();
+    try {
+      await persistSendIntent({
+        sendId,
+        recipientThreadId: input.threadId,
         environment: this.environment.name,
         text: input.text,
-        origin: input.origin
-          ? {
-              ...input.origin,
-              ...(input.senderEnvironment ? { senderEnvironment: input.senderEnvironment } : {}),
-            }
-          : null,
-        coalesceKey: input.coalesceKey ?? null,
-        queuedDuringTurnId: thread.latestTurn?.turnId ?? null,
+        coalesceKey: input.coalesceKey,
+        provenance: [
+          input.origin ?? null,
+          input.allowWhileRunning === true,
+          input.queueWhileRunning !== false,
+        ],
       });
+    } catch (cause) {
       return {
         dispatched: false,
-        queued: true,
-        queuedSendId: queued.id,
-        sequence: queued.sequence,
-        ...(superseded.length > 0 ? { supersededSendIds: superseded.map(({ id }) => id) } : {}),
+        queued: false,
+        uncertain: false,
+        sendId,
+        causeCode:
+          cause instanceof Error && cause.message === "SEND_ID_CONFLICT"
+            ? "SEND_ID_CONFLICT"
+            : "PERSISTENCE_FAILED",
       };
     }
-
-    const rpc = await this.openRpc();
+    let descriptor: ExecutionEnvironmentDescriptor;
     try {
-      await rpc.request("dispatchCommand", {
-        type: "message.dispatch",
-        createdBy: "user",
-        creationSource: "server",
-        commandId: input.commandId ?? NodeCrypto.randomUUID(),
-        threadId: thread.id,
-        messageId: input.commandId ? `${input.commandId}:message` : NodeCrypto.randomUUID(),
-        text: input.text,
-        attachments: [],
-        ...(input.origin
-          ? {
-              context: makeMessageOriginContext(input.origin),
-              senderThreadId: input.origin.fromThreadId,
-            }
-          : {}),
-        dispatchMode:
-          input.allowWhileRunning && thread.latestTurn?.state === "running"
-            ? { type: "steer_active", targetRunId: thread.latestTurn.turnId }
-            : { type: "start_immediately" },
-      });
-    } finally {
-      await rpc.dispose();
+      descriptor = await this.describe();
+    } catch (cause) {
+      return {
+        dispatched: false,
+        queued: false,
+        uncertain: false,
+        sendId,
+        causeCode: sendTransportCause(cause),
+      };
     }
+    if (descriptor.capabilities.reliableHandoffs === true) {
+      let rpc: RemoteRpcClient | null = null;
+      let attempted = false;
+      try {
+        rpc = await this.openRpc();
+        attempted = true;
+        const receipt = await rpc.request<HandoffReceipt>("fork.send.accept", {
+          sendId,
+          recipientThreadId: input.threadId,
+          text: input.text,
+          ...(input.origin?.fromThreadId ? { senderThreadId: input.origin.fromThreadId } : {}),
+          ...(input.origin ? { context: makeMessageOriginContext(input.origin) } : {}),
+          allowQueueFallback: input.queueWhileRunning !== false,
+          coalesceKey: input.coalesceKey ?? null,
+          intent: input.allowWhileRunning ? "control" : input.coalesceKey ? "queue" : "auto",
+        });
+        if (
+          receipt.status === "queued" ||
+          receipt.status === "held" ||
+          receipt.status === "accepted"
+        ) {
+          if (receipt.status === "held") {
+            const { queued } = await enqueueSend({
+              serverSendId: sendId,
+              allowWhileRunning: input.allowWhileRunning === true,
+              allowQueueFallback: input.queueWhileRunning !== false,
+              threadId: input.threadId,
+              agentName: input.agentName ?? null,
+              environment: this.environment.name,
+              text: input.text,
+              origin: input.origin ?? null,
+              coalesceKey: input.coalesceKey ?? null,
+              queuedDuringTurnId: null,
+            });
+            return {
+              dispatched: false,
+              queued: true,
+              queuedSendId: queued.id,
+              sequence: queued.sequence,
+              sendId,
+              receipt,
+            };
+          }
+          return {
+            dispatched: false,
+            queued: true,
+            queuedSendId: sendId,
+            sequence: 0,
+            sendId,
+            receipt,
+          };
+        }
+        if (
+          receipt.status === "refused" ||
+          receipt.status === "superseded" ||
+          receipt.status === "cancelled"
+        )
+          return {
+            dispatched: false,
+            queued: false,
+            uncertain: false,
+            sendId,
+            causeCode: receipt.cause ?? "DISPATCH_REJECTED",
+            receipt,
+          };
+        return { dispatched: true, queued: false, sendId, receipt };
+      } catch (cause) {
+        if (cause instanceof EnvironmentAuthorizationError)
+          return {
+            dispatched: false,
+            queued: false,
+            uncertain: false,
+            sendId,
+            causeCode: "ACCESS_DENIED",
+          };
+        if (cause instanceof HandoffError)
+          return {
+            dispatched: false,
+            queued: false,
+            uncertain:
+              cause.causeCode === "DISPATCH_REJECTED" || cause.causeCode === "PERSISTENCE_FAILED",
+            sendId,
+            causeCode: cause.causeCode,
+          };
+        return {
+          dispatched: false,
+          queued: false,
+          uncertain: attempted,
+          sendId,
+          causeCode: sendTransportCause(cause),
+        };
+      } finally {
+        await rpc?.dispose().catch(() => undefined);
+      }
+    }
+    return {
+      dispatched: false,
+      queued: false,
+      uncertain: false,
+      sendId,
+      causeCode: "RECEIPTS_UNAVAILABLE",
+    };
+  }
 
-    return { dispatched: true, queued: false };
+  async lookupSendReceipt(input: HandoffLookupInput): Promise<HandoffLookupResult> {
+    let rpc: RemoteRpcClient | null = null;
+    try {
+      rpc = await this.openRpc();
+      return await rpc.request<HandoffLookupResult>("fork.send.lookup", input);
+    } catch (cause) {
+      throw new Error(
+        cause instanceof HandoffError
+          ? cause.causeCode
+          : cause instanceof EnvironmentAuthorizationError
+            ? "ACCESS_DENIED"
+            : sendTransportCause(cause),
+      );
+    } finally {
+      await rpc?.dispose().catch(() => undefined);
+    }
+  }
+
+  async supportsReliableHandoffs(): Promise<boolean> {
+    return (await this.describe()).capabilities.reliableHandoffs === true;
+  }
+
+  async ownSendInbox(): Promise<HandoffLookupResult> {
+    const threadId = resolveCallerThreadId();
+    if (!threadId) throw new Error("CALLER_THREAD_REQUIRED");
+    let rpc: RemoteRpcClient | null = null;
+    try {
+      rpc = await this.openRpc();
+      return await rpc.request<HandoffLookupResult>("fork.send.inbox", { threadId });
+    } catch (cause) {
+      throw new Error(
+        cause instanceof HandoffError
+          ? cause.causeCode
+          : cause instanceof EnvironmentAuthorizationError
+            ? "ACCESS_DENIED"
+            : sendTransportCause(cause),
+      );
+    } finally {
+      await rpc?.dispose().catch(() => undefined);
+    }
   }
 
   async implementPlan(input: {
