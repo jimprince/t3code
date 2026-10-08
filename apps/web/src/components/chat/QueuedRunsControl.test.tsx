@@ -14,6 +14,8 @@ vi.mock("@t3tools/client-runtime/state/thread-workflows", () => ({
   deriveThreadQueueWorkflowState: () => state.workflow,
 }));
 
+vi.mock("../../state/environments", () => ({ useEnvironments: () => ({ environments: [] }) }));
+
 vi.mock("../../state/entities", () => ({
   useThreadProjection: () => state.projection,
 }));
