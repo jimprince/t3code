@@ -1,0 +1,4 @@
+id = "client-busy-server-recovery"
+category = "fix"
+functionality = "connections"
+text = "Keep remote connections alive through longer server stalls and allow more time to recover a connection ticket."
