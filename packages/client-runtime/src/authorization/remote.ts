@@ -23,6 +23,8 @@ export {
 export type RemoteEnvironmentAuthError = RemoteEnvironmentRequestError;
 
 const DEFAULT_REMOTE_REQUEST_TIMEOUT_MS = 10_000;
+// Busy remote servers can delay ticket issuance while the client is recovering.
+const WEBSOCKET_TICKET_REQUEST_TIMEOUT_MS = 30_000;
 
 const clientMetadataTokenExchangeFields = (
   clientMetadata: AuthClientPresentationMetadata | undefined,
@@ -168,7 +170,7 @@ export const issueRemoteWebSocketTicket = Effect.fn(
   const client = yield* makeEnvironmentHttpApiGroupClient(input.httpBaseUrl, "auth");
   return yield* executeEnvironmentHttpRequest(
     environmentEndpointUrl(input.httpBaseUrl, "/api/auth/websocket-ticket"),
-    input.timeoutMs ?? DEFAULT_REMOTE_REQUEST_TIMEOUT_MS,
+    input.timeoutMs ?? WEBSOCKET_TICKET_REQUEST_TIMEOUT_MS,
     client.webSocketTicket({
       headers: {
         authorization: `Bearer ${input.bearerToken}`,
@@ -188,7 +190,7 @@ export const issueRemoteDpopWebSocketTicket = Effect.fn(
   const client = yield* makeEnvironmentHttpApiGroupClient(input.httpBaseUrl, "auth");
   return yield* executeEnvironmentHttpRequest(
     environmentEndpointUrl(input.httpBaseUrl, "/api/auth/websocket-ticket"),
-    input.timeoutMs ?? DEFAULT_REMOTE_REQUEST_TIMEOUT_MS,
+    input.timeoutMs ?? WEBSOCKET_TICKET_REQUEST_TIMEOUT_MS,
     client.webSocketTicket({
       headers: {
         authorization: `DPoP ${input.accessToken}`,
