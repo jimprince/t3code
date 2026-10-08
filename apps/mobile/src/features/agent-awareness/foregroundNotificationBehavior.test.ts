@@ -1,3 +1,4 @@
+import { notificationEventKey } from "@t3tools/client-runtime/notification-eligibility";
 import type { Notification } from "expo-notifications";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -7,7 +8,23 @@ import { threadDeepLinkOnScreen } from "./notificationPayload";
 function notificationWithData(data: Record<string, unknown>): Notification {
   return {
     date: 0,
-    request: { identifier: "notification-1", content: { data }, trigger: null },
+    request: {
+      identifier: "notification-1",
+      content: {
+        data: {
+          environmentId: "env-1",
+          threadId: "thread-1",
+          notification: {
+            kind: "reply",
+            identity: "turn",
+            origin: "human",
+            occurredAt: new Date().toISOString(),
+          },
+          ...data,
+        },
+      },
+      trigger: null,
+    },
   } as unknown as Notification;
 }
 
@@ -54,8 +71,77 @@ describe("foregroundNotificationBehavior", () => {
       ).shouldShowBanner,
     ).toBe(true);
     expect(
-      foregroundNotificationBehavior(notificationWithData({}), "/threads/env-1/thread-1")
-        .shouldShowBanner,
+      foregroundNotificationBehavior(
+        notificationWithData({
+          environmentId: undefined,
+          threadId: undefined,
+          notification: undefined,
+        }),
+        "/threads/env-1/thread-1",
+      ).shouldShowBanner,
     ).toBe(true);
   });
+});
+
+it.each(["worker", "routed", "automation", "unknown"])(
+  "suppresses a %s reply locally",
+  (origin) => {
+    const notification = notificationWithData({
+      environmentId: "env-1",
+      threadId: "thread-1",
+      notification: {
+        kind: "reply",
+        identity: "turn",
+        origin,
+        occurredAt: new Date().toISOString(),
+      },
+    });
+    expect(foregroundNotificationBehavior(notification, null).shouldPlaySound).toBe(false);
+  },
+);
+
+it("keeps worker questions and decisions useful and deduplicates a scoped request", () => {
+  for (const kind of ["question", "approval", "decision", "error", "attention"] as const) {
+    const event = {
+      kind,
+      identity: "request-one",
+      origin: "worker" as const,
+      occurredAt: new Date().toISOString(),
+    };
+    const notification = notificationWithData({ notification: event });
+    expect(foregroundNotificationBehavior(notification, null).shouldPlaySound).toBe(true);
+    expect(
+      foregroundNotificationBehavior(
+        notification,
+        null,
+        new Set([notificationEventKey("env-1", "thread-1", event)]),
+      ).shouldShowBanner,
+    ).toBe(false);
+    expect(
+      foregroundNotificationBehavior(
+        notificationWithData({ notification: { ...event, identity: "request-two" } }),
+        null,
+        new Set([notificationEventKey("env-1", "thread-1", event)]),
+      ).shouldShowBanner,
+    ).toBe(true);
+  }
+});
+it("silences stale replies and agent payloads missing provenance", () => {
+  expect(
+    foregroundNotificationBehavior(notificationWithData({ notification: undefined }), null)
+      .shouldShowBanner,
+  ).toBe(false);
+  expect(
+    foregroundNotificationBehavior(
+      notificationWithData({
+        notification: {
+          kind: "reply",
+          identity: "old",
+          origin: "human",
+          occurredAt: "2000-01-01T00:00:00Z",
+        },
+      }),
+      null,
+    ).shouldPlaySound,
+  ).toBe(false);
 });
