@@ -103,7 +103,7 @@ describe("theme files", () => {
     });
   });
 
-  it("keeps the stock sidebar and chat on distinct surfaces in both appearances", () => {
+  it("keeps the stock dark sidebar on the standard dark surface, never pure black, and messages on their own", () => {
     expectThemeColors(getStandardThemeColors("light"), {
       canvas: "#fcfcfc",
       sidebar: "#fafafa",
@@ -112,7 +112,7 @@ describe("theme files", () => {
     });
     expectThemeColors(getStandardThemeColors("dark"), {
       canvas: "#0a0a0a",
-      sidebar: "#000000",
+      sidebar: "#0a0a0a",
       sidebarRowActive: "#1a1b1b",
       messageSurface: "#141414",
     });
