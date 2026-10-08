@@ -17,14 +17,21 @@ export type ServerRestartState =
       readonly etaSeconds: number;
     })
   | (RestartDetails & { readonly status: "back" | "updated"; readonly serverVersion: string })
-  | (RestartDetails & { readonly status: "failed"; readonly reason: string });
+  | (RestartDetails & {
+      readonly status: "failed";
+      readonly reason: string;
+      readonly failureKind?: "update" | "reconnect";
+    });
 
 /** Retain this state per environment across WebSocket reconnects. */
 export function applyServerRestartEvent(
   state: ServerRestartState,
   event: ServerLifecycleStreamEvent,
+  dismissedAt?: string,
 ): ServerRestartState {
   if (event.type === "updating") {
+    if (dismissedAt !== undefined && Date.parse(event.payload.at) <= Date.parse(dismissedAt))
+      return state;
     const { at, phase, targetVersion, etaSeconds, manualUpdateCommand, reason } = event.payload;
     const details = {
       targetVersion,
@@ -37,7 +44,12 @@ export function applyServerRestartEvent(
         : {}),
     };
     return phase === "failed"
-      ? { ...details, status: "failed", reason: reason ?? "Server update failed" }
+      ? {
+          ...details,
+          status: "failed",
+          failureKind: "update",
+          reason: reason ?? "Server update failed",
+        }
       : { ...details, status: "updating", phase, etaSeconds };
   }
   if (
@@ -47,6 +59,16 @@ export function applyServerRestartEvent(
     Date.parse(event.payload.at) <= Date.parse(state.announcedAt)
   )
     return state;
+  if (state.status === "failed" && state.failureKind === "update") return state;
+  const outcome = event.payload.updateOutcome;
+  if (outcome?.targetVersion === state.targetVersion && outcome.status !== "committed") {
+    return {
+      ...state,
+      status: "failed",
+      failureKind: "update",
+      reason: outcome.reason ?? `Server update ${outcome.status}`,
+    };
+  }
   const serverVersion = event.payload.environment.serverVersion;
   return {
     ...state,
@@ -67,6 +89,6 @@ export function disconnectServerRestart(
 
 export function expireServerRestart(state: ServerRestartState, nowMs: number): ServerRestartState {
   return state.status === "updating" && state.deadline !== undefined && nowMs >= state.deadline
-    ? { ...state, status: "failed", reason: "Server did not come back" }
+    ? { ...state, status: "failed", failureKind: "reconnect", reason: "Server did not come back" }
     : state;
 }
