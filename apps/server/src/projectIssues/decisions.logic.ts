@@ -6,6 +6,16 @@ const DEFAULT_WAITING = "chief-of-staff-inbox";
 const DECISION_BLOCK = /```decision[ \t]*\r?\n([\s\S]*?)```/;
 const MAX_OPTIONS = 5;
 
+const CURATOR_BLOCK = /<!--\s*curator-backlog-sort\b[\s\S]*?<!--\s*\/curator-backlog-sort\s*-->/g;
+
+/**
+ * The body without the curator's backlog-sort block: its comment markers hide, but the
+ * Bucket / owner / filing lines between them are visible text that is not the decision.
+ */
+export function withoutCuratorBlock(body: string): string {
+  return body.replace(CURATOR_BLOCK, "");
+}
+
 /**
  * The decision an issue body asks for, in the fixed format: context first, then one
  * fenced `decision` block with an optional `waiting:` and `options:` list, one option
@@ -13,7 +23,7 @@ const MAX_OPTIONS = 5;
  * the whole body.
  */
 export function parseDecisionIssue(body: string | null | undefined): ProjectIssueDecision {
-  const text = (body ?? "").replace(/<!--[\s\S]*?-->/g, "");
+  const text = withoutCuratorBlock(body ?? "").replace(/<!--[\s\S]*?-->/g, "");
   const match = DECISION_BLOCK.exec(text);
   const context = (match ? text.slice(0, match.index) : text).trim();
   let waiting = DEFAULT_WAITING;
