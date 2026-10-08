@@ -1,0 +1,4 @@
+id = "decisions-feed-mobile"
+category = "feature"
+functionality = "projects"
+text = "The mobile Home shows the same Decisions feed under each project: agent questions and approvals, decisions, answers, plans, and work to review or test, each with its actions (including Approve and merge, Send back and Later), and a confirmation once you act."
