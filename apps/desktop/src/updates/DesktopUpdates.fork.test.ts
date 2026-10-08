@@ -1,0 +1,401 @@
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { assert, describe, it } from "@effect/vitest";
+import type { DesktopUpdateState } from "@t3tools/contracts";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as TestClock from "effect/testing/TestClock";
+
+import * as DesktopConfig from "../app/DesktopConfig.ts";
+import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
+import * as DesktopState from "../app/DesktopState.ts";
+import * as DesktopBackendPool from "../backend/DesktopBackendPool.ts";
+import * as ElectronUpdater from "../electron/ElectronUpdater.ts";
+import * as ElectronWindow from "../electron/ElectronWindow.ts";
+import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
+import * as DesktopUpdates from "./DesktopUpdates.ts";
+
+interface UpdatesHarnessOptions {
+  readonly checkForUpdates?: Effect.Effect<
+    void,
+    ElectronUpdater.ElectronUpdaterCheckForUpdatesError
+  >;
+  readonly setUpdateChannelError?: DesktopAppSettings.DesktopSettingsWriteError;
+  readonly setDisableDifferentialDownload?: Effect.Effect<void>;
+  readonly stopBackend?: Effect.Effect<void>;
+  readonly env?: Record<string, string | undefined>;
+  readonly environment?: Partial<DesktopEnvironment.MakeDesktopEnvironmentInput>;
+}
+
+function makeHarness(options: UpdatesHarnessOptions = {}) {
+  let checkCount = 0;
+  let allowDowngrade = false;
+  let fullChangelog = false;
+  const feedUrls: ElectronUpdater.ElectronUpdaterFeedUrl[] = [];
+  const listeners = new Map<string, Set<(...args: readonly unknown[]) => void>>();
+  const sentStates: DesktopUpdateState[] = [];
+
+  const addListener = (eventName: string, listener: (...args: readonly unknown[]) => void) => {
+    const eventListeners = listeners.get(eventName) ?? new Set();
+    eventListeners.add(listener);
+    listeners.set(eventName, eventListeners);
+  };
+
+  const removeListener = (eventName: string, listener: (...args: readonly unknown[]) => void) => {
+    const eventListeners = listeners.get(eventName);
+    if (!eventListeners) {
+      return;
+    }
+    eventListeners.delete(listener);
+    if (eventListeners.size === 0) {
+      listeners.delete(eventName);
+    }
+  };
+
+  const updaterLayer = Layer.succeed(ElectronUpdater.ElectronUpdater, {
+    setFeedURL: (options) =>
+      Effect.sync(() => {
+        feedUrls.push(options);
+      }),
+    setAutoDownload: () => Effect.void,
+    setAutoInstallOnAppQuit: () => Effect.void,
+    setChannel: () => Effect.void,
+    setAllowPrerelease: () => Effect.void,
+    allowDowngrade: Effect.sync(() => allowDowngrade),
+    setAllowDowngrade: (value) =>
+      Effect.sync(() => {
+        allowDowngrade = value;
+      }),
+    setFullChangelog: (value) =>
+      Effect.sync(() => {
+        fullChangelog = value;
+      }),
+    setDisableDifferentialDownload: () => options.setDisableDifferentialDownload ?? Effect.void,
+    checkForUpdates: Effect.sync(() => {
+      checkCount += 1;
+    }).pipe(Effect.andThen(options.checkForUpdates ?? Effect.void)),
+    downloadUpdate: Effect.void,
+    quitAndInstall: () => Effect.void,
+    on: (eventName, listener) =>
+      Effect.acquireRelease(
+        Effect.sync(() => {
+          addListener(eventName, listener as unknown as (...args: readonly unknown[]) => void);
+        }),
+        () =>
+          Effect.sync(() => {
+            removeListener(eventName, listener as unknown as (...args: readonly unknown[]) => void);
+          }),
+      ).pipe(Effect.asVoid),
+  } satisfies ElectronUpdater.ElectronUpdater["Service"]);
+
+  const windowLayer = Layer.succeed(ElectronWindow.ElectronWindow, {
+    create: () => Effect.die("unexpected BrowserWindow creation"),
+    main: Effect.succeed(Option.none()),
+    currentMainOrFirst: Effect.succeed(Option.none()),
+    focusedMainOrFirst: Effect.succeed(Option.none()),
+    setMain: () => Effect.void,
+    clearMain: () => Effect.void,
+    prepareReveal: () => Effect.succeed(false),
+    reveal: () => Effect.void,
+    sendAll: (_channel, state) =>
+      Effect.sync(() => {
+        sentStates.push(state as DesktopUpdateState);
+      }),
+    destroyAll: Effect.void,
+    syncAllAppearance: () => Effect.void,
+  } satisfies ElectronWindow.ElectronWindow["Service"]);
+
+  const stubBackendInstance: DesktopBackendPool.DesktopBackendInstance = {
+    id: DesktopBackendPool.PRIMARY_INSTANCE_ID,
+    label: Effect.succeed("Windows"),
+    start: Effect.void,
+    stop: () => options.stopBackend ?? Effect.void,
+    currentConfig: Effect.succeed(Option.none()),
+    snapshot: Effect.succeed({
+      desiredRunning: false,
+      ready: false,
+      activePid: Option.none(),
+      restartAttempt: 0,
+      restartScheduled: false,
+    }),
+    waitForReady: () => Effect.succeed(true),
+  };
+  const backendLayer = DesktopBackendPool.layerTest([stubBackendInstance]);
+
+  const environmentLayer = DesktopEnvironment.layer({
+    dirname: "/repo/apps/desktop/src",
+    homeDirectory: NodePath.join(NodeOS.tmpdir(), `t3-desktop-updates-home-${process.pid}`),
+    platform: "darwin",
+    processArch: "x64",
+    appVersion: "1.2.3",
+    appPath: "/repo",
+    isPackaged: true,
+    resourcesPath: "/missing/resources",
+    runningUnderArm64Translation: false,
+    ...options.environment,
+  }).pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        NodeServices.layer,
+        DesktopConfig.layerTest({
+          T3CODE_HOME: NodePath.join(NodeOS.tmpdir(), `t3-desktop-updates-test-${process.pid}`),
+          T3CODE_DESKTOP_MOCK_UPDATES: "true",
+          T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT: "4141",
+          ...options.env,
+        }),
+      ),
+    ),
+  );
+
+  const setUpdateChannelError = options.setUpdateChannelError;
+  const settingsLayer = setUpdateChannelError
+    ? Layer.succeed(DesktopAppSettings.DesktopAppSettings, {
+        get: Effect.succeed(DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS),
+        load: Effect.succeed(DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS),
+        setLocalEnvironmentEnabled: () => Effect.die("unexpected local environment toggle"),
+        setMainWindowBounds: () => Effect.die("unexpected main window bounds update"),
+        setServerExposureMode: () => Effect.die("unexpected server exposure update"),
+        setTailscaleServe: () => Effect.die("unexpected Tailscale Serve update"),
+        setUpdateChannel: () => Effect.fail(setUpdateChannelError),
+        setWslBackendEnabled: () => Effect.die("unexpected WSL backend toggle"),
+        setWslDistro: () => Effect.die("unexpected WSL distro change"),
+        setWslOnly: () => Effect.die("unexpected WSL-only toggle"),
+        applyWslWindowsFallback: Effect.die("unexpected WSL Windows fallback"),
+        applyWslWindowsFallbackInMemory: Effect.die("unexpected WSL Windows fallback"),
+      } satisfies DesktopAppSettings.DesktopAppSettings["Service"])
+    : DesktopAppSettings.layer;
+
+  const layer = DesktopUpdates.layer.pipe(
+    Layer.provideMerge(updaterLayer),
+    Layer.provideMerge(windowLayer),
+    Layer.provideMerge(backendLayer),
+    Layer.provideMerge(DesktopState.layer),
+    Layer.provideMerge(settingsLayer),
+    Layer.provideMerge(
+      DesktopConfig.layerTest({
+        T3CODE_HOME: NodePath.join(NodeOS.tmpdir(), `t3-desktop-updates-test-${process.pid}`),
+        T3CODE_DESKTOP_MOCK_UPDATES: "true",
+        T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT: "4141",
+        ...options.env,
+      }),
+    ),
+    Layer.provideMerge(environmentLayer),
+    Layer.provideMerge(NodeServices.layer),
+  );
+
+  return {
+    layer,
+    checkCount: () => checkCount,
+    feedUrls: () => feedUrls,
+    fullChangelog: () => fullChangelog,
+    listenerCount: () =>
+      Array.from(listeners.values()).reduce(
+        (total, eventListeners) => total + eventListeners.size,
+        0,
+      ),
+    sentStates,
+    emit: (eventName: string, payload?: unknown) => {
+      for (const listener of listeners.get(eventName) ?? []) {
+        listener(payload);
+      }
+    },
+  };
+}
+
+describe("DesktopUpdates", () => {
+  it.effect("disables updates with a visible reason for packaged Fork Dev builds", () => {
+    const harness = makeHarness({
+      environment: {
+        desktopFlavor: "dev",
+      },
+    });
+
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+
+        const state = yield* updates.getState;
+        assert.equal(state.enabled, false);
+        assert.equal(state.status, "disabled");
+        assert.equal(state.message, "Automatic updates are disabled for Fork Dev builds.");
+      }),
+    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+  });
+});
+
+// A stand-in for ~/t3-mac-dev/dev-launch.sh: `head` is the checkout, `tip` is origin, and an
+// update request moves head to tip unless the kit is told to fail.
+function makeKitHome(options: {
+  readonly head: string;
+  readonly tip: string;
+  readonly failBuild?: boolean;
+}) {
+  const home = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-devkit-home-"));
+  const kitDir = NodePath.join(home, "t3-mac-dev");
+  NodeFS.mkdirSync(kitDir, { recursive: true });
+  NodeFS.writeFileSync(NodePath.join(kitDir, "head"), options.head);
+  NodeFS.writeFileSync(NodePath.join(kitDir, "tip"), options.tip);
+  NodeFS.writeFileSync(
+    NodePath.join(kitDir, "dev-launch.sh"),
+    `dir="$(cd "$(dirname "$0")" && pwd)"
+head="$(cat "$dir/head")"; tip="$(cat "$dir/tip")"
+if [ "$1" = "--status" ]; then
+  echo "branch followed: live   fetched: yes"
+  echo "checkout:        $head on live"
+  echo "origin/live:  $tip"
+  echo "dev app running: yes   update worker: idle"
+  if [ "$head" = "$tip" ]; then echo "needs update:    no"; else echo "needs update:    yes (automatic updater will apply it)"; fi
+else
+  echo requested >>"$dir/requests"
+  ${options.failBuild ? "true" : 'cp "$dir/tip" "$dir/head"'}
+fi
+`,
+  );
+  return {
+    home,
+    requests: () => {
+      try {
+        return NodeFS.readFileSync(NodePath.join(kitDir, "requests"), "utf8").trim().split("\n")
+          .length;
+      } catch {
+        return 0;
+      }
+    },
+    environment: {
+      homeDirectory: home,
+      isPackaged: false,
+      dirname: NodePath.join(home, "Developer", "t3code-dev", "apps", "desktop", "src"),
+    },
+    env: { VITE_DEV_SERVER_URL: "http://localhost:5733" },
+  };
+}
+
+const devKitHarness = (kit: ReturnType<typeof makeKitHome>) =>
+  makeHarness({ environment: kit.environment, env: kit.env });
+
+describe("DesktopUpdates in the Mac dev kit app", () => {
+  it.effect("checks origin/live against the build and shows both short SHAs", () => {
+    const kit = makeKitHome({ head: "abc1234", tip: "def5678" });
+    const harness = devKitHarness(kit);
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+        assert.equal((yield* updates.getState).enabled, true);
+
+        const behind = yield* updates.check("test");
+        assert.equal(behind.checked, true);
+        assert.equal(behind.state.status, "available");
+        assert.equal(behind.state.availableVersion, "def5678");
+        assert.include(behind.state.message, "abc1234");
+        assert.include(behind.state.message, "def5678");
+
+        NodeFS.writeFileSync(NodePath.join(kit.home, "t3-mac-dev", "tip"), "abc1234");
+        const current = yield* updates.check("test");
+        assert.equal(current.state.status, "up-to-date");
+        assert.include(current.state.message, "abc1234");
+        assert.equal(harness.checkCount(), 0);
+      }),
+    ).pipe(
+      Effect.provide(Layer.merge(TestClock.layer(), harness.layer)),
+      Effect.ensuring(Effect.sync(() => NodeFS.rmSync(kit.home, { recursive: true, force: true }))),
+    );
+  });
+
+  const runUpdate = (updates: DesktopUpdates.DesktopUpdates["Service"]) =>
+    Effect.gen(function* () {
+      const finished = { value: false };
+      const fiber = yield* Effect.forkChild(
+        updates.startUpdate.pipe(Effect.tap(() => Effect.sync(() => (finished.value = true)))),
+      );
+      for (let attempt = 0; attempt < 200 && !finished.value; attempt += 1) {
+        yield* TestClock.adjust("10 seconds");
+        yield* Effect.promise(() => new Promise((resolve) => setTimeout(resolve, 20)));
+      }
+      return yield* Fiber.join(fiber);
+    });
+
+  it.effect("updates by asking the kit to rebuild and reports the result", () => {
+    const kit = makeKitHome({ head: "abc1234", tip: "def5678" });
+    const harness = devKitHarness(kit);
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+        const result = yield* runUpdate(updates);
+        assert.equal(kit.requests(), 1);
+        assert.equal(result.completed, true);
+        assert.equal(result.state.status, "up-to-date");
+        assert.equal(
+          harness.sentStates.some(
+            (state) => state.updatePhase === "installing" && state.message?.includes("Rebuilding"),
+          ),
+          true,
+        );
+        assert.equal(harness.checkCount(), 0);
+      }),
+    ).pipe(
+      Effect.provide(Layer.merge(TestClock.layer(), harness.layer)),
+      Effect.ensuring(Effect.sync(() => NodeFS.rmSync(kit.home, { recursive: true, force: true }))),
+    );
+  });
+
+  it.effect("reports a retryable error when the rebuild leaves the app behind", () => {
+    const kit = makeKitHome({ head: "abc1234", tip: "def5678", failBuild: true });
+    const harness = devKitHarness(kit);
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+        const result = yield* runUpdate(updates);
+        assert.equal(result.completed, false);
+        assert.equal(result.state.status, "error");
+        assert.equal(result.state.errorContext, "install");
+        assert.equal(result.state.canRetry, true);
+      }),
+    ).pipe(
+      Effect.provide(Layer.merge(TestClock.layer(), harness.layer)),
+      Effect.ensuring(Effect.sync(() => NodeFS.rmSync(kit.home, { recursive: true, force: true }))),
+    );
+  });
+
+  it.effect("leaves a dev app from another checkout, or without the kit, disabled", () => {
+    const kit = makeKitHome({ head: "abc1234", tip: "def5678" });
+    const otherCheckout = makeHarness({
+      environment: { ...kit.environment, dirname: "/elsewhere/apps/desktop/src" },
+      env: kit.env,
+    });
+    const noKit = makeKitHome({ head: "abc1234", tip: "def5678" });
+    NodeFS.rmSync(NodePath.join(noKit.home, "t3-mac-dev"), { recursive: true });
+    const withoutKit = devKitHarness(noKit);
+    const disabledState = Effect.gen(function* () {
+      const updates = yield* DesktopUpdates.DesktopUpdates;
+      yield* updates.configure;
+      return yield* updates.getState;
+    });
+    return Effect.scoped(
+      Effect.gen(function* () {
+        for (const harness of [otherCheckout, withoutKit]) {
+          const state = yield* disabledState.pipe(Effect.provide(harness.layer));
+          assert.equal(state.enabled, false);
+          assert.equal(
+            state.message,
+            "Automatic updates are only available in packaged production builds.",
+          );
+        }
+      }),
+    ).pipe(
+      Effect.provide(TestClock.layer()),
+      Effect.ensuring(
+        Effect.sync(() => {
+          NodeFS.rmSync(kit.home, { recursive: true, force: true });
+          NodeFS.rmSync(noKit.home, { recursive: true, force: true });
+        }),
+      ),
+    );
+  });
+});

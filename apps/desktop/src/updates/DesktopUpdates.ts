@@ -32,6 +32,7 @@ import * as ElectronUpdater from "../electron/ElectronUpdater.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as IpcChannels from "../ipc/channels.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
+import * as DevKitUpdates from "./DevKitUpdates.ts";
 import { normalizeDesktopUpdateReleaseNotes } from "./releaseNotes.ts";
 import { resolveDefaultDesktopUpdateChannel } from "./updateChannels.ts";
 import {
@@ -50,6 +51,9 @@ import {
 const AUTO_UPDATE_STARTUP_DELAY = "15 seconds";
 const AUTO_UPDATE_POLL_INTERVAL = "4 minutes";
 const PREPARED_INSTALL_CHECK_WAIT = Duration.seconds(90);
+// The kit's own update ceiling is 800 seconds.
+const DEV_KIT_REBUILD_POLL_INTERVAL = "10 seconds";
+const DEV_KIT_REBUILD_MAX_POLLS = 100;
 
 type UpdateAction = "check" | "download" | "install" | "install-recovery" | "channel";
 
@@ -70,6 +74,8 @@ const UpdateInfo = Schema.Struct({
 
 const DownloadProgressInfo = Schema.Struct({
   percent: Schema.Number,
+  transferred: Schema.optionalKey(Schema.Number),
+  total: Schema.optionalKey(Schema.Number),
 });
 const decodeAppUpdateYmlConfig = Schema.decodeUnknownEffect(AppUpdateYmlConfig);
 const decodeUpdateInfo = Schema.decodeUnknownEffect(UpdateInfo);
@@ -182,6 +188,7 @@ export class DesktopUpdates extends Context.Service<
       channel: DesktopUpdateChannel,
     ) => Effect.Effect<DesktopUpdateState, DesktopUpdateSetChannelError>;
     readonly check: (reason: string) => Effect.Effect<DesktopUpdateCheckResult>;
+    readonly startUpdate: Effect.Effect<DesktopUpdateActionResult>;
     readonly download: Effect.Effect<DesktopUpdateActionResult>;
     readonly install: Effect.Effect<DesktopUpdateActionResult>;
     readonly installPrepared: (
@@ -215,11 +222,13 @@ function createBaseUpdateState(
   channel: DesktopUpdateChannel,
   enabled: boolean,
   environment: DesktopEnvironment.DesktopEnvironment["Service"],
+  disabledReason: Option.Option<string>,
 ): DesktopUpdateState {
   return {
     ...createInitialDesktopUpdateState(environment.appVersion, environment.runtimeInfo, channel),
     enabled,
     status: enabled ? "idle" : "disabled",
+    message: enabled ? null : Option.getOrNull(disabledReason),
   };
 }
 
@@ -253,18 +262,26 @@ function getAutoUpdateDisabledReason(args: {
   isDebPackage: boolean;
   disabledByEnv: boolean;
   hasUpdateFeedConfig: boolean;
+  devFlavor: boolean;
+  devKit: boolean;
 }): string | null {
-  if (!args.hasUpdateFeedConfig) {
-    return "Automatic updates are not available because no update feed is configured.";
+  if (args.devKit) {
+    return null;
   }
   if (args.isDevelopment || !args.isPackaged) {
     return "Automatic updates are only available in packaged production builds.";
+  }
+  if (args.devFlavor) {
+    return "Automatic updates are disabled for Fork Dev builds.";
   }
   if (args.disabledByEnv) {
     return "Automatic updates are disabled by the T3CODE_DISABLE_AUTO_UPDATE setting.";
   }
   if (args.platform === "linux" && !args.appImage && !args.isDebPackage) {
     return "Automatic updates on Linux require the AppImage or the .deb package.";
+  }
+  if (!args.hasUpdateFeedConfig) {
+    return "Automatic updates are unavailable for this build because it does not include release update metadata.";
   }
   return null;
 }
@@ -282,11 +299,13 @@ export const make = Effect.gen(function* () {
   const electronWindow = yield* ElectronWindow.ElectronWindow;
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const fileSystem = yield* FileSystem.FileSystem;
+  const devKit = yield* DevKitUpdates.resolve(environment, fileSystem);
   const desktopSettings = yield* DesktopAppSettings.DesktopAppSettings;
 
   const appUpdateYmlConfigRef = yield* Ref.make<Option.Option<AppUpdateYmlConfig>>(Option.none());
   const activeUpdateActionRef = yield* Ref.make<Option.Option<UpdateAction>>(Option.none());
   const finishedUpdateActions = yield* PubSub.unbounded<UpdateAction>();
+  const fullUpdateInFlight = yield* Ref.make(false);
   const updaterConfiguredRef = yield* Ref.make(false);
   const lastLoggedDownloadMilestoneRef = yield* Ref.make(-1);
   const updateStateRef = yield* Ref.make<DesktopUpdateState>(
@@ -360,6 +379,8 @@ export const make = Effect.gen(function* () {
         isDebPackage,
         disabledByEnv: config.disableAutoUpdate,
         hasUpdateFeedConfig: hasFeedConfig,
+        devFlavor: environment.isPackagedDevFlavor,
+        devKit: Option.isSome(devKit),
       }),
     );
   });
@@ -404,7 +425,74 @@ export const make = Effect.gen(function* () {
     });
   });
 
-  const shouldEnableAutoUpdates = resolveDisabledReason.pipe(Effect.map(Option.isNone));
+  const isDevKitRebuilding = (state: DesktopUpdateState) => state.updatePhase === "installing";
+
+  const applyDevKitStatus = (status: DevKitUpdates.DevKitStatus) =>
+    currentIsoTimestamp.pipe(
+      Effect.flatMap((checkedAt) =>
+        updateState((state) => DevKitUpdates.reduceStateOnDevKitStatus(state, status, checkedAt)),
+      ),
+    );
+
+  const failDevKit = (error: DevKitUpdates.DevKitUpdateError, errorContext: "check" | "install") =>
+    currentIsoTimestamp.pipe(
+      Effect.flatMap((failedAt) =>
+        updateState((state) => ({
+          ...reduceDesktopUpdateStateOnCheckFailure(state, error.message, failedAt),
+          errorContext,
+        })),
+      ),
+      Effect.andThen(logUpdaterError(error.message, { errorTag: error._tag })),
+    );
+
+  // Check for the Mac dev kit: its status script compares this build with origin.
+  const checkDevKit = (kit: DevKitUpdates.DevKit) =>
+    DevKitUpdates.readStatus(kit).pipe(
+      Effect.flatMap(applyDevKitStatus),
+      Effect.catchTags({ DevKitUpdateError: (error) => failDevKit(error, "check") }),
+      Effect.as(true),
+    );
+
+  // Update for the Mac dev kit: its update LaunchAgent pulls, rebuilds and relaunches this app.
+  // The call stays open while the kit works, so the update card and its Retry behave as for a
+  // download. A rebuild that needs the app restarted ends this process; one that does not (a
+  // renderer-only change) or fails ends here, and the kit's own status says which.
+  const rebuildDevKit = (kit: DevKitUpdates.DevKit) =>
+    Effect.gen(function* () {
+      const { availableVersion } = yield* Ref.get(updateStateRef);
+      yield* updateState((state) => ({
+        ...state,
+        updatePhase: "installing",
+        message: `Rebuilding T3 Code (Dev) at ${availableVersion}. It quits and relaunches within about 10 minutes.`,
+        errorContext: null,
+        canRetry: false,
+      }));
+      yield* logUpdaterInfo("requesting a dev kit rebuild", { target: availableVersion });
+      yield* DevKitUpdates.requestUpdate(kit);
+      for (let poll = 0; poll < DEV_KIT_REBUILD_MAX_POLLS; poll++) {
+        yield* Effect.sleep(DEV_KIT_REBUILD_POLL_INTERVAL);
+        const status = Option.getOrNull(yield* DevKitUpdates.readStatus(kit).pipe(Effect.option));
+        if (status === null || status.workerRunning) continue;
+        if (status.needsUpdate) {
+          return yield* new DevKitUpdates.DevKitUpdateError({
+            message: `The rebuild did not finish. Its log is ~/.t3-code-dev-kit/launch.log.`,
+          });
+        }
+        yield* applyDevKitStatus(status);
+        return { accepted: true, completed: true, state: yield* Ref.get(updateStateRef) };
+      }
+      return yield* new DevKitUpdates.DevKitUpdateError({
+        message: "The rebuild is taking too long. Its log is ~/.t3-code-dev-kit/launch.log.",
+      });
+    }).pipe(
+      Effect.catchTags({
+        DevKitUpdateError: (error) =>
+          failDevKit(error, "install").pipe(
+            Effect.andThen(Ref.get(updateStateRef)),
+            Effect.map((state) => ({ accepted: true, completed: false, state })),
+          ),
+      }),
+    );
 
   const checkForUpdates = Effect.fn("desktop.updates.checkForUpdates")(function* (
     reason: string,
@@ -415,7 +503,7 @@ export const make = Effect.gen(function* () {
     if (!(yield* Ref.get(updaterConfiguredRef))) return false;
 
     const state = yield* Ref.get(updateStateRef);
-    if (state.status === "downloading") {
+    if (state.status === "downloading" || (Option.isSome(devKit) && isDevKitRebuilding(state))) {
       yield* logUpdaterInfo("skipping update check while update is active", {
         reason,
         status: state.status,
@@ -430,6 +518,7 @@ export const make = Effect.gen(function* () {
       yield* setState(reduceDesktopUpdateStateOnCheckStart(state, checkedAt));
       yield* logUpdaterInfo("checking for updates", { reason });
 
+      if (Option.isSome(devKit)) return yield* checkDevKit(devKit.value);
       return yield* electronUpdater.checkForUpdates.pipe(
         Effect.as(true),
         Effect.catchTags({
@@ -460,7 +549,11 @@ export const make = Effect.gen(function* () {
 
   const downloadAvailableUpdate = Effect.gen(function* () {
     const state = yield* Ref.get(updateStateRef);
-    if (!(yield* Ref.get(updaterConfiguredRef)) || state.status !== "available") {
+    if (
+      !(yield* Ref.get(updaterConfiguredRef)) ||
+      state.status !== "available" ||
+      Option.isSome(devKit)
+    ) {
       return { accepted: false, completed: false };
     }
 
@@ -629,6 +722,14 @@ export const make = Effect.gen(function* () {
         yield* Ref.set(desktopState.quitting, true);
 
         return yield* Effect.gen(function* () {
+          // A new attempt must not publish the previous install error as its own failure.
+          yield* updateState((state) => ({
+            ...state,
+            updatePhase: "installing",
+            message: null,
+            errorContext: null,
+            canRetry: false,
+          }));
           yield* writeUpdateRestartMarker;
           // Stop every backend in the pool, not just the primary. With
           // parallel WSL + Windows backends, leaving the WSL instance up
@@ -643,6 +744,7 @@ export const make = Effect.gen(function* () {
             (instance) => instance.stop({ timeout: Duration.seconds(5) }),
             { concurrency: "unbounded" },
           );
+          yield* updateState((state) => ({ ...state, updatePhase: "restarting", canRetry: false }));
           yield* electronUpdater.quitAndInstall({
             isSilent: true,
             isForceRunAfter: true,
@@ -844,7 +946,13 @@ export const make = Effect.gen(function* () {
           const state = yield* Ref.get(updateStateRef);
           const percent = Math.floor(progress.percent);
           if (shouldBroadcastDownloadProgress(state, progress.percent) || state.message !== null) {
-            yield* setState(reduceDesktopUpdateStateOnDownloadProgress(state, progress.percent));
+            yield* setState({
+              ...reduceDesktopUpdateStateOnDownloadProgress(state, progress.percent),
+              ...(progress.transferred === undefined
+                ? {}
+                : { downloadTransferredBytes: progress.transferred }),
+              ...(progress.total === undefined ? {} : { downloadTotalBytes: progress.total }),
+            });
           }
           const milestone = percent - (percent % 10);
           const lastLoggedMilestone = yield* Ref.get(lastLoggedDownloadMilestoneRef);
@@ -891,6 +999,62 @@ export const make = Effect.gen(function* () {
     );
   });
 
+  const startUpdate = Effect.scoped(
+    Effect.gen(function* () {
+      if (yield* Ref.getAndSet(fullUpdateInFlight, true)) {
+        return { accepted: false, completed: false, state: yield* Ref.get(updateStateRef) };
+      }
+      const run = Effect.gen(function* () {
+        const changes = yield* PubSub.subscribe(stateChanges);
+        const waitWhile = (status: DesktopUpdateState["status"]) =>
+          Effect.gen(function* () {
+            while ((yield* Ref.get(updateStateRef)).status === status) {
+              yield* PubSub.take(changes);
+            }
+          });
+        let state = yield* Ref.get(updateStateRef);
+        if (state.downloadedVersion === null) {
+          const checked = yield* checkForUpdates("confirmed-update");
+          if (!checked)
+            return { accepted: false, completed: false, state: yield* Ref.get(updateStateRef) };
+          yield* waitWhile("checking").pipe(Effect.timeout("2 minutes"));
+          state = yield* Ref.get(updateStateRef);
+          if (state.status !== "available")
+            return { accepted: true, completed: state.status === "up-to-date", state };
+          if (Option.isSome(devKit)) return yield* rebuildDevKit(devKit.value);
+          const downloaded = yield* downloadAvailableUpdate;
+          if (!downloaded.completed)
+            return { ...downloaded, state: yield* Ref.get(updateStateRef) };
+          yield* waitWhile("downloading").pipe(Effect.timeout("20 minutes"));
+          state = yield* Ref.get(updateStateRef);
+        }
+        if (state.downloadedVersion === null) return { accepted: true, completed: false, state };
+        const installed = yield* installWithExpectedVersion(state.downloadedVersion);
+        return {
+          accepted: installed.accepted,
+          completed: installed.completed,
+          state: installed.state,
+        };
+      });
+      return yield* run.pipe(
+        Effect.catchTags({
+          TimeoutError: () =>
+            Effect.gen(function* () {
+              yield* updateState((state) => ({
+                ...state,
+                status: "error",
+                message: "The desktop updater stopped reporting progress.",
+                errorContext: state.status === "checking" ? "check" : "download",
+                canRetry: true,
+              }));
+              return { accepted: true, completed: false, state: yield* Ref.get(updateStateRef) };
+            }),
+        }),
+        Effect.ensuring(Ref.set(fullUpdateInFlight, false)),
+      );
+    }),
+  );
+
   return DesktopUpdates.of({
     getState: Ref.get(updateStateRef),
     isActionActive: activeUpdateAction.pipe(Effect.map(Option.isSome)),
@@ -923,12 +1087,19 @@ export const make = Effect.gen(function* () {
       }
 
       const settings = yield* desktopSettings.get;
-      const enabled = yield* shouldEnableAutoUpdates;
-      yield* setState(createBaseUpdateState(settings.updateChannel, enabled, environment));
+      const disabledReason = yield* resolveDisabledReason;
+      const enabled = Option.isNone(disabledReason);
+      yield* setState(
+        createBaseUpdateState(settings.updateChannel, enabled, environment, disabledReason),
+      );
       if (!enabled) {
         return;
       }
       yield* Ref.set(updaterConfiguredRef, true);
+      if (Option.isSome(devKit)) {
+        yield* startUpdatePollers;
+        return;
+      }
 
       yield* electronUpdater.setAutoDownload(false);
       yield* electronUpdater.setAutoInstallOnAppQuit(false);
@@ -994,8 +1165,9 @@ export const make = Effect.gen(function* () {
             ),
           );
 
-        const enabled = yield* shouldEnableAutoUpdates;
-        yield* setState(createBaseUpdateState(nextChannel, enabled, environment));
+        const disabledReason = yield* resolveDisabledReason;
+        const enabled = Option.isNone(disabledReason);
+        yield* setState(createBaseUpdateState(nextChannel, enabled, environment, disabledReason));
 
         if (!enabled || !(yield* Ref.get(updaterConfiguredRef))) {
           return yield* Ref.get(updateStateRef);
@@ -1024,6 +1196,7 @@ export const make = Effect.gen(function* () {
         state: yield* Ref.get(updateStateRef),
       };
     }),
+    startUpdate,
     download: Effect.gen(function* () {
       const result = yield* downloadAvailableUpdate;
       return {
