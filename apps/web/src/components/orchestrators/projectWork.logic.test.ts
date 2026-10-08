@@ -2,8 +2,8 @@ import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell
 import type { ProjectIssue } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { ProjectRequest, TaskStatus } from "./projectRequests.logic";
-import { deriveBlocked, deriveWorkingNow } from "./projectWork.logic";
+import type { TaskStatus } from "./projectRequests.logic";
+import { deriveBlocked } from "./projectWork.logic";
 
 const NOW = Date.parse("2026-10-10T12:00:00.000Z");
 const DAY = 24 * 60 * 60 * 1000;
@@ -185,69 +185,5 @@ describe("deriveBlocked", () => {
       "stuck:brad/printcell#2",
       "stuck:brad/printcell#1",
     ]);
-  });
-});
-
-describe("deriveWorkingNow", () => {
-  const request = (title: string, worker: EnvironmentThreadShell) =>
-    ({ issue: issue(1, { title }), servedBy: [worker] }) as unknown as ProjectRequest;
-
-  it("titles the row with the worker's task and keeps the worker's name last", () => {
-    const worker = thread("w1");
-    const [row] = deriveWorkingNow(
-      [{ thread: worker, latestLine: "Reading the logs." }],
-      [issue(5, { title: "Fix the feeder", linkedThreadIds: ["w1" as never] })],
-      [],
-    );
-    expect(row).toEqual({
-      key: "w1",
-      threadId: "w1",
-      title: "Fix the feeder",
-      worker: "Worker w1",
-      next: null,
-      forRequests: [],
-    });
-  });
-
-  it("takes the next step from the task's Progress note, never from the worker's prose", () => {
-    const worker = thread("w1");
-    const withNote = issue(5, {
-      linkedThreadIds: ["w1" as never],
-      latestComment: { author: "a", body: "Progress: wiring the RPC\nmore", createdAt: ago(0) },
-    });
-    expect(
-      deriveWorkingNow([{ thread: worker, latestLine: "Other." }], [withNote], [])[0]?.next,
-    ).toBe("wiring the RPC");
-    const answerComment = {
-      ...withNote,
-      latestComment: { author: "a", body: "Done, please test.", createdAt: ago(0) },
-    };
-    expect(
-      deriveWorkingNow(
-        [{ thread: worker, latestLine: "First thing. Second thing." }],
-        [answerComment],
-        [],
-      )[0]?.next,
-    ).toBeNull();
-  });
-
-  it("falls back to the thread title and lists the other requests it serves", () => {
-    const worker = thread("w1");
-    const [row] = deriveWorkingNow(
-      [{ thread: worker, latestLine: null }],
-      [],
-      [request("Add dark mode", worker), request("Fix the feeder", worker)],
-    );
-    expect(row).toMatchObject({
-      title: "Worker w1",
-      worker: null,
-      forRequests: ["Add dark mode", "Fix the feeder"],
-    });
-    const [titled] = deriveWorkingNow(
-      [{ thread: worker, latestLine: null }],
-      [issue(5, { title: "Add dark mode", linkedThreadIds: ["w1" as never] })],
-      [request("Add dark mode", worker)],
-    );
-    expect(titled?.forRequests).toEqual([]);
   });
 });
