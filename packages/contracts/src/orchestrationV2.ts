@@ -1159,6 +1159,13 @@ export const OrchestrationV2PlanStep = Schema.Struct({
 });
 export type OrchestrationV2PlanStep = typeof OrchestrationV2PlanStep.Type;
 
+/** Steps done and total in a thread's latest to-do list (TodoWrite, update_plan). */
+export const OrchestrationV2TodoProgress = Schema.Struct({
+  completed: NonNegativeInt,
+  total: NonNegativeInt,
+});
+export type OrchestrationV2TodoProgress = typeof OrchestrationV2TodoProgress.Type;
+
 export const OrchestrationV2UserInputQuestion = Schema.Struct({
   id: TrimmedNonEmptyString,
   header: TrimmedNonEmptyString,
@@ -1896,6 +1903,8 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
    */
   latestUserAuthoredMessageAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   hasActionableProposedPlan: Schema.Boolean,
+  /** Null when the thread has no to-do list; omitted by servers that predate it. */
+  todoProgress: Schema.optional(Schema.NullOr(OrchestrationV2TodoProgress)),
   // Normalized post-settlement background work for sidebar Waiting pills.
   // Empty when the latest root run is still active or no pending work remains.
   pendingBackgroundTasks: Schema.optional(Schema.Array(OrchestrationV2PendingBackgroundTask)).pipe(
