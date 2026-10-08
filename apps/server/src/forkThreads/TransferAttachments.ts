@@ -1,5 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFSP from "node:fs/promises";
+import * as NodeFS from "node:fs";
 import * as NodeCrypto from "node:crypto";
 import * as NodePath from "node:path";
 import {
@@ -21,6 +22,114 @@ import {
   createDeterministicAttachmentId,
   attachmentFileExtension,
 } from "../attachmentStore.ts";
+
+// Shared by portable thread moves and exact message forwarding. All writes stay
+// in the attachment store; existing content identities are checked before reuse.
+const writeImportedAttachment = async (
+  directory: string,
+  threadId: string,
+  original: ChatAttachment,
+  data: Buffer,
+  owned: string[],
+  stableKey?: string,
+): Promise<ChatAttachment> => {
+  const digest = NodeCrypto.createHash("sha256").update(data).digest("hex");
+  const id = createDeterministicAttachmentId(
+    threadId,
+    `${stableKey === undefined ? "" : `${stableKey}:`}${original.id}:${digest}`,
+  );
+  if (!id) throw new Error("Invalid destination attachment identity.");
+  const attachment = {
+    ...original,
+    id: ChatAttachmentId.make(
+      original.type === "file" ? `${id}-${attachmentFileExtension(original.name).slice(1)}` : id,
+    ),
+  };
+  const destination = resolveAttachmentPath({ attachmentsDir: directory, attachment });
+  if (!destination) throw new Error("Invalid destination attachment path.");
+  await NodeFSP.mkdir(NodePath.dirname(destination), { recursive: true });
+  try {
+    const handle = await NodeFSP.open(destination, "wx");
+    owned.push(destination);
+    try {
+      await handle.writeFile(data);
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+  } catch (cause) {
+    if (!Predicate.isObject(cause) || cause.code !== "EEXIST") throw cause;
+    const existing = await NodeFSP.open(
+      destination,
+      NodeFS.constants.O_RDONLY | NodeFS.constants.O_NOFOLLOW,
+    );
+    try {
+      if (!(await existing.readFile()).equals(data))
+        throw new Error("Destination attachment collision.", { cause });
+    } finally {
+      await existing.close();
+    }
+  }
+  return attachment;
+};
+
+/** Copy local originals or already-staged portable uploads one file at a time.
+ * The caller validates message budgets and correspondence before invoking this.
+ */
+export const copyStoredAttachments = (input: {
+  attachmentsDir: string;
+  recipientThreadId: string;
+  stableKey: string;
+  references: ReadonlyArray<ChatAttachment>;
+  sourceReferences?: ReadonlyArray<ChatAttachment>;
+}) => {
+  const owned: string[] = [];
+  const cleanup = Effect.promise(async () => {
+    for (const file of owned) await NodeFSP.unlink(file).catch(() => {});
+  });
+  return Effect.tryPromise({
+    try: async () => {
+      const attachments: ChatAttachment[] = [];
+      for (const [index, original] of input.references.entries()) {
+        const source = input.sourceReferences?.[index] ?? original;
+        const file = resolveAttachmentPath({
+          attachmentsDir: input.attachmentsDir,
+          attachment: source,
+        });
+        if (!file) throw new Error("Invalid attachment storage path.");
+        const handle = await NodeFSP.open(
+          file,
+          NodeFS.constants.O_RDONLY | NodeFS.constants.O_NOFOLLOW,
+        );
+        let data: Buffer;
+        try {
+          const info = await handle.stat();
+          if (!info.isFile() || info.size !== original.sizeBytes)
+            throw new Error("Stored attachment size mismatch.");
+          data = await handle.readFile();
+        } finally {
+          await handle.close();
+        }
+        if (data.length !== original.sizeBytes) throw new Error("Attachment changed during copy.");
+        attachments.push(
+          await writeImportedAttachment(
+            input.attachmentsDir,
+            input.recipientThreadId,
+            original,
+            data,
+            owned,
+            input.stableKey,
+          ),
+        );
+      }
+      return { attachments, cleanup };
+    },
+    catch: (cause) => new ThreadTransferError({ operation: "import-attachments", cause }),
+  }).pipe(
+    Effect.onError(() => cleanup),
+    Effect.uninterruptible,
+  );
+};
 
 const MAX_FILE = 50 * 1024 * 1024;
 const MAX_TOTAL = 64 * 1024 * 1024;
@@ -125,34 +234,13 @@ const make = Effect.gen(function* () {
           )
             throw new Error("Attachment size mismatch or limit exceeded.");
           total += data.length;
-          const digest = NodeCrypto.createHash("sha256").update(data).digest("hex");
-          const id = createDeterministicAttachmentId(threadId, `${original.id}:${digest}`);
-          if (!id) throw new Error("Invalid destination attachment identity.");
-          const attachment = {
-            ...original,
-            id: ChatAttachmentId.make(`${id}-${attachmentFileExtension(original.name).slice(1)}`),
-          };
-          const destination = resolveAttachmentPath({
-            attachmentsDir: config.attachmentsDir,
-            attachment,
-          });
-          if (!destination) throw new Error("Invalid destination attachment path.");
-          await NodeFSP.mkdir(NodePath.dirname(destination), { recursive: true });
-          try {
-            const handle = await NodeFSP.open(destination, "wx");
-            owned.push(destination);
-            try {
-              await handle.writeFile(data);
-              await handle.sync();
-            } finally {
-              await handle.close();
-            }
-          } catch (error) {
-            if (!Predicate.isObject(error) || error.code !== "EEXIST") throw error;
-            const existing = await NodeFSP.readFile(destination);
-            if (!existing.equals(data))
-              throw new Error("Destination attachment collision.", { cause: error });
-          }
+          const attachment = await writeImportedAttachment(
+            config.attachmentsDir,
+            threadId,
+            original,
+            data,
+            owned,
+          );
           attachments.set(original.id, attachment);
         }
         return { attachments, warnings, cleanup };
