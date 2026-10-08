@@ -1,0 +1,14 @@
+name = "fork-notification-eligibility"
+subject = "fix(notifications): alert for human replies and actionable requests"
+class = "product"
+purpose = "Alert once for replies to human messages and actionable requests, while automatic completions remain silent across web, desktop and mobile."
+retire_when = "Upstream provides one adjustable notification eligibility policy with provenance and logical deduplication across all alert surfaces."
+depends_on = ["fork-orchestrator-focus", "fork-child-input-attention", "fork-scripts-automations"]
+roles = []
+note = "Approved #190 policy. V2 projects starting-message provenance and final disposition without new migration or transcript hydration. One client-runtime table controls audience and freshness. Descendants do not suppress ended human replies; same-thread work does. Eligible requests and errors use stable run/request identities. Shared evaluator gates web, desktop, APNs, FCM and local mobile presentation; operational failure feedback and Live Activity group copy remain unchanged. Native lint/Robolectric are integration-gate obligations. A live client that watched a failure arrive (web coordinator, observed: true) alerts however late it saw it; replaying paths (relay push, reconciliation) keep the 120 s window so an old failed row never buzzes a phone."
+
+[[decision]]
+id = "catchup-2908-stable-thread-notifications"
+date = "2026-10-10"
+decided = "adapt"
+rationale = "Evaluate the approved fork human-reply/request/error policy over upstream stable thread-list subscriptions. Preserve logical dedupe, origin-aware subagent eligibility, same-thread busy/on-screen suppression, the 512-key bound and parent sound policy; the replaced automatic-completion policy remains excluded. Remove only obsolete NotificationState. Keep native server SDK/testing dependencies with fork client-runtime support. Static evaluator/coordinator review passed; composed CI remains required."
