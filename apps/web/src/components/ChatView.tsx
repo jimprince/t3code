@@ -286,6 +286,19 @@ import { WizardPopup } from "./ui/wizard";
 import { BranchToolbar, type BranchToolbarHandle } from "./BranchToolbar";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
 import { makeWorkspaceFileDropHandlers } from "./chat/workspaceFileDrop";
+import {
+  canHoldSendWhileDisconnected,
+  disconnectedDispatchMode,
+} from "./chat/disconnectedSend.logic";
+import {
+  discardDisconnectedSend,
+  enqueueDisconnectedSend,
+  resendDisconnectedSend,
+  retryDisconnectedSends,
+  useDisconnectedSendRefusals,
+  useDisconnectedSendsStalled,
+  usePendingDisconnectedSends,
+} from "../state/disconnectedSends";
 import { isEditableFocused } from "../lib/editableFocus";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
 import {
@@ -3040,6 +3053,13 @@ export default function ChatView(props: ChatViewProps) {
   const serverUpdateFailureDismissed =
     serverUpdateState === dismissedServerUpdateState ||
     isServerUpdateFailureDismissed(serverUpdateState);
+  // Messages typed while this thread's server was down, waiting to be delivered on reconnect.
+  const heldSends = usePendingDisconnectedSends(
+    routeThreadRef.environmentId,
+    isServerThread ? routeThreadRef.threadId : null,
+  );
+  const heldSendsStalled = useDisconnectedSendsStalled(routeThreadRef.environmentId);
+  const heldSendRefusals = useDisconnectedSendRefusals(routeThreadRef.environmentId);
   const systemComposerBannerItems = useMemo<ComposerBannerStackItem[]>(() => {
     const items: ComposerBannerStackItem[] = [];
     const updateRunning = serverUpdateState.status === "running";
@@ -3173,9 +3193,82 @@ export default function ChatView(props: ChatViewProps) {
             }),
       });
     }
+    if (heldSends.length > 0) {
+      const preview = (send: (typeof heldSends)[number], max: number) => {
+        const text = send.message.text.trim();
+        return text.length > max ? `${text.slice(0, max)}…` : text;
+      };
+      // A refused message is terminal: the user resends it (new id) or discards it. Later
+      // messages of this thread wait behind it; other threads are not held up.
+      const refused = heldSends.filter((send) => heldSendRefusals[send.commandId] !== undefined);
+      const waiting = heldSends.filter((send) => heldSendRefusals[send.commandId] === undefined);
+      for (const send of refused) {
+        items.push({
+          id: `held-sends:${routeThreadKey}:${send.commandId}`,
+          priority: "pending",
+          variant: "warning",
+          icon: <AlarmClockIcon />,
+          title: `Not sent: ${preview(send, 60)}`,
+          description: heldSendRefusals[send.commandId],
+          actions: (
+            <>
+              <Button
+                size="xs"
+                variant="ghost"
+                onClick={() => resendDisconnectedSend(routeThreadRef.environmentId, send.commandId)}
+              >
+                Resend
+              </Button>
+              <Button
+                size="xs"
+                variant="ghost"
+                onClick={() =>
+                  discardDisconnectedSend(routeThreadRef.environmentId, send.commandId)
+                }
+              >
+                Discard
+              </Button>
+            </>
+          ),
+        });
+      }
+      if (waiting.length > 0) {
+        const notSent = heldSendsStalled && !activeEnvironmentUnavailableState;
+        const count = `${waiting.length} message${waiting.length === 1 ? "" : "s"}`;
+        items.push({
+          id: `held-sends:${routeThreadKey}`,
+          priority: "pending",
+          variant: notSent ? "warning" : "default",
+          icon: <AlarmClockIcon />,
+          title: notSent
+            ? `${count} not sent`
+            : refused.length > 0
+              ? `${count} waiting for the message not sent`
+              : `${count} will send when back`,
+          description: preview(waiting[waiting.length - 1]!, 80),
+          ...(notSent
+            ? {
+                actions: (
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    onClick={() => retryDisconnectedSends(routeThreadRef.environmentId)}
+                  >
+                    Retry
+                  </Button>
+                ),
+              }
+            : {}),
+        });
+      }
+    }
     if (autoBalanceUpdateBanner) items.push(autoBalanceUpdateBanner);
     return items;
   }, [
+    heldSends,
+    heldSendRefusals,
+    heldSendsStalled,
+    routeThreadKey,
     automaticEnvironment,
     autoBalanceUpdateBanner,
     activeEnvironmentUnavailableState,
@@ -8517,6 +8610,67 @@ export default function ChatView(props: ChatViewProps) {
     }
   };
 
+  /**
+   * While the server is down a plain text message is kept and sent when it is back: the command
+   * is built once here, with its ids, and replayed unchanged. Returns whether it was kept. The
+   * provider is not checked here: its status is stale while the server is away, so the server
+   * decides on delivery and a refusal shows as "not sent" with Resend and Discard.
+   */
+  const holdSendWhileDisconnected = (
+    dispatchMode: ComposerDispatchMode,
+    hasDirectAnnotation: boolean,
+  ): boolean => {
+    const sendCtx = composerRef.current?.getSendContext();
+    if (!activeThread || !sendCtx) return false;
+    const text = promptRef.current;
+    if (
+      !canHoldSendWhileDisconnected({
+        isExistingServerThread: isServerThread,
+        serverMessageCount: activeMessageCount,
+        pendingMessageCount: optimisticUserMessages.length,
+        text,
+        attachmentCount: sendCtx.images.length + sendCtx.files.length,
+        contextCount:
+          sendCtx.terminalContexts.length +
+          sendCtx.previewAnnotations.length +
+          sendCtx.reviewComments.length +
+          sendCtx.threadContexts.length +
+          (hasDirectAnnotation ? 1 : 0),
+        multipleModels: sendCtx.multipleModelSelections !== null,
+        answeringPrompt: activePendingProgress !== null || showPlanFollowUpPrompt,
+        editingQueuedMessage: editingQueuedRun !== null,
+      })
+    ) {
+      return false;
+    }
+    const outgoingText = formatOutgoingPrompt({
+      provider: sendCtx.selectedProvider,
+      model: sendCtx.selectedModel,
+      models: sendCtx.selectedProviderModels,
+      effort: sendCtx.selectedPromptEffort,
+      text: text.trim(),
+    });
+    if (composerRef.current?.validateProviderInput(outgoingText) === false) return false;
+    enqueueDisconnectedSend(activeThread.environmentId, {
+      commandId: CommandId.make(randomUUID()),
+      threadId: activeThread.id,
+      message: { messageId: newMessageId(), role: "user", text: outgoingText, attachments: [] },
+      // Without a known provider the composer has no real selection; the thread's own is what the
+      // server would run.
+      modelSelection: sendCtx.providerAvailable
+        ? sendCtx.selectedModelSelection
+        : activeThread.modelSelection,
+      runtimeMode,
+      interactionMode: sendCtx.interactionMode,
+      dispatchMode: disconnectedDispatchMode(dispatchMode),
+      createdAt: new Date().toISOString(),
+    });
+    promptRef.current = "";
+    clearComposerDraftContent(composerDraftTarget);
+    composerRef.current?.resetCursorState();
+    return true;
+  };
+
   const onSend = async (
     e?: { preventDefault: () => void; repeat?: boolean },
     dispatchMode: ComposerDispatchMode = "auto",
@@ -8580,15 +8734,21 @@ export default function ChatView(props: ChatViewProps) {
       });
       return;
     }
-    if (activeEnvironmentUnavailable) {
+    // Earlier held messages go first: while any wait for this thread, a new one waits behind them.
+    if (activeEnvironmentUnavailable || heldSends.length > 0) {
+      if (holdSendWhileDisconnected(dispatchMode, directAnnotation !== undefined)) return;
       const toastSlot = environmentUnavailableSendToastSlotRef.current;
       environmentUnavailableSendToastSlotRef.current =
         (toastSlot + 1) % ENVIRONMENT_UNAVAILABLE_SEND_TOAST_TRAIL_SIZE;
       toastManager.add({
         ...stackedThreadToast({
           type: "warning",
-          title: "Not connected: message not sent",
-          description: "Reconnecting to the environment. Try again once it is connected.",
+          title: activeEnvironmentUnavailable
+            ? "Not connected: message not sent"
+            : "Message not sent: earlier messages are waiting",
+          description: activeEnvironmentUnavailable
+            ? "Only plain text messages wait for the server. Try again once it is connected."
+            : "Send this once the waiting messages have gone through.",
         }),
         id: `chat-send-environment-unavailable:${toastSlot}`,
       });
@@ -11424,7 +11584,10 @@ export default function ChatView(props: ChatViewProps) {
                                   ? openUsageLimits
                                   : undefined
                               }
-                              environmentUnavailable={activeEnvironmentUnavailableState}
+                              // An existing thread keeps its composer live so a plain text message can wait for the server.
+                              environmentUnavailable={
+                                isServerThread ? null : activeEnvironmentUnavailableState
+                              }
                               activePendingApproval={activePendingApproval}
                               pendingApprovals={pendingApprovals}
                               pendingUserInputs={pendingUserInputs}
