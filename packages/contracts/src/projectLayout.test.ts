@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -5,7 +6,10 @@ import {
   defaultProjectLayoutTabs,
   legacyWidgetOrder,
   normalizeWidgetConfig,
+  PROJECT_WIDGET_TYPES,
+  ProjectLayout,
   widgetOrderOps,
+  withoutRetiredWidgets,
   type ProjectLayoutTab,
 } from "./projectLayout.ts";
 
@@ -38,9 +42,6 @@ describe("default layout", () => {
       "release",
       "maintenance",
       "roadmap-summary",
-      "working",
-      "blocked",
-      "done",
       "issues-summary",
       "prs",
       "canvas-slot",
@@ -203,5 +204,72 @@ describe("widget settings", () => {
       config: { pendingPreview: 10 },
     });
     expect(normalizeWidgetConfig("unknown", {})).toHaveProperty("error");
+  });
+});
+
+describe("retired widgets", () => {
+  const retired = ["working", "blocked", "done"];
+
+  it("are no longer offered or accepted as new widgets", () => {
+    const offered = PROJECT_WIDGET_TYPES.map((entry) => entry.type);
+    for (const type of retired) expect(offered).not.toContain(type);
+    const result = applyLayoutOps(defaultProjectLayoutTabs(null), [
+      { op: "addWidget", tabId: "dashboard", widget: { type: "working" } },
+    ]);
+    expect("error" in result).toBe(true);
+  });
+
+  it("load from an old saved layout, which renders the rest and stays editable", () => {
+    // A revision as saved before the widgets were retired.
+    const saved = Schema.decodeUnknownSync(ProjectLayout)({
+      rootThreadId: "root",
+      revision: 4,
+      updatedAt: "2026-10-05T00:00:00.000Z",
+      updatedBy: null,
+      tabs: [
+        {
+          id: "dashboard",
+          title: "Dashboard",
+          widgets: [
+            { id: "requests", type: "requests", config: { includeLater: false } },
+            { id: "working", type: "working", config: {} },
+            { id: "blocked", type: "blocked", config: {} },
+            { id: "release", type: "release", config: {} },
+            { id: "done", type: "done", config: {} },
+          ],
+        },
+        { id: "extra", title: "Extra", widgets: [{ id: "done-2", type: "done", config: {} }] },
+      ],
+    });
+    const tabs = withoutRetiredWidgets(saved.tabs);
+    expect(ids(tabs)).toEqual([
+      ["dashboard", ["requests", "release"]],
+      ["extra", []],
+    ]);
+    // Editing the cleaned layout works, and saving it persists the cleanup.
+    const edited = applied(tabs, [
+      { op: "moveWidget", widgetId: "release", tabId: "dashboard", index: 0 },
+    ]);
+    expect(ids(edited)[0]).toEqual(["dashboard", ["release", "requests"]]);
+  });
+
+  it("leave a layout without them untouched, by identity", () => {
+    const tabs = defaultProjectLayoutTabs(null);
+    expect(withoutRetiredWidgets(tabs)).toBe(tabs);
+  });
+
+  it("drop out of an older saved widget order and out of `dashboard set` without an error", () => {
+    const migrated = defaultProjectLayoutTabs(["release", "working", "blocked", "done", "roadmap"]);
+    expect(migrated[0]!.widgets.map((widget) => widget.type)).toEqual([
+      "release",
+      "roadmap-summary",
+    ]);
+    const ops = orderOps(migrated, ["working", "release", "done"]);
+    expect(ops.flatMap((op) => (op.op === "addWidget" ? [op.widget.type] : []))).toEqual([
+      "release",
+    ]);
+    expect(widgetOrderOps(migrated, ["releas"])).toMatchObject({
+      error: expect.stringContaining("Unknown"),
+    });
   });
 });
