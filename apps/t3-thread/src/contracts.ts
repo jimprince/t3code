@@ -1,3 +1,13 @@
+import {
+  WS_METHODS,
+  GiteaTokenSetInput,
+  GiteaTokenSetResult,
+  GiteaTokenSetError,
+  ServerSettingsError,
+  SourceControlDiscoveryResult,
+  ProjectIssuesGetInput,
+  ProjectIssuesGetResult,
+} from "@t3tools/contracts";
 import { WsSessionReconcileRpc, HandoffRpcs } from "@t3tools/contracts";
 import {
   Automation,
@@ -238,6 +248,27 @@ const WsAutomationScriptsRunRpc = Rpc.make("automationScripts.run", {
 
 export const WsRpcGroup = RpcGroup.make(
   ...HandoffRpcs,
+  Rpc.make(WS_METHODS.serverGetSettings, {
+    payload: Schema.Struct({}),
+    success: SharedServerSettings,
+    error: Schema.Union([ServerSettingsError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make(WS_METHODS.giteaSetToken, {
+    payload: GiteaTokenSetInput,
+    success: GiteaTokenSetResult,
+    error: Schema.Union([GiteaTokenSetError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make(WS_METHODS.serverDiscoverSourceControl, {
+    payload: Schema.Struct({}),
+    success: SourceControlDiscoveryResult,
+    error: EnvironmentAuthorizationError,
+  }),
+  Rpc.make(WS_METHODS.projectIssuesGet, {
+    payload: ProjectIssuesGetInput,
+    success: ProjectIssuesGetResult,
+    error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+  }),
+
   Rpc.make("projectRequests.decide", {
     payload: ProjectRequestDecideInput,
     success: ProjectRequestDecideResult,
