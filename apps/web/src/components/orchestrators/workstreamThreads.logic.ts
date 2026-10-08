@@ -12,7 +12,7 @@ import { firstLine, isAfter, type Band, type BandRow } from "./workstreamBands.l
 /** One tag per thread row; it also sets the sort, what waits on Brad first. */
 export type ThreadTag = "waiting" | "error" | "blocked" | "running" | "done";
 
-export const THREAD_TAG_ORDER: ReadonlyArray<ThreadTag> = [
+const THREAD_TAG_ORDER: ReadonlyArray<ThreadTag> = [
   "waiting",
   "error",
   "blocked",
@@ -123,12 +123,14 @@ interface Tree {
   readonly threadsById: ReadonlyMap<string, OrchestratorThreadShell>;
   readonly rootId: string;
   readonly context: ThreadContext;
+  /** Standing agents: they have their own strip, so they are not thread rows. */
+  readonly exclude: ReadonlySet<string>;
 }
 
-/** The project's own sub-agents linked to a task, the orchestrator itself excluded. */
+/** The project's freelancer threads linked to a task: neither the orchestrator nor the Team. */
 const threadsOf = (issue: ProjectIssue, tree: Tree) =>
   issue.linkedThreadIds.flatMap((id) =>
-    id === tree.rootId ? [] : (tree.threadsById.get(id) ?? []),
+    id === tree.rootId || tree.exclude.has(id) ? [] : (tree.threadsById.get(id) ?? []),
   );
 
 /**
@@ -196,6 +198,8 @@ export function deriveThreadView(input: {
   readonly summary: Pick<OrchestratorSummary, "root" | "descendants">;
   readonly workerNotes: ReadonlyMap<string, string>;
   readonly since: string | null;
+  /** Standing agents (the Team strip's), who are not freelancers to list under Other threads. */
+  readonly exclude?: ReadonlySet<string>;
 }): ThreadView {
   const { bands, summary } = input;
   const tree: Tree = {
@@ -204,6 +208,7 @@ export function deriveThreadView(input: {
     ),
     rootId: summary.root.id,
     context: input,
+    exclude: input.exclude ?? new Set(),
   };
   const claimed = new Set<string>();
   const byBand = new Map<string, ReadonlyArray<ThreadRow>>();
@@ -228,11 +233,12 @@ export function deriveThreadView(input: {
   for (const band of bands) {
     if (band.epic !== null) continue;
     for (const row of band.rows) {
-      for (const id of row.issue.linkedThreadIds) if (!taskOfThread.has(id)) taskOfThread.set(id, row);
+      for (const id of row.issue.linkedThreadIds)
+        if (!taskOfThread.has(id)) taskOfThread.set(id, row);
     }
   }
   for (const thread of summary.descendants) {
-    if (claimed.has(thread.id)) continue;
+    if (claimed.has(thread.id) || input.exclude?.has(thread.id)) continue;
     const tag = threadTag(thread, input);
     if (tag === null) continue;
     const task = taskOfThread.get(thread.id);
