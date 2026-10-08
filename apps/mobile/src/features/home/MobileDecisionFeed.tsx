@@ -1,5 +1,6 @@
 import {
   approvalChoices,
+  approvalTitle,
   oneTapQuestion,
   questionAnswers,
 } from "@t3tools/client-runtime/decision-ask";
@@ -552,7 +553,7 @@ function FeedCard({
     card.kind === "question"
       ? (card.ask.questions[0]?.question ?? `${card.ask.threadTitle} has a question`)
       : card.kind === "approval"
-        ? card.ask.detail?.split("\n")[0]?.slice(0, 160) || `${card.ask.threadTitle} needs approval`
+        ? approvalTitle(card.ask)
         : card.kind === "plan"
           ? `${card.plan.title}: plan ready for review`
           : card.issue.title;
