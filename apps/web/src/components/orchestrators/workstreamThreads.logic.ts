@@ -12,7 +12,7 @@ import { firstLine, isAfter, type Band, type BandRow } from "./workstreamBands.l
 /** One tag per thread row; it also sets the sort, what waits on Brad first. */
 export type ThreadTag = "waiting" | "error" | "blocked" | "running" | "done";
 
-export const THREAD_TAG_ORDER: ReadonlyArray<ThreadTag> = [
+const THREAD_TAG_ORDER: ReadonlyArray<ThreadTag> = [
   "waiting",
   "error",
   "blocked",
