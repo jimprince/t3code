@@ -1,3 +1,9 @@
+import {
+  evaluateNotification,
+  notificationMessage,
+  threadNotificationEvent,
+  threadNotificationBusy,
+} from "@t3tools/client-runtime/notification-eligibility";
 import { useSupervisionForest } from "../state/forkSupervision";
 import {
   supervisionKey,
@@ -6,7 +12,7 @@ import {
 import { presentThreadShell } from "@t3tools/client-runtime/state/models";
 import { useAtomValue } from "@effect/atom-react";
 import { useNavigate, useParams } from "@tanstack/react-router";
-import type { EnvironmentId, OrchestrationV2ThreadShell, ThreadId } from "@t3tools/contracts";
+import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import {
   CircleAlertIcon,
@@ -26,7 +32,6 @@ import {
   setNotificationBadge,
   unlockNotificationAudio,
 } from "../threadNotifications";
-import { resolveSidebarThreadStatus } from "./Sidebar.logic";
 import { toastManager } from "./ui/toast";
 
 export function ThreadNotificationCoordinator() {
@@ -93,12 +98,6 @@ export function ThreadNotificationCoordinator() {
   ));
 }
 
-interface NotificationState {
-  readonly raw: OrchestrationV2ThreadShell;
-  readonly attention: string | null;
-  readonly completion: number | null;
-}
-
 function EnvironmentNotifications({
   environmentId,
   onNotification,
@@ -121,56 +120,46 @@ function EnvironmentNotifications({
   const { environmentId: activeEnvironmentId, threadId: activeThreadId } = useParams({
     strict: false,
   });
-  const previous = useRef(new Map<ThreadId, NotificationState>());
+  const previous = useRef(new Map<ThreadId, string | null>());
+  const seen = useRef(new Set<string>());
 
   useEffect(() => {
     if (threads === null) {
       previous.current.clear();
       return;
     }
-    const next = new Map<ThreadId, NotificationState>();
+    const next = new Map<ThreadId, string | null>();
     for (const rawThread of threads) {
-      if (rawThread.lineage.relationshipToParent === "subagent") continue;
-      const prior = previous.current.get(rawThread.id);
-      // The same object cannot produce a new notification.
-      if (prior?.raw === rawThread) {
-        next.set(rawThread.id, prior);
-        continue;
-      }
       const thread = presentThreadShell(environmentId, rawThread);
-      let status = resolveSidebarThreadStatus(thread);
-      if (status === "ready" && thread.latestRun?.status === "failed") status = "failed";
-      const attention =
-        status === "input" || status === "approval" || status === "failed" || status === "limited"
-          ? `${thread.latestRun?.runId ?? ""}:${status}`
-          : null;
-      const completedAt = Date.parse(thread.latestRun?.completedAt ?? "");
-      // Commands left running (a dev server) read as ready; subagents and monitors wait.
-      const completion =
-        status === "ready" &&
-        thread.latestRun?.status === "completed" &&
-        Number.isFinite(completedAt)
-          ? completedAt
-          : (prior?.completion ?? null);
-      next.set(thread.id, { raw: rawThread, attention, completion });
-      if (!prior || thread.archivedAt !== null) continue;
-      const kind =
-        attention && attention !== prior.attention
-          ? "input"
-          : completion !== null && (prior.completion === null || completion > prior.completion)
-            ? "completion"
-            : null;
-      if (!kind) continue;
-      const title =
-        kind === "completion"
-          ? "Thread completed"
-          : status === "approval"
-            ? "Approval needed"
-            : status === "limited"
-              ? "Usage limit reached"
-              : status === "failed"
-                ? "Thread failed"
-                : "Input needed";
+      const event = threadNotificationEvent(rawThread);
+      const prior = previous.current.get(thread.id);
+      const verdict = evaluateNotification({
+        event,
+        environmentId,
+        threadId: thread.id,
+        nowMs: Date.now(),
+        archived: thread.archivedAt !== null,
+        parentOwned:
+          rawThread.lineage.relationshipToParent === "subagent" && event?.origin !== "human",
+        busy: threadNotificationBusy(rawThread),
+        seen: seen.current,
+        observed: true,
+        onScreen:
+          document.visibilityState === "visible" &&
+          document.hasFocus() &&
+          activeEnvironmentId === environmentId &&
+          activeThreadId === thread.id,
+      });
+      next.set(thread.id, verdict.key);
+      if (prior === undefined || !event || !verdict.eligible || prior === verdict.key) continue;
+      seen.current.add(verdict.key!);
+      if (seen.current.size > 512) seen.current.delete(seen.current.values().next().value!);
+      const kind = event.kind === "reply" ? "completion" : "input";
+      const status =
+        event.kind === "error" ? "failed" : event.kind === "approval" ? "approval" : "input";
+      const title = thread.title;
+      const body = notificationMessage(event);
+
       if (
         hasNotificationSound(mode) &&
         supervisionSoundEligible(forest.parentByKey, supervisionKey(environmentId, thread.id))
@@ -188,7 +177,7 @@ function EnvironmentNotifications({
         const toastId = toastManager.add({
           type: kind === "completion" ? "success" : status === "failed" ? "error" : "warning",
           title,
-          description: thread.title,
+          description: body,
           data: {
             hideCopyButton: true,
             leadingIcon:
@@ -224,7 +213,7 @@ function EnvironmentNotifications({
         continue;
       try {
         const notification = new Notification(title, {
-          body: thread.title,
+          body,
           tag: `${environmentId}:${thread.id}`,
           silent: true,
         });
@@ -252,7 +241,6 @@ function EnvironmentNotifications({
     onNotification,
     threads,
     forest,
-
   ]);
 
   return null;
