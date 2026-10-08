@@ -7401,7 +7401,11 @@ export function makeClaudeAdapterV2(
                 compileClaudeModelSelection(currentTurn.input.modelSelection).promptEffort,
               ),
               attachments: turnInput.message.attachments,
-              priority: "now",
+              priority:
+                turnInput.message.createdBy === "agent" &&
+                turnInput.message.creationSource === "server"
+                  ? "next"
+                  : "now",
               attachmentsDir,
               fileSystem,
               skillNames: yield* userInvocableSkillNames(currentTurn.input.runtimePolicy.cwd),
