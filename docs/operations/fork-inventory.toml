@@ -2755,3 +2755,13 @@ retire_when = "Upstream provides an equivalent workstream thread view, or the pr
 depends_on = ["fork-dash-173", "fork-dash-187"]
 roles = []
 note = "Issue #178 (Brad: build it and retire the three widgets). A task appears as a row only when it has no thread and waits on you or is blocked. The layout still accepts the working, blocked and done widget ids but renders nothing for them, so stored layouts keep loading; removing the ids belongs to fork-project-layout. Lost with them: Working's 'also serving #N' list and Done's single chronological list (done rows now sit in their group, three per group). Threads are resolved only within the project's own thread tree; top-level heads such as another orchestrator's lanes need the project-wide thread resolver, which does not exist yet."
+
+[[patch]]
+name = "fork-dash-182"
+subject = "feat(web): add a Team strip of standing agents above the workstreams"
+class = "product"
+purpose = "Show the project's head and its standing sub-agents in a Team strip above the Dashboard's Workstreams, each with its responsibility, a status tag ('idle' between turns), what it owns and Open; one-task workers stay as thread rows under workstreams and in Other threads."
+retire_when = "Upstream provides an equivalent agent roster for projects, or the project page is retired."
+depends_on = ["fork-dash-178"]
+roles = []
+note = "Issue #182 (Brad: plain labels Team / Other threads). Membership: a thread directly under the head (the tree's parent link) with a thread scope of its own, not settled, not archived; the head is the root. The strip is hidden while there is no such sub-agent. Standing agents are excluded from Other threads. Ownership is read from what the page shows: the workstream bands and open tasks a member's thread is linked to; the head owns all of them. Standing agents are not thread rows under workstreams either (a task blocked behind one still gets its own row). Role-versus-standing agent kinds belong to #188 and are not modelled here. Moving #155 and #121 to the Dashboard Orchestrator's backlog was done in the tracker, not in code."
