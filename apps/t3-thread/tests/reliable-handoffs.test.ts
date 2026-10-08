@@ -23,11 +23,12 @@ const environment = {
   pairedAt: "2026-10-07T00:00:00Z",
 } satisfies SavedEnvironment;
 
-describe("reliable handoff transport", () => {
+// The production fixtures are private; CI and machines without them skip explicitly.
+const fixtures = process.env.T3_LIFECYCLE_FIXTURES;
+
+describe.skipIf(!fixtures)("reliable handoff transport", () => {
   beforeAll(async () => {
-    const fixtures = process.env.T3_LIFECYCLE_FIXTURES;
-    if (!fixtures) throw new Error("T3_LIFECYCLE_FIXTURES is required");
-    await NodeFSP.stat(NodePath.join(fixtures, "synthetic-edges.small.sanitized.sqlite"));
+    await NodeFSP.stat(NodePath.join(fixtures!, "synthetic-edges.small.sanitized.sqlite"));
   });
   it("waits for durable fsync before the first transport request", async () => {
     const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "handoff-fsync-"));
