@@ -58,8 +58,8 @@ function wsRpcProtocolLayer(wsUrl: string, opened: Deferred.Deferred<void, Socke
   // Reconnection belongs to the pre-RPC boundary below. Never reconnect an in-flight mutation.
   return Layer.effect(
     RpcClient.Protocol,
-    // Match the shared client heartbeat budget; Effect defaults it to the ping interval.
-    RpcClient.makeProtocolSocket({ pingTimeout: "15 seconds", retryPolicy: Schedule.recurs(0) }),
+    // Match the shared client heartbeat budget (30 s: a busy server can stall pongs); Effect defaults it to the ping interval.
+    RpcClient.makeProtocolSocket({ pingTimeout: "30 seconds", retryPolicy: Schedule.recurs(0) }),
   ).pipe(Layer.provide(socketLayer), Layer.provide(RpcSerialization.layerJson));
 }
 
