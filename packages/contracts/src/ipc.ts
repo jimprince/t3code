@@ -277,7 +277,11 @@ export interface DesktopRuntimeInfo {
 }
 
 export const DesktopUpdatePhaseSchema = Schema.Literals([
-  "checking", "downloading", "verifying", "installing", "restarting",
+  "checking",
+  "downloading",
+  "verifying",
+  "installing",
+  "restarting",
 ]);
 export type DesktopUpdatePhase = typeof DesktopUpdatePhaseSchema.Type;
 
