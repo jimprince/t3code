@@ -1,3 +1,4 @@
+import { ThreadNotificationEvent } from "@t3tools/contracts";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- Effect's Crypto has no createHmac or timingSafeEqual.
 import * as NodeCrypto from "node:crypto";
 
@@ -38,6 +39,7 @@ const ApnsDeliveryJobContext = {
 };
 
 export const ApnsNotificationPayload = Schema.Struct({
+  notification: Schema.optionalKey(ThreadNotificationEvent),
   title: Schema.String,
   body: Schema.String,
   environmentId: Schema.String,
