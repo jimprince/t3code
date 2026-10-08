@@ -1,3 +1,4 @@
+import { WsPlanPublishRpc } from "@t3tools/contracts";
 import {
   WS_METHODS,
   GiteaTokenSetInput,
@@ -260,6 +261,7 @@ const WsAutomationScriptsRunRpc = Rpc.make("automationScripts.run", {
 });
 
 export const WsRpcGroup = RpcGroup.make(
+  WsPlanPublishRpc,
   ...HandoffRpcs,
   ...MessageForwardRpcs,
   WsAssetsCreateUrlRpc,
