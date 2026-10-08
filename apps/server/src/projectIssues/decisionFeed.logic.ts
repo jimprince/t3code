@@ -244,23 +244,28 @@ export function pendingAsksOfThread(
   thread: { readonly id: ThreadId; readonly title: string; readonly projectTitle: string },
   projection: Parameters<typeof derivePendingThreadRequests>[0],
 ): ProjectPendingAsk[] {
-  const base = (request: { requestId: ProjectPendingAsk["requestId"]; createdAt: string }) => ({
+  const base = (request: {
+    requestId: ProjectPendingAsk["requestId"];
+    createdAt: string;
+    canRespond: boolean;
+  }) => ({
     threadId: thread.id,
     threadTitle: thread.title,
     projectTitle: thread.projectTitle,
     requestId: request.requestId,
     createdAt: request.createdAt,
+    canRespond: request.canRespond,
   });
   const { approvals, userInputs } = derivePendingThreadRequests(projection);
   return [
     ...userInputs.map((input): ProjectPendingAsk => ({
-      ...base(input),
+      ...base({ ...input, canRespond: input.responseCapability !== "not_resumable" }),
       kind: "question",
       questions: input.questions,
       messageResponse: input.responseMode === "message",
     })),
     ...approvals.map((approval): ProjectPendingAsk => ({
-      ...base(approval),
+      ...base({ ...approval, canRespond: approval.responseCapability === "live" }),
       kind: "approval",
       requestKind: approval.requestKind,
       ...(approval.detail === undefined ? {} : { detail: approval.detail }),
