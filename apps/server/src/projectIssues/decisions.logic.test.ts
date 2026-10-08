@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { parseDecisionIssue, planBradAnswer, resolveWaitingThread } from "./decisions.logic.ts";
+import {
+  parseDecisionIssue,
+  planBradAnswer,
+  resolveWaitingThread,
+  withoutCuratorBlock,
+} from "./decisions.logic.ts";
 
 const BODY = [
   "A Windows Update installed a new NVIDIA driver at 10:42 and WSL lost the GPU.",
@@ -116,5 +121,29 @@ describe("resolveWaitingThread", () => {
     expect(resolveWaitingThread("nobody", threads, projects)).toBeNull();
     expect(resolveWaitingThread("t-gone", threads, projects)).toBeNull();
     expect(resolveWaitingThread(" ", threads, projects)).toBeNull();
+  });
+});
+
+describe("the curator's backlog-sort block", () => {
+  const block = [
+    "<!-- curator-backlog-sort: chief-of-staff#31 -->",
+    "Bucket: Workstream (Unified Decisions)",
+    "Accountable owner: [T3 Orchestrator](http://100.64.0.4:3773/c9d5fd19/115bc0d6) (thread 115bc0d6)",
+    "Approved filing: [chief-of-staff#31](https://git.example/brad/chief-of-staff/issues/31).",
+    "<!-- /curator-backlog-sort -->",
+  ].join("\n");
+
+  it("is not part of the decision's context, wherever the curator put it", () => {
+    const after = parseDecisionIssue(`Which design?\n${block}\n\n${BODY.split("\n\n")[1]}`);
+    expect(after.context).toBe("Which design?");
+    const before = parseDecisionIssue(`${block}\n\nWhich design?`);
+    expect(before.context).toBe("Which design?");
+  });
+
+  it("leaves ordinary text, other comments and an unclosed marker alone", () => {
+    expect(withoutCuratorBlock("Bucket: mine\n<!-- note -->")).toBe("Bucket: mine\n<!-- note -->");
+    expect(parseDecisionIssue("Which?\n<!-- curator-backlog-sort: x -->\nBucket: y").context).toBe(
+      "Which?\n\nBucket: y",
+    );
   });
 });
