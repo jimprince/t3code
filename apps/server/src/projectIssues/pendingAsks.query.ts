@@ -8,7 +8,7 @@ import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 /** Most pending requests read for one thread; a thread rarely has more than one. */
-export const MAX_PENDING_REQUESTS = 5;
+const MAX_PENDING_REQUESTS = 5;
 /**
  * Newest turn items of a request's node that are looked at to find its question or
  * approval text. The request blocks its run, so its item is among the last ones.
