@@ -445,7 +445,7 @@ it.effect(
             };
             // Separate TS projects have different compiler policies. Runtime import
             // exercises the production CLI without compiling it as server source.
-            const cliModule = "../../../t3-thread/src/client.ts";
+            const cliModule = new URL("../../../t3-thread/src/client.ts", import.meta.url).href;
             const { RemoteEnvironmentClient } = yield* Effect.promise(() => import(cliModule));
             const client = new RemoteEnvironmentClient(environment, {
               descriptorFactory: async () => ({
