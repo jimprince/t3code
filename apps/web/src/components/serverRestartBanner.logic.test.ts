@@ -131,7 +131,10 @@ describe("server restart banner", () => {
     } as ServerLifecycleStreamEvent;
 
     // Runs one subscription replay through the same atom shape the app uses.
-    const replay = (start: ServerRestartState, events: ReadonlyArray<ServerLifecycleStreamEvent>) => {
+    const replay = (
+      start: ServerRestartState,
+      events: ReadonlyArray<ServerLifecycleStreamEvent>,
+    ) => {
       const registry = AtomRegistry.make();
       const atom = Atom.make(restartLifecycleEvents(Stream.fromIterable(events)));
       let state = start;
@@ -145,12 +148,13 @@ describe("server restart banner", () => {
     const lost = serverRestartReconnected(updating({ deadline: 91_000 }));
 
     it("opens the subscription and resolves on the restarted server's ready", () => {
-      expect(
-        replay(lost, [welcome, ready(2, "2026-10-08T20:01:00.000Z", target)]),
-      ).toMatchObject({ status: "updated", serverVersion: target });
-      expect(
-        replay(lost, [welcome, ready(2, "2026-10-08T20:01:00.000Z", "0.0.45")]),
-      ).toMatchObject({ status: "back", serverVersion: "0.0.45" });
+      expect(replay(lost, [welcome, ready(2, "2026-10-08T20:01:00.000Z", target)])).toMatchObject({
+        status: "updated",
+        serverVersion: target,
+      });
+      expect(replay(lost, [welcome, ready(2, "2026-10-08T20:01:00.000Z", "0.0.45")])).toMatchObject(
+        { status: "back", serverVersion: "0.0.45" },
+      );
     });
 
     it("recovers from did not come back once the server returns", () => {
@@ -159,9 +163,9 @@ describe("server restart banner", () => {
         1_000 + SERVER_RESTART_TIMEOUT_MS,
       );
       expect(failed.status).toBe("failed");
-      expect(
-        replay(failed, [welcome, ready(2, "2026-10-08T20:03:00.000Z", target)]).status,
-      ).toBe("updated");
+      expect(replay(failed, [welcome, ready(2, "2026-10-08T20:03:00.000Z", target)]).status).toBe(
+        "updated",
+      );
     });
 
     it("still sees ready when a migration notice follows it in the replay", () => {
