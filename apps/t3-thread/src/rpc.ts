@@ -23,6 +23,11 @@ import {
 } from "./contracts.js";
 
 const RPC_METHODS = {
+  "fork.message.forward.prepare": "fork.message.forward.prepare",
+  "fork.message.forward.accept": "fork.message.forward.accept",
+  [WS_METHODS.assetsCreateUrl]: WS_METHODS.assetsCreateUrl,
+  [WS_METHODS.attachmentsCreateUploadUrl]: WS_METHODS.attachmentsCreateUploadUrl,
+  [WS_METHODS.attachmentsDelete]: WS_METHODS.attachmentsDelete,
   "fork.send.accept": "fork.send.accept",
   "fork.send.lookup": "fork.send.lookup",
   "fork.send.inbox": "fork.send.inbox",
@@ -130,7 +135,7 @@ export class T3RpcClient {
       (payload: unknown) => Effect.Effect<T, unknown, never>
     >;
     const operation = Effect.suspend(() => client[RPC_METHODS[method]](input));
-    if (method.startsWith("fork.send.")) {
+    if (method.startsWith("fork.send.") || method.startsWith("fork.message.forward.")) {
       const result = await this.runtime.runPromise(
         Effect.exit(operation.pipe(Effect.timeout("15 seconds"))),
       );
