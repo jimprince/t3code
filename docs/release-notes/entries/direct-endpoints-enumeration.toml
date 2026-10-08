@@ -1,0 +1,4 @@
+id = "direct-endpoints-enumeration"
+category = "fix"
+functionality = "remote connections"
+text = "Keep server configuration available when the operating system cannot list network interfaces."
