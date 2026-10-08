@@ -59,6 +59,10 @@
       "types": "./src/decisionAnswer.ts",
       "default": "./src/decisionAnswer.ts"
     },
+    "./decision-deferral": {
+      "types": "./src/decisionDeferral.ts",
+      "default": "./src/decisionDeferral.ts"
+    },
     "./linkify": {
       "types": "./src/linkify.ts",
       "default": "./src/linkify.ts"

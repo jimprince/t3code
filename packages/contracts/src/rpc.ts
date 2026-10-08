@@ -1,6 +1,16 @@
 import { GiteaTokenSetInput, GiteaTokenSetResult, GiteaTokenSetError } from "./giteaToken.ts";
 import { SessionReconcileInput, SessionReconcileError } from "./sessionReconcile.ts";
 import { HandoffRpcs } from "./handoffs.ts";
+import {
+  ProjectPendingAsksInput,
+  ProjectPendingAsksResult,
+  ProjectRequestApproveMergeInput,
+  ProjectRequestApproveMergeResult,
+  ProjectRequestDeferInput,
+  ProjectRequestDeferResult,
+  ProjectRequestSendBackInput,
+  ProjectRequestSendBackResult,
+} from "./projectDecisions.ts";
 import { LegacyHistoryRpc } from "./forkLegacyHistory.ts";
 import { ThreadTransferRpcs } from "./threadTransfer.ts";
 import { ForkConversationRpc } from "./forkConversation.ts";
@@ -633,6 +643,10 @@ export const WS_METHODS = {
   projectRequestsSettle: "projectRequests.settle",
   projectRequestsDecide: "projectRequests.decide",
   projectRequestsDiscuss: "projectRequests.discuss",
+  projectRequestsPendingAsks: "projectRequests.pendingAsks",
+  projectRequestsApproveMerge: "projectRequests.approveMerge",
+  projectRequestsSendBack: "projectRequests.sendBack",
+  projectRequestsDefer: "projectRequests.defer",
   projectRequestsSubmit: "projectRequests.submit",
   projectRequestsStartIntake: "projectRequests.startIntake",
   projectRequestsCreate: "projectRequests.create",
@@ -1081,6 +1095,30 @@ const WsProjectRequestsDecideRpc = Rpc.make(WS_METHODS.projectRequestsDecide, {
 const WsProjectRequestsDiscussRpc = Rpc.make(WS_METHODS.projectRequestsDiscuss, {
   payload: ProjectRequestDiscussInput,
   success: ProjectRequestDiscussResult,
+  error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectRequestsPendingAsksRpc = Rpc.make(WS_METHODS.projectRequestsPendingAsks, {
+  payload: ProjectPendingAsksInput,
+  success: ProjectPendingAsksResult,
+  error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectRequestsApproveMergeRpc = Rpc.make(WS_METHODS.projectRequestsApproveMerge, {
+  payload: ProjectRequestApproveMergeInput,
+  success: ProjectRequestApproveMergeResult,
+  error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectRequestsSendBackRpc = Rpc.make(WS_METHODS.projectRequestsSendBack, {
+  payload: ProjectRequestSendBackInput,
+  success: ProjectRequestSendBackResult,
+  error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectRequestsDeferRpc = Rpc.make(WS_METHODS.projectRequestsDefer, {
+  payload: ProjectRequestDeferInput,
+  success: ProjectRequestDeferResult,
   error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
 });
 
@@ -2314,6 +2352,10 @@ export const WsForkRpcGroup = RpcGroup.make(
   WsProjectLayoutHistoryRpc,
   WsSubscribeProjectLayoutRpc,
   WsProjectRequestsDecideRpc,
+  WsProjectRequestsPendingAsksRpc,
+  WsProjectRequestsApproveMergeRpc,
+  WsProjectRequestsSendBackRpc,
+  WsProjectRequestsDeferRpc,
 ).middleware(RpcScopeAuthorization);
 
 export const WsRpcGroup = WsCoreRpcGroup.merge(WsForkRpcGroup);
