@@ -1,4 +1,8 @@
-import { describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+
+import { setHeldSendUnloadGuard } from "./heldSendUnloadGuard";
+
+afterEach(() => setHeldSendUnloadGuard(false));
 
 import { clearChunkReloadGuard, reloadOnceForChunkLoadError } from "./chunkReloadGuard";
 
@@ -53,4 +57,15 @@ describe("reloadOnceForChunkLoadError", () => {
     expect(reload).not.toHaveBeenCalled();
     expect(() => clearChunkReloadGuard(blocked)).not.toThrow();
   });
+});
+
+it("preserves pending composer command identities instead of automatically reloading stale chunks", () => {
+  const storage = createStorageStub();
+  const reload = vi.fn();
+  setHeldSendUnloadGuard(true);
+  expect(reloadOnceForChunkLoadError(() => storage, reload)).toBe(false);
+  expect(storage.length).toBe(0);
+  expect(reload).not.toHaveBeenCalled();
+  setHeldSendUnloadGuard(false);
+  expect(reloadOnceForChunkLoadError(() => storage, reload)).toBe(true);
 });
