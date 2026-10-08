@@ -290,7 +290,16 @@ export const DesktopIdleUpdateInstallOptionsSchema = Schema.Struct({
 });
 export type DesktopIdleUpdateInstallOptions = typeof DesktopIdleUpdateInstallOptionsSchema.Type;
 
+export const DesktopUpdatePhaseSchema = Schema.Literals([
+  "checking", "downloading", "verifying", "installing", "restarting",
+]);
+export type DesktopUpdatePhase = typeof DesktopUpdatePhaseSchema.Type;
+
 export interface DesktopUpdateState {
+  /** Optional for compatibility with older Electron shells. */
+  updatePhase?: DesktopUpdatePhase;
+  downloadTransferredBytes?: number;
+  downloadTotalBytes?: number;
   systemIdleSeconds?: number;
   enabled: boolean;
   status: DesktopUpdateStatus;
@@ -323,6 +332,9 @@ export const DesktopUpdateReleaseNoteSchema = Schema.Struct({
 });
 
 export const DesktopUpdateStateSchema = Schema.Struct({
+  updatePhase: Schema.optionalKey(DesktopUpdatePhaseSchema),
+  downloadTransferredBytes: Schema.optionalKey(Schema.Number),
+  downloadTotalBytes: Schema.optionalKey(Schema.Number),
   systemIdleSeconds: Schema.optionalKey(Schema.Number),
   enabled: Schema.Boolean,
   status: DesktopUpdateStatusSchema,
@@ -1279,6 +1291,8 @@ export interface DesktopBridge {
   getUpdateState: () => Promise<DesktopUpdateState>;
   setUpdateChannel: (channel: DesktopUpdateChannel) => Promise<DesktopUpdateState>;
   checkForUpdate: () => Promise<DesktopUpdateCheckResult>;
+  /** Run check, download and install after the renderer's interruption confirmation. */
+  startUpdate?: () => Promise<DesktopUpdateActionResult>;
   downloadUpdate: () => Promise<DesktopUpdateActionResult>;
   installUpdate: (options?: DesktopIdleUpdateInstallOptions) => Promise<DesktopUpdateActionResult>;
   onUpdateState: (listener: (state: DesktopUpdateState) => void) => () => void;
