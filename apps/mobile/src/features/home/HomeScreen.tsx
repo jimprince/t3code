@@ -6,7 +6,7 @@ import {
   buildOrchestratorSummaries,
   type OrchestratorSummary,
 } from "@t3tools/client-runtime/state/orchestrators";
-import { MobileDecisions } from "./MobileDecisions";
+import { MobileDecisionFeed } from "./MobileDecisionFeed";
 import { MobileProjectRequests } from "./MobileProjectRequests";
 import {
   type EnvironmentProject,
@@ -386,7 +386,7 @@ function MobileOrchestratorList({
               </Text>
             ) : null}
             <MobileProjectRequests summary={summary} />
-            <MobileDecisions
+            <MobileDecisionFeed
               summary={summary}
               // Selection reads only the environment and id; a new discussion
               // thread may not be in this list yet.
