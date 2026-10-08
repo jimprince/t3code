@@ -40,6 +40,7 @@ interface NewThreadWorkspaceOptions {
   branch?: string | null;
   worktreePath?: string | null;
   envMode?: DraftThreadEnvMode;
+  issue?: string | null;
   startFromOrigin?: boolean;
 }
 
@@ -51,6 +52,7 @@ function pickExplicitWorkspaceOptions(options: NewThreadWorkspaceOptions | undef
     ...(options?.branch !== undefined ? { branch: options.branch } : {}),
     ...(options?.worktreePath !== undefined ? { worktreePath: options.worktreePath } : {}),
     ...(options?.envMode !== undefined ? { envMode: options.envMode } : {}),
+    ...(options?.issue !== undefined ? { issue: options.issue } : {}),
     ...(options?.startFromOrigin !== undefined ? { startFromOrigin: options.startFromOrigin } : {}),
   };
 }
@@ -71,6 +73,7 @@ export function useNewThreadHandler() {
         branch?: string | null;
         worktreePath?: string | null;
         envMode?: DraftThreadEnvMode;
+        issue?: string | null;
         startFromOrigin?: boolean;
         replace?: boolean;
       },
@@ -278,6 +281,8 @@ export function useNewThreadHandler() {
               ...(carryInteractionMode ? { interactionMode: carryInteractionMode } : {}),
             });
           }
+          if (options?.issue !== undefined)
+            setDraftThreadContext(emptyStoredDraftThread.draftId, { issue: options.issue });
           // Model intent: an explicit human pick always stands. Seeds and
           // legacy entries alike re-resolve here — sticky first, mirroring
           // the mint-fresh path, then the project default or carried
@@ -351,7 +356,8 @@ export function useNewThreadHandler() {
           hasBranchOption ||
           hasWorktreePathOption ||
           hasEnvModeOption ||
-          hasStartFromOriginOption
+          hasStartFromOriginOption ||
+          options?.issue !== undefined
         ) {
           setDraftThreadContext(currentRouteTarget.draftId, pickExplicitWorkspaceOptions(options));
         }
@@ -418,6 +424,7 @@ export function useNewThreadHandler() {
           branch: options?.branch ?? null,
           worktreePath: options?.worktreePath ?? null,
           envMode: initialEnvMode,
+          ...(options?.issue !== undefined ? { issue: options.issue } : {}),
           startFromOrigin:
             options?.startFromOrigin ??
             resolveNewDraftStartFromOrigin({
