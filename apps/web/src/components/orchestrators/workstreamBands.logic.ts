@@ -10,7 +10,7 @@ import type { BlockedRow } from "./projectWork.logic";
 import { issueKey, type TaskStatus } from "./projectRequests.logic";
 
 /** Row order inside a band: what waits on Brad first, finished work last. */
-export const BAND_STATUS_ORDER: ReadonlyArray<TaskStatus> = [
+const BAND_STATUS_ORDER: ReadonlyArray<TaskStatus> = [
   "for-review",
   "active",
   "pending",
