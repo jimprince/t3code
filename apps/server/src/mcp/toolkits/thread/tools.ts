@@ -1,5 +1,9 @@
 import {
   ForkThreadMetadata,
+  MessageForwardSource,
+  EnvironmentId,
+  MessageForwardBundle,
+  MessageForwardResult,
   ScheduledTaskId,
   ScheduledTask,
   OrchestrationSearchThreadsInput,
@@ -20,6 +24,9 @@ import {
   NonNegativeInt,
   ProjectId,
 } from "@t3tools/contracts";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as ServerConfig from "../../../config.ts";
+import { ProviderRegistry } from "../../../provider/Services/ProviderRegistry.ts";
 import * as Crypto from "effect/Crypto";
 import * as Schema from "effect/Schema";
 import { Tool, Toolkit } from "effect/unstable/ai";
@@ -285,7 +292,48 @@ const ScheduledTaskRunTool = Tool.make("run_scheduled_task_now", {
   .annotate(Tool.Destructive, true)
   .annotate(Tool.OpenWorld, true);
 
+const forwardDependencies = [
+  ...commandTool.dependencies,
+  SqlClient.SqlClient,
+  ServerConfig.ServerConfig,
+  ProviderRegistry,
+];
+const ThreadForwardPrepareTool = Tool.make("t3_thread_forward_prepare", {
+  ...commandTool,
+  description:
+    "Read one stored message and all attachment metadata for forwarding within this MCP environment. Omit sourceThreadId for this thread. last-user selects a human-authored message, excluding wakes and agent sends. Never forward attachment paths between environments.",
+  parameters: Schema.Struct({
+    sourceThreadId: Schema.optional(ThreadId),
+    selection: MessageForwardSource.fields.selection,
+  }),
+  success: MessageForwardBundle,
+  dependencies: forwardDependencies,
+})
+  .annotate(Tool.Readonly, true)
+  .annotate(Tool.Destructive, false);
+const ThreadForwardTool = Tool.make("t3_thread_forward", {
+  ...commandTool,
+  description:
+    "Forward exact stored text and every attachment within this MCP environment through normal send/queue rules. Omit sourceThreadId for this thread. Cross-environment forwarding uses t3-thread forward <target> --message <id> (or --last-user), not this MCP tool. sourceUrl is the original message's absolute app URL. Keep clientRequestId for receipt lookup and an explicit retry after an uncertain reply.",
+  parameters: Schema.Struct({
+    targetThreadId: ThreadId,
+    targetEnvironmentId: Schema.optional(EnvironmentId),
+    sourceThreadId: Schema.optional(ThreadId),
+    selection: Schema.optional(MessageForwardSource.fields.selection),
+    sourceUrl: Schema.String,
+    note: Schema.optional(Schema.String.check(Schema.isMaxLength(16000))),
+    clientRequestId: Schema.String.check(Schema.isPattern(/^[a-zA-Z0-9._:-]{1,128}$/)),
+    queue: Schema.optional(Schema.Boolean),
+  }),
+  success: MessageForwardResult,
+  dependencies: forwardDependencies,
+})
+  .annotate(Tool.Destructive, true)
+  .annotate(Tool.OpenWorld, true);
+
 export const ThreadToolkit = Toolkit.make(
+  ThreadForwardPrepareTool,
+  ThreadForwardTool,
   ScheduledTaskRunTool,
   ThreadSearchTool,
   ThreadForkTool,
