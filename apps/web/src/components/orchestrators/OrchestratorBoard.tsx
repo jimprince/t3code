@@ -63,8 +63,8 @@ import { ProjectAutomationsSlot } from "../projects/ProjectAutomationsSlot";
 import { ProjectDecisionsWidget } from "./ProjectDecisionsWidget";
 import { ProjectIssuesBoard } from "./ProjectIssuesBoard";
 import { ProjectTaskPanel } from "./ProjectTaskPanel";
-import { OpenTaskContext, TaskTitle } from "./TaskLink";
-import { deriveWorkstreams } from "./projectWorkstreams.logic";
+import { OpenTaskContext } from "./TaskLink";
+import { useWorkstreamBands, WorkstreamBands } from "./WorkstreamBands";
 import type { TaskRef } from "./taskView.logic";
 import {
   ClickableRow,
@@ -89,7 +89,6 @@ import { ProjectIssuesSummary, ProjectRoadmapSummary } from "./ProjectTabSummari
 import { formatIssueAge } from "./projectIssuesBoard.logic";
 import { resolveProjectTab, type ProjectTab } from "./projectTabs.logic";
 import { HEALTH_LABEL, isHealthStale, latestWorkChangeAt } from "./projectHealth.logic";
-import { issueKey } from "./projectRequests.logic";
 import {
   deriveBlocked,
   deriveWorkingNow,
@@ -358,57 +357,27 @@ function ProjectBlockedWidget({ summary }: { readonly summary: OrchestratorSumma
 }
 
 /**
- * One line per active epic under the health line: its phase or milestone, N of
- * M, the workers on it, the next step, and Blocked. Derived from the epics and
- * their children only; hidden while no epic has work left. A row opens the epic.
+ * The Dashboard's Workstreams block: each active epic as a band of its tasks
+ * (see WorkstreamBands), with what changed since Brad's previous visit. Hidden
+ * while no epic has work left.
  */
-function ProjectWorkstreams({ summary }: { readonly summary: OrchestratorSummary }) {
-  const { statuses, query } = useTaskStatuses(summary);
-  const blockedRows = useBlockedRows(summary);
-  const rows = useMemo(
-    () =>
-      deriveWorkstreams({
-        issues: query.data?.issues ?? [],
-        statuses,
-        workingThreadIds: new Set(summary.working.map((item) => item.thread.id as string)),
-        blockedRows,
-        rootThreadId: summary.root.id,
-      }),
-    [blockedRows, query.data, statuses, summary.root.id, summary.working],
+function ProjectWorkstreams({
+  summary,
+  since,
+}: {
+  readonly summary: OrchestratorSummary;
+  readonly since: string | null;
+}) {
+  const tasks = useTaskStatuses(summary);
+  const workstreams = useWorkstreamBands(summary, tasks, since);
+  const bands = useMemo(
+    () => workstreams.bands.filter((band) => band.epic !== null && band.rows.length > 0),
+    [workstreams.bands],
   );
-  if (rows.length === 0) return null;
+  if (bands.length === 0) return null;
   return (
-    <ProjectSection title="Workstreams" count={rows.length}>
-      <ul className="divide-y divide-border">
-        {rows.map((row) => (
-          <li key={issueKey(row.epic)} className="py-1.5">
-            <TaskTitle
-              task={{
-                host: row.epic.host,
-                repository: row.epic.repository,
-                number: row.epic.number,
-              }}
-              url={row.epic.url}
-              className="flex w-full min-w-0 flex-wrap items-baseline gap-x-2 text-sm hover:underline"
-            >
-              <span>{row.epic.title}</span>
-              <span className="text-muted-foreground">
-                {row.milestone ? `${row.milestone} · ` : ""}
-                {row.progress}
-              </span>
-              {row.agents > 0 ? (
-                <span className="text-muted-foreground">
-                  {row.agents} {row.agents === 1 ? "agent" : "agents"}
-                </span>
-              ) : null}
-              {row.next ? (
-                <span className="text-muted-foreground">next: {row.next.title}</span>
-              ) : null}
-              {row.blocked ? <span className="text-error">Blocked</span> : null}
-            </TaskTitle>
-          </li>
-        ))}
-      </ul>
+    <ProjectSection title="Workstreams" count={bands.length}>
+      <WorkstreamBands summary={summary} workstreams={workstreams} bands={bands} compact />
     </ProjectSection>
   );
 }
@@ -958,7 +927,9 @@ export function OrchestratorBoard({
                 </div>
 
                 <ProjectHealthLine summary={summary} />
-                {tab === "dashboard" ? <ProjectWorkstreams summary={summary} /> : null}
+                {tab === "dashboard" ? (
+                  <ProjectWorkstreams summary={summary} since={previousVisit} />
+                ) : null}
                 <ProjectReleaseLine
                   summary={summary}
                   runningVersion={
