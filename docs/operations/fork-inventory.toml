@@ -2673,3 +2673,13 @@ retire_when = "The Tasks board is retired or upstream shows agent to-do progress
 depends_on = ["fork-dash-187-todo-progress", "fork-project-dashboard-widgets"]
 roles = []
 note = "Issue #187. taskStepProgress reads todoProgress from the project tree's thread shells and shows nothing for a thread that is no longer working, so a finished thread's list never lingers. Only Active cards show it."
+
+[[patch]]
+name = "fork-dash-173-part-of"
+subject = "feat(server): name the epic each project issue is part of"
+class = "divergence"
+purpose = "Expose each issue's 'Part of #N' parent on the project issue list, so clients can group tasks, finished ones included, under their workstream."
+retire_when = "Upstream provides a parent link on project issues, or the workstream bands are retired."
+depends_on = ["fork-task-view"]
+roles = []
+note = "Issue #173 and #175. 'Part of #N' stays the single parent link (parsePartOf, already used for epic progress); partOf is set only for a parent in the same repository. Epic progress still also reads the epic's checklist."
