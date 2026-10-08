@@ -1,0 +1,48 @@
+name = "fork-subprojects-ui"
+subject = "feat(projects): show nested orchestrators as subprojects in the sidebar and project page"
+class = "product"
+purpose = "Show a subproject as its own project: a compact one-line row inside its parent's sidebar card, a Subprojects section and breadcrumb on the project pages, and rollup counts on the parent."
+retire_when = "Upstream provides nested project pages, or the fork stops wanting nested orchestrators to have their own pages."
+depends_on = [
+  "fork-subprojects-server",
+  "fork-orchestrators-view",
+  "fork-project-page-workflow",
+  "fork-cross-environment-nesting",
+]
+roles = []
+note = "Client only; the server half is fork-subprojects-server. The pure subproject rules (top-level filter, rollup and fold labels, open task count, trail) live in packages/client-runtime state/projectSubprojects.ts so web and mobile share one rule and each only renders. Approved layout (#156): B compact rows plus A's rollup line. buildOrchestratorSummaries returns one summary per project, top-level and subproject alike. A summary's descendants, issues, needsYou, working and blocked cover its own tree only, matching the server's collectThreadTree; only mode `on` on a nested thread makes a subproject, like the server's findProjectRootThreadId. A subproject nests under the first enclosing top-level or mode-on thread, so plain workers in between are skipped; one with workers whose parent is missing or archived is a top-level project. `subprojects` and `rollup` (needsYou, working, blocked, latestActivityAt) fold subproject work into the parent for the sidebar bucket, card counts and page header; `status` counts subproject activity as the root's workers. The sidebar lists top-level projects only, with each project's subprojects as rows beneath it, ordered by the same deferred buckets. Mobile still lists every summary flat, so a subproject appears as its own project there. Subprojects come from an explicit mark (`t3-thread orchestrator mark`, `create --subproject`, Show as subproject) because automatic promotion stays off until the mobile app can reach a subproject's decisions. Reverse state: the project page Edit dialog and the thread menu offer `Show as worker` (mode off, which also blocks automatic promotion) and `Show as subproject` (mode on) through fork.threads.metadata.update, gated on the threadSubprojects capability. Mock B (Brad confirmed 2026-10-08): the Projects sidebar card of a project with subprojects has a chevron that folds its compact subproject rows away; the folded project keys are one list in this device's localStorage (COLLAPSED_SUBPROJECTS_KEY, expanded by default, toggleProjectKey) and deeper levels follow their parent. A card whose subprojects have working agents adds a line, '2 of 6 working in subprojects' (subprojectWorkingLabel: rollup.working minus the project's own activeWorkerCount; '6 working in subprojects' when all of them are inside), which stays visible while folded. Web and desktop only; mobile nesting and the automatic-promotion flip stay with fork.7."
+[[decision]]
+id = "workers-under-projects-301"
+date = "2026-10-14"
+decided = "refresh-existing-concern"
+rationale = "brad/t3code-fork#301: a subthread nested under a head did not show on its Projects card, because the rows were subagents only. The same rows, builder, ordering and Settled shelf now also list nested user or agent threads with no lineage relationship (kind worker: subthreads opened under the project and t3-thread workers), tagged worker. Forks, system threads and threads the user opened through a server action (isUserOpenedThread, which stay in Threads) are left out; a Harness-purpose worker stays off a Projects card through the existing projectSubagentRows rule. Display only: rollup, working and needs-you counts, Threads placement and the user-created-root rule are unchanged, with no per-card cap (a head with 35 workers lists 35 unsettled rows or folds them into Settled)."
+
+[[decision]]
+id = "delegated-worker-summary-226"
+date = "2026-10-09"
+decided = "repair-existing-concern"
+rationale = "Projects summary coverage verifies that a delegator with five organizationally nested worker delegates produces only its root summary, even for a pinned worker. Only an explicit subproject on mark adds a separate summary; server creation supplies the organizational relationship."
+
+[[decision]]
+id = "catchup-2908-subproject-mutation-guards"
+date = "2026-10-10"
+decided = "adapt"
+rationale = "Use upstream orchestration guards (#9786–#9791, #10298) for subproject/worker forward and reverse mutations. Preserve compact rows, rollup counts, breadcrumbs and explicit marking alongside nested creation/drop and reset entry points. Static sidebar/header/palette consumer review passed; composed CI remains required."
+
+[[decision]]
+id = "subproject-page-table-20261012"
+date = "2026-10-11"
+decided = "refresh-existing-concern"
+rationale = "The approved subproject table, folded count and phone header fit extend the existing subprojects UI concern. Keep them in this patch rather than adding a second page layout concern; settled grouping remains independently droppable above it."
+
+[[decision]]
+id = "catchup-r29-shared-subproject-rules"
+date = "2026-10-13"
+decided = "relocate"
+rationale = "Port main's table/progress/count behavior into r28's shared client-runtime rules and tests, retaining one implementation used by web and mobile."
+
+[[decision]]
+id = "subagents-under-projects-20261013"
+date = "2026-10-13"
+decided = "refresh-existing-concern"
+rationale = "Subagents (provider-native and delegate_task children) list as rows under their project, the way subprojects do. Client only: OrchestratorSummary.subagentRows is built from the existing own-tree descendants whose lineage is subagent, so rollup, working and needs-you counts, the Threads filters and the user-created-root rule are untouched. A runless native child reads idle, so its row is working only while the parent's pending-task roster names it. A Harness-purpose subagent stays off a Projects card. Settled rows fold into the existing Settled shelf. Own projectSubagentRows, owningProjectRoot, the sidebar and board rows and their tests here rather than adding a second concern. No contracts, server or migration."
