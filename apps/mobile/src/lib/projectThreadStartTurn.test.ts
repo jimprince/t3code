@@ -107,6 +107,7 @@ describe("new thread on an existing branch", () => {
     (worktreePath) => {
       const input = buildProjectThreadStartTurnInput({
         projectId: ProjectId.make("project"),
+        issue: "brad/tasks#7",
         projectCwd: "/workspace",
         threadId: "new-thread",
         commandId: "command",
@@ -132,6 +133,7 @@ describe("new thread on an existing branch", () => {
       expect(input.bootstrap).not.toHaveProperty("prepareWorktree");
       expect(input.bootstrap).not.toHaveProperty("runSetupScript");
       expect(input.threadId).toBe("new-thread");
+      expect(input.issue).toBe("brad/tasks#7");
     },
   );
 });
