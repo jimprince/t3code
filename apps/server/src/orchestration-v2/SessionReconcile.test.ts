@@ -28,6 +28,9 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import { vi } from "vite-plus/test";
+import * as Stream from "effect/Stream";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as TestClock from "effect/testing/TestClock";
 import { layerMemory as SqlitePersistenceMemory } from "../persistence/Sqlite.ts";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
@@ -82,6 +85,16 @@ const recoveryLayer = ProviderRuntimeRecovery.layer.pipe(
 const reconcileScenario = (
   status: "running" | "interrupted" | "completed" | "failed",
   duringGrace?: "completed" | "failed" | "interrupted" | "newer" | "attempt" | "ordinal",
+  starting?:
+    | "newer-start"
+    | "stale"
+    | "active-turn"
+    | "start-race"
+    | "slow-alive"
+    | "normal-stop"
+    | "commit-session-race"
+    | "commit-turn-race"
+    | "commit-run-race",
 ) =>
   Effect.gen(function* () {
     const orchestrator = yield* Orchestrator.OrchestratorV2;
@@ -295,10 +308,165 @@ const reconcileScenario = (
         },
       });
     }
+    if (starting) {
+      const projection = yield* projections.getThreadProjection(threadId);
+      if (starting === "newer-start" || starting === "slow-alive") yield* TestClock.adjust(1);
+      const startedAt = yield* DateTime.now;
+      yield* projections.apply({
+        id: EventId.make("starting-session"),
+        type: "provider-session.updated",
+        threadId,
+        occurredAt: now,
+        payload: { ...projection.providerSessions[0]!, status: "starting", updatedAt: startedAt },
+      });
+      // Elapsed time cannot invalidate a start begun after the terminal receipt.
+      if (starting === "slow-alive") yield* TestClock.adjust("24 hours");
+      if (starting === "active-turn") {
+        yield* projections.apply({
+          id: EventId.make("starting-live-turn"),
+          type: "provider-turn.updated",
+          threadId,
+          occurredAt: now,
+          payload: { ...projection.providerTurns[0]!, status: "running", completedAt: null },
+        });
+      }
+    }
+    const sql = yield* SqlClient.SqlClient;
+    const outboxBefore =
+      yield* sql`SELECT * FROM orchestration_v2_effect_outbox ORDER BY effect_id`;
+    let providerWriteCommitted = false;
+    if (starting?.startsWith("commit-")) {
+      const sink = yield* EventSink.EventSinkV2;
+      const commit = sink.commitCommand;
+      const spy = vi.spyOn(sink, "commitCommand").mockImplementation((input) =>
+        Effect.gen(function* () {
+          if (input.commandId === settle.commandId) {
+            // The production planner and causal guard already read their snapshot.
+            // Provider writers bypass the command lock and commit through this sink.
+            const projection = yield* projections.getThreadProjection(threadId).pipe(Effect.orDie);
+            yield* TestClock.adjust(1);
+            const at = yield* DateTime.now;
+            yield* sink.write({
+              events: [
+                starting === "commit-session-race"
+                  ? {
+                      id: EventId.make("commit-race-session"),
+                      type: "provider-session.updated",
+                      threadId,
+                      occurredAt: at,
+                      payload: { ...projection.providerSessions[0]!, updatedAt: at },
+                    }
+                  : starting === "commit-turn-race"
+                    ? {
+                        id: EventId.make("commit-race-turn"),
+                        type: "provider-turn.updated",
+                        threadId,
+                        occurredAt: at,
+                        payload: {
+                          ...projection.providerTurns[0]!,
+                          id: ProviderTurnId.make("provider-turn:newer"),
+                          ordinal: 2,
+                          status: "running",
+                          completedAt: null,
+                        },
+                      }
+                    : {
+                        id: EventId.make("commit-race-run"),
+                        type: "run.created",
+                        threadId,
+                        occurredAt: at,
+                        payload: {
+                          ...projection.runs[0]!,
+                          id: RunId.make("run:newer"),
+                          ordinal: 2,
+                          status: "running",
+                          completedAt: null,
+                        },
+                      },
+              ],
+            });
+            providerWriteCommitted = true;
+          }
+          return yield* commit(input);
+        }),
+      );
+      yield* Effect.acquireRelease(Effect.void, () => Effect.sync(() => spy.mockRestore()));
+    }
     const reconcile = makeSessionReconcileService({
       getThreadRecords: orchestrator.getThreadRecords,
-      dispatch: orchestrator.dispatch,
+      dispatch: (command) =>
+        Effect.gen(function* () {
+          if (starting === "start-race") {
+            const projection = yield* projections.getThreadProjection(threadId).pipe(Effect.orDie);
+            yield* TestClock.adjust(1);
+            const reopenedAt = yield* DateTime.now;
+            yield* projections
+              .apply({
+                id: EventId.make("racing-new-start"),
+                type: "provider-session.updated",
+                threadId,
+                occurredAt: reopenedAt,
+                payload: { ...projection.providerSessions[0]!, updatedAt: reopenedAt },
+              })
+              .pipe(Effect.orDie);
+          }
+          return yield* orchestrator.dispatch(command);
+        }),
     });
+    if (starting === "normal-stop") {
+      // Stop ACK preserves native work until its terminal event or bounded fallback.
+      yield* orchestrator.dispatch({ ...settle, interruptAcknowledged: true });
+      const stopped = yield* projections.getThreadProjection(threadId);
+      assert.equal(stopped.turnItems.find((item) => item.id === commandItem(1))?.status, "running");
+      assert.equal(stopped.runs[0]?.status, "running");
+      assert.equal(stopped.providerSessions[0]?.status, "starting");
+      return;
+    }
+    if (starting && starting !== "stale") {
+      const outcome = yield* Effect.exit(
+        reconcile.reconcile({ commandId: settle.commandId, threadId }),
+      );
+      if (starting.startsWith("commit-"))
+        assert.isTrue(
+          providerWriteCommitted,
+          "Provider write must commit before reconcile attempts its stale commit",
+        );
+      assert.equal(outcome._tag, "Failure", "A fresh or active provider start must be preserved");
+      const preserved = yield* projections.getThreadProjection(threadId);
+      assert.equal(preserved.providerSessions[0]?.status, "starting");
+      assert.equal(preserved.runs[0]?.status, "completed");
+      assert.equal(
+        preserved.turnItems.find((item) => item.id === commandItem(1))?.status,
+        "running",
+      );
+      if (starting.startsWith("commit-")) {
+        const sink = yield* EventSink.EventSinkV2;
+        assert.deepEqual(
+          yield* sink.readByCommandId({ commandId: settle.commandId }).pipe(Stream.runCollect),
+          [],
+        );
+        assert.deepEqual(
+          yield* sql`SELECT status FROM orchestration_command_receipts WHERE command_id=${settle.commandId}`,
+          [{ status: "rejected" }],
+        );
+        assert.deepEqual(
+          yield* sql`SELECT * FROM orchestration_v2_effect_outbox ORDER BY effect_id`,
+          outboxBefore,
+        );
+        assert.equal(
+          (yield* Effect.exit(reconcile.reconcile({ commandId: settle.commandId, threadId })))._tag,
+          "Failure",
+        );
+        if (starting === "commit-turn-race")
+          assert.equal(
+            preserved.providerTurns.find((turn) => turn.id === "provider-turn:newer")?.status,
+            "running",
+          );
+        if (starting === "commit-run-race")
+          assert.equal(preserved.runs.find((run) => run.id === "run:newer")?.status, "running");
+      }
+      return;
+    }
     if (status === "running") {
       assert.equal(
         (yield* Effect.exit(
@@ -532,11 +700,11 @@ const reconcileScenario = (
       ))._tag,
       "Failure",
     );
-  }).pipe(Effect.provide(testLayer));
+  }).pipe(Effect.scoped, Effect.provide(testLayer));
 
 it.effect.each(["interrupted", "completed", "failed"] as const)(
   "reconciles an ended %s run and replays safely",
-  reconcileScenario,
+  (status) => reconcileScenario(status),
 );
 
 it.effect("native terminal never arrives: fallback settles after the ten-second grace", () =>
@@ -555,4 +723,18 @@ it.effect("newer work started during the grace wins over the delayed fallback", 
 it.effect.each(["attempt", "ordinal"] as const)(
   "fallback preserves newer %s ownership during the grace",
   (ownership) => reconcileScenario("running", ownership),
+);
+
+it.effect.each(["newer-start", "stale", "active-turn", "start-race", "slow-alive"] as const)(
+  "starting-session reconciliation: %s",
+  (starting) => reconcileScenario("completed", undefined, starting),
+);
+
+it.effect("normal Stop ACK still interrupts background work while a start is pending", () =>
+  reconcileScenario("running", undefined, "normal-stop"),
+);
+
+it.effect.each(["commit-session-race", "commit-turn-race", "commit-run-race"] as const)(
+  "starting-session commit protects newer provider ownership: %s",
+  (starting) => reconcileScenario("completed", undefined, starting),
 );
