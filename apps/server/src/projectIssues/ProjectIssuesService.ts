@@ -24,7 +24,7 @@ import { ServerSettingsService } from "../serverSettings.ts";
 import * as GiteaApi from "../sourceControl/GiteaApi.ts";
 import * as ProjectDashboardStore from "../projectDashboard/ProjectDashboardStore.ts";
 import { resolveTrackerSetting } from "../projectDashboard/projectDashboard.logic.ts";
-import { epicProgress, parseEpicChecklist } from "./epicProgress.logic.ts";
+import { epicProgress, parseEpicChecklist, parsePartOf } from "./epicProgress.logic.ts";
 import {
   collectThreadTree,
   resolveProjectTracker,
@@ -369,6 +369,7 @@ export const make = Effect.gen(function* () {
         );
         for (const issue of items) {
           const issueKey = `${repositoryKey(target)}#${issue.number}`;
+          const parent = parsePartOf(issue.body);
           // Refresh persisted badge snapshots from the board's existing API read.
           // sync checks that the link still exists, so unlink races cannot resurrect it.
           for (const threadId of project.linkedThreads.get(issueKey) ?? []) {
@@ -406,6 +407,7 @@ export const make = Effect.gen(function* () {
           issues.push({
             ...toProjectIssue(target, issue, project.linkedThreads.get(issueKey) ?? []),
             ...(epics.has(issue.number) ? { epic: epics.get(issue.number)! } : {}),
+            ...(parent !== null && parent !== issue.number ? { partOf: parent } : {}),
           });
         }
       }
