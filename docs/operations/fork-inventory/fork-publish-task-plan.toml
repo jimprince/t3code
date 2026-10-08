@@ -1,0 +1,14 @@
+name = "fork-publish-task-plan"
+subject = "feat(agents): publish approved plans as idempotent workstreams"
+class = "product"
+purpose = "Publish approved markdown lists or T3 proposed plans to Gitea epics and owned tasks with retry-safe identity and optional nested workers."
+retire_when = "Upstream supplies the same approved-plan publication and task-worker lifecycle."
+depends_on = ["fork-create-task-issue", "fork-project-page-workflow", "fork-worker-operations"]
+roles = []
+note = "Gitea issue-body markers are the publication record; existing issue state and manual notes survive reruns. Integration fork.6: adapted replay to preserve UI theme/owner notes alongside BE authoritative contract and helpers. Fork.6 integration: adapt: union inventory, retain earlier integrated owner notes and later stanza (docs/operations/fork-inventory.toml). Retire/narrow/relocate do not apply to these retained UI behaviors or inventory insertions."
+
+[[decision]]
+id = "catchup-2908-plan-publication-access"
+date = "2026-10-10"
+decided = "adapt"
+rationale = "Register plan publication through upstream writesThreads declarations and current readCaller/assertFullAccess APIs (#9786–#9791, #10298). Preserve the explicit full-access check before worker creation and the unit-testable raw publication helper; registration always uses the declared handler layer. Static access/conflict review passed; composed plan/worker authorization tests remain required."
