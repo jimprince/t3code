@@ -1,0 +1,4 @@
+id = "held-sends-release-on-unsettle"
+category = "fix"
+functionality = "thread messaging"
+text = "Messages sent to a settled thread are delivered, oldest first, as soon as the thread is unsettled from any app, not only from the t3-thread CLI."
