@@ -314,7 +314,7 @@ describe("post-release disk observer", () => {
     });
   });
 
-  for (const boundary of [
+  it.each([
     "check",
     "failed",
     "mismatch",
@@ -322,43 +322,39 @@ describe("post-release disk observer", () => {
     "disabled",
     "default-inactive",
     "ci-rejected",
-  ] as const) {
-    it(`never runs at the ${boundary} boundary`, () => {
-      withObserver("success", (fixture, env, calls) => {
-        const result = run(fixture.repo, boundary === "check" ? "--check" : "--push", {
-          ...env,
-          TEST_PUSH_OUTCOME: boundary,
-          ...(boundary === "disabled" ? { STGIT_DISABLE_POST_RELEASE_HOOK: "1" } : {}),
-          ...(boundary === "default-inactive" ? { STGIT_DISABLE_POST_RELEASE_HOOK: "" } : {}),
-          ...(boundary === "ci-rejected" ? { TEST_CANDIDATE_EXIT: "1" } : {}),
-        });
-        if (["failed", "mismatch", "ci-rejected"].includes(boundary))
-          assert.notEqual(result.status, 0);
-        else assert.equal(result.status, 0, result.stderr);
-        assert.deepEqual(calls(), [], `observer ran at ${boundary}`);
-        assert.notInclude(result.stdout + result.stderr, observerFailure);
+  ] as const)("never runs at the %s boundary", (boundary) => {
+    withObserver("success", (fixture, env, calls) => {
+      const result = run(fixture.repo, boundary === "check" ? "--check" : "--push", {
+        ...env,
+        TEST_PUSH_OUTCOME: boundary,
+        ...(boundary === "disabled" ? { STGIT_DISABLE_POST_RELEASE_HOOK: "1" } : {}),
+        ...(boundary === "default-inactive" ? { STGIT_DISABLE_POST_RELEASE_HOOK: "" } : {}),
+        ...(boundary === "ci-rejected" ? { TEST_CANDIDATE_EXIT: "1" } : {}),
       });
+      if (["failed", "mismatch", "ci-rejected"].includes(boundary))
+        assert.notEqual(result.status, 0);
+      else assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(calls(), [], `observer ran at ${boundary}`);
+      assert.notInclude(result.stdout + result.stderr, observerFailure);
     });
-  }
+  });
 
-  for (const outcome of [
+  it.each([
     "nonzero",
     "timeout",
     "missing-observer",
     "missing-config",
     "throw",
-  ] as const) {
-    it(`keeps publication successful with one fixed log for ${outcome}`, () => {
-      withObserver(outcome, (fixture, env, calls) => {
-        const result = run(fixture.repo, "--push", env);
-        assert.equal(result.status, 0, result.stderr);
-        assert.equal(gitAt(fixture.remote, "rev-parse", "refs/heads/main"), fixture.head);
-        assert.lengthOf(calls(), outcome.startsWith("missing-") ? 0 : 1);
-        assert.equal((result.stdout + result.stderr).split(observerFailure).length - 1, 1);
-        assert.notInclude(result.stdout + result.stderr, "private diagnostic");
-      });
+  ] as const)("keeps publication successful with one fixed log for %s", (outcome) => {
+    withObserver(outcome, (fixture, env, calls) => {
+      const result = run(fixture.repo, "--push", env);
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(gitAt(fixture.remote, "rev-parse", "refs/heads/main"), fixture.head);
+      assert.lengthOf(calls(), outcome.startsWith("missing-") ? 0 : 1);
+      assert.equal((result.stdout + result.stderr).split(observerFailure).length - 1, 1);
+      assert.notInclude(result.stdout + result.stderr, "private diagnostic");
     });
-  }
+  });
 });
 
 describe("publish-stgit-stack", () => {

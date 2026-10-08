@@ -83,6 +83,20 @@ and the owning-patch/new-concern recommendation. Dependencies are preinstalled.
 
 ## Release and upstream-sync routing
 
+A push to `main` is a release: `fork-push-nightly.yml` publishes it, and every
+nightly host, including the DEV server and Brad's Mac, installs it. This holds
+even when Brad asks you directly for a release:
+
+- Push `main` only through `scripts/ci/publish-stgit-stack --push`, on a SHA
+  whose exact candidate CI is green.
+- Before pushing, announce the exact SHA and its candidate CI run to the
+  `chief-of-staff` and `t3-orchestrator` threads (`t3-thread send <name> ...`).
+  If neither can be reached, tell Brad before you push.
+- Don't upgrade the VM or Mac yourself (no `t3code-headless-upgrade --force`).
+  After publication the server's self-updater installs the release, and
+  `deployment-orchestrator` verifies it or runs the reviewed fallback.
+- Rollback drafts the bad release first.
+
 Read the canonical [release runbook](./docs/operations/release.md) for commands,
 tag preparation, CI evidence, signing/notarization, mobile delivery, headless
 upgrades, verification, and troubleshooting.
