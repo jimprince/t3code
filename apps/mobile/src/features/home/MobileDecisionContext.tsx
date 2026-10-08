@@ -56,10 +56,13 @@ export function MobileDecisionContext({
   environmentId,
   text,
   issueUrl,
+  clamp = true,
 }: {
   readonly environmentId: EnvironmentId;
   readonly text: string;
   readonly issueUrl: string;
+  /** Fold long text to a few lines with More; off when the caller clamps by blocks. */
+  readonly clamp?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const parsed = useMemo(() => parseDecisionContext(text, issueUrl), [text, issueUrl]);
@@ -68,7 +71,7 @@ export function MobileDecisionContext({
       {parsed.parts.length > 0 ? (
         <Text
           className="text-xs text-foreground-muted"
-          numberOfLines={parsed.long && !expanded ? COLLAPSED_LINES : undefined}
+          numberOfLines={clamp && parsed.long && !expanded ? COLLAPSED_LINES : undefined}
         >
           {parsed.parts.map((part, index) =>
             part.kind === "link" ? (
@@ -92,7 +95,7 @@ export function MobileDecisionContext({
           ))}
         </View>
       ) : null}
-      {parsed.long ? (
+      {clamp && parsed.long ? (
         <Pressable
           accessibilityRole="button"
           onPress={() => setExpanded((current) => !current)}
