@@ -1,6 +1,6 @@
-Bottom: c63ca92ab9b046fd9f61cb3b3331156fe03316b5
-Top:    950318baab2d14f4837e80e8a3f9277f748675ab
+Bottom: 308204989602a6f19e77d7f17e987970ba55e27b
+Top:    d9b1ea04d25637a78e277641052c4e77e018ac11
 Author: brad <bradprin@live.com>
-Date:   2026-10-08 20:18:19 +0000
+Date:   2026-10-08 20:25:19 +0000
 
 fix(projects): older servers get a task fallback instead of an unreadable error
