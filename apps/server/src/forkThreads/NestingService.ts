@@ -12,7 +12,11 @@ import * as Schema from "effect/Schema";
 import type * as SqlClient from "effect/unstable/sql/SqlClient";
 import { initializeMetadata, listMetadata, writeMetadata, metadataJson } from "./MetadataStore.ts";
 
-/** Inert until all clients can navigate promoted subprojects. */
+/**
+ * Inert until all clients can navigate promoted subprojects: mobile cannot yet reach a
+ * subproject's decisions. An explicit mark still works; tests turn promotion on through
+ * `autoPromoteSubprojects`.
+ */
 const AUTO_PROMOTE_SUBPROJECTS = false;
 
 type NestingShell = Pick<OrchestrationV2ThreadShell, "id" | "projectId" | "archivedAt">;
@@ -26,8 +30,10 @@ export const makeNestingService = <E, R, DispatchError, DispatchContext>(
     threadId: ThreadId;
     bumpForkMetadataRevision: true;
   }) => Effect.Effect<unknown, DispatchError, DispatchContext>,
+  options: { readonly autoPromoteSubprojects?: boolean } = {},
 ) =>
   Effect.gen(function* () {
+    const autoPromote = options.autoPromoteSubprojects ?? AUTO_PROMOTE_SUBPROJECTS;
     yield* initializeMetadata(sql);
     const list = () => listMetadata(sql);
     const persist = (input: ForkThreadMetadataUpdate) =>
@@ -100,7 +106,7 @@ export const makeNestingService = <E, R, DispatchError, DispatchContext>(
                 );
             }
             yield* writeMetadata(sql, value);
-            if (AUTO_PROMOTE_SUBPROJECTS && input.parentThreadId) {
+            if (autoPromote && input.parentThreadId) {
               const parent = rows.find((row) => row.threadId === input.parentThreadId);
               if (parent?.parentThreadId && (parent.subproject ?? "auto") === "auto")
                 yield* writeMetadata(sql, { ...parent, subproject: "on" });

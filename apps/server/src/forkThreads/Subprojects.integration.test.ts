@@ -162,6 +162,114 @@ it.effect(
     }).pipe(Effect.provide(nativeLayer)),
 );
 
+const makeThreads = (names: ReadonlyArray<string>) =>
+  Effect.gen(function* () {
+    const management = yield* ThreadManagement.ThreadManagementService;
+    const sql = yield* SqlClient.SqlClient;
+    const nesting = yield* makeNestingService(sql, management.getThreadShell, management.dispatch, {
+      autoPromoteSubprojects: true,
+    });
+    for (const name of names)
+      yield* management.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make(`create-${name}`),
+        threadId: id(name),
+        projectId: ProjectId.make("project"),
+        title: name,
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "fake-model" },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+        createdBy: "user",
+        creationSource: "web",
+      });
+    const nest = (child: string, parent: string | null, commandId = `nest-${child}-${parent}`) =>
+      nesting.update({
+        commandId: CommandId.make(commandId),
+        threadId: id(child),
+        parentThreadId: parent === null ? null : id(parent),
+      });
+    const mode = (name: string) =>
+      nesting
+        .list()
+        .pipe(
+          Effect.map((rows) => rows.find((row) => row.threadId === id(name))?.subproject ?? "auto"),
+        );
+    return { nesting, nest, mode };
+  });
+
+it.effect("a nested thread is promoted when a worker is created under it or moved into it", () =>
+  Effect.gen(function* () {
+    const { nest, mode } = yield* makeThreads(["top", "mid", "moved", "fresh"]);
+    yield* nest("mid", "top");
+    assert.equal(yield* mode("mid"), "auto");
+    // Moving an existing top-level thread under it promotes the new parent, once.
+    yield* nest("moved", "mid");
+    assert.equal(yield* mode("mid"), "on");
+    // The child itself and the top-level thread above it stay unpromoted.
+    assert.equal(yield* mode("moved"), "auto");
+    assert.equal(yield* mode("top"), "auto");
+    // Leaving again does not demote it.
+    yield* nest("moved", null);
+    assert.equal(yield* mode("mid"), "on");
+    yield* nest("fresh", "mid");
+    assert.equal(yield* mode("mid"), "on");
+  }).pipe(Effect.provide(nativeLayer)),
+);
+
+it.effect(
+  "off blocks promotion, on and explicit auto behave as documented, top-level is never promoted",
+  () =>
+    Effect.gen(function* () {
+      const { nesting, nest, mode } = yield* makeThreads([
+        "top",
+        "off",
+        "on",
+        "auto",
+        "w1",
+        "w2",
+        "w3",
+        "w4",
+      ]);
+      for (const name of ["off", "on", "auto"]) yield* nest(name, "top");
+      for (const [name, value] of [
+        ["off", "off"],
+        ["on", "on"],
+        ["auto", "auto"],
+      ] as const)
+        yield* nesting.update({
+          commandId: CommandId.make(`mode-${name}`),
+          threadId: id(name),
+          subproject: value,
+        });
+      yield* nest("w1", "off");
+      yield* nest("w2", "on");
+      yield* nest("w3", "auto");
+      yield* nest("w4", "top");
+      assert.equal(yield* mode("off"), "off");
+      assert.equal(yield* mode("on"), "on");
+      assert.equal(yield* mode("auto"), "on");
+      assert.equal(yield* mode("top"), "auto");
+    }).pipe(Effect.provide(nativeLayer)),
+);
+
+it.effect("replaying a nesting command does not undo a later opt-out", () =>
+  Effect.gen(function* () {
+    const { nesting, nest, mode } = yield* makeThreads(["top", "mid", "worker"]);
+    yield* nest("mid", "top");
+    yield* nest("worker", "mid", "nest-worker");
+    assert.equal(yield* mode("mid"), "on");
+    yield* nesting.update({
+      commandId: CommandId.make("opt-out"),
+      threadId: id("mid"),
+      subproject: "off",
+    });
+    yield* nest("worker", "mid", "nest-worker");
+    assert.equal(yield* mode("mid"), "off");
+  }).pipe(Effect.provide(nativeLayer)),
+);
+
 it.effect(
   "legacy mode imports once beside parents, scope and lifecycle; explicit V2 mode wins",
   () =>
