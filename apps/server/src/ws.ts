@@ -250,6 +250,7 @@ import * as PullRequestService from "./pullRequest/PullRequestService.ts";
 import { listLinkedPullRequestThreads } from "./pullRequest/linkedThreads.ts";
 import { pullRequestSyncKey } from "./pullRequest/pullRequestSyncKey.ts";
 import * as SqlClient from "effect/sql/SqlClient";
+import { makeHandoffService } from "./forkThreads/HandoffService.ts";
 import * as PullRequestSyncReactor from "./orchestration-v2/PullRequestSyncReactor.ts";
 import * as ProjectIssuesService from "./projectIssues/ProjectIssuesService.ts";
 import * as RequestLedger from "./projectIssues/RequestLedger.ts";
@@ -3213,7 +3214,16 @@ const layerWsRpc = (
       const conversationFork = yield* ForkWorkspace.ForkWorkspaceService;
       const threadTransfer = yield* ThreadTransfer.TransferService;
       const legacyHistory = yield* LegacyHistory.HistoryReader;
+      const handoffs = makeHandoffService(
+        sql,
+        threadManagement,
+        providerRegistry.getProviders,
+        currentSession.subject,
+      );
       const forkHandlers = WsForkRpcGroup.of({
+        "fork.send.accept": (input) => handoffs.accept(input),
+        "fork.send.lookup": (input) => handoffs.lookup(input),
+        "fork.send.inbox": (input) => handoffs.inbox(input.threadId),
         "fork.session.reconcile": (input) =>
           makeSessionReconcileService(threadManagement).reconcile(input),
         "orchestration.getLegacyHistory": (input) => legacyHistory.get(input),
