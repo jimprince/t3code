@@ -1,3 +1,4 @@
+import type { MessageForwardAcceptInput, MessageForwardResult } from "@t3tools/contracts";
 import type { ThreadIssueLink } from "@t3tools/contracts";
 export type { ThreadIssueLink } from "@t3tools/contracts";
 export type QueuedSendOrigin = import("@t3tools/shared/messageOrigin").MessageOrigin & {
@@ -363,6 +364,11 @@ export type QueuedSendStatus =
  * watcher drains the queue at the next turn boundary.
  */
 export interface SavedQueuedSend {
+  forwardedMessage?: MessageForwardResult["forwardedMessage"];
+  forward?: Pick<
+    MessageForwardAcceptInput,
+    "bundle" | "stagedAttachments" | "sourceUrl" | "senderName" | "note"
+  >;
   /** Stable server acceptance identity, including sends held by settlement. */
   serverSendId?: string;
   allowWhileRunning?: boolean;
