@@ -1,6 +1,6 @@
-Bottom: b13cb240f9582249ea1a8abc8cb2e68d568d0c46
-Top:    88216f17ceed59177624621513f8d58a21558e3a
+Bottom: 827b63998f417db79347d70b58847690232e0dae
+Top:    827b63998f417db79347d70b58847690232e0dae
 Author: brad <bradprin@live.com>
-Date:   2026-10-08 21:05:14 +0000
+Date:   2026-10-08 22:20:00 +0000
 
 feat(projects): pinned request box that sends in the background
