@@ -54,14 +54,15 @@ export const PROJECT_WIDGET_TYPES: ReadonlyArray<ProjectWidgetType> = [
   {
     type: "needs-you",
     title: "Needs you",
-    description: "Threads waiting on approval or input, and requests and issues for Brad.",
+    description:
+      "Folded into the Decisions widget. A layout with Decisions shows nothing here; one without it shows the Decisions feed in this place.",
     fields: [],
   },
   {
     type: "decisions",
     title: "Decisions",
     description:
-      "Decisions waiting on Brad (tracker issues labeled needs-brad): the question, its context, options with the recommended one marked, who is waiting and how long. One click answers with Undo, and the answer reaches the waiting thread.",
+      "Everything waiting on Brad in one feed: threads' questions, approvals and plans, decisions (tracker issues labeled needs-brad), answers to read, and work to review or test. Cards name who they are for and in which project; blocked threads lead, then newest first. Cards can be answered, approved and merged, sent back, settled, deferred (Later) and filtered by project.",
     fields: [],
   },
   {
@@ -359,7 +360,7 @@ export const findWidgetType = (type: string) =>
  * them). They are not offered or accepted, but layouts saved while they existed
  * still list them, so readers drop them silently instead of failing.
  */
-export const RETIRED_WIDGET_TYPES: ReadonlySet<string> = new Set(["working", "blocked", "done"]);
+const RETIRED_WIDGET_TYPES: ReadonlySet<string> = new Set(["working", "blocked", "done"]);
 
 /**
  * The tabs without retired widgets: the same array when there are none, so a
