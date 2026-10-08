@@ -10261,6 +10261,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       } satisfies OrchestratorV2DispatchResult;
     }
 
+    // Only reconciliation uses optimistic commit validation. Provider events
+    // bypass the command lock, so capture before any planning projection reads.
+    const expectedThreadSequence =
+      command.type === "thread.background-work.settle" && command.reconcileOnly
+        ? yield* mapDispatchError(command)(eventSink.latestSequence({ threadId: command.threadId }))
+        : undefined;
     const plan = yield* dispatchOnce(command).pipe(
       Effect.flatMap((planned) =>
         // A settle that finds the provider already ended everything has
@@ -10348,6 +10354,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         acceptedAt,
         events: plan.events,
         effects: plan.effects,
+        ...(expectedThreadSequence === undefined ? {} : { expectedThreadSequence }),
         ...(plan.cancelUnsettledEffects === undefined
           ? {}
           : { cancelUnsettledEffects: plan.cancelUnsettledEffects }),

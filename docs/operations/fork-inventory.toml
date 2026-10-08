@@ -2589,7 +2589,7 @@ purpose = "Let session reconcile clear a session stuck in starting after its tur
 retire_when = "Upstream reconciles stale starting sessions with an equivalent causal ownership guard."
 depends_on = ["fork-session-reconcile"]
 roles = []
-note = "Issue #191. Adds only the guard and the reconcile-only dispatch recheck; Stop semantics are unchanged. Residual provider-write window is #196."
+note = "Issues #191 and #196. Causal ownership is checked before planning and the thread event sequence is validated atomically at commit; ordinary Stop and provider writers are unchanged. Any intervening same-thread event conservatively refuses reconciliation; retry with a new command ID."
 
 [[patch.decision]]
 id = "v2-starting-reconcile-ownership"
@@ -2598,5 +2598,10 @@ note = "V2 already repairs a starting session left on its latest ended turn. A c
 
 [[patch.decision]]
 id = "v2-starting-reconcile-provider-write-window"
-decision = "defer"
-note = "Reconcile-only dispatch evaluates causal ownership on the same locked projection snapshot passed into Stop settlement; ordinary Stop keeps its default load and semantics. Remaining read-to-commit window: ProviderSessionManager writes directly to EventSink, and RunExecutionService -> ProviderEventIngestor -> EventSink bypasses ThreadCommandExecutor. A provider session or turn update can commit after the guarded snapshot read and before the planned reconcile commit; worst case, that reconcile can overwrite a newer session status or interrupt background work using stale ownership. The six focused cases cover the pre-dispatch race only, not this window. Follow-up: https://git.bradleyprince.com/brad/t3code-fork/issues/196. No EventSink recheck or outer SQL transaction is added."
+decision = "adapt"
+note = "Closed by #196: capture the thread event sequence before reconcile-only planning and compare after receipt reservation acquires the existing SQLite write transaction. A mismatch records a rejected receipt without planned events, effects, or cancellations. Provider writers bypass the command lock but cannot commit between this comparison and event/outbox writes; planning remains outside the transaction."
+
+[[patch.decision]]
+id = "v2-reconcile-atomic-sequence"
+decision = "adapt"
+note = "The optional expectedThreadSequence commit precondition is supplied only by reconcileOnly commands. Session, provider-turn, and run writes injected after planning reproduce the old failure, then reject atomically and preserve newer work, background items, rejected receipts, and outbox state. Direct projection mutations used by test setup are not production provider writer paths."
