@@ -1,0 +1,6 @@
+Bottom: cb0fe174a0cf2f6c15e8df3155c67406a0612272
+Top:    cb0fe174a0cf2f6c15e8df3155c67406a0612272
+Author: brad <bradprin@live.com>
+Date:   2026-10-08 07:31:47 +0000
+
+fix(decisions): clean decision context and mark which asks can be answered
