@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "866893afa80073bc5b0f4ae6f03a486867f68cd0",
-  "head": "4069fd24011567d9e9a97907a8002ea0bd335d5f",
+  "prev": "89d89b583a8cd1eb468ef8af5614bd414d3b31fa",
+  "head": "6e2ab0224df3bf7e6733162f278f1086ecfb4332",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -137,7 +137,8 @@
     "fork-decisions-feed-ui",
     "fork-decisions-feed-mobile",
     "fork-sidebar-dark-surface",
-    "fork-update-progress"
+    "fork-update-progress",
+    "fork-held-queue-resume"
   ],
   "unapplied": [],
   "hidden": [],
@@ -294,6 +295,9 @@
     },
     "fork-headless-delivery": {
       "oid": "dff02e9d6d8537ba2f610d73a714011c8b3f18f9"
+    },
+    "fork-held-queue-resume": {
+      "oid": "6e2ab0224df3bf7e6733162f278f1086ecfb4332"
     },
     "fork-inline-3d-objects": {
       "oid": "83c76a47a4875812f2a66f56e0681181137c3820"
