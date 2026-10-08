@@ -16,7 +16,11 @@ export class DisconnectedComposerRefusal extends Error {
  */
 export function createDisconnectedComposerQueue<
   T extends { readonly commandId: string },
->(options?: { readonly orderKey?: (command: T) => string }) {
+>(options?: {
+  readonly orderKey?: (command: T) => string;
+  readonly onChange?: () => void;
+  readonly sendTimeoutMs?: number;
+}) {
   const orderKey = options?.orderKey ?? (() => "");
   const commands: T[] = [];
   const refusals = new Map<string, string>();
@@ -79,16 +83,38 @@ export function createDisconnectedComposerQueue<
             );
             if (next === undefined) return;
             try {
-              await send(next);
+              let timer: ReturnType<typeof setTimeout> | undefined;
+              try {
+                await Promise.race([
+                  send(next),
+                  new Promise<never>((_, reject) => {
+                    timer = setTimeout(
+                      () =>
+                        reject(
+                          new Error(
+                            "Held send acknowledgement timed out; retry with the same command ID.",
+                          ),
+                        ),
+                      options?.sendTimeoutMs ?? 30_000,
+                    );
+                  }),
+                ]);
+              } finally {
+                if (timer !== undefined) clearTimeout(timer);
+              }
             } catch (error) {
               if (!(error instanceof DisconnectedComposerRefusal)) throw error;
               // A command removed or replaced while it was in flight has nothing left to refuse.
               if (commands.includes(next)) refusals.set(next.commandId, error.message);
+              options?.onChange?.();
               blocked.add(orderKey(next));
               continue;
             }
             const index = commands.indexOf(next);
-            if (index >= 0) commands.splice(index, 1);
+            if (index >= 0) {
+              commands.splice(index, 1);
+              options?.onChange?.();
+            }
           }
         })
         .finally(() => {
