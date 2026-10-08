@@ -1,0 +1,4 @@
+id = "release-groups-collapsed"
+category = "feature"
+functionality = "projects"
+text = "The Release widget's completed-release groups start collapsed, showing only the release and its count; open the ones you want and the choice is remembered per project."
