@@ -2,6 +2,17 @@ import { isThreadWorking } from "@t3tools/client-runtime/state/orchestrators";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import type { ProjectIssue, ProjectPendingRequest, ProjectRequestStage } from "@t3tools/contracts";
 
+import {
+  answerSentences,
+  isNotAnswer,
+  parseDecisionComment,
+  type DecisionOption,
+  type NeedsYouDecision,
+} from "@t3tools/client-runtime/decision-comment";
+
+export { answerSentences, isNotAnswer, parseDecisionComment };
+export type { DecisionOption, NeedsYouDecision };
+
 /** Item types, from the `ask:<kind>` label requests and typed issues carry. */
 export type RequestKind = "question" | "task" | "epic";
 
@@ -309,10 +320,6 @@ export function latestProgressLine(body: string | null | undefined): string | nu
   return text && !/^started\.?$/i.test(text) ? text : null;
 }
 
-/** A comment that is never an answer: a progress note, a curator note or Brad's own follow-up. */
-export const isNotAnswer = (body: string) =>
-  /^\s*(?:progress:|curator:|follow-up from brad\b)/i.test(body.replace(/<!--[\s\S]*?-->/g, ""));
-
 const isParked = (issue: Pick<ProjectIssue, "labels">) =>
   issue.labels.some((label) => label.toLowerCase() === "parked");
 
@@ -398,24 +405,6 @@ export function requestsOfSettledThreads(requests: ReadonlyArray<ProjectRequest>
     ...group,
     title: group.requests.length === 1 ? group.requests[0]!.issue.title : group.thread.title,
   }));
-}
-
-/**
- * An answer shown under its question: the first one to three sentences of the
- * reply, whole (never cut mid-sentence), without markdown markers.
- */
-export function answerSentences(text: string, limit = 3): string {
-  const plain = text
-    .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/```[\s\S]*?```/g, " ")
-    .replace(/\*\*|__|`|^#+\s*|^>\s*|^[-*]\s+/gm, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  const sentences = plain.match(/[^.!?]+[.!?]+(?=\s|$)|[^.!?]+$/g) ?? [plain];
-  return sentences
-    .slice(0, limit)
-    .map((sentence) => sentence.trim())
-    .join(" ");
 }
 
 /** The one status vocabulary of the project page: Tasks, Roadmap and Needs you share it. */
@@ -506,68 +495,6 @@ export const formatStatusCounts = (counts: StatusCounts) =>
     `${counts.forReview} for review`,
     `${counts.pending} pending`,
   ].join(" · ");
-
-export interface DecisionOption {
-  /** "Option A": the button's label. */
-  readonly label: string;
-  readonly text: string;
-}
-
-/** A Needs you row that asks Brad to choose or approve, with what the buttons need. */
-export interface NeedsYouDecision {
-  /** One or two whole sentences of what the agent asks. */
-  readonly summary: string;
-  /** Everything the comment says besides its options, line by line, for More. */
-  readonly detail: string;
-  readonly recommendation: string | null;
-  /** The choices a ready comment lists, at least two; empty when it is a plain approval. */
-  readonly options: ReadonlyArray<DecisionOption>;
-}
-
-const OPTION_LINE =
-  /^(?:[-*]\s+)?(?:[Oo]ption\s+([A-Za-z]|\d{1,2})\s*[:.)–—-]|\(?([A-Z])[:)])\s*(.+)$/;
-const RECOMMENDATION_LINE =
-  /^(?:[-*]\s+)?(?:(?:my|our)\s+recommendation|recommendation|recommended|i\s+recommend|we\s+recommend)\b\s*[:-]?\s*(.+)$/i;
-
-/**
- * What a ready comment asks of Brad: the choices it lists as lines starting
- * "Option A:" or "A)" (two or more, else they are not choices), its recommendation
- * line, and the rest as the summary.
- */
-export function parseDecisionComment(body: string): NeedsYouDecision {
-  const lines = body
-    .replace(/<!--[\s\S]*?-->/g, "")
-    .split("\n")
-    .map((line) => line.replace(/\*\*|__|`/g, "").trim())
-    .filter((line) => line.length > 0);
-  const options: DecisionOption[] = [];
-  let recommendation: string | null = null;
-  const rest: string[] = [];
-  for (const line of lines) {
-    const option = OPTION_LINE.exec(line);
-    if (option) {
-      options.push({
-        label: `Option ${(option[1] ?? option[2]!).toUpperCase()}`,
-        text: option[3]!.trim().slice(0, 200),
-      });
-      continue;
-    }
-    const recommended = RECOMMENDATION_LINE.exec(line);
-    if (recommended && recommendation === null) {
-      recommendation = recommended[1]!.trim();
-      continue;
-    }
-    rest.push(line);
-  }
-  const named = new Set(options.map((option) => option.label));
-  const choices = options.length >= 2 && named.size === options.length ? options : [];
-  return {
-    summary: answerSentences(rest.join(" ").replace(/^\s*(progress|test):\s*/i, ""), 2),
-    detail: rest.join("\n").replace(/^\s*(progress|test):\s*/i, ""),
-    recommendation,
-    options: choices,
-  };
-}
 
 const isEpic = (labels: ReadonlyArray<string>) =>
   labels.some((label) => label.toLowerCase() === "ask:epic");
