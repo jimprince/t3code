@@ -53,6 +53,7 @@ const RPC_METHODS = {
   getFullThreadDiff: ORCHESTRATION_V2_WS_METHODS.getFullThreadDiff,
   subscribeShell: ORCHESTRATION_V2_WS_METHODS.subscribeShell,
   subscribeThread: ORCHESTRATION_V2_WS_METHODS.subscribeThread,
+  planPublish: "fork.plan.publish",
   projectRequestsCreate: "projectRequests.create",
   projectRequestsUpdate: "projectRequests.update",
   projectRequestsList: "projectRequests.list",
