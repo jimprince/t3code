@@ -1,0 +1,4 @@
+id = "workstream-task-bands"
+category = "feature"
+functionality = "projects"
+text = "Tasks now show under their workstream: on the Dashboard each active epic lists its tasks and agents with what they last said and what changed since your last visit, and the Tasks tab can switch between workstreams and the status columns."
