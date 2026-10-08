@@ -244,6 +244,7 @@ export const make = Effect.gen(function* () {
       threadOrderReset: true,
       threadNesting: true,
       launchThreadParent: true,
+      reliableHandoffs: true,
       threadSubprojects: true,
       remoteThreadNesting: true,
       threadAutoSettleOptOut: true,

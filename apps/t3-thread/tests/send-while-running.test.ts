@@ -52,24 +52,34 @@ function makeRunningThread(): OrchestrationThread {
 function makeHarness(thread: OrchestrationThread) {
   const commands: Array<Record<string, unknown>> = [];
   const rpc = {
-    subscribeThreadSnapshot: vi.fn(async () => ({
-      kind: "snapshot",
-      snapshot: { snapshotSequence: 1, thread },
-    })),
-    subscribeShellSnapshot: vi.fn(async () => ({
-      kind: "snapshot",
-      snapshot: { projects: [], threads: [] },
-    })),
-    request: vi.fn(async (_method: string, input: unknown) => {
-      commands.push(input as Record<string, unknown>);
-      return { sequence: commands.length };
+    request: vi.fn(async (method: string, input: any) => {
+      expect(method).toBe("fork.send.accept");
+      commands.push(input);
+      const status = thread.archivedAt
+        ? "refused"
+        : thread.session?.status === "running"
+          ? input.allowQueueFallback === false
+            ? "refused"
+            : "steered"
+          : "started";
+      return {
+        sendId: input.sendId,
+        recipientThreadId: thread.id,
+        status,
+        cause: thread.archivedAt ? "ARCHIVED" : status === "refused" ? "BUSY" : null,
+        acceptedAt: "2026-10-07T00:00:00Z",
+        ownerThreadId: null,
+      };
     }),
     dispose: vi.fn(async () => undefined),
   };
   return {
     client: new RemoteEnvironmentClient(environment, {
-      descriptorFactory: descriptorFixture(environment),
-      rpcFactory: () => rpc,
+      descriptorFactory: async () => ({
+        ...(await descriptorFixture(environment)()),
+        capabilities: { reliableHandoffs: true },
+      }),
+      rpcFactory: () => rpc as any,
     }),
     commands,
   };
@@ -88,78 +98,41 @@ async function withTempState(test: () => Promise<void>): Promise<void> {
   }
 }
 
-describe("RemoteEnvironmentClient.sendMessage while a turn is running", () => {
-  it("queues the message and dispatches it at the next turn boundary", async () => {
+describe("server admission of CLI sends", () => {
+  it("routes a running thread through native steering without a local queue", async () => {
     await withTempState(async () => {
       const harness = makeHarness(makeRunningThread());
-
-      const result = await harness.client.sendMessage({ threadId: "thread-1", text: "status?" });
-
-      expect(result).toMatchObject({ queued: true, dispatched: false });
-      expect(harness.commands).toHaveLength(0);
-
-      // Accepted durably before `send` returns, so the CLI can exit immediately.
-      const state = await loadState();
-      expect(state.queuedSends).toHaveLength(1);
-      expect(state.queuedSends[0]).toMatchObject({
-        threadId: "thread-1",
-        environment: "local-mbp",
-        text: "status?",
-        status: "queued",
-        queuedDuringTurnId: "turn-1",
-      });
+      expect(
+        await harness.client.sendMessage({ threadId: "thread-1", text: "status?" }),
+      ).toMatchObject({ dispatched: true, receipt: { status: "steered" } });
+      expect(harness.commands[0]).toMatchObject({ recipientThreadId: "thread-1", intent: "auto" });
+      expect((await loadState()).queuedSends).toHaveLength(0);
     });
   });
-
-  it("rejects instead of queueing when the caller opts out", async () => {
-    // `--no-queue` keeps the historical contract available for callers that need a
-    // mid-turn send to fail loudly rather than be held.
+  it("passes a no-queue refusal policy to the locked server admission", async () => {
     await withTempState(async () => {
       const harness = makeHarness(makeRunningThread());
-
-      await expect(
-        harness.client.sendMessage({
+      expect(
+        await harness.client.sendMessage({
           threadId: "thread-1",
           text: "status?",
           queueWhileRunning: false,
         }),
-      ).rejects.toThrow(/is still running/);
-      expect(harness.commands).toHaveLength(0);
+      ).toMatchObject({ dispatched: false, queued: false, uncertain: false, causeCode: "BUSY" });
+      expect(harness.commands[0]).toMatchObject({ allowQueueFallback: false });
       expect((await loadState()).queuedSends).toHaveLength(0);
     });
   });
-
-  it("dispatches immediately when the thread is idle", async () => {
+  it("preserves healthy idle delivery and archive refusals", async () => {
     await withTempState(async () => {
-      const idle = makeRunningThread();
-      const harness = makeHarness({
-        ...idle,
-        latestTurn: {
-          ...idle.latestTurn!,
-          state: "completed",
-          completedAt: "2026-09-04T00:01:00.000Z",
-        },
-        session: null,
-      });
-
-      const result = await harness.client.sendMessage({ threadId: "thread-1", text: "status?" });
-
-      expect(result).toMatchObject({ dispatched: true, queued: false });
-      expect(harness.commands).toHaveLength(1);
-      expect((await loadState()).queuedSends).toHaveLength(0);
-    });
-  });
-
-  it("refuses to send to an archived thread instead of queueing forever", async () => {
-    await withTempState(async () => {
-      const harness = makeHarness({
-        ...makeRunningThread(),
-        archivedAt: "2026-09-04T00:02:00.000Z",
-      });
-
-      await expect(
-        harness.client.sendMessage({ threadId: "thread-1", text: "status?" }),
-      ).rejects.toThrow(/archived/);
+      const idle = makeHarness({ ...makeRunningThread(), session: null });
+      expect(
+        await idle.client.sendMessage({ threadId: "thread-1", text: "status?" }),
+      ).toMatchObject({ dispatched: true, queued: false });
+      const archived = makeHarness({ ...makeRunningThread(), archivedAt: "2026-09-04T00:02:00Z" });
+      expect(
+        await archived.client.sendMessage({ threadId: "thread-1", text: "status?" }),
+      ).toMatchObject({ uncertain: false, causeCode: "ARCHIVED" });
       expect((await loadState()).queuedSends).toHaveLength(0);
     });
   });
