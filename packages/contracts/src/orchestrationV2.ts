@@ -3150,6 +3150,8 @@ const OrchestrationV2InternalCommand = Schema.Union([
    */
   Schema.Struct({
     type: Schema.Literal("thread.background-work.settle"),
+    /** Fork reconciliation precondition; normal Stop never sets this flag. */
+    reconcileOnly: Schema.optional(Schema.Boolean),
     /** Stop ACK only records acknowledgement and schedules the native-terminal fallback. */
     interruptAcknowledged: Schema.optional(Schema.Boolean),
     commandId: CommandId,
