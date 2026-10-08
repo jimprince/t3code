@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "151cf42fbd96407f015e2d0ff88003b1df79798c",
-  "head": "5db43777537e474c950a02fe989ea56bd1cd6407",
+  "prev": "f485be137b27fc6ae7e3a57e82b6ca36d7e53a75",
+  "head": "837f27bd836d5d0602ee9e6009eedcb7ebc9a060",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -119,10 +119,10 @@
     "fork-direct-endpoints-enumeration",
     "fork-create-task-issue",
     "fork-decisions-feed-server",
-    "fork-dash-172"
+    "fork-dash-172",
+    "fork-dash-187-todo-progress"
   ],
   "unapplied": [
-    "fork-dash-187-todo-progress",
     "fork-dash-187",
     "fork-dash-173-part-of",
     "fork-dash-173",
@@ -223,7 +223,7 @@
       "oid": "783ab15e09c511f4c8d41aa9e0866b97c5292bd8"
     },
     "fork-dash-187-todo-progress": {
-      "oid": "b1f889002744bf34207f744dc1558defaee8d60d"
+      "oid": "837f27bd836d5d0602ee9e6009eedcb7ebc9a060"
     },
     "fork-dash-layout-retire": {
       "oid": "618409a3ebb62674ff73be026bd164af6f6aa578"
