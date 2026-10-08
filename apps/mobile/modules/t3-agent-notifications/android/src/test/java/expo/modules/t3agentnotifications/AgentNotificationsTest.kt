@@ -62,11 +62,27 @@ class AgentNotificationsTest {
     "activity_body" to "Test thread · Working",
     "activity_path" to "/threads/environment/thread",
     "alert_id" to alertId,
+    "alert_eligible" to "true",
     "alert_group" to "environment/thread",
     "alert_title" to "Test thread",
-    "alert_body" to "Done: Test project",
+    "alert_body" to "Reply ready",
     "alert_path" to "/threads/environment/thread",
   )
+
+  @Test
+  fun missingOrRejectedEligibilityKeepsTheActivityQuiet() {
+    AgentNotifications.receive(context, update("missing-verdict", true) - "alert_eligible")
+    assertEquals(1, manager.activeNotifications.size)
+    assertTrue(
+      manager.activeNotifications.single().notification.flags and
+        Notification.FLAG_ONGOING_EVENT != 0,
+    )
+    AgentNotifications.receive(
+      context,
+      update("rejected-verdict", true) + ("alert_eligible" to "false"),
+    )
+    assertEquals(1, manager.activeNotifications.size)
+  }
 
   @Test
   fun alertHistoryEvictsOnlyTheOldestEntryAfterCapacity() {
@@ -179,7 +195,8 @@ class AgentNotificationsTest {
   fun groupedAlertDisplaysEveryThreadAndRetriesStaySilent() {
     val titles = (1..5).map { "Thread $it " + "x".repeat(111) }.joinToString(", ")
     val grouped = update("group-completion", false) + mapOf(
-      "alert_title" to "5 agents finished",
+      "alert_eligible" to "true",
+      "alert_title" to "5 replies ready",
       "alert_body" to titles,
       "alert_path" to "/",
     )
@@ -191,7 +208,7 @@ class AgentNotificationsTest {
     )
 
     val alert = manager.activeNotifications.single()
-    assertEquals("5 agents finished", alert.notification.extras.getString(Notification.EXTRA_TITLE))
+    assertEquals("5 replies ready", alert.notification.extras.getString(Notification.EXTRA_TITLE))
     assertEquals(titles, alert.notification.extras.getString(Notification.EXTRA_BIG_TEXT))
     assertEquals("t3code-dev://", shadowOf(alert.notification.contentIntent).savedIntent.dataString)
   }
@@ -199,7 +216,8 @@ class AgentNotificationsTest {
   @Test
   fun foregroundGroupForOtherThreadsAlertsOnceAcrossBackgroundRetry() {
     val grouped = update("group-attention", true) + mapOf(
-      "alert_title" to "2 agents need attention",
+      "alert_eligible" to "true",
+      "alert_title" to "2 need you",
       "alert_body" to "First thread, Second thread",
       "alert_path" to "/",
     )
