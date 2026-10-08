@@ -1,4 +1,6 @@
 import type { MessageOrigin } from "@t3tools/shared/messageOrigin";
+import { sendOutcomeFailure, sendOutcomeHeld, sendTransportCause } from "./sendIntents.js";
+import type { HandoffLookupInput, HandoffLookupResult } from "@t3tools/contracts";
 import type { QueuedSendOrigin } from "./types.js";
 import * as NodeCrypto from "node:crypto";
 
@@ -54,6 +56,8 @@ const IN_FLIGHT_STATES = new Set(["running", "starting"]);
 const OPEN_STATUSES = new Set<SavedQueuedSend["status"]>(["queued", "dispatching"]);
 
 export interface QueueClient {
+  supportsReliableHandoffs?(): Promise<boolean>;
+  lookupSendReceipt?(input: HandoffLookupInput): Promise<HandoffLookupResult>;
   findThread(threadId: string): Promise<OrchestrationThread>;
   sendMessage(input: {
     commandId?: string;
@@ -62,6 +66,7 @@ export interface QueueClient {
     allowWhileRunning?: boolean;
     queueWhileRunning?: boolean;
     origin?: MessageOrigin | null;
+    coalesceKey?: string | null;
   }): Promise<unknown>;
 }
 
@@ -73,6 +78,9 @@ function nowIso(): string {
 
 /** Accept a send that cannot be dispatched yet and persist it before returning. */
 export async function enqueueSend(input: {
+  serverSendId?: string;
+  allowWhileRunning?: boolean;
+  allowQueueFallback?: boolean;
   threadId: string;
   agentName: string | null;
   environment: string;
@@ -85,7 +93,20 @@ export async function enqueueSend(input: {
   const now = (input.now ?? nowIso)();
 
   return updateState(async (state) => {
+    const existing = input.serverSendId
+      ? state.queuedSends.find(
+          (send) => send.serverSendId === input.serverSendId && OPEN_STATUSES.has(send.status),
+        )
+      : null;
+    if (existing) return { state, result: { queued: existing, superseded: [] } };
     const queued: SavedQueuedSend = {
+      ...(input.serverSendId ? { serverSendId: input.serverSendId } : {}),
+      ...(input.allowWhileRunning !== undefined
+        ? { allowWhileRunning: input.allowWhileRunning }
+        : {}),
+      ...(input.allowQueueFallback !== undefined
+        ? { allowQueueFallback: input.allowQueueFallback }
+        : {}),
       id: NodeCrypto.randomUUID(),
       sequence: nextQueuedSendSequence(state.queuedSends),
       threadId: input.threadId,
@@ -355,7 +376,15 @@ async function retireQueueForThread(input: {
 function withTimeout<T>(operation: Promise<T>, ms: number, what: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${what} timed out after ${ms / 1000}s.`)), ms);
+    timer = setTimeout(
+      () =>
+        reject(
+          Object.assign(new Error(`${what} timed out after ${ms / 1000}s.`), {
+            name: "TimeoutError",
+          }),
+        ),
+      ms,
+    );
   });
   return Promise.race([operation, timeout]).finally(() => clearTimeout(timer));
 }
@@ -459,7 +488,9 @@ export async function drainQueuedSends(options: {
       return;
     }
 
-    if (IN_FLIGHT_STATES.has(classifyThread(thread).state)) {
+    const reliable = (await client.supportsReliableHandoffs?.().catch(() => false)) ?? false;
+    if (thread.settledOverride === "settled") return;
+    if (IN_FLIGHT_STATES.has(classifyThread(thread).state) && !reliable) {
       // Not a turn boundary yet. Leave the record untouched so its attempt budget
       // is only spent on real dispatch failures.
       return;
@@ -467,35 +498,77 @@ export async function drainQueuedSends(options: {
 
     const claimed = await claimQueuedSend(head, attemptedAt);
     if (!claimed) return;
+    const sendId = claimed.serverSendId ?? `fork:queued-send:${claimed.id}`;
+
+    if (reliable && head.status === "dispatching") {
+      // A stale claim is an uncertain transport, never permission to resend.
+      let receipt: HandoffLookupResult | null = null;
+      try {
+        receipt = await withTimeout(
+          client.lookupSendReceipt?.({ type: "exact", sendId }) ?? Promise.resolve(null),
+          DISPATCH_TIMEOUT_MS,
+          "Looking up the queued send",
+        );
+      } catch {
+        /* Retain uncertainty. */
+      }
+      const known = receipt?.state === "found" ? receipt.receipts[0] : null;
+      const result: SavedQueuedSend = {
+        ...claimed,
+        serverSendId: sendId,
+        status:
+          known && ["started", "steered", "queued"].includes(known.status)
+            ? "dispatched"
+            : known && ["refused", "superseded", "cancelled"].includes(known.status)
+              ? "undeliverable"
+              : "uncertain",
+        updatedAt: attemptedAt,
+        dispatchedAt: known ? attemptedAt : null,
+        lastError: known ? null : "TRANSPORT_ERROR",
+      };
+      const persisted = await finalizeQueuedSend(result, claimed.dispatchClaimId);
+      if (persisted) settled.push(persisted);
+      return;
+    }
 
     let result: SavedQueuedSend;
     try {
-      await withTimeout(
+      const outcome = await withTimeout(
         client.sendMessage({
-          commandId: `fork:queued-send:${claimed.id}`,
+          commandId: sendId,
           threadId: claimed.threadId,
           text: claimed.text,
           origin: claimed.origin ?? null,
-          queueWhileRunning: false,
+          allowWhileRunning: claimed.allowWhileRunning ?? false,
+          queueWhileRunning: claimed.allowQueueFallback ?? reliable,
+          coalesceKey: claimed.coalesceKey ?? null,
         }),
         DISPATCH_TIMEOUT_MS,
         "Dispatching the queued send",
       );
+      const failure = sendOutcomeFailure(outcome);
+      const held = sendOutcomeHeld(outcome);
       result = {
         ...claimed,
-        status: "dispatched",
+        serverSendId: sendId,
+        status: held ? "queued" : (failure?.status ?? "dispatched"),
         updatedAt: attemptedAt,
-        dispatchedAt: attemptedAt,
-        lastError: null,
+        dispatchedAt: held || failure ? null : attemptedAt,
+        lastError: held ? "SETTLED" : (failure?.causeCode ?? null),
       };
     } catch (error) {
       const attempts = claimed.attempts + 1;
       result = {
         ...claimed,
-        status: attempts >= maxAttempts ? "undeliverable" : "queued",
+        status: reliable ? "uncertain" : attempts >= maxAttempts ? "undeliverable" : "queued",
+        ...(reliable ? { serverSendId: sendId } : {}),
         attempts,
         updatedAt: attemptedAt,
-        lastError: error instanceof Error ? error.message : String(error),
+        lastError: reliable
+          ? sendTransportCause(error)
+          : error instanceof Error
+            ? error.message
+            : String(error),
       };
     }
 
