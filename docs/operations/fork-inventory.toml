@@ -2796,3 +2796,12 @@ retire_when = "Upstream supplies the same approved-plan publication and task-wor
 depends_on = ["fork-create-task-issue", "fork-project-page-workflow", "fork-worker-operations"]
 roles = []
 note = "Gitea issue-body markers are the publication record; existing issue state and manual notes survive reruns. Integration fork.6: adapted replay to preserve UI theme/owner notes alongside BE authoritative contract and helpers. Fork.6 integration: adapt: union inventory, retain earlier integrated owner notes and later stanza (docs/operations/fork-inventory.toml). Retire/narrow/relocate do not apply to these retained UI behaviors or inventory insertions."
+[[patch]]
+name = "fork-dash-layout-retire"
+subject = "fix(projects): stop offering the retired Working, Blocked and Done widgets"
+class = "product"
+purpose = "Remove the Working, Blocked and Done widgets from the layout catalog so the picker, the CLI and the orchestrator tools no longer offer widgets that render nothing, while layouts saved earlier keep loading."
+retire_when = "Folded into fork-project-layout, or the project page layout is retired."
+depends_on = ["fork-project-layout", "fork-dash-178"]
+roles = []
+note = "withoutRetiredWidgets (contracts) drops widgets of RETIRED_WIDGET_TYPES from every saved revision the server reads and from the tabs the web renders (older servers still send them); the next saved change persists the cleanup. The default layout and the older widget order no longer include them, and dashboard set skips the retired ids instead of failing. Meant to be folded into fork-project-layout. Integration fork.6: adapted replay to preserve UI theme/owner notes alongside BE authoritative contract and helpers. Fork.6 integration: adapt: union inventory, retain earlier integrated owner notes and later stanza (docs/operations/fork-inventory.toml). Retire/narrow/relocate do not apply to these retained UI behaviors or inventory insertions."
