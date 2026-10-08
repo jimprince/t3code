@@ -76,7 +76,8 @@
     "@types/yauzl": "^3.4.0",
     "effect-acp": "workspace:*",
     "effect-codex-app-server": "workspace:*",
-    "vite-plus": "catalog:"
+    "vite-plus": "catalog:",
+    "@t3tools/client-runtime": "workspace:*"
   },
   "engines": {
     "node": "^22.16 || ^23.11 || >=24.10"
