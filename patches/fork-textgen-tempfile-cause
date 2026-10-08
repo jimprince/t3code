@@ -1,7 +1,7 @@
-Bottom: 210fcf163853a56f621efd35244f4dbaadd67202
-Top:    230fd4c49d642ae161f8efcfa4d187173bd5ad8b
+Bottom: 2433c5043774bf8c1459385787b1926b0e6d7d9a
+Top:    2a980bd8d74c12d32f8ba941b59e9164c1cb1478
 Author: brad <bradprin@live.com>
-Date:   2026-10-08 19:58:19 +0000
+Date:   2026-10-08 20:03:32 +0000
 
 fix(server): say why a text-generation temp file could not be written
 
