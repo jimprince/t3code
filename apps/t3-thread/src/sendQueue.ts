@@ -1,3 +1,4 @@
+import type { MessageForwardAcceptInput, MessageForwardResult } from "@t3tools/contracts";
 import type { MessageOrigin } from "@t3tools/shared/messageOrigin";
 import { sendOutcomeFailure, sendOutcomeHeld, sendTransportCause } from "./sendIntents.js";
 import type { HandoffLookupInput, HandoffLookupResult } from "@t3tools/contracts";
@@ -60,6 +61,11 @@ export interface QueueClient {
   lookupSendReceipt?(input: HandoffLookupInput): Promise<HandoffLookupResult>;
   findThread(threadId: string): Promise<OrchestrationThread>;
   sendMessage(input: {
+    forwardedMessage?: MessageForwardResult["forwardedMessage"];
+    forward?: Pick<
+      MessageForwardAcceptInput,
+      "bundle" | "stagedAttachments" | "sourceUrl" | "senderName" | "note"
+    >;
     commandId?: string;
     threadId: string;
     text: string;
@@ -78,6 +84,11 @@ function nowIso(): string {
 
 /** Accept a send that cannot be dispatched yet and persist it before returning. */
 export async function enqueueSend(input: {
+  forwardedMessage?: MessageForwardResult["forwardedMessage"];
+  forward?: Pick<
+    MessageForwardAcceptInput,
+    "bundle" | "stagedAttachments" | "sourceUrl" | "senderName" | "note"
+  >;
   serverSendId?: string;
   allowWhileRunning?: boolean;
   allowQueueFallback?: boolean;
@@ -100,6 +111,8 @@ export async function enqueueSend(input: {
       : null;
     if (existing) return { state, result: { queued: existing, superseded: [] } };
     const queued: SavedQueuedSend = {
+      ...(input.forwardedMessage ? { forwardedMessage: input.forwardedMessage } : {}),
+      ...(input.forward ? { forward: input.forward } : {}),
       ...(input.serverSendId ? { serverSendId: input.serverSendId } : {}),
       ...(input.allowWhileRunning !== undefined
         ? { allowWhileRunning: input.allowWhileRunning }
@@ -536,6 +549,8 @@ export async function drainQueuedSends(options: {
       const outcome = await withTimeout(
         client.sendMessage({
           commandId: sendId,
+          ...(claimed.forward ? { forward: claimed.forward } : {}),
+          ...(claimed.forwardedMessage ? { forwardedMessage: claimed.forwardedMessage } : {}),
           threadId: claimed.threadId,
           text: claimed.text,
           origin: claimed.origin ?? null,
