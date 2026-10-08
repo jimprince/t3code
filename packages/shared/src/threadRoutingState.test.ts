@@ -3,7 +3,7 @@ import { once } from "node:events";
 import * as Fs from "node:fs/promises";
 import * as Os from "node:os";
 import * as Path from "node:path";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 import { loadState, updateState } from "./threadRoutingState.ts";
 
 vi.mock("node:child_process", { spy: true });
