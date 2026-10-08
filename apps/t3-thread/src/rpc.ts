@@ -1,5 +1,5 @@
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
-import { ORCHESTRATION_V2_WS_METHODS, ThreadId } from "@t3tools/contracts";
+import { ORCHESTRATION_V2_WS_METHODS, ThreadId, WS_METHODS } from "@t3tools/contracts";
 import {
   Cause,
   Deferred,
@@ -49,6 +49,10 @@ const RPC_METHODS = {
   projectsMutate: "projects.mutate",
   launchThread: ORCHESTRATION_V2_WS_METHODS.launchThread,
   serverGetConfig: WS_SERVER_GET_CONFIG_METHOD,
+  serverGetSettings: WS_METHODS.serverGetSettings,
+  giteaSetToken: WS_METHODS.giteaSetToken,
+  serverDiscoverSourceControl: WS_METHODS.serverDiscoverSourceControl,
+  projectIssuesGet: WS_METHODS.projectIssuesGet,
   dispatchCommand: ORCHESTRATION_V2_WS_METHODS.dispatchCommand,
   getThreadProjection: ORCHESTRATION_V2_WS_METHODS.getThreadProjection,
   getArchivedShellSnapshot: ORCHESTRATION_V2_WS_METHODS.getArchivedShellSnapshot,
