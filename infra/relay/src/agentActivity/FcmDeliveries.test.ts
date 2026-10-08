@@ -38,6 +38,13 @@ const state: RelayAgentActivityState = {
   updatedAt: "1970-01-01T00:00:00.000Z",
   deepLink: "/threads/env/thread",
 };
+const reply = {
+  kind: "reply",
+  origin: "human",
+  identity: "turn",
+  occurredAt: state.updatedAt,
+} as const;
+
 const preferences = {
   notificationsEnabled: true,
   liveActivitiesEnabled: true,
@@ -219,10 +226,10 @@ describe("Android delivery routing", () => {
     {
       firstPhase: "waiting_for_approval",
       secondPhase: "waiting_for_input",
-      title: "2 agents need attention",
+      title: "2 need you",
       active: "true",
     },
-    { firstPhase: "completed", secondPhase: "failed", title: "2 agents finished", active: "false" },
+    { firstPhase: "completed", secondPhase: "failed", title: "2 need you", active: "false" },
   ] as const)(
     "routes grouped $firstPhase and $secondPhase to the overview once across their queued jobs",
     ({ firstPhase, secondPhase, title, active }) => {
@@ -231,7 +238,11 @@ describe("Android delivery routing", () => {
       return Effect.gen(function* () {
         const delivery = yield* FcmDeliveries.FcmDeliveries;
         yield* delivery.process(h.job);
-        h.current.state = { ...state, phase: firstPhase };
+        h.current.state = {
+          ...state,
+          phase: firstPhase,
+          ...(firstPhase === "completed" ? { notification: reply } : {}),
+        };
         h.current.otherStates = [{ ...secondState, phase: secondPhase }];
         yield* delivery.process({ ...h.job, state: h.current.state });
         yield* delivery.process({ ...h.job, state: h.current.otherStates[0] });
@@ -260,7 +271,7 @@ describe("Android delivery routing", () => {
       yield* delivery.process({ ...h.job, state: h.current.state });
       expect(h.sent[0]?.data).toMatchObject({
         alert_title: "Second thread",
-        alert_body: "Input: Project",
+        alert_body: "Question for you",
         alert_path: "/threads/env/second-thread",
       });
     }).pipe(Effect.provide(h.layer));
@@ -283,14 +294,14 @@ describe("Android delivery routing", () => {
   it.effect("prioritizes attention over simultaneous completions like iOS", () => {
     const h = harness();
     h.current.target.last_aggregate_json = encodeJson(aggregateFor([state, secondState]));
-    h.current.state = { ...state, phase: "completed" };
+    h.current.state = { ...state, phase: "completed", notification: reply };
     h.current.otherStates = [{ ...secondState, phase: "waiting_for_input" }];
     return Effect.gen(function* () {
       const delivery = yield* FcmDeliveries.FcmDeliveries;
       yield* delivery.process({ ...h.job, state: h.current.state });
       expect(h.sent[0]?.data).toMatchObject({
         alert_title: "Second thread",
-        alert_body: "Input: Project",
+        alert_body: "Question for you",
       });
       yield* delivery.process({ ...h.job, state: h.current.otherStates[0] });
       expect(h.sent.filter((message) => message.alert)).toHaveLength(1);
@@ -306,7 +317,11 @@ describe("Android delivery routing", () => {
         const delivery = yield* FcmDeliveries.FcmDeliveries;
         yield* delivery.process(h.job);
         h.current.otherStates = [];
-        h.current.state = { ...state, phase };
+        h.current.state = {
+          ...state,
+          phase,
+          ...(phase === "completed" ? { notification: reply } : {}),
+        };
         yield* delivery.enqueue({ target, state: null });
         yield* delivery.process(h.queued[0]);
         expect(h.sent.at(-1)?.alert).toBe(false);
@@ -346,7 +361,7 @@ describe("Android delivery routing", () => {
         yield* delivery.process({ ...h.job, state: h.current.state });
         expect(h.sent[0]?.data).toMatchObject({
           alert_title: "Fix notifications",
-          alert_body: "Approval: Project",
+          alert_body: "Approval needed",
         });
       }).pipe(Effect.provide(h.layer));
     },
@@ -361,14 +376,18 @@ describe("Android delivery routing", () => {
     const input = {
       previousAggregate: aggregateFor([state, other]),
       nextAggregate: aggregateFor([
-        { ...state, phase: "completed" },
-        { ...other, phase: "failed" },
+        { ...state, phase: "completed", notification: reply },
+        {
+          ...other,
+          phase: "failed",
+          notification: { ...reply, kind: "error", identity: "error", errorReason: "Agent failed" },
+        },
       ]),
       preferences,
       nowMs: 0,
     };
     const alert = FcmDeliveries.androidAlertForAggregate(input);
-    expect(alert?.alert_title).toBe("2 agents finished");
+    expect(alert?.alert_title).toBe("2 need you");
     expect(
       FcmDeliveries.androidAlertForAggregate({
         ...input,
@@ -389,7 +408,7 @@ describe("Android delivery routing", () => {
           })),
         },
       })?.alert_id,
-    ).not.toBe(alert?.alert_id);
+    ).toBe(alert?.alert_id);
   });
 
   it("distinguishes matching thread IDs in different environments", () => {
@@ -406,19 +425,23 @@ describe("Android delivery routing", () => {
         preferences,
         nowMs: 0,
       }),
-    ).toMatchObject({ alert_title: "Second thread", alert_body: "Input: Project" });
+    ).toMatchObject({ alert_title: "Second thread", alert_body: "Question for you" });
   });
 
   it.effect.each([
-    { phase: "waiting_for_approval", body: "Approval: Project", preference: "notifyOnApproval" },
-    { phase: "waiting_for_input", body: "Input: Project", preference: "notifyOnInput" },
-    { phase: "completed", body: "Done: Project", preference: "notifyOnCompletion" },
-    { phase: "failed", body: "Failed: Project", preference: "notifyOnFailure" },
+    { phase: "waiting_for_approval", body: "Approval needed", preference: "notifyOnApproval" },
+    { phase: "waiting_for_input", body: "Question for you", preference: "notifyOnInput" },
+    { phase: "completed", body: "Reply ready", preference: "notifyOnCompletion" },
+    { phase: "failed", body: "Error: Agent failed", preference: "notifyOnFailure" },
   ] as const)(
     "uses iOS alert wording for $phase and honors its preference",
     ({ phase, body, preference }) => {
       const h = harness();
-      h.current.state = { ...state, phase };
+      h.current.state = {
+        ...state,
+        phase,
+        ...(phase === "completed" ? { notification: reply } : {}),
+      };
       return Effect.gen(function* () {
         const delivery = yield* FcmDeliveries.FcmDeliveries;
         yield* delivery.process({ ...h.job, state: h.current.state });
@@ -443,6 +466,7 @@ describe("Android delivery routing", () => {
         {
           ...state,
           phase: "completed",
+          notification: reply,
           threadTitle: `  ${"T".repeat(150)}  `,
           projectTitle: `  ${"P".repeat(150)}  `,
         },
@@ -451,7 +475,7 @@ describe("Android delivery routing", () => {
       ),
     ).toMatchObject({
       alert_title: `${"T".repeat(117)}...`,
-      alert_body: `Done: ${"P".repeat(111)}...`,
+      alert_body: "Reply ready",
       alert_group: JSON.stringify([state.environmentId, state.threadId]),
     });
   });
@@ -463,6 +487,7 @@ describe("Android delivery routing", () => {
         environmentId: EnvironmentId.make("a/b"),
         threadId: ThreadId.make("c"),
         phase: "completed",
+        notification: reply,
       },
       preferences,
       0,
@@ -473,6 +498,7 @@ describe("Android delivery routing", () => {
         environmentId: EnvironmentId.make("a"),
         threadId: ThreadId.make("b/c"),
         phase: "completed",
+        notification: reply,
       },
       preferences,
       0,
@@ -487,14 +513,14 @@ describe("Android delivery routing", () => {
       return Effect.gen(function* () {
         const delivery = yield* FcmDeliveries.FcmDeliveries;
         yield* delivery.enqueue({ target, state });
-        h.current.state = { ...state, phase: "completed" };
+        h.current.state = { ...state, phase: "completed", notification: reply };
         yield* delivery.process(h.queued[0]);
         expect(h.sent).toHaveLength(0);
         yield* delivery.process({ ...h.job, state: h.current.state });
         expect(h.sent[0]?.data).toMatchObject({
           active: "false",
           alert_title: "Fix notifications",
-          alert_body: "Done: Project",
+          alert_body: "Reply ready",
           alert_path: "/threads/env/thread",
         });
       }).pipe(Effect.provide(h.layer));
@@ -503,7 +529,7 @@ describe("Android delivery routing", () => {
 
   it.effect("keeps completion alerts working with ongoing activity disabled", () => {
     const h = harness();
-    h.current.state = { ...state, phase: "completed" };
+    h.current.state = { ...state, phase: "completed", notification: reply };
     h.current.target.preferences_json = encodeJson({
       ...preferences,
       liveActivitiesEnabled: false,
@@ -514,7 +540,7 @@ describe("Android delivery routing", () => {
       expect(h.sent[0]?.data).toMatchObject({
         active: "false",
         alert_title: "Fix notifications",
-        alert_body: "Done: Project",
+        alert_body: "Reply ready",
       });
       expect(h.sent[0]?.data.user_id).toBe("user");
     }).pipe(Effect.provide(h.layer));
@@ -633,7 +659,7 @@ describe("Android delivery routing", () => {
       { ...secondState, phase: "failed" },
       { ...state, threadId: ThreadId.make("approval"), phase: "waiting_for_approval" },
       { ...state, threadId: ThreadId.make("input"), phase: "waiting_for_input" },
-      { ...state, threadId: ThreadId.make("done"), phase: "completed" },
+      { ...state, threadId: ThreadId.make("done"), phase: "completed", notification: reply },
     ]);
     const data = androidActivityData(aggregate);
     expect(data.activity_title).toBe("3 active agents · 2 need attention");
@@ -646,7 +672,8 @@ describe("Android delivery routing", () => {
     expect(input.activity_active_count).toBe("1");
     expect(androidActivityData(aggregateFor([state])).activity_chip).toBe("Active");
     expect(
-      androidActivityData(aggregateFor([{ ...state, phase: "completed" }])).activity_chip,
+      androidActivityData(aggregateFor([{ ...state, phase: "completed", notification: reply }]))
+        .activity_chip,
     ).toBe("");
     expect(androidActivityData(null).activity_chip).toBe("");
     expect(
@@ -683,7 +710,7 @@ describe("Android delivery routing", () => {
       user_id: "u".repeat(128),
       updated_at: "1788780000000",
       alert_id: "a".repeat(64),
-      alert_title: "5 agents finished",
+      alert_title: "5 replies ready",
       alert_body: Array(5).fill(longTitle).join(", "),
       alert_path: "/threads/env/thread",
     });
@@ -703,7 +730,7 @@ describe("delivery policy regressions", () => {
     const old = { ...state, threadId: ThreadId.make("old"), phase: "completed" as const };
     h.current.target.last_aggregate_json = encodeJson(aggregateFor([old]));
     h.current.otherStates = [old];
-    h.current.state = { ...state, phase: "completed" };
+    h.current.state = { ...state, phase: "completed", notification: reply };
     return Effect.gen(function* () {
       const d = yield* FcmDeliveries.FcmDeliveries;
       yield* d.process(h.job);
@@ -867,4 +894,24 @@ describe("FCM queue message isolation", () => {
       }).pipe(Effect.provide(h.layer));
     },
   );
+});
+
+describe("completion provenance", () => {
+  it.each(["worker", "routed", "automation", "unknown"] as const)(
+    "keeps %s completion silent on Android",
+    (origin) => {
+      expect(
+        FcmDeliveries.androidAlertForState(
+          { ...state, phase: "completed", notification: { ...reply, origin } },
+          preferences,
+          0,
+        ),
+      ).toBeNull();
+    },
+  );
+  it("keeps a legacy completion without provenance silent", () => {
+    expect(
+      FcmDeliveries.androidAlertForState({ ...state, phase: "completed" }, preferences, 0),
+    ).toBeNull();
+  });
 });
