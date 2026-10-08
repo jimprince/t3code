@@ -2830,3 +2830,18 @@ retire_when = "The Decisions feed is retired, or the web and mobile clients stop
 depends_on = ["fork-decisions-feed-server"]
 roles = []
 note = "decisionFeed.ts (export './decision-feed'): buildDecisionFeed merges thread questions and approvals (projectRequests.pendingAsks), plans waiting on Brad, needs-brad decisions and the answers / approve / review / test issues of the old Needs you. An issue that is both a decision and an item shows once, as the decision. Stalled threads lead; the rest sort oldest first by decisionSortTime (Move to end is later). Deferred cards go to `later` until decisionVisibility says they return (a day before a deadline at the latest). Chips count every visible card per project before the filter. reviewPullRequest picks the newest open pull request of the threads linked to the issue, with its mergeability and watched head sha for the merge pin. splitMarkdownBlocks / clampMarkdownBlocks clamp context by whole blocks (a lead paragraph, a list or table never cut), decisionContextMarkdown turns Gitea's <img> tags into Markdown. Hermes-safe: no toSorted."
+
+[[patch]]
+name = "fork-decisions-feed-ui"
+subject = "feat(web): one Decisions feed replaces Needs you"
+class = "product"
+purpose = "Show everything that needs Brad as one Decisions feed on the project page (brad/t3code-fork#171, #174 A, #180, #181 B): every Needs you item becomes a card with its actions, context renders as Markdown, cards can be deferred, and projects filter the list."
+retire_when = "Upstream provides a unified attention inbox with actions and deferral, or the project page stops listing what waits on Brad."
+depends_on = [
+  "fork-decisions-feed-model",
+  "fork-decisions-feed-server",
+  "fork-decisions-feed-context",
+  "fork-dashboard-polish",
+]
+roles = []
+note = "ProjectDecisionFeed.tsx owns the widget and the data hook (useDecisionFeedData): the project issues query, the old Needs you derivation (useNeedsYou), the pending asks query (read only while a thread's shell flags a pending approval or question, refreshed when that set changes) and buildDecisionFeed. asksWithFallbacks keeps a bare card for any waiting thread whose text did not arrive, so no Needs you kind is lost (thread approvals and questions, plans, answers, decisions to approve, review, test). BuiltinWidget renders the feed for `decisions`; `needs-you` renders nothing when the layout also has a Decisions widget, else the feed, so saved layouts keep it. The status line count is the feed's. DecisionFeedCards.tsx has the card shell and per-kind actions; acted-on cards stay with an outcome strip (held with Undo, sending, 'Sent to X', failed with Retry) until a later list read no longer has them (keptOutcomes). Approve and merge, Send back, Later, Move to end and Bring back call projectRequests.approveMerge / sendBack / defer; Settle, Works and Discuss use the existing commands; Review cards pass the watched head sha so the merge is pinned to what was shown. DecisionMarkdown.tsx is a small react-markdown component map (not ChatMarkdown) that clamps by whole blocks. Removed: ProjectDecisionsWidget.tsx and the Needs you rows (NeedsYouIssueGroups and its helpers) from ProjectRequestsSection.tsx. Not done here: the mobile feed and the decision-writing rule (DECISION-FORMAT.md and its skill live outside the repository)."
