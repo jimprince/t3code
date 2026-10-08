@@ -379,6 +379,56 @@ describe("remote environment authorization", () => {
     }),
   );
 
+  it.effect("gives only websocket tickets a thirty-second default deadline", () =>
+    Effect.gen(function* () {
+      const fetch = hangingFetch();
+      const requests = [
+        issueRemoteWebSocketTicket({
+          httpBaseUrl: "https://remote.example.com",
+          bearerToken: "bearer",
+        }).pipe(Effect.asVoid),
+        issueRemoteDpopWebSocketTicket({
+          httpBaseUrl: "https://remote.example.com",
+          accessToken: "access",
+          dpopProof: "proof",
+        }).pipe(Effect.asVoid),
+        bootstrapRemoteBearerSession({
+          httpBaseUrl: "https://remote.example.com",
+          credential: "pairing",
+        }).pipe(Effect.asVoid),
+        fetchRemoteSessionState({
+          httpBaseUrl: "https://remote.example.com",
+          bearerToken: "bearer",
+        }).pipe(Effect.asVoid),
+        fetchRemoteEnvironmentDescriptor({ httpBaseUrl: "https://remote.example.com" }).pipe(
+          Effect.asVoid,
+        ),
+      ];
+      const fibers = [];
+      for (const request of requests) {
+        fibers.push(
+          yield* request.pipe(provideRemoteHttp(fetch.fetchFn), Effect.flip, Effect.forkScoped),
+        );
+      }
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("10 seconds");
+      expect(fibers[0]?.pollUnsafe()).toBeUndefined();
+      expect(fibers[1]?.pollUnsafe()).toBeUndefined();
+      for (const fiber of fibers.slice(2)) {
+        expect(yield* Fiber.join(fiber)).toMatchObject({
+          _tag: "RemoteEnvironmentAuthTimeoutError",
+        });
+      }
+      yield* TestClock.adjust("19 seconds");
+      expect(fibers[0]?.pollUnsafe()).toBeUndefined();
+      expect(fibers[1]?.pollUnsafe()).toBeUndefined();
+      yield* TestClock.adjust("1 second");
+      for (const fiber of fibers.slice(0, 2)) {
+        expect((yield* Fiber.join(fiber)).message).toContain("timed out after 30000ms");
+      }
+    }).pipe(Effect.provide(TestClock.layer())),
+  );
+
   it.effect("fails hung fetch requests on the configured timeout", () =>
     Effect.gen(function* () {
       const fetch = hangingFetch();
