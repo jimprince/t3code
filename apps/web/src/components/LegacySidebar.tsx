@@ -195,7 +195,6 @@ import {
   isSidebarNestedLinkClick,
   isTrailingDoubleClick,
   resolveProjectStatusIndicator,
-  resolveThreadRowClassName,
   resolveThreadLastVisitedAt,
   resolveThreadStatusPill,
   orderItemsByPreferredIds,
@@ -207,6 +206,7 @@ import {
 } from "./Sidebar.logic";
 import { sortThreads } from "../lib/threadSort";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
+import { confirmAndStartDesktopUpdate } from "./sidebar/desktopUpdateFlow";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { useIsMobile } from "~/hooks/useMediaQuery";
 import { CommandDialogTrigger } from "./ui/command";
@@ -3760,6 +3760,14 @@ export default function LegacySidebar() {
     }
 
     setDesktopUpdateActionPending(true);
+
+    const startUpdate = bridge.startUpdate?.bind(bridge);
+    if (startUpdate) {
+      void confirmAndStartDesktopUpdate(startUpdate, desktopUpdateState).finally(() =>
+        setDesktopUpdateActionPending(false),
+      );
+      return;
+    }
 
     if (desktopUpdateButtonAction === "download") {
       void bridge
