@@ -99,7 +99,7 @@ export class ServerUpdateResumeTimeoutError extends Schema.TaggedError<ServerUpd
   },
 ) {
   override get message(): string {
-    return `The server did not resume on t3@${this.targetVersion}.`;
+    return `Server did not come back on t3@${this.targetVersion}.`;
   }
 }
 
@@ -127,9 +127,8 @@ export class ServerUpdateTerminalError extends Schema.TaggedError<ServerUpdateTe
   }
 }
 
-// Covers the 120-second trial deadline and a final restart of the previous
-// version when the trial rolls back.
-const SERVER_UPDATE_RESUME_TIMEOUT = Duration.minutes(4);
+// The UI offers Retry after about 90 seconds without a returning server.
+const SERVER_UPDATE_RESUME_TIMEOUT = Duration.seconds(90);
 
 export function matchesServerUpdateReadyEvent(
   result: ServerSelfUpdateResult,

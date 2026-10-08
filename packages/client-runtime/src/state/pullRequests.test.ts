@@ -1999,7 +1999,8 @@ it.effect("refreshes stack state after reopening and head SHAs after a turn", ()
 
 // Transport fixtures have a source-control-only session; authorization edge cases
 // are exercised by commandPermissions.test.ts.
-vi.mock("./session.ts", () => ({
+vi.mock("./session.ts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./session.ts")>()),
   createEnvironmentSessionAtoms: () => ({ sessionStateAtom: grantedSessions }),
 }));
 const grantedSessions = Atom.family((_id: EnvironmentId) =>
