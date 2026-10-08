@@ -6,7 +6,6 @@ import {
   AuthSettingsWriteScope,
   DEFAULT_SERVER_SETTINGS,
   ProviderInstanceId,
-  ThreadId,
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   AuthSourceControlWriteScope,
@@ -17,6 +16,7 @@ import {
   AuthTerminalOperateScope,
   WS_METHODS,
   WsRpcGroup,
+  ThreadId,
 } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -402,4 +402,68 @@ it.effect("separates host file URLs from readable attachment URLs", () =>
     }
     expect(handled).toBe(1);
   }).pipe(Effect.scoped),
+);
+
+it("requires operate scope for handoff acceptance and read scope for redacted receipts", () => {
+  expect(requiredScopeForRpcMethod("fork.send.accept")).toBe(AuthOrchestrationOperateScope);
+  expect(requiredScopeForRpcMethod("fork.send.lookup")).toBe(AuthOrchestrationReadScope);
+  expect(requiredScopeForRpcMethod("fork.send.inbox")).toBe(AuthOrchestrationReadScope);
+});
+
+it.effect("rejects a handoff RPC before acceptance under a read-only authenticated scope", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const methods = ["fork.send.accept", "fork.send.lookup"] as const;
+      const group = WsRpcGroup.omit(
+        ...[...WsRpcGroup.requests.keys()].filter(
+          (tag): tag is Exclude<keyof typeof RPC_REQUIRED_SCOPES, (typeof methods)[number]> =>
+            !(methods as ReadonlyArray<string>).includes(tag),
+        ),
+      );
+      let accepts = 0;
+      const client = yield* RpcTest.makeClient(group).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            group.toLayerHandler("fork.send.accept", (input) =>
+              Effect.sync(() => {
+                accepts++;
+                return {
+                  sendId: input.sendId,
+                  recipientThreadId: input.recipientThreadId,
+                  acceptedAt: "2026-10-07T00:00:00Z",
+                  status: "started" as const,
+                  cause: null,
+                  ownerThreadId: null,
+                };
+              }),
+            ),
+            group.toLayerHandler("fork.send.lookup", () =>
+              Effect.succeed({
+                state: "unknown" as const,
+                receipts: [],
+                retentionDays: 30 as const,
+              }),
+            ),
+            RpcAuthorization.layer([AuthOrchestrationReadScope]),
+          ),
+        ),
+      );
+      expect(
+        yield* client["fork.send.accept"]({
+          sendId: "scope-fixture",
+          recipientThreadId: ThreadId.make("recipient"),
+          text: "fixture",
+          coalesceKey: null,
+          intent: "auto",
+        }).pipe(Effect.flip),
+      ).toMatchObject({
+        _tag: "EnvironmentAuthorizationError",
+        requiredScope: AuthOrchestrationOperateScope,
+      });
+      expect(
+        (yield* client["fork.send.lookup"]({ type: "exact", sendId: "scope-fixture" })).state,
+      ).toBe("unknown");
+      expect(accepts).toBe(0);
+    }),
+  ),
 );
