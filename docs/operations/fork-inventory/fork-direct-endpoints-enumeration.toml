@@ -1,0 +1,8 @@
+name = "fork-direct-endpoints-enumeration"
+subject = "fix(server): tolerate unavailable network interface enumeration"
+class = "divergence"
+purpose = "Keep server config discovery available on restricted hosts where optional network interface enumeration fails, and skip enumeration for specific binds."
+retire_when = "Direct endpoint discovery no longer enumerates OS interfaces or its upstream replacement handles unavailable enumeration without failing server config."
+depends_on = ["fork-private-connection-defaults"]
+roles = []
+note = "Issue #199: non-wildcard hosts never enumerate; wildcard enumeration errors yield no optional bound addresses. Catch only the OS call, preserving config, auth, settings and unrelated discovery failures. Focused real-service tests also exercise the exact discovery wrapper used by getConfig; ws.ts is unchanged."
