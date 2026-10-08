@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "6e2d592ab86e89b5fd23be89cfe7c8feaee1a82e",
-  "head": "9488881e7e836f06110c50662e3cc44dad102108",
+  "prev": "0fe87287950e1956039ec70727389fba46f33785",
+  "head": "c976c57bc0fb575ee23fd79064665c58863d5aeb",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -133,11 +133,12 @@
     "fork-publish-task-plan",
     "fork-dash-layout-retire",
     "fork-decisions-feed-context",
-    "fork-decisions-feed-model",
+    "fork-decisions-feed-model"
+  ],
+  "unapplied": [
     "fork-decisions-feed-ui",
     "fork-decisions-feed-mobile"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
