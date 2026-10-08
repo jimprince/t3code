@@ -22,7 +22,7 @@ import {
   WsRpcGroup,
 } from "./contracts.js";
 
-const RPC_METHODS = {
+export const RPC_METHODS = {
   "fork.message.forward.prepare": "fork.message.forward.prepare",
   "fork.message.forward.accept": "fork.message.forward.accept",
   [WS_METHODS.assetsCreateUrl]: WS_METHODS.assetsCreateUrl,
@@ -64,6 +64,7 @@ const RPC_METHODS = {
   getFullThreadDiff: ORCHESTRATION_V2_WS_METHODS.getFullThreadDiff,
   subscribeShell: ORCHESTRATION_V2_WS_METHODS.subscribeShell,
   subscribeThread: ORCHESTRATION_V2_WS_METHODS.subscribeThread,
+  planPublish: "fork.plan.publish",
   projectRequestsCreate: "projectRequests.create",
   projectRequestsUpdate: "projectRequests.update",
   projectRequestsList: "projectRequests.list",
