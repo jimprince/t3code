@@ -1,6 +1,6 @@
-Bottom: 21c307f9d1925df51a36e2bfbdcbb329ddfa0620
-Top:    d6933dd2f1e7e25e9df91acc8931697f2dc591a5
+Bottom: b72cd7746a5f79aa48486b7b8b675ccb6f738417
+Top:    b4cf0a6e324db1cc558e297b083ec2a64e144e98
 Author: brad <bradprin@live.com>
-Date:   2026-10-07 22:10:57 +0000
+Date:   2026-10-07 22:26:02 -0600
 
 fix(web): side panels fit a phone screen
