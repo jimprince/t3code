@@ -1,3 +1,4 @@
+import { makeGiteaTokenRpcHandler } from "./sourceControl/GiteaTokenRpc.ts";
 import { AssetGiteaMediaUrlValidationError } from "@t3tools/contracts";
 import { giteaMediaFetchTarget } from "./assets/GiteaMediaFetch.ts";
 import { makeSessionReconcileService } from "./forkThreads/SessionReconcileService.ts";
@@ -3242,6 +3243,7 @@ const layerWsRpc = (
         "fork.send.accept": (input) => handoffs.accept(input),
         "fork.send.lookup": (input) => handoffs.lookup(input),
         "fork.send.inbox": (input) => handoffs.inbox(input.threadId),
+        [WS_METHODS.giteaSetToken]: makeGiteaTokenRpcHandler(serverSettings),
         "fork.session.reconcile": (input) =>
           makeSessionReconcileService(threadManagement).reconcile(input),
         "orchestration.getLegacyHistory": (input) => legacyHistory.get(input),
