@@ -33,7 +33,7 @@ function ContextText({ parts }: { readonly parts: ReadonlyArray<DecisionContextP
  * One embedded picture: fetched through the server, which holds the Gitea token a private
  * repository needs, or directly when it is not a Gitea upload. Opens full size in a new tab.
  */
-function ContextImage({
+export function ContextImage({
   environmentId,
   image,
 }: {
