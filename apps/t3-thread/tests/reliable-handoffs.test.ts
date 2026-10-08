@@ -23,11 +23,12 @@ const environment = {
   pairedAt: "2026-10-07T00:00:00Z",
 } satisfies SavedEnvironment;
 
-describe("reliable handoff transport", () => {
+// The production fixtures are private; CI and machines without them skip explicitly.
+const fixtures = process.env.T3_LIFECYCLE_FIXTURES;
+
+describe.skipIf(!fixtures)("reliable handoff transport", () => {
   beforeAll(async () => {
-    const fixtures = process.env.T3_LIFECYCLE_FIXTURES;
-    if (!fixtures) throw new Error("T3_LIFECYCLE_FIXTURES is required");
-    await NodeFSP.stat(NodePath.join(fixtures, "synthetic-edges.small.sanitized.sqlite"));
+    await NodeFSP.stat(NodePath.join(fixtures!, "synthetic-edges.small.sanitized.sqlite"));
   });
   it("waits for durable fsync before the first transport request", async () => {
     const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "handoff-fsync-"));
@@ -342,3 +343,85 @@ it("returns a known sanitized cause for authenticated scope refusal without retr
     await NodeFSP.rm(directory, { recursive: true, force: true });
   }
 });
+
+it.each([
+  ["non-timeout socket open", new SocketOpenError({ kind: "Unknown", cause: "private sentinel" })],
+  [
+    "refused connect",
+    Object.assign(new Error("private sentinel"), { code: "ECONNREFUSED", syscall: "connect" }),
+  ],
+  [
+    "unreachable connect",
+    Object.assign(new Error("private sentinel"), { code: "EHOSTUNREACH", syscall: "connect" }),
+  ],
+  [
+    "DNS lookup",
+    Object.assign(new Error("private sentinel"), { code: "ENOTFOUND", syscall: "getaddrinfo" }),
+  ],
+])("reports %s as retryable before admission", async (_label, error) => {
+  const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "handoff-unsent-"));
+  const previous = process.env.T3_AGENT_STATE_FILE;
+  process.env.T3_AGENT_STATE_FILE = NodePath.join(directory, "state.json");
+  const request = vi.fn(async () => {
+    throw error;
+  });
+  const client = new RemoteEnvironmentClient(environment, {
+    descriptorFactory: async () => ({
+      ...(await descriptorFixture(environment)()),
+      capabilities: { reliableHandoffs: true },
+    }),
+    rpcFactory: () => ({ request, dispose: async () => undefined }) as any,
+  });
+  try {
+    expect(await client.sendMessage({ threadId: "recipient", text: "body" })).toMatchObject({
+      dispatched: false,
+      queued: false,
+      uncertain: false,
+      retryable: true,
+    });
+    expect(request).toHaveBeenCalledTimes(1);
+  } finally {
+    if (previous === undefined) delete process.env.T3_AGENT_STATE_FILE;
+    else process.env.T3_AGENT_STATE_FILE = previous;
+    await NodeFSP.rm(directory, { recursive: true, force: true });
+  }
+});
+
+it.each(["descriptor", "client/auth construction"])(
+  "marks %s failure retryable before any acceptance frame",
+  async (phase) => {
+    const directory = await NodeFSP.mkdtemp(
+      NodePath.join(NodeOS.tmpdir(), "handoff-before-frame-"),
+    );
+    const previous = process.env.T3_AGENT_STATE_FILE;
+    process.env.T3_AGENT_STATE_FILE = NodePath.join(directory, "state.json");
+    const rpcFactory = vi.fn(() => {
+      throw new Error("private sentinel");
+    });
+    const client = new RemoteEnvironmentClient(environment, {
+      descriptorFactory: async () => {
+        if (phase === "descriptor") throw new Error("private sentinel");
+        return {
+          ...(await descriptorFixture(environment)()),
+          capabilities: { reliableHandoffs: true },
+        };
+      },
+      rpcFactory,
+    });
+    try {
+      const result = await client.sendMessage({ threadId: "recipient", text: "body" });
+      expect(result).toMatchObject({
+        dispatched: false,
+        queued: false,
+        uncertain: false,
+        retryable: true,
+      });
+      expect(JSON.stringify(result)).not.toContain("sentinel");
+      expect(rpcFactory).toHaveBeenCalledTimes(phase === "descriptor" ? 0 : 1);
+    } finally {
+      if (previous === undefined) delete process.env.T3_AGENT_STATE_FILE;
+      else process.env.T3_AGENT_STATE_FILE = previous;
+      await NodeFSP.rm(directory, { recursive: true, force: true });
+    }
+  },
+);
