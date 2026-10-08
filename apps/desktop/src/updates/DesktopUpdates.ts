@@ -655,7 +655,14 @@ export const make = Effect.gen(function* () {
         yield* Ref.set(desktopState.quitting, true);
 
         return yield* Effect.gen(function* () {
-          yield* updateState((state) => ({ ...state, updatePhase: "installing", canRetry: false }));
+          // A new attempt must not publish the previous install error as its own failure.
+          yield* updateState((state) => ({
+            ...state,
+            updatePhase: "installing",
+            message: null,
+            errorContext: null,
+            canRetry: false,
+          }));
           yield* writeUpdateRestartMarker;
           const { downloadedVersion } = yield* Ref.get(updateStateRef);
           if (downloadedVersion !== null) yield* updateRollback.arm(downloadedVersion);
