@@ -72,6 +72,7 @@ describe("project issue metadata refresh", () => {
                   {
                     number: 73,
                     title: "Fixed title",
+                    body: "Part of #9\n\nDetails",
                     state: "closed",
                     html_url: link.url,
                     created_at: now,
@@ -95,7 +96,7 @@ describe("project issue metadata refresh", () => {
         ),
       );
       expect(result.issues).toMatchObject([
-        { title: "Fixed title", status: "done", linkedThreadIds: [threadId] },
+        { title: "Fixed title", status: "done", linkedThreadIds: [threadId], partOf: 9 },
       ]);
       expect(commands).toMatchObject([
         {
