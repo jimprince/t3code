@@ -1,0 +1,4 @@
+id = "held-message-refused-resend-discard"
+category = "fix"
+functionality = "threads"
+text = "A message held while the server was down that the server then refuses shows as not sent with Resend and Discard, no longer blocks your other held messages, and is never retried under the same id."
