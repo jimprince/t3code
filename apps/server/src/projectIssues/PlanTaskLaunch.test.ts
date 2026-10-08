@@ -1,7 +1,7 @@
 import { describe, expect } from "vite-plus/test";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
+import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
 import { ProjectId, RunId, ThreadId } from "@t3tools/contracts";
 import {
   ThreadLaunchService,
@@ -110,7 +110,7 @@ describe("plan task launch", () => {
               return { threadId: input.threadId! } as never;
             }),
         } as never),
-        Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" })),
+        Effect.provide(SqlitePersistenceMemory),
       );
     },
   );
