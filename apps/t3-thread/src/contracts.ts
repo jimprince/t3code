@@ -1,4 +1,4 @@
-import { WsSessionReconcileRpc } from "@t3tools/contracts";
+import { WsSessionReconcileRpc, HandoffRpcs } from "@t3tools/contracts";
 import {
   Automation,
   AutomationDefinition,
@@ -237,6 +237,7 @@ const WsAutomationScriptsRunRpc = Rpc.make("automationScripts.run", {
 });
 
 export const WsRpcGroup = RpcGroup.make(
+  ...HandoffRpcs,
   Rpc.make("projectRequests.decide", {
     payload: ProjectRequestDecideInput,
     success: ProjectRequestDecideResult,
