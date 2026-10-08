@@ -2678,3 +2678,13 @@ retire_when = "The Release widget is retired or upstream provides an equivalent 
 depends_on = ["fork-project-dashboard-widgets"]
 roles = []
 note = "Issue #172. The groups the user opened are remembered per project and device in localStorage (t3code:projects:release-open:<environmentId>:<rootThreadId>); everything else starts closed. openGroups.logic holds the toggle and storage schema shared with the workstream bands."
+
+[[patch]]
+name = "fork-dash-187-todo-progress"
+subject = "feat(server): report a thread's to-do progress on its shell"
+class = "divergence"
+purpose = "Carry the steps done and total of a thread's latest to-do list (Claude TodoWrite, Codex update_plan) on the thread shell, so clients can show progress without loading the thread's detail."
+retire_when = "Upstream puts to-do progress on the thread shell, or the dashboard stops showing it."
+depends_on = ["fork-project-dashboard-widgets"]
+roles = []
+note = "Issue #187. todoProgress is optional on the shell contract (absent from servers that predate it, null without a list). The SQL shell query and threadShellFromProjection derive it from the todo_list plan of the thread's newest run (highest plan id on a tie), and a test asserts both paths agree. Every committed event already republishes the thread's shell, so plan updates add no stream traffic."
