@@ -339,6 +339,7 @@ function makeMutableServerSettingsService(
     return {
       start: Effect.void,
       ready: Effect.void,
+      setGiteaToken: () => Effect.die("Token setter is unused by this test"),
       getSettings: Ref.get(settingsRef),
       updateSettings: (patch) =>
         Effect.gen(function* () {
