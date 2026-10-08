@@ -59,6 +59,12 @@ describe("DesktopEnvironment", () => {
       );
 
       assert.equal(environment.isDevelopment, true);
+      assert.equal(environment.displayName, "T3 Code (Dev)");
+      assert.deepEqual(environment.branding, {
+        baseName: "T3 Code",
+        displayName: "T3 Code (Dev)",
+        stageLabel: "Dev",
+      });
       assert.equal(environment.appDataDirectory, "/Users/alice/Library/Application Support");
       assert.equal(environment.baseDir, "/tmp/t3");
       assert.equal(environment.stateDir, "/tmp/t3/userdata");
@@ -77,8 +83,9 @@ describe("DesktopEnvironment", () => {
       assert.equal(environment.backendEntryPath, "/repo/apps/server/dist/bin.mjs");
       assert.equal(environment.backendCwd, "/repo");
       assert.equal(environment.appUserModelId, "com.t3tools.t3code.dev");
+      assert.equal(environment.linuxDesktopEntryName, "t3code-dev.desktop");
       assert.equal(environment.linuxWmClass, "t3code-dev");
-      assert.equal(environment.linuxDesktopEntryName, "com.t3tools.T3Code.Development.desktop");
+      assert.equal(environment.forkIdentity.current, "t3code-fork-source-dev");
       assert.deepEqual(
         Option.map(environment.devServerUrl, (url) => url.href),
         Option.some("http://localhost:5173/"),
@@ -111,11 +118,22 @@ describe("DesktopEnvironment", () => {
       );
 
       assert.equal(environment.isDevelopment, false);
+      assert.equal(environment.displayName, "T3 Code (Fork)");
+      assert.deepEqual(environment.branding, {
+        baseName: "T3 Code",
+        displayName: "T3 Code (Fork)",
+        stageLabel: "Fork",
+      });
       assert.equal(environment.stateDir, "/tmp/t3/userdata");
       assert.equal(environment.logDir, "/tmp/t3/userdata/logs");
       assert.equal(environment.browserArtifactsDir, "/tmp/t3/userdata/browser-artifacts");
       assert.equal(environment.serverSettingsPath, "/tmp/t3/userdata/settings.json");
       assert.equal(environment.otlpProtocol, "http/json");
+      assert.equal(environment.appUserModelId, "com.t3tools.t3code.fork");
+      assert.equal(environment.linuxDesktopEntryName, "t3code-fork.desktop");
+      assert.equal(environment.linuxWmClass, "t3code-fork");
+      assert.equal(environment.forkIdentity.current, "t3code-fork-v2");
+      assert.equal(environment.forkIdentity.legacy, "T3 Code (Fork)");
     }),
   );
 
@@ -141,7 +159,7 @@ describe("DesktopEnvironment", () => {
     }),
   );
 
-  it.effect("uses the stable desktop entry as the packaged Linux portal identity", () =>
+  it.effect("uses the fork desktop entry as the packaged Linux portal identity", () =>
     Effect.gen(function* () {
       const environment = yield* makeEnvironment({
         platform: "linux",
@@ -150,7 +168,7 @@ describe("DesktopEnvironment", () => {
         resourcesPath: "/tmp/.mount_t3code/resources",
       });
 
-      assert.equal(environment.linuxDesktopEntryName, "com.t3tools.T3Code.desktop");
+      assert.equal(environment.linuxDesktopEntryName, "t3code-fork.desktop");
     }),
   );
 
