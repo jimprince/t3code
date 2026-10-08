@@ -20,6 +20,7 @@ import {
   useTaskStatuses,
   type SettleControls,
 } from "./ProjectRequestsSection";
+import { taskStepProgress } from "./taskProgress.logic";
 import { TaskTitle } from "./TaskLink";
 
 const DONE_PREVIEW = 8;
@@ -35,11 +36,14 @@ function IssueRow({
   lane,
   now,
   settle,
+  steps,
 }: {
   readonly issue: ProjectIssue;
   readonly lane: ProjectIssueLane;
   readonly now: number;
   readonly settle: SettleControls;
+  /** "3 of 5 steps" from the working thread's to-do list, or null. */
+  readonly steps: string | null;
 }) {
   const closed = issue.closedAt !== null || issue.status === "done";
   return (
@@ -59,6 +63,7 @@ function IssueRow({
         <span className="tabular-nums">
           {formatIssueAge(issue.closedAt ?? issue.updatedAt, now)}
         </span>
+        {steps ? <span className="tabular-nums">{steps}</span> : null}
         <span className="ml-auto">
           {lane === "for-review" ? (
             <SettleButton issues={[issue]} settle={settle} />
@@ -109,6 +114,10 @@ export function ProjectIssuesBoard({
     [query.data, statuses],
   );
   const now = query.dataUpdatedAt ?? 0;
+  const threadsById = useMemo(
+    () => new Map([summary.root, ...summary.descendants].map((thread) => [thread.id, thread])),
+    [summary.descendants, summary.root],
+  );
   const failed = (query.data?.repositories ?? []).filter((repository) => repository.error);
 
   if (query.data === null) {
@@ -123,7 +132,14 @@ export function ProjectIssuesBoard({
   }
 
   const row = (lane: ProjectIssueLane) => (issue: ProjectIssue) => (
-    <IssueRow key={issueKey(issue)} issue={issue} lane={lane} now={now} settle={settle} />
+    <IssueRow
+      key={issueKey(issue)}
+      issue={issue}
+      lane={lane}
+      now={now}
+      settle={settle}
+      steps={lane === "active" ? taskStepProgress(issue, threadsById) : null}
+    />
   );
   return (
     <div className="flex flex-col gap-2">
