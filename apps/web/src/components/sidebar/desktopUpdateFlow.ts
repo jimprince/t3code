@@ -22,7 +22,7 @@ export const useDesktopUpdateFlow = create<{
  * Runs the whole update (check, download, verify, install, restart) through the shell's single
  * `startUpdate` call. Resolves with the action result; a rejected call is a failed update too.
  */
-export async function startDesktopUpdate(
+async function startDesktopUpdate(
   startUpdate: NonNullable<DesktopBridge["startUpdate"]>,
 ): Promise<DesktopUpdateActionResult | null> {
   if (useDesktopUpdateFlow.getState().flow === "running") return null;

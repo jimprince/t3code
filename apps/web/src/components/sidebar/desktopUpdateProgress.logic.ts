@@ -36,7 +36,7 @@ export type DesktopUpdateProgress =
     };
 
 /** "fork.5" for a fork build, else the version as published. */
-export function updateTargetName(state: DesktopUpdateState): string | null {
+function updateTargetName(state: DesktopUpdateState): string | null {
   const version = state.downloadedVersion ?? state.availableVersion;
   if (!version) return null;
   return version.match(/-fork\.(\d+)$/)?.[0]?.slice(1) ?? version;

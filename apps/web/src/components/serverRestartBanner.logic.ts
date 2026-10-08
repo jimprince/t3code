@@ -1,7 +1,7 @@
 import type { ServerRestartState } from "@t3tools/client-runtime/fork/server-restart";
 
 /** How long "Server updated" stays before the banner clears itself. */
-export const SERVER_RESTART_DONE_VISIBLE_MS = 4_000;
+const SERVER_RESTART_DONE_VISIBLE_MS = 4_000;
 
 export const SERVER_RESTART_STEPS = ["Installing", "Restarting", "Reconnecting"] as const;
 
@@ -16,7 +16,7 @@ export type ServerRestartBannerModel = {
 };
 
 /** "fork.5" for a fork build version, else the version as published. */
-export function serverVersionName(version: string): string {
+function serverVersionName(version: string): string {
   return version.match(/-fork\.\d+$/)?.[0]?.slice(1) ?? version;
 }
 

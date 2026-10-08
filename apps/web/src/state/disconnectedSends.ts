@@ -50,11 +50,11 @@ export function enqueueDisconnectedSend(environmentId: EnvironmentId, send: Disc
   }));
 }
 
-export const hasDisconnectedSends = (environmentId: EnvironmentId) =>
+const hasDisconnectedSends = (environmentId: EnvironmentId) =>
   (queues.get(environmentId)?.pending().length ?? 0) > 0;
 
 /** Sends them first in, first out; whatever the server does not acknowledge stays held. */
-export async function flushDisconnectedSends(
+async function flushDisconnectedSends(
   environmentId: EnvironmentId,
   send: (command: DisconnectedSend) => Promise<unknown>,
 ): Promise<void> {
