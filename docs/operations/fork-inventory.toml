@@ -2013,7 +2013,7 @@ depends_on = [
   "fork-project-health",
 ]
 roles = []
-note = "ProjectWorkstreams in OrchestratorBoard.tsx renders directly under the health line on the dashboard tab (built in, not a layout widget, so PROJECT_WIDGET_TYPES is unchanged); deriveWorkstreams in projectWorkstreams.logic lists every open, unparked epic with children remaining. A row reads: the epic title, the earliest milestone with open children as 'M1 of M1-M4' (only the open children are known, so a finished milestone drops out of the range), 'N of M · Phase' from formatEpicProgress, the distinct linked worker threads of the epic and its open children that are working now (the orchestrator excluded) as 'N agents', 'next: <title>' (the first Active open child, else the first Pending one, by issue number), and a Blocked marker when an open child's blockedBy names an open issue, a deriveBlocked blocked-by or stuck row names a member, or a blocked worker is linked to one. A row is a TaskTitle, so it opens the epic's task view. Nothing renders while no epic has work left. No new RPC, contract or setting."
+note = "ProjectWorkstreams in OrchestratorBoard.tsx renders directly under the health line on the dashboard tab (built in, not a layout widget, so PROJECT_WIDGET_TYPES is unchanged). Since fork-dash-173 it is the compact mode of WorkstreamBands (workstreamBands.logic): one band per open, unparked epic, still reading the earliest open milestone as 'M1 of M1-M4', 'N of M · Phase' from formatEpicProgress, the working agents, and a Blocked marker (an open blockedBy, or a stuck Active task). The epic-only deriveWorkstreams, its 'next:' step and its blocked-worker signal were replaced there and in fork-dash-178. Nothing renders while no epic has work left. No new RPC, contract or setting."
 
 [[patch]]
 name = "fork-canvas-resize"
@@ -2708,3 +2708,19 @@ retire_when = "Upstream provides a parent link on project issues, or the workstr
 depends_on = ["fork-task-view"]
 roles = []
 note = "Issue #173 and #175. 'Part of #N' stays the single parent link (parsePartOf, already used for epic progress); partOf is set only for a parent in the same repository. Epic progress still also reads the epic's checklist."
+
+[[patch]]
+name = "fork-dash-173"
+subject = "feat(web): show tasks under their workstream, as a table or by status"
+class = "product"
+purpose = "One place for tasks, grouped by workstream: each open epic is a band of its tasks (For review, Active, Pending, Complete folded) with the agents on them and what they last said, plus what changed since Brad's previous visit. The Tasks tab switches between this and the four status columns; the Dashboard's Workstreams block is the same component without Complete."
+retire_when = "Upstream provides an equivalent workstream and task board, or the project page is retired."
+depends_on = [
+  "fork-dash-173-part-of",
+  "fork-dash-187",
+  "fork-dash-172",
+  "fork-project-workstreams",
+  "fork-task-view",
+]
+roles = []
+note = "Issues #173 (A2 with last-said as Latest) and #175 (board and status view combined). Replaces the epic-only Workstreams line; its deriveWorkstreams logic is deleted and its phase, milestone, progress and Blocked reading (an open blockedBy, a stuck Active task) carry over into workstreamBands.logic. The old block's 'blocked worker' signal is not carried over here: it moves with the Blocked widget into the threads view (#178). An epic's tasks are its 'Part of' children plus its checklist's open ones; a parked or closed epic lists as a row of the last band. Latest is the newest linked thread's worker summary, else the issue's newest comment; shells carry no message bodies. The Tasks view choice and each band's explicit open or closed choice are remembered per project and device in localStorage; a band with no choice follows its default (open when it waits on Brad, has agents working, or is the only band), so the default changing never reverses a choice. 'Since you looked' uses the page's previous-visit mark, so only the Dashboard block shows it."
