@@ -46,6 +46,7 @@ it.effect("attributes a launched thread's first message to the calling thread", 
       deletedAt: null,
     } as OrchestrationV2ThreadShell;
     let launchedSender: ThreadId | undefined;
+    let launchedIssue: string | undefined;
     const layerDependencies = Layer.mergeAll(
       NodeCrypto.layer,
       Layer.succeed(McpInvocationContext.McpInvocationContext, {
@@ -66,6 +67,7 @@ it.effect("attributes a launched thread's first message to the calling thread", 
       Layer.mock(ThreadLaunch.ThreadLaunchService)({
         launch: (input) => {
           launchedSender = input.initialMessage?.senderThreadId;
+          launchedIssue = input.issue;
           return Effect.succeed({
             threadId: input.threadId,
             projection: {
@@ -92,10 +94,15 @@ it.effect("attributes a launched thread's first message to the calling thread", 
       ),
     );
     const result = yield* toolkit
-      .handle("t3_thread_launch", { title: "Audit", message: "Review the change" })
+      .handle("t3_thread_launch", {
+        title: "Audit",
+        message: "Review the change",
+        issue: "brad/tasks#7",
+      })
       .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(layerDependencies));
     expect(result.at(-1)?.result).toMatchObject({ projectId, modelSelection });
     expect(launchedSender).toBe(sourceThreadId);
+    expect(launchedIssue).toBe("brad/tasks#7");
   }),
 );
 
