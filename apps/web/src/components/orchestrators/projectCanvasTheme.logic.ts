@@ -3,7 +3,7 @@
  * values into the page's `:root`, so a canvas follows the app theme, light or
  * dark, with the same names the app uses.
  */
-export const CANVAS_THEME_VARIABLES = [
+const CANVAS_THEME_VARIABLES = [
   "--background",
   "--foreground",
   "--card",
