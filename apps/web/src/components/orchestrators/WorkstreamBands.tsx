@@ -1,6 +1,6 @@
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { InlineButton } from "../ui/button";
@@ -25,6 +25,12 @@ import {
   type Band,
   type BandRow,
 } from "./workstreamBands.logic";
+import {
+  DONE_PER_GROUP,
+  deriveThreadView,
+  THREAD_TAG_LABEL,
+  type ThreadRow,
+} from "./workstreamThreads.logic";
 
 /** The project's tasks by workstream, from the same statuses the Tasks board uses. */
 export function useWorkstreamBands(
@@ -63,22 +69,32 @@ export function useWorkstreamBands(
       }),
     [blocked.tasks, query.data, since, statuses, summary.root.id, threadsById],
   );
-  return { bands, refresh: query.refresh, threadsById, now };
+  const threads = useMemo(
+    () =>
+      deriveThreadView({
+        bands,
+        summary,
+        workerNotes: blocked.workers,
+        since,
+      }),
+    [bands, blocked.workers, since, summary],
+  );
+  return { bands, threads, refresh: query.refresh, threadsById, now };
 }
 
 export type Workstreams = ReturnType<typeof useWorkstreamBands>;
 
+const OTHER_THREADS_KEY = "other-threads";
+
 function BandRowItem({
   row,
   now,
-  compact,
   settle,
   openThread,
   steps,
 }: {
   readonly row: BandRow;
   readonly now: number;
-  readonly compact: boolean;
   readonly settle: SettleControls;
   readonly openThread: (threadId: string) => void;
   readonly steps: string | null;
@@ -123,25 +139,111 @@ function BandRowItem({
         </div>
         {row.latest ? <p className="mt-0.5 text-xs text-muted-foreground">{row.latest}</p> : null}
       </div>
-      {compact ? null : (
-        <RowMenu
-          label={issue.title}
-          items={[
-            closed
-              ? {
-                  label: "Reopen",
-                  disabled: settle.isBusy(issue),
-                  onClick: () => void settle.reopen(issue),
-                }
-              : {
-                  label: "Settle",
-                  disabled: settle.isBusy(issue),
-                  onClick: () => void settle.settle([issue]),
-                },
-          ]}
-        />
-      )}
+      <RowMenu
+        label={issue.title}
+        items={[
+          closed
+            ? {
+                label: "Reopen",
+                disabled: settle.isBusy(issue),
+                onClick: () => void settle.reopen(issue),
+              }
+            : {
+                label: "Settle",
+                disabled: settle.isBusy(issue),
+                onClick: () => void settle.settle([issue]),
+              },
+        ]}
+      />
     </li>
+  );
+}
+
+const TAG_TONE = {
+  waiting: "strong",
+  error: "warning",
+  blocked: "warning",
+  running: "muted",
+  done: "muted",
+} as const;
+
+/** One thread, or a task with none that needs Brad or is blocked, tagged by what it asks. */
+function ThreadRowItem({
+  row,
+  now,
+  openThread,
+}: {
+  readonly row: ThreadRow;
+  readonly now: number;
+  readonly openThread: (threadId: string) => void;
+}) {
+  const label = THREAD_TAG_LABEL[row.tag];
+  const { issue, threadId } = row;
+  return (
+    <li className="flex items-start gap-3 py-1.5">
+      <StatusCell tone={TAG_TONE[row.tag]}>{label}</StatusCell>
+      <div className="min-w-0 flex-1">
+        {threadId ? (
+          <span className="text-sm">
+            <InlineButton onClick={() => openThread(threadId)}>
+              <span className="whitespace-normal text-left">{row.title}</span>
+            </InlineButton>
+          </span>
+        ) : issue ? (
+          <TaskTitle
+            task={{ host: issue.host, repository: issue.repository, number: issue.number }}
+            url={issue.url}
+            className="max-w-full text-sm text-foreground hover:underline"
+          >
+            {row.title}
+          </TaskTitle>
+        ) : (
+          <span className="text-sm">{row.title}</span>
+        )}
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+          <span className="sm:hidden">{label}</span>
+          {issue ? <span className="tabular-nums">#{issue.number}</span> : null}
+          {row.note ? <span className="text-error">{row.note}</span> : null}
+          {row.steps ? <span className="tabular-nums">{row.steps}</span> : null}
+          <span className="tabular-nums">{formatIssueAge(row.at, now)}</span>
+        </div>
+        {row.latest ? <p className="mt-0.5 text-xs text-muted-foreground">{row.latest}</p> : null}
+      </div>
+    </li>
+  );
+}
+
+/** A group's thread rows; finished ones beyond the first few fold behind a "Show" button. */
+function ThreadRowList({
+  rows,
+  now,
+  openThread,
+}: {
+  readonly rows: ReadonlyArray<ThreadRow>;
+  readonly now: number;
+  readonly openThread: (threadId: string) => void;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const done = rows.filter((row) => row.tag === "done");
+  const folded = Math.max(0, done.length - DONE_PER_GROUP);
+  const hidden = new Set(showAll ? [] : done.slice(DONE_PER_GROUP));
+  return (
+    <>
+      <ul className="divide-y divide-border">
+        {rows
+          .filter((row) => !hidden.has(row))
+          .map((row) => (
+            <ThreadRowItem key={row.key} row={row} now={now} openThread={openThread} />
+          ))}
+      </ul>
+      {folded > 0 ? (
+        <p className="text-xs">
+          <InlineButton tone="muted" onClick={() => setShowAll((value) => !value)}>
+            {showAll ? "Show fewer done" : `Show ${folded} more done`}
+          </InlineButton>
+        </p>
+      ) : null}
+    </>
   );
 }
 
@@ -149,8 +251,8 @@ function BandRowItem({
  * Workstream bands: each open epic with its tasks as rows (For review, Active,
  * Pending, Complete folded), then the tasks that belong to no epic. The Tasks tab
  * and the Dashboard's Workstreams block are this one component; `compact` is the
- * Dashboard's, with Complete left out and no row menus. Open or closed state is
- * remembered per project on this device.
+ * Dashboard's: thread rows instead of task rows, no Complete fold, no epic menu.
+ * Open or closed choices are remembered per project on this device.
  */
 export function WorkstreamBands({
   summary,
@@ -175,6 +277,12 @@ export function WorkstreamBands({
   );
   const setOpen = (key: string, open: boolean) =>
     setChosen((current) => setGroupOpen(current, key, open));
+  // Sub-agents outside any workstream open when one of them needs a look, unless the user chose.
+  const otherOpen = groupOpen(
+    chosen,
+    OTHER_THREADS_KEY,
+    workstreams.threads.other.some((row) => row.tag !== "done"),
+  );
   return (
     <div className="flex flex-col gap-3">
       {bands.map((band) => {
@@ -244,21 +352,28 @@ export function WorkstreamBands({
                     Since you looked: {band.changes}
                   </p>
                 ) : null}
-                <ul className="divide-y divide-border">
-                  {band.rows.map((row) => (
-                    <BandRowItem
-                      key={issueKey(row.issue)}
-                      row={row}
-                      now={now}
-                      compact={compact}
-                      settle={settle}
-                      openThread={openThread}
-                      steps={
-                        row.status === "active" ? taskStepProgress(row.issue, threadsById) : null
-                      }
-                    />
-                  ))}
-                </ul>
+                {compact ? (
+                  <ThreadRowList
+                    rows={workstreams.threads.byBand.get(band.key) ?? []}
+                    now={now}
+                    openThread={openThread}
+                  />
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {band.rows.map((row) => (
+                      <BandRowItem
+                        key={issueKey(row.issue)}
+                        row={row}
+                        now={now}
+                        settle={settle}
+                        openThread={openThread}
+                        steps={
+                          row.status === "active" ? taskStepProgress(row.issue, threadsById) : null
+                        }
+                      />
+                    ))}
+                  </ul>
+                )}
                 {!compact && band.complete.length > 0 ? (
                   <div className="mt-1">
                     <p className="text-xs">
@@ -277,7 +392,6 @@ export function WorkstreamBands({
                             key={issueKey(row.issue)}
                             row={row}
                             now={now}
-                            compact={false}
                             settle={settle}
                             openThread={openThread}
                             steps={null}
@@ -292,6 +406,29 @@ export function WorkstreamBands({
           </section>
         );
       })}
+      {compact && workstreams.threads.other.length > 0 ? (
+        <section>
+          <h3 className="flex flex-wrap items-baseline gap-x-2 text-sm">
+            <InlineButton
+              aria-expanded={otherOpen}
+              onClick={() => setOpen(OTHER_THREADS_KEY, !otherOpen)}
+            >
+              {otherOpen ? (
+                <ChevronDownIcon className="size-3.5" />
+              ) : (
+                <ChevronRightIcon className="size-3.5" />
+              )}
+              Other threads
+            </InlineButton>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {workstreams.threads.other.length}
+            </span>
+          </h3>
+          {otherOpen ? (
+            <ThreadRowList rows={workstreams.threads.other} now={now} openThread={openThread} />
+          ) : null}
+        </section>
+      ) : null}
     </div>
   );
 }
