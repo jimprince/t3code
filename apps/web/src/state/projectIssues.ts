@@ -52,3 +52,29 @@ export const startRequestIntake = createEnvironmentRpcCommand(connectionAtomRunt
   label: "environment-data:project-requests:start-intake",
   tag: WS_METHODS.projectRequestsStartIntake,
 });
+
+/** What the project tree's threads are asking Brad, with the question and approval text, for the Decisions feed. */
+export const projectPendingAsksQuery = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
+  label: "environment-data:project-requests:pending-asks",
+  tag: WS_METHODS.projectRequestsPendingAsks,
+  staleTimeMs: 15_000,
+  idleTtlMs: 0,
+});
+
+/** Brad approves a Review card: its pull request is merged and the issue settled. */
+export const approveMergeProjectRequest = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "environment-data:project-requests:approve-merge",
+  tag: WS_METHODS.projectRequestsApproveMerge,
+});
+
+/** Brad sends a Review or Test card back with a note. */
+export const sendBackProjectRequest = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "environment-data:project-requests:send-back",
+  tag: WS_METHODS.projectRequestsSendBack,
+});
+
+/** Later for a card: hide it until a time, move it to the end, or bring it back. */
+export const deferProjectRequest = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "environment-data:project-requests:defer",
+  tag: WS_METHODS.projectRequestsDefer,
+});
