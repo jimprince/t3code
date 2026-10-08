@@ -1,6 +1,6 @@
 Bottom: 08af2cc4222b9e64f58ca5423e8f97b7beca5d3b
-Top:    efeadf82c4e4508e712fd9b989f7155d4f520e17
+Top:    e068bbff56a469ebc6342adcccb4938f6c751c4e
 Author: brad <bradprin@live.com>
-Date:   2026-10-08 10:48:19 +0000
+Date:   2026-10-08 19:54:48 +0000
 
 feat(fork): operate worker threads from the t3-thread CLI
