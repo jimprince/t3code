@@ -62,7 +62,7 @@ import { ProjectDecisionsWidget } from "./ProjectDecisionsWidget";
 import { ProjectIssuesBoard } from "./ProjectIssuesBoard";
 import { ProjectTaskPanel } from "./ProjectTaskPanel";
 import { OpenTaskContext } from "./TaskLink";
-import { useWorkstreamBands, WorkstreamBands } from "./WorkstreamBands";
+import { TeamStrip, useWorkstreamBands, WorkstreamBands } from "./WorkstreamBands";
 import type { TaskRef } from "./taskView.logic";
 import {
   ClickableRow,
@@ -310,7 +310,7 @@ function BlockedCount({ summary }: { readonly summary: OrchestratorSummary }) {
 }
 
 /**
- * The Dashboard's Workstreams block: each active epic with the threads working on
+ * The Dashboard's Team strip and Workstreams block: each active epic with the threads working on
  * it, and Other threads for sub-agents outside any workstream (see WorkstreamBands),
  * with what changed since Brad's previous visit, or the last day when there is none.
  * Hidden while there is nothing to show.
@@ -323,7 +323,9 @@ function ProjectWorkstreams({
   readonly since: string | null;
 }) {
   const tasks = useTaskStatuses(summary);
-  const [firstVisitSince] = useState(() => new Date(Date.now() - FIRST_VISIT_WINDOW_MS).toISOString());
+  const [firstVisitSince] = useState(() =>
+    new Date(Date.now() - FIRST_VISIT_WINDOW_MS).toISOString(),
+  );
   const workstreams = useWorkstreamBands(summary, tasks, since ?? firstVisitSince);
   const bands = useMemo(
     () =>
@@ -334,11 +336,21 @@ function ProjectWorkstreams({
       ),
     [workstreams.bands, workstreams.threads.byBand],
   );
-  if (bands.length === 0 && workstreams.threads.other.length === 0) return null;
+  const hasWorkstreams = bands.length > 0 || workstreams.threads.other.length > 0;
+  if (!hasWorkstreams && workstreams.team.length === 0) return null;
   return (
-    <ProjectSection title="Workstreams" count={bands.length}>
-      <WorkstreamBands summary={summary} workstreams={workstreams} bands={bands} compact />
-    </ProjectSection>
+    <>
+      {workstreams.team.length > 0 ? (
+        <ProjectSection title="Team" count={workstreams.team.length}>
+          <TeamStrip summary={summary} team={workstreams.team} now={workstreams.now} />
+        </ProjectSection>
+      ) : null}
+      {hasWorkstreams ? (
+        <ProjectSection title="Workstreams" count={bands.length}>
+          <WorkstreamBands summary={summary} workstreams={workstreams} bands={bands} compact />
+        </ProjectSection>
+      ) : null}
+    </>
   );
 }
 
