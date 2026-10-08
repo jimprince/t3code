@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "601b20ba622c705860e09685462316d14f5095ac",
+  "prev": "8ad6fa34c4b4aee8d571e1cd5846bf852debf863",
   "head": "117c42184457407163cb462af22cc22101ba5f3c",
   "applied": [
     "fork-build-ci-compat",
@@ -120,13 +120,7 @@
     "fork-create-task-issue",
     "fork-decisions-feed-server"
   ],
-  "unapplied": [
-    "fork-dash-172",
-    "fork-dash-187-todo-progress",
-    "fork-dash-187",
-    "fork-dash-173-part-of",
-    "fork-dash-173"
-  ],
+  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
@@ -185,21 +179,6 @@
     },
     "fork-cross-project-thread-nesting": {
       "oid": "194a20c3b9aebafa2bbdf6987a23fedcc184c1b3"
-    },
-    "fork-dash-172": {
-      "oid": "b8fb6a10a072999152a7c430ff134fdea05ffd7b"
-    },
-    "fork-dash-173": {
-      "oid": "3f07e75e24a04cbf27feee2b0157c33c91498eed"
-    },
-    "fork-dash-173-part-of": {
-      "oid": "5cd59a0a89b35d3400b87d2c97f36db1ef00a286"
-    },
-    "fork-dash-187": {
-      "oid": "ce2dbf1bd10de4f9f29f89f1729b2fab654cd86e"
-    },
-    "fork-dash-187-todo-progress": {
-      "oid": "10cad78b595828640e0b55915aa0fd66e5f4d8d3"
     },
     "fork-dashboard-polish": {
       "oid": "a0dafcec1f19fc3c206f25894181c38b0d3d42fb"
