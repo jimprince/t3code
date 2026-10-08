@@ -1,4 +1,11 @@
 import {
+  GiteaTokenSetInput,
+  GiteaTokenSetError,
+  type GiteaTokenSetResult,
+} from "@t3tools/contracts";
+import * as Redacted from "effect/Redacted";
+import * as References from "effect/References";
+import {
   giteaTokenSecretName,
   redactGiteaInstances,
   materializeGiteaTokens,
@@ -283,6 +290,11 @@ export class ServerSettingsService extends Context.Service<
       patch: ServerSettingsPatch,
     ) => Effect.Effect<ServerSettings, ServerSettingsError>;
 
+    /** Rotate only an existing instance credential; no secret data in the receipt. */
+    readonly setGiteaToken: (
+      input: GiteaTokenSetInput,
+    ) => Effect.Effect<GiteaTokenSetResult, GiteaTokenSetError>;
+
     /** Apply a patch and one provider-instance mutation against the same latest settings snapshot. */
     readonly updateProviderInstance: (
       mutation: ProviderInstanceMutation,
@@ -308,6 +320,35 @@ export class ServerSettingsService extends Context.Service<
   /** @deprecated Import and use `layerTest` from this module. */
   static readonly layerTest = (overrides: DeepPartial<ServerSettings> = {}) => layerTest(overrides);
 }
+
+const isGiteaTokenSetError = Schema.is(GiteaTokenSetError);
+const validateGiteaTokenInput = Schema.decodeEffect(Schema.toType(GiteaTokenSetInput));
+
+const tokenPatchForExisting = (current: ServerSettings, input: GiteaTokenSetInput) =>
+  Effect.gen(function* () {
+    const validated = yield* validateGiteaTokenInput(input).pipe(
+      Effect.mapError(() => new GiteaTokenSetError({ reason: "invalid-input" })),
+    );
+    const { instanceId, token } = Redacted.value(validated);
+    if (!current.giteaInstances.some((instance) => instance.id === instanceId)) {
+      return yield* new GiteaTokenSetError({ reason: "unknown-instance" });
+    }
+    return {
+      giteaInstances: current.giteaInstances.map((instance) =>
+        instance.id === instanceId ? { ...instance, token } : instance,
+      ),
+    };
+  });
+
+const tokenReceipt = (settings: ServerSettings, input: GiteaTokenSetInput): GiteaTokenSetResult => {
+  const { instanceId, token } = Redacted.value(input);
+  const saved = settings.giteaInstances.find((instance) => instance.id === instanceId);
+  return {
+    instanceId,
+    tokenSet: Boolean(saved?.token),
+    storedMatchesInput: saved?.token === token,
+  };
+};
 
 const makeTest = (overrides: DeepPartial<ServerSettings> = {}) =>
   Effect.gen(function* () {
@@ -346,6 +387,18 @@ const makeTest = (overrides: DeepPartial<ServerSettings> = {}) =>
       updateSettings: (patch) =>
         updateTestSettings((currentSettings) =>
           Effect.succeed(applyServerSettingsPatch(currentSettings, patch)),
+        ),
+      setGiteaToken: (input) =>
+        writeSemaphore.withPermits(1)(
+          Effect.gen(function* () {
+            const current = yield* Ref.get(currentSettingsRef);
+            const patch = yield* tokenPatchForExisting(current, input);
+            const next = yield* normalizeServerSettings(
+              applyServerSettingsPatch(current, patch),
+            ).pipe(Effect.mapError(() => new GiteaTokenSetError({ reason: "storage-failed" })));
+            yield* Ref.set(currentSettingsRef, next);
+            return tokenReceipt(next, input);
+          }),
         ),
       updateProviderInstance: (mutation, patch = {}) =>
         updateTestSettings((currentSettings) =>
@@ -1229,11 +1282,10 @@ const make = Effect.gen(function* () {
           ? secretStore.set(write.secretName, write.previousValue.value)
           : secretStore.remove(write.secretName)
         ).pipe(
-          Effect.catch((cause) =>
+          Effect.catch(() =>
             Effect.logWarning("failed to roll back provider environment secret", {
               providerInstanceId: write.providerInstanceId,
               environmentVariable: write.environmentVariable,
-              cause,
             }),
           ),
         ),
@@ -1290,39 +1342,68 @@ const make = Effect.gen(function* () {
     );
   };
 
+  const updateSettingsUnlocked = (
+    current: ServerSettings,
+    updated: ServerSettings,
+  ): Effect.Effect<ServerSettings, ServerSettingsError> =>
+    Effect.gen(function* () {
+      const persisted = yield* persistProviderEnvironmentSecrets(current, updated);
+      const next = yield* normalizeServerSettings(persisted.settings);
+      const materialized = yield* Effect.uninterruptibleMask(() =>
+        Effect.gen(function* () {
+          const rollbackSecretChanges = yield* applyProviderEnvironmentSecretChanges(
+            persisted.changes,
+          );
+          const materializedExit = yield* Effect.exit(materializeProviderEnvironmentSecrets(next));
+          if (Exit.isFailure(materializedExit)) {
+            yield* rollbackSecretChanges;
+            return yield* Effect.failCause(materializedExit.cause);
+          }
+          const writeExit = yield* Effect.exit(writeSettingsAtomically(next));
+          if (Exit.isFailure(writeExit)) {
+            yield* rollbackSecretChanges;
+            return yield* Effect.failCause(writeExit.cause);
+          }
+          return materializedExit.value;
+        }),
+      );
+      yield* Cache.set(settingsCache, cacheKey, next);
+      yield* emitChange(next);
+      return resolveTextGenerationProvider(materialized);
+    });
+
   const updateAndPersistSettings = (
     update: (current: ServerSettings) => Effect.Effect<ServerSettings, ServerSettingsError>,
-  ): Effect.Effect<ServerSettings, ServerSettingsError> =>
+  ) =>
     writeSemaphore.withPermits(1)(
       Effect.gen(function* () {
         const current = yield* getSettingsFromCache;
-        const updated = yield* update(current);
-        const persisted = yield* persistProviderEnvironmentSecrets(current, updated);
-        const next = yield* normalizeServerSettings(persisted.settings);
-        const materialized = yield* Effect.uninterruptibleMask(() =>
-          Effect.gen(function* () {
-            const rollbackSecretChanges = yield* applyProviderEnvironmentSecretChanges(
-              persisted.changes,
-            );
-            const materializedExit = yield* Effect.exit(
-              materializeProviderEnvironmentSecrets(next),
-            );
-            if (Exit.isFailure(materializedExit)) {
-              yield* rollbackSecretChanges;
-              return yield* Effect.failCause(materializedExit.cause);
-            }
-            const writeExit = yield* Effect.exit(writeSettingsAtomically(next));
-            if (Exit.isFailure(writeExit)) {
-              yield* rollbackSecretChanges;
-              return yield* Effect.failCause(writeExit.cause);
-            }
-            return materializedExit.value;
-          }),
-        );
-        yield* Cache.set(settingsCache, cacheKey, next);
-        yield* emitChange(next);
-        return resolveTextGenerationProvider(materialized);
+        return yield* updateSettingsUnlocked(current, yield* update(current));
       }),
+    );
+
+  const setGiteaToken = (input: GiteaTokenSetInput) =>
+    writeSemaphore.withPermits(1)(
+      Effect.gen(function* () {
+        const current = yield* getSettingsFromCache;
+        const patch = yield* tokenPatchForExisting(current, input);
+        const saved = yield* updateSettingsUnlocked(
+          current,
+          applyServerSettingsPatch(current, patch),
+        );
+        return tokenReceipt(saved, input);
+      }).pipe(
+        Effect.catchCause((cause) => {
+          const reason = Cause.findErrorOption(cause);
+          return Effect.fail(
+            Option.isSome(reason) && isGiteaTokenSetError(reason.value)
+              ? reason.value
+              : new GiteaTokenSetError({ reason: "storage-failed" }),
+          );
+        }),
+        // Secret-store/platform defects must not become child-span data.
+        Effect.provideService(References.TracerEnabled, false),
+      ),
     );
 
   const withSettingsSnapshot: ServerSettingsService["Service"]["withSettingsSnapshot"] = (use) =>
@@ -1459,6 +1540,7 @@ const make = Effect.gen(function* () {
           return applyProviderInstanceMutation(patched, mutation);
         }),
       ),
+    setGiteaToken,
     withSettingsSnapshot,
     get streamChanges() {
       return materializeChanges(Stream.fromPubSub(changesPubSub));
