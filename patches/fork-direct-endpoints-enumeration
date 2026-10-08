@@ -1,7 +1,7 @@
-Bottom: 730272cb6cc8529f590768d60498a8f41b9729b5
-Top:    1d8fe45004e36e3bb5f9f5b8bea91903bb4fc5d6
+Bottom: faa0c8da30d3e4e0b73c2d3387ce7d96f4f15535
+Top:    b26a51475edb866223ee35b7bf16d7260cce7480
 Author: brad <bradprin@live.com>
-Date:   2026-10-08 20:31:00 +0000
+Date:   2026-10-08 20:31:38 +0000
 
 fix(server): tolerate unavailable network interface enumeration
 
