@@ -108,10 +108,12 @@ describe("threadTag", () => {
 
   it("tags a failed thread blocked when it says why, and error when it just failed", () => {
     const failed = thread("a", { failed: true });
-    expect(threadTag(failed, { since: SINCE, workerNotes: new Map([["a", "blocked: waits on M4"]]) })).toBe(
-      "blocked",
+    expect(
+      threadTag(failed, { since: SINCE, workerNotes: new Map([["a", "blocked: waits on M4"]]) }),
+    ).toBe("blocked");
+    expect(threadTag(failed, { since: SINCE, workerNotes: new Map([["a", "failed"]]) })).toBe(
+      "error",
     );
-    expect(threadTag(failed, { since: SINCE, workerNotes: new Map([["a", "failed"]]) })).toBe("error");
     expect(threadTag(failed, { since: SINCE, workerNotes: new Map() })).toBe("error");
   });
 
@@ -264,7 +266,10 @@ describe("deriveThreadView", () => {
         }),
       ],
       [[11, "complete"]],
-      [thread("owner", { working: true }), thread("fin", { completedAt: "2026-10-05T01:00:00.000Z" })],
+      [
+        thread("owner", { working: true }),
+        thread("fin", { completedAt: "2026-10-05T01:00:00.000Z" }),
+      ],
     ).byBand.get("brad/repo#10")!;
     expect(rows.map((row) => [row.threadId, row.tag])).toEqual([
       ["owner", "running"],
