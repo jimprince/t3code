@@ -119,6 +119,7 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
           threadId,
           projectId,
           title: input.title,
+          ...(input.issue === undefined ? {} : { issue: input.issue }),
           modelSelection,
           runtimeMode,
           interactionMode,
