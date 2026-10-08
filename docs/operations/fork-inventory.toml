@@ -2564,3 +2564,18 @@ id = "socket-open-209-subprojects-server"
 date = "2026-10-08"
 decided = "adapt"
 rationale = "Preserve migration 16 ledger identity while persistence startup owns the idempotent metadata and legacy import."
+
+[[patch]]
+name = "fork-reliable-handoffs"
+subject = "fix(threads): deliver reliable handoffs with durable receipts"
+class = "product"
+purpose = "Deliver CLI handoffs through V2 native auto steering with durable authenticated receipts, settlement/quota admission, safe Claude tool boundaries and bounded owner inbox reads."
+retire_when = "Upstream supplies authenticated idempotent handoff admission, durable sender-known receipts and equivalent lifecycle and provider-boundary semantics."
+depends_on = [
+  "fork-t3-thread-prebuilt",
+  "fork-subthread-lifecycle",
+  "fork-queue-coalesced-notes",
+  "fork-queue-idle-dispatch",
+]
+roles = []
+note = "Adds only WsForkRpcGroup RPCs and reuses fork_thread_metadata_receipts; no migration ID. V2 admission and binding commit with native events/outbox under existing ownership and thread lifecycle locks. Normal Claude handoffs use SDK next priority; explicit control retains now. Unknown transport outcomes stop automatic delivery/retry. Exact/coalesce lookup is sender-private; the own inbox uses existing environment read authorization and an exact-key bounded metadata index. Production fixtures require T3_LIFECYCLE_FIXTURES. Install/deployment remain separately gated per machine."
