@@ -1,27 +1,10 @@
-import { linkifyText, textLinks } from "@t3tools/client-runtime/linkify";
-import { Fragment, useMemo } from "react";
+import { textLinks } from "@t3tools/client-runtime/linkify";
+import { useMemo } from "react";
 
 const LINK_CLASS = "underline decoration-foreground/40 underline-offset-2 hover:text-foreground";
 
 /** Shortest readable form of a link: host and path, no scheme. */
 const shortUrl = (url: string) => url.replace(/^https?:\/\//, "").replace(/\/$/, "");
-
-/**
- * Agent prose with its http(s) URLs as links. They open in a new tab, which the desktop app
- * hands to the system browser instead of navigating itself.
- */
-export function LinkifiedText({ text }: { readonly text: string }) {
-  const parts = useMemo(() => linkifyText(text), [text]);
-  return parts.map((part, index) =>
-    part.kind === "link" ? (
-      <a key={index} href={part.url} target="_blank" rel="noreferrer" className={LINK_CLASS}>
-        {part.text}
-      </a>
-    ) : (
-      <Fragment key={index}>{part.text}</Fragment>
-    ),
-  );
-}
 
 /**
  * The links in a decision option, under its button: the button sends the answer, so a link
