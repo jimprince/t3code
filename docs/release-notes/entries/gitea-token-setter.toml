@@ -1,0 +1,4 @@
+id = "gitea-token-setter"
+category = "feature"
+functionality = "Gitea credentials"
+text = "Operators can replace an existing Gitea instance token through bounded stdin, with atomic secret storage, private errors, and fresh authentication plus a native issue read before success."
