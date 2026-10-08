@@ -139,6 +139,9 @@ object AgentNotifications {
     scheme: String,
     data: Map<String, String>
   ) {
+    // Eligibility was evaluated by client-runtime before this data push was queued.
+    // Old/unknown jobs may repaint the Live Activity, but cannot raise an alert.
+    if (data["alert_eligible"] != "true") return
     // Queue retries carry the same alert id. Keep a bounded history even when
     // notification A is retried after notification B has already arrived.
     val alertId = data["alert_id"]
