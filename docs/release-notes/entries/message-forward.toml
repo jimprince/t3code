@@ -1,0 +1,4 @@
+id = "message-forward"
+category = "feature"
+functionality = "threads"
+text = "Forward exact messages and their attachments between threads with the agent CLI and MCP tools, preserving attribution and normal delivery receipts."
