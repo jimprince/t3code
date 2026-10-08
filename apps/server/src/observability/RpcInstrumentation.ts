@@ -15,6 +15,8 @@ type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
  * prefix. Adding an RPC to `WsRpcGroup` without a label is a type error.
  */
 const RPC_AGGREGATES = {
+  "fork.message.forward.accept": "message-forward",
+  "fork.message.forward.prepare": "message-forward",
   "projectRequests.approveMerge": "project-issues",
   "projectRequests.defer": "project-issues",
   "projectRequests.pendingAsks": "project-issues",
