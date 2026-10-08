@@ -36,7 +36,7 @@ import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
 import * as ServerConfig from "../config.ts";
 
 import { listMetadata } from "../forkThreads/MetadataStore.ts";
-import type * as ThreadIssueService from "../forkThreads/ThreadIssueService.ts";
+import * as ThreadIssueService from "../forkThreads/ThreadIssueService.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
@@ -100,6 +100,7 @@ const GiteaLabels = Schema.Array(GiteaLabel);
 const CreatedIssue = Schema.Struct({ number: Schema.Number, html_url: Schema.String });
 const GiteaIssueLabels = Schema.Struct({
   title: Schema.optional(Schema.String),
+  pull_request: Schema.optional(Schema.Unknown),
   body: Schema.optional(Schema.NullOr(Schema.String)),
   state: Schema.Literals(["open", "closed"]),
   html_url: Schema.String,
@@ -723,19 +724,34 @@ export const make = (deps: {
     const update = (input: ProjectRequestUpdateInput) =>
       Effect.gen(function* () {
         const resolved = yield* resolveOrFail(input.threadId);
-        const reference = parseRequestReference(input.reference, resolved.target);
+        const explicitTarget = URL.canParse(input.reference)
+          ? yield* Effect.try({
+              try: () =>
+                ThreadIssueService.resolveThreadIssueReference(
+                  input.reference,
+                  resolved.project,
+                  resolved.config.giteaInstances,
+                ),
+              catch: (error) =>
+                fail(error instanceof Error ? error.message : "Invalid issue reference."),
+            })
+          : null;
+        const reference = explicitTarget ?? parseRequestReference(input.reference, resolved.target);
         if (!reference) return yield* fail("Expected an issue number, owner/repo#N, or issue URL.");
         if (input.status === "needs-test" && !input.release) {
           return yield* fail("A shipped request needs the release it shipped in.");
         }
         const target =
-          reference.repository === resolved.target.repository
+          explicitTarget ??
+          (reference.repository === resolved.target.repository
             ? resolved.target
-            : { ...resolved.target, repository: reference.repository };
+            : { ...resolved.target, repository: reference.repository });
         const path = `${GiteaApi.repositoryPath(target.repository)}/issues/${reference.number}`;
         const issue = yield* api
           .request(target.instance, path, GiteaIssueLabels)
           .pipe(Effect.mapError((error) => fail(error.detail)));
+        if (issue.pull_request != null)
+          return yield* fail("That Gitea URL is a pull request, not an issue.");
         const names = new Set((issue.labels ?? []).map((label) => label.name.toLowerCase()));
         // Typing a task is the one change that applies to any tracker issue, open or closed.
         const typeOnly =
@@ -839,7 +855,11 @@ export const make = (deps: {
         }
         // Every stage change leaves a short progress line on the issue, so the page can
         // show the latest one even when the agent wrote no summary.
-        const note = input.comment?.trim() || progressLineFor(input.status);
+        const note =
+          input.comment?.trim() ||
+          (input.status !== undefined && names.has(input.status)
+            ? null
+            : progressLineFor(input.status));
         if (note) {
           yield* api
             .send(target.instance, "POST", `${path}/comments`, { body: note })
@@ -849,7 +869,7 @@ export const make = (deps: {
           const url = `${target.instance.webOrigin.replace(/\/$/, "")}/${target.repository}/issues/${reference.number}`;
           yield* deps.threadIssues
             .link({ threadId: input.threadId, reference: url })
-            .pipe(Effect.ignore);
+            .pipe(Effect.mapError((error) => fail(error.message)));
         }
         deps.projectIssues.invalidate(target);
         return {
