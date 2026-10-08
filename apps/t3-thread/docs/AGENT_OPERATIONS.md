@@ -1366,3 +1366,5 @@ before retrying. The native app launch input and
 An already-started issue stays linked without another started comment when the
 launch is retried. Task completion remains the issue's existing PR merge or
 accepted-result workflow.
+
+Watcher notification retries require proof that the handoff was never submitted: a non-timeout socket-open failure, a refused/unreachable connect or failed DNS lookup, client/auth setup before the acceptance frame, or a scope rejection before admission. These failures use the existing backoff and attempt cap. A read/write failure, interruption, opaque transport error, or timeout after submission stays `uncertain` and is not automatically resent. Effect's `SocketOpenError` with kind `Timeout` can also mean an open socket missed its heartbeat, so it remains uncertain. Inspect the stable send receipt to reconcile it. Settled parents hold child notifications until explicitly unsettled; active parents receive them.
