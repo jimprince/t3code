@@ -462,26 +462,22 @@ describe("watch flows", () => {
     });
   });
 
-  it("keeps a routed event recoverable when the real send client discovers a busy recipient", async () => {
+  it("records native queued acceptance when a busy recipient races its snapshot", async () => {
     await withTempState(async () => {
-      await detectAttentionEvents({ clientFactory: createClientFactory({}).clientFactory });
-      class BusyOnSend extends RemoteEnvironmentClient {
-        reads = 0;
-        override async findThread(threadId: string): Promise<OrchestrationThread> {
-          return makeThread({
-            id: threadId,
-            latestTurn: {
-              ...makeThread().latestTurn!,
-              state: this.reads++ === 0 ? "completed" : "running",
-            },
-          });
-        }
-      }
-      const client = new BusyOnSend(makeEnvironment());
-      const attempted = await deliverPendingNotifications({ clientFactory: () => client });
-      expect(attempted[0]?.status).toBe("delivery-failed");
+      const factory = createClientFactory({});
+      await detectAttentionEvents({ clientFactory: factory.clientFactory });
+      const clientFactory: WatchClientFactory = (environment) => ({
+        ...factory.clientFactory(environment),
+        supportsReliableHandoffs: async () => true,
+        sendMessage: async (input) => ({
+          dispatched: false,
+          queued: true,
+          receipt: { sendId: input.commandId, status: "queued" },
+        }),
+      });
+      const attempted = await deliverPendingNotifications({ clientFactory });
+      expect(attempted[0]?.status).toBe("delivered");
       expect((await loadState()).queuedSends).toEqual([]);
-      expect((await loadState()).notifications[0]?.status).toBe("delivery-failed");
     });
   });
 
@@ -524,7 +520,7 @@ describe("watch flows", () => {
     });
   });
 
-  it("records delivery failures and retries them on a later pass", async () => {
+  it("preserves uncertain transport failures without automatic retry on later passes", async () => {
     await withTempState(async () => {
       let failDelivery = true;
       const { clientFactory, sentMessages } = createClientFactory({
@@ -540,12 +536,11 @@ describe("watch flows", () => {
       const failed = await deliverPendingNotifications({ env: "dev-vm", clientFactory });
       let state = await loadState();
       expect(failed).toHaveLength(1);
-      expect(state.notifications[0]?.status).toBe("delivery-failed");
-      expect(state.notifications[0]?.lastError).toContain("subscriber unreachable");
+      expect(state.notifications[0]?.status).toBe("uncertain");
+      expect(state.notifications[0]?.lastError).toBe("TRANSPORT_ERROR");
 
       failDelivery = false;
-      // A failed delivery now backs off, so the retry is due later rather than on
-      // the very next scan.
+      // Time and a healthy transport do not resolve the missing acknowledgment.
       expect(await deliverPendingNotifications({ env: "dev-vm", clientFactory })).toEqual([]);
       const retried = await deliverPendingNotifications({
         env: "dev-vm",
@@ -553,10 +548,10 @@ describe("watch flows", () => {
         now: () => new Date(Date.now() + 3_600_000).toISOString(),
       });
       state = await loadState();
-      expect(retried).toHaveLength(1);
-      expect(sentMessages).toHaveLength(1);
-      expect(state.notifications[0]?.status).toBe("delivered");
-      expect(state.notifications[0]?.lastError).toBeNull();
+      expect(retried).toHaveLength(0);
+      expect(sentMessages).toHaveLength(0);
+      expect(state.notifications[0]?.status).toBe("uncertain");
+      expect(state.notifications[0]?.lastError).toBe("TRANSPORT_ERROR");
     });
   });
 
@@ -1755,6 +1750,92 @@ describe("opt-in active-worker inactivity", () => {
         expect((await loadState()).notifications[0]?.status).toBe(
           change === "network" ? "delivery-failed" : "superseded",
         );
+      });
+    },
+  );
+});
+
+describe("reliable handoff notification recovery", () => {
+  it("steers a busy recipient and parks a dropped ack without autoretry", async () => {
+    await withTempState(async () => {
+      const subscriber = makeThread({
+        id: "thread-coordinator-a",
+        latestTurn: { ...makeThread().latestTurn!, state: "running" },
+      });
+      const factory = createClientFactory({ subscriberThread: subscriber });
+      await detectAttentionEvents({ clientFactory: factory.clientFactory });
+      let sends = 0;
+      const clientFactory: WatchClientFactory = (environment) => ({
+        ...factory.clientFactory(environment),
+        supportsReliableHandoffs: async () => true,
+        sendMessage: async (input) => {
+          sends++;
+          const claimed = (await loadState()).notifications[0]!;
+          expect(claimed.sendId).toBe(input.commandId);
+          return {
+            dispatched: false,
+            queued: false,
+            uncertain: true,
+            causeCode: "TRANSPORT_TIMEOUT",
+            sendId: input.commandId,
+          };
+        },
+      });
+      const delivered = await deliverPendingNotifications({ clientFactory });
+      expect(delivered[0]?.status).toBe("uncertain");
+      expect(delivered[0]?.lastError).toBe("TRANSPORT_TIMEOUT");
+      await deliverPendingNotifications({ clientFactory });
+      expect(sends).toBe(1);
+    });
+  });
+  it.each(["found", "unknown"] as const)(
+    "resolves a stale claim as %s without another send",
+    async (state) => {
+      await withTempState(async () => {
+        const factory = createClientFactory({});
+        await detectAttentionEvents({ clientFactory: factory.clientFactory });
+        const current = await loadState();
+        current.notifications[0] = {
+          ...current.notifications[0]!,
+          sendId: "notification:fixture",
+          status: "delivering",
+          deliveryClaimPid: -1,
+          lastAttemptedAt: "2020-01-01T00:00:00.000Z",
+        };
+        await saveState(current);
+        let sends = 0,
+          lookups = 0;
+        const clientFactory: WatchClientFactory = (environment) => ({
+          ...factory.clientFactory(environment),
+          lookupSendReceipt: async (input) => {
+            lookups++;
+            expect(input).toEqual({ type: "exact", sendId: "notification:fixture" });
+            return {
+              state,
+              retentionDays: 30,
+              receipts:
+                state === "unknown"
+                  ? []
+                  : [
+                      {
+                        sendId: "notification:fixture",
+                        recipientThreadId: "thread-coordinator-a" as any,
+                        status: "steered",
+                        acceptedAt: "2026-10-07T00:00:00Z",
+                        cause: null,
+                        ownerThreadId: null,
+                      },
+                    ],
+            };
+          },
+          sendMessage: async () => {
+            sends++;
+          },
+        });
+        const result = await deliverPendingNotifications({ clientFactory });
+        expect(result[0]?.status).toBe(state === "found" ? "delivered" : "uncertain");
+        expect(lookups).toBe(1);
+        expect(sends).toBe(0);
       });
     },
   );
