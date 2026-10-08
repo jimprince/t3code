@@ -57,6 +57,32 @@ describe("desktop update button state", () => {
     expect(getDesktopUpdateButtonTooltip(state)).toContain("Click to retry");
   });
 
+  it("shows the Mac dev kit's own message as the tooltip, only for the dev kit", () => {
+    const comparison = "origin/live is at def5678, ahead of this build (abc1234).";
+    const dev = { ...baseState, updateSource: "dev-kit" as const };
+    expect(
+      getDesktopUpdateButtonTooltip({
+        ...dev,
+        status: "available",
+        availableVersion: "def5678",
+        message: comparison,
+      }),
+    ).toBe(comparison);
+    expect(
+      getDesktopUpdateButtonTooltip({ ...dev, status: "idle", message: "Preparing def5678." }),
+    ).toBe("Preparing def5678.");
+    expect(
+      getDesktopUpdateButtonTooltip({
+        ...baseState,
+        status: "available",
+        availableVersion: "1.1.0",
+        message: "network down",
+        errorContext: "download",
+        canRetry: true,
+      }),
+    ).toBe("Update 1.1.0 ready to download");
+  });
+
   it("keeps install action available after an install error", () => {
     const state: DesktopUpdateState = {
       ...baseState,
