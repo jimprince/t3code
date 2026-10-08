@@ -1,6 +1,6 @@
-Bottom: 9010f77d2224498c2db121cc64458ca1d290407d
-Top:    f3a545d5fc8090b9743d96a8807e07fa566fb633
+Bottom: 92b987edce9668c275bc2ef93db755156b2af6ff
+Top:    8b0a1c95c9325ce8414e38d30a0c20b69229dc12
 Author: brad <bradprin@live.com>
-Date:   2026-10-08 20:31:38 +0000
+Date:   2026-10-08 20:42:16 +0000
 
 feat(projects): decide from Needs you and a Decisions widget, with Undo
