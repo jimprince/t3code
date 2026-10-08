@@ -6,6 +6,7 @@ import * as ForkWorkspace from "../forkThreads/ForkWorkspaceService.ts";
 import * as PortableHistory from "../forkThreads/PortableHistory.ts";
 import * as StartupResumePolicy from "../fork/recovery/StartupResumePolicy.ts";
 import * as UsageLimitRecoveryWorker from "./UsageLimitRecoveryWorker.ts";
+import * as TaskIssues from "../projectIssues/TaskIssueLaunchService.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as Layer from "effect/Layer";
 import * as OrchestrationCommandReceipts from "../persistence/Layers/OrchestrationCommandReceipts.ts";
@@ -251,12 +252,16 @@ export const ProjectSetupScriptRunnerLayerLive = projectSetupScriptRunnerLayer.p
 const managedProjectFoldersProvided = ManagedProjectFolders.layer.pipe(
   Layer.provide(ProjectServiceLayerLive),
 );
+const taskIssueLaunchProvided = TaskIssues.layer.pipe(
+  Layer.provide(Layer.mergeAll(ProjectServiceLayerLive, threadManagementProvided)),
+);
 const threadLaunchProvided = threadLaunchServiceLayer.pipe(
   Layer.provide(
     Layer.mergeAll(
       ProjectServiceLayerLive,
       ProjectSetupScriptRunnerLayerLive,
       managedProjectFoldersProvided,
+      taskIssueLaunchProvided,
       threadManagementProvided,
       commandReceiptStoreProvided,
       idAllocatorLayer,
@@ -359,6 +364,7 @@ export const OrchestrationV2ProductionLayerLive = Layer.mergeAll(
   ProjectServiceLayerLive,
   managedProjectFoldersProvided,
   threadLaunchProvided,
+  taskIssueLaunchProvided,
   threadLifecycleProvided,
   scheduledTaskProvided,
   UsageLimitRecoveryWorker.workerLive.pipe(

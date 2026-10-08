@@ -1402,6 +1402,7 @@ describe("thread outbox", () => {
         model: "gpt-5.4",
       },
       creation: {
+        issue: "brad/tasks#7",
         projectId: ProjectId.make("project-1"),
         workspaceMode: "worktree",
         branch: "main",
