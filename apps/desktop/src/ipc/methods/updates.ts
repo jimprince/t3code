@@ -31,6 +31,16 @@ export const setUpdateChannel = DesktopIpc.makeIpcMethod({
   }),
 });
 
+export const startUpdate = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.UPDATE_START_CHANNEL,
+  payload: Schema.Void,
+  result: DesktopUpdateActionResultSchema,
+  handler: Effect.fn("desktop.ipc.updates.start")(function* () {
+    const updates = yield* DesktopUpdates.DesktopUpdates;
+    return yield* updates.startUpdate;
+  }),
+});
+
 export const downloadUpdate = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.UPDATE_DOWNLOAD_CHANNEL,
   payload: Schema.Void,
