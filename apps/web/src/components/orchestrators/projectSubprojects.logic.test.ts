@@ -7,6 +7,8 @@ import {
   projectTrail,
   subprojectIsActive,
   subprojectNeedsYou,
+  subprojectWorkingLabel,
+  toggleProjectKey,
 } from "./projectSubprojects.logic";
 
 const issue = (number: number, state: "open" | "closed") =>
@@ -90,5 +92,19 @@ describe("project subprojects", () => {
       subprojects: [summary("a", { needsYou: 2 }), summary("b", { needsYou: 1 })],
     });
     expect(subprojectNeedsYou(root)).toBe(3);
+  });
+
+  it("folds a project's subprojects away and back", () => {
+    expect(toggleProjectKey([], "env:a")).toEqual(["env:a"]);
+    expect(toggleProjectKey(["env:a", "env:b"], "env:a")).toEqual(["env:b"]);
+  });
+
+  it("says how much of the working count is inside subprojects", () => {
+    const project = (working: number, own: number) =>
+      ({ rollup: { working }, activeWorkerCount: own }) as unknown as OrchestratorSummary;
+    expect(subprojectWorkingLabel(project(6, 4))).toBe("2 of 6 working in subprojects");
+    expect(subprojectWorkingLabel(project(3, 0))).toBe("3 working in subprojects");
+    expect(subprojectWorkingLabel(project(2, 2))).toBeNull();
+    expect(subprojectWorkingLabel(project(0, 0))).toBeNull();
   });
 });

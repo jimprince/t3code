@@ -11,7 +11,9 @@ import {
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { ChevronDownIcon, ChevronRightIcon, CircleAlertIcon, UsersIcon } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
+import * as Schema from "effect/Schema";
 
+import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { useProjects } from "../../state/entities";
 import { useEnvironments } from "../../state/environments";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
@@ -21,10 +23,13 @@ import { ProjectFavicon } from "../ProjectFavicon";
 import { OrchestratorStatus } from "./OrchestratorStatus";
 import { useDeferredProjectSidebarBuckets } from "./projectSidebarOrder";
 import {
+  COLLAPSED_SUBPROJECTS_KEY,
   openTaskCount,
   ownTreeContains,
   projectKeyOf,
   subprojectIsActive,
+  subprojectWorkingLabel,
+  toggleProjectKey,
 } from "./projectSubprojects.logic";
 import { useOrchestratorThreadShells } from "./useOrchestratorThreads";
 
@@ -52,6 +57,8 @@ const BUCKET_RANK: Record<ProjectSidebarBucket, number> = {
   idle: 2,
   quiet: 3,
 };
+const NO_PROJECTS: ReadonlyArray<string> = [];
+const ProjectKeys = Schema.Array(Schema.String);
 const threadKey = (thread: { readonly environmentId: string; readonly id: string }) =>
   `${thread.environmentId}:${thread.id}`;
 
@@ -140,15 +147,21 @@ function ProjectRow({
   summary,
   selectedRoute,
   sortSubprojects,
+  collapsed,
+  onToggleSubprojects,
 }: {
   readonly summary: OrchestratorSummary;
   readonly selectedRoute: string | null;
   readonly sortSubprojects: SortSubprojects;
+  readonly collapsed: boolean;
+  readonly onToggleSubprojects: (projectKey: string) => void;
 }) {
   const navigate = useNavigate();
   const selected = ownTreeContains(summary, selectedRoute);
   const openIssues = openTaskCount(summary);
   const { rollup } = summary;
+  const hasSubprojects = summary.subprojects.length > 0;
+  const workingInSubprojects = subprojectWorkingLabel(summary);
   const rootRef = scopeThreadRef(summary.root.environmentId, summary.root.id);
   const rootProject =
     summary.projects.find(
@@ -185,6 +198,21 @@ function ProjectRow({
               {openIssues} {openIssues === 1 ? "task" : "tasks"}
             </span>
           ) : null}
+          {hasSubprojects ? (
+            <button
+              type="button"
+              aria-label={`${collapsed ? "Show" : "Hide"} subprojects of ${summary.root.title}`}
+              aria-expanded={!collapsed}
+              className="pointer-events-auto -mr-1 flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+              onClick={() => onToggleSubprojects(projectKeyOf(summary))}
+            >
+              {collapsed ? (
+                <ChevronRightIcon className="size-3.5" />
+              ) : (
+                <ChevronDownIcon className="size-3.5" />
+              )}
+            </button>
+          ) : null}
         </span>
         <span className="flex min-w-0 w-full items-center gap-2 text-xs">
           <OrchestratorStatus status={summary.status} />
@@ -207,7 +235,12 @@ function ProjectRow({
         <span className="truncate text-3xs text-sidebar-muted-foreground">
           {summary.projects.map((project) => project.title).join(" · ")}
         </span>
-        {summary.subprojects.length > 0 ? (
+        {workingInSubprojects ? (
+          <span className="truncate text-3xs text-sidebar-muted-foreground">
+            {workingInSubprojects}
+          </span>
+        ) : null}
+        {hasSubprojects && !collapsed ? (
           <div className="-mx-1 border-t border-sidebar-border pt-1">
             <SubprojectRows
               summary={summary}
@@ -229,6 +262,16 @@ export function OrchestratorSidebarList() {
   const lastVisitedAtByThreadKey = useUiStateStore((state) => state.threadLastVisitedAtById);
   const selectedRoute = useSelectedRoute();
   const [quietExpanded, setQuietExpanded] = useState(false);
+  // Projects whose subprojects this device has folded away; the rest show theirs.
+  const [collapsedProjects, setCollapsedProjects] = useLocalStorage(
+    COLLAPSED_SUBPROJECTS_KEY,
+    NO_PROJECTS,
+    ProjectKeys,
+  );
+  const toggleSubprojects = useCallback(
+    (projectKey: string) => setCollapsedProjects((current) => toggleProjectKey(current, projectKey)),
+    [setCollapsedProjects],
+  );
   const [quietCutoff] = useState(() => Date.now() - QUIET_AFTER_MS);
   // Every project, subprojects included: each carries its own sidebar bucket.
   const allSummaries = useMemo(
@@ -306,6 +349,8 @@ export function OrchestratorSidebarList() {
                 summary={summary}
                 selectedRoute={selectedRoute}
                 sortSubprojects={sortSubprojects}
+                collapsed={collapsedProjects.includes(projectKeyOf(summary))}
+                onToggleSubprojects={toggleSubprojects}
               />
             ))}
           </ul>
@@ -332,6 +377,8 @@ export function OrchestratorSidebarList() {
                       summary={summary}
                       selectedRoute={selectedRoute}
                       sortSubprojects={sortSubprojects}
+                      collapsed={collapsedProjects.includes(projectKeyOf(summary))}
+                      onToggleSubprojects={toggleSubprojects}
                     />
                   ))}
                 </ul>

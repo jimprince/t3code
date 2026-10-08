@@ -54,3 +54,23 @@ export const subprojectNeedsYou = (summary: OrchestratorSummary) =>
   summary.subprojects.reduce((total, sub) => total + sub.rollup.needsYou, 0);
 export const subprojectBlocked = (summary: OrchestratorSummary) =>
   summary.subprojects.reduce((total, sub) => total + sub.rollup.blocked, 0);
+
+/** Subproject cards this device has collapsed in the Projects sidebar; expanded is the default. */
+export const COLLAPSED_SUBPROJECTS_KEY = "t3code:projects:collapsed-subprojects";
+
+/** The keys with `key` added if it was missing, removed if it was there. */
+export const toggleProjectKey = (keys: ReadonlyArray<string>, key: string): ReadonlyArray<string> =>
+  keys.includes(key) ? keys.filter((candidate) => candidate !== key) : [...keys, key];
+
+/**
+ * How much of a project's work is happening inside its subprojects, for the line under its
+ * card ("2 of 6 working in subprojects"). Null when none of it is.
+ */
+export function subprojectWorkingLabel(summary: OrchestratorSummary): string | null {
+  const total = summary.rollup.working;
+  const inSubprojects = total - summary.activeWorkerCount;
+  if (inSubprojects <= 0) return null;
+  return inSubprojects === total
+    ? `${total} working in subprojects`
+    : `${inSubprojects} of ${total} working in subprojects`;
+}
