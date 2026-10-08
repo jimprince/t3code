@@ -1,0 +1,4 @@
+id = "server-restart-banner"
+category = "feature"
+functionality = "server updates"
+text = "A banner across the top shows a server update installing, restarting and reconnecting, then confirms the new version; if the server does not return within 90 seconds it says so, with Retry and the manual update command."
