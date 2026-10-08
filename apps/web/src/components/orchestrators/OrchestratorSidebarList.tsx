@@ -10,8 +10,10 @@ import {
 } from "@t3tools/client-runtime/state/orchestrators";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { ChevronDownIcon, ChevronRightIcon, CircleAlertIcon, UsersIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import * as Schema from "effect/Schema";
 
+import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { useProjects } from "../../state/entities";
 import { useEnvironments } from "../../state/environments";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
@@ -20,6 +22,17 @@ import { useUiStateStore } from "../../uiStateStore";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { OrchestratorStatus } from "./OrchestratorStatus";
 import { useDeferredProjectSidebarBuckets } from "./projectSidebarOrder";
+import {
+  COLLAPSED_SUBPROJECTS_KEY,
+  openTaskCount,
+  ownTreeContains,
+  projectKeyOf,
+  subprojectCountLabel,
+  subprojectIsActive,
+  subprojectWorkingLabel,
+  toggleProjectKey,
+  topLevelProjects,
+} from "@t3tools/client-runtime/state/projectSubprojects";
 import { useOrchestratorThreadShells } from "./useOrchestratorThreads";
 
 const QUIET_AFTER_MS = 7 * 24 * 60 * 60 * 1_000;
@@ -46,6 +59,8 @@ const BUCKET_RANK: Record<ProjectSidebarBucket, number> = {
   idle: 2,
   quiet: 3,
 };
+const NO_PROJECTS: ReadonlyArray<string> = [];
+const ProjectKeys = Schema.Array(Schema.String);
 const threadKey = (thread: { readonly environmentId: string; readonly id: string }) =>
   `${thread.environmentId}:${thread.id}`;
 
@@ -61,19 +76,95 @@ function useSelectedRoute() {
   });
 }
 
-const containsThread = (summary: OrchestratorSummary, key: string | null) =>
-  key !== null &&
-  [summary.root, ...summary.descendants].some((thread) => threadKey(thread) === key);
+/** Subprojects of a project in sidebar order, supplied by the list so every level shares the deferred buckets. */
+type SortSubprojects = (summary: OrchestratorSummary) => ReadonlyArray<OrchestratorSummary>;
+
+/** One compact "/ Name" line per subproject, beneath its parent's card; deeper levels indent. */
+function SubprojectRows({
+  summary,
+  selectedRoute,
+  sortSubprojects,
+  depth = 0,
+}: {
+  readonly summary: OrchestratorSummary;
+  readonly selectedRoute: string | null;
+  readonly sortSubprojects: SortSubprojects;
+  readonly depth?: number;
+}) {
+  const navigate = useNavigate();
+  return sortSubprojects(summary).map((sub) => {
+    const { rollup } = sub;
+    const selected = ownTreeContains(sub, selectedRoute);
+    return (
+      <div key={projectKeyOf(sub)}>
+        <button
+          type="button"
+          aria-label={`Open ${sub.root.title} subproject`}
+          aria-current={selected ? "page" : undefined}
+          style={{ paddingLeft: `${0.625 + depth * 0.75}rem` }}
+          className={`pointer-events-auto flex h-6 w-full cursor-pointer items-center gap-1.5 rounded pr-1.5 text-left text-3xs hover:bg-sidebar-row-hover ${
+            selected
+              ? "bg-sidebar-row-active text-sidebar-foreground"
+              : "text-sidebar-muted-foreground"
+          }`}
+          onClick={() =>
+            void navigate({
+              to: "/orchestrators/$environmentId/$threadId",
+              params: { environmentId: sub.root.environmentId, threadId: sub.root.id },
+            })
+          }
+        >
+          <span aria-hidden>/</span>
+          <span
+            aria-hidden
+            className={`size-1.5 shrink-0 rounded-full ${
+              rollup.needsYou > 0
+                ? "bg-warning"
+                : subprojectIsActive(sub)
+                  ? "bg-info"
+                  : "bg-muted-foreground/40"
+            }`}
+          />
+          <span className="min-w-0 flex-1 truncate">{sub.root.title}</span>
+          {rollup.blocked > 0 ? <span className="shrink-0 text-error">Blocked</span> : null}
+          {rollup.needsYou > 0 ? (
+            <span className="shrink-0 tabular-nums text-warning-foreground">{rollup.needsYou}</span>
+          ) : null}
+          <span className="shrink-0 tabular-nums">
+            {formatRelativeTimeLabel(rollup.latestActivityAt)}
+          </span>
+        </button>
+        <SubprojectRows
+          summary={sub}
+          selectedRoute={selectedRoute}
+          sortSubprojects={sortSubprojects}
+          depth={depth + 1}
+        />
+      </div>
+    );
+  });
+}
 
 function ProjectRow({
   summary,
-  selected,
+  selectedRoute,
+  sortSubprojects,
+  collapsed,
+  onToggleSubprojects,
 }: {
   readonly summary: OrchestratorSummary;
-  readonly selected: boolean;
+  readonly selectedRoute: string | null;
+  readonly sortSubprojects: SortSubprojects;
+  readonly collapsed: boolean;
+  readonly onToggleSubprojects: (projectKey: string) => void;
 }) {
   const navigate = useNavigate();
-  const openIssues = summary.issues.filter((issue) => issue.snapshot?.state !== "closed").length;
+  const selected = ownTreeContains(summary, selectedRoute);
+  const openIssues = openTaskCount(summary);
+  const { rollup } = summary;
+  const hasSubprojects = summary.subprojects.length > 0;
+  const workingInSubprojects = subprojectWorkingLabel(summary);
+  const foldedHint = subprojectCountLabel(summary);
   const rootRef = scopeThreadRef(summary.root.environmentId, summary.root.id);
   const rootProject =
     summary.projects.find(
@@ -110,28 +201,61 @@ function ProjectRow({
               {openIssues} {openIssues === 1 ? "task" : "tasks"}
             </span>
           ) : null}
+          {hasSubprojects ? (
+            <button
+              type="button"
+              aria-label={`${collapsed ? "Show" : "Hide"} subprojects of ${summary.root.title}`}
+              aria-expanded={!collapsed}
+              className="pointer-events-auto -mr-1 flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+              onClick={() => onToggleSubprojects(projectKeyOf(summary))}
+            >
+              {collapsed ? (
+                <ChevronRightIcon className="size-3.5" />
+              ) : (
+                <ChevronDownIcon className="size-3.5" />
+              )}
+            </button>
+          ) : null}
         </span>
         <span className="flex min-w-0 w-full items-center gap-2 text-xs">
           <OrchestratorStatus status={summary.status} />
           <span className="ml-auto inline-flex items-center gap-2 text-sidebar-muted-foreground">
-            {summary.needsYou.length > 0 ? (
+            {rollup.needsYou > 0 ? (
               <span className="inline-flex items-center gap-1 text-warning-foreground">
                 <CircleAlertIcon className="size-3.5" />
-                {summary.needsYou.length}
+                {rollup.needsYou}
               </span>
             ) : null}
-            {summary.activeWorkerCount > 0 ? (
+            {rollup.working > 0 ? (
               <span className="inline-flex items-center gap-1">
                 <UsersIcon className="size-3.5" />
-                {summary.activeWorkerCount} working
+                {rollup.working} working
               </span>
             ) : null}
-            <span>{formatRelativeTimeLabel(summary.latestActivityAt)}</span>
+            <span>{formatRelativeTimeLabel(rollup.latestActivityAt)}</span>
           </span>
         </span>
         <span className="truncate text-3xs text-sidebar-muted-foreground">
-          {summary.projects.map((project) => project.title).join(" · ")}
+          {[
+            ...summary.projects.map((project) => project.title),
+            // A folded card keeps a count of the rows it hides.
+            ...(collapsed && foldedHint !== null ? [foldedHint] : []),
+          ].join(" · ")}
         </span>
+        {workingInSubprojects ? (
+          <span className="truncate text-3xs text-sidebar-muted-foreground">
+            {workingInSubprojects}
+          </span>
+        ) : null}
+        {hasSubprojects && !collapsed ? (
+          <div className="-mx-1 border-t border-sidebar-border pt-1">
+            <SubprojectRows
+              summary={summary}
+              selectedRoute={selectedRoute}
+              sortSubprojects={sortSubprojects}
+            />
+          </div>
+        ) : null}
       </div>
     </li>
   );
@@ -145,18 +269,31 @@ export function OrchestratorSidebarList() {
   const lastVisitedAtByThreadKey = useUiStateStore((state) => state.threadLastVisitedAtById);
   const selectedRoute = useSelectedRoute();
   const [quietExpanded, setQuietExpanded] = useState(false);
+  // Projects whose subprojects this device has folded away; the rest show theirs.
+  const [collapsedProjects, setCollapsedProjects] = useLocalStorage(
+    COLLAPSED_SUBPROJECTS_KEY,
+    NO_PROJECTS,
+    ProjectKeys,
+  );
+  const toggleSubprojects = useCallback(
+    (projectKey: string) =>
+      setCollapsedProjects((current) => toggleProjectKey(current, projectKey)),
+    [setCollapsedProjects],
+  );
   const [quietCutoff] = useState(() => Date.now() - QUIET_AFTER_MS);
-  const summaries = useMemo(
+  // Every project, subprojects included: each carries its own sidebar bucket.
+  const allSummaries = useMemo(
     () => buildOrchestratorSummaries(threads, projects),
     [projects, threads],
   );
+  const summaries = useMemo(() => topLevelProjects(allSummaries), [allSummaries]);
   const standaloneGroups = useMemo(
     () => buildStandaloneThreadGroups(threads, projects, lastVisitedAtByThreadKey),
     [lastVisitedAtByThreadKey, projects, threads],
   );
   const desiredBuckets = useMemo(
     () => [
-      ...summaries.map(
+      ...allSummaries.map(
         (summary) => [threadKey(summary.root), projectSidebarBucket(summary, quietCutoff)] as const,
       ),
       ...standaloneGroups.flatMap((group) =>
@@ -165,12 +302,17 @@ export function OrchestratorSidebarList() {
         ),
       ),
     ],
-    [quietCutoff, standaloneGroups, summaries],
+    [allSummaries, quietCutoff, standaloneGroups],
   );
   const displayedBuckets = useDeferredProjectSidebarBuckets(desiredBuckets);
   const orderedSummaries = useMemo(
     () => sortOrchestratorSummariesForSidebar(summaries, quietCutoff, displayedBuckets),
     [displayedBuckets, quietCutoff, summaries],
+  );
+  const sortSubprojects = useCallback(
+    (summary: OrchestratorSummary) =>
+      sortOrchestratorSummariesForSidebar(summary.subprojects, quietCutoff, displayedBuckets),
+    [displayedBuckets, quietCutoff],
   );
   const active = orderedSummaries.filter(
     (summary) => displayedBuckets.get(threadKey(summary.root)) !== "quiet",
@@ -210,7 +352,10 @@ export function OrchestratorSidebarList() {
               <ProjectRow
                 key={`${summary.root.environmentId}:${summary.root.id}`}
                 summary={summary}
-                selected={containsThread(summary, selectedRoute)}
+                selectedRoute={selectedRoute}
+                sortSubprojects={sortSubprojects}
+                collapsed={collapsedProjects.includes(projectKeyOf(summary))}
+                onToggleSubprojects={toggleSubprojects}
               />
             ))}
           </ul>
@@ -235,7 +380,10 @@ export function OrchestratorSidebarList() {
                     <ProjectRow
                       key={`${summary.root.environmentId}:${summary.root.id}`}
                       summary={summary}
-                      selected={containsThread(summary, selectedRoute)}
+                      selectedRoute={selectedRoute}
+                      sortSubprojects={sortSubprojects}
+                      collapsed={collapsedProjects.includes(projectKeyOf(summary))}
+                      onToggleSubprojects={toggleSubprojects}
                     />
                   ))}
                 </ul>
