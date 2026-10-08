@@ -1,0 +1,4 @@
+id = "workstream-thread-rows"
+category = "feature"
+functionality = "projects"
+text = "Each Dashboard workstream now lists its agent threads with one tag (waiting on you, error, blocked, running, done), what they last said and their to-do progress, and Other threads shows sub-agents outside any workstream; a task with no thread appears only when it waits on you or is blocked."
