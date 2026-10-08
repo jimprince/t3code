@@ -1,3 +1,7 @@
+import { notificationEventKey } from "@t3tools/client-runtime/notification-eligibility";
+import { ThreadNotificationEvent } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
+import * as Option from "effect/Option";
 import { useEffect, useLayoutEffect, useRef } from "react";
 import * as Notifications from "expo-notifications";
 import { useLinkTo } from "@react-navigation/native";
@@ -7,9 +11,12 @@ import { foregroundNotificationBehavior } from "./foregroundNotificationBehavior
 import { routeAgentNotificationResponseOnce, threadDeepLinkOnScreen } from "./notificationPayload";
 import { consumeLastAgentNotificationResponse } from "./notificationResponseConsumer";
 
+const decodeNotificationEvent = Schema.decodeUnknownOption(ThreadNotificationEvent);
+
 export function useAgentNotificationNavigation(pathname: string): void {
   const linkTo = useLinkTo();
   const handledResponseIds = useRef(new Set<string>());
+  const seenAlerts = useRef(new Set<string>());
   // Read through a ref so the native handler registered once below sees the
   // current route without re-registering on every navigation.
   const deepLinkOnScreen = useRef<string | null>(null);
@@ -23,8 +30,26 @@ export function useAgentNotificationNavigation(pathname: string): void {
 
   useEffect(() => {
     Notifications.setNotificationHandler({
-      handleNotification: (notification) =>
-        Promise.resolve(foregroundNotificationBehavior(notification, deepLinkOnScreen.current)),
+      handleNotification: (notification) => {
+        const behavior = foregroundNotificationBehavior(
+          notification,
+          deepLinkOnScreen.current,
+          seenAlerts.current,
+        );
+        const data = notification.request.content.data ?? {};
+        const event = Option.getOrNull(decodeNotificationEvent(data.notification));
+        if (event)
+          seenAlerts.current.add(
+            notificationEventKey(
+              String(data.environmentId ?? ""),
+              String(data.threadId ?? ""),
+              event,
+            ),
+          );
+        while (seenAlerts.current.size > 512)
+          seenAlerts.current.delete(seenAlerts.current.values().next().value!);
+        return Promise.resolve(behavior);
+      },
     });
     return () => {
       Notifications.setNotificationHandler(null);
