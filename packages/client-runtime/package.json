@@ -439,6 +439,7 @@
       "types": "./src/fork/threadTransfer.ts",
       "default": "./src/fork/threadTransfer.ts"
     },
+    "./notification-eligibility": "./src/notificationEligibility.ts",
     "./fork/server-restart": {
       "types": "./src/fork/serverRestart.ts",
       "default": "./src/fork/serverRestart.ts"

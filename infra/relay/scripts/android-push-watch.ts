@@ -1,3 +1,8 @@
+import {
+  evaluateNotification,
+  threadNotificationEvent,
+  threadNotificationBusy,
+} from "@t3tools/client-runtime/notification-eligibility";
 // @effect-diagnostics nodeBuiltinImport:off - Local developer verification reads private credential files.
 import * as NodeFSP from "node:fs/promises";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
@@ -159,6 +164,7 @@ const main = Effect.gen(function* () {
               threads.delete(item.threadId);
               break;
           }
+          const now = yield* Clock.currentTimeMillis;
           const next = new Map<string, RelayAgentActivityState>();
           for (const thread of threads.values()) {
             const project = projects.get(thread.projectId);
@@ -168,12 +174,25 @@ const main = Effect.gen(function* () {
               project,
               thread,
             });
-            if (state) next.set(thread.id, state);
+            if (state) {
+              const event = threadNotificationEvent(thread);
+              const eligible = evaluateNotification({
+                event,
+                environmentId: state.environmentId,
+                threadId: thread.id,
+                nowMs: now,
+                busy: threadNotificationBusy(thread),
+              }).eligible;
+              next.set(thread.id, {
+                ...state,
+                notification: eligible ? event : null,
+                ...(eligible && event?.kind === "reply" ? { phase: "completed" as const } : {}),
+              });
+            }
           }
           const state = item.kind === "thread.updated" ? next.get(item.thread.id) : undefined;
           const previous = state ? states.get(state.threadId) : undefined;
           // A fresh subscription restores ongoing work without announcing old completions.
-          const now = yield* Clock.currentTimeMillis;
           const alert =
             state && state.phase !== previous?.phase && item.kind !== "snapshot"
               ? FcmDeliveries.androidAlertForState(state, preferences, now)
