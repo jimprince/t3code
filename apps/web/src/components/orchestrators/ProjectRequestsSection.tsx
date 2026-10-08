@@ -3,7 +3,7 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentId, ProjectIssue, ProjectRequestStage } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
-import { CheckIcon, RotateCcwIcon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, ChevronRightIcon, RotateCcwIcon } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
@@ -12,6 +12,7 @@ import {
   projectIssuesQuery,
   settleProjectRequest,
 } from "../../state/projectIssues";
+import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { waitForThreadShell } from "../../state/entities";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -21,6 +22,7 @@ import { toastManager } from "../ui/toast";
 import { Input } from "../ui/input";
 import { LinkifiedText, OptionLinks } from "./LinkifiedText";
 import { DecisionContext } from "./DecisionContext";
+import { NO_OPEN_KEYS, openKeysSchema, toggleKey } from "./openGroups.logic";
 import { projectReturnState } from "./projectNavigation";
 import { formatIssueAge } from "./projectIssuesBoard.logic";
 import { useNextReleaseItems } from "./ProjectRoadmapWidget";
@@ -922,6 +924,12 @@ export function ProjectReleaseWidget({ summary }: { readonly summary: Orchestrat
       .filter((group) => group.items.length > 0);
   }, [query.data, requests, summary.descendants, summary.root.id]);
   const awaiting = useMemo(() => nextReleaseRequests(requests), [requests]);
+  // Completed groups start collapsed; the ones opened are remembered per project on this device.
+  const [openReleases, setOpenReleases] = useLocalStorage(
+    `t3code:projects:release-open:${summary.root.environmentId}:${summary.root.id}`,
+    NO_OPEN_KEYS,
+    openKeysSchema,
+  );
   const completedCount = completed.reduce((total, group) => total + group.items.length, 0);
   if (awaiting.length === 0 && completedCount === 0) return null;
   return (
@@ -936,19 +944,36 @@ export function ProjectReleaseWidget({ summary }: { readonly summary: Orchestrat
           </ul>
         </div>
       ) : null}
-      {completed.map((group) => (
-        <div key={group.release ?? ""} className="mb-3 last:mb-0">
-          <GroupTitle
-            title={group.release ? `Completed in ${group.release}` : "Completed outside a release"}
-            count={group.items.length}
-          />
-          <ul className="divide-y divide-border">
-            {group.items.map((task) => (
-              <CompletedRow key={issueKey(task.issue)} task={task} now={now} settle={settle} />
-            ))}
-          </ul>
-        </div>
-      ))}
+      {completed.map((group) => {
+        const key = group.release ?? "";
+        const isOpen = openReleases.includes(key);
+        return (
+          <div key={key} className="mb-3 last:mb-0">
+            <h3 className="mb-1 text-xs text-foreground/80">
+              <InlineButton
+                tone="muted"
+                aria-expanded={isOpen}
+                onClick={() => setOpenReleases((current) => toggleKey(current, key))}
+              >
+                {isOpen ? (
+                  <ChevronDownIcon className="inline size-3" />
+                ) : (
+                  <ChevronRightIcon className="inline size-3" />
+                )}{" "}
+                {group.release ? `Completed in ${group.release}` : "Completed outside a release"}{" "}
+                <span className="tabular-nums">{group.items.length}</span>
+              </InlineButton>
+            </h3>
+            {isOpen ? (
+              <ul className="divide-y divide-border">
+                {group.items.map((task) => (
+                  <CompletedRow key={issueKey(task.issue)} task={task} now={now} settle={settle} />
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        );
+      })}
     </ProjectSection>
   );
 }
