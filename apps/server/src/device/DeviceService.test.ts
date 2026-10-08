@@ -144,6 +144,7 @@ const fixture = Effect.fn("fixture")(function* (
         start: Effect.void,
         ready: Effect.void,
         getSettings: Ref.get(settings),
+        setGiteaToken: () => Effect.die("unused synthetic setter"),
         updateSettings: (patch) =>
           Ref.updateAndGet(settings, (current) => ({
             ...current,
