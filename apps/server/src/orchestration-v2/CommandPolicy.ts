@@ -121,6 +121,7 @@ export function resolveMessageDispatchIntent(
   projection: OrchestrationV2ThreadProjection,
   requestedMode: MessageDispatchMode,
   deliveryIntent?: "auto" | "steer" | "restart",
+  allowInterruptRestart = true,
 ): MessageDispatchMode {
   if (deliveryIntent === undefined) return requestedMode;
 
@@ -152,13 +153,18 @@ export function resolveMessageDispatchIntent(
           (candidate) => candidate.id === providerThread.providerSessionId,
         );
   const capabilities = providerSession?.capabilities.turns;
-  if (capabilities?.supportsActiveSteering === true) {
+  if (
+    capabilities?.supportsActiveSteering === true &&
+    (allowInterruptRestart ||
+      capabilities.activeSteeringInterruptsTools !== true ||
+      providerSession?.driver === "claude")
+  ) {
     return { type: "steer_active", targetRunId: activeRun.id };
   }
   if (capabilities?.supportsQueuedMessages === true) {
     return { type: "queue_after_active" };
   }
-  if (capabilities?.supportsSteeringByInterruptRestart === true) {
+  if (allowInterruptRestart && capabilities?.supportsSteeringByInterruptRestart === true) {
     return { type: "restart_active", targetRunId: activeRun.id };
   }
   return { type: "queue_after_active" };
