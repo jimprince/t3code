@@ -1,3 +1,8 @@
+import {
+  evaluateNotification,
+  threadNotificationEvent,
+  threadNotificationBusy,
+} from "@t3tools/client-runtime/notification-eligibility";
 import type {
   EnvironmentId,
   OrchestrationV2DomainEvent,
@@ -130,8 +135,9 @@ export function shouldPublishAgentAwarenessEvent(
     case "provider-turn.updated":
     case "turn-item.updated":
       return isTurnItemPayload(event.payload) && turnItemUpdateCanEndBackgroundWork(event.payload);
-    case "message.updated":
     case "plan.updated":
+      return true;
+    case "message.updated":
     case "checkpoint-scope.created":
     case "checkpoint.captured":
     case "checkpoint.rollback-requested":
@@ -293,7 +299,8 @@ function describeThreadShellForAwareness(
   };
 }
 
-function resolveAgentAwarenessRelayPublishSnapshot(input: {
+export function resolveAgentAwarenessRelayPublishSnapshot(input: {
+  readonly nowMs: number;
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
   readonly thread: Option.Option<OrchestrationV2ThreadShell>;
@@ -317,14 +324,42 @@ function resolveAgentAwarenessRelayPublishSnapshot(input: {
       reason: "project-not-found",
     };
   }
+  const thread = input.thread.value;
+  const event = threadNotificationEvent(thread);
+  const eligible = evaluateNotification({
+    event,
+    environmentId: input.environmentId,
+    threadId: thread.id,
+    nowMs: input.nowMs,
+    archived: thread.archivedAt !== null,
+    parentOwned: thread.lineage.relationshipToParent === "subagent" && event?.origin !== "human",
+    busy: threadNotificationBusy(thread),
+  }).eligible;
+  const awareness = projectThreadAwarenessV2({
+    environmentId: input.environmentId,
+    project: input.project.value,
+    thread: eligible
+      ? { ...thread, lineage: { ...thread.lineage, relationshipToParent: null } }
+      : thread,
+  });
+  const alertPhase =
+    event?.kind === "reply"
+      ? "completed"
+      : event?.kind === "error"
+        ? "failed"
+        : event?.kind === "approval"
+          ? "waiting_for_approval"
+          : "waiting_for_input";
   return {
     projectId: input.thread.value.projectId,
     state: sanitizeRelayAgentActivityState(
-      projectThreadAwarenessV2({
-        environmentId: input.environmentId,
-        project: input.project.value,
-        thread: input.thread.value,
-      }),
+      awareness
+        ? {
+            ...awareness,
+            notification: eligible ? event : null,
+            ...(eligible ? { phase: alertPhase as RelayAgentActivityState["phase"] } : {}),
+          }
+        : null,
     ),
     reason: "snapshot",
   };
@@ -525,11 +560,13 @@ export const make = Effect.gen(function* () {
     // domain event, so materializing the full shell here would make the cost
     // of one thread's activity proportional to how many threads exist.
     const threadShell = yield* threads.getThreadShell(threadId);
+    const nowMs = (yield* DateTime.now).epochMilliseconds;
     if (
       threadShell?.lineage.relationshipToParent === "subagent" &&
+      threadShell.notificationOrigin !== "human" &&
       !(yield* Ref.get(publishedStateByThreadRef)).has(threadId)
     ) {
-      // Subagents never project activity, so the relay holds no row to clear.
+      // Silent automatic subagents have no relay row to clear.
       // Their events would otherwise publish a tombstone each, and every
       // publish re-delivers the user's aggregate. Checked before the archive
       // filter so archiving one stays quiet too.
@@ -543,6 +580,7 @@ export const make = Effect.gen(function* () {
       ? yield* projects.getById(thread.value.projectId)
       : Option.none<Project>();
     const snapshot = resolveAgentAwarenessRelayPublishSnapshot({
+      nowMs,
       environmentId,
       threadId,
       thread,

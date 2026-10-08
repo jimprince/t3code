@@ -1,3 +1,4 @@
+import { makeMessageOriginContext } from "@t3tools/shared/messageOrigin";
 import { assert, it, vi } from "@effect/vitest";
 import {
   EnvironmentId,
@@ -2173,8 +2174,108 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
         payload: run,
       });
 
+      yield* projectionStore.apply({
+        id: EventId.make("event:projection-shell-interruptible:human-message"),
+        type: "message.updated",
+        threadId,
+        runId,
+        nodeId: rootNodeId,
+        driver,
+        occurredAt: now,
+        payload: {
+          createdBy: "user",
+          creationSource: "web",
+          id: run.userMessageId,
+          threadId,
+          runId,
+          nodeId: rootNodeId,
+          role: "user",
+          text: "Review my reply",
+          attachments: [],
+          streaming: false,
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
       let shell = (yield* projectionStore.getShellSnapshot()).threads.find(
         (thread) => thread.id === threadId,
+      );
+      assert.equal(shell?.notificationOrigin, "human");
+      assert.equal(
+        ProjectionStore.threadShellFromProjection(
+          yield* projectionStore.getThreadProjection(threadId),
+        ).notificationOrigin,
+        "human",
+      );
+      for (const source of ["worker-notification", "thread-send"] as const) {
+        yield* projectionStore.apply({
+          id: EventId.make(`event:projection-shell-interruptible:${source}`),
+          type: "message.updated",
+          threadId,
+          runId,
+          nodeId: rootNodeId,
+          driver,
+          occurredAt: now,
+          payload: {
+            createdBy: "user",
+            creationSource: "web",
+            id: run.userMessageId,
+            threadId,
+            runId,
+            nodeId: rootNodeId,
+            role: "user",
+            text: "Routed input",
+            context: makeMessageOriginContext({ source, fromThreadId: "worker" }),
+            attachments: [],
+            streaming: false,
+            createdAt: now,
+            updatedAt: now,
+          },
+        });
+        const expected = source === "worker-notification" ? "routed" : "worker";
+        assert.equal(
+          (yield* projectionStore.getThreadShell(threadId))?.notificationOrigin,
+          expected,
+        );
+        assert.equal(
+          ProjectionStore.threadShellFromProjection(
+            yield* projectionStore.getThreadProjection(threadId),
+          ).notificationOrigin,
+          expected,
+        );
+      }
+      yield* projectionStore.apply({
+        id: EventId.make("event:projection-shell-interruptible:worker-message"),
+        type: "message.updated",
+        threadId,
+        runId,
+        nodeId: rootNodeId,
+        driver,
+        occurredAt: now,
+        payload: {
+          createdBy: "agent",
+          creationSource: "mcp",
+          id: run.userMessageId,
+          threadId,
+          runId,
+          nodeId: rootNodeId,
+          role: "user",
+          text: "Worker completion",
+          attachments: [],
+          streaming: false,
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
+      shell = (yield* projectionStore.getShellSnapshot()).threads.find(
+        (thread) => thread.id === threadId,
+      );
+      assert.equal(shell?.notificationOrigin, "worker");
+      assert.equal(
+        ProjectionStore.threadShellFromProjection(
+          yield* projectionStore.getThreadProjection(threadId),
+        ).notificationOrigin,
+        "worker",
       );
       assert.equal(shell?.status, "running");
       assert.equal(shell?.activeRunId, runId);
