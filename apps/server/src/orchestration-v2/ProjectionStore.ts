@@ -1,4 +1,8 @@
 import {
+  notificationOriginForMessage,
+  notificationDispositionForReply,
+} from "@t3tools/client-runtime/notification-eligibility";
+import {
   latestRootProviderFailure,
   latestUnheldRun,
   threadErrorSummary,
@@ -912,6 +916,10 @@ type ShellThreadRow = {
   readonly latest_run_requested_at: string | null;
   readonly latest_run_started_at: string | null;
   readonly latest_run_completed_at: string | null;
+  readonly notification_superseded: number;
+  readonly notification_message_json: string | null;
+  readonly notification_reply_tail: string | null;
+  readonly notification_request_id: string | null;
   readonly active_run_id: string | null;
   readonly activity_run_status: string | null;
   readonly activity_run_started_at: string | null;
@@ -954,6 +962,20 @@ type ShellRunItemCountRow = {
   readonly run_id: string;
   readonly item_count: number;
 };
+
+const decodeNotificationMessage = Schema.decodeSync(
+  Schema.fromJsonString(
+    Schema.Struct({
+      createdBy: Schema.NullOr(Schema.String),
+      creationSource: Schema.NullOr(Schema.String),
+      scheduledTaskId: Schema.Unknown,
+      senderThreadId: Schema.Unknown,
+      notification: Schema.Unknown,
+      context: Schema.Struct({ records: Schema.Array(Schema.Unknown) }),
+      text: Schema.NullOr(Schema.String),
+    }),
+  ),
+);
 
 const encodeIdList = Schema.encodeSync(Schema.fromJsonString(Schema.Array(Schema.String)));
 
@@ -1384,6 +1406,24 @@ export function threadShellFromProjection(
     ...(projection.thread.historyOrigin === undefined
       ? {}
       : { historyOrigin: projection.thread.historyOrigin }),
+    notificationSuperseded:
+      latestRun != null && projection.runs.some((run) => run.ordinal > latestRun.ordinal),
+    notificationOrigin: notificationOriginForMessage(
+      projection.messages.find((message) => message.id === latestRun?.userMessageId),
+    ),
+    notificationDisposition: notificationDispositionForReply(
+      projection.messages
+        .filter(
+          (message) =>
+            message.runId === latestRun?.id && message.role === "assistant" && !message.streaming,
+        )
+        .toSorted(
+          (a, b) => DateTime.toEpochMillis(b.updatedAt) - DateTime.toEpochMillis(a.updatedAt),
+        )[0]?.text,
+    ),
+    notificationRequestId:
+      projection.plans.find((plan) => plan.kind === "proposed_plan" && plan.status === "active")
+        ?.id ?? null,
     latestRunId: latestRun?.id ?? null,
     latestRunRequestedAt: latestRun?.requestedAt ?? null,
     latestRunStartedAt: latestRun?.startedAt ?? null,
@@ -1485,6 +1525,10 @@ function isActivityRunForShell(
 
 type ShellThreadState = {
   readonly thread: OrchestrationV2ThreadProjection["thread"];
+  readonly notificationSuperseded: boolean;
+  readonly notificationOrigin: OrchestrationV2ThreadShell["notificationOrigin"];
+  readonly notificationDisposition: OrchestrationV2ThreadShell["notificationDisposition"];
+  readonly notificationRequestId: string | null;
   readonly latestRunId: RunId | null;
   readonly latestRunStatus: OrchestrationV2ShellThreadStatus;
   readonly latestRunRequestedAt: DateTime.Utc | null;
@@ -1628,6 +1672,10 @@ function shellFromState(input: {
     ...(input.state.thread.historyOrigin === undefined
       ? {}
       : { historyOrigin: input.state.thread.historyOrigin }),
+    notificationSuperseded: input.state.notificationSuperseded,
+    notificationOrigin: input.state.notificationOrigin,
+    notificationDisposition: input.state.notificationDisposition,
+    notificationRequestId: input.state.notificationRequestId,
     latestRunId: input.state.latestRunId,
     latestRunRequestedAt: input.state.latestRunRequestedAt,
     latestRunStartedAt: input.state.latestRunStartedAt,
@@ -4842,6 +4890,34 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               presented.requested_at AS latest_run_requested_at,
               json_extract(presented.payload_json, '$.startedAt') AS latest_run_started_at,
               presented.completed_at AS latest_run_completed_at,
+              EXISTS (SELECT 1 FROM orchestration_v2_projection_runs newer WHERE newer.thread_id = t.thread_id AND newer.ordinal > presented.ordinal) AS notification_superseded,
+              (
+                SELECT json_object('createdBy', json_extract(message.payload_json, '$.createdBy'),
+                  'creationSource', json_extract(message.payload_json, '$.creationSource'),
+                  'scheduledTaskId', json_extract(message.payload_json, '$.scheduledTaskId'),
+                  'senderThreadId', json_extract(message.payload_json, '$.senderThreadId'),
+                  'notification', json_type(message.payload_json, '$.notification') = 'object',
+                  'context', json_object('records', json_array(json_object('kind', 't3-origin', 'payload', json_object('source', (
+                    SELECT json_extract(origin.value, '$.payload.source') FROM json_each(message.payload_json, '$.context.records') origin
+                    WHERE json_extract(origin.value, '$.kind') = 't3-origin' LIMIT 1
+                  ))))),
+                  'text', substr(json_extract(message.payload_json, '$.text'), 1, 160))
+                FROM orchestration_v2_projection_messages message
+                WHERE message.thread_id = t.thread_id AND message.message_id = json_extract(presented.payload_json, '$.userMessageId')
+                LIMIT 1
+              ) AS notification_message_json,
+              (
+                SELECT substr(json_extract(message.payload_json, '$.text'), -64)
+                FROM orchestration_v2_projection_messages message
+                WHERE message.thread_id = t.thread_id AND message.run_id = presented.run_id
+                  AND message.role = 'assistant' AND message.streaming = 0
+                ORDER BY message.updated_at DESC, message.message_id DESC LIMIT 1
+              ) AS notification_reply_tail,
+              (
+                SELECT plan.plan_id FROM orchestration_v2_projection_plans plan
+                WHERE plan.thread_id = t.thread_id AND plan.kind = 'proposed_plan' AND plan.status = 'active'
+                ORDER BY json_extract(plan.payload_json, '$.updatedAt') DESC, plan.plan_id DESC LIMIT 1
+              ) AS notification_request_id,
               (
                 SELECT r.run_id
                 FROM orchestration_v2_projection_runs r
@@ -5346,6 +5422,14 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
         ];
         return {
           thread,
+          notificationOrigin: notificationOriginForMessage(
+            row.notification_message_json === null
+              ? null
+              : decodeNotificationMessage(row.notification_message_json),
+          ),
+          notificationSuperseded: row.notification_superseded === 1,
+          notificationRequestId: row.notification_request_id,
+          notificationDisposition: notificationDispositionForReply(row.notification_reply_tail),
           latestRunId,
           latestRunStatus,
           latestRunRequestedAt,
