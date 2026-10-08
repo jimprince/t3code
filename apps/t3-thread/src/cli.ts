@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { ThreadId, MessageId } from "@t3tools/contracts";
 import { registerGiteaTokenCommand, GiteaTokenCliError } from "./giteaToken.js";
 import type { QueuedSendOrigin } from "./types.js";
 import { registerAutomationCommands } from "./automations.js";
@@ -350,6 +351,7 @@ const AGENT_COMMAND_ALIASES = new Set([
   "inbox",
   "implement",
   "send",
+  "forward",
   "queue",
   "dequeue",
   "clarify",
@@ -2385,6 +2387,96 @@ agent
       dispatched: "implement",
     });
   });
+
+agent
+  .command("forward")
+  .description("Forward a stored message with every attachment, including across environments")
+  .argument("<target>", "agent name or raw thread UUID")
+  .option("--source <thread>", "source thread; defaults to the calling thread")
+  .option("--message <id>", "exact source message id")
+  .option("--last-user", "last human-authored user message in the source thread")
+  .option("--note <text>", "optional routing note")
+  .option("--no-queue", "refuse when the target is busy")
+  .option("--send-id <id>", "stable id for an explicit retry; look up uncertain replies first")
+  .action(
+    async (
+      target: string,
+      options: {
+        source?: string;
+        message?: string;
+        lastUser?: boolean;
+        note?: string;
+        queue: boolean;
+        sendId?: string;
+      },
+    ) => {
+      if (Boolean(options.message) === Boolean(options.lastUser))
+        throw new Error("Choose exactly one of --message or --last-user.");
+      const sourceId = options.source ?? resolveCallerThreadId();
+      if (!sourceId) throw new Error("Pass --source when outside a T3 thread.");
+      const routingState = await loadState();
+      const resolveExisting = async (name: string) => {
+        const routed = await routeToNamedAgent({
+          state: routingState,
+          name,
+          message: "",
+          requireLive: true,
+          clientFactory: namedAgentClients(routingState),
+        });
+        return withAgent(routed?.threadId ?? name);
+      };
+      const source = await resolveExisting(sourceId);
+      const destination = await resolveExisting(target);
+      const bundle = await source.client.prepareForward({
+        threadId: ThreadId.make(source.agent.threadId),
+        selection: options.message
+          ? { type: "message", messageId: MessageId.make(options.message) }
+          : { type: "last-user" },
+      });
+      const environment = requireEnvironment(source.state, source.agent.environment);
+      const destinationEnvironment = requireEnvironment(
+        destination.state,
+        destination.agent.environment,
+      );
+      const stagedAttachments =
+        environment.environmentId === destinationEnvironment.environmentId
+          ? undefined
+          : await source.client.stageForwardAttachments(bundle, destination.client);
+      const sourceUrl = new URL(
+        `${encodeURIComponent(environment.environmentId)}/${encodeURIComponent(bundle.sourceThreadId)}?messageId=${encodeURIComponent(bundle.sourceMessageId)}`,
+        environment.httpBaseUrl.replace(/\/?$/, "/"),
+      ).href;
+      const outcome = await sendDirectResult({
+        callerThreadId: resolveCallerThreadId(),
+        subscriberThreadId: destination.agent.threadId,
+        getSourceTurn: async (route) =>
+          (
+            await new RemoteEnvironmentClient(
+              requireEnvironment(source.state, route.sourceEnvironment),
+            ).findThread(route.sourceThreadId)
+          ).latestTurn?.turnId ?? null,
+        send: () =>
+          destination.client.sendMessage({
+            threadId: destination.agent.threadId,
+            text: bundle.text,
+            ...(options.sendId ? { commandId: options.sendId } : {}),
+            queueWhileRunning: options.queue,
+            origin: callerSendOrigin(source.state),
+            agentName: destination.saved ? destination.agent.name : null,
+            forward: {
+              bundle,
+              sourceUrl,
+              ...(stagedAttachments === undefined ? {} : { stagedAttachments }),
+              senderName:
+                callerSendOrigin(source.state)?.fromName ?? resolveCallerThreadId() ?? "T3 client",
+              ...(options.note === undefined ? {} : { note: options.note }),
+            },
+          }),
+      });
+      printJson(outcome);
+      if (!outcome.dispatched && !outcome.queued) process.exitCode = 2;
+    },
+  );
 
 agent
   .command("send")
