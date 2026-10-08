@@ -953,6 +953,10 @@ agent
   .requiredOption("--title <title>", "thread title")
   .option("--provider <provider>", "model provider")
   .option("--model <model>", "model slug")
+  .option(
+    "--issue <reference>",
+    "task issue (owner/repo#N or URL), linked and started before the worker",
+  )
   .option("--branch <name>", "git branch for T3's native worktree bootstrap")
   .option("--worktree <path>", "deprecated; T3 chooses/manages worktree paths")
   .option("--base-branch <name>", "base branch for T3's native worktree bootstrap", "main")
@@ -1058,6 +1062,7 @@ agent
       runtimeMode: options.runtimeMode,
       interactionMode: options.interactionMode,
       initialMessage,
+      issue: options.issue,
       workerContext:
         options.preamble === false
           ? undefined
