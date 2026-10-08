@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "d305a911d929461ebc213eb43b3005403084fe42",
-  "head": "f5d7c8659f9d1d97babb644df395073777978189",
+  "prev": "ef753481756223175c57249cf5978accc80af5d8",
+  "head": "ebe2b9916a3b85e7d18f6e6f2629426ff65f3401",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -112,10 +112,10 @@
     "fork-decision-discuss",
     "fork-decision-context-media",
     "fork-subprojects-server",
-    "fork-reliable-handoffs"
+    "fork-reliable-handoffs",
+    "fork-starting-reconcile-causal-guard"
   ],
   "unapplied": [
-    "fork-starting-reconcile-causal-guard",
     "fork-notification-eligibility",
     "fork-gitea-token-setter",
     "fork-direct-endpoints-enumeration",
@@ -496,7 +496,7 @@
       "oid": "5a3a60328dd3a2f8bc52b1a899594174e262fcf2"
     },
     "fork-starting-reconcile-causal-guard": {
-      "oid": "df73cbaf11493825455beccf0a9caa8ede7a8622"
+      "oid": "ebe2b9916a3b85e7d18f6e6f2629426ff65f3401"
     },
     "fork-step-preview": {
       "oid": "49a090387841a2f09d67f3a42005aeb1705886a7"
