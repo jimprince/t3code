@@ -1,3 +1,4 @@
+import { ThreadNotificationEvent } from "./notification.ts";
 import * as Context from "effect/Context";
 import * as Schema from "effect/Schema";
 import * as HttpApi from "effect/unstable/httpapi/HttpApi";
@@ -120,6 +121,7 @@ export const RelayDeviceUnregistrationParams = Schema.Struct({
 export type RelayDeviceUnregistrationParams = typeof RelayDeviceUnregistrationParams.Type;
 
 export const RelayAgentActivityState = Schema.Struct({
+  notification: Schema.optionalKey(Schema.NullOr(ThreadNotificationEvent)),
   environmentId: EnvironmentId,
   threadId: ThreadId,
   projectTitle: TrimmedNonEmptyString,
@@ -134,6 +136,7 @@ export const RelayAgentActivityState = Schema.Struct({
 export type RelayAgentActivityState = typeof RelayAgentActivityState.Type;
 
 export const RelayAgentActivityAggregateRow = Schema.Struct({
+  notification: Schema.optionalKey(Schema.NullOr(ThreadNotificationEvent)),
   environmentId: EnvironmentId,
   threadId: ThreadId,
   projectTitle: TrimmedNonEmptyString,
