@@ -941,3 +941,55 @@ describe("startup catch-up", { concurrent: false }, () => {
     }).pipe(Effect.scoped),
   );
 });
+
+describe("shared notification eligibility on relay", () => {
+  it("alerts a human reply while background work remains, but suppresses same-thread work", () => {
+    {
+      const ended = shell({
+        status: "completed",
+        notificationOrigin: "human",
+        latestRunId: RunId.make("reply"),
+        latestRunCompletedAt: DateTime.makeUnsafe(NOW),
+        pendingBackgroundTasks: [{ taskId: "watch", description: "Watching", kind: "command" }],
+      });
+      const snapshot = (thread: OrchestrationV2ThreadShell) =>
+        AgentAwarenessRelay.resolveAgentAwarenessRelayPublishSnapshot({
+          nowMs: Date.parse(NOW),
+          environmentId: EnvironmentId.make("env"),
+          threadId: THREAD_ID,
+          thread: Option.some(thread),
+          project: Option.some({ id: PROJECT_ID, title: "Project" } as never),
+        }).state;
+      assert.equal(snapshot(ended)?.notification?.kind, "reply");
+      assert.equal(snapshot(ended)?.phase, "completed");
+      for (const notificationOrigin of ["worker", "routed", "automation", "unknown"] as const)
+        assert.equal(snapshot({ ...ended, notificationOrigin })?.notification, null);
+      assert.equal(snapshot({ ...ended, activeRunId: RunId.make("newer") })?.notification, null);
+      assert.equal(snapshot({ ...ended, notificationSuperseded: true })?.notification, null);
+      assert.equal(snapshot({ ...ended, notificationDisposition: "quiet" })?.notification, null);
+      const decision = snapshot({
+        ...ended,
+        notificationOrigin: "worker",
+        status: "running",
+        hasActionableProposedPlan: true,
+        notificationRequestId: "plan",
+      });
+      assert.equal(decision?.phase, "waiting_for_input");
+      assert.equal(decision?.notification?.kind, "decision");
+      const child = {
+        ...ended,
+        lineage: {
+          ...ended.lineage,
+          parentThreadId: THREAD_ID,
+          relationshipToParent: "subagent" as const,
+        },
+      };
+      assert.equal(snapshot(child)?.notification?.kind, "reply");
+      assert.equal(
+        snapshot({ ...child, notificationOrigin: "worker", hasActionableProposedPlan: true })
+          ?.notification ?? null,
+        null,
+      );
+    }
+  });
+});
