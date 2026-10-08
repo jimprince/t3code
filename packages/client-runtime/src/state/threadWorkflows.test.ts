@@ -149,6 +149,7 @@ describe("thread workflows", () => {
         providerSessions: [],
       } as never);
       expect(state.isHeld).toBe(status === "queued");
+      expect(state.canResume).toBe(status === "queued");
       expect(state.queuedRuns.map(({ text }) => text)).toEqual(
         status === "queued" ? ["Saved message"] : [],
       );
