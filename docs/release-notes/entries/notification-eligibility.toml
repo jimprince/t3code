@@ -1,0 +1,4 @@
+id = "notification-eligibility"
+category = "fix"
+functionality = "notifications"
+text = "Alerts say Reply ready for your turns and stay quiet for worker messages, routed notifications, and automations across web, desktop, and mobile, while keeping questions, approvals, decisions, and actionable errors visible."

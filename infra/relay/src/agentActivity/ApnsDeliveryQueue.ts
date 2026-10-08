@@ -1,3 +1,4 @@
+import { notificationEventKey } from "@t3tools/client-runtime/notification-eligibility";
 import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
 import * as Crypto from "effect/Crypto";
@@ -24,6 +25,10 @@ import {
   type SignedApnsDeliveryJob,
 } from "./apnsDeliveryJobs.ts";
 import * as RelayConfiguration from "../Config.ts";
+
+const encodeDeliveryIdentity = Schema.encodeEffect(
+  Schema.fromJsonString(Schema.Array(Schema.String)),
+);
 
 export class ApnsDeliveryQueueSendError extends Schema.TaggedError<ApnsDeliveryQueueSendError>()(
   "ApnsDeliveryQueueSendError",
@@ -148,7 +153,27 @@ export const make = Effect.gen(function* () {
           "relay.thread_id": input.notification.threadId,
         });
         const now = yield* DateTime.now;
-        const jobId = yield* crypto.randomUUIDv4.pipe(
+        const event = input.notification.notification;
+        const jobId = yield* (
+          event
+            ? encodeDeliveryIdentity([
+                "push_notification",
+                input.userId,
+                input.deviceId,
+                input.token,
+                notificationEventKey(
+                  input.notification.environmentId,
+                  input.notification.threadId,
+                  event,
+                ),
+              ]).pipe(
+                Effect.flatMap((key) => crypto.digest("SHA-256", new TextEncoder().encode(key))),
+                Effect.map((bytes) =>
+                  Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(""),
+                ),
+              )
+            : crypto.randomUUIDv4
+        ).pipe(
           Effect.mapError(
             (cause) =>
               new ApnsDeliveryQueueSendError({
