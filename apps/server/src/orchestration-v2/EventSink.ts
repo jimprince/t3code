@@ -1,4 +1,5 @@
 import { seedDelegatedMetadata } from "../forkThreads/MetadataStore.ts";
+import { MessageAdmission } from "../forkThreads/MessageAdmission.ts";
 import {
   CommandId,
   type OrchestrationV2Run,
@@ -550,6 +551,8 @@ const baseLayer: Layer.Layer<
             return { ...existing, committed: false as const, cancelledEffectIds: [] };
           }
 
+          const admission = yield* MessageAdmission;
+          if (admission?.commandId === input.commandId) yield* admission.persist;
           const normalized = yield* normalizeEvents(input.events);
           const storedEvents = yield* eventStore.append({
             commandId: input.commandId,
