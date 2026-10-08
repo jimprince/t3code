@@ -6,6 +6,7 @@ import {
   CheckpointScopeId,
   ORCHESTRATION_V2_WS_METHODS,
   OrchestrationV2CheckpointUnavailableError,
+  OrchestrationV2DispatchCommandError,
   WS_METHODS,
   type ChatAttachment,
   type MessageId,
@@ -164,6 +165,7 @@ interface StartThreadBootstrap {
 }
 
 export interface StartThreadTurnInput extends ThreadCommandInput {
+  readonly issue?: string;
   /** Files a launched thread under this thread. Only for servers advertising `launchThreadParent`; older ones ignore it. */
   readonly parentThreadId?: ThreadId;
   readonly manualContinuationOfRunId?: RunId;
@@ -630,6 +632,19 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
   input: StartThreadTurnInput,
 ) {
   const commandId = yield* allocateCommandId(input);
+  if (input.issue !== undefined) {
+    if (
+      (input.bootstrap?.createThread === undefined &&
+        input.bootstrap?.prepareWorktree === undefined) ||
+      (yield* getInitialServerConfig()).environment.capabilities.taskIssueLaunch !== true
+    ) {
+      return yield* new OrchestrationV2DispatchCommandError({
+        commandId,
+        commandType: "thread.create",
+        message: "Task-linked creation requires a new-thread launch and a server that supports it.",
+      });
+    }
+  }
   const attachments = yield* persistAttachments(
     input.threadId,
     input.message.messageId,
@@ -680,6 +695,7 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
       runtimeMode: input.runtimeMode,
       interactionMode: input.interactionMode,
       workspaceStrategy,
+      ...(input.issue === undefined ? {} : { issue: input.issue }),
       ...(input.parentThreadId === undefined ? {} : { parentThreadId: input.parentThreadId }),
       initialMessage: {
         messageId: input.message.messageId,

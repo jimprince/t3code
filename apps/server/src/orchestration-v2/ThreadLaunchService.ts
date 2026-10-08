@@ -50,6 +50,7 @@ import type * as Orchestrator from "./Orchestrator.ts";
 import { makeProviderFailure } from "@t3tools/provider-core/server/failure";
 import { randomUuidV4 } from "@t3tools/provider-core/server/randomUuid";
 import * as ThreadManagement from "./ThreadManagementService.ts";
+import * as TaskIssues from "../projectIssues/TaskIssueLaunchService.ts";
 
 export type ThreadLaunchWorkspaceStrategy =
   | { readonly type: "root"; readonly branch?: string | undefined }
@@ -87,6 +88,7 @@ export interface ThreadLaunchInput {
   readonly reuseExistingThread?: boolean;
   readonly projectId: ProjectId;
   readonly title: string;
+  readonly issue?: string;
   readonly generateTitle?: boolean;
   readonly modelSelection: ModelSelection;
   readonly runtimeMode: RuntimeMode;
@@ -141,6 +143,7 @@ export class ThreadLaunchError extends Schema.TaggedError<ThreadLaunchError>()(
       "run-setup-script",
       "create-thread",
       "nest-thread",
+      "start-issue",
       "update-thread",
       "dispatch-message",
       "release-run",
@@ -194,6 +197,7 @@ const make = Effect.gen(function* () {
   const receipts = yield* CommandReceiptStore.CommandReceiptStoreV2;
   const ids = yield* IdAllocator.IdAllocatorV2;
   const threads = yield* ThreadManagement.ThreadManagementService;
+  const taskIssues = yield* TaskIssues.TaskIssueLaunchService;
   const managedFolders = yield* ManagedProjectFolders.ManagedProjectFolders;
   const preparationScope = yield* Scope.make("sequential");
   const scheduledLaunches = yield* Ref.make<ReadonlySet<CommandId>>(new Set());
@@ -797,11 +801,27 @@ const make = Effect.gen(function* () {
             .pipe(Effect.mapError(mapError(input, "nest-thread", threadId)));
         }
 
+        const initialMessageReceipt =
+          input.initialMessage === undefined
+            ? Option.none()
+            : yield* readReceipt(input, CommandId.make(`${input.commandId}:initial-message`));
+        if (
+          input.issue !== undefined &&
+          !(
+            Option.isSome(initialMessageReceipt) &&
+            initialMessageReceipt.value.status === "accepted"
+          )
+        ) {
+          yield* taskIssues
+            .start({ threadId, reference: input.issue })
+            .pipe(Effect.mapError(mapError(input, "start-issue", threadId)));
+        }
+
         let runId: RunId | null = null;
         let messageWasAlreadyAccepted = false;
         if (input.initialMessage !== undefined) {
           const messageCommandId = CommandId.make(`${input.commandId}:initial-message`);
-          const messageReceipt = yield* readReceipt(input, messageCommandId);
+          const messageReceipt = initialMessageReceipt;
           messageWasAlreadyAccepted = Option.isSome(messageReceipt);
           const messageId =
             input.initialMessage.messageId ??
