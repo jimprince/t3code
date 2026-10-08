@@ -2196,6 +2196,7 @@ it.layer(
         start: Effect.void,
         ready: Effect.void,
         getSettings: Effect.fail(settingsError),
+        setGiteaToken: () => Effect.die("unused synthetic setter"),
         updateSettings: () => Effect.fail(settingsError),
         updateProviderInstance: () => Effect.fail(settingsError),
         withSettingsSnapshot: () => Effect.fail(settingsError),
