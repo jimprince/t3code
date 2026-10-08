@@ -157,6 +157,7 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   threadActiveReorder: Schema.optionalKey(Schema.Boolean),
   threadOrderReset: Schema.optionalKey(Schema.Boolean),
   threadNesting: Schema.optionalKey(Schema.Boolean),
+  reliableHandoffs: Schema.optionalKey(Schema.Boolean),
   threadSubprojects: Schema.optionalKey(Schema.Boolean),
   remoteThreadNesting: Schema.optionalKey(Schema.Boolean),
   /** Server understands thread.auto-settle.set (per-thread auto-settle off).
