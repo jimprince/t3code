@@ -18,7 +18,8 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("../connection/runtime", () => ({ connectionAtomRuntime: undefined }));
-vi.mock("@t3tools/client-runtime/state/session", () => ({
+vi.mock("@t3tools/client-runtime/state/session", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@t3tools/client-runtime/state/session")>()),
   createEnvironmentSessionAtoms: () => ({
     sessionStateAtom: (id: EnvironmentId) => state.sessions.get(id)!,
   }),
