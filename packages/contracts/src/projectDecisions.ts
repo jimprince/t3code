@@ -22,6 +22,11 @@ const PendingAskBase = {
   projectTitle: Schema.String,
   requestId: RuntimeRequestId,
   createdAt: IsoDateTime,
+  /**
+   * The thread can still take Brad's response from outside its own view; false for a
+   * request that outlived its provider session, which only the thread can resolve.
+   */
+  canRespond: Schema.Boolean,
 };
 
 export const ProjectPendingAsk = Schema.Union([
