@@ -15,6 +15,7 @@ type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
  * prefix. Adding an RPC to `WsRpcGroup` without a label is a type error.
  */
 const RPC_AGGREGATES = {
+  "sourceControl.gitea.setToken": "source-control",
   "fork.send.accept": "handoff",
   "fork.send.inbox": "handoff",
   "fork.send.lookup": "handoff",
