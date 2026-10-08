@@ -1,0 +1,14 @@
+name = "fork-held-queue-resume"
+subject = "feat(web): resume a queue held after restart from the queued messages strip"
+class = "product"
+purpose = "Show 'Queue held after restart' with a Resume action in the web and desktop queued messages strip, as the mobile queue screen already does (brad/t3code-fork#218)."
+retire_when = "Upstream shows held queues with their own resume action."
+depends_on = ["fork-restart-when-idle"]
+roles = []
+note = "QueuedRunsControl shows the held row whenever deriveThreadQueueWorkflowState reports canResume (any queued run held, including completion notices with no visible row, so the strip also stays when it has no rows) and dispatches the native queue.resume through threadEnvironment.resumeThreadQueue with a fresh command id, independent of the composer draft. The strip's Resume and the composer's Resume thread button stay separate: the strip only resumes the queue. canResume comes from the client-runtime queue workflow supplied by the integrated fork.6 backend lane. No auto-resume: a restart still waits for consent."
+
+[[decision]]
+id = "queue-resume-entrypoints-223"
+date = "2026-10-09"
+decided = "adapt"
+rationale = "The strip invokes the composer's same continuation when available, refuses disconnected activation and avoids a Queued 0 label when only hidden completion notices are held."
