@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "f241c8693376adc8abdaf5cfd0d080c22f35da6a",
-  "head": "7f650a66a38d035246bcfcc762cc0f3ada8b27fc",
+  "prev": "d27e993cbc36d83c4e65dc5541fcbe5ccd85b72f",
+  "head": "b3621a18f47fd2ec8eef337a7794b45da16138d0",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -71,7 +71,9 @@
     "fork-project-dashboard-widgets",
     "fork-project-roadmap",
     "fork-project-page-workflow",
-    "fork-project-canvas",
+    "fork-project-canvas"
+  ],
+  "unapplied": [
     "fork-project-task-types",
     "fork-project-request-box-pinned",
     "fork-scripts-automations",
@@ -137,7 +139,6 @@
     "fork-decisions-feed-ui",
     "fork-decisions-feed-mobile"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
