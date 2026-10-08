@@ -15,6 +15,7 @@ import {
   type ProjectLayoutTab,
   type ProjectLayoutWidget,
   type ThreadId,
+  withoutRetiredWidgets,
 } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import * as Schema from "effect/Schema";
@@ -543,11 +544,6 @@ function BuiltinWidget({
       return <ProjectDecisionsWidget summary={summary} />;
     case "needs-you":
       return <ProjectNeedsYouWidget summary={summary} />;
-    // Retired for the threads under each workstream; the layout still accepts the ids.
-    case "working":
-    case "blocked":
-    case "done":
-      return null;
     case "composer":
       return (
         <ProjectSection title="New request">
@@ -664,10 +660,12 @@ export function OrchestratorBoard({
     readonly base: number;
     readonly tabs: ReadonlyArray<ProjectLayoutTab>;
   } | null>(null);
-  const layoutTabs =
+  // Older servers still send widgets the page has retired; they are dropped here too.
+  const layoutTabs = withoutRetiredWidgets(
     optimistic && optimistic.base === layoutState.layout.revision
       ? optimistic.tabs
-      : layoutState.layout.tabs;
+      : layoutState.layout.tabs,
+  );
   const tab = resolveProjectTab(
     tabFromUrl,
     rememberedTab,
