@@ -30,6 +30,12 @@ export function evaluateNotification(input: {
   readonly busy?: boolean;
   readonly quiet?: boolean;
   readonly seen?: ReadonlySet<string>;
+  /**
+   * The caller watched this event arrive (a live client comparing against its previous
+   * snapshot), so it cannot be a replay. A failure then alerts however late the client
+   * woke up; a replaying caller (relay push, reconciliation) leaves this off.
+   */
+  readonly observed?: boolean;
 }) {
   const event = input.event;
   if (!event) return { eligible: false, key: null, reason: "no-event" };
@@ -54,6 +60,7 @@ export function evaluateNotification(input: {
               : !(rule.origins as readonly string[]).includes(event.origin)
                 ? "automatic-or-unknown"
                 : rule.freshnessMs !== null &&
+                    !(input.observed && event.kind === "error") &&
                     (!Number.isFinite(timestamp) ||
                       input.nowMs - timestamp > rule.freshnessMs ||
                       timestamp > input.nowMs + 5_000)

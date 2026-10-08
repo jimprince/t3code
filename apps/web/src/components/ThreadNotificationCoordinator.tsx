@@ -138,6 +138,7 @@ function EnvironmentNotifications({
           rawThread.lineage.relationshipToParent === "subagent" && event?.origin !== "human",
         busy: threadNotificationBusy(rawThread),
         seen: seen.current,
+        observed: true,
         onScreen:
           document.visibilityState === "visible" &&
           document.hasFocus() &&

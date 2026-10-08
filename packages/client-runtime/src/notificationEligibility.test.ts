@@ -62,6 +62,16 @@ it("rejects stale and invalid terminal timestamps without aging out pending ques
     }).eligible,
   ).toBe(true);
 });
+it("alerts for an observed failure however late the client saw it, but not for a replayed one", () => {
+  const error = { ...event, kind: "error" as const, errorReason: "Agent failed" };
+  const late = { ...input, event: error, nowMs: input.nowMs + 3600_000 };
+  expect(evaluateNotification({ ...late, observed: true }).eligible).toBe(true);
+  expect(evaluateNotification(late).eligible).toBe(false);
+  // Only failures are exempt: an observed reply that is hours old stays stale.
+  expect(
+    evaluateNotification({ ...input, nowMs: input.nowMs + 3600_000, observed: true }).eligible,
+  ).toBe(false);
+});
 it("new requests in the same turn have separate identities", () => {
   const question = { ...event, kind: "question" as const, identity: "request-one" };
   const seen = new Set([notificationEventKey("env", "thread", question)]);
