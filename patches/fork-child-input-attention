@@ -1,6 +1,6 @@
-Bottom: 7ef567172e78e1d485d60c885da4da0531a0ee04
-Top:    a14a9af58259dca452fb44eb62afeb7017b98a89
+Bottom: e2b688c057b8fa7600f5567bf1f8a71eb45188fc
+Top:    e431e1fad44a0f74b130d49472142bf6d63b9e48
 Author: brad <bradprin@live.com>
-Date:   2026-10-08 10:48:19 +0000
+Date:   2026-10-08 19:32:16 +0000
 
 feat(threads): separate child input attention from parent status
