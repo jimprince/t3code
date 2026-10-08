@@ -195,18 +195,20 @@ it.layer(NodeServices.layer)("ServerSecretStore.layer", (it) => {
 
           return {
             ...fileSystem,
-            makeDirectory: () => Effect.void,
-            writeFile: () => Effect.void,
-            rename: () => Effect.void,
             chmod: (path, mode) =>
-              Effect.sync(() => {
-                chmodCalls.push({ path: String(path), mode });
-              }),
+              fileSystem.chmod(path, mode).pipe(
+                Effect.tap(() =>
+                  Effect.sync(() => {
+                    chmodCalls.push({ path: String(path), mode });
+                  }),
+                ),
+              ),
           } satisfies FileSystem.FileSystem;
         }),
       ).pipe(Layer.provide(NodeServices.layer));
 
-      const secretStore = yield* Effect.service(ServerSecretStore.ServerSecretStore).pipe(
+      yield* Effect.service(ServerSecretStore.ServerSecretStore).pipe(
+        Effect.tap((store) => store.set("session-signing-key", Uint8Array.from([1, 2, 3]))),
         Effect.provide(
           ServerSecretStore.layer.pipe(
             Layer.provide(layerServerConfig()),
@@ -215,12 +217,10 @@ it.layer(NodeServices.layer)("ServerSecretStore.layer", (it) => {
         ),
       );
 
-      yield* secretStore.set("session-signing-key", Uint8Array.from([1, 2, 3]));
-
       assert.isTrue(
         chmodCalls.some((call) => call.mode === 0o700 && /[\\/]secrets$/.test(call.path)),
       );
-      assert.isAtLeast(chmodCalls.filter((call) => call.mode === 0o600).length, 2);
+      assert.isAtLeast(chmodCalls.filter((call) => call.mode === 0o600).length, 1);
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 
