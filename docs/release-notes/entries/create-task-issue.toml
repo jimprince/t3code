@@ -1,0 +1,4 @@
+id = "create-task-issue"
+category = "feature"
+functionality = "agents"
+text = "Create workers linked to a task issue and mark it in progress before their first turn starts."
