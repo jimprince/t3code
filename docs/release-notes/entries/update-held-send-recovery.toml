@@ -1,0 +1,4 @@
+id = "update-held-send-recovery"
+category = "fix"
+functionality = "update recovery"
+text = "Update failures remain visible after reconnect; held sends warn before reload, retain their retry identities and show delivery progress without covering page headers."
