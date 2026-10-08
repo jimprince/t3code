@@ -22,7 +22,7 @@ it.effect(
         expect(result.accepted).toBe(true);
         expect(harness.checkCount()).toBe(1);
         expect(harness.downloadCount()).toBe(1);
-        expect(harness.quitAndInstallCount()).toBe(1);
+        expect(harness.quitAndInstalls()).toBe(1);
         expect(harness.sentStates.find((state) => state.updatePhase === "verifying")).toMatchObject(
           { downloadTransferredBytes: 2048, downloadTotalBytes: 2048, downloadPercent: 100 },
         );
@@ -72,7 +72,7 @@ it.effect("keeps a verified download and exposes the install failure for a one-c
       failInstall = false;
       const retried = yield* updates.startUpdate;
       expect(retried.accepted).toBe(true);
-      expect(harness.quitAndInstallCount()).toBe(2);
+      expect(harness.quitAndInstalls()).toBe(2);
       expect(harness.downloadCount()).toBe(1);
     }),
   ).pipe(Effect.provide(harness.layer));
