@@ -182,10 +182,27 @@ describe("mobile themes", () => {
           runtime[platform === "android" ? "--color-header" : "--color-drawer"],
           runtime["--color-screen"],
         );
-        expect(relativeLuminance(sidebar)).toBeLessThan(
-          relativeLuminance(runtime["--color-thread-canvas"]),
-        );
-        expect(contrastRatio(chrome, runtime["--color-screen"])).toBeGreaterThanOrEqual(1.06);
+        // The dark sidebar is the standard dark surface, not pure black, so it matches the thread
+        // canvas and the chrome is separated by its border rather than by a lighter or darker fill.
+        const darkSidebar = appearance === "dark";
+        const sidebarLuminance = relativeLuminance(sidebar);
+        const canvasLuminance = relativeLuminance(runtime["--color-thread-canvas"]);
+        if (darkSidebar) expect(sidebarLuminance).toBeLessThanOrEqual(canvasLuminance);
+        else expect(sidebarLuminance).toBeLessThan(canvasLuminance);
+        if (!darkSidebar) {
+          expect(contrastRatio(chrome, runtime["--color-screen"])).toBeGreaterThanOrEqual(1.06);
+        } else {
+          // The dark fill, screen and canvas are one surface, so the border is the only separator.
+          // 1.06 is this file's visible-separation bar for fills; the shipped border measures ~1.075.
+          const border = flattenThemeColor(runtime["--color-drawer-border"], sidebar);
+          for (const pane of [
+            sidebar,
+            runtime["--color-screen"],
+            runtime["--color-thread-canvas"],
+          ]) {
+            expect(contrastRatio(border, pane)).toBeGreaterThanOrEqual(1.06);
+          }
+        }
         const foregroundRoles =
           platform === "android"
             ? (["--color-header-foreground", "--color-foreground-muted"] as const)
