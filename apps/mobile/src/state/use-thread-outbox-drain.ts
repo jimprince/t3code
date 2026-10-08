@@ -1028,6 +1028,7 @@ export function useThreadOutboxDrain(): void {
         environmentId: queuedMessage.environmentId,
         input: buildProjectThreadStartTurnInput({
           projectId: creation.projectId,
+          ...(creation.issue === undefined ? {} : { issue: creation.issue }),
           projectCwd,
           threadId: queuedMessage.threadId,
           commandId: queuedMessage.commandId,
