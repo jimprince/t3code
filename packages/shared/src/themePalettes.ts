@@ -246,7 +246,7 @@ export const T3_CODE_DARK_THEME_COLORS: ThemeColors = {
   messageActionHover: "#3061d9",
   codeBackground: "#111111",
   codeForeground: "#f5f5f5",
-  sidebar: "#000000",
+  sidebar: "#0a0a0a",
   sidebarForeground: "#f1f3f7",
   sidebarMutedForeground: "#a3a3a3",
   sidebarControlSurface: "#0a0a0a",
