@@ -32,6 +32,28 @@ export function approvalChoices(ask: Pick<ApprovalAsk, "options">): ReadonlyArra
 }
 
 /**
+ * What an approval asks, in a few words, so the card's title does not repeat the command it
+ * shows below. A request whose text did not arrive reads as the thread needing approval.
+ */
+export function approvalTitle(
+  ask: Pick<ApprovalAsk, "requestKind" | "appName" | "requestId" | "threadTitle">,
+): string {
+  if (ask.requestId === "pending") return `${ask.threadTitle} needs approval`;
+  switch (ask.requestKind) {
+    case "command":
+      return "Run a command";
+    case "file-read":
+      return "Read files";
+    case "file-change":
+      return "Change files";
+    case "permission":
+      return "Grant a permission";
+    case "mcp-elicitation":
+      return ask.appName ? `Let ${ask.appName} continue` : "Answer a tool request";
+  }
+}
+
+/**
  * The one question a card can take a one-tap answer for: a live request with a single
  * single-select question. Anything else (several questions, multi-select, a thread that
  * wants a message instead, a request that outlived its session) is answered in the thread.

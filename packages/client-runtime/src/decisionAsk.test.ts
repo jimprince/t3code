@@ -1,7 +1,7 @@
 import type { ProjectPendingAsk } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { approvalChoices, oneTapQuestion, questionAnswers } from "./decisionAsk.ts";
+import { approvalChoices, approvalTitle, oneTapQuestion, questionAnswers } from "./decisionAsk.ts";
 
 type QuestionAsk = Extract<ProjectPendingAsk, { kind: "question" }>;
 
@@ -82,5 +82,27 @@ describe("approvalChoices", () => {
       { decision: "accept", label: "Approve", warning: "Untrusted app" },
       { decision: "decline", label: "Deny", warning: undefined },
     ]);
+  });
+});
+
+describe("approvalTitle", () => {
+  const ask = (extra: object) =>
+    ({
+      requestKind: "command",
+      requestId: "r1",
+      threadTitle: "Tool changer worker",
+      ...extra,
+    }) as never;
+
+  it("names what is asked instead of repeating the command", () => {
+    expect(approvalTitle(ask({}))).toBe("Run a command");
+    expect(approvalTitle(ask({ requestKind: "file-change" }))).toBe("Change files");
+    expect(approvalTitle(ask({ requestKind: "mcp-elicitation", appName: "Linear" }))).toBe(
+      "Let Linear continue",
+    );
+  });
+
+  it("falls back to the thread when the request's text did not arrive", () => {
+    expect(approvalTitle(ask({ requestId: "pending" }))).toBe("Tool changer worker needs approval");
   });
 });
