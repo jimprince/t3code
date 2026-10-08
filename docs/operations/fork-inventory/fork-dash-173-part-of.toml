@@ -1,0 +1,8 @@
+name = "fork-dash-173-part-of"
+subject = "feat(server): name the epic each project issue is part of"
+class = "divergence"
+purpose = "Expose each issue's 'Part of #N' parent on the project issue list, so clients can group tasks, finished ones included, under their workstream."
+retire_when = "Upstream provides a parent link on project issues, or the workstream bands are retired."
+depends_on = ["fork-task-view"]
+roles = []
+note = "Issue #173 and #175. 'Part of #N' stays the single parent link (parsePartOf, already used for epic progress); partOf is set only for a parent in the same repository. Epic progress still also reads the epic's checklist."
