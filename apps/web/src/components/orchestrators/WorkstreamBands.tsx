@@ -25,6 +25,7 @@ import {
   type Band,
   type BandRow,
 } from "./workstreamBands.logic";
+import { deriveTeam, TEAM_TAG_LABEL, teamIds, type TeamMember } from "./workstreamTeam.logic";
 import {
   DONE_PER_GROUP,
   deriveThreadView,
@@ -69,6 +70,16 @@ export function useWorkstreamBands(
       }),
     [blocked.tasks, query.data, since, statuses, summary.root.id, threadsById],
   );
+  const team = useMemo(
+    () =>
+      deriveTeam({
+        root: summary.root,
+        descendants: summary.descendants,
+        bands,
+        workerNotes: blocked.workers,
+      }),
+    [bands, blocked.workers, summary.descendants, summary.root],
+  );
   const threads = useMemo(
     () =>
       deriveThreadView({
@@ -76,10 +87,11 @@ export function useWorkstreamBands(
         summary,
         workerNotes: blocked.workers,
         since,
+        exclude: teamIds(summary.root, summary.descendants),
       }),
     [bands, blocked.workers, since, summary],
   );
-  return { bands, threads, refresh: query.refresh, threadsById, now };
+  return { bands, threads, team, refresh: query.refresh, threadsById, now };
 }
 
 export type Workstreams = ReturnType<typeof useWorkstreamBands>;
@@ -244,6 +256,61 @@ function ThreadRowList({
         </p>
       ) : null}
     </>
+  );
+}
+
+const TEAM_TONE = {
+  waiting: "strong",
+  error: "warning",
+  blocked: "warning",
+  running: "muted",
+  idle: "muted",
+} as const;
+
+/**
+ * The Team strip: the project's head and its standing sub-agents, each with its
+ * responsibility, a status tag ("idle" between turns), what it owns and Open.
+ */
+export function TeamStrip({
+  summary,
+  team,
+  now,
+}: {
+  readonly summary: OrchestratorSummary;
+  readonly team: ReadonlyArray<TeamMember>;
+  readonly now: number;
+}) {
+  const openThread = useOpenThread(summary);
+  return (
+    <ul className="divide-y divide-border">
+      {team.map((member) => {
+        const label = TEAM_TAG_LABEL[member.tag];
+        return (
+          <li key={member.threadId} className="flex items-start gap-3 py-1.5">
+            <StatusCell tone={TEAM_TONE[member.tag]}>{label}</StatusCell>
+            <div className="min-w-0 flex-1">
+              <span className="text-sm">
+                <InlineButton onClick={() => openThread(member.threadId)}>
+                  <span className="whitespace-normal text-left">{member.title}</span>
+                </InlineButton>
+              </span>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                <span className="sm:hidden">{label}</span>
+                {member.head ? <span>head</span> : null}
+                {member.owns ? <span className="tabular-nums">{member.owns}</span> : null}
+                <span className="tabular-nums">{formatIssueAge(member.at, now)}</span>
+              </div>
+              {member.responsibility ? (
+                <p className="mt-0.5 text-xs text-muted-foreground">{member.responsibility}</p>
+              ) : null}
+              {member.latest ? (
+                <p className="mt-0.5 text-xs text-muted-foreground">last said: {member.latest}</p>
+              ) : null}
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
