@@ -2770,3 +2770,13 @@ depends_on = [
 ]
 roles = []
 note = "Client only; the server half is fork-subprojects-server. Approved layout (#156): B compact rows plus A's rollup line. buildOrchestratorSummaries returns one summary per project, top-level and subproject alike. A summary's descendants, issues, needsYou, working and blocked cover its own tree only, matching the server's collectThreadTree; only mode `on` on a nested thread makes a subproject, like the server's findProjectRootThreadId. A subproject nests under the first enclosing top-level or mode-on thread, so plain workers in between are skipped; one with workers whose parent is missing or archived is a top-level project. `subprojects` and `rollup` (needsYou, working, blocked, latestActivityAt) fold subproject work into the parent for the sidebar bucket, card counts and page header; `status` counts subproject activity as the root's workers. The sidebar lists top-level projects only, with each project's subprojects as rows beneath it, ordered by the same deferred buckets. Mobile still lists every summary flat, so a subproject appears as its own project there. Subprojects come from an explicit mark (`t3-thread orchestrator mark`, `create --subproject`, Show as subproject) because automatic promotion stays off until the mobile app can reach a subproject's decisions. Reverse state: the project page Edit dialog and the thread menu offer `Show as worker` (mode off, which also blocks automatic promotion) and `Show as subproject` (mode on) through fork.threads.metadata.update, gated on the threadSubprojects capability."
+
+[[patch]]
+name = "fork-chat-workspace-startup"
+subject = "fix(server): preserve chat workspaces across temporary directory changes"
+class = "product"
+purpose = "Keep General Chat startup independent of TMPDIR while preserving shipped project IDs, workspace paths, and existing chat-thread bindings."
+retire_when = "Upstream provides durable General Chat workspaces and compatibility with shipped temporary-directory project roots."
+depends_on = ["fork-general-chat"]
+roles = []
+note = "#202: New chat roots use T3 home/chat-workspaces. Existing chat roots remain authoritative and are recreated when absent; no project or provider-session paths are rewritten. Fold into fork-general-chat. Copied Mac/VM fixture tests cover startup, restart, singleton identity, thread/transcript preservation, and migration ledgers."
