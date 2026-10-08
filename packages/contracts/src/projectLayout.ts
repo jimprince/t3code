@@ -121,19 +121,6 @@ export const PROJECT_WIDGET_TYPES: ReadonlyArray<ProjectWidgetType> = [
     ],
   },
   {
-    type: "working",
-    title: "Working",
-    description: "Workers running now, each as its task, status and next step.",
-    fields: [],
-  },
-  { type: "blocked", title: "Blocked", description: "Workers that are blocked.", fields: [] },
-  {
-    type: "done",
-    title: "Done since your last visit",
-    description: "Workers that finished since Brad last opened the page.",
-    fields: [],
-  },
-  {
     type: "prs",
     title: "Pull requests",
     description: "Pull requests by what they need, merged ones folded.",
@@ -366,6 +353,29 @@ function uniqueId(base: string, taken: ReadonlySet<string>): string {
 
 export const findWidgetType = (type: string) =>
   PROJECT_WIDGET_TYPES.find((candidate) => candidate.type === type);
+
+/**
+ * Widgets the project page no longer has (the threads under each workstream replace
+ * them). They are not offered or accepted, but layouts saved while they existed
+ * still list them, so readers drop them silently instead of failing.
+ */
+export const RETIRED_WIDGET_TYPES: ReadonlySet<string> = new Set(["working", "blocked", "done"]);
+
+/**
+ * The tabs without retired widgets: the same array when there are none, so a
+ * layout that needs no cleaning keeps its identity.
+ */
+export function withoutRetiredWidgets(
+  tabs: ReadonlyArray<ProjectLayoutTab>,
+): ReadonlyArray<ProjectLayoutTab> {
+  if (!tabs.some((tab) => tab.widgets.some((widget) => RETIRED_WIDGET_TYPES.has(widget.type)))) {
+    return tabs;
+  }
+  return tabs.map((tab) => ({
+    ...tab,
+    widgets: tab.widgets.filter((widget) => !RETIRED_WIDGET_TYPES.has(widget.type)),
+  }));
+}
 
 const isHttpUrl = (value: unknown) => {
   if (typeof value !== "string" || !URL.canParse(value)) return false;
@@ -627,9 +637,6 @@ const DEFAULT_DASHBOARD_TYPES = [
   "release",
   "maintenance",
   "roadmap-summary",
-  "working",
-  "blocked",
-  "done",
   "issues-summary",
   "prs",
   "canvas-slot",
@@ -643,9 +650,6 @@ const LEGACY_WIDGET_TYPES: Readonly<Record<string, string>> = {
   release: "release",
   maintenance: "maintenance",
   roadmap: "roadmap-summary",
-  working: "working",
-  blocked: "blocked",
-  done: "done",
   "new-request": "composer",
   issues: "issues-summary",
   prs: "prs",
@@ -721,8 +725,10 @@ function widgetDraftForId(id: string): WidgetDraftValue | null {
  */
 export function widgetOrderOps(
   tabs: ReadonlyArray<ProjectLayoutTab>,
-  order: ReadonlyArray<string>,
+  requestedOrder: ReadonlyArray<string>,
 ): { ops: ProjectLayoutOp[] } | { error: string } {
+  // A retired id, such as one in an older script, is skipped rather than an error.
+  const order = requestedOrder.filter((id) => !RETIRED_WIDGET_TYPES.has(id));
   const unknown = order.filter((id) => widgetDraftForId(id) === null);
   if (unknown.length > 0) {
     return {
