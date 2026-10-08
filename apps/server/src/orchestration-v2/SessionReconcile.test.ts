@@ -82,6 +82,7 @@ const recoveryLayer = ProviderRuntimeRecovery.layer.pipe(
 const reconcileScenario = (
   status: "running" | "interrupted" | "completed" | "failed",
   duringGrace?: "completed" | "failed" | "interrupted" | "newer" | "attempt" | "ordinal",
+  starting?: "newer-start" | "stale" | "active-turn" | "start-race" | "slow-alive" | "normal-stop",
 ) =>
   Effect.gen(function* () {
     const orchestrator = yield* Orchestrator.OrchestratorV2;
@@ -295,10 +296,77 @@ const reconcileScenario = (
         },
       });
     }
+    if (starting) {
+      const projection = yield* projections.getThreadProjection(threadId);
+      if (starting === "newer-start" || starting === "slow-alive") yield* TestClock.adjust(1);
+      const startedAt = yield* DateTime.now;
+      yield* projections.apply({
+        id: EventId.make("starting-session"),
+        type: "provider-session.updated",
+        threadId,
+        occurredAt: now,
+        payload: { ...projection.providerSessions[0]!, status: "starting", updatedAt: startedAt },
+      });
+      // Elapsed time cannot invalidate a start begun after the terminal receipt.
+      if (starting === "slow-alive") yield* TestClock.adjust("24 hours");
+      if (starting === "active-turn") {
+        yield* projections.apply({
+          id: EventId.make("starting-live-turn"),
+          type: "provider-turn.updated",
+          threadId,
+          occurredAt: now,
+          payload: { ...projection.providerTurns[0]!, status: "running", completedAt: null },
+        });
+      }
+    }
     const reconcile = makeSessionReconcileService({
       getThreadRecords: orchestrator.getThreadRecords,
-      dispatch: orchestrator.dispatch,
+      dispatch: (command) =>
+        Effect.gen(function* () {
+          if (starting === "start-race") {
+            const projection = yield* projections.getThreadProjection(threadId).pipe(Effect.orDie);
+            yield* TestClock.adjust(1);
+            const reopenedAt = yield* DateTime.now;
+            yield* projections
+              .apply({
+                id: EventId.make("racing-new-start"),
+                type: "provider-session.updated",
+                threadId,
+                occurredAt: reopenedAt,
+                payload: { ...projection.providerSessions[0]!, updatedAt: reopenedAt },
+              })
+              .pipe(Effect.orDie);
+          }
+          return yield* orchestrator.dispatch(command);
+        }),
     });
+    if (starting === "normal-stop") {
+      // Model B: ordinary Stop ACK interrupts background work while root/session wait.
+      yield* orchestrator.dispatch({ ...settle, interruptAcknowledged: true });
+      const stopped = yield* projections.getThreadProjection(threadId);
+      assert.equal(
+        stopped.turnItems.find((item) => item.id === commandItem(1))?.status,
+        "interrupted",
+      );
+      assert.equal(stopped.runs[0]?.status, "running");
+      assert.equal(stopped.providerSessions[0]?.status, "starting");
+      return;
+    }
+    if (starting && starting !== "stale") {
+      assert.equal(
+        (yield* Effect.exit(reconcile.reconcile({ commandId: settle.commandId, threadId })))._tag,
+        "Failure",
+        "A fresh or active provider start must be preserved",
+      );
+      const preserved = yield* projections.getThreadProjection(threadId);
+      assert.equal(preserved.providerSessions[0]?.status, "starting");
+      assert.equal(preserved.runs[0]?.status, "completed");
+      assert.equal(
+        preserved.turnItems.find((item) => item.id === commandItem(1))?.status,
+        "running",
+      );
+      return;
+    }
     if (status === "running") {
       assert.equal(
         (yield* Effect.exit(
@@ -536,7 +604,7 @@ const reconcileScenario = (
 
 it.effect.each(["interrupted", "completed", "failed"] as const)(
   "reconciles an ended %s run and replays safely",
-  reconcileScenario,
+  (status) => reconcileScenario(status),
 );
 
 it.effect("native terminal never arrives: fallback settles after the ten-second grace", () =>
@@ -555,4 +623,13 @@ it.effect("newer work started during the grace wins over the delayed fallback", 
 it.effect.each(["attempt", "ordinal"] as const)(
   "fallback preserves newer %s ownership during the grace",
   (ownership) => reconcileScenario("running", ownership),
+);
+
+it.effect.each(["newer-start", "stale", "active-turn", "start-race", "slow-alive"] as const)(
+  "starting-session reconciliation: %s",
+  (starting) => reconcileScenario("completed", undefined, starting),
+);
+
+it.effect("normal Stop ACK still interrupts background work while a start is pending", () =>
+  reconcileScenario("running", undefined, "normal-stop"),
 );
