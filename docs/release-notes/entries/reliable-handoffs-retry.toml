@@ -1,0 +1,4 @@
+id = "reliable-handoffs-retry"
+category = "fix"
+functionality = "agents"
+text = "Retry parent notifications after proven connection or pre-admission failures, while keeping ambiguous timeouts available for receipt lookup without duplicate sends."

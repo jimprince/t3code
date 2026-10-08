@@ -2735,3 +2735,13 @@ depends_on = [
 ]
 roles = []
 note = "Issues #173 (A2 with last-said as Latest) and #175 (board and status view combined). Replaces the epic-only Workstreams line; its deriveWorkstreams logic is deleted and its phase, milestone, progress and Blocked reading (an open blockedBy, a stuck Active task) carry over into workstreamBands.logic. The old block's 'blocked worker' signal is not carried over here: it moves with the Blocked widget into the threads view (#178). An epic's tasks are its 'Part of' children plus its checklist's open ones; a parked or closed epic lists as a row of the last band. Latest is the newest linked thread's worker summary, else the issue's newest comment; shells carry no message bodies. The Tasks view choice and each band's explicit open or closed choice are remembered per project and device in localStorage; a band with no choice follows its default (open when it waits on Brad, has agents working, or is the only band), so the default changing never reverses a choice. 'Since you looked' uses the page's previous-visit mark, so only the Dashboard block shows it."
+
+[[patch]]
+name = "fork-reliable-handoffs-retry"
+subject = "fix(agents): retry handoffs only when delivery is provably unsent"
+class = "product"
+purpose = "Recover watcher notifications from proven pre-admission transport failures while retaining uncertainty after ambiguous submission."
+retire_when = "Upstream watcher handoffs share equivalent submission-certainty classification and retry behavior."
+depends_on = ["fork-reliable-handoffs"]
+roles = []
+note = "Fold into fork-reliable-handoffs. Socket-open Timeout remains ambiguous because it can report an open-socket heartbeat failure. Parent wake fixtures preserve the explicit settled-recipient hold policy; production adapter fixture verifies native steering receipts instead of the former local queue."
