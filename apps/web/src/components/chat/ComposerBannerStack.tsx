@@ -12,7 +12,7 @@ const DISMISS_TRANSITION_MS = 220;
 export interface ComposerBannerStackItem {
   readonly id: string;
   readonly variant: ComposerBannerVariant;
-  readonly priority?: "urgent" | "activity" | "notice";
+  readonly priority?: "pending" | "urgent" | "activity" | "notice";
   readonly compact?: boolean;
   readonly icon: ReactNode;
   readonly title: ReactNode;
@@ -31,6 +31,7 @@ export type ComposerBannerStackContent = Pick<
 type ComposerBannerStackEntry = ComposerBannerStackItem | ComposerBannerStackContent;
 
 function bannerPriority(item: ComposerBannerStackEntry) {
+  if (item.priority === "pending") return -1;
   if (item.priority === "activity") {
     return 0;
   }
