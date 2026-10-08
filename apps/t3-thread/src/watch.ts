@@ -9,7 +9,12 @@ import { observeInactivity, inactivityStillCurrent } from "./inactivity.js";
 import { withInputReminder, inputNotificationStillCurrent } from "./inputReminders.js";
 import { notificationOrigin } from "./focusNotifications.js";
 import * as NodeCrypto from "node:crypto";
-import { sendOutcomeFailure, sendOutcomeHeld, sendTransportCause } from "./sendIntents.js";
+import {
+  sendOutcomeFailure,
+  sendOutcomeHeld,
+  sendTransportCause,
+  sendWasNeverSubmitted,
+} from "./sendIntents.js";
 import type { HandoffLookupInput, HandoffLookupResult } from "@t3tools/contracts";
 
 import { RemoteEnvironmentClient } from "./client.js";
@@ -838,6 +843,24 @@ export async function deliverPendingNotifications(
       nextAttemptAt: null,
     });
 
+    const retryFailure = (reason: string): SavedNotification => {
+      const attempts = (notification.attempts ?? 0) + 1;
+      return attempts >= maxAttempts
+        ? { ...terminal(`${reason} (gave up after ${attempts} attempts)`), attempts }
+        : {
+            ...notification,
+            ...(transportAttempted
+              ? { sendId: notification.sendId ?? `notification:${notification.id}` }
+              : {}),
+            status: "delivery-failed",
+            attempts,
+            updatedAt: attemptedAt,
+            lastAttemptedAt: attemptedAt,
+            lastError: reason,
+            nextAttemptAt: nextAttemptAt(attemptedAt, attempts),
+          };
+    };
+
     try {
       const state = await loadState();
       const subscription = state.subscriptions.find((route) =>
@@ -1091,45 +1114,34 @@ export async function deliverPendingNotifications(
           });
           const failure = sendOutcomeFailure(outcome);
           const held = sendOutcomeHeld(outcome);
-          result = {
-            ...notification,
-            sendId,
-            status: failure ? failure.status : held ? "uncertain" : "delivered",
-            onboardingDelivered: !failure && !held && includeOnboarding,
-            updatedAt: attemptedAt,
-            deliveredAt: failure || held ? null : attemptedAt,
-            lastAttemptedAt: attemptedAt,
-            lastError: failure?.causeCode ?? (held ? "SETTLED" : null),
-            nextAttemptAt: null,
-          };
+          result =
+            failure?.retryable === true
+              ? retryFailure(failure.causeCode)
+              : {
+                  ...notification,
+                  sendId,
+                  status: failure ? failure.status : held ? "uncertain" : "delivered",
+                  onboardingDelivered: !failure && !held && includeOnboarding,
+                  updatedAt: attemptedAt,
+                  deliveredAt: failure || held ? null : attemptedAt,
+                  lastAttemptedAt: attemptedAt,
+                  lastError: failure?.causeCode ?? (held ? "SETTLED" : null),
+                  nextAttemptAt: null,
+                };
         }
       }
     } catch (error) {
-      const attempts = (notification.attempts ?? 0) + 1;
-      const message = error instanceof Error ? error.message : String(error);
-      result = transportAttempted
-        ? {
-            ...notification,
-            sendId: notification.sendId ?? `notification:${notification.id}`,
-            status: "uncertain",
-            updatedAt: attemptedAt,
-            lastError: sendTransportCause(error),
-            nextAttemptAt: null,
-          }
-        : attempts >= maxAttempts
+      result =
+        transportAttempted && !sendWasNeverSubmitted(error)
           ? {
-              ...terminal(`${message} (gave up after ${attempts} attempts)`),
-              attempts,
-            }
-          : {
               ...notification,
-              status: "delivery-failed",
-              attempts,
+              sendId: notification.sendId ?? `notification:${notification.id}`,
+              status: "uncertain",
               updatedAt: attemptedAt,
-              lastAttemptedAt: attemptedAt,
-              lastError: message,
-              nextAttemptAt: nextAttemptAt(attemptedAt, attempts),
-            };
+              lastError: sendTransportCause(error),
+              nextAttemptAt: null,
+            }
+          : retryFailure(sendTransportCause(error));
     }
 
     const persisted = await finalizeNotificationAttempt({
