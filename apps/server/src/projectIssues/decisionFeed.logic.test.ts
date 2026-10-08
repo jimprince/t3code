@@ -239,10 +239,32 @@ describe("pendingAsksOfThread", () => {
       ["question", "r-question"],
       ["approval", "r-approval"],
     ]);
+    expect(asks.map((ask) => ask.canRespond)).toEqual([true, true]);
     expect(asks[1]).toMatchObject({
       threadTitle: "Printer Voice",
       projectTitle: "Home Assistant",
       detail: "git push --force-with-lease",
     });
+  });
+
+  it("marks a request that outlived its provider session as not answerable from outside", () => {
+    const stale = {
+      ...(request("r-stale", "command", "2026-10-08T01:00:00.000Z") as object),
+      responseCapability: { type: "not_resumable", reason: "session ended" },
+    } as never;
+    const [ask] = pendingAsksOfThread(
+      { id: ThreadId.make("t1"), title: "t", projectTitle: "p" },
+      {
+        runtimeRequests: [stale],
+        turnItems: [
+          {
+            type: "approval_request",
+            requestId: RuntimeRequestId.make("r-stale"),
+            prompt: "rm -rf",
+          },
+        ] as never,
+      },
+    );
+    expect(ask?.canRespond).toBe(false);
   });
 });
