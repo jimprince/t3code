@@ -1,4 +1,5 @@
 import { MessageForwardRpcs } from "./messageForward.ts";
+import { PlanPublicationInput, PlanPublicationResult } from "./planPublication.ts";
 import { GiteaTokenSetInput, GiteaTokenSetResult, GiteaTokenSetError } from "./giteaToken.ts";
 import { SessionReconcileInput, SessionReconcileError } from "./sessionReconcile.ts";
 import { HandoffRpcs } from "./handoffs.ts";
@@ -2335,7 +2336,14 @@ export const WsSessionReconcileRpc = Rpc.make("fork.session.reconcile", {
   error: Schema.Union([SessionReconcileError, EnvironmentAuthorizationError]),
 });
 
+export const WsPlanPublishRpc = Rpc.make("fork.plan.publish", {
+  payload: PlanPublicationInput,
+  success: PlanPublicationResult,
+  error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+});
+
 export const WsForkRpcGroup = RpcGroup.make(
+  WsPlanPublishRpc,
   ...HandoffRpcs,
   ...MessageForwardRpcs,
   WsGiteaSetTokenRpc,
