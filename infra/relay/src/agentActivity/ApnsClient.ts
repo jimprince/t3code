@@ -195,6 +195,7 @@ function makePushNotificationRequest(input: {
       environmentId: input.notification.environmentId,
       threadId: input.notification.threadId,
       deepLink: input.notification.deepLink,
+      ...(input.notification.notification ? { notification: input.notification.notification } : {}),
     },
   };
 }

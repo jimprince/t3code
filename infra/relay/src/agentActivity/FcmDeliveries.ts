@@ -1,3 +1,4 @@
+import { notificationEventKey } from "@t3tools/client-runtime/notification-eligibility";
 import { and, eq } from "drizzle-orm";
 import {
   RelayAgentActivityState,
@@ -66,7 +67,10 @@ export function androidAlertForState(
   if (!shouldAlertForActivity({ ...state, preferences, nowMs })) return null;
   const notification = notificationForActivity({ ...state, status: statusForPhase(state.phase) });
   return {
-    alert_id: JSON.stringify([state.environmentId, state.threadId, state.phase, state.updatedAt]),
+    alert_id: state.notification
+      ? notificationEventKey(state.environmentId, state.threadId, state.notification)
+      : JSON.stringify([state.environmentId, state.threadId, state.phase, state.updatedAt]),
+    alert_eligible: "true",
     alert_group: JSON.stringify([state.environmentId, state.threadId]),
     alert_title: notification.title,
     alert_body: notification.body,
@@ -92,7 +96,10 @@ export function androidAlertForAggregate(input: {
   if (activities.length === 1) {
     const notification = notificationForActivity(first);
     return {
-      alert_id: JSON.stringify([first.environmentId, first.threadId, first.phase, first.updatedAt]),
+      alert_id: first.notification
+        ? notificationEventKey(first.environmentId, first.threadId, first.notification)
+        : JSON.stringify([first.environmentId, first.threadId, first.phase, first.updatedAt]),
+      alert_eligible: "true",
       alert_group: JSON.stringify([first.environmentId, first.threadId]),
       alert_title: notification.title,
       alert_body: notification.body,
@@ -100,11 +107,16 @@ export function androidAlertForAggregate(input: {
     };
   }
   return {
+    alert_eligible: "true",
     // Every contributing queue job identifies the same group, including after
     // retries or a different database row order. The native handler deduplicates it.
     alert_id: JSON.stringify(
       activities
-        .map((row) => [row.environmentId, row.threadId, row.phase, row.updatedAt])
+        .map((row) =>
+          row.notification
+            ? [notificationEventKey(row.environmentId, row.threadId, row.notification)]
+            : [row.environmentId, row.threadId, row.phase, row.updatedAt],
+        )
         .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
     ),
     alert_title: alert.title,
