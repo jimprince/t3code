@@ -3,7 +3,7 @@ import { readMessageOrigin } from "@t3tools/shared/messageOrigin";
 import type { OrchestrationV2ThreadShell, ThreadNotificationEvent } from "@t3tools/contracts";
 
 // Product policy: adapters supply state/identities/preferences, not audience rules.
-export const NOTIFICATION_CASES = {
+const NOTIFICATION_CASES = {
   reply: { origins: ["human"], freshnessMs: 120_000, suppressOnlySameThreadWork: true },
   question: { origins: ["human", "worker", "routed", "automation", "unknown"], freshnessMs: null },
   approval: { origins: ["human", "worker", "routed", "automation", "unknown"], freshnessMs: null },

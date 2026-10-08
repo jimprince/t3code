@@ -73,8 +73,14 @@ class AgentNotificationsTest {
   fun missingOrRejectedEligibilityKeepsTheActivityQuiet() {
     AgentNotifications.receive(context, update("missing-verdict", true) - "alert_eligible")
     assertEquals(1, manager.activeNotifications.size)
-    assertTrue(manager.activeNotifications.single().notification.flags and Notification.FLAG_ONGOING_EVENT != 0)
-    AgentNotifications.receive(context, update("rejected-verdict", true) + ("alert_eligible" to "false"))
+    assertTrue(
+      manager.activeNotifications.single().notification.flags and
+        Notification.FLAG_ONGOING_EVENT != 0,
+    )
+    AgentNotifications.receive(
+      context,
+      update("rejected-verdict", true) + ("alert_eligible" to "false"),
+    )
     assertEquals(1, manager.activeNotifications.size)
   }
 
