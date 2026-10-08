@@ -6,6 +6,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 
+import type { SignedApnsDeliveryJob } from "./apnsDeliveryJobs.ts";
 import * as RelayConfiguration from "../Config.ts";
 import * as ApnsDeliveryQueue from "./ApnsDeliveryQueue.ts";
 
@@ -113,3 +114,60 @@ describe("ApnsDeliveryQueue", () => {
     }).pipe(Effect.provide(layer));
   });
 });
+
+it.effect(
+  "deduplicates APNs jobs by device and logical turn rather than mutable timestamps",
+  () => {
+    const sent: SignedApnsDeliveryJob[] = [];
+    const layer = ApnsDeliveryQueue.layer.pipe(
+      Layer.provide(
+        Layer.succeed(ApnsDeliveryQueue.ApnsDeliveryQueueSender, {
+          send: (job) =>
+            Effect.sync(() => {
+              sent.push(job);
+            }),
+        }),
+      ),
+      Layer.provide(NodeCryptoLayer.layer),
+      Layer.provide(RelayConfiguration.layer(config)),
+    );
+    return Effect.gen(function* () {
+      const queue = yield* ApnsDeliveryQueue.ApnsDeliveryQueue;
+      const input = {
+        userId: "user",
+        deviceId: "phone",
+        token: "token",
+        notification: {
+          title: "Thread",
+          body: "Reply ready",
+          environmentId: "env",
+          threadId: "thread",
+          deepLink: "/threads/env/thread",
+          notification: {
+            kind: "reply" as const,
+            identity: "turn",
+            origin: "human" as const,
+            occurredAt: "1970-01-01T00:00:00Z",
+          },
+        },
+      };
+      yield* queue.enqueuePushNotification(input);
+      yield* queue.enqueuePushNotification({
+        ...input,
+        notification: { ...input.notification, updatedAt: "later" },
+      });
+      yield* queue.enqueuePushNotification({
+        ...input,
+        notification: {
+          ...input.notification,
+          notification: { ...input.notification.notification, identity: "next-turn" },
+        },
+      });
+      yield* queue.enqueuePushNotification({ ...input, deviceId: "other-phone" });
+      expect(sent[0]!.payload.jobId).toBe(sent[1]!.payload.jobId);
+      expect(sent[2]!.payload.jobId).not.toBe(sent[0]!.payload.jobId);
+      expect(sent[3]!.payload.jobId).not.toBe(sent[0]!.payload.jobId);
+      expect(sent[0]!.payload.notification?.notification).toEqual(input.notification.notification);
+    }).pipe(Effect.provide(layer));
+  },
+);
