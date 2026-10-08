@@ -43,7 +43,6 @@ import {
   needsYouDecision,
   type NeedsYouDecision,
   nextReleaseRequests,
-  requestsByWorker,
   requestsOfSettledThreads,
   STAGE_STATUS,
   TASK_STATUS_LABEL,
@@ -1085,26 +1084,5 @@ export function ProjectMaintenanceWidget({
         })}
       </ul>
     </ProjectSection>
-  );
-}
-
-/** "for: <request>" under a worker row: which of Brad's asks the worker serves. */
-export function WorkerRequestTag({
-  summary,
-  threadId,
-}: {
-  readonly summary: OrchestratorSummary;
-  readonly threadId: string;
-}) {
-  const { requests } = useProjectRequests(summary);
-  const served = useMemo(
-    () => requestsByWorker(requests).get(threadId) ?? [],
-    [requests, threadId],
-  );
-  if (served.length === 0) return null;
-  return (
-    <span className="mt-0.5 block text-xs text-muted-foreground">
-      for: {served.map((request) => request.issue.title).join(" · ")}
-    </span>
   );
 }
