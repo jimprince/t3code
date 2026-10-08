@@ -294,45 +294,22 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
       (await NodeFSP.readFile(NodePath.join(directory, "identity"), "utf8")).split("\n"),
     ).toContain(created.threadId);
     const queued = await client.sendMessage({ threadId: created.threadId, text: "Follow-up" });
-    expect(queued.queued).toBe(true);
-    const sender = { source: "thread-send", fromThreadId: "sender" };
-    const first = await client.sendMessage({
-      threadId: created.threadId,
-      text: "status 1",
-      origin: sender,
-      senderEnvironment: "one",
-      coalesceKey: "status",
+    // Native automatic admission steers the active provider; the operator must not
+    // keep a second actionable local queue after the server accepts the handoff.
+    expect(queued).toMatchObject({
+      dispatched: true,
+      queued: false,
+      receipt: { status: "steered" },
     });
-    const ordinary = await client.sendMessage({
-      threadId: created.threadId,
-      text: "ordinary instruction",
-      origin: sender,
-      senderEnvironment: "one",
-    });
-    const foreign = await client.sendMessage({
-      threadId: created.threadId,
-      text: "foreign status",
-      origin: sender,
-      senderEnvironment: "two",
-      coalesceKey: "status",
-    });
-    const latest = await client.sendMessage({
-      threadId: created.threadId,
-      text: "status 2",
-      origin: sender,
-      senderEnvironment: "one",
-      coalesceKey: "status",
-    });
-    expect(first.queued && ordinary.queued && foreign.queued && latest.queued).toBe(true);
-    const queuedState = await loadState();
-    expect(queuedState.queuedSends.find((record) => record.text === "status 1")?.status).toBe(
-      "cancelled",
+    expect(await client.lookupSendReceipt({ type: "exact", sendId: queued.sendId! })).toMatchObject(
+      {
+        state: "found",
+        receipts: [{ sendId: queued.sendId, status: "steered" }],
+      },
     );
-    expect(
-      queuedState.queuedSends
-        .filter((record) => record.status === "queued")
-        .map((record) => record.text),
-    ).toEqual(["Follow-up", "ordinary instruction", "foreign status", "status 2"]);
+    expect((await loadState()).queuedSends).toEqual([]);
+    // Queue/coalesce identity and supersession are exercised by the production
+    // HandoffService integration fixture; this fixture covers active provider delivery.
     expect(await client.setThreadPinned(created.threadId, true)).toMatchObject({ pinned: true });
     expect(await client.setThreadPinned(created.threadId, false)).toMatchObject({ pinned: false });
     const interrupted = rpc.waitForThreadEvent(created.threadId, (item) =>
@@ -345,10 +322,7 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
     await client.interrupt(created.threadId);
     await interrupted;
     const drained = await drainQueuedSends({ clientFactory: () => client });
-    expect(drained[0]?.lastError).toBeNull();
-    expect(drained.map((record) => [record.text, record.status])).toEqual([
-      ["Follow-up", "dispatched"],
-    ]);
+    expect(drained).toEqual([]);
     const delivered = rpc.waitForThreadEvent(created.threadId, (item) =>
       item.kind === "snapshot"
         ? item.projection.messages.some((message) => message.text === "Follow-up")
@@ -357,12 +331,6 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
           item.event.payload.text === "Follow-up",
     );
     await delivered;
-    expect(
-      (await client.findThread(created.threadId)).messages.some(
-        (message) => message.text === "status 1",
-      ),
-    ).toBe(false);
-    await client.interrupt(created.threadId);
     expect(await client.settleThread(created.threadId)).toMatchObject({
       settledOverride: "settled",
     });
@@ -396,6 +364,13 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
         parentThreadId: null,
         remoteParent: null,
       });
+      await rpc.waitForThreadEvent(child.threadId, (item) =>
+        item.kind === "snapshot"
+          ? item.projection.runs.some((run) => run.status === "running")
+          : item.kind === "event" &&
+            item.event.type === "run.updated" &&
+            item.event.payload.status === "running",
+      );
       await client.interrupt(child.threadId);
     }
   } finally {
