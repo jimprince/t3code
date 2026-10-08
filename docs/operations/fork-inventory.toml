@@ -2564,3 +2564,13 @@ note = "V2 already repairs a starting session left on its latest ended turn. A c
 id = "v2-starting-reconcile-provider-write-window"
 decision = "defer"
 note = "Reconcile-only dispatch evaluates causal ownership on the same locked projection snapshot passed into Stop settlement; ordinary Stop keeps its default load and semantics. Remaining read-to-commit window: ProviderSessionManager writes directly to EventSink, and RunExecutionService -> ProviderEventIngestor -> EventSink bypasses ThreadCommandExecutor. A provider session or turn update can commit after the guarded snapshot read and before the planned reconcile commit; worst case, that reconcile can overwrite a newer session status or interrupt background work using stale ownership. The six focused cases cover the pre-dispatch race only, not this window. Follow-up: https://git.bradleyprince.com/brad/t3code-fork/issues/196. No EventSink recheck or outer SQL transaction is added."
+
+[[patch]]
+name = "fork-notification-eligibility"
+subject = "fix(notifications): alert for human replies and actionable requests"
+class = "product"
+purpose = "Alert once for replies to human messages and actionable requests, while automatic completions remain silent across web, desktop and mobile."
+retire_when = "Upstream provides one adjustable notification eligibility policy with provenance and logical deduplication across all alert surfaces."
+depends_on = ["fork-orchestrator-focus", "fork-child-input-attention", "fork-scripts-automations"]
+roles = []
+note = "Approved #190 policy. V2 projects starting-message provenance and final disposition without new migration or transcript hydration. One client-runtime table controls audience and freshness. Descendants do not suppress ended human replies; same-thread work does. Eligible requests and errors use stable run/request identities. Shared evaluator gates web, desktop, APNs, FCM and local mobile presentation; operational failure feedback and Live Activity group copy remain unchanged. Native lint/Robolectric are integration-gate obligations."
