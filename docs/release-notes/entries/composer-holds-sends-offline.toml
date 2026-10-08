@@ -1,0 +1,4 @@
+id = "composer-holds-sends-offline"
+category = "feature"
+functionality = "composer"
+text = "Plain text messages sent while a server is restarting or unreachable wait in the composer and are delivered when it reconnects; if the server refuses one, the composer says it was not sent and offers Retry."
