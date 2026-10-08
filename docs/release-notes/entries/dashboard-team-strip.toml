@@ -1,0 +1,4 @@
+id = "dashboard-team-strip"
+category = "feature"
+functionality = "projects"
+text = "The Dashboard has a Team strip above the workstreams listing the project's head and its standing agents, with each one's responsibility, status and what it owns."
