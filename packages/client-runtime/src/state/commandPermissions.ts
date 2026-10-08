@@ -9,9 +9,9 @@ import {
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
-import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
+import { Atom, AtomRegistry } from "effect/reactivity";
 import type { EnvironmentRegistry } from "../connection/registry.ts";
-import { createEnvironmentSessionAtoms } from "./session.ts";
+import { createEnvironmentSessionAtoms, sessionStateGrants } from "./session.ts";
 
 /** UI availability and dispatch use the same target session and method policy. */
 function makeCommandPermissions<R, E>(
@@ -27,12 +27,8 @@ function makeCommandPermissions<R, E>(
         const scopes = scopeKey.split(",").filter(Boolean) as AuthEnvironmentScope[];
         if (scopes.length === 0) return true;
         const result = get(sessions.sessionStateAtom(environmentId));
-        const session = Option.getOrNull(AsyncResult.value(result));
-        return (
-          result._tag !== "Failure" &&
-          session !== null &&
-          scopes.every((scope) => sessionGrantsScope(session, scope))
-        );
+        const session = sessionStateGrants(result);
+        return session !== null && scopes.every((scope) => sessionGrantsScope(session, scope));
       }),
     ),
   );
@@ -50,12 +46,16 @@ function makeCommandPermissions<R, E>(
       return Effect.scoped(
         Effect.gen(function* () {
           yield* AtomRegistry.mount(registry, atom);
-          const session = yield* AtomRegistry.getResult(registry, atom, {
-            suspendOnWaiting: false,
-          }).pipe(
-            Effect.timeoutOption(6_000),
-            Effect.catch(() => Effect.succeed(Option.none<AuthSessionState>())),
-          );
+          const cached = sessionStateGrants(registry.get(atom));
+          const session =
+            cached !== null
+              ? Option.some(cached)
+              : yield* AtomRegistry.getResult(registry, atom, {
+                  suspendOnWaiting: false,
+                }).pipe(
+                  Effect.timeoutOption(6_000),
+                  Effect.catch(() => Effect.succeed(Option.none<AuthSessionState>())),
+                );
           const missing = scopes.find(
             (scope) => Option.isNone(session) || !sessionGrantsScope(session.value, scope),
           );
