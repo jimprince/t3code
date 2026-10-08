@@ -63,6 +63,26 @@
       "types": "./src/decisionAnswer.ts",
       "default": "./src/decisionAnswer.ts"
     },
+    "./decision-feed": {
+      "types": "./src/decisionFeed.ts",
+      "default": "./src/decisionFeed.ts"
+    },
+    "./decision-ask": {
+      "types": "./src/decisionAsk.ts",
+      "default": "./src/decisionAsk.ts"
+    },
+    "./decision-outcome": {
+      "types": "./src/decisionOutcome.ts",
+      "default": "./src/decisionOutcome.ts"
+    },
+    "./decision-markdown-text": {
+      "types": "./src/decisionMarkdownText.ts",
+      "default": "./src/decisionMarkdownText.ts"
+    },
+    "./decision-comment": {
+      "types": "./src/decisionComment.ts",
+      "default": "./src/decisionComment.ts"
+    },
     "./decision-deferral": {
       "types": "./src/decisionDeferral.ts",
       "default": "./src/decisionDeferral.ts"
