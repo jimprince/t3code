@@ -1,4 +1,6 @@
 import { makeMessageForwardService } from "./forkThreads/MessageForwardService.ts";
+import * as PlanPublicationService from "./projectIssues/PlanPublicationService.ts";
+import * as PlanTaskLaunch from "./projectIssues/PlanTaskLaunch.ts";
 import { makeGiteaTokenRpcHandler } from "./sourceControl/GiteaTokenRpc.ts";
 import { AssetGiteaMediaUrlValidationError } from "@t3tools/contracts";
 import { giteaMediaFetchTarget } from "./assets/GiteaMediaFetch.ts";
@@ -1356,6 +1358,8 @@ const makeWsRpcLayer = (
       const projectIssues = yield* ProjectIssuesService.make;
       const requestLedger = yield* RequestLedger.make({ projectIssues, threadIssues });
       const decisionFeed = yield* DecisionFeed.make({ projectIssues, ledger: requestLedger });
+      const planTaskLauncher = yield* PlanTaskLaunch.make.pipe(Effect.orDie);
+      const planPublication = yield* PlanPublicationService.make(requestLedger, planTaskLauncher);
       const projectCanvas = yield* ProjectCanvasService.make;
       const requestIntake = yield* RequestIntake.make({
         providers: providerRegistry,
@@ -3970,6 +3974,7 @@ const makeWsRpcLayer = (
       const forkHandlers = WsForkRpcGroup.of({
         "fork.message.forward.prepare": (input) => forwards.prepare(input),
         "fork.message.forward.accept": (input) => forwards.accept(input),
+        "fork.plan.publish": (input) => planPublication.publish(input),
         "fork.send.accept": (input) => handoffs.accept(input),
         "fork.send.lookup": (input) => handoffs.lookup(input),
         "fork.send.inbox": (input) => handoffs.inbox(input.threadId),
