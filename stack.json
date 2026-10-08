@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "786e9d7fe6a151e6f75d701e5ea547cc420705be",
-  "head": "e1bc106623304938df7f0cbeacc87a6796fa6574",
+  "prev": "f6b1d8bd8f6cd75b5d1bec29ee813e6cc7098dec",
+  "head": "e22662b961672a8461cfbe698422d6eb73b3a7f6",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -125,8 +125,7 @@
     "fork-dash-173-part-of",
     "fork-dash-173",
     "fork-reliable-handoffs-retry",
-    "fork-dash-178",
-    "refresh-temp"
+    "fork-dash-178"
   ],
   "unapplied": [],
   "hidden": [],
@@ -198,7 +197,7 @@
       "oid": "ed21737b1e06373af39abfda1216e2ff5b7e1bee"
     },
     "fork-dash-178": {
-      "oid": "fabb5ee8c7eaca30925a9730abdd18ebac9a82a1"
+      "oid": "e22662b961672a8461cfbe698422d6eb73b3a7f6"
     },
     "fork-dash-187": {
       "oid": "7bc0f2eb43a3d3fce8c4abba43ad824f74c67c01"
@@ -499,9 +498,6 @@
     },
     "fork-worktree-cleanup": {
       "oid": "59f5bb3765528295ed47a214763443995570f33c"
-    },
-    "refresh-temp": {
-      "oid": "e1bc106623304938df7f0cbeacc87a6796fa6574"
     }
   }
 }
