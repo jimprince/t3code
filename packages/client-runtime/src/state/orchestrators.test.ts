@@ -10,6 +10,7 @@ import {
   buildOrchestratorSummaries,
   buildStandaloneThreadGroups,
   orchestratorDoneSince,
+  projectSidebarBucket,
   isThreadWorking,
   joinOrchestratorMetadata,
   lastActivityAt,
@@ -131,6 +132,33 @@ const thread = (
       : {}),
   };
 };
+
+it("Projects includes only a delegator and explicitly marked subprojects after joining seeded metadata", () => {
+  const root = thread("delegator", null, { pinnedAt: "2026-10-01T00:00:00.000Z" });
+  const workers = Array.from({ length: 5 }, (_, i) =>
+    thread(`delegate-${i}`, null, { pinnedAt: i === 0 ? "2026-10-01T00:00:00.000Z" : null }),
+  );
+  const rows = workers.map((worker) => ({
+    environmentId: root.environmentId,
+    threadId: worker.id,
+    parentThreadId: root.id,
+    subproject: "off" as const,
+    settleOnComplete: true,
+  }));
+  const joined = joinOrchestratorMetadata([root, ...workers], rows);
+  expect(
+    buildOrchestratorSummaries(joined, [project("project-a")]).map((summary) => summary.root.id),
+  ).toEqual([root.id]);
+  const withSubproject = joinOrchestratorMetadata(
+    [root, ...workers],
+    rows.map((row, i) => (i === 1 ? { ...row, subproject: "on" as const } : row)),
+  );
+  expect(
+    buildOrchestratorSummaries(withSubproject, [project("project-a")]).map(
+      (summary) => summary.root.id,
+    ),
+  ).toEqual([root.id, workers[1]!.id]);
+});
 
 describe("buildOrchestratorSummaries", () => {
   it("finds top-level orchestrators and rolls nested activity, attention, projects, and links up", () => {
@@ -329,6 +357,161 @@ describe("buildOrchestratorSummaries", () => {
       "archived-child",
     ]);
     expect(threadsVisibleInThreadsMode(all, false)).toEqual(all);
+  });
+});
+
+describe("subprojects", () => {
+  const running = (id: string): NonNullable<Overrides["session"]> => ({
+    threadId: id,
+    status: "running",
+    providerName: "codex",
+    runtimeMode: "full-access",
+    activeTurnId: null,
+    updatedAt: "2026-10-01T00:00:00.000Z",
+    lastError: null,
+  });
+
+  it("gives a mode-on nested thread its own project and keeps its workers out of the parent's tree", () => {
+    const root = thread("root", null);
+    const sub = thread("sub", "root", { subproject: "on" });
+    const subWorker = thread("sub-worker", "sub", { hasPendingUserInput: true });
+    const worker = thread("worker", "root", { session: running("worker") });
+    const summaries = buildOrchestratorSummaries(
+      [root, sub, subWorker, worker],
+      [project("project-a")],
+    );
+    const byId = new Map(summaries.map((item) => [item.root.id as string, item]));
+
+    expect([...byId.keys()].toSorted()).toEqual(["root", "sub"]);
+    const parent = byId.get("root")!;
+    expect(parent.parentProjectKey).toBeNull();
+    expect(parent.descendants.map((item) => item.id)).toEqual(["worker"]);
+    expect(parent.subprojects.map((item) => item.root.id)).toEqual(["sub"]);
+    expect(parent.needsYou).toEqual([]);
+    // The parent's rollup counts what is waiting on you inside the subproject.
+    expect(parent.rollup.needsYou).toBe(1);
+    // The worker running under the parent, plus the subproject's worker waiting on an answer.
+    expect(parent.rollup.working).toBe(2);
+    expect(parent.activeWorkerCount).toBe(1);
+    const child = byId.get("sub")!;
+    expect(child.parentProjectKey).toBe("env-1:root");
+    expect(child.descendants.map((item) => item.id)).toEqual(["sub-worker"]);
+    expect(child.needsYou.map((item) => item.thread.id)).toEqual(["sub-worker"]);
+    expect(child.rollup.needsYou).toBe(1);
+  });
+
+  it("leaves auto and off threads, and a top-level thread marked on, as before", () => {
+    const root = thread("root", null);
+    const auto = thread("auto", "root", { subproject: "auto" });
+    const off = thread("off", "root", { subproject: "off" });
+    const autoWorker = thread("auto-worker", "auto");
+    const top = thread("top", null, { subproject: "on" });
+    const topWorker = thread("top-worker", "top");
+    const summaries = buildOrchestratorSummaries(
+      [root, auto, off, autoWorker, top, topWorker],
+      [project("project-a")],
+    );
+    expect(summaries.map((item) => item.root.id).toSorted()).toEqual(["root", "top"]);
+    const parent = summaries.find((item) => item.root.id === "root")!;
+    expect(parent.descendants.map((item) => item.id).toSorted()).toEqual([
+      "auto",
+      "auto-worker",
+      "off",
+    ]);
+    expect(parent.subprojects).toEqual([]);
+    expect(summaries.find((item) => item.root.id === "top")!.parentProjectKey).toBeNull();
+  });
+
+  it("nests a subproject under the nearest enclosing project, past plain workers", () => {
+    const root = thread("root", null);
+    const mid = thread("mid", "root", { subproject: "on" });
+    const plain = thread("plain", "mid");
+    const deep = thread("deep", "plain", { subproject: "on" });
+    const summaries = buildOrchestratorSummaries([root, mid, plain, deep], []);
+    const byId = new Map(summaries.map((item) => [item.root.id as string, item]));
+    expect(byId.get("deep")!.parentProjectKey).toBe("env-1:mid");
+    expect(byId.get("mid")!.subprojects.map((item) => item.root.id)).toEqual(["deep"]);
+    expect(byId.get("mid")!.descendants.map((item) => item.id)).toEqual(["plain"]);
+    expect(byId.get("root")!.subprojects.map((item) => item.root.id)).toEqual(["mid"]);
+  });
+
+  it("drives the parent's sidebar bucket and status from its subprojects", () => {
+    const root = thread("root", null);
+    const quietSub = thread("quiet-sub", "root", { subproject: "on" });
+    const busySub = thread("busy-sub", "root", { subproject: "on", session: running("busy-sub") });
+    const parent = buildOrchestratorSummaries([root, quietSub, busySub], []).find(
+      (item) => item.root.id === "root",
+    );
+    expect(parent!.status).toBe("supervising");
+    expect(parent!.rollup.working).toBe(1);
+    expect(projectSidebarBucket(parent!, 0)).toBe("working");
+
+    const asking = thread("asking-sub", "root", { subproject: "on", hasPendingApprovals: true });
+    const attention = buildOrchestratorSummaries([root, asking], []).find(
+      (item) => item.root.id === "root",
+    );
+    expect(attention!.needsYou).toEqual([]);
+    expect(projectSidebarBucket(attention!, 0)).toBe("needs-you");
+  });
+
+  it("orders a project's subprojects by what needs you first", () => {
+    const root = thread("root", null);
+    const calm = thread("calm", "root", { subproject: "on", title: "Calm" });
+    const asking = thread("asking", "root", {
+      subproject: "on",
+      title: "Zed",
+      hasPendingUserInput: true,
+    });
+    const parent = buildOrchestratorSummaries([root, calm, asking], []).find(
+      (item) => item.root.id === "root",
+    );
+    expect(
+      sortOrchestratorSummariesForSidebar(parent!.subprojects, 0).map((item) => item.root.id),
+    ).toEqual(["asking", "calm"]);
+  });
+
+  it("makes a subproject with workers whose parent is archived a top-level project", () => {
+    const root = thread("root", null, { archivedAt: "2026-10-01T00:00:00.000Z" });
+    const sub = thread("sub", "root", { subproject: "on" });
+    const worker = thread("worker", "sub");
+    // The sidebar and board pass sidecar metadata; the join drops an archived parent.
+    const metadata = [
+      { environmentId: "env-1", threadId: ThreadId.make("root"), parentThreadId: null },
+      {
+        environmentId: "env-1",
+        threadId: ThreadId.make("sub"),
+        parentThreadId: ThreadId.make("root"),
+        subproject: "on" as const,
+      },
+      {
+        environmentId: "env-1",
+        threadId: ThreadId.make("worker"),
+        parentThreadId: ThreadId.make("sub"),
+      },
+    ];
+    const summaries = buildOrchestratorSummaries([root, sub, worker], [], metadata);
+    expect(summaries.map((item) => item.root.id)).toEqual(["sub"]);
+    expect(summaries[0]?.parentProjectKey).toBeNull();
+  });
+
+  it("reads the mode from the nesting sidecar", () => {
+    const root = thread("root", null);
+    const sub = thread("sub", "root");
+    const summaries = buildOrchestratorSummaries(
+      [root, sub],
+      [],
+      [
+        {
+          environmentId: "env-1",
+          threadId: ThreadId.make("sub"),
+          parentThreadId: ThreadId.make("root"),
+          subproject: "on",
+        },
+        { environmentId: "env-1", threadId: ThreadId.make("root"), parentThreadId: null },
+      ],
+    );
+    expect(summaries.map((item) => item.root.id).toSorted()).toEqual(["root", "sub"]);
+    expect(summaries.find((item) => item.root.id === "sub")!.root.subproject).toBe("on");
   });
 });
 
