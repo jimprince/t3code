@@ -1,0 +1,4 @@
+id = "subprojects-table"
+category = "feature"
+functionality = "projects"
+text = "A project page lists its subprojects in one table with health, task progress, working agents, needs-you count and last activity, a folded sidebar card shows how many subprojects it hides, and the page header and rows no longer clip or crowd the Edit button at phone width."
