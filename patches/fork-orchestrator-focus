@@ -1,6 +1,6 @@
 Bottom: bcbfb6161c891715e0eb9e99f97fbe83fa9ec246
 Top:    bd8410fea2d39b7849ccf0b9d9e4aff33997faa2
 Author: brad <bradprin@live.com>
-Date:   2026-10-08 19:34:17 +0000
+Date:   2026-10-08 19:34:47 +0000
 
 feat(threads): fold worker traffic in orchestrator threads
