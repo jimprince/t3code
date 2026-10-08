@@ -140,6 +140,8 @@ export const ProjectIssue = Schema.Struct({
   milestone: Schema.optionalKey(Schema.NullOr(ProjectMilestone)),
   /** Set for epics. */
   epic: Schema.optionalKey(ProjectEpicProgress),
+  /** The epic it is part of: its body starts "Part of #N", in the same repository. */
+  partOf: Schema.optionalKey(PositiveInt),
   /** Same-repository issue numbers its body or newest comment says it is "Blocked by". */
   blockedBy: Schema.optionalKey(Schema.Array(PositiveInt)),
   /** For a request waiting on Brad: the newest comment, usually the agent's answer or summary. */
