@@ -72,7 +72,7 @@ const failure = (result: AtomCommandResult<unknown, unknown>): Result => {
  * plans, its decisions, and the answers, approvals, reviews and tests that used to be Needs
  * you. The same data feeds the widget and the "N need you" count in the status line.
  */
-export function useDecisionFeedData(
+function useDecisionFeedData(
   summary: OrchestratorSummary,
   project: string | null,
   /** Only the widget re-reads the asks when the waiting set changes; the count shares its read. */

@@ -360,7 +360,7 @@ export const findWidgetType = (type: string) =>
  * them). They are not offered or accepted, but layouts saved while they existed
  * still list them, so readers drop them silently instead of failing.
  */
-export const RETIRED_WIDGET_TYPES: ReadonlySet<string> = new Set(["working", "blocked", "done"]);
+const RETIRED_WIDGET_TYPES: ReadonlySet<string> = new Set(["working", "blocked", "done"]);
 
 /**
  * The tabs without retired widgets: the same array when there are none, so a
