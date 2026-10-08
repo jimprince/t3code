@@ -2785,3 +2785,12 @@ retire_when = "Upstream supports exact stored-message forwarding across environm
 depends_on = ["fork-reliable-handoffs", "fork-thread-transfer"]
 roles = []
 note = "Issue #170, including chief-of-staff#26. Source preparation returns metadata; cross-environment bytes stream through existing signed asset downloads and attachment uploads. The target reuses TransferAttachments for store-only copies under deterministic IDs before native handoff dispatch. MCP forwards within its own environment and directs remote targets to the CLI. The UI action remains a separate lane. Integration fork.6: adapted replay to preserve UI theme/owner notes alongside BE authoritative contract and helpers. Fork.6 integration: adapt: union inventory, retain earlier integrated owner notes and later stanza (docs/operations/fork-inventory.toml). Retire/narrow/relocate do not apply to these retained UI behaviors or inventory insertions."
+[[patch]]
+name = "fork-publish-task-plan"
+subject = "feat(agents): publish approved plans as idempotent workstreams"
+class = "product"
+purpose = "Publish approved markdown lists or T3 proposed plans to Gitea epics and owned tasks with retry-safe identity and optional nested workers."
+retire_when = "Upstream supplies the same approved-plan publication and task-worker lifecycle."
+depends_on = ["fork-create-task-issue", "fork-project-page-workflow", "fork-worker-operations"]
+roles = []
+note = "Gitea issue-body markers are the publication record; existing issue state and manual notes survive reruns. Integration fork.6: adapted replay to preserve UI theme/owner notes alongside BE authoritative contract and helpers. Fork.6 integration: adapt: union inventory, retain earlier integrated owner notes and later stanza (docs/operations/fork-inventory.toml). Retire/narrow/relocate do not apply to these retained UI behaviors or inventory insertions."
