@@ -86,7 +86,7 @@ import {
   type WorktreeSetupSnapshot,
 } from "@t3tools/contracts";
 import { type EnvironmentConnectionPresentation } from "@t3tools/client-runtime/connection";
-import { deriveThreadTitleSeed } from "@t3tools/client-runtime/operations";
+
 import {
   wasBootstrapThreadDeleted,
   wasBootstrapThreadNotCreated,
@@ -230,8 +230,6 @@ import {
   DEFAULT_THREAD_TERMINAL_ID,
   MAX_TERMINALS_PER_GROUP,
   type ChatMessage,
-  isBrowserPreviewAttachment,
-  isImageAttachment,
   type SessionPhase,
   type Thread,
 } from "../types";
@@ -8816,6 +8814,7 @@ export default function ChatView(props: ChatViewProps) {
     }
     const sendCtx = composerRef.current?.getSendContext();
     if (activePendingProgress && sendCtx?.answeringPendingUserInput !== false) {
+      if (activePendingIsResponding) return;
       if (directAnnotation) {
         notifyDirectAnnotationAttached();
         return;
