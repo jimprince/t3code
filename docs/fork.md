@@ -5,6 +5,7 @@ This index owns fork-specific links so upstream's documentation index can evolve
 - [Performance protection and recovery](./user/performance-recovery.md)
 - [Moving threads between machines](./user/moving-threads.md)
 - [`t3-thread` operator CLI](./architecture/t3-thread.md)
+- [Repair older delegated workers](./operations/delegated-worker-repair.md)
 - [Mobile app](../apps/mobile/README.md) and [iOS deployment options](./mobile/ios-deployment.md)
 - [Rebase the fork or resolve a patch conflict](./operations/fork-maintenance.md#rebase-and-conflict-repair)
 - [Add or change a fork feature](./operations/fork-maintenance.md#adding-or-changing-fork-functionality)
