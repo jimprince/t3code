@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off globalDate:off -- Real-process lock tests use Node IPC/GC and elapsed wall time.
 import * as NodeChildProcess from "node:child_process";
 import * as NodeEvents from "node:events";
 import * as NodeFSP from "node:fs/promises";
