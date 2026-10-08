@@ -1,3 +1,9 @@
+import {
+  evaluateNotification,
+  notificationMessage,
+  threadNotificationEvent,
+  threadNotificationBusy,
+} from "@t3tools/client-runtime/notification-eligibility";
 import { useSupervisionForest } from "../state/forkSupervision";
 import {
   supervisionKey,
@@ -26,7 +32,6 @@ import {
   setNotificationBadge,
   unlockNotificationAudio,
 } from "../threadNotifications";
-import { resolveSidebarThreadStatus } from "./Sidebar.logic";
 import { toastManager } from "./ui/toast";
 
 export function ThreadNotificationCoordinator() {
@@ -110,53 +115,45 @@ function EnvironmentNotifications({
   const { environmentId: activeEnvironmentId, threadId: activeThreadId } = useParams({
     strict: false,
   });
-  const previous = useRef(
-    new Map<ThreadId, { attention: string | null; completion: number | null }>(),
-  );
+  const previous = useRef(new Map<ThreadId, string | null>());
+  const seen = useRef(new Set<string>());
 
   useEffect(() => {
     if (shell.status !== "live" || Option.isNone(shell.snapshot)) {
       previous.current.clear();
       return;
     }
-    const next = new Map<ThreadId, { attention: string | null; completion: number | null }>();
+    const next = new Map<ThreadId, string | null>();
     for (const rawThread of shell.snapshot.value.threads) {
-      if (rawThread.lineage.relationshipToParent === "subagent") continue;
       const thread = presentThreadShell(environmentId, rawThread);
-      let status = resolveSidebarThreadStatus(thread);
-      if (status === "ready" && thread.latestRun?.status === "failed") status = "failed";
+      const event = threadNotificationEvent(rawThread);
       const prior = previous.current.get(thread.id);
-      const attention =
-        status === "input" || status === "approval" || status === "failed" || status === "limited"
-          ? `${thread.latestRun?.runId ?? ""}:${status}`
-          : null;
-      const completedAt = Date.parse(thread.latestRun?.completedAt ?? "");
-      // Commands left running (a dev server) read as ready; subagents and monitors wait.
-      const completion =
-        status === "ready" &&
-        thread.latestRun?.status === "completed" &&
-        Number.isFinite(completedAt)
-          ? completedAt
-          : (prior?.completion ?? null);
-      next.set(thread.id, { attention, completion });
-      if (!prior || thread.archivedAt !== null) continue;
-      const kind =
-        attention && attention !== prior.attention
-          ? "input"
-          : completion !== null && (prior.completion === null || completion > prior.completion)
-            ? "completion"
-            : null;
-      if (!kind) continue;
-      const title =
-        kind === "completion"
-          ? "Thread completed"
-          : status === "approval"
-            ? "Approval needed"
-            : status === "limited"
-              ? "Usage limit reached"
-              : status === "failed"
-                ? "Thread failed"
-                : "Input needed";
+      const verdict = evaluateNotification({
+        event,
+        environmentId,
+        threadId: thread.id,
+        nowMs: Date.now(),
+        archived: thread.archivedAt !== null,
+        parentOwned:
+          rawThread.lineage.relationshipToParent === "subagent" && event?.origin !== "human",
+        busy: threadNotificationBusy(rawThread),
+        seen: seen.current,
+        observed: true,
+        onScreen:
+          document.visibilityState === "visible" &&
+          document.hasFocus() &&
+          activeEnvironmentId === environmentId &&
+          activeThreadId === thread.id,
+      });
+      next.set(thread.id, verdict.key);
+      if (prior === undefined || !event || !verdict.eligible || prior === verdict.key) continue;
+      seen.current.add(verdict.key!);
+      if (seen.current.size > 512) seen.current.delete(seen.current.values().next().value!);
+      const kind = event.kind === "reply" ? "completion" : "input";
+      const status =
+        event.kind === "error" ? "failed" : event.kind === "approval" ? "approval" : "input";
+      const title = thread.title;
+      const body = notificationMessage(event);
       if (
         hasNotificationSound(mode) &&
         supervisionSoundEligible(forest.parentByKey, supervisionKey(environmentId, thread.id))
@@ -174,7 +171,7 @@ function EnvironmentNotifications({
         const toastId = toastManager.add({
           type: kind === "completion" ? "success" : status === "failed" ? "error" : "warning",
           title,
-          description: thread.title,
+          description: body,
           data: {
             hideCopyButton: true,
             leadingIcon:
@@ -210,7 +207,7 @@ function EnvironmentNotifications({
         continue;
       try {
         const notification = new Notification(title, {
-          body: thread.title,
+          body,
           tag: `${environmentId}:${thread.id}`,
           silent: true,
         });
