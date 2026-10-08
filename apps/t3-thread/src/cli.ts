@@ -249,7 +249,13 @@ async function resolveNotifyEndpoint(
 }
 
 /** Origin for a send made from inside a T3 thread; a send from a plain terminal has none. */
-type SendCommandOptions = { queue: boolean; coalesce?: string; progress?: boolean };
+type SendCommandOptions = {
+  queue: boolean;
+  coalesce?: string;
+  progress?: boolean;
+  control?: boolean;
+  sendId?: string;
+};
 type QueueCommandOptions = { env?: string; open?: boolean; summary?: boolean };
 
 function callerSendOrigin(state: Awaited<ReturnType<typeof loadState>>): QueuedSendOrigin | null {
@@ -2421,10 +2427,12 @@ agent
   .option("--no-queue", "fail instead of queueing when the target thread is still running")
   .option("--coalesce <key>", "replace your own still-waiting keyed note")
   .option("--progress", "shorthand for --coalesce progress")
+  .option("--control", "explicit control steering; may interrupt a Claude tool")
+  .option("--send-id <id>", "explicit same-ID retry; default recovery is receipt lookup")
   .action(async (name, messageParts: string[], options: SendCommandOptions) => {
     const rawText = messageParts.join(" ").trim();
-    // A name that is neither a saved alias nor a UUID may be a named agent; a
-    // dormant one starts with this message, so there is nothing left to send.
+    // Resolve live named agents without invoking their unreceipted start RPC.
+    // Dormant incarnations require their explicit lifecycle command.
     const routingState = await loadState();
     const callerId = resolveCallerThreadId();
     const sender = callerId
@@ -2440,12 +2448,30 @@ agent
       callerSendOrigin(routingState),
       sender?.environment ?? "unknown",
     );
-    const routed = await routeToNamedAgent({
-      state: routingState,
-      name,
-      message: text,
-      clientFactory: namedAgentClients(routingState),
-    });
+    let routed: Awaited<ReturnType<typeof routeToNamedAgent>>;
+    try {
+      routed = await routeToNamedAgent({
+        state: routingState,
+        name,
+        message: text,
+        requireLive: true,
+        clientFactory: namedAgentClients(routingState),
+      });
+    } catch (cause) {
+      if (cause instanceof Error && cause.message === "DORMANT") {
+        printJson({
+          namedAgent: name,
+          dispatched: false,
+          queued: false,
+          uncertain: false,
+          causeCode: "DORMANT",
+          ...(options.sendId ? { sendId: options.sendId } : {}),
+        });
+        process.exitCode = 2;
+        return;
+      }
+      throw cause;
+    }
     if (routed?.started) {
       printJson({ namedAgent: name, ...routed, dispatched: true, queued: false });
       return;
@@ -2466,6 +2492,8 @@ agent
           threadId: savedAgent.threadId,
           text,
           queueWhileRunning: options.queue,
+          commandId: options.sendId,
+          allowWhileRunning: options.control,
           origin: callerSendOrigin(state),
           senderEnvironment:
             resolveCallerEnvironmentMetadata()?.environmentName ??
@@ -2474,8 +2502,11 @@ agent
           agentName: saved ? savedAgent.name : null,
         }),
     });
-    const released = outcome.queued ? [] : await releaseHeldNotifications(savedAgent.threadId);
-    if (outcome.queued || released.length > 0) {
+    const released = outcome.dispatched ? await releaseHeldNotifications(savedAgent.threadId) : [];
+    if (
+      (outcome.queued && (!outcome.receipt || outcome.receipt.status === "held")) ||
+      released.length > 0
+    ) {
       await ensureNotificationWatcher();
     }
     printJson({
@@ -2485,6 +2516,7 @@ agent
       environment: savedAgent.environment,
       ...outcome,
     });
+    if (!outcome.dispatched && !outcome.queued) process.exitCode = 2;
   });
 
 agent
@@ -2520,6 +2552,53 @@ agent
   });
 
 agent
+  .command("send-receipt")
+  .description("Look up a send without resending or waking its recipient")
+  .argument("<name>", "recipient name or UUID, for environment routing")
+  .argument("[send-id]", "client-known send ID")
+  .option("--coalesce <key>", "metadata lookup for a sender-owned coalesce key")
+  .option("--since <iso>", "start of a bounded lookup interval")
+  .option("--until <iso>", "end of lookup interval (at most 24 hours)")
+  .action(
+    async (
+      name: string,
+      sendId: string | undefined,
+      options: { coalesce?: string; since?: string; until?: string },
+    ) => {
+      const { client, agent } = await withAgent(name);
+      if (sendId) printJson(await client.lookupSendReceipt({ type: "exact", sendId }));
+      else if (options.coalesce && options.since && options.until)
+        printJson(
+          await client.lookupSendReceipt({
+            type: "coalesce",
+            recipientThreadId: agent.threadId as import("@t3tools/contracts").ThreadId,
+            coalesceKey: options.coalesce,
+            since: options.since,
+            until: options.until,
+          }),
+        );
+      else throw new Error("SEND_ID_OR_BOUNDED_COALESCE_REQUIRED");
+    },
+  );
+
+agent
+  .command("own-inbox")
+  .description("Read up to 50 redacted handoff receipts for the calling thread")
+  .action(async () => {
+    const caller = resolveCallerThreadId();
+    if (!caller) throw new Error("CALLER_THREAD_REQUIRED");
+    const state = await loadState();
+    const endpoint = resolveCallerEndpointFromLocalContext(
+      state,
+      caller,
+      resolveCallerEnvironmentMetadata(),
+    );
+    if (!endpoint) throw new Error("CALLER_ENVIRONMENT_REQUIRED");
+    const client = new RemoteEnvironmentClient(requireEnvironment(state, endpoint.environment));
+    printJson(await client.ownSendInbox());
+  });
+
+agent
   .command("dequeue")
   .description("Cancel a queued send before it reaches the thread")
   .argument("<id>", "queued send id from `t3-thread queue`")
@@ -2539,7 +2618,7 @@ for (const kind of ["clarify", "revise", "complete"] as const) {
         text: buildFollowUpMessage(kind, messageParts.join(" ")),
         agentName: saved ? savedAgent.name : null,
       });
-      if (outcome.queued) {
+      if (outcome.queued && (!outcome.receipt || outcome.receipt.status === "held")) {
         await ensureNotificationWatcher();
       }
       printJson({
@@ -2547,8 +2626,9 @@ for (const kind of ["clarify", "revise", "complete"] as const) {
         threadId: savedAgent.threadId,
         environment: savedAgent.environment,
         ...outcome,
-        dispatched: outcome.queued ? false : kind,
+        dispatched: outcome.dispatched ? kind : false,
       });
+      if (!outcome.dispatched && !outcome.queued) process.exitCode = 2;
     });
 }
 
