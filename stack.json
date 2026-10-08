@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "57960e8c3ae4fdde7885ea8c219a07c2a06a2158",
-  "head": "52436806d0543d2ee96cc904fafd506b625a0357",
+  "prev": "24b9952473ce1691206592c5665366df98d5db8c",
+  "head": "0f240b8063b8f4c5474076da5c86bf57b3fca4a0",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -96,10 +96,10 @@
     "fork-item-types",
     "fork-board-declutter",
     "fork-project-skew-gate",
-    "fork-request-titles"
+    "fork-request-titles",
+    "fork-page-agent-tray"
   ],
   "unapplied": [
-    "fork-page-agent-tray",
     "fork-release-publication",
     "fork-maintenance-automation",
     "fork-antigravity-errors",
@@ -343,7 +343,7 @@
       "oid": "48e0c07a9d686ad02cbc3d8cace2b0797be6213d"
     },
     "fork-page-agent-tray": {
-      "oid": "117de6c74ea4a0b17a99321d11d6e02dd0b1eb22"
+      "oid": "0f240b8063b8f4c5474076da5c86bf57b3fca4a0"
     },
     "fork-phone-side-panels": {
       "oid": "61a20cd6e38508f53d03874e35e25e4274807ff6"
