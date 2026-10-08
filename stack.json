@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "e5eb70d7438a58f642917b10d8cc7f696124c333",
-  "head": "3faef26bbbf46deb7274f02948bfda814ccf5c06",
+  "prev": "e173b251516fa69bfe77822ca6232aca0aabbcb1",
+  "head": "e38f46c802ee8edb621de26b3decd1d460da75dd",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -111,15 +111,14 @@
     "fork-decision-links",
     "fork-decision-discuss",
     "fork-decision-context-media",
-    "fork-subprojects-server"
-  ],
-  "unapplied": [
+    "fork-subprojects-server",
     "fork-reliable-handoffs",
     "fork-starting-reconcile-causal-guard",
     "fork-notification-eligibility",
     "fork-gitea-token-setter",
     "fork-direct-endpoints-enumeration"
   ],
+  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
@@ -198,7 +197,7 @@
       "oid": "0b406c0ed67949931f24693e5820786a5d3905e6"
     },
     "fork-direct-endpoints-enumeration": {
-      "oid": "4cec1964d9cb5fabe5ae5aff22c64a96693d7214"
+      "oid": "e38f46c802ee8edb621de26b3decd1d460da75dd"
     },
     "fork-embedded-pages": {
       "oid": "94fbdce7564f4011399b1375412dd54070fe0a42"
@@ -225,7 +224,7 @@
       "oid": "d635a10128c85566356f66ff1381a9508384c158"
     },
     "fork-gitea-token-setter": {
-      "oid": "f65fccd38d515f2ba165f5bc9edc7216753702b1"
+      "oid": "c815191c55c878ac0e354c80b545c390352930c5"
     },
     "fork-headless-delivery": {
       "oid": "93ecb01e605b95228e1bcbe2f5836364fdc11d10"
@@ -258,7 +257,7 @@
       "oid": "781a76b221eed346c30ae4b0c96d38455d96a781"
     },
     "fork-notification-eligibility": {
-      "oid": "a6ba27046471f9023ff639e9c1f5e1191c210f2b"
+      "oid": "05530b1ad5476820eca5b2bfc52ef42063005171"
     },
     "fork-notification-preferences": {
       "oid": "dc238cbc281968585290906088a8fce0efe68d8d"
@@ -357,7 +356,7 @@
       "oid": "82cbb375cf3b3531393e3a6a6a67953667b40d48"
     },
     "fork-reliable-handoffs": {
-      "oid": "7205801f6edf50574a2630960a98cb20114042a9"
+      "oid": "14fa63c1269c4e63244e735e13a76ac5f7381867"
     },
     "fork-remote-file-downloads": {
       "oid": "c8cdaecfe3e6abb722ae2f61db64b8f0768615ad"
@@ -414,7 +413,7 @@
       "oid": "ec41c5830e1b56101e5a236f1811cd1518c09d00"
     },
     "fork-starting-reconcile-causal-guard": {
-      "oid": "22ad738a3df9821a8e6861be3081ca5afcba004f"
+      "oid": "9fb9c5943964e0d5165c9e0974c7a38b03dab8c9"
     },
     "fork-step-preview": {
       "oid": "ddfef30e39fbb17bcff15b9eeb0d171cc3a07eaa"
