@@ -339,22 +339,19 @@ describe("post-release disk observer", () => {
     });
   });
 
-  it.each([
-    "nonzero",
-    "timeout",
-    "missing-observer",
-    "missing-config",
-    "throw",
-  ] as const)("keeps publication successful with one fixed log for %s", (outcome) => {
-    withObserver(outcome, (fixture, env, calls) => {
-      const result = run(fixture.repo, "--push", env);
-      assert.equal(result.status, 0, result.stderr);
-      assert.equal(gitAt(fixture.remote, "rev-parse", "refs/heads/main"), fixture.head);
-      assert.lengthOf(calls(), outcome.startsWith("missing-") ? 0 : 1);
-      assert.equal((result.stdout + result.stderr).split(observerFailure).length - 1, 1);
-      assert.notInclude(result.stdout + result.stderr, "private diagnostic");
-    });
-  });
+  it.each(["nonzero", "timeout", "missing-observer", "missing-config", "throw"] as const)(
+    "keeps publication successful with one fixed log for %s",
+    (outcome) => {
+      withObserver(outcome, (fixture, env, calls) => {
+        const result = run(fixture.repo, "--push", env);
+        assert.equal(result.status, 0, result.stderr);
+        assert.equal(gitAt(fixture.remote, "rev-parse", "refs/heads/main"), fixture.head);
+        assert.lengthOf(calls(), outcome.startsWith("missing-") ? 0 : 1);
+        assert.equal((result.stdout + result.stderr).split(observerFailure).length - 1, 1);
+        assert.notInclude(result.stdout + result.stderr, "private diagnostic");
+      });
+    },
+  );
 });
 
 describe("publish-stgit-stack", () => {
