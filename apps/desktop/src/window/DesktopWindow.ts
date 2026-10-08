@@ -99,6 +99,7 @@ export class DesktopWindow extends Context.Service<
   {
     readonly createMain: Effect.Effect<Electron.BrowserWindow, DesktopWindowError>;
     readonly ensureMain: Effect.Effect<Electron.BrowserWindow, DesktopWindowError>;
+    readonly navigateMain: (url: string) => Effect.Effect<boolean, DesktopWindowError>;
     readonly revealOrCreateMain: Effect.Effect<Electron.BrowserWindow, DesktopWindowError>;
     readonly activate: Effect.Effect<void, DesktopWindowError>;
     readonly createMainIfBackendReady: Effect.Effect<void, DesktopWindowError>;
@@ -216,7 +217,14 @@ export function isSameOriginRendererNavigation(input: {
   readonly navigationUrl: string;
 }): boolean {
   try {
-    return new URL(input.applicationUrl).origin === new URL(input.navigationUrl).origin;
+    const app = new URL(input.applicationUrl);
+    const target = new URL(input.navigationUrl);
+    return (
+      app.protocol === target.protocol &&
+      app.host === target.host &&
+      target.username === "" &&
+      target.password === ""
+    );
   } catch {
     return false;
   }
@@ -331,6 +339,7 @@ export const make = Effect.gen(function* () {
   // createMainIfBackendReady, which gates the post-readiness window
   // open in development and the macOS "activate without windows" path.
   const backendReadyRef = yield* Ref.make(false);
+  const pendingNavigation = yield* Ref.make<string | null>(null);
   // The transient "Connecting to WSL" splash window, tracked separately so it
   // is never mistaken for the real main window.
   const splashWindowRef = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
@@ -704,11 +713,12 @@ export const make = Effect.gen(function* () {
       developmentLoadRetryFiber = undefined;
       runFork(Fiber.interrupt(retryFiber));
     };
+    const navigationUrl = yield* Ref.getAndSet(pendingNavigation, null);
     const loadApplication = () => {
       if (window.isDestroyed()) {
         return;
       }
-      void window.loadURL(applicationUrl).catch(() => undefined);
+      void window.loadURL(navigationUrl ?? applicationUrl).catch(() => undefined);
     };
     const scheduleDevelopmentLoadRetry = () => {
       if (developmentLoadRetryFiber !== undefined || window.isDestroyed()) {
@@ -957,6 +967,22 @@ export const make = Effect.gen(function* () {
     createMain,
     ensureMain,
     revealOrCreateMain,
+    navigateMain: Effect.fn("desktop.window.navigateMain")(function* (url) {
+      if (
+        !isSameOriginRendererNavigation({
+          applicationUrl: getDesktopUrl(environment.isDevelopment),
+          navigationUrl: url,
+        })
+      )
+        return false;
+      if (yield* waitingForBackend) {
+        yield* Ref.set(pendingNavigation, url);
+        return true;
+      }
+      const window = yield* revealOrCreateMain;
+      yield* Effect.promise(() => window.loadURL(url).catch(() => undefined));
+      return true;
+    }),
     prepareCaptureReveal: Effect.gen(function* () {
       const existingWindow = yield* currentMainWindow;
       if (Option.isSome(existingWindow)) {
