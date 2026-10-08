@@ -12,11 +12,15 @@ export type ThreadNestingMenuId =
   | "new-nested-thread"
   | "nest-under"
   | `nest-under:${string}`
-  | "move-to-sidebar";
+  | "move-to-sidebar"
+  | "subproject-on"
+  | "subproject-off";
 
 export interface ThreadNestingMenuState {
   readonly canStartNestedThread: boolean;
   readonly isNested: boolean;
+  /** Whether a nested thread is a subproject now; null when it is not nested or the host cannot say. */
+  readonly subproject: "on" | "off" | null;
   readonly parentCandidates: ReadonlyArray<{ readonly id: ThreadId; readonly title: string }>;
 }
 
@@ -29,6 +33,7 @@ export function resolveThreadNestingMenuState(input: {
   readonly thread: Pick<EnvironmentThreadShell, "environmentId" | "id">;
   readonly forest: ReturnType<typeof supervisionForest>;
   readonly supported: boolean;
+  readonly subprojectsSupported?: boolean;
 }): ThreadNestingMenuState | null {
   const { thread, forest } = input;
   if (!input.supported) return null;
@@ -38,6 +43,12 @@ export function resolveThreadNestingMenuState(input: {
   return {
     canStartNestedThread: true,
     isNested: currentParent !== undefined,
+    subproject:
+      currentParent === undefined || input.subprojectsSupported !== true
+        ? null
+        : forest.byKey.get(key)?.subproject === "on"
+          ? "on"
+          : "off",
     parentCandidates: [...forest.byKey.entries()]
       .filter(
         ([candidateKey]) =>
@@ -55,6 +66,8 @@ export function isThreadNestingMenuId(id: string | null | undefined): id is Thre
     id === "new-nested-thread" ||
     id === "nest-under" ||
     id === "move-to-sidebar" ||
+    id === "subproject-on" ||
+    id === "subproject-off" ||
     (id?.startsWith("nest-under:") ?? false)
   );
 }
@@ -72,7 +85,7 @@ export function nestUnderMenuTarget(
 /**
  * Splices nesting actions into the shared thread action menu: "New thread
  * under this one" joins the new-thread item at the top, and "Nest under…" /
- * "Move to sidebar" join the lifecycle group before Rename.
+ * "Move to sidebar" / "Show as subproject" join the lifecycle group before Rename.
  */
 export function withThreadNestingMenuItems<T extends string>(
   items: ReadonlyArray<ContextMenuItem<T>>,
@@ -96,6 +109,11 @@ export function withThreadNestingMenuItems<T extends string>(
         ]
       : []),
     ...(state.isNested ? [{ id: "move-to-sidebar" as const, label: "Move to sidebar" }] : []),
+    ...(state.subproject === "on"
+      ? [{ id: "subproject-off" as const, label: "Show as worker" }]
+      : state.subproject === "off"
+        ? [{ id: "subproject-on" as const, label: "Show as subproject" }]
+        : []),
   ];
   const result: ContextMenuItem<T | ThreadNestingMenuId>[] = [...items];
   const branchIndex = result.findIndex((item) => item.id === "new-thread-on-branch");
