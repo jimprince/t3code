@@ -1,4 +1,5 @@
 import { openRpcConnection } from "./openRpc.js";
+import type { PlanPublicationInput, PlanPublicationResult } from "@t3tools/contracts";
 import type { NamedAgentSummary } from "./namedAgents.js";
 import {
   MessageForwardError,
@@ -1447,6 +1448,15 @@ export class RemoteEnvironmentClient {
     const rpc = await this.openRpc();
     try {
       return await rpc.request("threadIssuesUnlink", { threadId, reference });
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
+  async publishPlan(input: PlanPublicationInput): Promise<PlanPublicationResult> {
+    const rpc = await this.openRpc();
+    try {
+      return await rpc.request<PlanPublicationResult>("planPublish", input);
     } finally {
       await rpc.dispose();
     }
