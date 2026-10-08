@@ -15,6 +15,10 @@ export const legacyHistoryTables = {
   legacyGoals: "projection_thread_goals",
   legacyEvents: "orchestration_events",
 } as const;
+/** Keep event reads on the thread index: the version index scans every old event. */
+export const legacyEventWhere = (columns: ReadonlyArray<string>): string =>
+  `${columns.includes("aggregate_kind") ? "aggregate_kind = 'thread' AND " : ""}stream_id = ?${columns.includes("application_event_version") ? " AND +application_event_version = 1" : ""}`;
+
 export const readForkHistory = (sql: SqlClient.SqlClient, threadId: ThreadId) =>
   Effect.gen(function* () {
     const history: Record<string, unknown> = {};
@@ -28,7 +32,7 @@ export const readForkHistory = (sql: SqlClient.SqlClient, threadId: ThreadId) =>
         columns.some((column) => column.name === "stream_id")
       ) {
         const rows = yield* sql.unsafe(
-          `SELECT * FROM ${table} WHERE stream_id = ?${columns.some((column) => column.name === "application_event_version") ? " AND application_event_version = 1" : ""} ORDER BY sequence`,
+          `SELECT * FROM ${table} WHERE ${legacyEventWhere(columns.map((column) => column.name))} ORDER BY sequence`,
           [threadId],
         );
         if (rows.length > 0) history[section] = rows;

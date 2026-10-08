@@ -2372,6 +2372,12 @@ roles = []
 note = "Brad approved removing goals on 2026-09-05. Retain historical goal schema, projection and import compatibility; numbered migrations remain in the migration ledger. Migration 5 converts sidebar-reordered/orderKey to meta-updated/activeOrderKey transactionally without changing event identity or sequence. ID 4 remains reserved for the previously shipped sidebar-order column migration. Thread transfer bundles contain snapshots, not raw ordering events. Packaged upgrade fixtures freeze released 1293 and 1400 schemas with synthetic sidebar, goal and legacy attachment events; verify replay, preserved IDs and migration ledgers, projections and restart before release. Recent retirement review: sidebar data now migrates through 5; goals keep historical schemas and projection support; file handoffs retain compatibility under their own concern."
 
 [[patch.decision]]
+id = "legacy-event-thread-index"
+date = "2026-10-08"
+decided = "narrow"
+rationale = "History probes, counts, pages and transfer reads seek aggregate_kind/thread plus stream_id. Unary plus on the integer application_event_version disqualifies the low-selectivity version index without a new index migration or a named-index hint; older schemas without these columns remain readable. Full V1 scans blocked server heartbeats for 20–31 seconds on large histories."
+
+[[patch.decision]]
 id = "v2-stable-history-paging"
 date = "2026-10-06"
 decided = "adapt"

@@ -4,7 +4,10 @@ import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import type * as SqlError from "effect/unstable/sql/SqlError";
-import { legacyHistoryTables } from "../orchestration-v2/legacy/ForkHistoryRead.ts";
+import {
+  legacyEventWhere,
+  legacyHistoryTables,
+} from "../orchestration-v2/legacy/ForkHistoryRead.ts";
 
 type Row = Record<string, unknown>;
 type Db = {
@@ -79,7 +82,7 @@ const tableSource = Effect.fn("HistoryPaging.tableSource")(function* (
   const where = columns.includes("thread_id")
     ? `thread_id = ?${extra}`
     : table === "orchestration_events" && columns.includes("stream_id")
-      ? `stream_id = ?${columns.includes("application_event_version") ? " AND application_event_version = 1" : ""}${extra}`
+      ? `${legacyEventWhere(columns)}${extra}`
       : null;
   if (where === null || (narrow !== undefined && !columns.includes(narrow.column))) {
     return memorySource([]);
