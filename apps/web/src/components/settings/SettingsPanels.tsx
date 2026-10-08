@@ -101,6 +101,7 @@ import {
   sortProviderInstanceEntries,
 } from "../../providerInstances";
 import { ensureLocalApi, readLocalApi } from "../../localApi";
+import { confirmAndStartDesktopUpdate } from "../sidebar/desktopUpdateFlow";
 import { isMacPlatform } from "../../lib/utils";
 import { EMPTY_SERVER_PROVIDERS } from "../../state/server";
 import { useArchivedThreadSnapshots } from "../../lib/archivedThreadsState";
@@ -329,6 +330,16 @@ function AboutVersionSection() {
     if (!bridge) return;
 
     const action = updateState ? resolveDesktopUpdateButtonAction(updateState) : "none";
+
+    const startUpdate = bridge.startUpdate?.bind(bridge);
+    if (startUpdate && updateState && (action === "download" || action === "install")) {
+      if (isUpdateActionPending) return;
+      setIsUpdateActionPending(true);
+      void confirmAndStartDesktopUpdate(startUpdate, updateState).finally(() =>
+        setIsUpdateActionPending(false),
+      );
+      return;
+    }
 
     if (action === "download") {
       void bridge.downloadUpdate().catch((error: unknown) => {
