@@ -1,0 +1,4 @@
+id = "publish-task-plan"
+category = "feature"
+functionality = "agents"
+text = "Publish approved plans as owned epic and task issues, update the same issues on rerun, and optionally start nested workers linked to their tasks."
