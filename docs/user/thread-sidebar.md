@@ -305,11 +305,16 @@ workspace. A project badge identifies workers in a different project. Token
 counts labeled `ctx tok` describe occupied context when the provider does not
 report a cumulative processed-token count.
 
-### Talk a decision through
+### Decisions
 
-On a project page, **Discuss** on a decision opens a thread nested under the agent waiting on it, briefed with the question and its options. When you settle on an answer there, the agent records it as if you had picked it. Discuss again returns to the same thread until you archive it.
+A project page lists everything that needs you in one **Decisions** list: questions and approvals from agents, decisions, answers to read, plans, work to review and shipped work to test. Agents that are stalled right now come first, then the rest, oldest first. Each card says who it is for and in which project, and a line under its buttons says where the result goes. Project chips narrow the list to one project.
 
-Decision context keeps its links and shows attached pictures as thumbnails. Expand long context to read it in full.
+- A question or approval is answered from its card and the agent's turn resumes. A question with several parts opens its thread.
+- **Approve and merge** merges the pull request that closes the issue and settles it. It is off while the branch conflicts or the pull request is a draft; **Send back** (with a note) comments on the issue, moves it back to Active and tells the agent that owns it, or the project orchestrator when that agent is gone. **Works** and **Broken** do the same for shipped work.
+- **Later** hides a card for 15 minutes, a day or a custom time without telling anyone, and **Move to end** sends it behind the others. Later cards are listed under **Later** with **Bring back**. A card with a deadline comes back the day before it.
+- **Discuss** opens a thread nested under the agent waiting on the decision, briefed with the question and its options. When you settle on an answer there, the agent records it as if you had picked it. Discuss again returns to the same thread until you archive it.
+
+Context is Markdown: a lead sentence, bullets, small tables, links and pictures that open full size. Long context shows its first blocks, with **More** for the rest.
 
 ### Named agents
 
