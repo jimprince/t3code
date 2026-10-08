@@ -1,6 +1,6 @@
-Bottom: 002ed81cc2222ffc2d8e00120c5d83fa004ab5e3
-Top:    6eeefba30bf2f5769ab6c63ddeefc776b27496a2
+Bottom: 1941a2d8cb6a13efd8f127e0786d5c369aa58b11
+Top:    a776cbd0ab53bf5cb11519faca6e06efc0d7c246
 Author: brad <bradprin@live.com>
-Date:   2026-10-08 10:17:03 +0000
+Date:   2026-10-08 10:24:21 +0000
 
 feat(web): show tasks under their workstream, as a table or by status
