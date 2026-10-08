@@ -173,7 +173,8 @@ describe("source control environment atoms", () => {
 
 // Transport fixtures have a source-control-only session; authorization edge cases
 // are exercised by commandPermissions.test.ts.
-vi.mock("./session.ts", () => ({
+vi.mock("./session.ts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./session.ts")>()),
   createEnvironmentSessionAtoms: () => ({ sessionStateAtom: grantedSessions }),
 }));
 const grantedSessions = Atom.family((_id: EnvironmentId) =>
