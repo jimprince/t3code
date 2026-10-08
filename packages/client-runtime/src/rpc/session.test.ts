@@ -1266,3 +1266,60 @@ describe("RpcSessionFactory", () => {
     }).pipe(Effect.provide(TestClock.layer())),
   );
 });
+
+const makeLiveHeartbeatSession = Effect.fn("TestRpcHeartbeat.make")(function* () {
+  const { factory, sockets } = yield* makeFactory();
+  const session = yield* factory.connect(PREPARED);
+  yield* Effect.addFinalizer(() =>
+    Effect.sync(() => {
+      for (const socket of sockets) socket.close();
+    }),
+  );
+  const ready = yield* Effect.forkChild(session.ready);
+  const socket = yield* awaitSocket(sockets);
+  socket.open();
+  yield* completeInitialConfig(socket);
+  yield* Fiber.join(ready);
+  const closed = yield* Effect.forkChild(Effect.flip(session.closed));
+  return { socket, closed };
+});
+
+describe("RPC heartbeat resilience", () => {
+  it.effect.each([1, 2, 5])(
+    "tolerates %s missed pongs and resets on pong",
+    (missed) =>
+      Effect.gen(function* () {
+        const { socket, closed } = yield* makeLiveHeartbeatSession();
+        for (let tick = 0; tick <= missed; tick += 1) {
+          yield* TestClock.adjust("5 seconds");
+          expect(closed.pollUnsafe()).toBeUndefined();
+        }
+        socket.serverMessage(encodeJson({ _tag: "Pong" }));
+        yield* Effect.yieldNow;
+        for (let tick = 0; tick <= 5; tick += 1) {
+          yield* TestClock.adjust("5 seconds");
+          expect(closed.pollUnsafe()).toBeUndefined();
+        }
+      }).pipe(Effect.provide(TestClock.layer())),
+    5_000,
+  );
+  it.effect.each(["six missed pongs", "server close"] as const)(
+    "ends the session after %s",
+    (trigger) =>
+      Effect.gen(function* () {
+        const { socket, closed } = yield* makeLiveHeartbeatSession();
+        if (trigger === "six missed pongs") {
+          for (let tick = 0; tick <= 5; tick += 1) {
+            yield* TestClock.adjust("5 seconds");
+            expect(closed.pollUnsafe()).toBeUndefined();
+          }
+          yield* TestClock.adjust("5 seconds");
+        } else {
+          socket.close(1012, "service restart");
+        }
+        expect(yield* Fiber.join(closed)).toBeInstanceOf(ConnectionTransientError);
+        expect(socket.readyState).toBe(TestWebSocket.CLOSED);
+      }).pipe(Effect.provide(TestClock.layer())),
+    5_000,
+  );
+});
