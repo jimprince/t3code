@@ -41,6 +41,15 @@ contents could not be read). A miss reports both lists; it does not imply the
 thread is absent from an unreachable environment. Existing saved mappings remain
 preferred, and `search --env <name>` still restricts lookup to that environment.
 
+## Forward exact messages
+
+Use `t3-thread forward <target> --message <id>` or `--last-user`; add `--source`
+when outside the source thread. Exact text and every attachment are forwarded,
+with attribution and an optional `--note`, across paired environments. Existing
+named agents must have a live thread; forwarding never creates one implicitly.
+Use the returned send ID for receipt lookup before retrying uncertain delivery.
+See [Message forwarding](MESSAGE_FORWARDING.md) for MCP and the UI RPC shape.
+
 ## Environments
 
 List paired environments:
