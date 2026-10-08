@@ -80,6 +80,13 @@ const state: RelayAgentActivityState = {
   deepLink: "/",
 };
 
+const reply = {
+  kind: "reply",
+  origin: "human",
+  identity: "turn",
+  occurredAt: state.updatedAt,
+} as const;
+
 const aggregate: RelayAgentActivityAggregateState = {
   title: "T3 Code",
   subtitle: "Agent work in progress",
@@ -726,7 +733,13 @@ describe("ApnsDeliveries", () => {
               },
               notification: {
                 title: "Thread",
-                body: "Input: Project",
+                body: "Question for you",
+                notification: {
+                  kind: "question",
+                  identity: `waiting_for_input:${state.updatedAt}`,
+                  origin: "unknown",
+                  occurredAt: state.updatedAt,
+                },
                 environmentId: "env",
                 threadId: "thread",
                 deepLink: "/",
@@ -823,7 +836,13 @@ describe("ApnsDeliveries", () => {
               },
               notification: {
                 title: "Thread",
-                body: "Input: Project",
+                body: "Question for you",
+                notification: {
+                  kind: "question",
+                  identity: `waiting_for_input:${state.updatedAt}`,
+                  origin: "unknown",
+                  occurredAt: state.updatedAt,
+                },
                 environmentId: "env",
                 threadId: "thread",
                 deepLink: "/",
@@ -1107,7 +1126,13 @@ describe("ApnsDeliveries", () => {
       aggregate: null,
       notification: {
         title: "Thread",
-        body: "Input: Project",
+        body: "Question for you",
+        notification: {
+          kind: "question",
+          identity: "request",
+          origin: "unknown",
+          occurredAt: state.updatedAt,
+        },
         environmentId: "env",
         threadId: "thread",
         deepLink: "/",
@@ -1169,7 +1194,13 @@ describe("ApnsDeliveries", () => {
       aggregate: null,
       notification: {
         title: "Thread",
-        body: "Input: Project",
+        body: "Question for you",
+        notification: {
+          kind: "question",
+          identity: "request",
+          origin: "unknown",
+          occurredAt: state.updatedAt,
+        },
         environmentId: "env",
         threadId: "thread",
         deepLink: "/",
@@ -1276,7 +1307,13 @@ describe("ApnsDeliveries", () => {
       aggregate: null,
       notification: {
         title: "Thread",
-        body: "Input: Project",
+        body: "Question for you",
+        notification: {
+          kind: "question",
+          identity: "request",
+          origin: "unknown",
+          occurredAt: state.updatedAt,
+        },
         environmentId: "env",
         threadId: "thread",
         deepLink: "/",
@@ -1343,6 +1380,7 @@ describe("ApnsDeliveries", () => {
         {
           ...aggregate.activities[0]!,
           phase: "completed",
+          notification: reply,
           status: "Done",
           updatedAt: completedAt,
         },
@@ -1354,7 +1392,7 @@ describe("ApnsDeliveries", () => {
       deviceId: target.device_id,
       token: target.activity_push_token ?? "activity-token",
       aggregate: completedAggregate,
-      alert: { title: "Thread", body: "Done: Project" },
+      alert: { title: "Thread", body: "Reply ready" },
       createdAt: completedAt,
       expiresAt: "1970-01-01T00:10:00.000Z",
       jobId: "job-update-superseded-by-running",
@@ -1417,11 +1455,12 @@ describe("ApnsDeliveries", () => {
       aggregate: null,
       notification: {
         title: "Thread",
-        body: "Done: Project",
+        body: "Reply ready",
         environmentId: "env",
         threadId: "thread",
         deepLink: "/",
         phase: "completed",
+        notification: reply,
         updatedAt: completedAt,
       },
       createdAt: completedAt,
@@ -1486,7 +1525,13 @@ describe("ApnsDeliveries", () => {
       aggregate: null,
       notification: {
         title: "Thread",
-        body: "Input: Project",
+        body: "Question for you",
+        notification: {
+          kind: "question",
+          identity: "request",
+          origin: "unknown",
+          occurredAt: state.updatedAt,
+        },
         environmentId: "env",
         threadId: "thread",
         deepLink: "/",
@@ -1540,7 +1585,13 @@ describe("ApnsDeliveries", () => {
       aggregate: null,
       notification: {
         title: "Thread",
-        body: "Failed: Project",
+        body: "Error: Agent failed",
+        notification: {
+          kind: "error",
+          identity: "turn",
+          origin: "unknown",
+          occurredAt: state.updatedAt,
+        },
         environmentId: "env",
         threadId: "thread",
         deepLink: "/",
@@ -1768,7 +1819,7 @@ describe("live activity alert decisions", () => {
       },
       preferences,
     });
-    expect(alert).toEqual({ title: "Blocked thread", body: "Approval: Project" });
+    expect(alert).toEqual({ title: "Blocked thread", body: "Approval needed" });
   });
 
   it("stays silent when the attention phase was already delivered", () => {
@@ -1828,7 +1879,7 @@ describe("live activity alert decisions", () => {
       preferences,
     });
     expect(alert).toEqual({
-      title: "2 agents need attention",
+      title: "2 need you",
       body: "Blocked thread, Other blocked thread",
     });
   });
@@ -1837,14 +1888,26 @@ describe("live activity alert decisions", () => {
     const terminalAggregate = {
       ...aggregate,
       activeCount: 0,
-      activities: [{ ...aggregate.activities[0]!, phase: "completed" as const, status: "Done" }],
+      activities: [
+        {
+          ...aggregate.activities[0]!,
+          phase: "completed" as const,
+          notification: reply,
+          status: "Done",
+        },
+      ],
     };
-    expect(
-      ApnsDeliveries.alertForTerminalAggregate({ aggregate: terminalAggregate, preferences }),
-    ).toEqual({ title: "Thread", body: "Done: Project" });
     expect(
       ApnsDeliveries.alertForTerminalAggregate({
         aggregate: terminalAggregate,
+        preferences,
+        nowMs: 0,
+      }),
+    ).toEqual({ title: "Thread", body: "Reply ready" });
+    expect(
+      ApnsDeliveries.alertForTerminalAggregate({
+        aggregate: terminalAggregate,
+        nowMs: 0,
         preferences: { ...preferences, notifyOnCompletion: false },
       }),
     ).toBeNull();
@@ -1855,6 +1918,7 @@ describe("live activity alert decisions", () => {
     const doneRow = {
       ...aggregate.activities[0]!,
       phase: "completed" as const,
+      notification: reply,
       status: "Done",
     };
     const next = {
@@ -1869,7 +1933,7 @@ describe("live activity alert decisions", () => {
         preferences,
         nowMs: 0,
       }),
-    ).toEqual({ title: "Thread", body: "Done: Project" });
+    ).toEqual({ title: "Thread", body: "Reply ready" });
     // The completion switch mutes it.
     expect(
       ApnsDeliveries.alertForNewlyTerminal({
@@ -1913,7 +1977,7 @@ describe("queued iOS alert policy", () => {
     "checks the current policy for a %s completion",
     (scenario) => {
       let sent = 0;
-      const completed = { ...state, phase: "completed" as const };
+      const completed = { ...state, phase: "completed" as const, notification: reply };
       const prefs = JSON.parse(enabledPreferences);
       if (scenario === "muted") prefs.notifyOnCompletion = false;
       const payload = makeApnsDeliveryJobPayload({
@@ -1924,11 +1988,12 @@ describe("queued iOS alert policy", () => {
         aggregate: null,
         notification: {
           title: "Thread",
-          body: "Done: Project",
+          body: "Reply ready",
           environmentId: "env",
           threadId: "thread",
           deepLink: "/",
           phase: "completed",
+          notification: reply,
           updatedAt: completed.updatedAt,
         },
         createdAt: completed.updatedAt,
@@ -1973,6 +2038,7 @@ describe("fast completion delivery", () => {
           ...aggregate.activities[0]!,
           threadId: "old" as RelayAgentActivityState["threadId"],
           phase: "completed" as const,
+          notification: reply,
         },
       ],
     };
@@ -1980,7 +2046,9 @@ describe("fast completion delivery", () => {
     const done = {
       ...aggregate,
       activeCount: 0,
-      activities: [{ ...aggregate.activities[0]!, phase: "completed" as const }],
+      activities: [
+        { ...aggregate.activities[0]!, phase: "completed" as const, notification: reply },
+      ],
     };
     return Effect.gen(function* () {
       const d = yield* ApnsDeliveries.ApnsDeliveries;
@@ -1996,7 +2064,9 @@ describe("fast completion delivery", () => {
     const done = {
       ...aggregate,
       activeCount: 0,
-      activities: [{ ...aggregate.activities[0]!, phase: "completed" as const }],
+      activities: [
+        { ...aggregate.activities[0]!, phase: "completed" as const, notification: reply },
+      ],
     };
     const previous = {
       ...aggregate,
@@ -2040,7 +2110,8 @@ describe("signed APNs registration metadata", () => {
         ? {
             notification: {
               title: "Thread",
-              body: "Input: Project",
+              body: "Question for you",
+              notification: { ...reply, kind: "question", identity: "metadata-question" },
               environmentId: "env",
               threadId: "thread",
               deepLink: "/",
