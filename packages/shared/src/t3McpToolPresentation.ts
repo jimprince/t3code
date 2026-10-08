@@ -279,6 +279,11 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
     "thread-configuration",
   ),
   t3_thread_configure: tool(["Set", "Setting", "Set", "thread model"], "thread-configure"),
+  t3_thread_forward: tool(
+    ["Forward", "Forwarding", "Forwarded", "a message with attachments"],
+    "thread-send",
+  ),
+  t3_thread_forward_prepare: tool(["Read", "Reading", "Read", "a portable message"], "thread-read"),
   t3_thread_fork: tool(["Fork", "Forking", "Requested a fork of", "this thread"], "thread-fork"),
   t3_thread_merge_back: tool(
     ["Merge", "Merging", "Requested a merge of", "thread context"],
