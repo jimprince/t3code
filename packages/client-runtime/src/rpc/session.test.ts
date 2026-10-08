@@ -1085,31 +1085,30 @@ describe("RpcSessionFactory", () => {
     }),
   );
 
-  it.effect("tolerates two missed pong windows before closing the session", () =>
-    Effect.gen(function* () {
-      const { factory, sockets } = yield* makeFactory();
-      const session = yield* factory.connect(PREPARED);
-      const readyFiber = yield* Effect.forkChild(session.ready);
-      const closedFiber = yield* Effect.forkChild(Effect.flip(session.closed));
-      const socket = yield* awaitSocket(sockets);
+  it.effect(
+    "tolerates five missed pong windows before closing the session",
+    () =>
+      Effect.gen(function* () {
+        const { factory, sockets } = yield* makeFactory();
+        const session = yield* factory.connect(PREPARED);
+        const readyFiber = yield* Effect.forkChild(session.ready);
+        const closedFiber = yield* Effect.forkChild(Effect.flip(session.closed));
+        const socket = yield* awaitSocket(sockets);
 
-      socket.open();
-      yield* completeInitialConfig(socket);
-      yield* Fiber.join(readyFiber);
+        socket.open();
+        yield* completeInitialConfig(socket);
+        yield* Fiber.join(readyFiber);
 
-      yield* TestClock.adjust("15 seconds");
-      expect(closedFiber.pollUnsafe()).toBeUndefined();
-      expect(socket.sent.map((message) => decodeJson(message)).filter(isPing)).toEqual([
-        { _tag: "Ping" },
-        { _tag: "Ping" },
-        { _tag: "Ping" },
-      ]);
+        yield* TestClock.adjust("30 seconds");
+        expect(closedFiber.pollUnsafe()).toBeUndefined();
+        expect(socket.sent.map((message) => decodeJson(message)).filter(isPing)).toHaveLength(6);
 
-      yield* TestClock.adjust("5 seconds");
-      const error = yield* Fiber.join(closedFiber);
-      expect(error).toBeInstanceOf(ConnectionTransientError);
-      expect(error).toMatchObject({ reason: "transport" });
-    }).pipe(Effect.scoped, Effect.provide(TestClock.layer())),
+        yield* TestClock.adjust("5 seconds");
+        const error = yield* Fiber.join(closedFiber);
+        expect(error).toBeInstanceOf(ConnectionTransientError);
+        expect(error).toMatchObject({ reason: "transport" });
+      }).pipe(Effect.scoped, Effect.provide(TestClock.layer())),
+    5_000,
   );
 
   it.effect("keeps reading replies after closing a stream with a full buffer", () =>
@@ -1264,5 +1263,62 @@ describe("RpcSessionFactory", () => {
       });
       expect(sockets[0]?.readyState).toBe(TestWebSocket.CLOSED);
     }).pipe(Effect.provide(TestClock.layer())),
+  );
+});
+
+const makeLiveHeartbeatSession = Effect.fn("TestRpcHeartbeat.make")(function* () {
+  const { factory, sockets } = yield* makeFactory();
+  const session = yield* factory.connect(PREPARED);
+  yield* Effect.addFinalizer(() =>
+    Effect.sync(() => {
+      for (const socket of sockets) socket.close();
+    }),
+  );
+  const ready = yield* Effect.forkChild(session.ready);
+  const socket = yield* awaitSocket(sockets);
+  socket.open();
+  yield* completeInitialConfig(socket);
+  yield* Fiber.join(ready);
+  const closed = yield* Effect.forkChild(Effect.flip(session.closed));
+  return { socket, closed };
+});
+
+describe("RPC heartbeat resilience", () => {
+  it.effect.each([1, 2, 5])(
+    "tolerates %s missed pongs and resets on pong",
+    (missed) =>
+      Effect.gen(function* () {
+        const { socket, closed } = yield* makeLiveHeartbeatSession();
+        for (let tick = 0; tick <= missed; tick += 1) {
+          yield* TestClock.adjust("5 seconds");
+          expect(closed.pollUnsafe()).toBeUndefined();
+        }
+        socket.serverMessage(encodeJson({ _tag: "Pong" }));
+        yield* Effect.yieldNow;
+        for (let tick = 0; tick <= 5; tick += 1) {
+          yield* TestClock.adjust("5 seconds");
+          expect(closed.pollUnsafe()).toBeUndefined();
+        }
+      }).pipe(Effect.provide(TestClock.layer())),
+    5_000,
+  );
+  it.effect.each(["six missed pongs", "server close"] as const)(
+    "ends the session after %s",
+    (trigger) =>
+      Effect.gen(function* () {
+        const { socket, closed } = yield* makeLiveHeartbeatSession();
+        if (trigger === "six missed pongs") {
+          for (let tick = 0; tick <= 5; tick += 1) {
+            yield* TestClock.adjust("5 seconds");
+            expect(closed.pollUnsafe()).toBeUndefined();
+          }
+          yield* TestClock.adjust("5 seconds");
+        } else {
+          socket.close(1012, "service restart");
+        }
+        expect(yield* Fiber.join(closed)).toBeInstanceOf(ConnectionTransientError);
+        expect(socket.readyState).toBe(TestWebSocket.CLOSED);
+      }).pipe(Effect.provide(TestClock.layer())),
+    5_000,
   );
 });
