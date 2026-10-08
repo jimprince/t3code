@@ -1,5 +1,8 @@
 import { makeNestingService } from "../../../forkThreads/NestingService.ts";
 import * as SqlClient from "effect/sql/SqlClient";
+import { ProviderRegistry } from "../../../provider/ProviderRegistry.ts";
+import { makeMessageForwardService } from "../../../forkThreads/MessageForwardService.ts";
+import { makeHandoffService } from "../../../forkThreads/HandoffService.ts";
 import {
   CommandId,
   type RuntimeRequestId,
@@ -74,12 +77,81 @@ const readQuestion = Effect.fn("mcp.readQuestion")(function* (input: {
     });
   return { ...context, request, item };
 });
+const forwardService = Effect.gen(function* () {
+  const { threads, scope, caller } = yield* readCaller();
+  const sql = yield* SqlClient.SqlClient;
+  const providers = yield* ProviderRegistry;
+  const handoffs = makeHandoffService(sql, threads, providers.getProviders, scope.requestNamespace);
+  return { caller, forwards: makeMessageForwardService(sql, threads, handoffs.accept) };
+});
 /** A tool that changes `threadId`, or the caller's own thread when it is omitted. */
 const writesThread = <P extends { readonly threadId?: ThreadId | undefined }, A, E, R>(
   handle: (params: P) => Effect.Effect<A, E, R>,
 ) => McpToolAccess.writesThreads((params: P) => [params.threadId], handle);
 
 export const layer = McpToolAccess.toLayer(ThreadToolkit, {
+  t3_thread_forward_prepare: McpToolAccess.reads((input) =>
+    Effect.gen(function* () {
+      const source = yield* readThread(input.sourceThreadId);
+      const { forwards } = yield* forwardService;
+      return yield* forwards
+        .prepare({ threadId: source.projection.thread.id, selection: input.selection })
+        .pipe(Effect.mapError(unavailable));
+    }),
+  ),
+  t3_thread_forward: McpToolAccess.writesThreads(
+    (input) => [input.targetThreadId],
+    (input) =>
+      Effect.gen(function* () {
+        const { scope } = yield* readCaller();
+        if (
+          input.targetEnvironmentId !== undefined &&
+          input.targetEnvironmentId !== scope.environmentId
+        )
+          return yield* new OrchestratorMcpFailure({
+            code: "cross_environment_forward_unsupported",
+            message:
+              "Cross-environment forwarding uses t3-thread forward <target> --message <id> (or --last-user). This MCP tool forwards only within its own environment.",
+          });
+        yield* readThread(input.targetThreadId).pipe(
+          Effect.catchTags({
+            OrchestratorMcpFailure: (error) =>
+              Effect.fail(
+                error.code === "thread_not_found"
+                  ? new OrchestratorMcpFailure({
+                      code: "thread_not_found",
+                      message:
+                        "Target thread was not found in this MCP environment. For another paired environment, use t3-thread forward <target> --message <id> (or --last-user).",
+                    })
+                  : error,
+              ),
+          }),
+        );
+        const { forwards, caller } = yield* forwardService;
+        const source = yield* readThread(input.sourceThreadId);
+        const bundle = yield* forwards
+          .prepare({
+            threadId: source.projection.thread.id,
+            selection: input.selection ?? { type: "last-user" },
+          })
+          .pipe(Effect.mapError(unavailable));
+        return yield* forwards
+          .accept({
+            recipientThreadId: input.targetThreadId,
+            sendId: input.clientRequestId,
+            ...(caller ? { senderThreadId: caller.id } : {}),
+            bundle,
+            sourceUrl: input.sourceUrl,
+            senderName: caller?.title ?? "T3 client",
+            ...(input.note === undefined ? {} : { note: input.note }),
+            coalesceKey: null,
+            intent: "auto",
+            allowQueueFallback: input.queue ?? true,
+          })
+          .pipe(Effect.mapError(unavailable));
+      }),
+  ),
+
   run_scheduled_task_now: McpToolAccess.writesEnvironment((input) =>
     Effect.gen(function* () {
       const scheduler = yield* ScheduledTasks.ScheduledTaskService;
