@@ -1,0 +1,14 @@
+name = "fork-create-task-issue"
+subject = "feat(agents): link and start task issues before launching workers"
+class = "product"
+purpose = "Link a worker's task issue and mark it in-progress before its first message is accepted, across CLI, MCP and app launch paths (#185)."
+retire_when = "Upstream provides shared task-linked thread creation with a durable issue gate before provider execution."
+depends_on = ["fork-worker-operations", "fork-project-page-workflow"]
+roles = []
+note = "TaskIssueLaunchService reuses RequestLedger.update; launch issue failures retain an empty recoverable shell and prevent the first run. CLI worker nesting lands before issue resolution. Repeating a stage already present does not append another progress comment. The existing launch RPC and shared app commands accept the optional issue field; no new RPC or migration is added."
+
+[[decision]]
+id = "catchup-2908-issue-gated-launch"
+date = "2026-10-10"
+decided = "adapt"
+rationale = "Pass issue-gated launch through upstream direct RPC/MCP services and nominal startsThreads permissions (#9786–#9791, #10298), retaining caller mode ceilings, secret/webhook coverage and receipt-replay issue regression. Do not revive obsolete transport handlers. Static service/access/conflict review passed; composed issue-gated launch tests remain required."
