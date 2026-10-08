@@ -76,6 +76,11 @@ let focused = false;
 let visibility = "visible";
 
 const SHELL_NOW = DateTime.makeUnsafe("2026-09-13T07:00:00.000Z");
+// Terminal alerts only fire while fresh (#190), so the clock follows the newest event shown.
+let clock = DateTime.toEpochMillis(SHELL_NOW) + 1_000;
+const observeAt = (iso: string) => {
+  clock = Math.max(clock, Date.parse(iso) + 1_000);
+};
 
 function toV2ThreadShell(input: typeof thread) {
   const latestTurn = input.latestTurn;
@@ -98,6 +103,8 @@ function toV2ThreadShell(input: typeof thread) {
     forkedFrom: null,
     createdBy: "user",
     creationSource: "web",
+    // #190 alerts only for human-started turns; an unmarked thread counts as automatic.
+    notificationOrigin: "human",
     latestRunId: latestTurn.turnId,
     activeRunId: null,
     status:
@@ -138,9 +145,11 @@ function shell(overrides: Partial<typeof thread> = {}) {
   };
 }
 function complete(environment = "one", completedAt = "2026-09-13T08:00:00Z") {
+  observeAt(completedAt);
+  // #190 alerts once per run, so a later completion is a later run.
   state.shells.set(
     environment,
-    shell({ latestTurn: { turnId: "turn", state: "completed", completedAt } }),
+    shell({ latestTurn: { turnId: `turn-${completedAt}`, state: "completed", completedAt } }),
   );
 }
 async function render() {
@@ -152,6 +161,8 @@ async function render() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clock = DateTime.toEpochMillis(SHELL_NOW) + 1_000;
+  vi.spyOn(Date, "now").mockImplementation(() => clock);
   state.mode = "notifications";
   state.inApp = false;
   state.environmentIds = ["one", "two"];
@@ -179,6 +190,7 @@ afterEach(async () => {
   await act(async () => renderer?.unmount());
   renderer = undefined;
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 it("counts notifying threads across environments, replaces repeat alerts, and clears on focus", async () => {
@@ -317,7 +329,18 @@ it("badges background failures with in-app notifications enabled", async () => {
   await render();
   state.shells.set("one", shell({ latestTurn: { ...thread.latestTurn, state: "error" } }));
   await render();
-  expect(TestNotification.sent[0]?.title).toBe("Thread failed");
+  // The heading is the thread title and the body says what happened (#190).
+  expect(TestNotification.sent[0]?.title).toBe("Test thread");
+  expect(TestNotification.sent[0]?.options.body).toBe("Error: Agent failed");
   expect(state.badge).toHaveBeenLastCalledWith(1);
   expect(state.toast).not.toHaveBeenCalled();
+});
+
+it("badges a failure that the client only saw after sleeping for an hour", async () => {
+  await render();
+  clock += 3_600_000;
+  state.shells.set("one", shell({ latestTurn: { ...thread.latestTurn, state: "error" } }));
+  await render();
+  expect(TestNotification.sent[0]?.options.body).toBe("Error: Agent failed");
+  expect(state.badge).toHaveBeenLastCalledWith(1);
 });
