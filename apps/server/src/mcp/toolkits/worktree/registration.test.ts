@@ -139,6 +139,7 @@ it.effect("production mcp layer lists worktree tools over http", () =>
       const payload = yield* decodeToolsListPayload(bodyText.match(/\{.*\}/s)![0]);
       const tools = payload.result.tools;
       const toolNames = tools.map((tool) => tool.name);
+      expect(toolNames).toContain("t3_plan_publish");
       expect(toolNames).toContain("t3_worktree_handoff");
       expect(toolNames).toContain("t3_worktree_status");
       // The worktree registration merges alongside the other toolkits rather
