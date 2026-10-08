@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import {
   createDisconnectedComposerQueue,
   DisconnectedComposerRefusal,
@@ -147,4 +147,43 @@ describe("disconnected composer sends", () => {
       expect(queue.pending()).toEqual([first, other]);
     });
   });
+});
+
+it("releases single-flight after a lost acknowledgement and retries the original identity", async () => {
+  vi.useFakeTimers();
+  try {
+    const queue = createDisconnectedComposerQueue<{ commandId: string; messageId: string }>({
+      sendTimeoutMs: 50,
+    });
+    const command = { commandId: "same-command", messageId: "same-message" };
+    queue.enqueue(command);
+    let acknowledge!: () => void;
+    const draining = queue.flush(
+      () =>
+        new Promise<void>((resolve) => {
+          acknowledge = resolve;
+        }),
+    );
+    const rejection = expect(draining).rejects.toThrow("acknowledgement timed out");
+    await vi.advanceTimersByTimeAsync(50);
+    await rejection;
+    expect(queue.pending()).toEqual([command]);
+    const delivered: (typeof command)[] = [];
+    await queue.flush(async (entry) => void delivered.push(entry));
+    acknowledge();
+    expect(delivered).toEqual([command]);
+    expect(queue.pending()).toEqual([]);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+it("publishes the remaining count after each acknowledgement", async () => {
+  const counts: number[] = [];
+  const queue = createDisconnectedComposerQueue<{ commandId: string }>({
+    onChange: () => counts.push(queue.pending().length),
+  });
+  queue.enqueue({ commandId: "a" });
+  queue.enqueue({ commandId: "b" });
+  await queue.flush(async () => undefined);
+  expect(counts).toEqual([1, 0]);
 });
