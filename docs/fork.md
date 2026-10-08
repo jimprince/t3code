@@ -16,3 +16,12 @@ This index owns fork-specific links so upstream's documentation index can evolve
 - [Fork patch inventory](./operations/fork-inventory.toml)
 
 - [Measure update reliability](./operations/fork-maintenance.md#measure-update-reliability)
+
+## General Chat workspace storage
+
+New General Chat workspaces live in `chat-workspaces/` under T3 home.
+Existing installations keep the workspace path saved in their chat project,
+including paths created under a previous system temporary directory. Startup
+recreates a missing directory without changing project IDs, thread bindings,
+or provider-session paths. Changing `TMPDIR` does not move an existing chat
+workspace or prevent startup.
