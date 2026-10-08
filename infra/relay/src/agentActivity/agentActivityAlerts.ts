@@ -1,33 +1,65 @@
+import {
+  groupedNotificationTitle,
+  evaluateNotification,
+  notificationEventKey,
+  notificationMessage,
+} from "@t3tools/client-runtime/notification-eligibility";
+import type { ThreadNotificationEvent } from "@t3tools/contracts";
 import type {
   RelayAgentActivityAggregateRow,
   RelayAgentActivityAggregateState,
   RelayAgentAwarenessPreferences,
 } from "@t3tools/contracts/relay";
-import * as DateTime from "effect/DateTime";
-import * as Option from "effect/Option";
 
 export interface AgentActivityAlert {
   readonly title: string;
   readonly body: string;
 }
 
-export const TERMINAL_NOTIFICATION_FRESHNESS_MS = 2 * 60 * 1_000;
-
-export function isFreshTerminalNotification(updatedAt: string, nowMs: number): boolean {
-  const timestamp = Option.getOrNull(DateTime.make(updatedAt));
-  return (
-    timestamp !== null && nowMs - timestamp.epochMilliseconds <= TERMINAL_NOTIFICATION_FRESHNESS_MS
-  );
-}
-
 type TransitionInput = {
+  readonly nowMs?: number;
   readonly previousAggregate: RelayAgentActivityAggregateState | null;
   readonly nextAggregate: RelayAgentActivityAggregateState;
   readonly preferences: RelayAgentAwarenessPreferences | null;
 };
 
+export function activityNotificationEvent(row: {
+  notification?: ThreadNotificationEvent | null;
+  phase: string;
+  updatedAt: string;
+}): ThreadNotificationEvent | null {
+  if (row.notification !== undefined) return row.notification;
+  const kind =
+    row.phase === "waiting_for_approval"
+      ? "approval"
+      : row.phase === "waiting_for_input"
+        ? "question"
+        : row.phase === "failed"
+          ? "error"
+          : null;
+  // Old persisted jobs remain readable; unknown successful replies stay quiet.
+  return kind
+    ? {
+        kind,
+        identity: `${row.phase}:${row.updatedAt}`,
+        origin: "unknown",
+        occurredAt: row.updatedAt,
+      }
+    : null;
+}
 function rowKey(row: RelayAgentActivityAggregateRow): string {
-  return JSON.stringify([row.environmentId, row.threadId]);
+  const event = activityNotificationEvent(row);
+  return event
+    ? notificationEventKey(row.environmentId, row.threadId, event)
+    : JSON.stringify([row.environmentId, row.threadId]);
+}
+function eligibleRow(row: RelayAgentActivityAggregateRow, nowMs: number) {
+  return evaluateNotification({
+    event: activityNotificationEvent(row),
+    environmentId: row.environmentId,
+    threadId: row.threadId,
+    nowMs,
+  }).eligible;
 }
 
 function isAttentionPhase(phase: string): boolean {
@@ -63,7 +95,8 @@ export function attentionTransitionRows(input: TransitionInput) {
     (row) =>
       isAttentionPhase(row.phase) &&
       !previouslyAttention.has(rowKey(row)) &&
-      alertAllowedForPhase(input.preferences, row.phase),
+      alertAllowedForPhase(input.preferences, row.phase) &&
+      eligibleRow(row, input.nowMs ?? 0),
   );
 }
 
@@ -75,16 +108,22 @@ export function newlyTerminalRows(
   includeUnobserved = false,
 ): ReadonlyArray<RelayAgentActivityAggregateRow> {
   if (previousAggregate === null) return [];
-  const previousPhases = new Map(
-    previousAggregate.activities.map((row) => [rowKey(row), row.phase]),
+  const previous = new Map(
+    previousAggregate.activities.map((row) => [
+      JSON.stringify([row.environmentId, row.threadId]),
+      row,
+    ]),
   );
   return nextAggregate.activities.filter((row) => {
     if (row.phase !== "completed" && row.phase !== "failed") return false;
-    const previousPhase = previousPhases.get(rowKey(row));
+    const prior = previous.get(JSON.stringify([row.environmentId, row.threadId]));
     return (
-      (includeUnobserved || previousPhase !== undefined) &&
-      previousPhase !== "completed" &&
-      previousPhase !== "failed"
+      (includeUnobserved || prior !== undefined) &&
+      !(
+        prior &&
+        (prior.phase === "completed" || prior.phase === "failed") &&
+        rowKey(prior) === rowKey(row)
+      )
     );
   });
 }
@@ -97,10 +136,7 @@ export function terminalTransitionRows(
     input.nextAggregate,
     input.includeUnobserved,
   ).filter((row) => {
-    return (
-      alertAllowedForPhase(input.preferences, row.phase) &&
-      isFreshTerminalNotification(row.updatedAt, input.nowMs)
-    );
+    return alertAllowedForPhase(input.preferences, row.phase) && eligibleRow(row, input.nowMs);
   });
 }
 
@@ -110,10 +146,15 @@ export function alertForActivityRows(
   const first = rows[0];
   if (!first) return null;
   if (rows.length === 1) {
-    return { title: first.threadTitle, body: `${first.status}: ${first.projectTitle}` };
+    return {
+      title: first.threadTitle,
+      body: notificationMessage(activityNotificationEvent(first)!),
+    };
   }
   return {
-    title: `${rows.length} agents ${isAttentionPhase(first.phase) ? "need attention" : "finished"}`,
+    title: groupedNotificationTitle(
+      rows.map((row) => activityNotificationEvent(row)!).filter(Boolean),
+    ),
     body: rows.map((row) => row.threadTitle).join(", "),
   };
 }
@@ -131,13 +172,19 @@ export function alertForNewlyTerminal(
 export function alertForTerminalAggregate(input: {
   readonly aggregate: RelayAgentActivityAggregateState | null;
   readonly preferences: RelayAgentAwarenessPreferences | null;
+  readonly nowMs?: number;
 }): AgentActivityAlert | null {
   const row = input.aggregate?.activities[0];
   if (!row || (row.phase !== "completed" && row.phase !== "failed")) return null;
-  return alertAllowedForPhase(input.preferences, row.phase) ? alertForActivityRows([row]) : null;
+  return alertAllowedForPhase(input.preferences, row.phase) && eligibleRow(row, input.nowMs ?? 0)
+    ? alertForActivityRows([row])
+    : null;
 }
 
 export function shouldAlertForActivity(input: {
+  readonly environmentId?: string;
+  readonly threadId?: string;
+  readonly notification?: ThreadNotificationEvent | null;
   readonly phase: RelayAgentActivityAggregateRow["phase"];
   readonly updatedAt: string;
   readonly preferences: RelayAgentAwarenessPreferences | null;
@@ -146,7 +193,11 @@ export function shouldAlertForActivity(input: {
   return (
     input.preferences?.notificationsEnabled === true &&
     alertAllowedForPhase(input.preferences, input.phase) &&
-    ((input.phase !== "completed" && input.phase !== "failed") ||
-      isFreshTerminalNotification(input.updatedAt, input.nowMs))
+    evaluateNotification({
+      event: activityNotificationEvent(input),
+      environmentId: input.environmentId ?? "",
+      threadId: input.threadId ?? "",
+      nowMs: input.nowMs,
+    }).eligible
   );
 }
