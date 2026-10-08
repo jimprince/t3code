@@ -2735,3 +2735,13 @@ retire_when = "Upstream watcher handoffs share equivalent submission-certainty c
 depends_on = ["fork-reliable-handoffs"]
 roles = []
 note = "Fold into fork-reliable-handoffs. Socket-open Timeout remains ambiguous because it can report an open-socket heartbeat failure. Parent wake fixtures preserve the explicit settled-recipient hold policy; production adapter fixture verifies native steering receipts instead of the former local queue."
+
+[[patch]]
+name = "fork-dash-178"
+subject = "feat(web): list threads under each workstream and retire Working, Blocked and Done"
+class = "product"
+purpose = "Show each workstream's threads on the Dashboard with one tag per row (waiting on you, error, blocked, running, done), their own last words and to-do progress, and Other threads for sub-agents outside any workstream. The separate Working now, Blocked and Done widgets are retired; the stuck-3-days rule lives on as a 'blocked, stuck Nd' tag."
+retire_when = "Upstream provides an equivalent workstream thread view, or the project page is retired."
+depends_on = ["fork-dash-173", "fork-dash-187"]
+roles = []
+note = "Issue #178 (Brad: build it and retire the three widgets). A task appears as a row only when it has no thread and waits on you or is blocked. The layout still accepts the working, blocked and done widget ids but renders nothing for them, so stored layouts keep loading; removing the ids belongs to fork-project-layout. Lost with them: Working's 'also serving #N' list and Done's single chronological list (done rows now sit in their group, three per group). Threads are resolved only within the project's own thread tree; top-level heads such as another orchestrator's lanes need the project-wide thread resolver, which does not exist yet."
