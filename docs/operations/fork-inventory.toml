@@ -911,3 +911,9 @@ id = "v2-port-2689"
 date = "2026-10-05"
 decided = "reconcile-smaller"
 rationale = "Keep operator refresh on V2 auth services, preserve metadata and proof binding, and overlap old credentials until their original expiry for concurrent operators."
+
+[[patch.decision]]
+id = "socket-open-209-auth-session-refresh"
+date = "2026-10-08"
+decided = "adapt"
+rationale = "Carry the socket-open deadline through session discovery and refresh once before opening attempts."

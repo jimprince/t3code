@@ -935,11 +935,17 @@ export class RemoteEnvironmentClient {
   }
 
   private async openRpc(): Promise<RemoteRpcClient> {
-    await this.refreshEnvironment();
     if (this.rpcFactory) {
       return this.rpcFactory(this.environment.wsBaseUrl);
     }
-    return openRpcConnection(this.environment);
+    return openRpcConnection(this.environment, {
+      prepare: async (signal) => {
+        this.currentEnvironment = await refreshSavedEnvironmentSession(this.currentEnvironment, {
+          signal,
+        });
+        return this.environment;
+      },
+    });
   }
   private async refreshEnvironment(): Promise<void> {
     if (this.rpcFactory) return;

@@ -22,6 +22,7 @@ export async function refreshSavedEnvironmentSession(
   environment: SavedEnvironment,
   options: {
     nowMs?: number;
+    signal?: AbortSignal;
     discover?: (httpBaseUrl: string) => Promise<boolean>;
     refresh?: (input: {
       httpBaseUrl: string;
@@ -42,7 +43,7 @@ export async function refreshSavedEnvironmentSession(
     const supported = await (
       options.discover ??
       (async (httpBaseUrl) => {
-        const descriptor = await fetchEnvironmentDescriptor(httpBaseUrl);
+        const descriptor = await fetchEnvironmentDescriptor(httpBaseUrl, options.signal);
         return (
           descriptor.orchestrationProtocolVersion === 2 &&
           descriptor.capabilities.sessionRefresh === true
@@ -50,7 +51,9 @@ export async function refreshSavedEnvironmentSession(
       })
     )(current.httpBaseUrl);
     if (!supported) return current;
-    const refreshed = await (options.refresh ?? refreshAccessToken)({
+    const refreshed = await (
+      options.refresh ?? ((input) => refreshAccessToken({ ...input, signal: options.signal }))
+    )({
       httpBaseUrl: current.httpBaseUrl,
       bearerToken: current.bearerToken,
     });

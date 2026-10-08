@@ -226,6 +226,7 @@ export async function fetchSessionState(input: {
 export async function refreshAccessToken(input: {
   httpBaseUrl: string;
   bearerToken: string;
+  signal?: AbortSignal;
 }): Promise<AuthSessionRefreshResult> {
   return fetchRemoteJson<AuthSessionRefreshResult>({
     httpBaseUrl: input.httpBaseUrl,
