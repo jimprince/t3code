@@ -127,11 +127,15 @@ async function queue(text: string, threadId = "thread-worker-a"): Promise<void> 
 }
 
 describe("send queue drain", () => {
-  it("wakes settled threads for an explicit queued instruction", async () => {
+  it("holds explicit queued instructions until a settled recipient is explicitly unsettled", async () => {
     await withTempState(async () => {
       await queue("Please retry the operation");
       const thread = makeThread({ settledOverride: "settled" });
       const { clientFactory, sent } = createClientFactory({ thread: () => thread });
+      await drainQueuedSends({ clientFactory });
+      expect(sent).toEqual([]);
+      expect((await loadState()).queuedSends[0]?.status).toBe("queued");
+      thread.settledOverride = null;
       await drainQueuedSends({ clientFactory });
       expect(sent.map((message) => message.text)).toEqual(["Please retry the operation"]);
     });
@@ -647,5 +651,63 @@ it("serializes concurrent keyed writers and keeps equal sender ids from differen
       "source-a",
       "source-b",
     ]);
+  });
+});
+
+describe("reliable handoff queue recovery", () => {
+  it("delivers legacy queued work to a running turn once and stops on a dropped ack", async () => {
+    await withTempState(async () => {
+      await queue("fixture");
+      let sends = 0;
+      const clientFactory: QueueClientFactory = () => ({
+        findThread: async () => runningThread(),
+        supportsReliableHandoffs: async () => true,
+        sendMessage: async (input) => {
+          sends++;
+          expect(input.commandId).toMatch(/^fork:queued-send:/);
+          return {
+            dispatched: false,
+            queued: false,
+            uncertain: true,
+            causeCode: "TRANSPORT_TIMEOUT",
+            sendId: input.commandId,
+          };
+        },
+      });
+      await drainQueuedSends({ clientFactory });
+      expect((await loadState()).queuedSends[0]?.status).toBe("uncertain");
+      await drainQueuedSends({ clientFactory });
+      expect(sends).toBe(1);
+    });
+  });
+  it("looks up an abandoned queued claim without resending it", async () => {
+    await withTempState(async () => {
+      await queue("fixture");
+      const state = await loadState();
+      state.queuedSends[0] = {
+        ...state.queuedSends[0]!,
+        status: "dispatching",
+        lastAttemptedAt: "2020-01-01T00:00:00Z",
+      };
+      await saveState(state);
+      let sends = 0,
+        lookups = 0;
+      const clientFactory: QueueClientFactory = () => ({
+        findThread: async () => makeThread(),
+        supportsReliableHandoffs: async () => true,
+        lookupSendReceipt: async () => {
+          lookups++;
+          return { state: "unknown", receipts: [], retentionDays: 30 };
+        },
+        sendMessage: async () => {
+          sends++;
+          return { dispatched: true, queued: false };
+        },
+      });
+      await drainQueuedSends({ clientFactory });
+      expect((await loadState()).queuedSends[0]?.status).toBe("uncertain");
+      expect(sends).toBe(0);
+      expect(lookups).toBe(1);
+    });
   });
 });
