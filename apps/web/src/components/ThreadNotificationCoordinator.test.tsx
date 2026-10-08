@@ -6,6 +6,8 @@ import { create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const state = vi.hoisted(() => ({
+  runId: "run-1",
+  origin: "human" as "human" | "worker" | "routed" | "automation" | "unknown",
   mode: "off" as ClientSettings["notificationMode"],
   inApp: true,
   active: { environmentId: "env-1", threadId: "other-thread" },
@@ -33,7 +35,7 @@ const state = vi.hoisted(() => ({
   }),
 }));
 
-const SHELL_NOW = DateTime.makeUnsafe("2026-09-13T09:00:00.000Z");
+const SHELL_NOW = DateTime.makeUnsafe("2026-09-13T10:00:00.000Z");
 
 function mockThreadShell() {
   return {
@@ -55,7 +57,8 @@ function mockThreadShell() {
     forkedFrom: null,
     createdBy: "user",
     creationSource: "web",
-    latestRunId: "run-1",
+    notificationOrigin: state.origin,
+    latestRunId: state.runId,
     activeRunId: null,
     status: state.completedAt
       ? "completed"
@@ -64,9 +67,9 @@ function mockThreadShell() {
         : "running",
     lastErrorClass: state.limited ? "usage_limit" : null,
     pendingRuntimeRequest: state.input
-      ? { id: "request-1", kind: "user_input", createdAt: SHELL_NOW }
+      ? { id: `${state.runId}:request`, kind: "user_input", createdAt: SHELL_NOW }
       : state.approval
-        ? { id: "request-1", kind: "command", createdAt: SHELL_NOW }
+        ? { id: `${state.runId}:request`, kind: "command", createdAt: SHELL_NOW }
         : null,
     latestVisibleMessage: null,
     latestUserMessageAt: null,
@@ -142,7 +145,10 @@ async function complete() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-09-13T10:00:00.000Z"));
   Object.assign(state, {
+    runId: "run-1",
+    origin: "human",
     mode: "off",
     inApp: true,
     active: { environmentId: "env-1", threadId: "other-thread" },
@@ -176,21 +182,29 @@ afterEach(async () => {
   await act(() => renderer?.unmount());
   renderer = undefined;
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe("thread notifications", () => {
-  it.each([true, false])("keeps subagents silent with focus=%s", async (focused) => {
-    state.subagent = true;
-    state.focused = focused;
-    state.mode = "notifications-and-sound";
-    await render();
-    await complete();
-    state.input = true;
-    await render();
-    expect(state.sound).not.toHaveBeenCalled();
-    expect(state.add).not.toHaveBeenCalled();
-    expect(state.notification).not.toHaveBeenCalled();
-  });
+  it.each([true, false])(
+    "keeps parent-owned subagent completions and questions silent with focus=%s",
+    async (focused) => {
+      state.subagent = true;
+      state.origin = "worker";
+      state.focused = focused;
+      state.mode = "notifications-and-sound";
+      await render();
+      await complete();
+      expect(state.sound).not.toHaveBeenCalled();
+      expect(state.add).not.toHaveBeenCalled();
+      expect(state.notification).not.toHaveBeenCalled();
+      state.input = true;
+      await render();
+      expect(state.sound).not.toHaveBeenCalled();
+      expect(state.add).not.toHaveBeenCalled();
+      expect(state.notification).not.toHaveBeenCalled();
+    },
+  );
 
   it("alerts once with system alerts off and opens the completed thread", async () => {
     await render();
@@ -198,8 +212,8 @@ describe("thread notifications", () => {
     await render();
     expect(state.add).toHaveBeenCalledTimes(1);
     const toast = state.add.mock.calls[0]?.[0];
-    expect(toast?.title).toBe("Thread completed");
-    expect(toast?.description).toBe("Fix the login form");
+    expect(toast?.title).toBe("Fix the login form");
+    expect(toast?.description).toBe("Reply ready");
     toast?.actionProps.onClick();
     expect(state.close).toHaveBeenCalledWith("toast-1");
     expect(state.navigate).toHaveBeenCalledWith({
@@ -224,11 +238,11 @@ describe("thread notifications", () => {
   );
 
   it.each([
-    ["input", "Input needed"],
+    ["input", "Question for you"],
     ["approval", "Approval needed"],
-    ["sessionError", "Thread failed"],
-    ["turnError", "Thread failed"],
-    ["limited", "Usage limit reached"],
+    ["sessionError", "Error: Agent failed"],
+    ["turnError", "Error: Agent failed"],
+    ["limited", "Error: Agent failed"],
   ] as const)("uses the same %s event for in-app and desktop alerts", async (event, title) => {
     state.mode = "notifications-and-sound";
     await render();
@@ -236,35 +250,38 @@ describe("thread notifications", () => {
     await render();
     await render();
     expect(state.add).toHaveBeenCalledTimes(1);
-    expect(state.add).toHaveBeenLastCalledWith(expect.objectContaining({ title }));
+    expect(state.add).toHaveBeenLastCalledWith(
+      expect.objectContaining({ title: "Fix the login form", description: title }),
+    );
     expect(state.sound).toHaveBeenCalledWith("input", expect.any(Function));
     expect(state.notification).not.toHaveBeenCalled();
 
     state[event] = false;
     await render();
     state.focused = false;
+    state.runId = "run-2";
     state[event] = true;
     await render();
     await render();
     expect(state.add).toHaveBeenCalledTimes(1);
     expect(state.notification).toHaveBeenCalledTimes(1);
-    expect(state.notification).toHaveBeenCalledWith(title, {
-      body: "Fix the login form",
+    expect(state.notification).toHaveBeenCalledWith("Fix the login form", {
+      body: title,
       tag: "env-1:thread-1",
       silent: true,
     });
   });
 
-  it("alerts when only a dev server is left running, not while a monitor can wake the agent", async () => {
+  it("alerts for an ended human turn while background work continues", async () => {
     await render();
     state.background = [{ taskId: "watch", kind: "monitor" }];
     await complete();
-    expect(state.add).not.toHaveBeenCalled();
+    expect(state.add).toHaveBeenCalledTimes(1);
     state.background = [{ taskId: "dev", kind: "command" }];
     await render();
     expect(state.add).toHaveBeenCalledTimes(1);
     expect(state.add).toHaveBeenLastCalledWith(
-      expect.objectContaining({ title: "Thread completed" }),
+      expect.objectContaining({ title: "Fix the login form", description: "Reply ready" }),
     );
   });
 
@@ -321,10 +338,47 @@ describe("thread notifications", () => {
     await render();
     await complete();
     expect(state.add).not.toHaveBeenCalled();
-    expect(state.notification).toHaveBeenCalledWith("Thread completed", {
-      body: "Fix the login form",
+    expect(state.notification).toHaveBeenCalledWith("Fix the login form", {
+      body: "Reply ready",
       tag: "env-1:thread-1",
       silent: true,
     });
   });
+});
+
+it.each(["worker", "routed", "automation", "unknown"] as const)(
+  "silences %s completions on an otherwise alerting thread",
+  async (origin) => {
+    state.origin = origin;
+    state.mode = "notifications-and-sound";
+    await render();
+    await complete();
+    expect(state.add).not.toHaveBeenCalled();
+    expect(state.sound).not.toHaveBeenCalled();
+    expect(state.notification).not.toHaveBeenCalled();
+  },
+);
+it("suppresses active-thread sound as well as toast and OS alert", async () => {
+  state.mode = "notifications-and-sound";
+  state.active.threadId = "thread-1";
+  await render();
+  await complete();
+  expect(state.sound).not.toHaveBeenCalled();
+  expect(state.add).not.toHaveBeenCalled();
+  expect(state.notification).not.toHaveBeenCalled();
+});
+it("announces the ended human reply even while descendants or monitors run", async () => {
+  await render();
+  state.background = [{ taskId: "watch", kind: "monitor" }];
+  await complete();
+  expect(state.add).toHaveBeenCalledTimes(1);
+});
+
+it("alerts for a human directly addressing a nested worker", async () => {
+  state.subagent = true;
+  state.origin = "human";
+  await render();
+  await complete();
+  expect(state.add).toHaveBeenCalledTimes(1);
+  expect(state.add.mock.calls[0]?.[0].description).toBe("Reply ready");
 });
