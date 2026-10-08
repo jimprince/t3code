@@ -2542,3 +2542,13 @@ depends_on = [
 ]
 roles = []
 note = "Adds only WsForkRpcGroup RPCs and reuses fork_thread_metadata_receipts; no migration ID. V2 admission and binding commit with native events/outbox under existing ownership and thread lifecycle locks. Normal Claude handoffs use SDK next priority; explicit control retains now. Unknown transport outcomes stop automatic delivery/retry. Exact/coalesce lookup is sender-private; the own inbox uses existing environment read authorization and an exact-key bounded metadata index. Production fixtures require T3_LIFECYCLE_FIXTURES. Install/deployment remain separately gated per machine."
+
+[[patch]]
+name = "fork-notification-eligibility"
+subject = "fix(notifications): alert for human replies and actionable requests"
+class = "product"
+purpose = "Alert once for replies to human messages and actionable requests, while automatic completions remain silent across web, desktop and mobile."
+retire_when = "Upstream provides one adjustable notification eligibility policy with provenance and logical deduplication across all alert surfaces."
+depends_on = ["fork-orchestrator-focus", "fork-child-input-attention", "fork-scripts-automations"]
+roles = []
+note = "Approved #190 policy. V2 projects starting-message provenance and final disposition without new migration or transcript hydration. One client-runtime table controls audience and freshness. Descendants do not suppress ended human replies; same-thread work does. Eligible requests and errors use stable run/request identities. Shared evaluator gates web, desktop, APNs, FCM and local mobile presentation; operational failure feedback and Live Activity group copy remain unchanged. Native lint/Robolectric are integration-gate obligations."
