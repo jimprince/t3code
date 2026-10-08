@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "3d0e7667237e84eaceca8ed621ce48ffbaf8e64e",
-  "head": "ffe896e4eec94cdaaeebd78bf4290f53f550410d",
+  "prev": "f1b09d72543a56d9f4b6a8435705266f5e367636",
+  "head": "30ac8f123ad3b7ea53827bb4687aa2a945f921dc",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -115,8 +115,7 @@
     "fork-reliable-handoffs",
     "fork-starting-reconcile-causal-guard",
     "fork-notification-eligibility",
-    "fork-gitea-token-setter",
-    "refresh-temp"
+    "fork-gitea-token-setter"
   ],
   "unapplied": [
     "fork-direct-endpoints-enumeration",
@@ -290,7 +289,7 @@
       "oid": "404cfba46afce2ea50f535c7a99a6bcb21c764f1"
     },
     "fork-gitea-token-setter": {
-      "oid": "05d57bd0acc394f29659168236e0f08e9f53ee1f"
+      "oid": "30ac8f123ad3b7ea53827bb4687aa2a945f921dc"
     },
     "fork-headless-delivery": {
       "oid": "a2fc291cdcebc63fbf29d8cc99e5cbe7dbdb43b7"
@@ -540,9 +539,6 @@
     },
     "fork-worktree-cleanup": {
       "oid": "1abf55357173fc4bed6e45cab955def9fd529c14"
-    },
-    "refresh-temp": {
-      "oid": "ffe896e4eec94cdaaeebd78bf4290f53f550410d"
     }
   }
 }
