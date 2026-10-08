@@ -71,6 +71,8 @@ export function getArm64IntelBuildWarningDescription(state: DesktopUpdateState):
 }
 
 export function getDesktopUpdateButtonTooltip(state: DesktopUpdateState): string {
+  // The Mac dev build explains its own Check (commits compared, prebuild progress or failure).
+  if (state.updateSource === "dev-kit" && state.message !== null) return state.message;
   if (state.status === "available") {
     return `Update ${state.availableVersion ?? "available"} ready to download`;
   }
