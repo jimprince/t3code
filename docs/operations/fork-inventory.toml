@@ -1475,3 +1475,9 @@ id = "v2-port-2689"
 date = "2026-10-05"
 decided = "reconcile-smaller"
 rationale = "Persist completion preference in V2 thread payloads, import ledger 8 values and run completion/archive policy through native commands with guarded pin preservation."
+
+[[patch.decision]]
+id = "socket-open-209-subthread-lifecycle"
+date = "2026-10-08"
+decided = "adapt"
+rationale = "Use persistence startup metadata initialization instead of repeating the historical import in the orchestrator."

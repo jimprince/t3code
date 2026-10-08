@@ -1,6 +1,6 @@
 import { legacyNoticeCanStart } from "../fork/recovery/LegacyBackgroundWorkPolicy.ts";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
-import { initializeMetadata, listMetadata } from "../forkThreads/MetadataStore.ts";
+import { listMetadata } from "../forkThreads/MetadataStore.ts";
 import { readWorkerMetadata } from "../forkThreads/WorkerLifecycleMetadata.ts";
 import { archiveEligible } from "../forkThreads/ArchiveDeadlines.ts";
 import { completionEligible } from "../forkThreads/WorkerLifecyclePolicy.ts";
