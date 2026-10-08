@@ -163,3 +163,9 @@ id = "v2-port-2689-m2"
 date = "2026-10-05"
 decided = "reconcile-smaller"
 rationale = "Resolve shared-runtime worker identity through the per-session MCP caller, with explicit CLI identity-unavailable fallback. Preserve native held-queue outcomes and actionable plan state for parent notifications. Organizational metadata reads and nest/unnest use the M2 fork sidecar independently of execution lineage. Remote parents and order reset require their advertised capability; project automation remains M3."
+
+[[patch.decision]]
+id = "socket-open-209-worker-operations"
+date = "2026-10-08"
+decided = "adapt"
+rationale = "Retry only socket opening before RPC delivery with fresh tickets and scopes, a bounded deadline, and no mutation replay."

@@ -1,6 +1,6 @@
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
-import { ORCHESTRATION_V2_WS_METHODS, ThreadId } from "@t3tools/contracts";
-import { Effect, Exit, Layer, ManagedRuntime, Option, Scope, Stream } from "effect";
+import { Cause, Deferred, Exit, Layer, ManagedRuntime, ORCHESTRATION_V2_WS_METHODS, Option, Schedule, Scope, Stream, ThreadId } from "@t3tools/contracts";
+import { Effect } from "effect";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import * as Socket from "effect/unstable/socket/Socket";
 
@@ -29,13 +29,24 @@ const makeT3RpcClient = RpcClient.make(WsRpcGroup);
 type RpcProtocolClient =
   typeof makeT3RpcClient extends Effect.Effect<infer Client, any, any> ? Client : never;
 
-function wsRpcProtocolLayer(wsUrl: string) {
-  return RpcClient.layerProtocolSocket().pipe(
-    Layer.provide(
-      Socket.layerWebSocket(wsUrl).pipe(Layer.provide(NodeSocket.layerWebSocketConstructor)),
+function wsRpcProtocolLayer(wsUrl: string, opened: Deferred.Deferred<void, Socket.SocketError>) {
+  const socketLayer = Layer.effect(
+    Socket.Socket,
+    Socket.makeWebSocket(wsUrl).pipe(
+      Effect.map((socket) => ({
+        ...socket,
+        reader: socket.reader.pipe(
+          Effect.tap(() => Deferred.succeed(opened, undefined)),
+          Effect.tapError((error) => Deferred.fail(opened, error)),
+        ),
+      })),
     ),
-    Layer.provide(RpcSerialization.layerJson),
-  );
+  ).pipe(Layer.provide(NodeSocket.layerWebSocketConstructor));
+  // Reconnection belongs to the pre-RPC boundary below. Never reconnect an in-flight mutation.
+  return Layer.effect(
+    RpcClient.Protocol,
+    RpcClient.makeProtocolSocket({ retryPolicy: Schedule.recurs(0) }),
+  ).pipe(Layer.provide(socketLayer), Layer.provide(RpcSerialization.layerJson));
 }
 
 export class T3RpcClient {
@@ -43,10 +54,24 @@ export class T3RpcClient {
   private readonly scope: Scope.Closeable;
   private readonly clientPromise: Promise<RpcProtocolClient>;
 
+  private readonly opened = Deferred.makeUnsafe<void, Socket.SocketError>();
+
   constructor(wsUrl: string) {
-    this.runtime = ManagedRuntime.make(wsRpcProtocolLayer(wsUrl));
+    this.runtime = ManagedRuntime.make(wsRpcProtocolLayer(wsUrl, this.opened));
     this.scope = this.runtime.runSync(Scope.make());
     this.clientPromise = this.runtime.runPromise(Scope.provide(this.scope)(makeT3RpcClient));
+  }
+
+  /** Resolves only after the socket reader acquires an open connection, before any RPC write. */
+  async awaitOpen(signal?: AbortSignal): Promise<void> {
+    await this.clientPromise;
+    const result = await this.runtime.runPromiseExit(Deferred.await(this.opened), { signal });
+    if (Exit.isFailure(result)) {
+      throw Option.getOrElse(
+        Cause.findErrorOption(result.cause),
+        () => signal?.reason ?? new Error("Socket open interrupted"),
+      );
+    }
   }
 
   async request<T>(method: keyof typeof RPC_METHODS, input: unknown): Promise<T> {
@@ -83,9 +108,11 @@ export class T3RpcClient {
   }
 
   async dispose(): Promise<void> {
-    await this.runtime.runPromise(Scope.close(this.scope, Exit.void)).finally(() => {
-      this.runtime.dispose();
-    });
+    try {
+      await this.runtime.runPromise(Scope.close(this.scope, Exit.void));
+    } finally {
+      await this.runtime.dispose();
+    }
   }
 
   private async requestStreamFirst<T>(

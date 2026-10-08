@@ -59,3 +59,52 @@ it("closes an RPC connection during its handshake without an uncaught websocket 
     await NodeFSP.rm(directory, { recursive: true, force: true });
   }
 }, 60_000);
+
+it("opens a fresh real socket after an unsent failure, with a new ticket and no RPC frames", async () => {
+  const { createHash } = await import("node:crypto");
+  const { openRpcConnection } = await import("../src/openRpc.js");
+  const server = NodeHttp.createServer();
+  const sockets = new Set<import("node:net").Socket>();
+  const tickets: string[] = [];
+  const frames: Buffer[] = [];
+  server.on("connection", (socket) => {
+    sockets.add(socket);
+    socket.on("close", () => sockets.delete(socket));
+  });
+  server.on("upgrade", (request, socket) => {
+    tickets.push(request.url ?? "");
+    if (tickets.length === 1) {
+      socket.destroy();
+      return;
+    }
+    const accept = createHash("sha1")
+      .update(`${request.headers["sec-websocket-key"]}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
+      .digest("base64");
+    socket.write(
+      `HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`,
+    );
+    socket.on("data", (data: Buffer) => frames.push(data));
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Expected TCP address");
+  let issued = 0;
+  try {
+    const rpc = await openRpcConnection(
+      { httpBaseUrl: "http://test", wsBaseUrl: "ws://test", bearerToken: "synthetic" },
+      {
+        resolveUrl: async () => `ws://127.0.0.1:${address.port}/ws?ticket=${++issued}`,
+        random: () => 0,
+      },
+    );
+    try {
+      expect(tickets).toEqual(["/ws?ticket=1", "/ws?ticket=2"]);
+      expect(frames).toEqual([]);
+    } finally {
+      await rpc.dispose();
+    }
+  } finally {
+    for (const socket of sockets) socket.destroy();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});

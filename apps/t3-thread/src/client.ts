@@ -1,3 +1,4 @@
+import { openRpcConnection } from "./openRpc.js";
 import { withThreadMetadata, type ThreadMetadata } from "./v2/nesting.js";
 import { pendingRequests, requirePendingRequest } from "./v2/requests.js";
 import { wrapWithPreamble, type WorkerContext } from "./thread-preamble.js";
@@ -20,7 +21,6 @@ import {
   exchangePairingCredential,
   fetchEnvironmentDescriptor,
   fetchSessionState,
-  resolveWebSocketUrl,
 } from "./http.js";
 import { T3RpcClient } from "./rpc.js";
 import { enqueueSend } from "./sendQueue.js";
@@ -932,12 +932,7 @@ export class RemoteEnvironmentClient {
     if (this.rpcFactory) {
       return this.rpcFactory(this.environment.wsBaseUrl);
     }
-    const wsUrl = await resolveWebSocketUrl({
-      httpBaseUrl: this.environment.httpBaseUrl,
-      wsBaseUrl: this.environment.wsBaseUrl,
-      bearerToken: this.environment.bearerToken,
-    });
-    return new T3RpcClient(wsUrl);
+    return openRpcConnection(this.environment);
   }
 
 }

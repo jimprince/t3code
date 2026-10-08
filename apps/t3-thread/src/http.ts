@@ -131,6 +131,7 @@ async function fetchRemoteJson<T>(input: {
   method?: "GET" | "POST";
   bearerToken?: string;
   body?: unknown;
+  signal?: AbortSignal;
 }): Promise<T> {
   const requestUrl = new URL(input.pathname, input.httpBaseUrl).toString();
   let response: Response;
@@ -162,10 +163,12 @@ async function fetchRemoteJson<T>(input: {
 
 export async function fetchEnvironmentDescriptor(
   httpBaseUrl: string,
+  signal?: AbortSignal,
 ): Promise<ExecutionEnvironmentDescriptor> {
   return fetchRemoteJson<ExecutionEnvironmentDescriptor>({
     httpBaseUrl,
     pathname: "/.well-known/t3/environment",
+    signal,
   });
 }
 
@@ -222,6 +225,7 @@ export async function fetchSessionState(input: {
 export async function issueWebSocketTicket(input: {
   httpBaseUrl: string;
   bearerToken: string;
+  signal?: AbortSignal;
 }): Promise<AuthWebSocketTicketResult> {
   return fetchRemoteJson<AuthWebSocketTicketResult>({
     httpBaseUrl: input.httpBaseUrl,
@@ -235,6 +239,7 @@ export async function resolveWebSocketUrl(input: {
   httpBaseUrl: string;
   wsBaseUrl: string;
   bearerToken: string;
+  signal?: AbortSignal;
 }): Promise<string> {
   const issued = await issueWebSocketTicket({
     httpBaseUrl: input.httpBaseUrl,
