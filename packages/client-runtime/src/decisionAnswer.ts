@@ -41,7 +41,7 @@ export type DecisionDelivery =
   | { readonly phase: "failed"; readonly error: string };
 
 /** A delivery the server just confirmed, stamped now so later list reads can be told apart. */
-export function sentDelivery(notified: boolean): DecisionDelivery {
+function sentDelivery(notified: boolean): DecisionDelivery {
   return { phase: "sent", at: Date.now(), notified };
 }
 
