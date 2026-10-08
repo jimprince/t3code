@@ -1,6 +1,6 @@
-Bottom: 570f90d7500e90a7c85f85daf53b9cf8ebcb1664
-Top:    8f6664c6a7db37b69578e70b4d10e107c5226465
+Bottom: e1fa173e6ff61a53e92e8c6e73ff050da21e3020
+Top:    5f3ca4c16bed8d237decdd81a8971690054c7d57
 Author: brad <bradprin@live.com>
-Date:   2026-10-08 20:25:19 +0000
+Date:   2026-10-08 20:31:00 +0000
 
 feat(web): collapse Release widget groups by default
