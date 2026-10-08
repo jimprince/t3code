@@ -5,6 +5,7 @@ import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 import * as NodeUtil from "node:util";
 import { beforeAll, describe, expect, it } from "vite-plus/test";
+import { THREAD_ROUTING_LOCK_HELPER } from "@t3tools/shared/threadRoutingState";
 
 const run = NodeUtil.promisify(NodeChildProcess.execFile);
 const workspace = NodeURL.fileURLToPath(new URL("..", import.meta.url));
@@ -14,13 +15,31 @@ describe("prebuilt launch", () => {
     await run(process.execPath, ["scripts/build.mjs"], { cwd: workspace });
   }, 30_000);
 
-  it("runs the actual built CLI and a watcher pass without spawning children", async () => {
+  it("runs the actual built CLI and watcher with no loader subprocesses; only the #220 flock helper", async () => {
     const temp = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-prebuilt-"));
     try {
       const guard = NodePath.join(temp, "no-spawn.cjs");
+      const helperInvocations = NodePath.join(temp, "flock-helper-invocations.txt");
       await NodeFSP.writeFile(
         guard,
-        `const cp = require('node:child_process'); for (const key of ['spawn', 'spawnSync', 'exec', 'execSync', 'execFile', 'execFileSync', 'fork']) cp[key] = () => { throw new Error('Unexpected child process'); };`,
+        `const cp = require('node:child_process');
+         const fs = require('node:fs');
+         const helperScript = ${JSON.stringify(THREAD_ROUTING_LOCK_HELPER)};
+         for (const key of ['spawn', 'spawnSync', 'exec', 'execSync', 'execFile', 'execFileSync', 'fork']) {
+           const original = cp[key];
+           cp[key] = (...callArgs) => {
+             const [command, args, options] = callArgs;
+             if ((key === 'spawn' || key === 'spawnSync') && command === '/usr/bin/perl' &&
+                 Array.isArray(args) && args.length === 2 && args[0] === '-e' && args[1] === helperScript &&
+                 Array.isArray(options?.stdio) && options.stdio.length === 4 &&
+                 options.stdio[0] === 'ignore' && options.stdio[1] === 'ignore' && options.stdio[2] === 'pipe' &&
+                 Number.isInteger(options.stdio[3]) && options.stdio[3] >= 0) {
+               fs.appendFileSync(${JSON.stringify(helperInvocations)}, key + '\\n');
+               return original.apply(cp, callArgs);
+             }
+             throw new Error('Unexpected child process');
+           };
+         }`,
       );
       const env = {
         ...process.env,
@@ -44,10 +63,26 @@ describe("prebuilt launch", () => {
         { cwd: workspace, env, timeout: 4000 },
       );
       expect(boundedWatch.stdout).toContain('"scannedAt"');
+      expect((await NodeFSP.readFile(helperInvocations, "utf8")).split("\n")).toContain("spawn");
+      const blocked = await run(
+        process.execPath,
+        [
+          "-e",
+          `const assert = require('node:assert/strict');
+           const cp = require('node:child_process');
+           assert.throws(() => cp.spawn(process.execPath, []), /Unexpected child process/);
+           assert.throws(() => cp.spawn('/usr/bin/perl', ['-e', 'exit 0']), /Unexpected child process/);
+           assert.throws(() => cp.spawn('/usr/bin/perl', ['-e', ${JSON.stringify(THREAD_ROUTING_LOCK_HELPER)}]), /Unexpected child process/);
+           assert.throws(() => cp.execFile('/usr/bin/perl', ['-e', ${JSON.stringify(THREAD_ROUTING_LOCK_HELPER)}]), /Unexpected child process/);
+           console.log('guard enforced');`,
+        ],
+        { cwd: workspace, env },
+      );
+      expect(blocked.stdout.trim()).toBe("guard enforced");
     } finally {
       await NodeFSP.rm(temp, { recursive: true, force: true });
     }
-    // Three real launches, one holding a watcher for a second: parallel CI needs headroom.
+    // Four real launches, one holding a watcher for a second: parallel CI needs headroom.
   }, 15_000);
 
   it("selects the build by default, refuses stale/missing builds and opts into tsx", async () => {
