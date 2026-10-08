@@ -142,6 +142,18 @@ Supported direct-ID lifecycle commands: `settle`, `unsettle`, `status`, `result`
 
 Use the complete ID printed by the server, including `thread:delegated-task:command%3A...` or `automation:...`, for nesting, settlement, metadata updates, and results. IDs are opaque: do not URL-decode the embedded command namespace.
 
+### Forwarding exact messages and attachments
+
+```bash
+t3-thread forward worker-a --last-user
+t3-thread forward worker-a --source chief-of-staff --message <message-id> --note "Route to the owner."
+```
+
+The command preserves exact source text and all attachments, including between
+paired environments. It uses the normal reliable delivery receipts and queue.
+See [Message forwarding](docs/MESSAGE_FORWARDING.md) for retries, MCP tools, and
+the RPC contract for the app action.
+
 ### Sending to a thread that is still running
 
 `send` (and `clarify` / `revise` / `complete`) to a thread whose turn is still
