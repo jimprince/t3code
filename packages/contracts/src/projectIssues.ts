@@ -80,8 +80,36 @@ export const ProjectIssueDecision = Schema.Struct({
   /** A saved agent name or thread id; the block's `waiting:` line, else chief-of-staff-inbox. */
   waiting: Schema.String,
   options: Schema.Array(Schema.Struct({ text: Schema.String, recommended: Schema.Boolean })),
+  /**
+   * The context's `deadline:` line, a date (`2026-10-08`) or an instant, UTC. A deferred
+   * card comes back the day before it.
+   */
+  deadline: Schema.optionalKey(Schema.String),
 });
 export type ProjectIssueDecision = typeof ProjectIssueDecision.Type;
+
+/**
+ * Who a card is for: the thread that gets Brad's answer (the thread a `needs-brad`
+ * decision waits on, else the thread that owns the work) and its project. When the
+ * owning thread is archived the orchestrator stands in and `previousTitle` names it.
+ */
+export const ProjectIssueOwner = Schema.Struct({
+  threadId: ThreadId,
+  title: Schema.String,
+  projectTitle: Schema.String,
+  previousTitle: Schema.optionalKey(Schema.String),
+});
+export type ProjectIssueOwner = typeof ProjectIssueOwner.Type;
+
+/**
+ * Later, as recorded on the issue: hidden until `until`, and/or moved to the end of
+ * the feed at `movedToEndAt`. A past `until` no longer hides the card.
+ */
+export const ProjectIssueDeferral = Schema.Struct({
+  until: Schema.NullOr(IsoDateTime),
+  movedToEndAt: Schema.NullOr(IsoDateTime),
+});
+export type ProjectIssueDeferral = typeof ProjectIssueDeferral.Type;
 
 export const ProjectIssue = Schema.Struct({
   host: TrimmedNonEmptyString,
@@ -103,6 +131,10 @@ export const ProjectIssue = Schema.Struct({
   linkedThreadIds: Schema.Array(ThreadId),
   /** Set on an open issue labeled `needs-brad`: a decision waiting on Brad. */
   decision: Schema.optionalKey(ProjectIssueDecision),
+  /** Set on an open card for Brad (a decision, review, test or answer): who it is for. */
+  owner: Schema.optionalKey(ProjectIssueOwner),
+  /** Set when Brad deferred the card. */
+  deferral: Schema.optionalKey(ProjectIssueDeferral),
   /** Set for requests (issues labeled ask). */
   stage: Schema.optionalKey(ProjectRequestStage),
   milestone: Schema.optionalKey(Schema.NullOr(ProjectMilestone)),
