@@ -121,6 +121,8 @@ export interface EventSinkV2Shape {
     EventSinkV2Error
   >;
   readonly commitCommand: (input: {
+    /** Reject a stale plan atomically; omitted by ordinary commands. */
+    readonly expectedThreadSequence?: number;
     readonly commandId: CommandId;
     readonly threadId: ThreadId;
     readonly commandType: string;
@@ -549,6 +551,30 @@ const baseLayer: Layer.Layer<
           if (!reserved) {
             const existing = yield* existingCommandResult(input.commandId);
             return { ...existing, committed: false as const, cancelledEffectIds: [] };
+          }
+
+          if (input.expectedThreadSequence !== undefined) {
+            // Receipt reservation has acquired SQLite write ownership. No provider
+            // writer can commit between this comparison and the event/outbox writes.
+            const sequence = yield* eventStore.latestSequence({ threadId: input.threadId });
+            if (sequence !== input.expectedThreadSequence) {
+              const receipt: CommandReceiptStore.CommandReceiptV2 = {
+                commandId: input.commandId,
+                threadId: input.threadId,
+                commandType: input.commandType,
+                acceptedAt: input.acceptedAt,
+                resultSequence: sequence,
+                status: "rejected",
+                error: "Thread changed before reconciliation; newer work was preserved.",
+              };
+              yield* commandReceipts.upsert(receipt);
+              return {
+                receipt,
+                storedEvents: [],
+                committed: false as const,
+                cancelledEffectIds: [],
+              };
+            }
           }
 
           const admission = yield* MessageAdmission;
