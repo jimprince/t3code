@@ -1377,3 +1377,15 @@ launch is retried. Task completion remains the issue's existing PR merge or
 accepted-result workflow.
 
 Watcher notification retries require proof that the handoff was never submitted: a non-timeout socket-open failure, a refused/unreachable connect or failed DNS lookup, client/auth setup before the acceptance frame, or a scope rejection before admission. These failures use the existing backoff and attempt cap. A read/write failure, interruption, opaque transport error, or timeout after submission stays `uncertain` and is not automatically resent. Effect's `SocketOpenError` with kind `Timeout` can also mean an open socket missed its heartbeat, so it remains uncertain. Inspect the stable send receipt to reconcile it. Settled parents hold child notifications until explicitly unsettled; active parents receive them.
+
+### Publish an approved plan as a workstream
+
+Use `t3-thread plan publish <thread> --title "Parser v2" --owner "Parser manager" --file ./approved-plan.md --key parser-v2` to publish an approved markdown list in that project's configured Gitea tracker. A stored T3 Plan-mode proposal uses `--plan-id <id>` instead of `--file` and `--key`. Publishing records an existing approval; it does not approve a plan for Brad.
+
+The command creates one epic and one task issue per top-level unordered, ordered, or checklist item. Tasks include `Part of #<epic>` and `Owner: <owner>`. Indented `Owner:` lines override the default owner; other indented text stays in the task's brief. Lists inside fenced code are ignored. Plans must contain 1–100 tasks with titles and owners no longer than 200 characters.
+
+Keep `--key` stable and unique within the tracker repository when editing a markdown plan. Append `<!-- task:parser -->` to a list item's title for a stable task identity across reordering. Without explicit task keys, list positions are the identities. Reruns update the same issue titles and generated body blocks, preserve notes outside those blocks, issue state, comments, and unrelated labels, and refresh the epic checklist from Gitea completion state. Removed tasks remain in Gitea for the owner to reconcile. Keep the generated `t3-plan` marker lines intact. A failed or partial API read stops before any writes; a lost create response is recovered by those markers on rerun.
+
+Add `--threads` to start a nested worker for each open task using the workstream owner's project, workspace, and model. Each worker's owner metadata and in-progress linked issue are recorded before its first message. Repeating the command recovers the same worker and first-message receipt; it does not start a second job. Closed tasks are left complete. Partial publication or a launch failure can be recovered by running the same command again.
+
+The MCP tool `t3_plan_publish` exposes the same `title`, `owner`, `source` (`markdown` with `key` and `markdown`, or `proposed_plan` with `threadId` and `planId`) and optional `createThreads` fields. Omit `threadId` to use the calling T3 thread. Starting workers requires a full-access/default caller. No provider run is needed merely to publish issues.
