@@ -5,6 +5,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";
+import { useTheme } from "../../hooks/useTheme";
 import { logProjectCanvasAction } from "../../state/projectCanvas";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { buildThreadRouteParams } from "../../threadRoutes";
@@ -19,6 +20,7 @@ import {
   parseCanvasMessage,
   takeRateSlot,
 } from "./projectCanvasBridge.logic";
+import { canvasThemeStyle, withCanvasTheme } from "./projectCanvasTheme.logic";
 import { useSendToOrchestrator } from "./sendToOrchestrator";
 
 const FRAME_HEIGHT: Record<ProjectCanvasPage["size"], string> = {
@@ -33,6 +35,24 @@ const CANVAS_SPAN: Record<ProjectCanvasPage["size"], string> = {
   medium: "col-span-6 md:col-span-3",
   full: "col-span-6",
 };
+
+/**
+ * The canvas document with the app's theme variables in its `:root`, so the page
+ * matches the app. The values are read from the live root, which the theme hook
+ * has already updated when `theme` or `resolvedTheme` changes.
+ */
+function useThemedCanvasHtml(html: string | null): string | null {
+  const { theme, resolvedTheme } = useTheme();
+  return useMemo(() => {
+    if (html === null) return null;
+    const computed = getComputedStyle(document.documentElement);
+    return withCanvasTheme(
+      html,
+      canvasThemeStyle((name) => computed.getPropertyValue(name), resolvedTheme),
+    );
+    // theme is not read above; it signals that the root's variables changed.
+  }, [html, theme, resolvedTheme]);
+}
 
 /** Hosts a canvas may open: GitHub, the configured Gitea web origins, and the tree's links. */
 function useKnownHosts(summary: OrchestratorSummary): ReadonlySet<string> {
@@ -205,6 +225,7 @@ export function ProjectCanvasWidget({
 }) {
   const frame = useRef<HTMLIFrameElement | null>(null);
   const bridge = useCanvasBridge(summary, canvas.id, frame);
+  const html = useThemedCanvasHtml(canvas.html);
   return (
     <section className={`min-w-0 ${CANVAS_SPAN[canvas.size]}`}>
       <h2 className="mb-2 flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
@@ -247,8 +268,8 @@ export function ProjectCanvasWidget({
             title={`${canvas.title} canvas`}
             sandbox="allow-scripts"
             referrerPolicy="no-referrer"
-            srcDoc={canvas.html}
-            className="size-full bg-black"
+            srcDoc={html ?? undefined}
+            className="size-full"
           />
         </div>
       )}

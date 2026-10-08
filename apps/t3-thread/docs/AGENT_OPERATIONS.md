@@ -1062,8 +1062,11 @@ An orchestrator can show its own page on the project's Dashboard: write a static
 `.t3/dashboard/index.html` (plus its CSS, images, JSON or scripts in the same folder) in the
 project workspace. The server reads it and inlines those local files; the page shows in a
 sandboxed frame with no access to T3, so it cannot fetch from the network or T3. Start from
-the template and style kit in `docs/user/project-canvas/` (dark, true black, dense, white text,
-minimal copy, no decorative chrome, no continuously repainting animation). The page header shows
+the template and style kit in `docs/user/project-canvas/` (dense, minimal copy, no decorative chrome,
+no continuously repainting animation). T3 copies its theme variables (`--background`, `--foreground`,
+`--card`, `--muted`, `--muted-foreground`, `--border`, `--primary`, `--success`, `--warning`,
+`--error`, `--info`) into the page's `:root` and sets `color-scheme`, so use them, with a fallback,
+instead of fixed colours; never a pure black background. The page header shows
 "updated X ago" from the file times, so regenerate the whole folder whenever the numbers change,
 for example from a project automation that runs a script every 15 minutes. Keep it under 4 MB.
 

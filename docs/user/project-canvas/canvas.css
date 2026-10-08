@@ -1,13 +1,14 @@
-/* Project canvas style kit: dark, true black, dense, white text, no decorative chrome. */
+/* Project canvas style kit: dense, no decorative chrome. T3 puts its theme variables in the page's
+   :root, so the page follows the app theme; the fallbacks apply when a page opens outside T3. */
 :root {
-  color-scheme: dark;
-  --fg: #fff;
-  --muted: #9a9a96;
-  --line: #1f1f1d;
-  --good: #0ca30c;
-  --warn: #fab219;
-  --bad: #d03b3b;
-  --accent: #3987e5;
+  --fg: var(--foreground, #f5f5f5);
+  --muted: var(--muted-foreground, #9a9a96);
+  --line: var(--border, #1f1f1d);
+  --good: var(--success, #0ca30c);
+  --warn: var(--warning, #fab219);
+  --bad: var(--error, #d03b3b);
+  --accent: var(--primary, #3987e5);
+  --surface: var(--background, #0a0a0a);
 }
 * {
   box-sizing: border-box;
@@ -15,7 +16,7 @@
 body {
   margin: 0;
   padding: 12px;
-  background: #000;
+  background: var(--surface);
   color: var(--fg);
   font:
     13px/1.45 ui-sans-serif,
@@ -46,7 +47,7 @@ h2 {
   border: 1px solid var(--line);
 }
 .stat {
-  background: #000;
+  background: var(--surface);
   padding: 8px 10px;
 }
 .stat .label {
