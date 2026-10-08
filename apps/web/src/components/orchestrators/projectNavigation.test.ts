@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
+import { buildOrchestratorSummaries } from "@t3tools/client-runtime/state/orchestrators";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
+
+import { makeThreadFixture } from "../../test-fixtures";
 
 import {
   isProjectPullRequestDetail,
@@ -56,5 +59,38 @@ describe("project navigation", () => {
     expect(
       owningProjectReturn(summaries, EnvironmentId.make("env-1"), ThreadId.make("standalone")),
     ).toBeNull();
+  });
+
+  it("leads a subagent of a worker back to the project that owns the worker", () => {
+    const env = EnvironmentId.make("env-1");
+    const node = (id: string, parent: string | null, subagent = false) => {
+      const lineage = {
+        rootThreadId: ThreadId.make(parent ?? id),
+        parentThreadId: parent === null ? null : ThreadId.make(parent),
+        relationshipToParent: subagent ? ("subagent" as const) : null,
+      };
+      const thread = makeThreadFixture({ id: ThreadId.make(id), environmentId: env, lineage });
+      return {
+        ...thread,
+        parentThreadId: parent === null ? null : ThreadId.make(parent),
+        subproject: "auto" as const,
+        supervisionMetadataPresent: true,
+      };
+    };
+    const summaries = buildOrchestratorSummaries(
+      [
+        node("project", null),
+        node("worker", "project"),
+        node("native", "worker", true),
+        node("native-of-native", "native", true),
+      ],
+      [],
+    );
+    for (const id of ["native", "native-of-native"]) {
+      expect(owningProjectReturn(summaries, env, ThreadId.make(id))).toEqual({
+        environmentId: "env-1",
+        threadId: "project",
+      });
+    }
   });
 });
