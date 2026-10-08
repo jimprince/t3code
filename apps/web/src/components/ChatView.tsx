@@ -11571,6 +11571,7 @@ export default function ChatView(props: ChatViewProps) {
                                     editingRunId={editingQueuedRun?.runId ?? null}
                                     onEditQueuedRun={beginEditingQueuedRun}
                                     onCancelEdit={cancelEditingQueuedRun}
+                                    onResume={onResume}
                                   />
                                 ) : null
                               }
