@@ -78,6 +78,7 @@ const makeSupervisor = Effect.fn("TestEnvironmentCommands.makeSupervisor")(funct
   readonly projection?: OrchestrationV2ThreadProjection;
   readonly projectionRequests?: ThreadId[];
   readonly advertiseServerResolvedCommandContext?: boolean;
+  readonly advertiseTaskIssueLaunch?: boolean;
 }) {
   const client = {
     [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command: OrchestrationV2Command) =>
@@ -125,6 +126,7 @@ const makeSupervisor = Effect.fn("TestEnvironmentCommands.makeSupervisor")(funct
       environment: {
         capabilities: {
           repositoryIdentity: true,
+          taskIssueLaunch: input.advertiseTaskIssueLaunch !== false,
           ...(input.advertiseServerResolvedCommandContext === false
             ? {}
             : { serverResolvedCommandContext: true }),
@@ -324,6 +326,7 @@ describe("V2 environment commands", () => {
 
       yield* startThreadTurn({
         commandId: CommandId.make("launch-existing-worktree"),
+        issue: "brad/tasks#7",
         threadId: v2ThreadId,
         message: {
           messageId: MessageId.make("message-existing-worktree"),
@@ -351,6 +354,7 @@ describe("V2 environment commands", () => {
       expect(launches[0]).toMatchObject({
         threadId: v2ThreadId,
         title: "Continue here",
+        issue: "brad/tasks#7",
         generateTitle: true,
         workspaceStrategy: {
           type: "existing_worktree",
@@ -970,3 +974,46 @@ describe("V2 environment commands", () => {
     }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
   );
 });
+
+it.effect(
+  "refuses task-linked creation on an older server instead of launching an unlinked worker",
+  () =>
+    Effect.gen(function* () {
+      const launches: OrchestrationV2ThreadLaunchInput[] = [];
+      const supervisor = yield* makeSupervisor({
+        commands: [],
+        projects: [],
+        launches,
+        advertiseTaskIssueLaunch: false,
+      });
+      const result = yield* startThreadTurn({
+        threadId: v2ThreadId,
+        issue: "brad/tasks#7",
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        message: {
+          messageId: MessageId.make("legacy-issue"),
+          role: "user",
+          text: "Build it",
+          attachments: [],
+        },
+        bootstrap: {
+          createThread: {
+            projectId: ProjectId.make("project-1"),
+            title: "Worker",
+            modelSelection: v2Projection.thread.modelSelection,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            branch: null,
+            worktreePath: null,
+            createdAt: "2026-06-20T00:00:00.000Z",
+          },
+        },
+      }).pipe(
+        Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+        Effect.flip,
+      );
+      expect(result.message).toContain("server that supports it");
+      expect(launches).toEqual([]);
+    }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
+);
