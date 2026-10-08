@@ -90,7 +90,7 @@ export type DesktopUpdateStatus =
 export type DesktopRuntimeArch = "arm64" | "x64" | "other";
 export type DesktopTheme = "light" | "dark" | "system";
 export type DesktopUpdateChannel = "latest" | "nightly";
-export type DesktopAppStageLabel = "Alpha" | "Dev" | "Nightly";
+export type DesktopAppStageLabel = "Alpha" | "Dev" | "Nightly" | "Fork" | "Fork Dev";
 
 export const DesktopUpdateStatusSchema = Schema.Literals([
   "disabled",
@@ -105,7 +105,7 @@ export const DesktopUpdateStatusSchema = Schema.Literals([
 export const DesktopRuntimeArchSchema = Schema.Literals(["arm64", "x64", "other"]);
 export const DesktopThemeSchema = Schema.Literals(["light", "dark", "system"]);
 export const DesktopUpdateChannelSchema = Schema.Literals(["latest", "nightly"]);
-export const DesktopAppStageLabelSchema = Schema.Literals(["Alpha", "Dev", "Nightly"]);
+export const DesktopAppStageLabelSchema = Schema.Literals(["Alpha", "Dev", "Nightly", "Fork", "Fork Dev"]);
 
 export interface DesktopAppBranding {
   baseName: string;
@@ -276,7 +276,16 @@ export interface DesktopRuntimeInfo {
   runningUnderArm64Translation: boolean;
 }
 
+export const DesktopUpdatePhaseSchema = Schema.Literals([
+  "checking", "downloading", "verifying", "installing", "restarting",
+]);
+export type DesktopUpdatePhase = typeof DesktopUpdatePhaseSchema.Type;
+
 export interface DesktopUpdateState {
+  /** Optional for compatibility with older Electron shells. */
+  updatePhase?: DesktopUpdatePhase;
+  downloadTransferredBytes?: number;
+  downloadTotalBytes?: number;
   enabled: boolean;
   status: DesktopUpdateStatus;
   channel: DesktopUpdateChannel;
@@ -308,6 +317,9 @@ export const DesktopUpdateReleaseNoteSchema = Schema.Struct({
 });
 
 export const DesktopUpdateStateSchema = Schema.Struct({
+  updatePhase: Schema.optionalKey(DesktopUpdatePhaseSchema),
+  downloadTransferredBytes: Schema.optionalKey(Schema.Number),
+  downloadTotalBytes: Schema.optionalKey(Schema.Number),
   enabled: Schema.Boolean,
   status: DesktopUpdateStatusSchema,
   channel: DesktopUpdateChannelSchema,
@@ -1242,6 +1254,8 @@ export interface DesktopBridge {
   getUpdateState: () => Promise<DesktopUpdateState>;
   setUpdateChannel: (channel: DesktopUpdateChannel) => Promise<DesktopUpdateState>;
   checkForUpdate: () => Promise<DesktopUpdateCheckResult>;
+  /** Run check, download and install after the renderer's interruption confirmation. */
+  startUpdate?: () => Promise<DesktopUpdateActionResult>;
   downloadUpdate: () => Promise<DesktopUpdateActionResult>;
   installUpdate: () => Promise<DesktopUpdateActionResult>;
   onUpdateState: (listener: (state: DesktopUpdateState) => void) => () => void;
