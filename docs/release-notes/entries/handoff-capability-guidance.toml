@@ -1,0 +1,4 @@
+id = "handoff-capability-guidance"
+category = "fix"
+functionality = "thread communication"
+text = "Receipt-backed send refusals identify the target server version and explain how to update it safely."
