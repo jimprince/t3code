@@ -73,9 +73,45 @@ describe("server restart announcements", () => {
     };
     expect(applyServerRestartEvent({ status: "idle" }, event)).toEqual({
       status: "failed",
+      failureKind: "update",
       targetVersion: "1.0.0-fork.6",
       announcedAt: update.payload.at,
       reason: "disk full",
     });
   });
+});
+
+it.each(["rolled-back", "failed"] as const)(
+  "keeps %s outcomes failed through further ready events",
+  (status) => {
+    const state = applyServerRestartEvent({ status: "idle" }, update);
+    const returned = ready("1.0.0-fork.5");
+    if (returned.type !== "ready") throw new Error("fixture");
+    returned.payload.updateOutcome = {
+      id: "update-1",
+      fromVersion: "1.0.0-fork.5",
+      targetVersion: "1.0.0-fork.6",
+      status,
+      reason: "Startup failed; restore the previous build",
+    };
+    const failed = applyServerRestartEvent(state, returned);
+    expect(failed).toMatchObject({
+      status: "failed",
+      failureKind: "update",
+      reason: "Startup failed; restore the previous build",
+      manualUpdateCommand: "t3 service update",
+    });
+    expect(applyServerRestartEvent(failed, ready("1.0.0-fork.5", "2026-10-08T20:00:00.000Z"))).toBe(
+      failed,
+    );
+  },
+);
+it("does not replay dismissed announcements but admits a genuinely later update", () => {
+  expect(applyServerRestartEvent({ status: "idle" }, update, update.payload.at)).toEqual({
+    status: "idle",
+  });
+  const later = { ...update, payload: { ...update.payload, at: "2026-10-09T19:00:00.000Z" } };
+  expect(applyServerRestartEvent({ status: "idle" }, later, update.payload.at).status).toBe(
+    "updating",
+  );
 });
