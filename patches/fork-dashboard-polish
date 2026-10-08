@@ -1,6 +1,6 @@
-Bottom: bed1de7e59ddf6560f9d348c140290af7a24fc18
-Top:    703f032389428a67aa9b21316e97dfde4a5df82a
+Bottom: f864944385d4a8c0dbb38c8f096ca317cf9d93c4
+Top:    8ddb8e1a76867d88d78457834f92156e0fab3b9f
 Author: brad <bradprin@live.com>
-Date:   2026-10-08 07:29:28 +0000
+Date:   2026-10-08 07:51:20 +0000
 
 fix(web): calmer, consistent project page

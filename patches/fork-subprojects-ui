@@ -1,6 +1,6 @@
-Bottom: 768afb1e59782d220d479b3b8d9a23f7a4025245
-Top:    923bf2a64bc3b726d3a9ebf969339372fd75ae24
+Bottom: 7016421ca5752dc76aa5455ac1b164c521bce78c
+Top:    ba8a31c7454e9401702ca16062b3412d62ab16ae
 Author: brad <bradprin@live.com>
-Date:   2026-10-08 07:51:05 +0000
+Date:   2026-10-08 07:51:20 +0000
 
 feat(projects): show nested orchestrators as subprojects in the sidebar and project page
