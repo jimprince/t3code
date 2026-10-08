@@ -1,0 +1,4 @@
+id = "decisions-feed"
+category = "feature"
+functionality = "projects"
+text = "One Decisions list for everything that needs you: the project page's Needs you folds into Decisions, so agent questions and approvals, decisions, answers, plans, and work to review or test are all cards with their actions. Review cards can Approve and merge, Send back with a note or Settle; Later hides a card or moves it to the end; project chips filter by project; cards name the real project and owner, and decision context renders as Markdown."
