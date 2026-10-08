@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "707aec7658ef5569f7f568c697f5380651a10f8d",
-  "head": "3f07e75e24a04cbf27feee2b0157c33c91498eed",
+  "prev": "601b20ba622c705860e09685462316d14f5095ac",
+  "head": "117c42184457407163cb462af22cc22101ba5f3c",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -118,14 +118,15 @@
     "fork-gitea-token-setter",
     "fork-direct-endpoints-enumeration",
     "fork-create-task-issue",
-    "fork-decisions-feed-server",
+    "fork-decisions-feed-server"
+  ],
+  "unapplied": [
     "fork-dash-172",
     "fork-dash-187-todo-progress",
     "fork-dash-187",
     "fork-dash-173-part-of",
     "fork-dash-173"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
