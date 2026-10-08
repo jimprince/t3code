@@ -107,6 +107,7 @@ import {
   type CodexFeedbackSubmission,
 } from "@t3tools/client-runtime/state/threads";
 import { resolveThreadLastVisitedAt } from "./Sidebar.logic";
+import { ProjectReturnButton } from "./orchestrators/ProjectReturnButton";
 import { derivePendingThreadRequests } from "@t3tools/client-runtime/state/thread-requests";
 import {
   parseScopedThreadKey,
@@ -288,7 +289,6 @@ import { isEditableFocused } from "../lib/editableFocus";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
 import {
   AlarmClockIcon,
-  ArrowLeftIcon,
   CheckCircle2Icon,
   PaperclipIcon,
   ChevronDownIcon,
@@ -10819,11 +10819,6 @@ export default function ChatView(props: ChatViewProps) {
       />
     </div>
   );
-  const openProjectReturn = () => {
-    const target = citationLocation.projectReturn;
-    if (!target) return;
-    void navigate({ to: "/orchestrators/$environmentId/$threadId", params: target });
-  };
   const panelLayoutControls = (
     <div
       className={cn(
@@ -10926,16 +10921,11 @@ export default function ChatView(props: ChatViewProps) {
           ) : null}
           {!rightPanelControlsAtRoot && !rightPanelControlsInPanel ? panelLayoutControls : null}
           {inlineRightPanelOwnsTitleBar ? threadPanelHeaderControl : null}
-          {citationLocation.projectReturn ? (
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              aria-label="Back to project"
-              onClick={openProjectReturn}
-            >
-              <ArrowLeftIcon />
-            </Button>
-          ) : null}
+          <ProjectReturnButton
+            environmentId={activeThread.environmentId}
+            threadId={activeThread.id}
+            recorded={citationLocation.projectReturn}
+          />
           <ChatHeader
             activeThreadEnvironmentId={activeThread.environmentId}
             activeThreadId={activeThread.id}
