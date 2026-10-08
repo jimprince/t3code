@@ -73,3 +73,67 @@ workers and those waiting for input or quota are excluded. Use
 `--inactivity-minutes 0` to disable it. See
 [Active-worker inactivity monitoring](AGENT_OPERATIONS.md#active-worker-inactivity-monitoring)
 for restart, network, and silent-tool limits.
+
+## Reliable V2 handoffs and receipts
+
+`send` uses server admission instead of waiting locally for every running turn.
+Codex receives ordinary handoffs through native active steering; Claude receives
+SDK `next` priority at the next tool boundary. Explicit `--control` uses immediate
+steering and can interrupt tools. Unsupported safe steering queues natively.
+`--progress` / `--coalesce <key>` queue replaceable progress behind active work;
+new accepted progress supersedes only that authenticated sender's pending entries
+with the same sender-thread provenance, recipient and key. Dispatched history is
+retained. `--no-queue` refuses an active recipient with `BUSY`.
+
+Generate and durably save a send ID in your own automation before launching the
+CLI, then pass `--send-id <id>`. The CLI independently fsyncs a private intent
+record before transport. Intent files contain recipient, environment, timestamp,
+coalesce key and a payload/provenance hash, never the message body. A generated
+CLI ID is also durable before transport, but callers whose subprocess output can
+be lost should supply their own ID so they already know the recovery key.
+
+The server binds each ID to its authenticated sender, recipient and payload,
+and commits the receipt with native events and outbox before provider work.
+Receipts describe durable admission (`started`, `steered`, `queued`, `held`,
+`refused`, `superseded`, `cancelled`), not proof that an agent read the message.
+Settled recipients are held even for control sends; confirmed selected-provider
+quota exhaustion is refused with `QUOTA_EXHAUSTED` and an owner thread reference.
+Neither refusal nor uncertainty switches providers/accounts or wakes an owner.
+Held messages retain their private pending payload and can be released by the
+local watcher after an explicit unsettle; quota refusals require an explicit send.
+
+Timeout, OS transport failure and interruption return fixed sanitized cause codes
+and `uncertain: true` when transport might already have accepted the message.
+That outcome does not authorize automatic retry, a fresh ID, provider fallback,
+or recipient wake. Use `send-receipt <recipient> <id>` to read the receipt without
+resending. An explicitly requested same-ID retry is idempotent only with the
+identical recipient, payload and provenance; changed input returns `SEND_ID_CONFLICT`.
+A failed/uncertain send exits with code 2. A server lacking receipt support is
+refused with `RECEIPTS_UNAVAILABLE` instead of silently reverting to unsafe sends.
+
+Metadata lookup also supports `send-receipt <recipient> --coalesce <key>
+--since <ISO> --until <ISO>` over at most 24 hours. It reports `found`, `unknown`
+or `multiple`; it never infers which send a matching timestamp represents.
+`own-inbox` makes one scoped receipt RPC using local caller/environment identity,
+without scanning the fleet or hydrating transcripts. It exposes at most the latest
+50 admissions and reports truncation. Exact and coalesce lookups are private to
+the authenticated sender; inbox access follows the existing environment-wide
+orchestration read scope, rather than claiming a new per-thread access boundary.
+All responses exclude bodies, stderr, authentication identity and binding hashes.
+
+Queryable receipt metadata has a 30-day horizon. ID bindings remain in existing
+storage indefinitely to prevent reused IDs from acquiring a different payload;
+`unknown` can mean never accepted or outside the lookup horizon. Coalesce results
+are capped at 50 with an honest truncation flag. Historical sends made before this
+protocol cannot be retroactively attributed from queue snapshots. The six disk
+observer intents remain UNKNOWN.
+
+Watcher crash recovery looks up the retained exact ID and never blindly resends a
+stale claim. An absent or ambiguous receipt leaves the delivery uncertain. A known
+native queued receipt needs no watcher wake; it drains through V2's native outbox.
+Only locally held sends need the separately deployed per-machine watcher.
+
+Live named-agent sends resolve the existing incarnation and use this same
+receipted path. A dormant named agent is refused with `DORMANT`: automatic
+incarnation through the older unreceipted resolve RPC is not protocol recovery.
+Start an incarnation with its explicit named-agent lifecycle command first.
