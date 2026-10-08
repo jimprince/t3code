@@ -1,0 +1,4 @@
+id = "reliable-handoffs"
+category = "fix"
+functionality = "threads"
+text = "Thread handoffs can reach a running agent without waiting for its turn to end. Normal Claude handoffs wait for a tool boundary, settled workers stay held, and durable send receipts let callers resolve lost acknowledgments without sending duplicates."
