@@ -34,6 +34,7 @@ const THREAD_OUTBOX_SCHEMA_VERSION = 3;
 const THREAD_OUTBOX_MAX_RETRY_DELAY_MS = 16_000;
 
 const QueuedThreadCreationSchema = Schema.Struct({
+  issue: Schema.optional(Schema.String),
   projectId: ProjectId,
   // Snapshot of the project's display metadata so a pending task stays
   // presentable in the thread list even when the project shell is not loaded.
@@ -68,6 +69,7 @@ const decodeStoredQueuedThreadMessage = Schema.decodeUnknownSync(QueuedThreadMes
 const encodeStoredQueuedThreadMessage = Schema.encodeUnknownSync(QueuedThreadMessageSchema);
 
 export interface QueuedThreadCreation {
+  readonly issue?: string;
   readonly projectId: ProjectIdType;
   readonly projectTitle?: string;
   readonly projectCwd?: string;
