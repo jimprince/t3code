@@ -2561,3 +2561,28 @@ depends_on = [
 ]
 roles = []
 note = "Adds only WsForkRpcGroup RPCs and reuses fork_thread_metadata_receipts; no migration ID. V2 admission and binding commit with native events/outbox under existing ownership and thread lifecycle locks. Normal Claude handoffs use SDK next priority; explicit control retains now. Unknown transport outcomes stop automatic delivery/retry. Exact/coalesce lookup is sender-private; the own inbox uses existing environment read authorization and an exact-key bounded metadata index. Production fixtures require T3_LIFECYCLE_FIXTURES. Install/deployment remain separately gated per machine."
+
+[[patch]]
+name = "fork-starting-reconcile-causal-guard"
+subject = "fix(server): guard starting-session reconcile with causal ownership"
+class = "product"
+purpose = "Let session reconcile clear a session stuck in starting after its turn ended, while refusing whenever a newer start, live provider turn or active run owns the thread."
+retire_when = "Upstream reconciles stale starting sessions with an equivalent causal ownership guard."
+depends_on = ["fork-session-reconcile"]
+roles = []
+note = "Issues #191 and #196. Causal ownership is checked before planning and the thread event sequence is validated atomically at commit; ordinary Stop and provider writers are unchanged. Any intervening same-thread event conservatively refuses reconciliation; retry with a new command ID."
+
+[[patch.decision]]
+id = "v2-starting-reconcile-ownership"
+decision = "adapt"
+note = "V2 already repairs a starting session left on its latest ended turn. A causal ownership guard now rejects reconciliation when the starting session updated after the terminal receipt, any provider turn is live, or any run is active; the fork reconcile-only dispatch branch rechecks the guard before invoking normal Stop settlement, preserving starts racing dispatch without changing Stop-ACK background interruption. Elapsed time never invalidates a newer start. Residual follow-up: a crash during the first start with no prior terminal turn remains starting; safe recovery needs provider-process or session-handle liveness, not a timer."
+
+[[patch.decision]]
+id = "v2-starting-reconcile-provider-write-window"
+decision = "adapt"
+note = "Closed by #196: capture the thread event sequence before reconcile-only planning and compare after receipt reservation acquires the existing SQLite write transaction. A mismatch records a rejected receipt without planned events, effects, or cancellations. Provider writers bypass the command lock but cannot commit between this comparison and event/outbox writes; planning remains outside the transaction."
+
+[[patch.decision]]
+id = "v2-reconcile-atomic-sequence"
+decision = "adapt"
+note = "The optional expectedThreadSequence commit precondition is supplied only by reconcileOnly commands. Session, provider-turn, and run writes injected after planning reproduce the old failure, then reject atomically and preserve newer work, background items, rejected receipts, and outbox state. Direct projection mutations used by test setup are not production provider writer paths."
