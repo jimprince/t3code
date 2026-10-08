@@ -1056,7 +1056,7 @@ read the layout and its history but not change it:
   `moveTab`, `removeTab`, `addWidget`, `moveWidget`, `removeWidget`, `setWidgetConfig`,
   `setWidgetTitle`, `setWidgetSize` (small, medium, full) and `replaceLayout`. Ops address tabs
   and widgets by id; if one fails nothing changes and the error carries the current layout.
-  Always give a short reason: Brad sees "Layout changed by <you>: <reason> · Undo".
+  Always give a short reason: it is kept with the revision in `project_layout_history`.
 - `project_layout_history` and `project_layout_revert { revision }` (0 is the default layout).
 
 The CLI still sets the first tab's widgets by their older ids (requests, needs-you, release,

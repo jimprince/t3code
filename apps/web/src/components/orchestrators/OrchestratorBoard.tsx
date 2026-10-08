@@ -14,7 +14,6 @@ import {
   applyLayoutOps,
   CommandId,
   type EnvironmentId,
-  type ProjectLayout,
   type ProjectLayoutOp,
   type ProjectLayoutTab,
   type ProjectLayoutWidget,
@@ -45,11 +44,7 @@ import {
 import { updateProjectScopeCommand } from "../../state/forkProjectScope";
 import { useSupervisionReadyHosts } from "../../state/forkSupervision";
 import { threadEnvironment } from "../../state/threads";
-import {
-  applyProjectLayout,
-  revertProjectLayout,
-  useProjectLayout,
-} from "../../state/projectLayout";
+import { applyProjectLayout, useProjectLayout } from "../../state/projectLayout";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { randomUUID } from "../../lib/utils";
 import { buildThreadRouteParams } from "../../threadRoutes";
@@ -213,64 +208,6 @@ function ProjectTabBar({
         ) : null}
       </div>
       <div className="ml-auto pb-1">{actions}</div>
-    </div>
-  );
-}
-
-/**
- * "Layout changed by <orchestrator>: <reason> · Undo", shown for a while after a
- * new layout revision, whoever made it; Undo restores the revision before it.
- */
-function LayoutChangeChip({
-  summary,
-  layout,
-  onUndo,
-}: {
-  readonly summary: OrchestratorSummary;
-  readonly layout: ProjectLayout;
-  readonly onUndo: (toRevision: number) => void;
-}) {
-  // The revision this page opened with is not news; only later ones are.
-  const [seenRevision, setSeenRevision] = useState(layout.revision);
-  const [shown, setShown] = useState<ProjectLayout | null>(null);
-  if (layout.revision !== seenRevision) {
-    setSeenRevision(layout.revision);
-    if (layout.revision > seenRevision && layout.updatedBy) setShown(layout);
-  }
-  useEffect(() => {
-    if (!shown) return;
-    const timer = window.setTimeout(() => setShown(null), 20_000);
-    return () => window.clearTimeout(timer);
-  }, [shown]);
-  if (!shown?.updatedBy) return null;
-  const actor = shown.updatedBy;
-  const who =
-    actor.kind === "agent"
-      ? ([summary.root, ...summary.descendants].find((thread) => thread.id === actor.threadId)
-          ?.title ?? "the orchestrator")
-      : null;
-  return (
-    <div
-      role="status"
-      className="flex items-center gap-2 rounded-md border border-border px-2.5 py-1.5 text-xs"
-    >
-      <span className="min-w-0 flex-1 truncate text-foreground/90">
-        {who ? `Layout changed by ${who}` : "Layout changed"}
-        {actor.reason ? `: ${actor.reason}` : ""}
-      </span>
-      <Button
-        size="xs"
-        variant="outline"
-        onClick={() => {
-          setShown(null);
-          onUndo(shown.revision - 1);
-        }}
-      >
-        Undo
-      </Button>
-      <Button size="icon-xs" variant="ghost" aria-label="Dismiss" onClick={() => setShown(null)}>
-        <XIcon />
-      </Button>
     </div>
   );
 }
@@ -643,7 +580,6 @@ export function OrchestratorBoard({
   );
   const layoutState = useProjectLayout(environmentId, threadId);
   const applyLayout = useAtomCommand(applyProjectLayout, "Change layout");
-  const revertLayout = useAtomCommand(revertProjectLayout, "Undo layout change");
   const [editingLayout, setEditingLayout] = useState(false);
   // An edit shows at once; the server's next revision replaces it.
   const [optimistic, setOptimistic] = useState<{
@@ -896,16 +832,6 @@ export function OrchestratorBoard({
               />
               {/* On every tab, above the tabs: one line until it is used. */}
               <ProjectRequestBox summary={summary} />
-              <LayoutChangeChip
-                summary={summary}
-                layout={layoutState.layout}
-                onUndo={(toRevision) =>
-                  void revertLayout({
-                    environmentId,
-                    input: { threadId, toRevision: Math.max(0, toRevision) },
-                  })
-                }
-              />
               <ProjectTabBar
                 tabs={layoutTabs}
                 tab={tab}

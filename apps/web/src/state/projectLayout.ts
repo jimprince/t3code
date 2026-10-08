@@ -25,11 +25,6 @@ export const applyProjectLayout = createEnvironmentRpcCommand(connectionAtomRunt
   tag: WS_METHODS.projectLayoutApply,
 });
 
-export const revertProjectLayout = createEnvironmentRpcCommand(connectionAtomRuntime, {
-  label: "environment-data:project-layout:revert",
-  tag: WS_METHODS.projectLayoutRevert,
-});
-
 export interface ProjectLayoutState {
   readonly layout: ProjectLayout;
   /** False on servers without layouts, or before the first revision arrives: read-only default. */
