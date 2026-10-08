@@ -2,12 +2,11 @@ import { CommandId, type OrchestrationV2ServerCommand, ForkThreadMetadataError, 
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type * as SqlClient from "effect/unstable/sql/SqlClient";
-import { initializeMetadata, listMetadata, writeMetadata } from "./MetadataStore.ts";
+import { listMetadata, writeMetadata } from "./MetadataStore.ts";
 
 type NestingShell = Pick<OrchestrationV2ThreadShell, "id" | "projectId" | "archivedAt">;
 /** Only the supervision sidecar changes. Native runs, lineage and workspaces remain owned by V2. */
 export const makeNestingService = <E, R, DispatchError = never, DispatchContext = never>(sql: SqlClient.SqlClient, getShell: (id: ThreadId) => Effect.Effect<NestingShell | null, E, R>, refreshShell: (command: Extract<OrchestrationV2ServerCommand, { type: "thread.metadata.update" }>) => Effect.Effect<unknown, DispatchError, DispatchContext> = () => Effect.void) => Effect.gen(function* () {
-  yield* initializeMetadata(sql);
   const list = () => listMetadata(sql);
   const update = (input: ForkThreadMetadataUpdate) => sql.withTransaction(Effect.gen(function* () {
     const receipts = yield* sql<{ payload: string }>`SELECT payload FROM fork_thread_metadata_receipts WHERE command_id = ${input.commandId}`;

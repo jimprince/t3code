@@ -1241,3 +1241,9 @@ rationale = "The nested-thread rows used text-[.7rem] and text-[.65rem], now err
 id = "v2-port-2689-m2"
 decision = "reconcile-smaller"
 note = "V2 supervision metadata is separate from native execution lineage; retained behavior and import coverage are recorded in the nesting lane report."
+
+[[patch.decision]]
+id = "socket-open-209-nested-threads"
+date = "2026-10-08"
+decided = "adapt"
+rationale = "Initialize nesting metadata once per persistence environment; leave connection-scoped constructors inert and startup failures retryable."
