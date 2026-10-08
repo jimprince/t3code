@@ -1,3 +1,4 @@
+import { NotificationOrigin } from "./notification.ts";
 import { ThreadIssueLink, ThreadIssueKey, ThreadIssueSnapshot } from "./threadIssue.ts";
 import { CodexNativeGoalSummary } from "./codexNativeGoal.ts";
 import { ForkWorkerSummary } from "./forkWorkerSummary.ts";
@@ -1764,6 +1765,10 @@ export type OrchestrationV2LatestVisibleMessageSummary =
   typeof OrchestrationV2LatestVisibleMessageSummary.Type;
 
 export const OrchestrationV2ThreadShell = Schema.Struct({
+  notificationOrigin: Schema.optional(NotificationOrigin),
+  notificationSuperseded: Schema.optional(Schema.Boolean),
+  notificationDisposition: Schema.optional(Schema.NullOr(Schema.Literals(["quiet", "attention"]))),
+  notificationRequestId: Schema.optional(Schema.NullOr(Schema.String)),
   codexNativeGoal: Schema.optional(Schema.NullOr(CodexNativeGoalSummary)),
   workerSummary: Schema.optional(ForkWorkerSummary),
   ...OrchestrationV2CreationFields,
