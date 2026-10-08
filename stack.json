@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "386f78ac1b475dc4364fec117311b9c4647d4ebe",
-  "head": "8316497ab56a2b4e01ec86d1ef9d9f29777a0bae",
+  "prev": "467b3e0a881787e411c1b8fd20543e6c96db012a",
+  "head": "d7a116c5fea40214ab64b8901c840dd451d3e581",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -116,10 +116,10 @@
     "fork-starting-reconcile-causal-guard",
     "fork-notification-eligibility",
     "fork-gitea-token-setter",
-    "fork-direct-endpoints-enumeration"
+    "fork-direct-endpoints-enumeration",
+    "fork-create-task-issue"
   ],
   "unapplied": [
-    "fork-create-task-issue",
     "fork-decisions-feed-server",
     "fork-dash-172",
     "fork-dash-187-todo-progress",
@@ -182,7 +182,7 @@
       "oid": "8e721a677c355146889e22fcfa6b7cd68b546366"
     },
     "fork-create-task-issue": {
-      "oid": "4b453d719cb7ac8d519040bf929b787174eba678"
+      "oid": "d7a116c5fea40214ab64b8901c840dd451d3e581"
     },
     "fork-cross-environment-nesting": {
       "oid": "3545d8d73464a580b48244c79f448fdc95d9bfe9"
