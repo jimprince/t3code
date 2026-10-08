@@ -1,0 +1,4 @@
+id = "subprojects-ui"
+category = "feature"
+functionality = "projects"
+text = "A nested orchestrator marked as a subproject (t3-thread orchestrator mark, or Show as subproject in its thread menu) now appears as a compact row inside its parent's sidebar card, with its own project page and a Subprojects section and rollup counts on the parent. Show as worker turns it back. Nested threads are not promoted automatically yet; that waits for the mobile app."
