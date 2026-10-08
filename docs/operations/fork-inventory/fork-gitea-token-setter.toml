@@ -1,0 +1,14 @@
+name = "fork-gitea-token-setter"
+subject = "feat(source-control): rotate existing Gitea tokens through stdin"
+class = "product"
+purpose = "Atomically replace only an existing Gitea instance credential through a redacted typed RPC and bounded stdin CLI, then verify fresh authentication and a native issue read."
+retire_when = "Upstream supports equivalent existing-ID atomic token rotation, secret rollback, redacted errors and traces, and a stdin-only verified operator flow."
+depends_on = ["fork-gitea-connections", "fork-worker-operations", "fork-project-page-workflow"]
+roles = []
+note = "Source preparation for #189 and #74 only. No instance creation, general admin commands, token minting, live credential installation or revocation. The shared settings semaphore guards identity lookup through persistence; files are opened 0600 before writing. Lost acknowledgement is uncertain and never retried. Deployment owns producer delivery and DEV/Mac release windows."
+
+[[decision]]
+id = "catchup-2908-gitea-settings-write"
+date = "2026-10-10"
+decided = "adapt"
+rationale = "Require upstream settings.write for credential mutation (#9786–#9791, #10298), retaining legacy operate compatibility through auth permissions and moving registry mocks to the current module. Omit only the unused synthetic server-settings setter hunk in the removed managed-provider test after package extraction (#17299); token mutation behavior stays. Static permission/conflict review passed; composed credential authorization tests remain required."
