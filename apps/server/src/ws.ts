@@ -2027,6 +2027,7 @@ const layerWsRpc = (
                     runtimeMode: input.runtimeMode,
                     interactionMode: input.interactionMode,
                     workspaceStrategy: input.workspaceStrategy,
+                    ...(input.issue === undefined ? {} : { issue: input.issue }),
                     ...(input.initialMessage === undefined
                       ? {}
                       : {
