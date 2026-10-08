@@ -748,7 +748,6 @@ function lastDeliveredRunForProviderThread(
 
 const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(function* () {
   const sql = yield* SqlClient.SqlClient;
-  yield* initializeMetadata(sql).pipe(Effect.orDie);
   const checkpointService = yield* CheckpointServiceV2;
   const commandPolicy = yield* CommandPolicyV2;
   const contextHandoffService = yield* ContextHandoffServiceV2;
