@@ -4,7 +4,12 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
-import { ProjectIssuesError, ThreadId, type GiteaInstanceConfig } from "@t3tools/contracts";
+import {
+  ProjectIssuesError,
+  ThreadId,
+  type GiteaInstanceConfig,
+  ThreadIssueOperationError,
+} from "@t3tools/contracts";
 import { ServerConfig } from "../config.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
 import * as DateTime from "effect/DateTime";
@@ -58,6 +63,7 @@ function fakeGitea() {
   const comments: string[] = [];
   const calls: string[] = [];
   let labelled = true;
+  let inProgress = false;
   const client = HttpClient.make((request) => {
     const path = new URL(request.url).pathname.replace("/api/v1/repos/brad/chief-of-staff", "");
     const step = `${request.method} ${path}`;
@@ -74,7 +80,10 @@ function fakeGitea() {
           body,
           state: "open",
           html_url: "http://git.home:3000/brad/chief-of-staff/issues/14",
-          labels: labelled ? [{ name: "needs-brad" }] : [],
+          labels: [
+            ...(labelled ? [{ name: "needs-brad" }] : []),
+            ...(inProgress ? [{ name: "in-progress" }] : []),
+          ],
         });
       case "GET /issues/14/comments":
         return reply(
@@ -87,7 +96,17 @@ function fakeGitea() {
         return reply(201, {});
       }
       case "GET /labels":
-        return reply(200, [{ id: 7, name: "needs-brad" }]);
+        return reply(200, [
+          { id: 7, name: "needs-brad" },
+          { id: 8, name: "in-progress" },
+          { id: 9, name: "needs-review" },
+          { id: 10, name: "awaiting-release" },
+          { id: 11, name: "needs-test" },
+          { id: 12, name: "backlog" },
+        ]);
+      case "POST /issues/14/labels":
+        inProgress = true;
+        return reply(200, {});
       case "DELETE /issues/14/labels/7":
         labelled = false;
         return reply(200, {});
@@ -99,9 +118,14 @@ function fakeGitea() {
 }
 
 /** Brad picks the recommended option on #14 from the Decisions widget. */
-const answer14 = (
+const withLedger = <A>(
   gitea: ReturnType<typeof fakeGitea>,
   dispatch: (command: { readonly threadId: string }) => Effect.Effect<unknown, ProjectIssuesError>,
+  action: (ledger: Effect.Success<ReturnType<typeof make>>) => Effect.Effect<A, ProjectIssuesError>,
+  link: (input: {
+    threadId: ThreadId;
+    reference: string;
+  }) => Effect.Effect<unknown, ThreadIssueOperationError> = () => Effect.die("unused issue link"),
 ) =>
   Effect.gen(function* () {
     yield* initializeMetadata(yield* SqlClient.SqlClient);
@@ -111,17 +135,10 @@ const answer14 = (
         repositoryForProject: () => Effect.succeed(target),
         invalidate: () => undefined,
       } as never,
-      threadIssues: {} as never,
+      threadIssues: { link } as never,
     });
   }).pipe(
-    Effect.flatMap((ledger) =>
-      ledger.decide({
-        threadId: root,
-        reference: "brad/chief-of-staff#14",
-        decision: "option",
-        option: "Tailnet/LAN only with one password",
-      }),
-    ),
+    Effect.flatMap(action),
     Effect.provideService(ThreadManagementService, {
       dispatch: dispatch,
       getShellSnapshot: () =>
@@ -145,6 +162,19 @@ const answer14 = (
         ),
       ),
     ),
+  );
+
+const answer14 = (
+  gitea: ReturnType<typeof fakeGitea>,
+  dispatch: (command: { readonly threadId: string }) => Effect.Effect<unknown, ProjectIssuesError>,
+) =>
+  withLedger(gitea, dispatch, (ledger) =>
+    ledger.decide({
+      threadId: root,
+      reference: "brad/chief-of-staff#14",
+      decision: "option",
+      option: "Tailnet/LAN only with one password",
+    }),
   );
 
 const CHOSE = "Brad chose: Tailnet/LAN only with one password";
@@ -202,3 +232,41 @@ describe("answering a decision", () => {
     }),
   );
 });
+
+it.effect(
+  "starting a task records its stage and link, retries without duplicate comments and propagates a failed link",
+  () =>
+    Effect.gen(function* () {
+      const gitea = fakeGitea();
+      const links: Array<{ threadId: ThreadId; reference: string }> = [];
+      let reject = true;
+      const start = () =>
+        withLedger(
+          gitea,
+          () => Effect.die("unused dispatch"),
+          (ledger) =>
+            ledger.update({
+              threadId: waiting,
+              reference: "brad/chief-of-staff#14",
+              status: "in-progress",
+            }),
+          (input) => {
+            if (reject)
+              return Effect.fail(new ThreadIssueOperationError({ message: "Cannot persist link" }));
+            links.push(input);
+            return Effect.succeed({});
+          },
+        );
+      expect((yield* start().pipe(Effect.flip)).message).toBe("Cannot persist link");
+      expect(gitea.comments).toEqual(["Progress: started"]);
+      reject = false;
+      yield* start();
+      yield* start();
+      expect(gitea.comments).toEqual(["Progress: started"]);
+      expect(links).toEqual([
+        { threadId: waiting, reference: "http://git.home:3000/brad/chief-of-staff/issues/14" },
+        { threadId: waiting, reference: "http://git.home:3000/brad/chief-of-staff/issues/14" },
+      ]);
+      expect(gitea.calls.filter((step) => step === "POST /issues/14/labels")).toHaveLength(1);
+    }),
+);
