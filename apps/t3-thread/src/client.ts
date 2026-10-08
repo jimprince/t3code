@@ -254,6 +254,17 @@ export class RemoteEnvironmentClient {
     }
   }
 
+  /** One connection; mutation callers must never retry after a lost acknowledgement. */
+  async withGiteaTokenRpc<T>(run: (rpc: RemoteRpcClient) => Promise<T>): Promise<T> {
+    const rpc = await this.openRpc();
+    try {
+      return await run(rpc);
+    } finally {
+      // Cleanup cannot turn a confirmed outcome into an ambiguous commit.
+      await rpc.dispose().catch(() => undefined);
+    }
+  }
+
   async listModels(): Promise<ProviderModelInventory[]> {
     return providerInventoryFromConfig(await this.getServerConfig());
   }

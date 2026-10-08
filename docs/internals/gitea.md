@@ -53,3 +53,7 @@ Listings stop once the requested slice and a following row are known.
 The concern is carried as `fork-gitea-connections`. Retire it when upstream
 provides configured Gitea instances, protected token storage, and equivalent
 branch/repository-safe badge lookup.
+
+Credential rotation is carried as `fork-gitea-token-setter`. Its existing-ID RPC,
+stdin consumer, verification and Deployment driver contract are documented in
+[the token rotation procedure](../operations/gitea-token-rotation.md).
