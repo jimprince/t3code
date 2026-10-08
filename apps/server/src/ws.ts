@@ -1,3 +1,4 @@
+import { makeMessageForwardService } from "./forkThreads/MessageForwardService.ts";
 import { makeGiteaTokenRpcHandler } from "./sourceControl/GiteaTokenRpc.ts";
 import { AssetGiteaMediaUrlValidationError } from "@t3tools/contracts";
 import { giteaMediaFetchTarget } from "./assets/GiteaMediaFetch.ts";
@@ -3197,6 +3198,7 @@ const layerWsRpc = (
         providerRegistry.getProviders,
         currentSession.subject,
       );
+      const forwards = makeMessageForwardService(sql, threadManagement, handoffs.accept);
       const forkHandlers = WsForkRpcGroup.of({
         ...threadSubscriptionHandlers(threadManagement),
         [WS_METHODS.automationsList]: (input) =>
@@ -3244,6 +3246,8 @@ const layerWsRpc = (
         [WS_METHODS.projectRequestsList]: (input) => requestLedger.listForThread(input),
         ...(yield* makeWorkspaceUploadHandlers),
         ...(yield* makeSupervisionDragHandlers),
+        "fork.message.forward.prepare": (input) => forwards.prepare(input),
+        "fork.message.forward.accept": (input) => forwards.accept(input),
         "fork.send.accept": (input) => handoffs.accept(input),
         "fork.send.lookup": (input) => handoffs.lookup(input),
         "fork.send.inbox": (input) => handoffs.inbox(input.threadId),
