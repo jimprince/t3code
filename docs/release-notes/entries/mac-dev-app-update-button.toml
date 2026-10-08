@@ -1,0 +1,4 @@
+id = "mac-dev-app-update-button"
+category = "feature"
+functionality = "desktop updates"
+text = "T3 Code (Dev) on the Mac can check whether origin/live has moved past the commit it was built from, and update by rebuilding and relaunching itself."

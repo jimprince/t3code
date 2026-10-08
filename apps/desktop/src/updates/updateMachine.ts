@@ -5,6 +5,12 @@ import type {
   DesktopUpdateState,
 } from "@t3tools/contracts";
 
+function clearDesktopUpdatePhase(state: DesktopUpdateState): DesktopUpdateState {
+  const next = { ...state };
+  delete next.updatePhase;
+  return next;
+}
+
 function nextStatusAfterDownloadFailure(
   currentState: DesktopUpdateState,
 ): DesktopUpdateState["status"] {
@@ -48,6 +54,7 @@ export function reduceDesktopUpdateStateOnCheckStart(
   return {
     ...state,
     status: "checking",
+    updatePhase: "checking",
     checkedAt,
     releaseNotes: hasDownloadedUpdate ? state.releaseNotes : [],
     omittedReleaseCount: hasDownloadedUpdate ? state.omittedReleaseCount : 0,
@@ -65,7 +72,7 @@ export function reduceDesktopUpdateStateOnCheckFailure(
 ): DesktopUpdateState {
   if (state.downloadedVersion !== null) {
     return {
-      ...state,
+      ...clearDesktopUpdatePhase(state),
       status: "downloaded",
       message: null,
       checkedAt,
@@ -76,7 +83,7 @@ export function reduceDesktopUpdateStateOnCheckFailure(
   }
 
   return {
-    ...state,
+    ...clearDesktopUpdatePhase(state),
     status: "error",
     message,
     checkedAt,
@@ -96,7 +103,7 @@ export function reduceDesktopUpdateStateOnUpdateAvailable(
   const isDownloadedVersion = state.downloadedVersion === version;
   const preserveReleaseNotes = isDownloadedVersion && releaseNotes.length === 0;
   return {
-    ...state,
+    ...clearDesktopUpdatePhase(state),
     status: isDownloadedVersion ? "downloaded" : "available",
     availableVersion: version,
     downloadedVersion: isDownloadedVersion ? version : null,
@@ -116,7 +123,7 @@ export function reduceDesktopUpdateStateOnNoUpdate(
 ): DesktopUpdateState {
   if (state.downloadedVersion !== null) {
     return {
-      ...state,
+      ...clearDesktopUpdatePhase(state),
       status: "downloaded",
       availableVersion: state.downloadedVersion,
       downloadPercent: 100,
@@ -128,7 +135,7 @@ export function reduceDesktopUpdateStateOnNoUpdate(
   }
 
   return {
-    ...state,
+    ...clearDesktopUpdatePhase(state),
     status: "up-to-date",
     availableVersion: null,
     downloadedVersion: null,
@@ -148,6 +155,9 @@ export function reduceDesktopUpdateStateOnDownloadStart(
   return {
     ...state,
     status: "downloading",
+    updatePhase: "downloading",
+    downloadTransferredBytes: 0,
+    downloadTotalBytes: 0,
     downloadPercent: 0,
     message: null,
     errorContext: null,
@@ -160,7 +170,7 @@ export function reduceDesktopUpdateStateOnDownloadFailure(
   message: string,
 ): DesktopUpdateState {
   return {
-    ...state,
+    ...clearDesktopUpdatePhase(state),
     status: nextStatusAfterDownloadFailure(state),
     message,
     downloadPercent: null,
@@ -176,6 +186,7 @@ export function reduceDesktopUpdateStateOnDownloadProgress(
   return {
     ...state,
     status: "downloading",
+    updatePhase: percent >= 100 ? "verifying" : "downloading",
     downloadPercent: percent,
     message: null,
     errorContext: null,
@@ -188,7 +199,7 @@ export function reduceDesktopUpdateStateOnDownloadComplete(
   version: string,
 ): DesktopUpdateState {
   return {
-    ...state,
+    ...clearDesktopUpdatePhase(state),
     status: "downloaded",
     availableVersion: version,
     downloadedVersion: version,
@@ -204,7 +215,7 @@ export function reduceDesktopUpdateStateOnInstallFailure(
   message: string,
 ): DesktopUpdateState {
   return {
-    ...state,
+    ...clearDesktopUpdatePhase(state),
     status: "downloaded",
     message,
     errorContext: "install",
