@@ -1,6 +1,6 @@
-Bottom: 2a48bc37af379b59b91e8c1947317ceb9d590c13
-Top:    366974462c4f26bc932f893f26051b2594498288
+Bottom: aa4c01f4fcbea9434e6c8caee6ccf7502eac65f7
+Top:    157ac3c5b9ee0117a263a721d547479d34d907aa
 Author: brad <bradprin@live.com>
-Date:   2026-10-08 20:03:59 +0000
+Date:   2026-10-08 20:16:49 +0000
 
 feat(projects): remove meta lines, ids, duplicate rows and narration from the project page

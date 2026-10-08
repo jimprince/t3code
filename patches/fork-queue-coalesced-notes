@@ -1,7 +1,7 @@
-Bottom: bbb71267050bb09d18b5a4d630d7e374ed75fbc0
-Top:    fab86732eb14cae49bcd94eb0d8b14eb28f86a00
+Bottom: f429e82fd3b9622bb6696a699db85799723cae4b
+Top:    e8b3037f7fd5e95d736d01eba9eab4f4f97212d4
 Author: brad <bradprin@live.com>
-Date:   2026-10-08 20:03:32 +0000
+Date:   2026-10-08 20:16:49 +0000
 
 feat(threads): let workers replace their own queued status notes
 
