@@ -6,7 +6,13 @@ import {
   supervisionThreadKey,
   type ScopedSupervisionMetadata,
 } from "./forkNesting.ts";
-import type { ForkRemoteParent, ThreadId } from "@t3tools/contracts";
+import {
+  isProviderNativeSubagentThread,
+  type ForkRemoteParent,
+  type ThreadId,
+  type ThreadSubprojectMode,
+} from "@t3tools/contracts";
+import { threadPurposes } from "./threadPurpose.ts";
 
 /** Organizational fields come from the nesting sidecar, never execution lineage. */
 export interface OrchestratorThreadShell extends EnvironmentThreadShell {
@@ -14,6 +20,8 @@ export interface OrchestratorThreadShell extends EnvironmentThreadShell {
   readonly remoteParent?: ForkRemoteParent | null;
   readonly scope?: string | null;
   readonly supervisionParentKey?: string | null;
+  /** Only `on` makes a nested thread a subproject; the server writes `on` when it promotes one. */
+  readonly subproject?: ThreadSubprojectMode;
 }
 export type ThreadDisplayStatus =
   | "approval"
@@ -109,6 +117,7 @@ export function joinOrchestratorMetadata(
       parentThreadId: row?.parentThreadId ?? null,
       remoteParent: row?.remoteParent ?? null,
       scope: row?.scope ?? null,
+      subproject: row?.subproject ?? thread.subproject ?? "auto",
       supervisionParentKey: parents.get(threadActivityKey(thread)) ?? null,
     };
   });
@@ -146,9 +155,34 @@ export interface StandaloneThreadGroup {
   readonly threads: ReadonlyArray<StandaloneThreadItem>;
 }
 
+/** One project and every subproject beneath it, for the sidebar rollup line and the page header. */
+export interface OrchestratorRollup {
+  readonly needsYou: number;
+  readonly working: number;
+  readonly blocked: number;
+  readonly latestActivityAt: string;
+}
+
+/**
+ * A project is a top-level orchestrator or a subproject: a nested thread whose mode is `on`.
+ * Everything but `rollup`, `subprojects` and `status` covers only the project's own tree, the same
+ * threads the server scopes its page data to; a subproject's tree is its own summary. `status`
+ * counts subproject work as the root's workers.
+ */
 export interface OrchestratorSummary {
   readonly root: OrchestratorThreadShell;
+  /** Own workers only; a subproject and everything beneath it is left out. */
   readonly descendants: ReadonlyArray<OrchestratorThreadShell>;
+  /** Direct subprojects, each a full summary also present in the returned list. */
+  readonly subprojects: ReadonlyArray<OrchestratorSummary>;
+  /**
+   * Subagents in the project's own tree, running and waiting first, then recent, then settled.
+   * Display only: `working`, `needsYou` and the rollup count them exactly as before.
+   */
+  readonly subagentRows: ReadonlyArray<SubagentRow>;
+  /** The enclosing project's root key, or null for a top-level project. */
+  readonly parentProjectKey: string | null;
+  readonly rollup: OrchestratorRollup;
   readonly projects: ReadonlyArray<EnvironmentProject>;
   readonly status: ThreadDisplayStatus;
   readonly needsYou: ReadonlyArray<OrchestratorAttentionItem>;
@@ -159,6 +193,35 @@ export interface OrchestratorSummary {
   readonly issues: ReadonlyArray<ThreadIssueLink>;
   readonly pullRequests: ReadonlyArray<ThreadPullRequestLink>;
 }
+
+/**
+ * A row beneath a project. A subagent is any thread in the project's own tree whose lineage says
+ * "subagent", whether the provider spawned it (Claude Task, Codex or Cursor native, read-only)
+ * or `delegate_task` did (takes messages). A worker is a nested thread with no lineage
+ * relationship that a user or agent created: a subthread opened under the project or a
+ * `t3-thread` worker. A row, not a project: it never joins `subprojects`, and the rollup counts
+ * are not derived from it.
+ */
+export interface SubagentRow {
+  readonly kind: "subagent" | "worker";
+  readonly thread: OrchestratorThreadShell;
+  /** The organizational parent: the project root, or the worker that spawned this subagent. */
+  readonly parentKey: string | null;
+  readonly parentTitle: string | null;
+  /**
+   * A provider-native subagent has no run of its own, so its shell reads idle while it works;
+   * the parent's roster of pending subagent tasks is what says it is still going.
+   */
+  readonly working: boolean;
+  readonly needsYou: boolean;
+  /** Provider-native: the provider owns the conversation, so it cannot take messages. */
+  readonly readOnly: boolean;
+  /** Settled and neither working nor waiting on you: lists fold it into the Settled shelf. */
+  readonly settled: boolean;
+}
+
+/** A project with no activity for this long folds into Quiet on web and mobile. */
+export const PROJECT_QUIET_AFTER_MS = 7 * 24 * 60 * 60 * 1_000;
 
 export type ProjectSidebarBucket = "needs-you" | "working" | "idle" | "quiet";
 
@@ -173,16 +236,17 @@ export function projectSidebarBucket(
   summary: OrchestratorSummary,
   quietCutoffMs: number,
 ): ProjectSidebarBucket {
-  if (summary.needsYou.length > 0) return "needs-you";
+  const { rollup } = summary;
+  if (rollup.needsYou > 0) return "needs-you";
   if (
-    summary.activeWorkerCount > 0 ||
+    rollup.working > 0 ||
     summary.status === "working" ||
     summary.status === "monitoring" ||
     summary.status === "supervising"
   ) {
     return "working";
   }
-  return Date.parse(summary.latestActivityAt) >= quietCutoffMs ? "idle" : "quiet";
+  return Date.parse(rollup.latestActivityAt) >= quietCutoffMs ? "idle" : "quiet";
 }
 
 function compareStableThreadOrder(
@@ -323,6 +387,78 @@ function uniqueLinks<T>(links: ReadonlyArray<T>, keyOf: (link: T) => string): Re
   });
 }
 
+/** The workers a project owns: `collectDescendants` without any subproject or what is beneath it. */
+function collectOwnDescendants(
+  root: OrchestratorThreadShell,
+  childrenByParent: ReadonlyMap<string, ReadonlyArray<OrchestratorThreadShell>>,
+): ReadonlyArray<OrchestratorThreadShell> {
+  const rootKey = threadActivityKey(root);
+  const visited = new Set([rootKey]);
+  const descendants: OrchestratorThreadShell[] = [];
+  const queue = [...(childrenByParent.get(rootKey) ?? [])];
+  for (const child of queue) {
+    const key = threadActivityKey(child);
+    if (visited.has(key) || child.subproject === "on") continue;
+    visited.add(key);
+    descendants.push(child);
+    queue.push(...(childrenByParent.get(key) ?? []));
+  }
+  return descendants;
+}
+
+/**
+ * A nested user or agent thread that is not a subagent or fork. A thread the user opened through a
+ * server action (Discuss, resume) is not one: it stays in Threads, not on the card.
+ */
+function isNestedWorker(thread: OrchestratorThreadShell): boolean {
+  return (
+    parentKey(thread) != null &&
+    thread.lineage.relationshipToParent === null &&
+    (thread.source.createdBy === "user" || thread.source.createdBy === "agent") &&
+    !isUserOpenedThread(thread)
+  );
+}
+
+/** The subagent and worker rows of one project's own tree; see `SubagentRow`. */
+function buildSubagentRows(
+  descendants: ReadonlyArray<OrchestratorThreadShell>,
+  byKey: ReadonlyMap<string, OrchestratorThreadShell>,
+  runningChildKeys: ReadonlySet<string>,
+): ReadonlyArray<SubagentRow> {
+  const rows = descendants
+    .filter(
+      (thread) => thread.lineage.relationshipToParent === "subagent" || isNestedWorker(thread),
+    )
+    .map((thread): SubagentRow => {
+      const key = parentKey(thread);
+      const working = isThreadWorking(thread) || runningChildKeys.has(threadActivityKey(thread));
+      const needsYou = thread.hasPendingApprovals || thread.hasPendingUserInput;
+      const subagent = thread.lineage.relationshipToParent === "subagent";
+      return {
+        kind: subagent ? "subagent" : "worker",
+        thread,
+        parentKey: key,
+        parentTitle: key === null ? null : (byKey.get(key)?.title ?? null),
+        working,
+        needsYou,
+        readOnly:
+          subagent &&
+          isProviderNativeSubagentThread({
+            lineage: thread.lineage,
+            creationSource: thread.source.creationSource,
+          }),
+        settled: thread.settledOverride === "settled" && !working && !needsYou,
+      };
+    });
+  const rank = (row: SubagentRow) => (row.needsYou || row.working ? 0 : row.settled ? 2 : 1);
+  return rows.sort(
+    (left, right) =>
+      rank(left) - rank(right) ||
+      Date.parse(lastActivityAt(right.thread)) - Date.parse(lastActivityAt(left.thread)) ||
+      threadActivityKey(left.thread).localeCompare(threadActivityKey(right.thread)),
+  );
+}
+
 /** Builds the read-only orchestrator projection used by every client surface. */
 export function buildOrchestratorSummaries(
   threads: ReadonlyArray<OrchestratorThreadShell>,
@@ -331,7 +467,9 @@ export function buildOrchestratorSummaries(
 ): ReadonlyArray<OrchestratorSummary> {
   if (metadata !== undefined) threads = joinOrchestratorMetadata(threads, metadata);
   const childrenByParent = new Map<string, OrchestratorThreadShell[]>();
+  const byKey = new Map<string, OrchestratorThreadShell>();
   for (const thread of threads) {
+    byKey.set(threadActivityKey(thread), thread);
     if (thread.archivedAt != null || parentKey(thread) == null) continue;
     const key = parentKey(thread)!;
     const children = childrenByParent.get(key);
@@ -341,19 +479,46 @@ export function buildOrchestratorSummaries(
   const projectByKey = new Map<string, EnvironmentProject>(
     projects.map((project) => [`${project.environmentId}:${project.id}`, project] as const),
   );
+  // Children a parent's pending-task roster says are still running (see `SubagentRow.working`).
+  const runningChildKeys = new Set<string>();
+  for (const thread of threads) {
+    if (thread.archivedAt != null) continue;
+    for (const task of thread.pendingBackgroundTasks) {
+      if (task.kind === "subagent" && task.childThreadId !== undefined) {
+        runningChildKeys.add(`${thread.environmentId}:${task.childThreadId}`);
+      }
+    }
+  }
+  const isSubproject = (thread: OrchestratorThreadShell) =>
+    thread.subproject === "on" && parentKey(thread) != null;
+  /** The enclosing project's root: the first thread above that is top-level or a subproject. */
+  const enclosingProjectKey = (thread: OrchestratorThreadShell): string | null => {
+    const seen = new Set([threadActivityKey(thread)]);
+    let key = parentKey(thread);
+    while (key != null && !seen.has(key)) {
+      seen.add(key);
+      const parent = byKey.get(key);
+      if (!parent || parent.archivedAt != null) return null;
+      if (parentKey(parent) == null || isSubproject(parent)) return key;
+      key = parentKey(parent);
+    }
+    return null;
+  };
 
-  return threads
+  const own = threads
     .filter(
       (thread) =>
         thread.archivedAt == null &&
-        parentKey(thread) == null &&
-        // An orchestrator: it has workers, or it is pinned (the chief of staff
-        // reports to Brad without workers nested under it).
-        ((childrenByParent.get(threadActivityKey(thread))?.length ?? 0) > 0 ||
-          thread.pinnedAt != null),
+        (isSubproject(thread)
+          ? true
+          : // An orchestrator: it has workers, or it is pinned (the chief of staff
+            // reports to Brad without workers nested under it).
+            parentKey(thread) == null &&
+            ((childrenByParent.get(threadActivityKey(thread))?.length ?? 0) > 0 ||
+              thread.pinnedAt != null)),
     )
     .map((root) => {
-      const descendants = collectDescendants(root, childrenByParent);
+      const descendants = collectOwnDescendants(root, childrenByParent);
       const tree = [root, ...descendants];
       const needsYou = tree.flatMap((thread): OrchestratorAttentionItem[] => [
         ...(thread.hasPendingApprovals ? [{ kind: "approval" as const, thread }] : []),
@@ -382,19 +547,14 @@ export function buildOrchestratorSummaries(
       return {
         root,
         descendants,
+        subagentRows: buildSubagentRows(descendants, byKey, runningChildKeys),
         projects: projectList,
-        status: resolveThreadDisplayStatus({
-          ...root,
-          hasActiveDescendants: working.length > 0,
-          settled: root.settledOverride === "settled",
-        }),
         needsYou,
         working,
         blocked: tree.filter(isBlocked).map((thread) => ({
           thread,
           latestLine: thread.source.workerSummary?.output?.trim() || null,
         })),
-        activeWorkerCount: working.length,
         latestActivityAt: tree
           .map(latestActivityAt)
           .sort((left, right) => Date.parse(right) - Date.parse(left))[0]!,
@@ -402,6 +562,59 @@ export function buildOrchestratorSummaries(
         pullRequests,
       };
     });
+
+  const ownByKey = new Map(own.map((item) => [threadActivityKey(item.root), item]));
+  const subprojectKeysByParent = new Map<string, string[]>();
+  for (const item of own) {
+    const parent = isSubproject(item.root) ? enclosingProjectKey(item.root) : null;
+    if (parent === null || !ownByKey.has(parent)) continue;
+    const keys = subprojectKeysByParent.get(parent) ?? [];
+    keys.push(threadActivityKey(item.root));
+    subprojectKeysByParent.set(parent, keys);
+  }
+  const parentOf = new Map<string, string>();
+  for (const [parent, keys] of subprojectKeysByParent) {
+    for (const key of keys) parentOf.set(key, parent);
+  }
+
+  // Children first, so a project's rollup folds in finished subproject rollups.
+  const built = new Map<string, OrchestratorSummary>();
+  const build = (key: string, path: ReadonlySet<string>): OrchestratorSummary => {
+    const cached = built.get(key);
+    if (cached) return cached;
+    const item = ownByKey.get(key)!;
+    const subprojects = (subprojectKeysByParent.get(key) ?? [])
+      .filter((child) => !path.has(child))
+      .map((child) => build(child, new Set([...path, key])));
+    const sum = (pick: (sub: OrchestratorSummary) => number) =>
+      subprojects.reduce((total, sub) => total + pick(sub), 0);
+    // A subproject's own orchestrator being busy counts as work on the parent, like any worker.
+    const working =
+      item.working.length + sum((sub) => sub.rollup.working + Number(isOwnActive(sub.root)));
+    const summary: OrchestratorSummary = {
+      ...item,
+      subprojects,
+      parentProjectKey: parentOf.get(key) ?? null,
+      status: resolveThreadDisplayStatus({
+        ...item.root,
+        hasActiveDescendants: working > 0,
+        settled: item.root.settledOverride === "settled",
+      }),
+      activeWorkerCount: item.working.length,
+      rollup: {
+        needsYou: item.needsYou.length + sum((sub) => sub.rollup.needsYou),
+        working,
+        blocked: item.blocked.length + sum((sub) => sub.rollup.blocked),
+        latestActivityAt: [
+          item.latestActivityAt,
+          ...subprojects.map((sub) => sub.rollup.latestActivityAt),
+        ].sort((left, right) => Date.parse(right) - Date.parse(left))[0]!,
+      },
+    };
+    built.set(key, summary);
+    return summary;
+  };
+  return own.map((item) => build(threadActivityKey(item.root), new Set()));
 }
 
 /** Standalone roots worth surfacing below Projects, grouped by their T3 project. */
