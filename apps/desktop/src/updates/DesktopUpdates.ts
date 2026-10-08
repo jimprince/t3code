@@ -72,6 +72,8 @@ const UpdateInfo = Schema.Struct({
 
 const DownloadProgressInfo = Schema.Struct({
   percent: Schema.Number,
+  transferred: Schema.optionalKey(Schema.Number),
+  total: Schema.optionalKey(Schema.Number),
 });
 const decodeAppUpdateYmlConfig = Schema.decodeUnknownEffect(AppUpdateYmlConfig);
 const decodeUpdateInfo = Schema.decodeUnknownEffect(UpdateInfo);
@@ -184,6 +186,7 @@ export class DesktopUpdates extends Context.Service<
       channel: DesktopUpdateChannel,
     ) => Effect.Effect<DesktopUpdateState, DesktopUpdateSetChannelError>;
     readonly check: (reason: string) => Effect.Effect<DesktopUpdateCheckResult>;
+    readonly startUpdate: Effect.Effect<DesktopUpdateActionResult>;
     readonly download: Effect.Effect<DesktopUpdateActionResult>;
     readonly install: Effect.Effect<DesktopUpdateActionResult>;
     readonly installPrepared: (
@@ -301,6 +304,7 @@ export const make = Effect.gen(function* () {
   const appUpdateYmlConfigRef = yield* Ref.make<Option.Option<AppUpdateYmlConfig>>(Option.none());
   const activeUpdateActionRef = yield* Ref.make<Option.Option<UpdateAction>>(Option.none());
   const finishedUpdateActions = yield* PubSub.unbounded<UpdateAction>();
+  const fullUpdateInFlight = yield* Ref.make(false);
   const updaterConfiguredRef = yield* Ref.make(false);
   const lastLoggedDownloadMilestoneRef = yield* Ref.make(-1);
   const updateStateRef = yield* Ref.make<DesktopUpdateState>(
@@ -651,6 +655,7 @@ export const make = Effect.gen(function* () {
         yield* Ref.set(desktopState.quitting, true);
 
         return yield* Effect.gen(function* () {
+          yield* updateState((state) => ({ ...state, updatePhase: "installing", canRetry: false }));
           yield* writeUpdateRestartMarker;
           const { downloadedVersion } = yield* Ref.get(updateStateRef);
           if (downloadedVersion !== null) yield* updateRollback.arm(downloadedVersion);
@@ -667,6 +672,7 @@ export const make = Effect.gen(function* () {
             (instance) => instance.stop({ timeout: Duration.seconds(5) }),
             { concurrency: "unbounded" },
           );
+          yield* updateState((state) => ({ ...state, updatePhase: "restarting", canRetry: false }));
           yield* electronUpdater.quitAndInstall({
             isSilent: true,
             isForceRunAfter: true,
@@ -875,7 +881,13 @@ export const make = Effect.gen(function* () {
           const state = yield* Ref.get(updateStateRef);
           const percent = Math.floor(progress.percent);
           if (shouldBroadcastDownloadProgress(state, progress.percent) || state.message !== null) {
-            yield* setState(reduceDesktopUpdateStateOnDownloadProgress(state, progress.percent));
+            yield* setState({
+              ...reduceDesktopUpdateStateOnDownloadProgress(state, progress.percent),
+              ...(progress.transferred === undefined
+                ? {}
+                : { downloadTransferredBytes: progress.transferred }),
+              ...(progress.total === undefined ? {} : { downloadTotalBytes: progress.total }),
+            });
           }
           const milestone = percent - (percent % 10);
           const lastLoggedMilestone = yield* Ref.get(lastLoggedDownloadMilestoneRef);
@@ -921,6 +933,60 @@ export const make = Effect.gen(function* () {
       }),
     );
   });
+
+  const startUpdate = Effect.scoped(
+    Effect.gen(function* () {
+      if (yield* Ref.getAndSet(fullUpdateInFlight, true)) {
+        return { accepted: false, completed: false, state: yield* Ref.get(updateStateRef) };
+      }
+      const run = Effect.gen(function* () {
+        const changes = yield* PubSub.subscribe(stateChanges);
+        const waitWhile = (status: DesktopUpdateState["status"]) =>
+          Effect.gen(function* () {
+            while ((yield* Ref.get(updateStateRef)).status === status) {
+              yield* PubSub.take(changes);
+            }
+          });
+        let state = yield* Ref.get(updateStateRef);
+        if (state.downloadedVersion === null) {
+          const checked = yield* checkForUpdates("confirmed-update");
+          if (!checked)
+            return { accepted: false, completed: false, state: yield* Ref.get(updateStateRef) };
+          yield* waitWhile("checking").pipe(Effect.timeout("2 minutes"));
+          state = yield* Ref.get(updateStateRef);
+          if (state.status !== "available")
+            return { accepted: true, completed: state.status === "up-to-date", state };
+          const downloaded = yield* downloadAvailableUpdate;
+          if (!downloaded.completed)
+            return { ...downloaded, state: yield* Ref.get(updateStateRef) };
+          yield* waitWhile("downloading").pipe(Effect.timeout("20 minutes"));
+          state = yield* Ref.get(updateStateRef);
+        }
+        if (state.downloadedVersion === null) return { accepted: true, completed: false, state };
+        const installed = yield* installWithExpectedVersion(state.downloadedVersion);
+        return {
+          accepted: installed.accepted,
+          completed: installed.completed,
+          state: installed.state,
+        };
+      });
+      return yield* run.pipe(
+        Effect.catchTag("TimeoutError", () =>
+          Effect.gen(function* () {
+            yield* updateState((state) => ({
+              ...state,
+              status: "error",
+              message: "The desktop updater stopped reporting progress.",
+              errorContext: state.status === "checking" ? "check" : "download",
+              canRetry: true,
+            }));
+            return { accepted: true, completed: false, state: yield* Ref.get(updateStateRef) };
+          }),
+        ),
+        Effect.ensuring(Ref.set(fullUpdateInFlight, false)),
+      );
+    }),
+  );
 
   return DesktopUpdates.of({
     getState: Effect.gen(function* () {
@@ -1065,6 +1131,7 @@ export const make = Effect.gen(function* () {
         state: yield* Ref.get(updateStateRef),
       };
     }),
+    startUpdate,
     download: Effect.gen(function* () {
       const result = yield* downloadAvailableUpdate;
       return {

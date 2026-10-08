@@ -1,3 +1,5 @@
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 // @effect-diagnostics nodeBuiltinImport:off globalTimers:off -- The rollback test waits in real time for real state files under TestClock.
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
@@ -130,7 +132,7 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
 
   const environmentLayer = DesktopEnvironment.layer({
     dirname: "/repo/apps/desktop/src",
-    homeDirectory: `/tmp/t3-desktop-updates-home-${process.pid}`,
+    homeDirectory: NodePath.join(NodeOS.tmpdir(), `t3-desktop-updates-home-${process.pid}`),
     platform: "darwin",
     processArch: "x64",
     appVersion: "1.2.3",
@@ -144,7 +146,7 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
       Layer.mergeAll(
         NodeServices.layer,
         DesktopConfig.layerTest({
-          T3CODE_HOME: `/tmp/t3-desktop-updates-test-${process.pid}`,
+          T3CODE_HOME: NodePath.join(NodeOS.tmpdir(), `t3-desktop-updates-test-${process.pid}`),
           T3CODE_DESKTOP_MOCK_UPDATES: "true",
           T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT: "4141",
           ...options.env,
@@ -184,7 +186,7 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
     Layer.provideMerge(settingsLayer),
     Layer.provideMerge(
       DesktopConfig.layerTest({
-        T3CODE_HOME: `/tmp/t3-desktop-updates-test-${process.pid}`,
+        T3CODE_HOME: NodePath.join(NodeOS.tmpdir(), `t3-desktop-updates-test-${process.pid}`),
         T3CODE_DESKTOP_MOCK_UPDATES: "true",
         T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT: "4141",
         ...options.env,
