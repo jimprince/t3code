@@ -1161,9 +1161,9 @@ t3-thread project layout apply "$T3_THREAD_ID" --reason "Put Release first" \
 
 `dashboard set` replaces the first tab's widgets with an ordered list. Each id is any registered
 widget type (`decisions`, `markdown`, `links`, `canvas-slot`, ...), an older id (requests,
-needs-you, release, maintenance, roadmap, working, blocked, done, new-request, issues, prs, canvas,
-automations), or `canvas:<id>`. An id it does not know is an error naming it and nothing changes;
-it never drops one silently. It keeps the id and settings of a widget already on the tab, and
+needs-you, release, maintenance, roadmap, new-request, issues, prs, canvas, automations), or
+`canvas:<id>`. An id it does not know is an error naming it and nothing changes; it never drops
+one silently, except the retired `working`, `blocked` and `done`, which are skipped. It keeps the id and settings of a widget already on the tab, and
 removes the ones you leave out. `dashboard show` prints every widget on every tab (`tabs`), and
 the first tab's older ids as `widgets` for scripts:
 
