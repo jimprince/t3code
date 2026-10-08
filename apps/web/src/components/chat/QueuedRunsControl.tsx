@@ -20,6 +20,7 @@ import { useId, useImperativeHandle, useMemo, useRef, useState, type Ref } from 
 
 import { useAssetUrls } from "../../assets/assetUrls";
 import { threadEnvironment } from "../../state/threads";
+import { useEnvironments } from "../../state/environments";
 import { useThreadProjection } from "../../state/entities";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { isImageAttachment, type ChatMessage } from "../../types";
@@ -64,6 +65,8 @@ export function QueuedRunsControl({
   readonly editingRunId: RunId | null;
   readonly onEditQueuedRun: (request: EditQueuedRunRequest) => void;
   readonly onCancelEdit: () => void;
+  /** Match the composer continuation when an interrupted turn and held queue coexist. */
+  readonly onResume?: () => Promise<unknown>;
 }) {
   const projection = useThreadProjection(
     scopeThreadRef(props.environmentId, props.threadId),
@@ -71,6 +74,14 @@ export function QueuedRunsControl({
   const reorder = useAtomCommand(threadEnvironment.reorderQueuedRun);
   const promote = useAtomCommand(threadEnvironment.promoteQueuedRun);
   const cancel = useAtomCommand(threadEnvironment.cancelQueuedRun);
+  const { environments } = useEnvironments();
+  const connected = environments.some(
+    (environment) =>
+      environment.environmentId === props.environmentId &&
+      environment.connection.phase === "connected",
+  );
+  const resumeQueue = useAtomCommand(threadEnvironment.resumeThreadQueue);
+  const [resuming, setResuming] = useState(false);
   const [expanded, setExpanded] = useState(true);
   const queueListId = useId();
   const [busyRunId, setBusyRunId] = useState<RunId | null>(null);
@@ -229,7 +240,24 @@ export function QueuedRunsControl({
     },
   }));
 
-  if (items.length === 0) return null;
+  // A held queue stays visible even when every held run is a completion notice with no row.
+  const canResume = workflow?.canResume === true;
+  if (items.length === 0 && !canResume) return null;
+
+  const resume = async () => {
+    if (!connected || resuming) return;
+    setResuming(true);
+    try {
+      if (props.onResume) await props.onResume();
+      else
+        await resumeQueue({
+          environmentId: props.environmentId,
+          input: { threadId: props.threadId },
+        });
+    } finally {
+      setResuming(false);
+    }
+  };
 
   const remove = async (runId: RunId) => {
     setBusyRunId(runId);
@@ -247,28 +275,53 @@ export function QueuedRunsControl({
     <ComposerBanner.Attachment>
       <ComposerBanner.Root
         role="region"
-        aria-label={`${items.length} queued message${items.length === 1 ? "" : "s"}`}
+        aria-label={
+          items.length > 0
+            ? `${items.length} queued message${items.length === 1 ? "" : "s"}`
+            : "Queue held after restart"
+        }
         aria-live="polite"
         data-chat-composer-collapsed-controls="true"
         className="relative z-0"
       >
-        <ComposerBanner.Row
-          render={<button type="button" />}
-          aria-label={expanded ? "Collapse queued messages" : "Expand queued messages"}
-          aria-expanded={expanded}
-          aria-controls={queueListId}
-          onPointerDown={(event) => event.preventDefault()}
-          onClick={() => setExpanded((value) => !value)}
-        >
-          <ComposerBanner.Icon>
-            <ListOrderedIcon />
-          </ComposerBanner.Icon>
-          <ComposerBanner.Content className="text-muted-foreground">Queued</ComposerBanner.Content>
-          <ComposerBanner.Actions>
-            <ComposerBanner.Count>{items.length}</ComposerBanner.Count>
-            <ComposerBanner.ToggleIcon expanded={expanded} />
-          </ComposerBanner.Actions>
-        </ComposerBanner.Row>
+        {items.length > 0 ? (
+          <ComposerBanner.Row
+            render={<button type="button" />}
+            aria-label={expanded ? "Collapse queued messages" : "Expand queued messages"}
+            aria-expanded={expanded}
+            aria-controls={queueListId}
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            <ComposerBanner.Icon>
+              <ListOrderedIcon />
+            </ComposerBanner.Icon>
+            <ComposerBanner.Content className="text-muted-foreground">
+              Queued
+            </ComposerBanner.Content>
+            <ComposerBanner.Actions>
+              <ComposerBanner.Count>{items.length}</ComposerBanner.Count>
+              <ComposerBanner.ToggleIcon expanded={expanded} />
+            </ComposerBanner.Actions>
+          </ComposerBanner.Row>
+        ) : null}
+        {canResume ? (
+          <ComposerBanner.Row>
+            <ComposerBanner.Content className="text-muted-foreground">
+              Queue held after restart
+            </ComposerBanner.Content>
+            <ComposerBanner.Actions>
+              <Button
+                size="xs"
+                variant="outline"
+                disabled={resuming || !connected}
+                onClick={() => void resume()}
+              >
+                Resume
+              </Button>
+            </ComposerBanner.Actions>
+          </ComposerBanner.Row>
+        ) : null}
         <ComposerBanner.Scroll className={cn("max-h-32", !expanded && "hidden")}>
           <ComposerBanner.Children render={<ol />} id={queueListId}>
             {items.map((item) => {
