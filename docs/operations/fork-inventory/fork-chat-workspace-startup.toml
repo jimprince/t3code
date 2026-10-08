@@ -1,0 +1,8 @@
+name = "fork-chat-workspace-startup"
+subject = "fix(server): preserve chat workspaces across temporary directory changes"
+class = "product"
+purpose = "Keep General Chat startup independent of TMPDIR while preserving shipped project IDs, workspace paths, and existing chat-thread bindings."
+retire_when = "Upstream provides durable General Chat workspaces and compatibility with shipped temporary-directory project roots."
+depends_on = ["fork-general-chat"]
+roles = []
+note = "#202: New chat roots use T3 home/chat-workspaces. Existing chat roots remain authoritative and are recreated when absent; no project or provider-session paths are rewritten. Fold into fork-general-chat. Copied Mac/VM fixture tests cover startup, restart, singleton identity, thread/transcript preservation, and migration ledgers. Integration fork.6: adapted replay to preserve UI theme/owner notes alongside BE authoritative contract and helpers. Fork.6 integration: adapt: union inventory, retain earlier integrated owner notes and later stanza (docs/operations/fork-inventory.toml). Retire/narrow/relocate do not apply to these retained UI behaviors or inventory insertions."
