@@ -115,7 +115,9 @@ const makeHarness = Effect.fn("TestThreadCommands.makeHarness")(function* () {
       ),
     ),
   );
-  const snapshotAtom = Atom.family((_environmentId: EnvironmentId) => Atom.make(SNAPSHOT));
+  const snapshotAtom = Atom.family((_environmentId: EnvironmentId) =>
+    Atom.make<OrchestrationV2ShellSnapshot | null>(SNAPSHOT),
+  );
   const commands = createThreadEnvironmentAtoms(runtime, snapshotAtom);
   const registry = AtomRegistry.make();
   yield* Effect.addFinalizer(() => Effect.sync(() => registry.dispose()));
@@ -192,6 +194,9 @@ describe("remote thread lifecycle commands", () => {
       const request = yield* Queue.take(h.requests);
       yield* Deferred.succeed(request.reply, { sequence: 3 });
       expect((yield* Effect.promise(() => result))._tag).toBe("Success");
+      // A disconnect clears the snapshot but cannot revoke an accepted receipt.
+      h.registry.set(h.snapshotAtom(ENVIRONMENT_ID), null);
+      expect(h.registry.get(h.visibleAtom)).toBeNull();
       const changed = {
         ...SNAPSHOT,
         snapshotSequence: 2,
