@@ -19,6 +19,7 @@ import {
   GitCommandError,
   MessageId,
   ProjectId,
+  ProjectIssuesError,
   ProviderDriverKind,
   ProviderInstanceId,
   OrchestrationV2ThreadProjectionJson,
@@ -56,6 +57,7 @@ import * as IdAllocator from "./IdAllocator.ts";
 import type { ProviderAdapterV2Shape } from "./ProviderAdapter.ts";
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
 import * as ThreadLaunch from "./ThreadLaunchService.ts";
+import * as TaskIssues from "../projectIssues/TaskIssueLaunchService.ts";
 import * as ThreadManagement from "./ThreadManagementService.ts";
 import * as ThreadTitleRegeneration from "./ThreadTitleRegenerationService.ts";
 import { makeOrchestratorV2ReplayLayerWithRegistry } from "./testkit/ProviderReplayHarness.ts";
@@ -96,6 +98,7 @@ const adapter = {
 } as ProviderAdapterV2Shape;
 
 interface HarnessOptions {
+  readonly startIssue?: TaskIssues.TaskIssueLaunchService["Service"]["start"];
   readonly managedFolders?: Layer.Layer<ManagedProjectFolders.ManagedProjectFolders>;
   readonly createWorktree?: GitWorkflow.GitWorkflowService["Service"]["createWorktree"];
   readonly resolveRemoteWorktreeBase?: GitWorkflow.GitWorkflowService["Service"]["resolveRemoteWorktreeBase"];
@@ -143,6 +146,9 @@ function makeHarness(options: HarnessOptions = {}) {
     options.generateTitle ?? (() => Effect.succeed({ title: "Generated title" })),
   );
   const externalServices = Layer.mergeAll(
+    Layer.succeed(TaskIssues.TaskIssueLaunchService, {
+      start: options.startIssue ?? (() => Effect.die("unexpected issue start")),
+    }),
     WorktreeSetupTracker.layer,
     Layer.mock(ProjectCloneTracker.ProjectCloneTracker)({ get: () => Effect.succeed(null) }),
     Layer.mock(TerminalManager.TerminalManager)({ close: () => Effect.void }),
@@ -2304,3 +2310,68 @@ it.effect("explicit local launch skips remote policy and preserves the local bas
     assert.equal(harness.createWorktree.mock.calls[0]?.[0].refName, "topic");
   }).pipe(Effect.provide(harness.layer));
 });
+
+it.effect(
+  "links and starts a task before accepting its worker message, including launch receipt replay",
+  () => {
+    let starts = 0;
+    let management: ThreadManagement.ThreadManagementService["Service"];
+    const harness = makeHarness({
+      startIssue: ({ threadId, reference }) =>
+        Effect.gen(function* () {
+          starts++;
+          assert.equal(reference, "brad/tasks#7");
+          assert.equal(
+            (yield* management.getThreadProjection(threadId).pipe(Effect.orDie)).runs.length,
+            0,
+          );
+        }),
+    });
+    return Effect.gen(function* () {
+      const launch = yield* ThreadLaunch.ThreadLaunchService;
+      management = yield* ThreadManagement.ThreadManagementService;
+      const input = {
+        ...launchInput({ command: "issue-launch", thread: "issue-worker", message: "Build it" }),
+        issue: "brad/tasks#7",
+      };
+      const first = yield* launch.launch(input);
+      assert.equal(first.projection.runs.length, 1);
+      assert.equal(starts, 1);
+      const replayed = yield* launch.launch(input);
+      assert.equal(replayed.projection.runs.length, 1);
+      assert.equal(starts, 1);
+    }).pipe(Effect.provide(harness.layer));
+  },
+);
+
+it.effect(
+  "an issue failure leaves a recoverable empty shell and never accepts the first message",
+  () => {
+    let failing = true;
+    const harness = makeHarness({
+      startIssue: () =>
+        failing
+          ? Effect.fail(new ProjectIssuesError({ message: "Gitea unavailable" }))
+          : Effect.void,
+    });
+    return Effect.gen(function* () {
+      const launch = yield* ThreadLaunch.ThreadLaunchService;
+      const threads = yield* ThreadManagement.ThreadManagementService;
+      const input = {
+        ...launchInput({
+          command: "issue-retry",
+          thread: "issue-retry-worker",
+          message: "Build it",
+        }),
+        issue: "brad/tasks#7",
+      };
+      const error = yield* launch.launch(input).pipe(Effect.flip);
+      assert.equal(error.operation, "start-issue");
+      assert.equal((yield* threads.getThreadProjection(input.threadId)).runs.length, 0);
+      failing = false;
+      const recovered = yield* launch.launch(input);
+      assert.equal(recovered.projection.runs.length, 1);
+      assert.equal(recovered.projection.thread.id, input.threadId);
+    }).pipe(Effect.provide(harness.layer));
+  },
+);
