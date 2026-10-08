@@ -1422,3 +1422,9 @@ id = "v2-port-2689-m2"
 date = "2026-10-05"
 decided = "reconcile-smaller"
 rationale = "Port supervision UI to V2 shells behind fork-owned components; preserve native lineage and run state."
+
+[[patch.decision]]
+id = "socket-open-209-sidebar-drag-to-nest"
+date = "2026-10-08"
+decided = "adapt"
+rationale = "Initialize metadata explicitly in the isolated raw-SQL drag fixture after moving initialization to persistence startup."

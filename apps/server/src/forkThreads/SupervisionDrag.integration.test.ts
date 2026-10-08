@@ -5,12 +5,13 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import { v2ThreadShell } from "../../../../packages/client-runtime/src/state/orchestrationV2TestFixtures.ts";
 import { makeSupervisionDrop } from "./SupervisionDrag.ts";
-import { listMetadata } from "./MetadataStore.ts";
+import { initializeMetadata, listMetadata } from "./MetadataStore.ts";
 it.effect(
   "persists nesting with retry-stable native commands, rejects cycles and unnests on section drop",
   () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+    yield* initializeMetadata(sql);
       const commands: OrchestrationV2ServerCommand[] = [];
       const a = ThreadId.make("a"),
         b = ThreadId.make("b");
