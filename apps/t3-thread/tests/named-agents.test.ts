@@ -197,3 +197,30 @@ describe("scaffoldAgentFolder", () => {
     expect(NodeFS.readFileSync(NodePath.join(folder, "AGENT.md"), "utf8")).toBe("edited charter");
   });
 });
+
+it("routes receipted handoffs to a live incarnation and never starts a dormant one", async () => {
+  const live = fakeClients({
+    "dev-vm": { agents: [{ ...printer, liveThreadId: "live-printer" }] },
+  });
+  expect(
+    await routeToNamedAgent({
+      state: state(["dev-vm"]),
+      name: "printer",
+      message: "fixture",
+      requireLive: true,
+      clientFactory: live.factory,
+    }),
+  ).toEqual({ environment: "dev-vm", threadId: "live-printer", started: false });
+  expect(live.resolved).toEqual([]);
+  const dormant = fakeClients({ "dev-vm": { agents: [printer] } });
+  await expect(
+    routeToNamedAgent({
+      state: state(["dev-vm"]),
+      name: "printer",
+      message: "fixture",
+      requireLive: true,
+      clientFactory: dormant.factory,
+    }),
+  ).rejects.toThrow("DORMANT");
+  expect(dormant.resolved).toEqual([]);
+});

@@ -21,6 +21,7 @@ export const MAX_DELIVERY_ATTEMPTS = 6;
 
 /** Statuses the watcher can no longer act on by itself. */
 export const TERMINAL_NOTIFICATION_STATUSES = new Set<SavedNotificationStatus>([
+  "uncertain",
   "delivered",
   "undeliverable",
   "blocked",
