@@ -1,0 +1,8 @@
+name = "fork-reliable-handoffs-retry"
+subject = "fix(agents): retry handoffs only when delivery is provably unsent"
+class = "product"
+purpose = "Recover watcher notifications from proven pre-admission transport failures while retaining uncertainty after ambiguous submission."
+retire_when = "Upstream watcher handoffs share equivalent submission-certainty classification and retry behavior."
+depends_on = ["fork-reliable-handoffs"]
+roles = []
+note = "Fold into fork-reliable-handoffs. Socket-open Timeout remains ambiguous because it can report an open-socket heartbeat failure. Parent wake fixtures preserve the explicit settled-recipient hold policy; production adapter fixture verifies native steering receipts instead of the former local queue."
