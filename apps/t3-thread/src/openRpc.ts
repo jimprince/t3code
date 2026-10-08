@@ -29,6 +29,7 @@ type OpenOptions<T extends OpenClient> = {
   prepare?: (signal: AbortSignal) => Promise<Environment>;
   createClient: (url: string) => T;
   random?: () => number;
+  delay?: (milliseconds: number, signal: AbortSignal) => Promise<void>;
 };
 
 export function openRpcConnection<T extends OpenClient>(
@@ -44,6 +45,9 @@ export async function openRpcConnection(
   options: Partial<OpenOptions<OpenClient>> = {},
 ): Promise<OpenClient> {
   const deadline = AbortSignal.timeout(60_000);
+  const delay =
+    options.delay ??
+    ((milliseconds, signal) => NodeTimersPromises.setTimeout(milliseconds, undefined, { signal }));
   const resolveUrl = options.resolveUrl ?? resolveWebSocketUrl;
   const current = options.prepare ? await options.prepare(deadline) : environment;
   const createClient = options.createClient ?? ((url: string) => new T3RpcClient(url));
@@ -63,9 +67,7 @@ export async function openRpcConnection(
       if (deadline.aborted) throw deadline.reason;
       if (attempt === 3 || !isRetryableOpenFailure(error)) throw error;
       const jitter = 0.8 + (options.random ?? Math.random)() * 0.4;
-      await NodeTimersPromises.setTimeout(1000 * 2 ** attempt * jitter, undefined, {
-        signal: deadline,
-      });
+      await delay(1000 * 2 ** attempt * jitter, deadline);
     }
   }
 }

@@ -14,7 +14,6 @@ const timeout = () =>
 afterEach(() => vi.useRealTimers());
 
 it("uses four fresh clients and tickets, closes each failure and never sends a mutation", async () => {
-  vi.useFakeTimers();
   const clients: Array<{
     awaitOpen: ReturnType<typeof vi.fn>;
     dispose: ReturnType<typeof vi.fn>;
@@ -30,10 +29,14 @@ it("uses four fresh clients and tickets, closes each failure and never sends a m
     clients.push(client);
     return client;
   });
-  const pending = openRpcConnection(environment, { resolveUrl, createClient, random: () => 0.5 });
-  const rejected = expect(pending).rejects.toMatchObject({ reason: { _tag: "SocketOpenError" } });
-  await vi.advanceTimersByTimeAsync(7000);
-  await rejected;
+  const delay = vi.fn(async (_milliseconds: number, _signal: AbortSignal) => {});
+  await expect(
+    openRpcConnection(environment, { resolveUrl, createClient, random: () => 0.5, delay }),
+  ).rejects.toMatchObject({ reason: { _tag: "SocketOpenError" } });
+  expect(delay.mock.calls.map(([milliseconds]) => milliseconds)).toEqual([1000, 2000, 4000]);
+  const signals = delay.mock.calls.map(([, signal]) => signal);
+  expect(new Set(signals).size).toBe(1);
+  expect(signals[0]?.aborted).toBe(false);
   expect(resolveUrl).toHaveBeenCalledTimes(4);
   expect(createClient.mock.calls.map(([url]) => url)).toEqual(
     [0, 1, 2, 3].map((id) => `ws://test?ticket=${id}`),
@@ -45,7 +48,6 @@ it("uses four fresh clients and tickets, closes each failure and never sends a m
 });
 
 it("returns the first open client, leaving its mutation failure to the caller without replay", async () => {
-  vi.useFakeTimers();
   const mutation = vi.fn().mockRejectedValue(timeout()); // same tag can mean an ambiguous heartbeat failure
   const failed = {
     awaitOpen: vi.fn().mockRejectedValue(timeout()),
@@ -61,11 +63,10 @@ it("returns the first open client, leaving its mutation failure to the caller wi
     resolveUrl: async () => "ws://test",
     createClient,
     random: () => 0.5,
+    delay: async () => {},
   });
-  await vi.advanceTimersByTimeAsync(1000);
   expect(await pending).toBe(opened);
   await expect(opened.request("dispatchCommand", {})).rejects.toBeInstanceOf(Socket.SocketError);
-  await vi.advanceTimersByTimeAsync(10_000);
   expect(createClient).toHaveBeenCalledTimes(2);
   expect(failed.dispose).toHaveBeenCalledTimes(1);
   expect(opened.dispose).not.toHaveBeenCalled();

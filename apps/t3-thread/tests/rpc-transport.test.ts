@@ -4,7 +4,8 @@ import * as NodeHttp from "node:http";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
-import { expect, it } from "vite-plus/test";
+import { expect, it, vi } from "vite-plus/test";
+import { T3RpcClient } from "../src/rpc.js";
 
 it("closes an RPC connection during its handshake without an uncaught websocket error", async () => {
   const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-rpc-close-"));
@@ -88,16 +89,30 @@ it("opens a fresh real socket after an unsent failure, with a new ticket and no 
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Expected TCP address");
+  const clients: T3RpcClient[] = [];
   let issued = 0;
+  const delay = vi.fn(async () => {});
   try {
     const rpc = await openRpcConnection(
       { httpBaseUrl: "http://test", wsBaseUrl: "ws://test", bearerToken: "synthetic" },
       {
         resolveUrl: async () => `ws://127.0.0.1:${address.port}/ws?ticket=${++issued}`,
         random: () => 0,
+        delay,
+        createClient: (url) => {
+          const client = new T3RpcClient(url);
+          vi.spyOn(client, "dispose");
+          clients.push(client);
+          return client;
+        },
       },
     );
     try {
+      expect(delay).toHaveBeenCalledExactlyOnceWith(800, expect.any(AbortSignal));
+      expect(clients).toHaveLength(2);
+      expect(clients[0]).not.toBe(clients[1]);
+      expect(clients[0]!.dispose).toHaveBeenCalledTimes(1);
+      expect(clients[1]!.dispose).not.toHaveBeenCalled();
       expect(tickets).toEqual(["/ws?ticket=1", "/ws?ticket=2"]);
       expect(frames).toEqual([]);
     } finally {
