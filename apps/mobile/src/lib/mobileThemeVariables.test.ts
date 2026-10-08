@@ -77,7 +77,7 @@ describe("mobile theme runtime variables", () => {
         } else {
           expect(ios).toEqual(getMobileThemeVariables("t3-code", appearance));
           expect(ios["--color-drawer"]).toBe(android["--color-drawer"]);
-          expect(ios["--color-drawer"]).toBe("#000000");
+          expect(ios["--color-drawer"]).toBe("#0a0a0a");
           expect(ios["--color-thread-canvas"]).toBe("#0a0a0a");
         }
         expect(themeColorWithAlpha(ios["--color-thread-hover"], 1)).not.toBe(
