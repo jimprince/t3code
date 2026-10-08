@@ -43,8 +43,8 @@ export function decisionVisibility(input: {
 }
 
 /**
- * Where a card sorts in a feed that is oldest first: when it was filed, or when Brad
- * last moved it to the end if that is later.
+ * When a card last moved in the feed: when it was filed, or when Brad last moved it to the
+ * end if that is later.
  */
 export function decisionSortTime(createdAt: string, deferral?: ProjectIssueDeferral): number {
   const moved = deferral?.movedToEndAt == null ? Number.NaN : Date.parse(deferral.movedToEndAt);
