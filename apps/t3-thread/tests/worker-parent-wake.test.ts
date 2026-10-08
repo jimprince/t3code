@@ -43,9 +43,14 @@ const thread = (id: string): OrchestrationThread => ({
   session: null,
 });
 afterEach(() => vi.unstubAllEnvs());
-it.each([false, true])(
-  "wakes the current parent (remote=%s) despite a saved same-UUID parent on another host",
-  async (remote) => {
+it.each([
+  [false, false],
+  [true, false],
+  [false, true],
+  [true, true],
+])(
+  "routes to the current parent (remote=%s, settled=%s) despite a saved same-UUID parent on another host",
+  async (remote, settled) => {
     const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-focus-v2-"));
     try {
       vi.stubEnv("T3_AGENT_STATE_FILE", NodePath.join(directory, "state.json"));
@@ -68,7 +73,10 @@ it.each([false, true])(
           },
         ],
       };
-      const parent = { ...thread("parent"), settledOverride: "settled" as const };
+      const parent = {
+        ...thread("parent"),
+        settledOverride: settled ? ("settled" as const) : ("active" as const),
+      };
       await saveState({
         version: 1,
         environments: [env("local", "local-id"), env("renamed", "descriptor")],
@@ -110,9 +118,9 @@ it.each([false, true])(
       const now = () => new Date(clock).toISOString();
       await detectAttentionEvents({ clientFactory: factory, now });
       expect((await deliverPendingNotifications({ clientFactory: factory, now }))[0]?.status).toBe(
-        "delivered",
+        settled ? "held" : "delivered",
       );
-      expect(sent).toEqual([`${remote ? "renamed" : "local"}:parent`]);
+      expect(sent).toEqual(settled ? [] : [`${remote ? "renamed" : "local"}:parent`]);
       const state = await loadState();
       expect(state.subscriptions[0]?.sourceEnvironment).toBe("local");
       expect(state.subscriptions[0]?.subscriberEnvironment).toBe(remote ? "renamed" : "local");
@@ -123,7 +131,7 @@ it.each([false, true])(
       if ("remoteParent" in child) child.remoteParent = null;
       const obsolete = await deliverPendingNotifications({ clientFactory: factory, now });
       expect(obsolete.some((notification) => notification.status === "superseded")).toBe(true);
-      expect(sent).toHaveLength(1);
+      expect(sent).toHaveLength(settled ? 0 : 1);
     } finally {
       await NodeFSP.rm(directory, { recursive: true, force: true });
     }
