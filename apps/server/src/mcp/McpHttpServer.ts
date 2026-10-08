@@ -1,3 +1,5 @@
+import { PlansToolkitHandlersLive } from "./toolkits/plans/handlers.ts";
+import { PlansToolkit } from "./toolkits/plans/tools.ts";
 import { DecisionsToolkitHandlersLive } from "./toolkits/decisions/handlers.ts";
 import { DecisionsToolkit } from "./toolkits/decisions/tools.ts";
 import { ThreadIssuesToolkitHandlersLive } from "./toolkits/issues/handlers.ts";
@@ -833,6 +835,8 @@ const layerPreviewControlsRegistration = toolkitRegistration(
   PreviewControlsHandlers.layer,
 );
 
+const layerPlansToolkit = toolkitRegistration(PlansToolkit, PlansToolkitHandlersLive);
+
 export const layerEnvironmentToolkit = toolkitRegistration(
   EnvironmentToolkit,
   EnvironmentHandlers.layer,
@@ -892,6 +896,7 @@ export const layer = Layer.mergeAll(
   layerPullRequestsToolkit,
   layerThreadIssuesToolkit,
   layerDecisionsToolkit,
+  layerPlansToolkit,
   layerProjectLayoutToolkit,
   layerDeviceToolkit,
   layerHtmlToolkit,
