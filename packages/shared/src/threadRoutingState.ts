@@ -62,7 +62,7 @@ async function sleep(ms: number): Promise<void> {
 
 // flock belongs to the inherited open file description, so the parent's FD
 // retains it after Perl exits. Never unlink this sidecar: that splits the lock.
-const LOCK_HELPER = `use Fcntl qw(:flock);
+export const THREAD_ROUTING_LOCK_HELPER = `use Fcntl qw(:flock);
 open(my $fh, '>&=', 3) or die "Cannot open inherited state lock: $!";
 if (flock($fh, LOCK_EX | LOCK_NB)) { exit 0; }
 exit 1;`;
@@ -74,7 +74,7 @@ async function tryStateLock(fd: number): Promise<boolean> {
         cause,
       });
     try {
-      const child = NodeChildProcess.spawn("/usr/bin/perl", ["-e", LOCK_HELPER], {
+      const child = NodeChildProcess.spawn("/usr/bin/perl", ["-e", THREAD_ROUTING_LOCK_HELPER], {
         stdio: ["ignore", "ignore", "pipe", fd],
       });
       let stderr = "";
