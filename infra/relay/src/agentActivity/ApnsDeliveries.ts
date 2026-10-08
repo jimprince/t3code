@@ -939,16 +939,23 @@ export const make = Effect.gen(function* () {
       }
       deliveryTarget = currentTarget;
       const preferences = parsePreferences(currentTarget.preferences_json);
-      const alertAllowed =
-        notification.phase !== undefined && notification.updatedAt !== undefined
-          ? shouldAlertForActivity({
-              ...notification,
-              phase: notification.phase,
-              updatedAt: notification.updatedAt,
-              preferences,
-              nowMs: now.epochMilliseconds,
-            })
-          : preferences?.notificationsEnabled === true;
+      const event = notification.notification;
+      const phase =
+        notification.phase ??
+        (event?.kind === "approval"
+          ? "waiting_for_approval"
+          : event?.kind === "error"
+            ? "failed"
+            : event && event.kind !== "reply"
+              ? "waiting_for_input"
+              : "completed");
+      const alertAllowed = shouldAlertForActivity({
+        ...notification,
+        phase,
+        updatedAt: notification.updatedAt ?? event?.occurredAt ?? "",
+        preferences,
+        nowMs: now.epochMilliseconds,
+      });
       if (!alertAllowed) {
         yield* attempts.completeSourceJob({
           sourceJobId: input.sourceJobId,
@@ -1160,6 +1167,7 @@ export const make = Effect.gen(function* () {
             ? null
             : alertForTerminalAggregate({
                 aggregate: delivery.aggregate,
+                nowMs: input.nowMs,
                 preferences: parsePreferences(input.target.preferences_json),
               })
           : delivery.alert;
