@@ -1,0 +1,8 @@
+name = "fork-dash-187"
+subject = "feat(web): show a running thread's to-do progress on its task card"
+class = "product"
+purpose = "Show '3 of 5 steps' on an Active task card while a linked thread is working, from that thread's own to-do list. Display only; nothing is written to the tracker."
+retire_when = "The Tasks board is retired or upstream shows agent to-do progress on task cards."
+depends_on = ["fork-dash-187-todo-progress", "fork-project-dashboard-widgets"]
+roles = []
+note = "Issue #187. taskStepProgress reads todoProgress from the project tree's thread shells and shows nothing for a thread that is no longer working, so a finished thread's list never lingers. Only Active cards show it."
