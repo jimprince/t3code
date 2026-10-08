@@ -2,6 +2,7 @@ import {
   newForkCommandId,
   resetForkThreadOrder,
   readForkNestingSupported,
+  readForkSubprojectsSupported,
   readForkOrderResetSupported,
 } from "../components/chat/forkThreadCommands";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
@@ -169,6 +170,7 @@ export function useThreadActionMenu(input: {
           thread,
           forest: appAtomRegistry.get(supervision.forest),
           supported: readForkNestingSupported(threadRef.environmentId),
+          subprojectsSupported: readForkSubprojectsSupported(threadRef.environmentId),
         });
         const baseItems = buildThreadActionMenuItems({
           canOperate: readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope),
