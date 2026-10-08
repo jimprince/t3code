@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off -- The shared test harness uses Node paths to honor the lane-private temp directory.
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeServices from "@effect/platform-node/NodeServices";

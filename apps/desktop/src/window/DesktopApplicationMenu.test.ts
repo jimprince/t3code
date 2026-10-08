@@ -67,6 +67,7 @@ const desktopUpdatesLayer = Layer.succeed(DesktopUpdates.DesktopUpdates, {
   setChannel: () => Effect.die("unexpected setChannel"),
   check: () => Effect.die("unexpected check"),
   download: Effect.die("unexpected download"),
+  startUpdate: Effect.die("unexpected startUpdate"),
   install: Effect.die("unexpected install"),
   installPrepared: () => Effect.die("unexpected installPrepared"),
 } satisfies DesktopUpdates.DesktopUpdates["Service"]);
