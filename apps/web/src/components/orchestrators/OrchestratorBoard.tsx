@@ -60,7 +60,7 @@ import { OrchestratorStatus } from "./OrchestratorStatus";
 import { useOrchestratorThreadShells } from "./useOrchestratorThreads";
 import { readOrchestratorLastVisit, recordOrchestratorVisit } from "./orchestratorVisit";
 import { ProjectAutomationsSlot } from "../projects/ProjectAutomationsSlot";
-import { ProjectDecisionsWidget } from "./ProjectDecisionsWidget";
+import { ProjectDecisionFeed, useDecisionFeedCount } from "./ProjectDecisionFeed";
 import { ProjectIssuesBoard } from "./ProjectIssuesBoard";
 import { ProjectTaskPanel } from "./ProjectTaskPanel";
 import { OpenTaskContext } from "./TaskLink";
@@ -68,14 +68,10 @@ import { TeamStrip, useWorkstreamBands, WorkstreamBands } from "./WorkstreamBand
 import type { TaskRef } from "./taskView.logic";
 import {
   ClickableRow,
-  NeedsYouIssueGroups,
   ProjectMaintenanceWidget,
   ProjectReleaseLine,
   ProjectReleaseWidget,
   ProjectRequestsSection,
-  useNeedsYou,
-  useOpenThread,
-  useSettle,
   useTaskStatuses,
 } from "./ProjectRequestsSection";
 import { ProjectLayoutTabView, TAB_DRAG_TYPE, WIDGET_DRAG_TYPE } from "./ProjectLayoutView";
@@ -233,57 +229,11 @@ const Empty = ({ children }: { readonly children: ReactNode }) => (
 );
 
 /**
- * Everything waiting on Brad, from one source: threads asking for an approval,
- * an answer or a plan review, then the requests and issues the Issues board's
- * Needs you lane shows. Hidden when nothing waits.
- */
-function ProjectNeedsYouWidget({ summary }: { readonly summary: OrchestratorSummary }) {
-  const { items, query } = useNeedsYou(summary);
-  const settle = useSettle(summary, query.refresh);
-  const openThread = useOpenThread(summary);
-  const count = summary.needsYou.length + items.length;
-  if (count === 0) return null;
-  return (
-    <ProjectSection title="Needs you" count={count}>
-      {summary.needsYou.length > 0 ? (
-        <ul className="mb-3 divide-y divide-border">
-          {summary.needsYou.map((item) => (
-            <ClickableRow
-              key={`${item.kind}:${item.thread.id}`}
-              label={`Open ${item.thread.title}`}
-              onOpen={() => openThread(item.thread.id)}
-              className="items-start py-1.5"
-            >
-              <CircleAlertIcon className="mt-0.5 size-4 shrink-0 text-warning-foreground" />
-              <span className="min-w-0 flex-1 text-sm">{item.thread.title}</span>
-              <span className="shrink-0 text-xs text-muted-foreground">
-                {item.kind === "approval"
-                  ? "Approval"
-                  : item.kind === "input"
-                    ? "Question"
-                    : "Plan ready"}
-              </span>
-            </ClickableRow>
-          ))}
-        </ul>
-      ) : null}
-      <NeedsYouIssueGroups
-        summary={summary}
-        items={items}
-        settle={settle}
-        refresh={query.refresh}
-      />
-    </ProjectSection>
-  );
-}
-
-/**
- * "N need you" in the status line: the Needs you widget's count, plus what is waiting on a
+ * "N need you" in the status line: the Decisions feed's count, plus what is waiting on a
  * thread inside each subproject (its own requests show on its page).
  */
 function NeedsYouCount({ summary }: { readonly summary: OrchestratorSummary }) {
-  const { items } = useNeedsYou(summary);
-  const count = summary.needsYou.length + items.length + subprojectNeedsYou(summary);
+  const count = useDecisionFeedCount(summary) + subprojectNeedsYou(summary);
   if (count === 0) return null;
   return (
     <span className="inline-flex items-center gap-1.5 text-warning-foreground">
@@ -445,6 +395,7 @@ interface BoardPage {
   readonly chatOpen: boolean;
   readonly setChatOpen: (open: boolean) => void;
   readonly rootRef: ReturnType<typeof scopeThreadRef>;
+  readonly decisionsInLayout: boolean;
   readonly revealSentMessage: (messageId: import("@t3tools/contracts").MessageId) => void;
 }
 
@@ -500,9 +451,10 @@ function BuiltinWidget({
         />
       );
     case "decisions":
-      return <ProjectDecisionsWidget summary={summary} />;
+      return <ProjectDecisionFeed summary={summary} />;
     case "needs-you":
-      return <ProjectNeedsYouWidget summary={summary} />;
+      // Needs you folded into the Decisions feed; a layout without a Decisions widget keeps it here.
+      return page.decisionsInLayout ? null : <ProjectDecisionFeed summary={summary} />;
     case "composer":
       return (
         <ProjectSection title="New request">
@@ -828,6 +780,7 @@ export function OrchestratorBoard({
     chatOpen,
     setChatOpen,
     rootRef,
+    decisionsInLayout: tabWith("decisions") !== null,
     revealSentMessage,
   };
 
