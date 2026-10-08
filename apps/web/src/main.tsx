@@ -13,7 +13,10 @@ import {
   syncDocumentWindowControlsOverlayClass,
 } from "./lib/windowControlsOverlay";
 import { AppRoot } from "./AppRoot";
+import { preventHeldSendUnload } from "./lib/heldSendUnloadGuard";
 import { clearChunkReloadGuard, reloadOnceForChunkLoadError } from "./lib/chunkReloadGuard";
+
+window.addEventListener("beforeunload", preventHeldSendUnload);
 
 prepareProviderAuthDelivery();
 
