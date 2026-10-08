@@ -13,7 +13,7 @@ import {
   type HandoffLookupInput,
   type HandoffLookupResult,
 } from "@t3tools/contracts";
-import { persistSendIntent, sendTransportCause } from "./sendIntents.js";
+import { persistSendIntent, sendTransportCause, sendWasNeverSubmitted } from "./sendIntents.js";
 import { withThreadMetadata, type ThreadMetadata } from "./v2/nesting.js";
 import { projectionHasWork } from "./v2/workState.js";
 import { threadShell as gcThreadShell } from "./v2/reads.js";
@@ -85,7 +85,7 @@ export type SendMessageOutcome = (
     }
   | { dispatched: false; queued: false; uncertain: true; sendId: string; causeCode: string }
   | { dispatched: false; queued: false; uncertain: false; sendId: string; causeCode: string }
-) & { receipt?: HandoffReceipt; sendId?: string };
+) & { receipt?: HandoffReceipt; sendId?: string; retryable?: boolean };
 
 function buildPlanImplementationPrompt(planMarkdown: string): string {
   return `PLEASE IMPLEMENT THIS PLAN:\n${planMarkdown.trim()}`;
@@ -949,6 +949,7 @@ export class RemoteEnvironmentClient {
         dispatched: false,
         queued: false,
         uncertain: false,
+        retryable: true,
         sendId,
         causeCode: sendTransportCause(cause),
       };
@@ -1025,6 +1026,7 @@ export class RemoteEnvironmentClient {
             dispatched: false,
             queued: false,
             uncertain: false,
+            retryable: true,
             sendId,
             causeCode: "ACCESS_DENIED",
           };
@@ -1040,7 +1042,8 @@ export class RemoteEnvironmentClient {
         return {
           dispatched: false,
           queued: false,
-          uncertain: attempted,
+          uncertain: attempted && !sendWasNeverSubmitted(cause),
+          retryable: !attempted || sendWasNeverSubmitted(cause),
           sendId,
           causeCode: sendTransportCause(cause),
         };
