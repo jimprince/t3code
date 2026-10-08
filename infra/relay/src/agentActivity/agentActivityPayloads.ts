@@ -1,3 +1,5 @@
+import { notificationMessage } from "@t3tools/client-runtime/notification-eligibility";
+import { activityNotificationEvent } from "./agentActivityAlerts.ts";
 import type {
   RelayAgentActivityAggregateRow,
   RelayAgentActivityAggregateState,
@@ -111,13 +113,15 @@ export function notificationForActivity(
   row: RelayAgentActivityAggregateRow,
 ): ApnsNotificationPayload {
   const activity = sanitizeAgentActivityAggregateRow(row);
+  const event = activityNotificationEvent(activity);
   return sanitizeApnsNotificationPayload({
     title: activity.threadTitle,
-    body: `${activity.status}: ${activity.projectTitle}`,
+    body: event ? notificationMessage(event) : activity.status,
     environmentId: activity.environmentId,
     threadId: activity.threadId,
     deepLink: activity.deepLink,
     phase: activity.phase,
+    ...(event ? { notification: event } : {}),
     updatedAt: activity.updatedAt,
   });
 }
