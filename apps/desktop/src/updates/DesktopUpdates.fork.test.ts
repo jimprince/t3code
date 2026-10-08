@@ -1,57 +1,41 @@
-// @effect-diagnostics nodeBuiltinImport:off -- The shared test harness uses Node paths to honor the lane-private temp directory.
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { assert, describe, it } from "@effect/vitest";
 import type { DesktopUpdateState } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
-import * as PlatformError from "effect/PlatformError";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as TestClock from "effect/testing/TestClock";
 
-import * as DesktopBackendPool from "../backend/DesktopBackendPool.ts";
 import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
+import * as DesktopState from "../app/DesktopState.ts";
+import * as DesktopBackendPool from "../backend/DesktopBackendPool.ts";
 import * as ElectronUpdater from "../electron/ElectronUpdater.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
-import * as DesktopState from "../app/DesktopState.ts";
 import * as DesktopUpdates from "./DesktopUpdates.ts";
 
-/** Shared DesktopUpdates test harness: a fully stubbed updater layer whose
-    electron-updater events are driven by hand via `emit`. Used by
-    DesktopUpdates.test.ts and DesktopRemoteUpdates.test.ts. */
-
-export const flushCallbacks = Effect.yieldNow;
-
-export interface UpdatesHarnessOptions {
+interface UpdatesHarnessOptions {
   readonly checkForUpdates?: Effect.Effect<
     void,
     ElectronUpdater.ElectronUpdaterCheckForUpdatesError
   >;
-  readonly beforeSetUpdateChannel?: Effect.Effect<void>;
   readonly setUpdateChannelError?: DesktopAppSettings.DesktopSettingsWriteError;
   readonly setDisableDifferentialDownload?: Effect.Effect<void>;
-  readonly downloadUpdate?: Effect.Effect<void>;
-  readonly quitAndInstall?: Effect.Effect<void, ElectronUpdater.ElectronUpdaterQuitAndInstallError>;
   readonly stopBackend?: Effect.Effect<void>;
-  readonly startBackend?: Effect.Effect<void>;
   readonly env?: Record<string, string | undefined>;
-  readonly platform?: NodeJS.Platform;
-  /** Contents of the resources/package-type marker a Linux package ships. */
-  readonly packageType?: string | undefined;
+  readonly environment?: Partial<DesktopEnvironment.MakeDesktopEnvironmentInput>;
 }
 
-export function makeHarness(options: UpdatesHarnessOptions = {}) {
+function makeHarness(options: UpdatesHarnessOptions = {}) {
   let checkCount = 0;
-  let quitAndInstallCount = 0;
-  let downloadCount = 0;
   let allowDowngrade = false;
   let fullChangelog = false;
   const feedUrls: ElectronUpdater.ElectronUpdaterFeedUrl[] = [];
   const listeners = new Map<string, Set<(...args: readonly unknown[]) => void>>();
   const sentStates: DesktopUpdateState[] = [];
-  const installSteps: string[] = [];
 
   const addListener = (eventName: string, listener: (...args: readonly unknown[]) => void) => {
     const eventListeners = listeners.get(eventName) ?? new Set();
@@ -70,7 +54,7 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     }
   };
 
-  const layerUpdater = Layer.succeed(ElectronUpdater.ElectronUpdater, {
+  const updaterLayer = Layer.succeed(ElectronUpdater.ElectronUpdater, {
     setFeedURL: (options) =>
       Effect.sync(() => {
         feedUrls.push(options);
@@ -92,14 +76,8 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     checkForUpdates: Effect.sync(() => {
       checkCount += 1;
     }).pipe(Effect.andThen(options.checkForUpdates ?? Effect.void)),
-    downloadUpdate: Effect.sync(() => {
-      downloadCount += 1;
-    }).pipe(Effect.andThen(options.downloadUpdate ?? Effect.void)),
-    quitAndInstall: () =>
-      Effect.sync(() => {
-        quitAndInstallCount += 1;
-        installSteps.push("quitAndInstall");
-      }).pipe(Effect.andThen(options.quitAndInstall ?? Effect.void)),
+    downloadUpdate: Effect.void,
+    quitAndInstall: () => Effect.void,
     on: (eventName, listener) =>
       Effect.acquireRelease(
         Effect.sync(() => {
@@ -112,11 +90,11 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
       ).pipe(Effect.asVoid),
   } satisfies ElectronUpdater.ElectronUpdater["Service"]);
 
-  const layerWindow = Layer.succeed(ElectronWindow.ElectronWindow, {
+  const windowLayer = Layer.succeed(ElectronWindow.ElectronWindow, {
     create: () => Effect.die("unexpected BrowserWindow creation"),
-    main: Effect.succeedNone,
-    currentMainOrFirst: Effect.succeedNone,
-    focusedMainOrFirst: Effect.succeedNone,
+    main: Effect.succeed(Option.none()),
+    currentMainOrFirst: Effect.succeed(Option.none()),
+    focusedMainOrFirst: Effect.succeed(Option.none()),
     setMain: () => Effect.void,
     clearMain: () => Effect.void,
     prepareReveal: () => Effect.succeed(false),
@@ -125,20 +103,16 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
       Effect.sync(() => {
         sentStates.push(state as DesktopUpdateState);
       }),
-    destroyAll: Effect.sync(() => {
-      installSteps.push("destroyAll");
-    }),
+    destroyAll: Effect.void,
     syncAllAppearance: () => Effect.void,
   } satisfies ElectronWindow.ElectronWindow["Service"]);
 
   const stubBackendInstance: DesktopBackendPool.DesktopBackendInstance = {
     id: DesktopBackendPool.PRIMARY_INSTANCE_ID,
     label: Effect.succeed("Windows"),
-    start: Effect.sync(() => {
-      installSteps.push("startBackend");
-    }).pipe(Effect.andThen(options.startBackend ?? Effect.void)),
+    start: Effect.void,
     stop: () => options.stopBackend ?? Effect.void,
-    currentConfig: Effect.succeedNone,
+    currentConfig: Effect.succeed(Option.none()),
     snapshot: Effect.succeed({
       desiredRunning: false,
       ready: false,
@@ -148,18 +122,19 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     }),
     waitForReady: () => Effect.succeed(true),
   };
-  const layerBackend = DesktopBackendPool.layerTest([stubBackendInstance]);
+  const backendLayer = DesktopBackendPool.layerTest([stubBackendInstance]);
 
-  const layerEnvironment = DesktopEnvironment.layer({
+  const environmentLayer = DesktopEnvironment.layer({
     dirname: "/repo/apps/desktop/src",
     homeDirectory: NodePath.join(NodeOS.tmpdir(), `t3-desktop-updates-home-${process.pid}`),
-    platform: options.platform ?? "darwin",
+    platform: "darwin",
     processArch: "x64",
     appVersion: "1.2.3",
     appPath: "/repo",
     isPackaged: true,
     resourcesPath: "/missing/resources",
     runningUnderArm64Translation: false,
+    ...options.environment,
   }).pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -174,76 +149,30 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     ),
   );
 
-  let testSettings: DesktopAppSettings.DesktopSettings = {
-    ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
-  };
   const setUpdateChannelError = options.setUpdateChannelError;
-  const layerSettings =
-    setUpdateChannelError || options.beforeSetUpdateChannel
-      ? Layer.succeed(DesktopAppSettings.DesktopAppSettings, {
-          get: Effect.sync(() => testSettings),
-          load: Effect.sync(() => testSettings),
-          setMainWindowBounds: () => Effect.die("unexpected main window bounds update"),
-          setServerExposureMode: () => Effect.die("unexpected server exposure update"),
-          setTailscaleServe: () => Effect.die("unexpected Tailscale Serve update"),
-          setUpdateChannel: (channel) =>
-            setUpdateChannelError
-              ? Effect.fail(setUpdateChannelError)
-              : (options.beforeSetUpdateChannel ?? Effect.void).pipe(
-                  Effect.andThen(
-                    Effect.sync(() => {
-                      const changed = testSettings.updateChannel !== channel;
-                      testSettings = {
-                        ...testSettings,
-                        updateChannel: channel,
-                        updateChannelConfiguredByUser: true,
-                      };
-                      return { settings: testSettings, changed };
-                    }),
-                  ),
-                ),
-          setWslBackendEnabled: () => Effect.die("unexpected WSL backend toggle"),
-          setWslDistro: () => Effect.die("unexpected WSL distro change"),
-          setLocalEnvironmentEnabled: () => Effect.die("unexpected local environment toggle"),
-          setWslOnly: () => Effect.die("unexpected WSL-only toggle"),
-          applyWslWindowsFallback: Effect.die("unexpected WSL Windows fallback"),
-          applyWslWindowsFallbackInMemory: Effect.die("unexpected WSL Windows fallback"),
-        } satisfies DesktopAppSettings.DesktopAppSettings["Service"])
-      : DesktopAppSettings.layer;
-
-  // Tracks the restart markers installs leave, so installs stay free of real
-  // disk I/O that would outrun the tests' settle loops.
-  const updateRestartMarkers = new Set<string>();
-  const layerFileSystem = FileSystem.layerNoop({
-    readFileString: (path) =>
-      path === "/missing/resources/package-type" && options.packageType !== undefined
-        ? Effect.succeed(options.packageType)
-        : Effect.fail(
-            PlatformError.systemError({
-              module: "FileSystem",
-              method: "readFileString",
-              _tag: "NotFound",
-              pathOrDescriptor: path,
-            }),
-          ),
-    makeDirectory: () => Effect.void,
-    writeFileString: (path) =>
-      Effect.sync(() => {
-        updateRestartMarkers.add(path);
-      }),
-    remove: (path) =>
-      Effect.sync(() => {
-        updateRestartMarkers.delete(path);
-      }),
-  });
+  const settingsLayer = setUpdateChannelError
+    ? Layer.succeed(DesktopAppSettings.DesktopAppSettings, {
+        get: Effect.succeed(DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS),
+        load: Effect.succeed(DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS),
+        setLocalEnvironmentEnabled: () => Effect.die("unexpected local environment toggle"),
+        setMainWindowBounds: () => Effect.die("unexpected main window bounds update"),
+        setServerExposureMode: () => Effect.die("unexpected server exposure update"),
+        setTailscaleServe: () => Effect.die("unexpected Tailscale Serve update"),
+        setUpdateChannel: () => Effect.fail(setUpdateChannelError),
+        setWslBackendEnabled: () => Effect.die("unexpected WSL backend toggle"),
+        setWslDistro: () => Effect.die("unexpected WSL distro change"),
+        setWslOnly: () => Effect.die("unexpected WSL-only toggle"),
+        applyWslWindowsFallback: Effect.die("unexpected WSL Windows fallback"),
+        applyWslWindowsFallbackInMemory: Effect.die("unexpected WSL Windows fallback"),
+      } satisfies DesktopAppSettings.DesktopAppSettings["Service"])
+    : DesktopAppSettings.layer;
 
   const layer = DesktopUpdates.layer.pipe(
-    Layer.provide(layerFileSystem),
-    Layer.provideMerge(layerUpdater),
-    Layer.provideMerge(layerWindow),
-    Layer.provideMerge(layerBackend),
+    Layer.provideMerge(updaterLayer),
+    Layer.provideMerge(windowLayer),
+    Layer.provideMerge(backendLayer),
     Layer.provideMerge(DesktopState.layer),
-    Layer.provideMerge(layerSettings),
+    Layer.provideMerge(settingsLayer),
     Layer.provideMerge(
       DesktopConfig.layerTest({
         T3CODE_HOME: NodePath.join(NodeOS.tmpdir(), `t3-desktop-updates-test-${process.pid}`),
@@ -252,18 +181,14 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
         ...options.env,
       }),
     ),
-    Layer.provideMerge(layerEnvironment),
+    Layer.provideMerge(environmentLayer),
     Layer.provideMerge(NodeServices.layer),
   );
 
   return {
     layer,
     checkCount: () => checkCount,
-    quitAndInstalls: () => quitAndInstallCount,
-    installSteps,
-    updateRestartMarkers,
-    downloadCount: () => downloadCount,
-    feedUrls: (): ElectronUpdater.ElectronUpdaterFeedUrl[] => feedUrls,
+    feedUrls: () => feedUrls,
     fullChangelog: () => fullChangelog,
     listenerCount: () =>
       Array.from(listeners.values()).reduce(
@@ -278,3 +203,25 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     },
   };
 }
+
+describe("DesktopUpdates", () => {
+  it.effect("disables updates with a visible reason for packaged Fork Dev builds", () => {
+    const harness = makeHarness({
+      environment: {
+        desktopFlavor: "dev",
+      },
+    });
+
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+
+        const state = yield* updates.getState;
+        assert.equal(state.enabled, false);
+        assert.equal(state.status, "disabled");
+        assert.equal(state.message, "Automatic updates are disabled for Fork Dev builds.");
+      }),
+    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+  });
+});

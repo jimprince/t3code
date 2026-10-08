@@ -1,0 +1,4 @@
+id = "confirmed-desktop-update"
+category = "feature"
+functionality = "updates"
+text = "A confirmed desktop update runs checking, downloading, verification and restart in one action, with progress and retryable failures."
