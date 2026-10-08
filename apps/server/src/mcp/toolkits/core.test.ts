@@ -74,6 +74,13 @@ const decodeMcpAttachmentInput = Schema.decodeUnknownEffect(McpAttachmentInput);
 // Registration asks for every service the thread tools declare; these cases call none that use them.
 const layerThreadToolkit = McpHttpServer.layerThreadToolkit.pipe(
   Layer.provide(Layer.mock(ThreadSearch.ThreadSearch)({})),
+  Layer.provide(Layer.mock(ProviderRegistry.ProviderRegistry)({})),
+  Layer.provide(
+    ServerConfig.layerTest(process.cwd(), { prefix: "t3-mcp-core-" }).pipe(
+      Layer.provide(NodeServices.layer),
+    ),
+  ),
+  Layer.provide(SqlitePersistence.layerMemory),
   Layer.provide(Layer.mock(ScheduledTaskService.ScheduledTaskService)({})),
 );
 
