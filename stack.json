@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "5016d2c43f93a7efcdc60762ab99545baa3d7fcb",
-  "head": "4cec1964d9cb5fabe5ae5aff22c64a96693d7214",
+  "prev": "24bffb1a9ed5043fd1a0fa881e98fd8119e0aa96",
+  "head": "c4a49b272209b52cbfbc9a69741fa36fbfc56522",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -103,7 +103,9 @@
     "fork-antigravity-errors",
     "fork-conversation-fork",
     "fork-thread-transfer",
-    "fork-thread-history-compatibility",
+    "fork-thread-history-compatibility"
+  ],
+  "unapplied": [
     "fork-session-reconcile",
     "fork-codex-extra-skill-roots",
     "fork-dashboard-polish",
@@ -118,7 +120,6 @@
     "fork-gitea-token-setter",
     "fork-direct-endpoints-enumeration"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
