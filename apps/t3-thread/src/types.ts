@@ -58,6 +58,7 @@ export interface ExecutionEnvironmentDescriptor {
     threadActiveReorder?: boolean;
     threadOrderReset?: boolean;
     threadNesting?: boolean;
+    reliableHandoffs?: boolean;
     threadSubprojects?: boolean;
     threadIssues?: boolean;
     remoteThreadNesting?: boolean;
@@ -287,6 +288,7 @@ export interface SavedSubscription {
  * the watcher awake for automatic recovery.
  */
 export type SavedNotificationStatus =
+  | "uncertain"
   | "pending"
   | "delivering"
   | "delivered"
@@ -297,6 +299,7 @@ export type SavedNotificationStatus =
   | "superseded";
 
 export interface SavedNotification {
+  sendId?: string;
   subscriberEnvironmentId?: string;
   /** An actionable input/approval for the current organizational parent. */
   isChildInput?: boolean;
@@ -347,6 +350,7 @@ export interface SavedNotification {
  * target can never accept the message (archived thread, exhausted attempts).
  */
 export type QueuedSendStatus =
+  | "uncertain"
   | "queued"
   | "dispatching"
   | "dispatched"
@@ -359,6 +363,10 @@ export type QueuedSendStatus =
  * watcher drains the queue at the next turn boundary.
  */
 export interface SavedQueuedSend {
+  /** Stable server acceptance identity, including sends held by settlement. */
+  serverSendId?: string;
+  allowWhileRunning?: boolean;
+  allowQueueFallback?: boolean;
   id: string;
   /** Monotonic per state file. Defines FIFO dispatch order within a thread. */
   sequence: number;
