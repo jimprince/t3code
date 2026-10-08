@@ -1043,7 +1043,7 @@ purpose = "Keep thread lifecycle, reconnect snapshots, pending-input, session-st
 retire_when = "Upstream supplies equivalent lifecycle recovery, bounded snapshot handoff, and client recovery semantics."
 depends_on = ["fork-provider-turn-safety"]
 roles = []
-note = "Reorganized 2026-09-06 from fork-thread-lifecycle-recovery, fork-web-client-resilience. [fork-thread-lifecycle-recovery] Upstream1286 checkpoint validation is asynchronous; use it for the resolved revert workspace. Archived-thread lookup preserves upstream branch PR identity and active ordering fields. Keep upstream shell-only stop-session tests; do not restore tests for its removed startup heartbeat helper."
+note = "#214: Client-runtime exports reconnect outcome and ninety-second timeout helpers plus an identity-preserving disconnected composer queue; renderers own connection hooks and visible state. #218: Shared queue workflow exposes canResume for held queued items. Reorganized 2026-09-06 from fork-thread-lifecycle-recovery, fork-web-client-resilience. [fork-thread-lifecycle-recovery] Upstream1286 checkpoint validation is asynchronous; use it for the resolved revert workspace. Archived-thread lookup preserves upstream branch PR identity and active ordering fields. Keep upstream shell-only stop-session tests; do not restore tests for its removed startup heartbeat helper."
 
 [[patch.decision]]
 id = "upstream13764-queued-send-left-the-composer-handler"
