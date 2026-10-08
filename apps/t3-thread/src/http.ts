@@ -139,6 +139,7 @@ async function fetchRemoteJson<T>(input: {
   try {
     response = await fetch(requestUrl, {
       method: input.method ?? "GET",
+      signal: input.signal,
       headers: {
         ...(input.body !== undefined ? { "content-type": "application/json" } : {}),
         ...(input.bearerToken ? { authorization: `Bearer ${input.bearerToken}` } : {}),
@@ -228,6 +229,7 @@ export async function issueWebSocketTicket(input: {
   signal?: AbortSignal;
 }): Promise<AuthWebSocketTicketResult> {
   return fetchRemoteJson<AuthWebSocketTicketResult>({
+    signal: input.signal,
     httpBaseUrl: input.httpBaseUrl,
     pathname: "/api/auth/websocket-ticket",
     method: "POST",
@@ -242,6 +244,7 @@ export async function resolveWebSocketUrl(input: {
   signal?: AbortSignal;
 }): Promise<string> {
   const issued = await issueWebSocketTicket({
+    signal: input.signal,
     httpBaseUrl: input.httpBaseUrl,
     bearerToken: input.bearerToken,
   });
