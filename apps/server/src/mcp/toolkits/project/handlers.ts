@@ -109,6 +109,7 @@ export const ProjectHandlersLive = ProjectToolkit.toLayer({
         threadId,
         projectId,
         title: input.title,
+        ...(input.issue === undefined ? {} : { issue: input.issue }),
         modelSelection,
         runtimeMode,
         interactionMode: input.interactionMode ?? caller?.interactionMode ?? "default",
