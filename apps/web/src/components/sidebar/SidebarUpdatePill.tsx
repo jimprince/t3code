@@ -21,6 +21,7 @@ import {
   shouldToastDesktopUpdateActionResult,
 } from "../desktopUpdate.logic";
 import { showDesktopUpdateDownloadedToast } from "../desktopUpdate.toast";
+import { confirmAndStartDesktopUpdate } from "./desktopUpdateFlow";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Popover, PopoverCreateHandle, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { SidebarMenuItem } from "../ui/sidebar";
@@ -194,6 +195,17 @@ function SidebarUpdateControl() {
 
     setIsActionPending(true);
 
+    // One click: after the interruption confirm, the shell runs every phase itself and the
+    // update card shows them. Older shells without startUpdate keep the two-step flow below.
+    const startUpdate = bridge.startUpdate?.bind(bridge);
+    const runOneClickUpdate = () =>
+      confirmAndStartDesktopUpdate(startUpdate!, state).finally(() => setIsActionPending(false));
+
+    if (startUpdate && action === "download") {
+      void runOneClickUpdate();
+      return;
+    }
+
     if (action === "download") {
       void bridge
         .downloadUpdate()
@@ -234,6 +246,11 @@ function SidebarUpdateControl() {
     if (action === "install" && busyAgentCount > 0) {
       setIdleRestartDialogOpen(true);
       setIsActionPending(false);
+      return;
+    }
+
+    if (startUpdate && action === "install") {
+      void runOneClickUpdate();
       return;
     }
 
