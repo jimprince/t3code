@@ -84,8 +84,3 @@ export function parseDecisionContext(context: string, issueUrl: string): Decisio
     long: withoutImages.length > LONG_CHARS || withoutImages.split("\n").length > LONG_LINES,
   };
 }
-
-/** The context's visible text, for comparing a short summary with the whole. */
-export function decisionContextText(parts: ReadonlyArray<DecisionContextPart>): string {
-  return parts.map((part) => part.text).join("");
-}
