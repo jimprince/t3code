@@ -2780,3 +2780,12 @@ retire_when = "Folded into fork-project-layout, or the project page layout is re
 depends_on = ["fork-project-layout", "fork-dash-178"]
 roles = []
 note = "withoutRetiredWidgets (contracts) drops widgets of RETIRED_WIDGET_TYPES from every saved revision the server reads and from the tabs the web renders (older servers still send them); the next saved change persists the cleanup. The default layout and the older widget order no longer include them, and dashboard set skips the retired ids instead of failing. Meant to be folded into fork-project-layout. Integration fork.6: adapted replay to preserve UI theme/owner notes alongside BE authoritative contract and helpers. Fork.6 integration: adapt: union inventory, retain earlier integrated owner notes and later stanza (docs/operations/fork-inventory.toml). Retire/narrow/relocate do not apply to these retained UI behaviors or inventory insertions."
+[[patch]]
+name = "fork-decisions-feed-context"
+subject = "fix(decisions): clean decision context and mark which asks can be answered"
+class = "product"
+purpose = "Keep the curator's Bucket / Accountable owner / Approved filing lines out of a decision card's context (brad/t3code-fork#181), and tell the feed which pending thread asks can be answered from a card."
+retire_when = "The curator stops writing the backlog-sort block into issue bodies, or decisions are no longer parsed from issue bodies."
+depends_on = ["fork-decisions-feed-server"]
+roles = []
+note = "parseDecisionIssue removes the block between <!-- curator-backlog-sort ... --> and <!-- /curator-backlog-sort --> before it strips HTML comments, because the comment markers hide but the lines between them are visible text. An unclosed marker is left alone. Pending asks gain canRespond (a question unless its provider session is gone, an approval only while live) so a card offers buttons only where the thread can take them. Integration fork.6: adapted replay to preserve UI theme/owner notes alongside BE authoritative contract and helpers. Fork.6 integration: adapt: union inventory, retain earlier integrated owner notes and later stanza (docs/operations/fork-inventory.toml). Retire/narrow/relocate do not apply to these retained UI behaviors or inventory insertions."
