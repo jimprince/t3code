@@ -1,0 +1,4 @@
+id = "queue-held-resume"
+category = "feature"
+functionality = "queued messages"
+text = "A queue held after a restart now shows Resume in the queued messages strip on web and desktop."
