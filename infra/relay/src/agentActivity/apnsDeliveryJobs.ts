@@ -1,3 +1,4 @@
+import { ThreadNotificationEvent } from "@t3tools/contracts";
 import * as NodeCrypto from "node:crypto";
 
 import {
@@ -37,6 +38,7 @@ const ApnsDeliveryJobContext = {
 };
 
 export const ApnsNotificationPayload = Schema.Struct({
+  notification: Schema.optionalKey(ThreadNotificationEvent),
   title: Schema.String,
   body: Schema.String,
   environmentId: Schema.String,
