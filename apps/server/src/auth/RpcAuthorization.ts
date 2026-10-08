@@ -27,6 +27,8 @@ type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
  */
 export const RPC_REQUIRED_SCOPES = {
   "fork.session.reconcile": AuthOrchestrationOperateScope,
+  "fork.message.forward.prepare": AuthOrchestrationReadScope,
+  "fork.message.forward.accept": AuthOrchestrationOperateScope,
   "fork.send.accept": AuthOrchestrationOperateScope,
   "fork.send.lookup": AuthOrchestrationReadScope,
   "fork.send.inbox": AuthOrchestrationReadScope,
