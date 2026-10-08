@@ -250,6 +250,7 @@ import * as PullRequestService from "./pullRequest/PullRequestService.ts";
 import { listLinkedPullRequestThreads } from "./pullRequest/linkedThreads.ts";
 import { pullRequestSyncKey } from "./pullRequest/pullRequestSyncKey.ts";
 import * as SqlClient from "effect/sql/SqlClient";
+import { makeHandoffService } from "./forkThreads/HandoffService.ts";
 import * as PullRequestSyncReactor from "./orchestration-v2/PullRequestSyncReactor.ts";
 import * as ProjectIssuesService from "./projectIssues/ProjectIssuesService.ts";
 import * as RequestLedger from "./projectIssues/RequestLedger.ts";
@@ -2767,8 +2768,13 @@ const layerWsRpc = (
               return yield* issueAssetUrl({ resource: input.resource });
             }
             if (input.resource._tag === "gitea-media") {
-              const settings = yield* serverSettings.getSettings.pipe(Effect.mapError(() => new AssetGiteaMediaUrlValidationError({})));
-              return yield* issueAssetUrl({ resource: input.resource, giteaMedia: giteaMediaFetchTarget(input.resource.url, settings.giteaInstances) });
+              const settings = yield* serverSettings.getSettings.pipe(
+                Effect.mapError(() => new AssetGiteaMediaUrlValidationError({})),
+              );
+              return yield* issueAssetUrl({
+                resource: input.resource,
+                giteaMedia: giteaMediaFetchTarget(input.resource.url, settings.giteaInstances),
+              });
             }
             if (input.resource._tag === "draft-workspace-file") {
               // A project draft names its workspace directly; there is no
@@ -3181,6 +3187,12 @@ const layerWsRpc = (
       const conversationFork = yield* ForkWorkspace.ForkWorkspaceService;
       const threadTransfer = yield* ThreadTransfer.TransferService;
       const legacyHistory = yield* LegacyHistory.HistoryReader;
+      const handoffs = makeHandoffService(
+        sql,
+        threadManagement,
+        providerRegistry.getProviders,
+        currentSession.subject,
+      );
       const forkHandlers = WsForkRpcGroup.of({
         ...threadSubscriptionHandlers(threadManagement),
         [WS_METHODS.automationsList]: (input) =>
@@ -3227,6 +3239,9 @@ const layerWsRpc = (
         [WS_METHODS.projectRequestsList]: (input) => requestLedger.listForThread(input),
         ...(yield* makeWorkspaceUploadHandlers),
         ...(yield* makeSupervisionDragHandlers),
+        "fork.send.accept": (input) => handoffs.accept(input),
+        "fork.send.lookup": (input) => handoffs.lookup(input),
+        "fork.send.inbox": (input) => handoffs.inbox(input.threadId),
         "fork.session.reconcile": (input) =>
           makeSessionReconcileService(threadManagement).reconcile(input),
         "orchestration.getLegacyHistory": (input) => legacyHistory.get(input),
