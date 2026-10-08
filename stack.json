@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "acc9f64ed4295b4c0af355bda67d336f09861c84",
-  "head": "e4dec1b5c9fe437aeff66ff2c230a634c230a31f",
+  "prev": "d924fa1a25001277b202baf169d2b5f93df51dc6",
+  "head": "b9a7454214a5f11106eccb5f195d4b8b6551fed4",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -99,7 +99,9 @@
     "fork-request-titles",
     "fork-page-agent-tray",
     "fork-release-publication",
-    "fork-maintenance-automation",
+    "fork-maintenance-automation"
+  ],
+  "unapplied": [
     "fork-antigravity-errors",
     "fork-conversation-fork",
     "fork-thread-transfer",
@@ -118,7 +120,6 @@
     "fork-gitea-token-setter",
     "fork-direct-endpoints-enumeration"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
