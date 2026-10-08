@@ -19,7 +19,7 @@ beforeEach(async () => {
 afterEach(async () => {
   for (const child of children.splice(0)) {
     if (child.exitCode === null && child.signalCode === null) {
-      const exited = NodeEvents.once(child, "exit");
+      const exited = NodeEvents.EventEmitter.once(child, "exit");
       child.kill("SIGKILL");
       await exited;
     }
@@ -48,10 +48,10 @@ async function holdInChild() {
     { stdio: ["ignore", "ignore", "pipe", "ipc"], env: { ...process.env } },
   );
   children.push(child);
-  const ready = NodeEvents.once(child, "message");
+  const ready = NodeEvents.EventEmitter.once(child, "message");
   await Promise.race([
     ready,
-    NodeEvents.once(child, "exit").then(([code]) => {
+    NodeEvents.EventEmitter.once(child, "exit").then(([code]) => {
       throw new Error(`Holder exited before locking: ${code}`);
     }),
   ]);
@@ -62,7 +62,7 @@ it("releases a killed holder's lock without cleanup and keeps the same sidecar",
   const child = await holdInChild();
   const sidecar = `${process.env.T3_AGENT_STATE_FILE}.lock`;
   const inode = (await NodeFSP.stat(sidecar)).ino;
-  const exited = NodeEvents.once(child, "exit");
+  const exited = NodeEvents.EventEmitter.once(child, "exit");
   child.kill("SIGKILL");
   await exited;
   await updateState({ count: 0 }, (state) => ({
