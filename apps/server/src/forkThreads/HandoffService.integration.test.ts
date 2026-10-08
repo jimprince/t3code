@@ -43,6 +43,8 @@ const decodeClientReceipt = Schema.decodeUnknownEffect(
 );
 
 const fixtures = process.env.T3_LIFECYCLE_FIXTURES;
+// The production fixtures are private; CI and machines without them skip these explicitly.
+const itFixture = fixtures ? it.effect : it.effect.skip;
 const fixtureRuntime = <A, E>(
   test: Effect.Effect<
     A,
@@ -113,7 +115,7 @@ const input = (sendId: string, recipient = "handoff:recipient"): HandoffAcceptIn
   intent: "auto",
 });
 
-it.effect(
+itFixture(
   "accepts before provider work, resolves a dropped ack, binds retries and redacts lookup",
   () =>
     fixtureRuntime(
@@ -163,7 +165,7 @@ it.effect(
     ),
 );
 
-it.effect("rolls back the authenticated receipt with a failed native acceptance transaction", () =>
+itFixture("rolls back the authenticated receipt with a failed native acceptance transaction", () =>
   fixtureRuntime(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
@@ -188,7 +190,7 @@ it.effect("rolls back the authenticated receipt with a failed native acceptance 
   ),
 );
 
-it.effect(
+itFixture(
   "holds settled workers, refuses confirmed quota exhaustion with an owner, preserves useful idle delivery",
   () =>
     fixtureRuntime(
@@ -250,7 +252,7 @@ it.effect(
     ),
 );
 
-it.effect(
+itFixture(
   "coalesces only the sender's queued progress, records supersession and reports multiple matches",
   () =>
     fixtureRuntime(
@@ -293,7 +295,7 @@ it.effect(
     ),
 );
 
-it.effect(
+itFixture(
   "routes the production CLI send into a running Codex turn exactly once before provider work",
   () =>
     Effect.scoped(
@@ -445,7 +447,7 @@ it.effect(
             };
             // Separate TS projects have different compiler policies. Runtime import
             // exercises the production CLI without compiling it as server source.
-            const cliModule = "../../../t3-thread/src/client.ts";
+            const cliModule = new URL("../../../t3-thread/src/client.ts", import.meta.url).href;
             const { RemoteEnvironmentClient } = yield* Effect.promise(() => import(cliModule));
             const client = new RemoteEnvironmentClient(environment, {
               descriptorFactory: async () => ({
@@ -490,7 +492,7 @@ const intruderInbox = (
     ThreadId.make("handoff:recipient"),
   );
 
-it.effect(
+itFixture(
   "refuses archived recipients and opt-out busy sends without losing healthy dispatch",
   () =>
     fixtureRuntime(
@@ -521,7 +523,7 @@ it.effect(
     ),
 );
 
-it.effect("preserves other sender provenance while coalescing queued handoffs", () =>
+itFixture("preserves other sender provenance while coalescing queued handoffs", () =>
   fixtureRuntime(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
@@ -564,7 +566,7 @@ it.effect("preserves other sender provenance while coalescing queued handoffs", 
   ),
 );
 
-it.effect(
+itFixture(
   "reports bounded inbox/coalesce truncation and expires lookup without forgetting the ID binding",
   () =>
     fixtureRuntime(
