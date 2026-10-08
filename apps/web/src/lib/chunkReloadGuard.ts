@@ -1,3 +1,5 @@
+import { hasHeldSendUnloadGuard } from "./heldSendUnloadGuard";
+
 // Split chunks are fetched lazily, so a deploy (or desktop server swap)
 // between page load and a later fetch can 404 the old hashed assets. One
 // reload picks up the fresh index.html. A sessionStorage flag keeps a
@@ -14,6 +16,7 @@ export function reloadOnceForChunkLoadError(
   getStorage: () => Storage = () => window.sessionStorage,
   reload: () => void = () => window.location.reload(),
 ): boolean {
+  if (hasHeldSendUnloadGuard()) return false;
   let alreadyReloaded: boolean;
   try {
     const storage = getStorage();
