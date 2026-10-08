@@ -71,6 +71,8 @@ export function QueuedRunsControl({
   const reorder = useAtomCommand(threadEnvironment.reorderQueuedRun);
   const promote = useAtomCommand(threadEnvironment.promoteQueuedRun);
   const cancel = useAtomCommand(threadEnvironment.cancelQueuedRun);
+  const resumeQueue = useAtomCommand(threadEnvironment.resumeThreadQueue);
+  const [resuming, setResuming] = useState(false);
   const [expanded, setExpanded] = useState(true);
   const queueListId = useId();
   const [busyRunId, setBusyRunId] = useState<RunId | null>(null);
@@ -229,7 +231,21 @@ export function QueuedRunsControl({
     },
   }));
 
-  if (items.length === 0) return null;
+  // A held queue stays visible even when every held run is a completion notice with no row.
+  const canResume = workflow?.canResume === true;
+  if (items.length === 0 && !canResume) return null;
+
+  const resume = async () => {
+    setResuming(true);
+    try {
+      await resumeQueue({
+        environmentId: props.environmentId,
+        input: { threadId: props.threadId },
+      });
+    } finally {
+      setResuming(false);
+    }
+  };
 
   const remove = async (runId: RunId) => {
     setBusyRunId(runId);
@@ -269,6 +285,18 @@ export function QueuedRunsControl({
             <ComposerBanner.ToggleIcon expanded={expanded} />
           </ComposerBanner.Actions>
         </ComposerBanner.Row>
+        {canResume ? (
+          <ComposerBanner.Row>
+            <ComposerBanner.Content className="text-muted-foreground">
+              Queue held after restart
+            </ComposerBanner.Content>
+            <ComposerBanner.Actions>
+              <Button size="xs" variant="outline" disabled={resuming} onClick={() => void resume()}>
+                Resume
+              </Button>
+            </ComposerBanner.Actions>
+          </ComposerBanner.Row>
+        ) : null}
         <ComposerBanner.Scroll className={cn("max-h-32", !expanded && "hidden")}>
           <ComposerBanner.Children render={<ol />} id={queueListId}>
             {items.map((item) => {
