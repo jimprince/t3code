@@ -1,6 +1,6 @@
 Bottom: b09dfb92cd8378c6b360a4168e6e0464f4bc95f4
 Top:    d0a1f5dff4fbb9e9412c045e1c7efe725e2773f2
 Author: brad <bradprin@live.com>
-Date:   2026-10-08 20:17:42 +0000
+Date:   2026-10-08 20:18:19 +0000
 
-feat(threads): recover native lifecycle and retain clients through disconnects
+fix(threads): recover thread and client state after disruptions
