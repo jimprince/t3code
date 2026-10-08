@@ -1,10 +1,8 @@
 import {
   buildOrchestratorSummaries,
-  orchestratorDoneSince,
   type OrchestratorSummary,
 } from "@t3tools/client-runtime/state/orchestrators";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -47,7 +45,7 @@ import { buildThreadRouteParams } from "../../threadRoutes";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
 import ChatView from "../ChatView";
 import { ProjectFavicon } from "../ProjectFavicon";
-import { Button, InlineButton } from "../ui/button";
+import { Button } from "../ui/button";
 import { Dialog, DialogFooter, DialogHeader, DialogPopup, DialogTitle } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
@@ -75,10 +73,8 @@ import {
   ProjectRequestsSection,
   useNeedsYou,
   useOpenThread,
-  useProjectRequests,
   useSettle,
   useTaskStatuses,
-  WorkerRequestTag,
 } from "./ProjectRequestsSection";
 import { ProjectLayoutTabView, TAB_DRAG_TYPE, WIDGET_DRAG_TYPE } from "./ProjectLayoutView";
 import { ProjectRoadmapWidget, SaveForLater } from "./ProjectRoadmapWidget";
@@ -86,15 +82,9 @@ import { ProjectPullRequestsWidget } from "./ProjectPullRequestsWidget";
 import { ProjectRequestBox } from "./ProjectRequestBox";
 import { ProjectSection } from "./ProjectSection";
 import { ProjectIssuesSummary, ProjectRoadmapSummary } from "./ProjectTabSummaries";
-import { formatIssueAge } from "./projectIssuesBoard.logic";
 import { resolveProjectTab, type ProjectTab } from "./projectTabs.logic";
 import { HEALTH_LABEL, isHealthStale, latestWorkChangeAt } from "./projectHealth.logic";
-import {
-  deriveBlocked,
-  deriveWorkingNow,
-  type BlockedRow,
-  type WorkingRow,
-} from "./projectWork.logic";
+import { deriveBlocked, type BlockedRow } from "./projectWork.logic";
 import { projectReturnState } from "./projectNavigation";
 
 /**
@@ -293,6 +283,9 @@ function NeedsYouCount({ summary }: { readonly summary: OrchestratorSummary }) {
 }
 
 /** What is stuck on the project, derived from threads and tasks; the same rows feed the widget and the status line. */
+/** Without a recorded visit, "since your last visit" means the last day. */
+const FIRST_VISIT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 function useBlockedRows(summary: OrchestratorSummary): BlockedRow[] {
   const { statuses, query } = useTaskStatuses(summary);
   const now = query.dataUpdatedAt ?? 0;
@@ -310,56 +303,17 @@ function useBlockedRows(summary: OrchestratorSummary): BlockedRow[] {
   );
 }
 
-/** "N blocked" in the status line: the same count as the Blocked widget. */
+/** "N blocked" in the status line: the blocked tags and notes under Workstreams, counted. */
 function BlockedCount({ summary }: { readonly summary: OrchestratorSummary }) {
   const count = useBlockedRows(summary).length;
   return count > 0 ? <span className="text-error">{count} blocked</span> : null;
 }
 
-/** Stuck work with its cause, owner and next step; hidden when nothing is stuck. */
-function ProjectBlockedWidget({ summary }: { readonly summary: OrchestratorSummary }) {
-  const rows = useBlockedRows(summary);
-  const openThread = useOpenThread(summary);
-  if (rows.length === 0) return null;
-  return (
-    <ProjectSection title="Blocked" count={rows.length}>
-      <ul className="divide-y divide-border">
-        {rows.map((row) => (
-          <ClickableRow
-            key={row.key}
-            label={`Open ${row.owner?.title ?? row.title}`}
-            onOpen={row.owner ? () => openThread(row.owner!.id) : null}
-            className="items-start py-1.5"
-          >
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm">{row.title}</span>
-              <span className="block text-xs text-muted-foreground">
-                <span className="text-error">{row.cause}</span>
-                {/* The owner only when it says more than the title. */}
-                {row.owner && row.owner.title !== row.title ? ` · ${row.owner.title}` : ""}
-                {row.next ? ` · next: ${row.next}` : ""}
-              </span>
-            </span>
-            {row.action ? (
-              <Button
-                size="xs"
-                variant="outline"
-                render={<a href={row.action.url} target="_blank" rel="noopener noreferrer" />}
-              >
-                {row.action.label}
-              </Button>
-            ) : null}
-          </ClickableRow>
-        ))}
-      </ul>
-    </ProjectSection>
-  );
-}
-
 /**
- * The Dashboard's Workstreams block: each active epic as a band of its tasks
- * (see WorkstreamBands), with what changed since Brad's previous visit. Hidden
- * while no epic has work left.
+ * The Dashboard's Workstreams block: each active epic with the threads working on
+ * it, and Other threads for sub-agents outside any workstream (see WorkstreamBands),
+ * with what changed since Brad's previous visit, or the last day when there is none.
+ * Hidden while there is nothing to show.
  */
 function ProjectWorkstreams({
   summary,
@@ -369,12 +323,18 @@ function ProjectWorkstreams({
   readonly since: string | null;
 }) {
   const tasks = useTaskStatuses(summary);
-  const workstreams = useWorkstreamBands(summary, tasks, since);
+  const [firstVisitSince] = useState(() => new Date(Date.now() - FIRST_VISIT_WINDOW_MS).toISOString());
+  const workstreams = useWorkstreamBands(summary, tasks, since ?? firstVisitSince);
   const bands = useMemo(
-    () => workstreams.bands.filter((band) => band.epic !== null && band.rows.length > 0),
-    [workstreams.bands],
+    () =>
+      workstreams.bands.filter(
+        (band) =>
+          band.epic !== null &&
+          (band.rows.length > 0 || (workstreams.threads.byBand.get(band.key)?.length ?? 0) > 0),
+      ),
+    [workstreams.bands, workstreams.threads.byBand],
   );
-  if (bands.length === 0) return null;
+  if (bands.length === 0 && workstreams.threads.other.length === 0) return null;
   return (
     <ProjectSection title="Workstreams" count={bands.length}>
       <WorkstreamBands summary={summary} workstreams={workstreams} bands={bands} compact />
@@ -382,122 +342,8 @@ function ProjectWorkstreams({
   );
 }
 
-/** Who is working on what: one outcome row per worker, opening its thread. */
-function ProjectWorkingWidget({ summary }: { readonly summary: OrchestratorSummary }) {
-  const { query, requests } = useProjectRequests(summary);
-  const openThread = useOpenThread(summary);
-  const rows: WorkingRow[] = useMemo(
-    () => deriveWorkingNow(summary.working, query.data?.issues ?? [], requests),
-    [query.data, requests, summary.working],
-  );
-  if (rows.length === 0) return null;
-  return (
-    <ProjectSection title="Working now" count={rows.length}>
-      <ul className="divide-y divide-border">
-        {rows.map((row) => (
-          <ClickableRow
-            key={row.key}
-            label={`Open ${row.worker ?? row.title}`}
-            onOpen={() => openThread(row.threadId)}
-            className="items-start py-1.5"
-          >
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm">
-                {row.title}
-                <span className="text-muted-foreground">
-                  {row.next ? ` · next: ${row.next}` : ""}
-                  {row.worker && row.worker !== row.title ? ` · ${row.worker}` : ""}
-                </span>
-              </span>
-              {row.forRequests.length > 0 ? (
-                <span className="block text-xs text-muted-foreground">
-                  for: {row.forRequests.join(" · ")}
-                </span>
-              ) : null}
-            </span>
-          </ClickableRow>
-        ))}
-      </ul>
-    </ProjectSection>
-  );
-}
-
-/** A worker row (Done) that opens its thread when clicked. */
-function WorkerRow({
-  summary,
-  thread,
-  trailing,
-}: {
-  readonly summary: OrchestratorSummary;
-  readonly thread: EnvironmentThreadShell;
-  readonly trailing: ReactNode;
-}) {
-  const openThread = useOpenThread(summary);
-  return (
-    <ClickableRow
-      label={`Open ${thread.title}`}
-      onOpen={() => openThread(thread.id)}
-      className="items-start py-1.5"
-    >
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm">{thread.title}</span>
-        <WorkerRequestTag summary={summary} threadId={thread.id} />
-      </span>
-      {trailing}
-    </ClickableRow>
-  );
-}
-
-/** Rows "Done since your last visit" shows before "Show all". */
-const DONE_PREVIEW = 5;
-/** Without a recorded visit, "since your last visit" means the last day. */
-const FIRST_VISIT_WINDOW_MS = 24 * 60 * 60 * 1000;
-
-/** Workers that finished since Brad last opened the page, newest first; hidden when none did. */
-function ProjectDoneWidget({
-  summary,
-  done,
-}: {
-  readonly summary: OrchestratorSummary;
-  readonly done: ReturnType<typeof orchestratorDoneSince>;
-}) {
-  const [showAll, setShowAll] = useState(false);
-  const [now] = useState(() => Date.now());
-  if (done.length === 0) return null;
-  const shown = showAll ? done : done.slice(0, DONE_PREVIEW);
-  return (
-    <ProjectSection title="Done since your last visit" count={done.length}>
-      <ul className="divide-y divide-border">
-        {shown.map((item) => (
-          <WorkerRow
-            key={item.thread.id}
-            summary={summary}
-            thread={item.thread}
-            trailing={
-              <time
-                className="w-8 shrink-0 pt-px text-right text-xs tabular-nums text-muted-foreground"
-                dateTime={item.completedAt}
-              >
-                {formatIssueAge(item.completedAt, now)}
-              </time>
-            }
-          />
-        ))}
-      </ul>
-      {done.length > DONE_PREVIEW ? (
-        <p className="mt-1 text-xs">
-          <InlineButton tone="muted" onClick={() => setShowAll((value) => !value)}>
-            {showAll ? "Show fewer" : `Show all ${done.length}`}
-          </InlineButton>
-        </p>
-      ) : null}
-    </ProjectSection>
-  );
-}
-
 interface BoardPage {
   readonly summary: OrchestratorSummary;
-  readonly done: ReturnType<typeof orchestratorDoneSince>;
   readonly selectTab: (tab: ProjectTab) => void;
   readonly roadmapTab: string | null;
   readonly tasksTab: string | null;
@@ -517,7 +363,6 @@ function BuiltinWidget({
 }) {
   const {
     summary,
-    done,
     selectTab,
     roadmapTab,
     tasksTab,
@@ -563,12 +408,11 @@ function BuiltinWidget({
       return <ProjectDecisionsWidget summary={summary} />;
     case "needs-you":
       return <ProjectNeedsYouWidget summary={summary} />;
+    // Retired for the threads under each workstream; the layout still accepts the ids.
     case "working":
-      return <ProjectWorkingWidget summary={summary} />;
     case "blocked":
-      return <ProjectBlockedWidget summary={summary} />;
     case "done":
-      return <ProjectDoneWidget summary={summary} done={done} />;
+      return null;
     case "composer":
       return (
         <ProjectSection title="New request">
@@ -758,7 +602,6 @@ export function OrchestratorBoard({
       ) ?? null,
     [environmentId, projects, threadId, threads],
   );
-  const [openedAt] = useState(() => Date.now());
   const previousVisit = useMemo(
     () =>
       readOrchestratorLastVisit(
@@ -767,16 +610,6 @@ export function OrchestratorBoard({
         threadId,
       ),
     [environmentId, threadId],
-  );
-  const done = useMemo(
-    () =>
-      summary === null
-        ? []
-        : orchestratorDoneSince(
-            summary,
-            previousVisit ?? new Date(openedAt - FIRST_VISIT_WINDOW_MS).toISOString(),
-          ),
-    [openedAt, previousVisit, summary],
   );
 
   useEffect(() => {
@@ -866,7 +699,6 @@ export function OrchestratorBoard({
   const tasksTab = tabWith("issues-board");
   const page: BoardPage = {
     summary,
-    done,
     selectTab,
     roadmapTab,
     tasksTab,
