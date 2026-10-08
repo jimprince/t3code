@@ -1,5 +1,6 @@
 import {
   approvalChoices,
+  approvalTitle,
   oneTapQuestion,
   questionAnswers,
 } from "@t3tools/client-runtime/decision-ask";
@@ -265,9 +266,11 @@ function ApprovalBody({
               </Button>
             ))
           : null}
-        <InlineButton tone="muted" onClick={() => actions.openThread(ask.threadId)}>
-          Open thread
-        </InlineButton>
+        <span className="text-xs">
+          <InlineButton tone="muted" onClick={() => actions.openThread(ask.threadId)}>
+            Open thread
+          </InlineButton>
+        </span>
       </span>
       {ask.canRespond ? null : (
         <span className="text-xs text-muted-foreground">
@@ -637,11 +640,7 @@ function CardTitle({ card }: { readonly card: DecisionFeedCard }) {
     );
   }
   if (card.kind === "approval") {
-    return (
-      <span className="text-sm">
-        {card.ask.detail?.split("\n")[0]?.slice(0, 160) || `${card.ask.threadTitle} needs approval`}
-      </span>
-    );
+    return <span className="text-sm">{approvalTitle(card.ask)}</span>;
   }
   if (card.kind === "plan") {
     return <span className="text-sm">{card.plan.title}: plan ready for review</span>;
