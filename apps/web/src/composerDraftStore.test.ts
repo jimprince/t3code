@@ -1300,6 +1300,31 @@ describe("composerDraftStore project draft thread mapping", () => {
     }
   });
 
+  it("preserves a task issue through draft updates and persistence and allows explicit clearing", () => {
+    const store = useComposerDraftStore.getState();
+    store.setProjectDraftThreadId(projectRef, draftId, { threadId, issue: " brad/tasks#7 " });
+    expect(useComposerDraftStore.getState().getDraftThread(draftId)?.issue).toBe("brad/tasks#7");
+    store.setDraftThreadContext(draftId, { branch: "feature" });
+    expect(useComposerDraftStore.getState().getDraftThread(draftId)?.issue).toBe("brad/tasks#7");
+    const persistApi = useComposerDraftStore.persist as unknown as {
+      getOptions: () => {
+        merge: (
+          persisted: unknown,
+          current: ReturnType<typeof useComposerDraftStore.getState>,
+        ) => ReturnType<typeof useComposerDraftStore.getState>;
+      };
+    };
+    const state = useComposerDraftStore.getState();
+    const restored = persistApi
+      .getOptions()
+      .merge(JSON.parse(JSON.stringify(partializeComposerDraftStoreState(state))), state);
+    expect(Object.values(restored.draftThreadsByThreadKey)[0]?.issue).toBe("brad/tasks#7");
+    store.setDraftThreadContext(draftId, { issue: "brad/tasks#8" });
+    expect(useComposerDraftStore.getState().getDraftThread(draftId)?.issue).toBe("brad/tasks#8");
+    store.setDraftThreadContext(draftId, { issue: null });
+    expect(useComposerDraftStore.getState().getDraftThread(draftId)?.issue).toBeUndefined();
+  });
+
   it("stores and reads project draft thread ids via actions", () => {
     const store = useComposerDraftStore.getState();
     expect(store.getDraftThreadByProjectRef(projectRef)).toBeNull();
