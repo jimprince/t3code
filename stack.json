@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "3f0a36adea69f775a618301a0e424d8cedf749a0",
-  "head": "a5b2f65286ea283eb4229b36e850023d22ffe80f",
+  "prev": "89e9457962788f23e9c281a1f142ca7450541fcc",
+  "head": "0844ec5f1dc88542f031f4cbdc69e8ea9570c5c6",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -135,8 +135,7 @@
     "fork-decisions-feed-context",
     "fork-decisions-feed-model",
     "fork-decisions-feed-ui",
-    "fork-decisions-feed-mobile",
-    "refresh-temp"
+    "fork-decisions-feed-mobile"
   ],
   "unapplied": [],
   "hidden": [],
@@ -223,7 +222,7 @@
       "oid": "9c5c2d0a107e3fbe56ac3befbfdc8d34a80e9ca1"
     },
     "fork-dash-layout-retire": {
-      "oid": "0266743e7ad8f37fea81541e31422495f1ff8638"
+      "oid": "0cbd1da50ccbf3161b3c3494589f5e3637d62cb2"
     },
     "fork-dashboard-polish": {
       "oid": "d39cdf2684564f1a2bdde12e27f1ce6301e41e77"
@@ -238,19 +237,19 @@
       "oid": "a0a612f33ce35e92a0da9fdcb4cc6ab4db4e36f8"
     },
     "fork-decisions-feed-context": {
-      "oid": "098050bd9bb4d35124868abb5e65445c157cce72"
+      "oid": "2c17a90f27a680ab3400c7a5f4a20b5b39e24bbc"
     },
     "fork-decisions-feed-mobile": {
-      "oid": "89a519b7f53d51569b8ca60353fc4fcb7450c2bb"
+      "oid": "0844ec5f1dc88542f031f4cbdc69e8ea9570c5c6"
     },
     "fork-decisions-feed-model": {
-      "oid": "9e590760f3543180f6236c1b101b2fccd2110d72"
+      "oid": "f57b205869f7ffe57304736f6831d0eb53752a58"
     },
     "fork-decisions-feed-server": {
       "oid": "a56f3e1cfe4bc4114a8b918e26702adec42d87a4"
     },
     "fork-decisions-feed-ui": {
-      "oid": "16d55ad00ddef2fbdc5e381c8d2888d48cf6f87a"
+      "oid": "6065b0e995a07652cf2b363620fe053ab235d59d"
     },
     "fork-decisions-other": {
       "oid": "cecdb0cced35705059483b9574c3fb1ebd65f7b4"
@@ -412,7 +411,7 @@
       "oid": "c8a82dd5ddf825824888673577e3abf5e249a3ef"
     },
     "fork-publish-task-plan": {
-      "oid": "e294bbbc17ba88ca8e59f8a5897bf84968076c2c"
+      "oid": "c5043eb7724999cf08d7386c174f358ac206601d"
     },
     "fork-queue-coalesced-notes": {
       "oid": "a89da59843d0130bc53a22ce888466f1a20a5ab4"
@@ -539,9 +538,6 @@
     },
     "fork-worktree-cleanup": {
       "oid": "724f2028c8ed8a02ac1a7de1a26f0a66a3bc1b65"
-    },
-    "refresh-temp": {
-      "oid": "a5b2f65286ea283eb4229b36e850023d22ffe80f"
     }
   }
 }
