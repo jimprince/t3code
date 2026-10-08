@@ -169,6 +169,10 @@ it.effect("seeks the thread for legacy event probes, counts, pages and transfer 
       (2002, 'thread', 'target', 2, 'native'),
       (2003, 'thread', 'target', 1, 'second'),
       (2004, 'project', 'target', 1, 'project')`;
+    const baseline = yield* sql<{ detail: string }>`EXPLAIN QUERY PLAN
+      SELECT 1 FROM orchestration_events
+      WHERE stream_id = 'absent' AND application_event_version = 1 LIMIT 1`;
+    assert.isTrue(baseline.some(({ detail }) => detail.includes("application_event_version=?")));
     let eventReads = 0;
     const bounded = {
       unsafe: ((statement: string, params?: ReadonlyArray<string | number>) =>
@@ -182,6 +186,17 @@ it.effect("seeks the thread for legacy event probes, counts, pages and transfer 
               plan.map((row) => row.detail).join("\n"),
               /stream_id=\?/,
               "legacy event reads must seek the thread instead of scanning all V1 events",
+            );
+            const details = plan.map((row) => row.detail).join("\n");
+            assert.notInclude(
+              details,
+              "SCAN",
+              "an empty thread must not scan unrelated legacy history",
+            );
+            assert.notInclude(
+              details,
+              "TEMP B-TREE",
+              "pages must use the stream index's sequence order",
             );
             eventReads++;
           }
@@ -211,4 +226,26 @@ it.effect("seeks the thread for legacy event probes, counts, pages and transfer 
     );
     assert.isAtLeast(eventReads, 6);
   }).pipe(Effect.provide(SqlitePersistenceMemory)),
+);
+
+it.effect("reads pre-version and sparse retained event schemas", () =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    yield* sql`CREATE TABLE orchestration_events (sequence INTEGER PRIMARY KEY, stream_id TEXT, payload_json TEXT)`;
+    yield* sql`INSERT INTO orchestration_events VALUES (1, 'old', 'retained')`;
+    const history = yield* openHistory(sql, "old", {}, historySections({}));
+    assert.deepStrictEqual((yield* history.page("events", 0, 10)).records, [
+      { sequence: 1, stream_id: "old", payload_json: "retained" },
+    ]);
+    assert.deepStrictEqual((yield* readForkHistory(sql, ThreadId.make("old"))).legacyEvents, [
+      { sequence: 1, stream_id: "old", payload_json: "retained" },
+    ]);
+    yield* sql`ALTER TABLE orchestration_events ADD COLUMN aggregate_kind TEXT DEFAULT 'thread'`;
+    const sparse = yield* openHistory(sql, "old", {}, historySections({}));
+    assert.equal((yield* sparse.page("events", 0, 10)).records.length, 1);
+    assert.equal(
+      ((yield* readForkHistory(sql, ThreadId.make("old"))).legacyEvents as unknown[]).length,
+      1,
+    );
+  }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
 );
