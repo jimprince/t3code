@@ -230,6 +230,7 @@ export async function refreshAccessToken(input: {
   signal?: AbortSignal;
 }): Promise<AuthSessionRefreshResult> {
   return fetchRemoteJson<AuthSessionRefreshResult>({
+    signal: input.signal,
     httpBaseUrl: input.httpBaseUrl,
     pathname: "/api/auth/session/refresh",
     method: "POST",
