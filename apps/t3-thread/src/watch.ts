@@ -11,6 +11,8 @@ import { observeInactivity, inactivityStillCurrent } from "./inactivity.js";
 import { withInputReminder, inputNotificationStillCurrent } from "./inputReminders.js";
 import { notificationOrigin } from "./focusNotifications.js";
 import * as NodeCrypto from "node:crypto";
+import { sendOutcomeFailure, sendOutcomeHeld, sendTransportCause } from "./sendIntents.js";
+import type { HandoffLookupInput, HandoffLookupResult } from "@t3tools/contracts";
 
 import { RemoteEnvironmentClient } from "./client.js";
 import { buildAgentOverview, getLatestTurnAssistantMessage, needsAttention } from "./monitor.js";
@@ -103,8 +105,10 @@ function isNotificationReply(thread: OrchestrationThread): boolean {
 export interface WatchClient {
   listThreads?(): Promise<OrchestrationThreadShell[]>;
   findThread(threadId: string): Promise<OrchestrationThread>;
-  /** Result is unused here; `RemoteEnvironmentClient.sendMessage` reports dispatch vs queue. */
+  supportsReliableHandoffs?(): Promise<boolean>;
+  lookupSendReceipt?(input: HandoffLookupInput): Promise<HandoffLookupResult>;
   sendMessage(input: {
+    commandId?: string;
     threadId: string;
     text: string;
     queueWhileRunning?: boolean;
@@ -952,14 +956,14 @@ export async function claimPendingNotifications(
     now?: () => string;
     claimTimeoutMs?: number;
   } = {},
-): Promise<SavedNotification[]> {
+): Promise<Array<SavedNotification & { receiptRecovery?: boolean }>> {
   const now = options.now ?? nowIso;
   const claimTimeoutMs = options.claimTimeoutMs ?? DELIVERY_CLAIM_TIMEOUT_MS;
   const claimedAt = now();
   const claimedAtMs = Date.parse(claimedAt);
 
   return updateState(async (state) => {
-    const claimed: SavedNotification[] = [];
+    const claimed: Array<SavedNotification & { receiptRecovery?: boolean }> = [];
     // Oldest event first, and at most one per recipient: delivering a
     // notification starts a turn on the recipient, so a second one in the same
     // pass would only find it busy. Ordering is by creation, then event key, so
@@ -1000,6 +1004,7 @@ export async function claimPendingNotifications(
       claimed.push({
         ...notification,
         status: "delivering",
+        ...(notification.status === "delivering" ? { receiptRecovery: true } : {}),
         updatedAt: claimedAt,
         lastAttemptedAt: claimedAt,
         lastError: null,
@@ -1079,6 +1084,7 @@ export async function deliverPendingNotifications(
     const attemptedAt = now();
     const attemptedAtMs = Date.parse(attemptedAt);
     let result: SavedNotification;
+    let transportAttempted = false;
 
     /** A route that can never succeed again. Stops retrying and releases the watcher. */
     const terminal = (reason: string): SavedNotification => ({
@@ -1268,6 +1274,8 @@ export async function deliverPendingNotifications(
         }
         const subscriberClient = clientFactory(subscriberEnvironment);
         const subscriberThread = await subscriberClient.findThread(notification.subscriberThreadId);
+        const reliable =
+          (await subscriberClient.supportsReliableHandoffs?.().catch(() => false)) ?? false;
         const subscriberStatus = classifyThread(subscriberThread);
         const quota = threadQuotaBlock(subscriberThread);
 
@@ -1275,7 +1283,7 @@ export async function deliverPendingNotifications(
           result = terminal(
             `Subscriber thread '${notification.subscriberThreadId}' is archived and can no longer be notified.`,
           );
-        } else if (subscriberThread.settledOverride === "settled" && !notification.isChildInput) {
+        } else if (subscriberThread.settledOverride === "settled") {
           // Delivery starts a turn, and the server unsettles a thread on any
           // turn. Hold the event until the user unsettles the recipient.
           result = {
@@ -1298,7 +1306,7 @@ export async function deliverPendingNotifications(
             quotaResetAt: quota.resetsAt === null ? null : new Date(quota.resetsAt).toISOString(),
             nextAttemptAt: new Date(attemptedAtMs + SETTLED_RECIPIENT_RECHECK_MS).toISOString(),
           };
-        } else if (["running", "starting"].includes(subscriberStatus.state)) {
+        } else if (!reliable && ["running", "starting"].includes(subscriberStatus.state)) {
           // Expected, not a failure: hold the event and re-offer it shortly.
           // The attempt budget is reserved for real delivery errors.
           result = {
@@ -1325,20 +1333,39 @@ export async function deliverPendingNotifications(
               candidate.subscriberThreadId === notification.subscriberThreadId &&
               candidate.onboardingDelivered === true,
           );
-          await subscriberClient.sendMessage({
+          const sendId = notification.sendId ?? `notification:${notification.id}`;
+          // Persist the identity in the claimed record before entering transport.
+          await updateState(async (state) => ({
+            state: {
+              ...state,
+              notifications: state.notifications.map((event) =>
+                event.id === notification.id &&
+                event.deliveryClaimId === notification.deliveryClaimId
+                  ? { ...event, sendId }
+                  : event,
+              ),
+            },
+            result: undefined,
+          }));
+          transportAttempted = true;
+          const outcome = await subscriberClient.sendMessage({
+            commandId: sendId,
             threadId: notification.subscriberThreadId,
             text: buildNotificationMessage(notification, includeOnboarding),
             origin: notificationOrigin(notification),
-            queueWhileRunning: false,
+            queueWhileRunning: true,
           });
+          const failure = sendOutcomeFailure(outcome);
+          const held = sendOutcomeHeld(outcome);
           result = {
             ...notification,
-            status: "delivered",
-            onboardingDelivered: includeOnboarding,
+            sendId,
+            status: failure ? failure.status : held ? "uncertain" : "delivered",
+            onboardingDelivered: !failure && !held && includeOnboarding,
             updatedAt: attemptedAt,
-            deliveredAt: attemptedAt,
+            deliveredAt: failure || held ? null : attemptedAt,
             lastAttemptedAt: attemptedAt,
-            lastError: null,
+            lastError: failure?.causeCode ?? (held ? "SETTLED" : null),
             nextAttemptAt: null,
           };
         }
@@ -1346,8 +1373,16 @@ export async function deliverPendingNotifications(
     } catch (error) {
       const attempts = (notification.attempts ?? 0) + 1;
       const message = error instanceof Error ? error.message : String(error);
-      result =
-        attempts >= maxAttempts
+      result = transportAttempted
+        ? {
+            ...notification,
+            sendId: notification.sendId ?? `notification:${notification.id}`,
+            status: "uncertain",
+            updatedAt: attemptedAt,
+            lastError: sendTransportCause(error),
+            nextAttemptAt: null,
+          }
+        : attempts >= maxAttempts
           ? {
               ...terminal(`${message} (gave up after ${attempts} attempts)`),
               attempts,
