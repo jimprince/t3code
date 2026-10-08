@@ -16,6 +16,7 @@ import type { UploadedMobileAttachment } from "./attachmentUpload";
 
 export interface ProjectThreadStartTurnSpec {
   readonly projectId: ProjectId;
+  readonly issue?: string;
   readonly projectCwd: string;
   readonly threadId: string;
   readonly commandId: string;
@@ -48,6 +49,7 @@ export function buildProjectThreadStartTurnInput(spec: ProjectThreadStartTurnSpe
     commandId: CommandId.make(spec.commandId),
     creationSource: "mobile" as const,
     threadId: ThreadId.make(spec.threadId),
+    ...(spec.issue === undefined ? {} : { issue: spec.issue }),
     message: {
       messageId: MessageId.make(spec.messageId),
       role: "user" as const,
