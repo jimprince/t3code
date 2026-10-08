@@ -1,4 +1,5 @@
 import { SessionReconcileInput, SessionReconcileError } from "./sessionReconcile.ts";
+import { HandoffRpcs } from "./handoffs.ts";
 import { LegacyHistoryRpc } from "./forkLegacyHistory.ts";
 import { ThreadTransferRpcs } from "./threadTransfer.ts";
 import { ForkConversationRpc } from "./forkConversation.ts";
@@ -2408,6 +2409,7 @@ export const WsSessionReconcileRpc = Rpc.make("fork.session.reconcile", {
 });
 
 export const WsForkRpcGroup = RpcGroup.make(
+  ...HandoffRpcs,
   WsProjectRequestsDiscussRpc,
   WsSessionReconcileRpc,
   ForkConversationRpc,
