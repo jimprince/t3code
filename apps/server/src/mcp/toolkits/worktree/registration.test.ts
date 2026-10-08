@@ -1,3 +1,4 @@
+import { ThreadLaunchService } from "../../../orchestration-v2/ThreadLaunchService.ts";
 import * as Orchestrator from "../../../orchestration-v2/Orchestrator.ts";
 import * as ProjectionStore from "../../../orchestration-v2/ProjectionStore.ts";
 import * as DeviceService from "../../../device/DeviceService.ts";
@@ -39,6 +40,7 @@ import * as PreviewBrowser from "../../../preview/PreviewBrowser.ts";
 const layerStubServices = Layer.mergeAll(
   SqlitePersistence.layerMemory,
   Layer.mock(Orchestrator.OrchestratorV2)({}),
+  Layer.mock(ThreadLaunchService)({}),
   Layer.mock(ProjectionStore.ProjectionStoreV2)({}),
   Layer.mock(DeviceService.DeviceService)({}),
   Layer.mock(ThreadManagementService.ThreadManagementService)({}),
@@ -139,6 +141,7 @@ it.effect("production mcp layer lists worktree tools over http", () =>
       const payload = yield* decodeToolsListPayload(bodyText.match(/\{.*\}/s)![0]);
       const tools = payload.result.tools;
       const toolNames = tools.map((tool) => tool.name);
+      expect(toolNames).toContain("t3_plan_publish");
       expect(toolNames).toContain("t3_worktree_handoff");
       expect(toolNames).toContain("t3_worktree_status");
       // The worktree registration merges alongside the other toolkits rather
