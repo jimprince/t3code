@@ -1,3 +1,4 @@
+import { GiteaTokenSetInput, GiteaTokenSetResult, GiteaTokenSetError } from "./giteaToken.ts";
 import { SessionReconcileInput, SessionReconcileError } from "./sessionReconcile.ts";
 import { HandoffRpcs } from "./handoffs.ts";
 import { LegacyHistoryRpc } from "./forkLegacyHistory.ts";
@@ -584,6 +585,7 @@ export const WS_METHODS = {
   serverRemoveKeybinding: "server.removeKeybinding",
   serverGetSettings: "server.getSettings",
   serverUpdateSettings: "server.updateSettings",
+  giteaSetToken: "sourceControl.gitea.setToken",
   serverDiscoverSourceControl: "server.discoverSourceControl",
   serverSearchAcpRegistry: "server.searchAcpRegistry",
   serverPrepareAcpRegistryAgent: "server.prepareAcpRegistryAgent",
@@ -884,6 +886,12 @@ const WsServerUpdateSettingsRpc = Rpc.make(WS_METHODS.serverUpdateSettings, {
   }),
   success: ServerSettings,
   error: Schema.Union([ServerSettingsError, EnvironmentAuthorizationError]),
+});
+
+const WsGiteaSetTokenRpc = Rpc.make(WS_METHODS.giteaSetToken, {
+  payload: GiteaTokenSetInput,
+  success: GiteaTokenSetResult,
+  error: Schema.Union([GiteaTokenSetError, EnvironmentAuthorizationError]),
 });
 
 const WsServerDiscoverSourceControlRpc = Rpc.make(WS_METHODS.serverDiscoverSourceControl, {
@@ -2376,6 +2384,7 @@ export const WsSessionReconcileRpc = Rpc.make("fork.session.reconcile", {
 // group's toHandlers type hits TS2589 and the server's handler-service types resolve to any in R.
 export const WsForkRpcGroup = RpcGroup.make(
   ...HandoffRpcs,
+  WsGiteaSetTokenRpc,
   WsProjectRequestsDiscussRpc,
   WsSessionReconcileRpc,
   WsAutomationsListRpc,
