@@ -422,7 +422,8 @@
     "./fork/thread-transfer": {
       "types": "./src/fork/threadTransfer.ts",
       "default": "./src/fork/threadTransfer.ts"
-    }
+    },
+    "./notification-eligibility": "./src/notificationEligibility.ts"
   },
   "scripts": {
     "typecheck": "node ../../scripts/ci/heavy-gate.ts tsc --noEmit",
