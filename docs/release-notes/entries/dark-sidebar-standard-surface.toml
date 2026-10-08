@@ -1,0 +1,4 @@
+id = "dark-sidebar-standard-surface"
+category = "fix"
+functionality = "web sidebar"
+text = "The dark sidebar, including the mobile drawer, uses the app's normal dark surface instead of pure black."
