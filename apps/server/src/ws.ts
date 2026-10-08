@@ -255,6 +255,7 @@ import { makeHandoffService } from "./forkThreads/HandoffService.ts";
 import * as PullRequestSyncReactor from "./orchestration-v2/PullRequestSyncReactor.ts";
 import * as ProjectIssuesService from "./projectIssues/ProjectIssuesService.ts";
 import * as RequestLedger from "./projectIssues/RequestLedger.ts";
+import * as DecisionFeed from "./projectIssues/DecisionFeed.ts";
 import * as ProjectDashboardService from "./projectDashboard/ProjectDashboardService.ts";
 import * as ProjectDashboardStore from "./projectDashboard/ProjectDashboardStore.ts";
 import * as ProjectLayoutService from "./projectLayout/ProjectLayoutService.ts";
@@ -1359,6 +1360,7 @@ const layerWsRpc = (
       const withPullRequestViewer = pullRequests.withRoutingCredential;
       const projectIssues = yield* ProjectIssuesService.make;
       const requestLedger = yield* RequestLedger.make({ projectIssues, threadIssues });
+      const decisionFeed = yield* DecisionFeed.make({ projectIssues, ledger: requestLedger });
       const projectCanvas = yield* ProjectCanvasService.make;
       const requestIntake = yield* RequestIntake.make({
         providers: providerRegistry,
@@ -2536,7 +2538,7 @@ const layerWsRpc = (
                 Effect.forkScoped,
               ),
           ),
-        [WS_METHODS.projectIssuesList]: (input) => projectIssues.list(input).pipe(Effect.flatMap((result) => requestLedger.decorate(result, input.rootThreadId))),
+        [WS_METHODS.projectIssuesList]: (input) => projectIssues.list(input).pipe(Effect.flatMap((result) => requestLedger.decorate(result, input.rootThreadId)), Effect.flatMap((result) => decisionFeed.enrich(result, input.rootThreadId))),
         [WS_METHODS.projectRequestsSettle]: (input) => requestLedger.settle(input),
         [WS_METHODS.projectRequestsCreate]: (input) => requestLedger.create(input),
         [WS_METHODS.projectRequestsUpdate]: (input) => requestLedger.update(input),
@@ -3262,6 +3264,14 @@ const layerWsRpc = (
           projectLayout.stream(input.threadId),
         [WS_METHODS.projectRequestsDiscuss]: (input) =>
           requestLedger.discuss(input),
+        [WS_METHODS.projectRequestsPendingAsks]: (input) =>
+          decisionFeed.pendingAsks(input),
+        [WS_METHODS.projectRequestsApproveMerge]: (input) =>
+          decisionFeed.approveAndMerge(input),
+        [WS_METHODS.projectRequestsSendBack]: (input) =>
+          decisionFeed.sendBack(input),
+        [WS_METHODS.projectRequestsDefer]: (input) =>
+          decisionFeed.defer(input),
         [WS_METHODS.projectRequestsDecide]: (input) =>
           requestLedger.decide(input),
       });
