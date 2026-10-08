@@ -1,5 +1,6 @@
 import { listMetadata, readMetadata } from "../forkThreads/MetadataStore.ts";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as TaskIssues from "../projectIssues/TaskIssueLaunchService.ts";
 import {
   CommandId,
   type RunId,
@@ -774,6 +775,7 @@ function timelineItem(input: {
 
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
+  const taskIssues = yield* Effect.serviceOption(TaskIssues.TaskIssueLaunchService);
   const crypto = yield* Crypto.Crypto;
   const threadManagement = yield* ThreadManagementService.ThreadManagementService;
   const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
@@ -1796,6 +1798,24 @@ const make = Effect.gen(function* () {
                     ),
                   ),
                 );
+              if (request.issue !== undefined) {
+                if (Option.isNone(taskIssues))
+                  return yield* failure(
+                    "capability_denied",
+                    "Task-linked creation is unavailable.",
+                  );
+                const existing = yield* threadManagement
+                  .getThreadShell(threadId)
+                  .pipe(Effect.mapError(threadManagementFailure));
+                // An accepted first message owns its issue stage; replay must leave it alone.
+                if (existing?.latestRunId === null) {
+                  yield* taskIssues.value
+                    .start({ threadId, reference: request.issue })
+                    .pipe(
+                      Effect.mapError((error) => failure("orchestration_error", error.message)),
+                    );
+                }
+              }
               if (request.prompt !== undefined) {
                 yield* threadManagement
                   .dispatch({
