@@ -84,3 +84,33 @@ describe("withThreadNestingMenuItems", () => {
     expect(nestUnderMenuTarget("nest-under:nope", state)).toBeNull();
   });
 });
+
+describe("subproject menu items", () => {
+  const modeThreads = threads.map((t) =>
+    t.id === "child" ? { ...t, subproject: "on" as const } : t,
+  );
+  const modeForest = supervisionForest(modeThreads, metadata);
+  const items = (id: string, subprojectsSupported: boolean) =>
+    withThreadNestingMenuItems(
+      [{ id: "rename", label: "Rename" }],
+      resolveThreadNestingMenuState({
+        thread: modeThreads.find((t) => t.id === id)!,
+        forest: modeForest,
+        supported: true,
+        subprojectsSupported,
+      }),
+    ).map((item) => item.id);
+
+  it("offers the way out for a subproject and the way back for a nested worker", () => {
+    expect(items("child", true)).toContain("subproject-off");
+    expect(items("child", true)).not.toContain("subproject-on");
+    expect(items("grand", true)).toContain("subproject-on");
+  });
+
+  it("offers neither on a top-level thread or a host without subprojects", () => {
+    for (const ids of [items("other", true), items("child", false)]) {
+      expect(ids).not.toContain("subproject-on");
+      expect(ids).not.toContain("subproject-off");
+    }
+  });
+});
