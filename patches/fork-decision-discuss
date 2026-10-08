@@ -1,6 +1,6 @@
-Bottom: d8963e91b781dc6d36b30cf3f08c4bfa1c311f1a
-Top:    215dde8c5cfa2a78583eb5bc9bd2e3b605c611cf
+Bottom: 06b2b1dc778de555ad1f4b2ace8bc8cce20aa436
+Top:    3470d2b3c17329277a296db88eba7be6b908abfe
 Author: User <user@example.com>
-Date:   2026-10-08 10:09:27 +0000
+Date:   2026-10-08 10:11:01 +0000
 
 feat(projects): discuss a decision in its own thread
