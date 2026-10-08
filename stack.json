@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "fd15c5560bdec7c501b10abd7737615c84bb2525",
-  "head": "089f66662287f24e697863ac5623caa3e3b7a16c",
+  "prev": "77b7c39746cdb8306a89d09286338162afbafca2",
+  "head": "6f2eb4459bcb92284729e2a1affd8a8c92715ba6",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -62,7 +62,9 @@
     "fork-textgen-own-scope",
     "fork-dev-vm-heavy-check-gate",
     "fork-gitea-issue-links",
-    "fork-orchestrators-view",
+    "fork-orchestrators-view"
+  ],
+  "unapplied": [
     "fork-codex-goal-visibility",
     "fork-named-agents",
     "fork-project-automations",
@@ -120,7 +122,6 @@
     "fork-create-task-issue",
     "fork-decisions-feed-server"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
