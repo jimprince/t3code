@@ -204,10 +204,7 @@ it.effect("seeks the thread for legacy event probes, counts, pages and transfer 
     assert.equal(second.nextOffset, null);
     const absent = yield* open(bounded, "absent");
     assert.deepStrictEqual(absent.sections, []);
-    const transferred = yield* readForkHistory(
-      bounded as typeof sql,
-      ThreadId.make("target"),
-    );
+    const transferred = yield* readForkHistory(bounded as typeof sql, ThreadId.make("target"));
     assert.deepStrictEqual(
       (transferred.legacyEvents as Array<{ payload_json: string }>).map((row) => row.payload_json),
       ["first", "second"],
