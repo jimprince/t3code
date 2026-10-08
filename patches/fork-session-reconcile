@@ -1,6 +1,6 @@
-Bottom: 2daf0c7f27e6e0903cc946ddefec9fc7414915de
-Top:    9a3136c2f5866efd364b25d68c9eb79d744de754
+Bottom: d9aead65b22096f06fff303bafa9c37e3aea1f57
+Top:    47b6e2bb235064d4745d23ef49758b5fc2bded92
 Author: brad <bradprin@live.com>
-Date:   2026-10-07 22:27:13 -0600
+Date:   2026-10-07 22:28:27 -0600
 
 fix(server): clear a session left running by an interrupted turn
