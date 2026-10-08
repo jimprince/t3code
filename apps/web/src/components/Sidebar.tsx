@@ -20,6 +20,7 @@ import { SidebarChildInputAttention } from "./sidebar/SidebarChildInputAttention
 import {
   newForkCommandId,
   readForkNestingSupported,
+  readForkSubprojectsSupported,
   moveThreadToEnvironment,
   readForkOrderResetSupported,
   resetForkThreadOrder,
@@ -4631,6 +4632,7 @@ export default function Sidebar() {
           thread,
           forest: appAtomRegistry.get(forkSupervision.forest),
           supported: readForkNestingSupported(thread.environmentId),
+          subprojectsSupported: readForkSubprojectsSupported(thread.environmentId),
         });
         const clicked = await settlePromise(() =>
           api.contextMenu.show(
