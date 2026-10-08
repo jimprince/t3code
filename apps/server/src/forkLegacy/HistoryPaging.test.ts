@@ -1,6 +1,10 @@
 import { assert, it } from "@effect/vitest";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
-import { legacyHistoryTables } from "../orchestration-v2/legacy/ForkHistoryRead.ts";
+import { ThreadId } from "@t3tools/contracts";
+import {
+  legacyHistoryTables,
+  readForkHistory,
+} from "../orchestration-v2/legacy/ForkHistoryRead.ts";
 import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
@@ -143,4 +147,71 @@ it.effect("pages each legacy table deterministically, including timestamp ties",
       }
     }
   }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
+);
+
+it.effect("seeks the thread for legacy event probes, counts, pages and transfer reads", () =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    yield* sql`DROP TABLE orchestration_events`;
+    yield* sql`CREATE TABLE orchestration_events (
+      sequence INTEGER PRIMARY KEY, aggregate_kind TEXT, stream_id TEXT,
+      application_event_version INTEGER, payload_json TEXT
+    )`;
+    yield* sql`CREATE INDEX idx_orch_events_stream_sequence
+      ON orchestration_events(aggregate_kind, stream_id, sequence)`;
+    yield* sql`CREATE INDEX idx_orchestration_events_application_sequence
+      ON orchestration_events(application_event_version, sequence)`;
+    yield* sql`WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 2000)
+      INSERT INTO orchestration_events
+      SELECT i, 'thread', 'unrelated-' || i, 1, 'unrelated' FROM n`;
+    yield* sql`INSERT INTO orchestration_events VALUES
+      (2001, 'thread', 'target', 1, 'first'),
+      (2002, 'thread', 'target', 2, 'native'),
+      (2003, 'thread', 'target', 1, 'second'),
+      (2004, 'project', 'target', 1, 'project')`;
+    let eventReads = 0;
+    const bounded = {
+      unsafe: ((statement: string, params?: ReadonlyArray<string | number>) =>
+        Effect.gen(function* () {
+          if (statement.startsWith("SELECT") && statement.includes("FROM orchestration_events")) {
+            const plan = yield* sql.unsafe<{ detail: string }>(
+              `EXPLAIN QUERY PLAN ${statement}`,
+              params,
+            );
+            assert.match(
+              plan.map((row) => row.detail).join("\n"),
+              /stream_id=\?/,
+              "legacy event reads must seek the thread instead of scanning all V1 events",
+            );
+            eventReads++;
+          }
+          return yield* sql.unsafe(statement, params);
+        })) as Parameters<typeof openHistory>[0]["unsafe"],
+    };
+    const history = yield* open(bounded, "target");
+    assert.deepStrictEqual(history.sections, ["events"]);
+    const first = yield* history.page("events", 0, 1);
+    assert.deepStrictEqual(
+      first.records.map((row) => row.payload_json),
+      ["first"],
+    );
+    assert.equal(first.nextOffset, 1);
+    const second = yield* history.page("events", 1, 1);
+    assert.deepStrictEqual(
+      second.records.map((row) => row.payload_json),
+      ["second"],
+    );
+    assert.equal(second.nextOffset, null);
+    const absent = yield* open(bounded, "absent");
+    assert.deepStrictEqual(absent.sections, []);
+    const transferred = yield* readForkHistory(
+      bounded as typeof sql,
+      ThreadId.makeUnsafe("target"),
+    );
+    assert.deepStrictEqual(
+      (transferred.legacyEvents as Array<{ payload_json: string }>).map((row) => row.payload_json),
+      ["first", "second"],
+    );
+    assert.isAtLeast(eventReads, 6);
+  }).pipe(Effect.provide(SqlitePersistenceMemory)),
 );
