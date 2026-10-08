@@ -34,6 +34,7 @@ import { isElectron } from "../../env";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { useProjects, useServerConfigs } from "../../state/entities";
 import { updateProjectScopeCommand } from "../../state/forkProjectScope";
+import { setThreadSubprojectCommand } from "../../state/forkSubproject";
 import { useSupervisionReadyHosts } from "../../state/forkSupervision";
 import { threadEnvironment } from "../../state/threads";
 import { applyProjectLayout, useProjectLayout } from "../../state/projectLayout";
@@ -86,6 +87,13 @@ import { resolveProjectTab, type ProjectTab } from "./projectTabs.logic";
 import { HEALTH_LABEL, isHealthStale, latestWorkChangeAt } from "./projectHealth.logic";
 import { deriveBlocked, type BlockedRow } from "./projectWork.logic";
 import { projectReturnState } from "./projectNavigation";
+import {
+  projectTrail,
+  subprojectBlocked,
+  subprojectIsActive,
+  subprojectNeedsYou,
+  taskProgressLabel,
+} from "./projectSubprojects.logic";
 
 /**
  * The layout's tabs, with the page's actions (Edit layout) at the right. In edit
@@ -269,10 +277,13 @@ function ProjectNeedsYouWidget({ summary }: { readonly summary: OrchestratorSumm
   );
 }
 
-/** "N need you" in the status line: the same count as the Needs you widget. */
+/**
+ * "N need you" in the status line: the Needs you widget's count, plus what is waiting on a
+ * thread inside each subproject (its own requests show on its page).
+ */
 function NeedsYouCount({ summary }: { readonly summary: OrchestratorSummary }) {
   const { items } = useNeedsYou(summary);
-  const count = summary.needsYou.length + items.length;
+  const count = summary.needsYou.length + items.length + subprojectNeedsYou(summary);
   if (count === 0) return null;
   return (
     <span className="inline-flex items-center gap-1.5 text-warning-foreground">
@@ -303,10 +314,122 @@ function useBlockedRows(summary: OrchestratorSummary): BlockedRow[] {
   );
 }
 
-/** "N blocked" in the status line: the blocked tags and notes under Workstreams, counted. */
+/** "N blocked" in the status line: the blocked tags and notes under Workstreams, counted, plus blocked threads inside subprojects. */
 function BlockedCount({ summary }: { readonly summary: OrchestratorSummary }) {
-  const count = useBlockedRows(summary).length;
+  const count = useBlockedRows(summary).length + subprojectBlocked(summary);
   return count > 0 ? <span className="text-error">{count} blocked</span> : null;
+}
+
+/** A subproject's health chip and sentence, from its own page data. */
+function SubprojectHealth({ summary }: { readonly summary: OrchestratorSummary }) {
+  const dashboard = useEnvironmentQuery(
+    projectDashboardQuery({
+      environmentId: summary.root.environmentId,
+      input: { threadId: summary.root.id },
+    }),
+  );
+  const health = dashboard.data?.health ?? null;
+  if (health === null) return null;
+  return (
+    <>
+      <span
+        className={`shrink-0 rounded-sm px-1.5 py-0.5 text-xs font-medium ${HEALTH_TONE[health.status]}`}
+      >
+        {HEALTH_LABEL[health.status]}
+      </span>
+      <span className="min-w-0 truncate text-muted-foreground">{health.sentence}</span>
+    </>
+  );
+}
+
+/** Column widths of the subprojects table; the header row and every row share them. */
+const SUBPROJECT_COLUMN = {
+  name: "sm:w-48 sm:flex-none",
+  progress: "hidden w-16 shrink-0 text-right sm:block",
+  working: "hidden w-16 shrink-0 text-right sm:block",
+  needsYou: "hidden w-24 shrink-0 text-right sm:block",
+  activity: "w-20 shrink-0 text-right",
+} as const;
+
+/**
+ * One table row per direct subproject: its health, task progress, who is working, what waits
+ * on you inside it and when it last moved. A row opens the subproject's own page. Below `sm`
+ * the columns collapse into one meta line under the name.
+ */
+function ProjectSubprojects({ summary }: { readonly summary: OrchestratorSummary }) {
+  const navigate = useNavigate();
+  if (summary.subprojects.length === 0) return null;
+  return (
+    <ProjectSection title="Subprojects" count={summary.subprojects.length}>
+      <div aria-hidden className="hidden gap-3 pb-1 text-xs text-muted-foreground sm:flex">
+        <span className={SUBPROJECT_COLUMN.name}>Name</span>
+        <span className="min-w-0 flex-1">Health</span>
+        <span className={SUBPROJECT_COLUMN.progress}>Progress</span>
+        <span className={SUBPROJECT_COLUMN.working}>Working</span>
+        <span className={SUBPROJECT_COLUMN.needsYou}>Needs you</span>
+        <span className={SUBPROJECT_COLUMN.activity}>Last active</span>
+      </div>
+      <ul className="divide-y divide-border">
+        {summary.subprojects.map((sub) => {
+          const progress = taskProgressLabel(sub);
+          const working =
+            sub.rollup.working > 0
+              ? String(sub.rollup.working)
+              : subprojectIsActive(sub)
+                ? "Working"
+                : null;
+          const needsYou = sub.rollup.needsYou > 0 ? `${sub.rollup.needsYou} need you` : null;
+          const blocked = sub.rollup.blocked > 0;
+          return (
+            <ClickableRow
+              key={`${sub.root.environmentId}:${sub.root.id}`}
+              label={`Open ${sub.root.title} subproject`}
+              onOpen={() =>
+                void navigate({
+                  to: "/orchestrators/$environmentId/$threadId",
+                  params: { environmentId: sub.root.environmentId, threadId: sub.root.id },
+                })
+              }
+              className="flex-wrap items-baseline gap-x-3 gap-y-0.5 py-1.5 text-sm sm:flex-nowrap"
+            >
+              <span className={`min-w-0 flex-1 truncate font-medium ${SUBPROJECT_COLUMN.name}`}>
+                <span className="text-muted-foreground">/ </span>
+                {sub.root.title}
+              </span>
+              <span className="order-last flex min-w-0 basis-full items-baseline gap-2 sm:order-none sm:basis-auto sm:flex-1">
+                <SubprojectHealth summary={sub} />
+              </span>
+              <span className={SUBPROJECT_COLUMN.progress}>
+                {progress === null ? null : <span className="tabular-nums">{progress}</span>}
+              </span>
+              <span className={`${SUBPROJECT_COLUMN.working} text-muted-foreground`}>
+                {working}
+              </span>
+              <span className={SUBPROJECT_COLUMN.needsYou}>
+                {blocked ? <span className="text-error">Blocked </span> : null}
+                {needsYou === null ? null : (
+                  <span className="text-warning-foreground">{needsYou}</span>
+                )}
+              </span>
+              <span className={`${SUBPROJECT_COLUMN.activity} text-xs text-muted-foreground`}>
+                {formatRelativeTimeLabel(sub.rollup.latestActivityAt)}
+              </span>
+              <span className="order-last basis-full text-xs text-muted-foreground sm:hidden empty:hidden">
+                {[
+                  blocked ? "Blocked" : null,
+                  needsYou,
+                  working === null ? null : working === "Working" ? working : `${working} working`,
+                  progress === null ? null : `${progress} tasks`,
+                ]
+                  .filter((part) => part !== null)
+                  .join(" · ")}
+              </span>
+            </ClickableRow>
+          );
+        })}
+      </ul>
+    </ProjectSection>
+  );
 }
 
 /**
@@ -590,6 +713,7 @@ export function OrchestratorBoard({
   const updateProjectScope = useAtomCommand(updateProjectScopeCommand, {
     reportFailure: false,
   });
+  const setSubproject = useAtomCommand(setThreadSubprojectCommand, "Change subproject");
   const [chatOpen, setChatOpen] = useLocalStorage(
     `t3code:projects:orchestrator-chat-open:${environmentId}:${threadId}`,
     false,
@@ -607,12 +731,20 @@ export function OrchestratorBoard({
     projectDashboardQuery({ environmentId, input: { threadId } }),
   );
   const saveTracker = useAtomCommand(setProjectDashboardTracker, "Save task repository");
+  const summaries = useMemo(
+    () => buildOrchestratorSummaries(threads, projects),
+    [projects, threads],
+  );
   const summary = useMemo(
     () =>
-      buildOrchestratorSummaries(threads, projects).find(
+      summaries.find(
         (item) => item.root.environmentId === environmentId && item.root.id === threadId,
       ) ?? null,
-    [environmentId, projects, threadId, threads],
+    [environmentId, summaries, threadId],
+  );
+  const trail = useMemo(
+    () => (summary === null ? [] : projectTrail(summaries, summary)),
+    [summaries, summary],
   );
   const previousVisit = useMemo(
     () =>
@@ -698,6 +830,28 @@ export function OrchestratorBoard({
     }
     setEditing(false);
   };
+  /** Turns a subproject back into a plain worker of its parent; its page goes away. */
+  const showAsWorker = async () => {
+    const result = await setSubproject({
+      environmentId: summary.root.environmentId,
+      input: {
+        commandId: CommandId.make(randomUUID()),
+        threadId: summary.root.id,
+        subproject: "off",
+      },
+    });
+    if (result._tag === "Failure") return;
+    setEditing(false);
+    const parent = trail.at(-1);
+    void navigate(
+      parent
+        ? {
+            to: "/orchestrators/$environmentId/$threadId",
+            params: { environmentId: parent.root.environmentId, threadId: parent.root.id },
+          }
+        : { to: "/" },
+    );
+  };
   const revealSentMessage = (messageId: import("@t3tools/contracts").MessageId) => {
     setRevealedMessageId(messageId);
     setChatOpen(true);
@@ -727,9 +881,34 @@ export function OrchestratorBoard({
           <WorkspacePageHeader electron={isElectron} className="bg-background">
             {rootProject ? <ProjectFavicon project={rootProject} className="size-5" /> : null}
             <WorkspaceBreadcrumb ariaLabel="Project breadcrumb">
+              {trail.map((ancestor) => (
+                <WorkspaceBreadcrumbItem
+                  key={`${ancestor.root.environmentId}:${ancestor.root.id}`}
+                  className="shrink"
+                >
+                  <button
+                    type="button"
+                    className="max-w-24 cursor-pointer truncate hover:text-foreground hover:underline sm:max-w-48"
+                    onClick={() =>
+                      void navigate({
+                        to: "/orchestrators/$environmentId/$threadId",
+                        params: {
+                          environmentId: ancestor.root.environmentId,
+                          threadId: ancestor.root.id,
+                        },
+                      })
+                    }
+                  >
+                    {ancestor.root.title}
+                  </button>
+                  <span aria-hidden className="pl-2 sm:pl-3">
+                    /
+                  </span>
+                </WorkspaceBreadcrumbItem>
+              ))}
               <WorkspaceBreadcrumbItem current>
                 <span className="flex min-w-0 flex-col">
-                  <h1>{summary.root.title}</h1>
+                  <h1 className="truncate">{summary.root.title}</h1>
                   {summary.root.scope ? (
                     <span className="truncate text-xs font-normal text-muted-foreground">
                       {summary.root.scope}
@@ -739,17 +918,19 @@ export function OrchestratorBoard({
               </WorkspaceBreadcrumbItem>
             </WorkspaceBreadcrumb>
             <div className="flex-1" />
-            <Button size="sm" variant="ghost" onClick={openEditor}>
+            {/* Icon-only below `sm`: the labels would leave the breadcrumb about 100px. */}
+            <Button size="sm" variant="ghost" aria-label="Edit" onClick={openEditor}>
               <PencilIcon />
-              Edit
+              <span className="hidden sm:inline">Edit</span>
             </Button>
             <Button
               size="sm"
               variant={chatOpen ? "secondary" : "outline"}
+              aria-label={chatOpen ? "Hide chat" : "Chat"}
               onClick={() => setChatOpen((open) => !open)}
             >
               <MessageSquareIcon />
-              {chatOpen ? "Hide chat" : "Chat"}
+              <span className="hidden sm:inline">{chatOpen ? "Hide chat" : "Chat"}</span>
             </Button>
           </WorkspacePageHeader>
           <div className="flex min-h-0 flex-1 border-t border-border">
@@ -757,10 +938,10 @@ export function OrchestratorBoard({
               <WorkspacePageContainer width="wide" className="gap-5">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
                   <OrchestratorStatus status={summary.status} />
-                  {summary.activeWorkerCount > 0 ? (
+                  {summary.rollup.working > 0 ? (
                     <span className="inline-flex items-center gap-1.5 text-muted-foreground">
                       <UsersIcon className="size-4" />
-                      {summary.activeWorkerCount} working
+                      {summary.rollup.working} working
                     </span>
                   ) : null}
                   <NeedsYouCount summary={summary} />
@@ -771,6 +952,7 @@ export function OrchestratorBoard({
                 </div>
 
                 <ProjectHealthLine summary={summary} />
+                {tab === "dashboard" ? <ProjectSubprojects summary={summary} /> : null}
                 {tab === "dashboard" ? (
                   <ProjectWorkstreams summary={summary} since={previousVisit} />
                 ) : null}
@@ -900,6 +1082,11 @@ export function OrchestratorBoard({
               </label>
             </div>
             <DialogFooter>
+              {summary.parentProjectKey !== null ? (
+                <Button variant="ghost" className="mr-auto" onClick={() => void showAsWorker()}>
+                  Show as worker
+                </Button>
+              ) : null}
               <Button variant="outline" onClick={() => setEditing(false)}>
                 Cancel
               </Button>
