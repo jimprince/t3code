@@ -461,6 +461,26 @@ const captureOne = DesktopSnapShotId.make("11111111-1111-4111-8111-111111111111"
 const captureTwo = DesktopSnapShotId.make("22222222-2222-4222-8222-222222222222");
 
 describe("DesktopWindow", () => {
+  it.effect("queues thread navigation until backend readiness, then navigates warm windows", () =>
+    Effect.gen(function* () {
+      const fakeWindow = makeFakeBrowserWindow();
+      const createCount = yield* Ref.make(0);
+      const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+      const layer = layerTest({ window: fakeWindow.window, createCount, mainWindow });
+      yield* Effect.gen(function* () {
+        const desktopWindow = yield* DesktopWindow.DesktopWindow;
+        const target = "t3code-dev://app/environment/thread";
+        assert.equal(yield* desktopWindow.navigateMain(target), true);
+        assert.equal(yield* Ref.get(createCount), 0);
+        assert.equal(yield* desktopWindow.navigateMain("attacker://app/thread"), false);
+        yield* desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773"));
+        assert.deepEqual(fakeWindow.loadURL.mock.calls, [[target]]);
+        const next = "t3code-dev://app/another/thread";
+        assert.equal(yield* desktopWindow.navigateMain(next), true);
+        assert.deepEqual(fakeWindow.loadURL.mock.calls.at(-1), [next]);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
   it.effect("shows native context menus for browser guests and sign-in popups", () =>
     Effect.gen(function* () {
       const host = makeFakeBrowserWindow();
