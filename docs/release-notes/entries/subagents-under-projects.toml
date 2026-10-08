@@ -1,0 +1,4 @@
+id = "subagents-under-projects"
+category = "feature"
+functionality = "projects"
+text = "Subagents now list under their project on the Projects sidebar and project page, on web and mobile: working ones first, settled ones in the Settled row, provider-run subagents marked read-only; mobile subagent threads gain Back to project."
