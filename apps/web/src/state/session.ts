@@ -1,5 +1,8 @@
 import { useAtomValue } from "@effect/atom-react";
-import { createEnvironmentSessionAtoms } from "@t3tools/client-runtime/state/session";
+import {
+  createEnvironmentSessionAtoms,
+  sessionStateGrants,
+} from "@t3tools/client-runtime/state/session";
 import {
   type AuthEnvironmentScope,
   type AuthSessionState,
@@ -34,8 +37,8 @@ function sessionHasScope(
   result: AsyncResult.AsyncResult<AuthSessionState, unknown>,
   scope: AuthEnvironmentScope,
 ): boolean {
-  const session = Option.getOrNull(AsyncResult.value(result));
-  return result._tag !== "Failure" && session !== null && sessionGrantsScope(session, scope);
+  const session = sessionStateGrants(result);
+  return session !== null && sessionGrantsScope(session, scope);
 }
 
 /** Subscribe to the grants of every selected environment. */
@@ -96,7 +99,7 @@ export function readPreparedConnection(environmentId: EnvironmentId) {
 export function useEnvironmentSessionState(environmentId: EnvironmentId) {
   const result = useAtomValue(environmentSession.sessionStateAtom(environmentId));
   return {
-    data: Option.getOrNull(AsyncResult.value(result)),
+    data: sessionStateGrants(result),
     hasError: result._tag === "Failure",
     isPending: result.waiting,
   };
