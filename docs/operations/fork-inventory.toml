@@ -2744,7 +2744,7 @@ purpose = "Show each workstream's threads on the Dashboard with one tag per row 
 retire_when = "Upstream provides an equivalent workstream thread view, or the project page is retired."
 depends_on = ["fork-dash-173", "fork-dash-187"]
 roles = []
-note = "Issue #178 (Brad: build it and retire the three widgets). A task appears as a row only when it has no thread and waits on you or is blocked. The layout still accepts the working, blocked and done widget ids but renders nothing for them, so stored layouts keep loading; removing the ids belongs to fork-project-layout. Lost with them: Working's 'also serving #N' list and Done's single chronological list (done rows now sit in their group, three per group). Threads are resolved only within the project's own thread tree; top-level heads such as another orchestrator's lanes need the project-wide thread resolver, which does not exist yet."
+note = "Issue #178 (Brad: build it and retire the three widgets). A task appears as a row only when it has no thread and waits on you or is blocked. The working, blocked and done widget ids are retired from the layout catalog (fork-dash-layout-retire): not offered or accepted, and dropped silently from saved layouts that still list them. Lost with them: Working's 'also serving #N' list and Done's single chronological list (done rows now sit in their group, three per group). Threads are resolved only within the project's own thread tree; top-level heads such as another orchestrator's lanes need the project-wide thread resolver, which does not exist yet."
 
 [[patch]]
 name = "fork-dash-182"
@@ -2800,3 +2800,13 @@ retire_when = "Upstream supplies the same approved-plan publication and task-wor
 depends_on = ["fork-create-task-issue", "fork-project-page-workflow", "fork-worker-operations"]
 roles = []
 note = "Gitea issue-body markers are the publication record; existing issue state and manual notes survive reruns."
+
+[[patch]]
+name = "fork-dash-layout-retire"
+subject = "fix(projects): stop offering the retired Working, Blocked and Done widgets"
+class = "product"
+purpose = "Remove the Working, Blocked and Done widgets from the layout catalog so the picker, the CLI and the orchestrator tools no longer offer widgets that render nothing, while layouts saved earlier keep loading."
+retire_when = "Folded into fork-project-layout, or the project page layout is retired."
+depends_on = ["fork-project-layout", "fork-dash-178"]
+roles = []
+note = "withoutRetiredWidgets (contracts) drops widgets of RETIRED_WIDGET_TYPES from every saved revision the server reads and from the tabs the web renders (older servers still send them); the next saved change persists the cleanup. The default layout and the older widget order no longer include them, and dashboard set skips the retired ids instead of failing. Meant to be folded into fork-project-layout."
