@@ -1,10 +1,10 @@
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import type { EnvironmentId, ProjectIssue, ProjectRequestStage } from "@t3tools/contracts";
+import type { ProjectIssue, ProjectRequestStage } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { CheckIcon, ChevronDownIcon, ChevronRightIcon, RotateCcwIcon } from "lucide-react";
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
   decideProjectRequest,
@@ -19,9 +19,6 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { Button, InlineButton } from "../ui/button";
 import { toastManager } from "../ui/toast";
-import { Input } from "../ui/input";
-import { LinkifiedText, OptionLinks } from "./LinkifiedText";
-import { DecisionContext } from "./DecisionContext";
 import { NO_OPEN_KEYS, openKeysSchema, toggleKey } from "./openGroups.logic";
 import { projectReturnState } from "./projectNavigation";
 import { formatIssueAge } from "./projectIssuesBoard.logic";
@@ -30,27 +27,19 @@ import { TaskTitle } from "./TaskLink";
 import { RequestKindTag } from "./RequestKindTag";
 import { GroupTitle, ProjectSection, RowMenu, StatusCell } from "./ProjectSection";
 import {
-  answerSentences,
   deriveCompleted,
   deriveMaintenance,
   deriveNeedsYou,
   deriveProjectRequests,
-  isBug,
   isMaintenanceWithAgents,
   issueKey,
-  isNotAnswer,
   latestProgressLine,
-  needsYouDecision,
-  type NeedsYouDecision,
   nextReleaseRequests,
   requestsOfSettledThreads,
   STAGE_STATUS,
   TASK_STATUS_LABEL,
-  taskKind,
   taskStatuses,
   type CompletedTask,
-  type ForYouGroup,
-  type NeedsYouItem,
   type ProjectRequest,
 } from "./projectRequests.logic";
 
@@ -124,11 +113,16 @@ export function useNeedsYou(summary: OrchestratorSummary) {
 export function useSettle(summary: OrchestratorSummary, refresh: () => void) {
   const settle = useAtomCommand(settleProjectRequest, "Settle");
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
-  const run = async (issues: ReadonlyArray<ProjectIssue>, reopen: boolean) => {
+  /** Resolves to the first failure's reason, or null when every issue was settled (or reopened). */
+  const run = async (
+    issues: ReadonlyArray<ProjectIssue>,
+    reopen: boolean,
+  ): Promise<string | null> => {
     const keys = issues.map(issueKey);
     setBusy((current) => new Set([...current, ...keys]));
+    let failed: string | null = null;
     for (const issue of issues) {
-      await settle({
+      const result = await settle({
         environmentId: summary.root.environmentId,
         input: {
           rootThreadId: summary.root.id,
@@ -138,9 +132,15 @@ export function useSettle(summary: OrchestratorSummary, refresh: () => void) {
           ...(reopen ? { reopen: true } : {}),
         },
       });
+      if (result._tag !== "Success" && failed === null) {
+        const error = squashAtomCommandFailure(result);
+        failed =
+          error instanceof Error && error.message ? error.message : "Could not reach the server.";
+      }
     }
     setBusy((current) => new Set([...current].filter((key) => !keys.includes(key))));
     refresh();
+    return failed;
   };
   return {
     isBusy: (issue: ProjectIssue) => busy.has(issueKey(issue)),
@@ -215,24 +215,6 @@ export function useUndoableActions() {
       bring(key);
     },
   };
-}
-
-/** What is waiting to be sent, each with its Undo. */
-function UndoLines({ actions }: { readonly actions: ReturnType<typeof useUndoableActions> }) {
-  if (actions.queued.length === 0) return null;
-  return (
-    <ul className="mt-2 border-t border-border pt-1">
-      {actions.queued.map((entry) => (
-        <li key={entry.key} className="flex items-center gap-2 py-0.5 text-xs">
-          <span className="min-w-0 flex-1 truncate text-muted-foreground">{entry.label}</span>
-          <Button size="xs" variant="ghost-muted" onClick={() => actions.undo(entry.key)}>
-            <RotateCcwIcon />
-            Undo
-          </Button>
-        </li>
-      ))}
-    </ul>
-  );
 }
 
 /** What became of a decision: sent (and whether a thread was told), or the server's reason it was not. */
@@ -513,275 +495,6 @@ function CompactRow({
         ) : null
       }
     />
-  );
-}
-
-/** "07:12" today, "Oct 4, 07:12" before: when a question was asked or answered. */
-function clockTime(iso: string): string {
-  const date = new Date(iso);
-  const time = date.toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-  return date.toDateString() === new Date().toDateString()
-    ? time
-    : `${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}, ${time}`;
-}
-
-/**
- * The body of a Needs you row, answer first: an answered question shows its own
- * answer in a few whole sentences with when it was asked and answered; work for
- * review shows the agent's summary; shipped work shows its test step. No meta line.
- */
-function NeedsYouRowBody({
-  environmentId,
-  issue,
-  request,
-  group,
-  decision = null,
-}: {
-  readonly environmentId: EnvironmentId;
-  readonly issue: ProjectIssue;
-  readonly request: ProjectRequest | null;
-  readonly group: NeedsYouItem["group"];
-  readonly decision?: NeedsYouDecision | null;
-}) {
-  if (decision) {
-    return (
-      <span className="min-w-0 flex-1">
-        <IssueLink issue={issue} />
-        {decision.detail ? (
-          <DecisionContext
-            environmentId={environmentId}
-            text={decision.detail}
-            summary={decision.summary}
-            issueUrl={issue.url}
-          />
-        ) : null}
-        {decision.recommendation ? (
-          <span className="mt-0.5 block text-xs wrap-anywhere text-foreground/90">
-            Recommended: <LinkifiedText text={decision.recommendation} />
-          </span>
-        ) : null}
-      </span>
-    );
-  }
-  // A ready comment is the agent's answer or summary; otherwise the thread's reply
-  // to this very question. Brad's own follow-ups and curator notes never are.
-  const ready = request?.stage === "ready" || request === null;
-  const comment = issue.latestComment;
-  const answer =
-    ready && comment && !isNotAnswer(comment.body)
-      ? { text: comment.body, at: comment.createdAt }
-      : issue.answer
-        ? { text: issue.answer.text, at: issue.answer.answeredAt }
-        : null;
-  const kind = taskKind(issue.labels);
-  const bug = isBug(issue.labels);
-  return (
-    <span className="min-w-0 flex-1">
-      <span className="flex flex-wrap items-baseline gap-x-2">
-        <IssueLink issue={issue} />
-        <RequestKindTag kind={kind} bug={bug} />
-        {group === "test" && issue.milestone ? (
-          <span className="text-xs text-muted-foreground">{issue.milestone.title}</span>
-        ) : null}
-      </span>
-      {group === "test" ? (
-        request?.testStep ? (
-          <span className="block text-xs text-foreground/85">Test: {request.testStep}</span>
-        ) : null
-      ) : answer ? (
-        <>
-          <span className="mt-0.5 block text-sm text-foreground/85">
-            {answerSentences(answer.text.replace(/^\s*(progress|test|answer):\s*/i, ""))}
-          </span>
-          {group === "answers" ? (
-            <span className="mt-0.5 block text-xs text-muted-foreground">
-              Asked {clockTime(issue.answer?.askedAt ?? issue.createdAt)} · As of{" "}
-              {clockTime(answer.at)}
-            </span>
-          ) : null}
-        </>
-      ) : null}
-    </span>
-  );
-}
-
-/** Needs you's groups: answers to read, decisions to make, then work for review (shipped work to test included). */
-const NEEDS_YOU_GROUPS: ReadonlyArray<{
-  readonly title: string;
-  readonly groups: ReadonlyArray<ForYouGroup>;
-}> = [
-  { title: "Answers", groups: ["answers"] },
-  { title: "Decisions", groups: ["approve"] },
-  { title: TASK_STATUS_LABEL["for-review"], groups: ["review", "test"] },
-];
-
-/**
- * Brad's part of Needs you: requests in his groups and any other issue marked
- * for his review or test, each with its answer or test step and a Settle on the row.
- */
-export function NeedsYouIssueGroups({
-  summary,
-  items,
-  settle,
-  refresh,
-}: {
-  readonly summary: OrchestratorSummary;
-  readonly items: ReadonlyArray<NeedsYouItem>;
-  readonly settle: SettleControls;
-  readonly refresh: () => void;
-}) {
-  const openThread = useOpenThread(summary);
-  const actions = useUndoableActions();
-  const decide = useDecide(summary, refresh);
-  const discuss = useDiscuss(summary);
-  return (
-    <>
-      {NEEDS_YOU_GROUPS.map(({ title, groups }) => {
-        const groupItems = groups.flatMap((group) =>
-          items.filter((item) => item.group === group && !actions.isGone(issueKey(item.issue))),
-        );
-        if (groupItems.length === 0) return null;
-        return (
-          <div key={title} className="mb-3 last:mb-0">
-            <GroupTitle title={title} count={groupItems.length} />
-            <ul className="divide-y divide-border">
-              {groupItems.map((item) => {
-                const { issue, request } = item;
-                const key = issueKey(issue);
-                const threadId = threadOf(issue, request);
-                const decision = needsYouDecision(item);
-                return (
-                  <ClickableRow
-                    key={key}
-                    label={`Open the thread for ${issue.title}`}
-                    onOpen={threadId ? () => openThread(threadId) : null}
-                    // A decision's buttons sit under its question, full width.
-                    className={decision ? "flex-col gap-2 py-1.5" : "items-start py-1.5"}
-                  >
-                    <NeedsYouRowBody
-                      environmentId={summary.root.environmentId}
-                      issue={issue}
-                      request={request}
-                      group={item.group}
-                      decision={decision}
-                    />
-                    {decision ? (
-                      <DecisionActions
-                        decision={decision}
-                        discussing={discuss.pending === key}
-                        onDiscuss={() => void discuss.start(issue)}
-                        onDecide={(kind, extra) =>
-                          actions.run(
-                            key,
-                            kind === "approve"
-                              ? "Approved"
-                              : kind === "not-yet"
-                                ? "Not yet"
-                                : (extra.option ?? "Chosen"),
-                            async () => (await decide(issue, kind, extra)).sent,
-                          )
-                        }
-                      />
-                    ) : (
-                      <Button
-                        size="xs"
-                        variant="outline"
-                        disabled={settle.isBusy(issue)}
-                        onClick={() =>
-                          actions.run(key, "Settled", async () => {
-                            await settle.settle([issue]);
-                            return true;
-                          })
-                        }
-                      >
-                        <CheckIcon />
-                        Settle
-                      </Button>
-                    )}
-                  </ClickableRow>
-                );
-              })}
-            </ul>
-          </div>
-        );
-      })}
-      <UndoLines actions={actions} />
-    </>
-  );
-}
-
-/** Approve, Not yet (with an optional one-line reason), a button per option, and Discuss. */
-function DecisionActions({
-  decision,
-  discussing,
-  onDiscuss,
-  onDecide,
-}: {
-  readonly decision: NeedsYouDecision;
-  readonly discussing: boolean;
-  readonly onDiscuss: () => void;
-  readonly onDecide: (
-    kind: "approve" | "not-yet" | "option",
-    extra: { readonly option?: string; readonly reason?: string },
-  ) => void;
-}) {
-  const [reason, setReason] = useState("");
-  const [reasonOpen, setReasonOpen] = useState(false);
-  return (
-    <span className="flex max-w-2xl flex-col gap-1">
-      {decision.options.length === 0 ? (
-        <Button size="sm-multiline" variant="outline" onClick={() => onDecide("approve", {})}>
-          <CheckIcon />
-          <span className="min-w-0 flex-1 text-left">Approve</span>
-        </Button>
-      ) : (
-        decision.options.map((option) => (
-          <Fragment key={option.label}>
-            <Button
-              size="sm-multiline"
-              variant="outline"
-              onClick={() => onDecide("option", { option: `${option.label}: ${option.text}` })}
-            >
-              <span className="min-w-0 flex-1 text-left wrap-anywhere">
-                {option.label}: {option.text}
-              </span>
-            </Button>
-            <OptionLinks text={option.text} />
-          </Fragment>
-        ))
-      )}
-      <span className="flex items-center gap-3 text-xs">
-        <InlineButton
-          tone="muted"
-          onClick={() => onDecide("not-yet", reason.trim() ? { reason: reason.trim() } : {})}
-        >
-          Not yet
-        </InlineButton>
-        {reasonOpen ? null : (
-          <InlineButton tone="muted" onClick={() => setReasonOpen(true)}>
-            Add reason
-          </InlineButton>
-        )}
-        <InlineButton tone="muted" disabled={discussing} onClick={onDiscuss}>
-          {discussing ? "Opening..." : "Discuss"}
-        </InlineButton>
-      </span>
-      {reasonOpen ? (
-        <Input
-          size="sm"
-          value={reason}
-          maxLength={500}
-          placeholder="Reason"
-          aria-label="Reason for not yet"
-          autoFocus
-          onChange={(event) => setReason(event.target.value)}
-        />
-      ) : null}
-    </span>
   );
 }
 
