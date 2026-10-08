@@ -3,6 +3,8 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type { ThreadManagementServiceShape } from "../orchestration-v2/ThreadManagementService.ts";
 
+import { canReconcileStartingSession } from "./StartingSessionReconcile.ts";
+
 const isSessionReconcileError = Schema.is(SessionReconcileError);
 
 /** Repairs only an ended latest run; live work must be interrupted through the normal Stop path. */
@@ -45,13 +47,15 @@ export const makeSessionReconcileService = (
         !turn ||
         !session ||
         !["starting", "running", "waiting"].includes(session.status) ||
-        providerThread.lastRunOrdinal !== latest.ordinal
+        providerThread.lastRunOrdinal !== latest.ordinal ||
+        !canReconcileStartingSession(p, session, turn)
       )
         return yield* new SessionReconcileError({
           message: "Thread has no session stuck on an ended turn.",
         });
       const result = yield* threads.dispatch({
         type: "thread.background-work.settle",
+        reconcileOnly: true,
         ...input,
         providerThreadId: providerThread.id,
         providerTurnId: turn.id,
