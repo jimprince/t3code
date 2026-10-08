@@ -1,0 +1,4 @@
+id = "workers-under-projects"
+category = "feature"
+functionality = "projects"
+text = "Threads nested under a project, whether you started them with New thread under this one or an agent did, now list as worker rows on the Projects sidebar, project page and mobile card, next to subagents: working ones first, settled ones in the Settled row."
