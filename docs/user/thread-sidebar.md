@@ -290,6 +290,21 @@ to answer its workers itself and ask you only when it cannot. Nesting is not
 available in the mobile app yet; mobile lists every thread and uses the same
 **Supervising** status for an idle parent with active descendants.
 
+### Subprojects
+
+A nested thread that runs workers of its own can be a **subproject** of its
+parent's project. Mark one with **Show as subproject** in its menu or with
+`t3-thread orchestrator mark`; nested threads are not promoted automatically
+yet. In **Projects** it appears as a one-line `/ Name` row inside its parent's
+card, with its needs-you count and last activity. The parent's card, status and
+header count what is happening inside its subprojects too. Open a subproject for
+its own page, health line, layout, tasks and Decisions; the breadcrumb leads back
+to its parent, whose page lists its subprojects.
+
+To turn a subproject back into a plain worker, choose **Show as worker** from its
+menu or from **Edit** on its page. Mobile lists a subproject as its own project,
+and its decisions show only there, not on the parent's card.
+
 Nested threads in the Agents panel show their latest output, model and effort,
 provider pool, tokens and tools when available, turn duration, last activity and
 workspace. A project badge identifies workers in a different project. Token
