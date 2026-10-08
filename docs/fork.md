@@ -25,3 +25,12 @@ thread event arrives in between, reconciliation refuses without interrupting
 that work. Refresh the thread before requesting reconciliation again; reusing a
 rejected command ID continues to return its recorded rejection. Ordinary Stop
 acknowledgments retain their existing behavior.
+
+## General Chat workspace storage
+
+New General Chat workspaces live in `chat-workspaces/` under T3 home.
+Existing installations keep the workspace path saved in their chat project,
+including paths created under a previous system temporary directory. Startup
+recreates a missing directory without changing project IDs, thread bindings,
+or provider-session paths. Changing `TMPDIR` does not move an existing chat
+workspace or prevent startup.
