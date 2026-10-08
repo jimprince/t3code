@@ -8816,6 +8816,7 @@ export default function ChatView(props: ChatViewProps) {
     }
     const sendCtx = composerRef.current?.getSendContext();
     if (activePendingProgress && sendCtx?.answeringPendingUserInput !== false) {
+      if (activePendingIsResponding) return;
       if (directAnnotation) {
         notifyDirectAnnotationAttached();
         return;
