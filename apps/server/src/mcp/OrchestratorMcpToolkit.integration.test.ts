@@ -1,3 +1,4 @@
+import * as ServerConfig from "../config.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import { listMetadata } from "../forkThreads/MetadataStore.ts";
 import * as SqlClient from "effect/sql/SqlClient";
@@ -704,6 +705,7 @@ describe("orchestrator MCP toolkit", () => {
                 Layer.provide(layerOrchestration),
               ),
             ),
+            Layer.provide(ServerConfig.layerTest(cwd).pipe(Layer.provide(NodeServices.layer))),
             Layer.provide(NodeServices.layer),
           );
 
