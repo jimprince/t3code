@@ -23,6 +23,9 @@ import {
 } from "./contracts.js";
 
 const RPC_METHODS = {
+  "fork.send.accept": "fork.send.accept",
+  "fork.send.lookup": "fork.send.lookup",
+  "fork.send.inbox": "fork.send.inbox",
   sessionReconcile: "fork.session.reconcile",
   threadIssuesLink: "threadIssues.link",
   threadIssuesUnlink: "threadIssues.unlink",
@@ -122,7 +125,19 @@ export class T3RpcClient {
       string,
       (payload: unknown) => Effect.Effect<T, unknown, never>
     >;
-    return this.runtime.runPromise(Effect.suspend(() => client[RPC_METHODS[method]](input)));
+    const operation = Effect.suspend(() => client[RPC_METHODS[method]](input));
+    if (method.startsWith("fork.send.")) {
+      const result = await this.runtime.runPromise(
+        Effect.exit(operation.pipe(Effect.timeout("15 seconds"))),
+      );
+      if (Exit.isSuccess(result)) return result.value;
+      throw Option.getOrElse(Cause.findErrorOption(result.cause), () =>
+        Object.assign(new Error("TRANSPORT_ERROR"), {
+          name: Cause.hasInterrupts(result.cause) ? "AbortError" : "Error",
+        }),
+      );
+    }
+    return this.runtime.runPromise(operation);
   }
 
   async subscribeShellSnapshot<T>(): Promise<T> {
