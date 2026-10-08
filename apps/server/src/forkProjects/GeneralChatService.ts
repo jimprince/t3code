@@ -1,7 +1,6 @@
 import { GeneralChatInvariantError } from "./GeneralChatError.ts";
 // @effect-diagnostics nodeBuiltinImport:off - Preserve shipped environment storage keys.
 import * as NodeCrypto from "node:crypto";
-import * as NodeOS from "node:os";
 import { CommandId, ProjectId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -9,6 +8,7 @@ import * as Path from "effect/Path";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
+import * as ServerConfig from "../config.ts";
 
 const getChatProjectStorageKey = (environmentId: string): string =>
   `env-${NodeCrypto.createHash("sha256").update(environmentId).digest("hex").slice(0, 32)}`;
@@ -22,21 +22,25 @@ export const ensureGeneralChat = (environmentId: string) =>
     const paths = yield* WorkspacePaths.WorkspacePaths;
     const path = yield* Path.Path;
     const projectId = getChatProjectId(environmentId);
-    const workspaceRoot = yield* paths.normalizeWorkspaceRoot(
-      path.join(NodeOS.tmpdir(), "t3code-chat-workspaces", getChatProjectStorageKey(environmentId)),
-      { createIfMissing: true },
-    );
     const existing = yield* projects.getById(projectId);
     if (Option.isSome(existing)) {
-      if (existing.value.kind !== "chat" || existing.value.workspaceRoot !== workspaceRoot) {
+      if (existing.value.kind !== "chat") {
         return yield* Effect.fail(
           new GeneralChatInvariantError({
             message: `Chat project '${projectId}' does not own its server workspace.`,
           }),
         );
       }
+      // Shipped projects and provider sessions retain their original workspace.
+      // Recreate it after temporary-directory cleanup, regardless of today's TMPDIR.
+      yield* paths.normalizeWorkspaceRoot(existing.value.workspaceRoot, { createIfMissing: true });
       return projectId;
     }
+    const config = yield* ServerConfig.ServerConfig;
+    const workspaceRoot = yield* paths.normalizeWorkspaceRoot(
+      path.join(config.baseDir, "chat-workspaces", getChatProjectStorageKey(environmentId)),
+      { createIfMissing: true },
+    );
     const project = yield* projects.create({
       projectId,
       commandId: CommandId.make(`chat-project.ensure-${getChatProjectStorageKey(environmentId)}`),
