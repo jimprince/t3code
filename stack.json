@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "ffb45c0aec639016371c7faa6d81f8e358487a0f",
-  "head": "5bc904d1b201db9436f64b7ce1b540d57c998f61",
+  "prev": "2f37d7470cc5f758ec62e99e592e2dacc12be994",
+  "head": "8e68a73701f898d9abd734d115e233fe8d648a94",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -113,12 +113,13 @@
     "fork-decision-context-media",
     "fork-subprojects-server",
     "fork-reliable-handoffs",
-    "fork-starting-reconcile-causal-guard",
+    "fork-starting-reconcile-causal-guard"
+  ],
+  "unapplied": [
     "fork-notification-eligibility",
     "fork-gitea-token-setter",
     "fork-direct-endpoints-enumeration"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
