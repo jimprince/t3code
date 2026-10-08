@@ -1352,3 +1352,17 @@ The V2 CLI uses the scripts and automation RPCs; update it with `t3-thread-deplo
 ### Subprojects
 
 A nested thread can keep its own project page data. `t3-thread orchestrator mark <thread>` sets it on, `unmark` opts out, and `auto` restores the default. `create --subproject` marks the new thread. Auto-promotion ships disabled until every client can navigate subprojects. A top-level thread's stored mode has no effect.
+
+### Start a worker on a task issue
+
+Pass `--issue owner/repo#N` (or a canonical Gitea issue URL) to `t3-thread create`.
+The server links the issue and marks it `in-progress` before accepting the first
+worker message. It uses the project's configured tracker and Gitea connection.
+If Gitea or linking fails, creation reports the failure and retains an empty
+thread; the CLI error includes its thread and launch IDs. Inspect that thread
+before retrying. The native app launch input and
+`t3_thread_launch` MCP tool accept the same optional `issue` field.
+
+An already-started issue stays linked without another started comment when the
+launch is retried. Task completion remains the issue's existing PR merge or
+accepted-result workflow.
