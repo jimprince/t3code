@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off globalTimers:off globalDate:off - shared Node boundary for the Promise-based CLI and server, preserving the CLI filesystem lock.
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
-import { promisify } from "node:util";
+import * as NodeUtil from "node:util";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -11,10 +11,10 @@ const DEFAULT_STATE_DIR = NodePath.join(NodeOS.homedir(), ".config", "t3-remote-
 const DEFAULT_STATE_FILE = NodePath.join(DEFAULT_STATE_DIR, "state.json");
 const STATE_LOCK_TIMEOUT_MS = 10_000;
 const STATE_LOCK_RETRY_MS = 50;
-const openLockFile = promisify(NodeFS.open);
-const closeLockFile = promisify(NodeFS.close);
-const truncateLockFile = promisify(NodeFS.ftruncate);
-const writeLockFile = promisify(NodeFS.writeFile);
+const openLockFile = NodeUtil.promisify(NodeFS.open);
+const closeLockFile = NodeUtil.promisify(NodeFS.close);
+const truncateLockFile = NodeUtil.promisify(NodeFS.ftruncate);
+const writeLockFile = NodeUtil.promisify(NodeFS.writeFile);
 
 export function resolveStateFile(): string {
   return process.env.T3_AGENT_STATE_FILE?.trim() || DEFAULT_STATE_FILE;

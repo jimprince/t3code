@@ -1,24 +1,24 @@
-import * as ChildProcess from "node:child_process";
-import { once } from "node:events";
-import * as Fs from "node:fs/promises";
-import * as Os from "node:os";
-import * as Path from "node:path";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeEvents from "node:events";
+import * as NodeFSP from "node:fs/promises";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 import { loadState, updateState } from "./threadRoutingState.ts";
 
 vi.mock("node:child_process", { spy: true });
 let directory: string;
 let previousStateFile: string | undefined;
-const children: ChildProcess.ChildProcess[] = [];
+const children: NodeChildProcess.ChildProcess[] = [];
 beforeEach(async () => {
-  directory = await Fs.mkdtemp(Path.join(Os.tmpdir(), "t3-state-flock-"));
+  directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-state-flock-"));
   previousStateFile = process.env.T3_AGENT_STATE_FILE;
-  process.env.T3_AGENT_STATE_FILE = Path.join(directory, "state.json");
+  process.env.T3_AGENT_STATE_FILE = NodePath.join(directory, "state.json");
 });
 afterEach(async () => {
   for (const child of children.splice(0)) {
     if (child.exitCode === null && child.signalCode === null) {
-      const exited = once(child, "exit");
+      const exited = NodeEvents.once(child, "exit");
       child.kill("SIGKILL");
       await exited;
     }
@@ -26,11 +26,11 @@ afterEach(async () => {
   vi.restoreAllMocks();
   if (previousStateFile === undefined) delete process.env.T3_AGENT_STATE_FILE;
   else process.env.T3_AGENT_STATE_FILE = previousStateFile;
-  await Fs.rm(directory, { recursive: true, force: true });
+  await NodeFSP.rm(directory, { recursive: true, force: true });
 });
 
 async function holdInChild() {
-  const child = ChildProcess.spawn(
+  const child = NodeChildProcess.spawn(
     process.execPath,
     [
       "--expose-gc",
@@ -47,10 +47,10 @@ async function holdInChild() {
     { stdio: ["ignore", "ignore", "pipe", "ipc"], env: { ...process.env } },
   );
   children.push(child);
-  const ready = once(child, "message");
+  const ready = NodeEvents.once(child, "message");
   await Promise.race([
     ready,
-    once(child, "exit").then(([code]) => {
+    NodeEvents.once(child, "exit").then(([code]) => {
       throw new Error(`Holder exited before locking: ${code}`);
     }),
   ]);
@@ -60,8 +60,8 @@ async function holdInChild() {
 it("releases a killed holder's lock without cleanup and keeps the same sidecar", async () => {
   const child = await holdInChild();
   const sidecar = `${process.env.T3_AGENT_STATE_FILE}.lock`;
-  const inode = (await Fs.stat(sidecar)).ino;
-  const exited = once(child, "exit");
+  const inode = (await NodeFSP.stat(sidecar)).ino;
+  const exited = NodeEvents.once(child, "exit");
   child.kill("SIGKILL");
   await exited;
   await updateState({ count: 0 }, (state) => ({
@@ -69,7 +69,7 @@ it("releases a killed holder's lock without cleanup and keeps the same sidecar",
     result: undefined,
   }));
   expect(await loadState({ count: 0 })).toEqual({ count: 1 });
-  expect((await Fs.stat(sidecar)).ino).toBe(inode);
+  expect((await NodeFSP.stat(sidecar)).ino).toBe(inode);
 });
 
 it("times out after 10 seconds instead of stealing a live holder's lock", async () => {
@@ -104,7 +104,7 @@ it("releases the persistent lock when a mutator throws", async () => {
 });
 
 it("names the Perl requirement if the helper cannot be started", async () => {
-  vi.mocked(ChildProcess.spawn).mockImplementationOnce(() => {
+  vi.mocked(NodeChildProcess.spawn).mockImplementationOnce(() => {
     throw Object.assign(new Error("spawn ENOENT"), { code: "ENOENT" });
   });
   await expect(updateState({}, (state) => ({ state, result: undefined }))).rejects.toThrow(
