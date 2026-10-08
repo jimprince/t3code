@@ -313,6 +313,28 @@ verify_remote_state() {
   [[ "$failed" == false ]]
 }
 
+# Host-local observation is best effort and cannot affect publication's outcome.
+# No command/path overrides; activation requires Deployment approval.
+post_release_observer() {
+  [[ "${STGIT_DISABLE_POST_RELEASE_HOOK:-1}" != "0" ]] && return 0
+  if ! bun -e '
+    try {
+      const { existsSync } = require("node:fs");
+      const { spawnSync } = require("node:child_process");
+      const observer = "/home/brad/.local/share/deployment-disk-watch/current/scripts/dev-disk-watch.py";
+      const config = "/home/brad/.local/state/dev-disk-watch/config.json";
+      if (!existsSync(observer) || !existsSync(config)) process.exit(1);
+      const result = spawnSync("/usr/bin/python3", [
+        "-I", "-B", observer, "--mode", "post-release", "--config", config, "--notify",
+      ], { timeout: 60000, killSignal: "SIGKILL", stdio: "ignore", shell: false });
+      process.exit(result.status === 0 && !result.error ? 0 : 1);
+    } catch { process.exit(1); }
+  ' >/dev/null 2>&1; then
+    echo "Post-release disk observer skipped or failed; publication remains successful." >&2 || true
+  fi
+  return 0
+}
+
 if ! git_cmd push --atomic "$remote" "${leases[@]}" "${refspecs[@]}"; then
   echo "atomic push reported failure; verifying remote state before deciding outcome." >&2
   if ! verify_remote_state; then
@@ -322,5 +344,6 @@ if ! git_cmd push --atomic "$remote" "${leases[@]}" "${refspecs[@]}"; then
   echo "Atomic push transport was ambiguous, but every resulting remote ref is correct."
 else
   verify_remote_state
+  post_release_observer
 fi
 echo "Published HEAD and canonical StGit metadata atomically; backup: $backup_ref; stack snapshot: $history_ref"

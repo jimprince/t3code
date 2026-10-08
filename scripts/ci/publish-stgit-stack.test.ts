@@ -121,6 +121,7 @@ const run = (
     encoding: "utf8",
     env: {
       ...process.env,
+      STGIT_DISABLE_POST_RELEASE_HOOK: "1",
       SYNC_GIT_BIN: "/usr/bin/git",
       STGIT_EXPECTED_REMOTE_MAIN: repo.git("config", "test.leaseMain"),
       STGIT_EXPECTED_REMOTE_STACK: repo.git("config", "test.leaseStack"),
@@ -185,6 +186,180 @@ const racingGit = (): { readonly bin: string; readonly marker: string; readonly 
   NodeFS.chmodSync(bin, 0o755);
   return { bin, marker, dir };
 };
+
+// Every Bun process gets this preload; Python is intercepted even if hook gating breaks.
+const withObserver = (
+  outcome: "success" | "nonzero" | "timeout" | "missing-observer" | "missing-config" | "throw",
+  test: (
+    fixture: ReturnType<typeof seedPublication>,
+    env: Record<string, string>,
+    calls: () => unknown[],
+  ) => void,
+) => {
+  const fixture = seedPublication();
+  const dir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-observer-mock-"));
+  const callsPath = NodePath.join(dir, "calls.jsonl");
+  const preload = NodePath.join(dir, "mock.cjs");
+  const realBun = NodeChildProcess.execFileSync("which", ["bun"], { encoding: "utf8" }).trim();
+  NodeFS.writeFileSync(
+    preload,
+    `
+    const fs = require("node:fs");
+    const cp = require("node:child_process");
+    const observer = "/home/brad/.local/share/deployment-disk-watch/current/scripts/dev-disk-watch.py";
+    const config = "/home/brad/.local/state/dev-disk-watch/config.json";
+    const exists = fs.existsSync;
+    fs.existsSync = path => path === observer ? ${outcome !== "missing-observer"}
+      : path === config ? ${outcome !== "missing-config"} : exists(path);
+    const spawn = cp.spawnSync;
+    cp.spawnSync = (command, args, options) => {
+      if (command !== "/usr/bin/python3") return spawn(command, args, options);
+      const main = spawn("/usr/bin/git", ["--git-dir", ${JSON.stringify(fixture.remote)},
+        "rev-parse", "refs/heads/main"], {encoding:"utf8"}).stdout.trim();
+      fs.appendFileSync(${JSON.stringify(callsPath)}, JSON.stringify({command,args,options,main,verified:exists(process.env.TEST_VERIFIED)}) + "\\n");
+      if (${JSON.stringify(outcome)} === "throw") throw new Error("private diagnostic");
+      return {status: ${outcome === "nonzero" ? "9" : outcome === "timeout" ? "null" : "0"},
+        error: ${outcome === "timeout" ? '{code:"ETIMEDOUT",message:"private diagnostic"}' : "undefined"}};
+    };
+  `,
+  );
+  const bunWrapper = NodePath.join(dir, "bun");
+  // Paths are positional arguments to Bash, never an executable supplied to the publisher.
+  NodeFS.writeFileSync(
+    bunWrapper,
+    '#!/usr/bin/env bash\nexec "$TEST_REAL_BUN" --preload "$TEST_OBSERVER_PRELOAD" "$@"\n',
+  );
+  NodeFS.chmodSync(bunWrapper, 0o755);
+  const gitWrapper = NodePath.join(dir, "git");
+  NodeFS.writeFileSync(
+    gitWrapper,
+    `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "\${1:-}" == push ]]; then
+  printf "push\\n" >> "$TEST_PUSHED"
+  if [[ "\${TEST_PUSH_OUTCOME:-}" == failed ]]; then exit 1; fi
+  /usr/bin/git "$@"
+  if [[ "\${TEST_PUSH_OUTCOME:-}" == mismatch ]]; then
+    /usr/bin/git --git-dir="$TEST_REMOTE" update-ref refs/heads/main "$TEST_REMOTE_BASE"
+  elif [[ "\${TEST_PUSH_OUTCOME:-}" == ambiguous ]]; then exit 1; fi
+  exit 0
+fi
+if [[ "\${1:-}" == ls-remote && -e "$TEST_PUSHED" ]]; then : > "$TEST_VERIFIED"; fi
+exec /usr/bin/git "$@"
+`,
+  );
+  NodeFS.chmodSync(gitWrapper, 0o755);
+  try {
+    test(
+      fixture,
+      {
+        PATH: `${dir}:${process.env.PATH}`,
+        STGIT_DISABLE_POST_RELEASE_HOOK: "0",
+        TEST_REAL_BUN: realBun,
+        TEST_OBSERVER_PRELOAD: preload,
+        SYNC_GIT_BIN: gitWrapper,
+        TEST_PUSHED: NodePath.join(dir, "pushed"),
+        TEST_VERIFIED: NodePath.join(dir, "verified"),
+        TEST_REMOTE: fixture.remote,
+        TEST_REMOTE_BASE: fixture.remoteBase,
+      },
+      () =>
+        NodeFS.existsSync(callsPath)
+          ? NodeFS.readFileSync(callsPath, "utf8")
+              .trim()
+              .split("\n")
+              .map((line) => JSON.parse(line))
+          : [],
+    );
+    const pushes = NodePath.join(dir, "pushed");
+    assert.isAtMost(
+      NodeFS.existsSync(pushes) ? NodeFS.readFileSync(pushes, "utf8").trim().split("\n").length : 0,
+      1,
+      "observer outcomes must never retry publication",
+    );
+  } finally {
+    fixture.repo.cleanup();
+    NodeFS.rmSync(fixture.remote, { recursive: true, force: true });
+    NodeFS.rmSync(dir, { recursive: true, force: true });
+  }
+};
+
+const observerFailure =
+  "Post-release disk observer skipped or failed; publication remains successful.";
+
+describe("post-release disk observer", () => {
+  it("runs once with fixed argv only after a verified successful push", () => {
+    withObserver("success", (fixture, env, calls) => {
+      const result = run(fixture.repo, "--push", env);
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(calls(), [
+        {
+          command: "/usr/bin/python3",
+          args: [
+            "-I",
+            "-B",
+            "/home/brad/.local/share/deployment-disk-watch/current/scripts/dev-disk-watch.py",
+            "--mode",
+            "post-release",
+            "--config",
+            "/home/brad/.local/state/dev-disk-watch/config.json",
+            "--notify",
+          ],
+          options: { timeout: 60_000, killSignal: "SIGKILL", stdio: "ignore", shell: false },
+          main: fixture.head,
+          verified: true,
+        },
+      ]);
+      assert.notInclude(result.stdout + result.stderr, observerFailure);
+    });
+  });
+
+  for (const boundary of [
+    "check",
+    "failed",
+    "mismatch",
+    "ambiguous",
+    "disabled",
+    "default-inactive",
+    "ci-rejected",
+  ] as const) {
+    it(`never runs at the ${boundary} boundary`, () => {
+      withObserver("success", (fixture, env, calls) => {
+        const result = run(fixture.repo, boundary === "check" ? "--check" : "--push", {
+          ...env,
+          TEST_PUSH_OUTCOME: boundary,
+          ...(boundary === "disabled" ? { STGIT_DISABLE_POST_RELEASE_HOOK: "1" } : {}),
+          ...(boundary === "default-inactive" ? { STGIT_DISABLE_POST_RELEASE_HOOK: "" } : {}),
+          ...(boundary === "ci-rejected" ? { TEST_CANDIDATE_EXIT: "1" } : {}),
+        });
+        if (["failed", "mismatch", "ci-rejected"].includes(boundary))
+          assert.notEqual(result.status, 0);
+        else assert.equal(result.status, 0, result.stderr);
+        assert.deepEqual(calls(), [], `observer ran at ${boundary}`);
+        assert.notInclude(result.stdout + result.stderr, observerFailure);
+      });
+    });
+  }
+
+  for (const outcome of [
+    "nonzero",
+    "timeout",
+    "missing-observer",
+    "missing-config",
+    "throw",
+  ] as const) {
+    it(`keeps publication successful with one fixed log for ${outcome}`, () => {
+      withObserver(outcome, (fixture, env, calls) => {
+        const result = run(fixture.repo, "--push", env);
+        assert.equal(result.status, 0, result.stderr);
+        assert.equal(gitAt(fixture.remote, "rev-parse", "refs/heads/main"), fixture.head);
+        assert.lengthOf(calls(), outcome.startsWith("missing-") ? 0 : 1);
+        assert.equal((result.stdout + result.stderr).split(observerFailure).length - 1, 1);
+        assert.notInclude(result.stdout + result.stderr, "private diagnostic");
+      });
+    });
+  }
+});
 
 describe("publish-stgit-stack", () => {
   it("keeps canonical refs unchanged when candidate CI rejects a repair, then publishes the verified replacement", () => {

@@ -337,6 +337,31 @@ namespace. The helper never refreshes a rejected lease or retries against
 newly observed state, and it verifies every resulting remote object ID when a
 push reports an ambiguous transport failure.
 
+The hook is inactive by default. Only a separately Deployment-approved activation
+may set `STGIT_DISABLE_POST_RELEASE_HOOK=0`. Once activated, after a successful
+push exit and verified remote refs, the publisher makes one
+best-effort host-local disk observation with the fixed Python argv:
+
+```text
+/usr/bin/python3 -I -B /home/brad/.local/share/deployment-disk-watch/current/scripts/dev-disk-watch.py --mode post-release --config /home/brad/.local/state/dev-disk-watch/config.json --notify
+```
+
+The observer has a 60-second timeout with SIGKILL, discards output, and cannot
+change the publication exit code or retry publication. A missing observer or
+config and any observer failure print only the fixed line
+`Post-release disk observer skipped or failed; publication remains successful.`
+It never runs in check mode, after a failed push (including verified ambiguous
+transport outcomes), or after failed remote verification. CI/test harnesses
+can set `STGIT_DISABLE_POST_RELEASE_HOOK=1`; no command/path override exists.
+Tests intercept the subprocess and use disposable local Git remotes; they
+must never execute the installed observer. The fixed trailing `--notify` is
+required for delivery, durable receipts and locking by the immutable reviewed
+local-controller PR166 observer at `3aaa2030cb78bea34aab277af2936c753d9cc5dc`
+(SHA256 `0eceff4d8520c324eef0bc160c50a77c11ddf989587848e1c9beb184e6de77bf`).
+This hook is V2-only source preparation: V1 is frozen after fork.33. V2 Port
+replays the concern; no V1 integration or install is authorized. Activation
+remains Deployment's separate gate.
+
 Candidate deployment supplies `STGIT_EXPECTED_REMOTE_STACK` and
 `STGIT_EXPECTED_PATCH_REFS_JSON`. These bind publication to the complete
 metadata state observed when the candidate was claimed, including obsolete
