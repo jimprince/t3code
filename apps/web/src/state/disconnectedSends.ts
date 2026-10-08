@@ -13,15 +13,24 @@ type SendQueue = ReturnType<typeof createDisconnectedComposerQueue<DisconnectedS
 const queues = new Map<EnvironmentId, SendQueue>();
 
 const useQueueStore = create<{
-  /** Changes whenever the queue contents or a delivery outcome changes; drives the banner. */
-  readonly revision: number;
+  /**
+   * A copy of each environment's held messages, oldest first, replaced on every change so the
+   * composer strip re-renders. A counter read inside a memo is not enough: React Compiler drops
+   * a dependency the memo body does not use.
+   */
+  readonly held: Readonly<Partial<Record<EnvironmentId, ReadonlyArray<DisconnectedSend>>>>;
   /** Counts the reasons to deliver now: a new held send or a user Retry. */
   readonly flushRequests: number;
   /** Environments whose last delivery was refused; they stay held until a Retry. */
   readonly refused: ReadonlySet<EnvironmentId>;
-}>(() => ({ revision: 0, flushRequests: 0, refused: new Set() }));
+}>(() => ({ held: {}, flushRequests: 0, refused: new Set() }));
 
-const bump = () => useQueueStore.setState(({ revision }) => ({ revision: revision + 1 }));
+const NO_HELD_SENDS: ReadonlyArray<DisconnectedSend> = [];
+
+const heldIn = (
+  held: Readonly<Partial<Record<EnvironmentId, ReadonlyArray<DisconnectedSend>>>>,
+  environmentId: EnvironmentId,
+) => ({ ...held, [environmentId]: queueFor(environmentId).pending() });
 
 function setRefused(environmentId: EnvironmentId, refused: boolean) {
   useQueueStore.setState((store) => {
@@ -44,8 +53,8 @@ function queueFor(environmentId: EnvironmentId): SendQueue {
 
 export function enqueueDisconnectedSend(environmentId: EnvironmentId, send: DisconnectedSend) {
   queueFor(environmentId).enqueue(send);
-  useQueueStore.setState(({ revision, flushRequests }) => ({
-    revision: revision + 1,
+  useQueueStore.setState(({ held, flushRequests }) => ({
+    held: heldIn(held, environmentId),
     flushRequests: flushRequests + 1,
   }));
 }
@@ -65,7 +74,7 @@ async function flushDisconnectedSends(
     setRefused(environmentId, true);
     throw error;
   } finally {
-    bump();
+    useQueueStore.setState(({ held }) => ({ held: heldIn(held, environmentId) }));
   }
 }
 
@@ -101,27 +110,33 @@ export const useDisconnectedFlushRequests = () => useQueueStore((store) => store
 export const useDisconnectedSendsRefused = (environmentId: EnvironmentId) =>
   useQueueStore((store) => store.refused.has(environmentId));
 
+function heldForThread(
+  held: ReadonlyArray<DisconnectedSend> | undefined,
+  threadId: ThreadId | null,
+): ReadonlyArray<DisconnectedSend> {
+  return threadId === null || held === undefined
+    ? NO_HELD_SENDS
+    : held.filter((send) => send.threadId === threadId);
+}
+
 /** The messages held for one thread, oldest first. */
 export function usePendingDisconnectedSends(
   environmentId: EnvironmentId,
   threadId: ThreadId | null,
 ): ReadonlyArray<DisconnectedSend> {
-  const revision = useQueueStore((store) => store.revision);
-  return useMemo(() => {
-    void revision;
-    return threadId === null
-      ? []
-      : (queues.get(environmentId)?.pending() ?? []).filter((send) => send.threadId === threadId);
-  }, [environmentId, revision, threadId]);
+  const held = useQueueStore((store) => store.held[environmentId]);
+  return useMemo(() => heldForThread(held, threadId), [held, threadId]);
 }
 
 /** Non-hook reads of the same state, for code outside React and for tests. */
 export const disconnectedFlushRequests = () => useQueueStore.getState().flushRequests;
+export const pendingDisconnectedSends = (environmentId: EnvironmentId, threadId: ThreadId) =>
+  heldForThread(useQueueStore.getState().held[environmentId], threadId);
 export const isDisconnectedSendsRefused = (environmentId: EnvironmentId) =>
   useQueueStore.getState().refused.has(environmentId);
 
 /** Test seam: forget every queue and outcome. */
 export function resetDisconnectedSendsForTest() {
   queues.clear();
-  useQueueStore.setState({ revision: 0, flushRequests: 0, refused: new Set() });
+  useQueueStore.setState({ held: {}, flushRequests: 0, refused: new Set() });
 }

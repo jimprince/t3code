@@ -1,7 +1,10 @@
 /** What a composer submission carries, as far as holding it for a server that is down is concerned. */
 export type DisconnectedSendContent = {
   readonly isExistingServerThread: boolean;
-  readonly isFirstMessage: boolean;
+  /** User messages the server's projection holds for the thread. */
+  readonly serverMessageCount: number;
+  /** User messages sent from this page that the projection does not show yet. */
+  readonly pendingMessageCount: number;
   readonly text: string;
   readonly attachmentCount: number;
   readonly contextCount: number;
@@ -19,7 +22,7 @@ export function canHoldSendWhileDisconnected(content: DisconnectedSendContent): 
   const trimmed = content.text.trim();
   return (
     content.isExistingServerThread &&
-    !content.isFirstMessage &&
+    content.serverMessageCount + content.pendingMessageCount > 0 &&
     trimmed.length > 0 &&
     !trimmed.startsWith("/") &&
     content.attachmentCount === 0 &&

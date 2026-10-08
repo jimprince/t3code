@@ -6,22 +6,25 @@ import {
 } from "@t3tools/client-runtime/fork/server-restart";
 import { createEnvironmentRpcSubscriptionAtomFamily } from "@t3tools/client-runtime/state/runtime";
 import { type EnvironmentId, WS_METHODS } from "@t3tools/contracts";
-import * as Option from "effect/Option";
-import { AsyncResult } from "effect/unstable/reactivity";
 import { useEffect } from "react";
 import { create } from "zustand";
 
-import { serverRestartReconnected } from "../components/serverRestartBanner.logic";
+import {
+  followServerRestartEvents,
+  restartLifecycleEvents,
+  serverRestartReconnected,
+} from "../components/serverRestartBanner.logic";
 import { connectionAtomRuntime } from "../connection/runtime";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { useEnvironments } from "./environments";
 
-/** Lifecycle events including the server's update announcements, newest event as the value. */
+/** The server's ready and update events, newest one as the value. */
 const serverLifecycleWithUpdates = createEnvironmentRpcSubscriptionAtomFamily(
   connectionAtomRuntime,
   {
     label: "environment-data:server:lifecycle-with-updates",
     tag: WS_METHODS.subscribeServerLifecycle,
+    transform: restartLifecycleEvents,
   },
 );
 
@@ -69,14 +72,10 @@ export function useServerRestartTracking() {
       .filter((id) => id.length > 0)
       .map((id) => {
         const environmentId = id as EnvironmentId;
-        return appAtomRegistry.subscribe(
+        return followServerRestartEvents(
+          appAtomRegistry,
           serverLifecycleWithUpdates({ environmentId, input: { includeUpdates: true } }),
-          (result) => {
-            const event = Option.getOrNull(AsyncResult.value(result));
-            if (event !== null) {
-              updateRestart(environmentId, (state) => applyServerRestartEvent(state, event));
-            }
-          },
+          (event) => updateRestart(environmentId, (state) => applyServerRestartEvent(state, event)),
         );
       });
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());

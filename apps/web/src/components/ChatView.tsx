@@ -8563,19 +8563,22 @@ export default function ChatView(props: ChatViewProps) {
 
   /**
    * While the server is down a plain text message is kept and sent when it is back: the command
-   * is built once here, with its ids, and replayed unchanged. Returns whether it was kept.
+   * is built once here, with its ids, and replayed unchanged. Returns whether it was kept. The
+   * provider is not checked here: its status is stale while the server is away, so the server
+   * decides on delivery and a refusal shows as "not sent" with Retry.
    */
   const holdSendWhileDisconnected = (
     dispatchMode: ComposerDispatchMode,
     hasDirectAnnotation: boolean,
   ): boolean => {
     const sendCtx = composerRef.current?.getSendContext();
-    if (!activeThread || !sendCtx?.providerAvailable) return false;
+    if (!activeThread || !sendCtx) return false;
     const text = promptRef.current;
     if (
       !canHoldSendWhileDisconnected({
         isExistingServerThread: isServerThread,
-        isFirstMessage: activeMessageCount === 0,
+        serverMessageCount: activeMessageCount,
+        pendingMessageCount: optimisticUserMessages.length,
         text,
         attachmentCount: sendCtx.images.length + sendCtx.files.length,
         contextCount:
@@ -8603,7 +8606,11 @@ export default function ChatView(props: ChatViewProps) {
       commandId: CommandId.make(randomUUID()),
       threadId: activeThread.id,
       message: { messageId: newMessageId(), role: "user", text: outgoingText, attachments: [] },
-      modelSelection: sendCtx.selectedModelSelection,
+      // Without a known provider the composer has no real selection; the thread's own is what the
+      // server would run.
+      modelSelection: sendCtx.providerAvailable
+        ? sendCtx.selectedModelSelection
+        : activeThread.modelSelection,
       runtimeMode,
       interactionMode: sendCtx.interactionMode,
       dispatchMode: disconnectedDispatchMode(dispatchMode),

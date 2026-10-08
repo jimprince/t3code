@@ -1,4 +1,8 @@
 import type { ServerRestartState } from "@t3tools/client-runtime/fork/server-restart";
+import type { ServerLifecycleStreamEvent } from "@t3tools/contracts";
+import * as Option from "effect/Option";
+import * as Stream from "effect/Stream";
+import { AsyncResult, type Atom, type AtomRegistry } from "effect/unstable/reactivity";
 
 /** How long "Server updated" stays before the banner clears itself. */
 const SERVER_RESTART_DONE_VISIBLE_MS = 4_000;
@@ -101,4 +105,33 @@ export function serverRestartReconnected(state: ServerRestartState): ServerResta
   if (state.status !== "updating" || state.deadline === undefined) return state;
   const { deadline: _deadline, ...rest } = state;
   return rest;
+}
+
+/**
+ * Keeps the lifecycle events that move a restart. A stream atom holds only the last event of
+ * each chunk and the replay arrives as one chunk sorted by sequence, so after this filter that
+ * last event is the newest ready or updating one, not a later welcome or migration notice.
+ */
+export const restartLifecycleEvents = <E, R>(
+  events: Stream.Stream<ServerLifecycleStreamEvent, E, R>,
+): Stream.Stream<ServerLifecycleStreamEvent, E, R> =>
+  events.pipe(Stream.filter((event) => event.type === "ready" || event.type === "updating"));
+
+/**
+ * Hands every lifecycle event the atom receives to `apply`. `immediate` builds the atom, which
+ * is what opens its stream: a bare listener never starts it and would never hear from the server.
+ */
+export function followServerRestartEvents<E>(
+  registry: AtomRegistry.AtomRegistry,
+  atom: Atom.Atom<AsyncResult.AsyncResult<ServerLifecycleStreamEvent, E>>,
+  apply: (event: ServerLifecycleStreamEvent) => void,
+): () => void {
+  return registry.subscribe(
+    atom,
+    (result) => {
+      const event = Option.getOrNull(AsyncResult.value(result));
+      if (event !== null) apply(event);
+    },
+    { immediate: true },
+  );
 }

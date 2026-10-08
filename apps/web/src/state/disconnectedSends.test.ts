@@ -6,6 +6,7 @@ import {
   enqueueDisconnectedSend,
   flushHeldSends,
   isDisconnectedSendsRefused,
+  pendingDisconnectedSends,
   resetDisconnectedSendsForTest,
   retryDisconnectedSends,
   type DisconnectedSend,
@@ -14,10 +15,10 @@ import {
 const environment = EnvironmentId.make("environment-a");
 const thread = ThreadId.make("thread-a");
 
-const held = (id: string): DisconnectedSend =>
+const held = (id: string, threadId = thread): DisconnectedSend =>
   ({
     commandId: CommandId.make(`command-${id}`),
-    threadId: thread,
+    threadId,
     message: {
       messageId: MessageId.make(`message-${id}`),
       role: "user",
@@ -38,6 +39,23 @@ describe("held sends", () => {
       async (_, command) => void delivered.push(command.commandId),
     );
     expect(delivered).toEqual(["command-a", "command-b"]);
+  });
+
+  it("shows a thread's held messages until the server accepts them", async () => {
+    const texts = () =>
+      pendingDisconnectedSends(environment, thread).map((send) => send.message.text);
+    enqueueDisconnectedSend(environment, held("a"));
+    enqueueDisconnectedSend(environment, held("b"));
+    enqueueDisconnectedSend(environment, held("other", ThreadId.make("thread-b")));
+    expect(texts()).toEqual(["a", "b"]);
+
+    await flushHeldSends([environment], async () => {
+      throw new Error("refused");
+    });
+    expect(texts()).toEqual(["a", "b"]);
+
+    await flushHeldSends([environment], async () => undefined);
+    expect(texts()).toEqual([]);
   });
 
   it("asks for delivery when a send is held, so one held while connected does not wait", () => {

@@ -6,10 +6,14 @@ import {
   type ServerRestartState,
 } from "@t3tools/client-runtime/fork/server-restart";
 import type { ServerLifecycleStreamEvent } from "@t3tools/contracts";
+import * as Stream from "effect/Stream";
+import { Atom, AtomRegistry } from "effect/unstable/reactivity";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
   describeServerRestart,
+  followServerRestartEvents,
+  restartLifecycleEvents,
   serverRestartClearDelayMs,
   serverRestartExpiryDelayMs,
   serverRestartReconnected,
@@ -106,6 +110,81 @@ describe("server restart banner", () => {
     it("leaves other states alone", () => {
       expect(serverRestartReconnected(installing)).toBe(installing);
       expect(serverRestartReconnected({ status: "idle" })).toEqual({ status: "idle" });
+    });
+  });
+
+  describe("following the server's lifecycle subscription", () => {
+    const target = "0.0.46-nightly.20261008.1-fork.6";
+    const ready = (sequence: number, at: string, serverVersion: string) =>
+      ({
+        version: 1,
+        sequence,
+        type: "ready",
+        payload: { at, environment: { serverVersion } },
+      }) as unknown as ServerLifecycleStreamEvent;
+    const welcome = { version: 1, sequence: 1, type: "welcome" } as ServerLifecycleStreamEvent;
+    const migrated = {
+      version: 1,
+      sequence: 3,
+      type: "legacyThreadMigration",
+      payload: { status: "complete", totalThreadCount: 2 },
+    } as ServerLifecycleStreamEvent;
+
+    // Runs one subscription replay through the same atom shape the app uses.
+    const replay = (start: ServerRestartState, events: ReadonlyArray<ServerLifecycleStreamEvent>) => {
+      const registry = AtomRegistry.make();
+      const atom = Atom.make(restartLifecycleEvents(Stream.fromIterable(events)));
+      let state = start;
+      const stop = followServerRestartEvents(registry, atom, (event) => {
+        state = applyServerRestartEvent(state, event);
+      });
+      stop();
+      registry.dispose();
+      return state;
+    };
+    const lost = serverRestartReconnected(updating({ deadline: 91_000 }));
+
+    it("opens the subscription and resolves on the restarted server's ready", () => {
+      expect(
+        replay(lost, [welcome, ready(2, "2026-10-08T20:01:00.000Z", target)]),
+      ).toMatchObject({ status: "updated", serverVersion: target });
+      expect(
+        replay(lost, [welcome, ready(2, "2026-10-08T20:01:00.000Z", "0.0.45")]),
+      ).toMatchObject({ status: "back", serverVersion: "0.0.45" });
+    });
+
+    it("recovers from did not come back once the server returns", () => {
+      const failed = expireServerRestart(
+        disconnectServerRestart(updating(), 1_000),
+        1_000 + SERVER_RESTART_TIMEOUT_MS,
+      );
+      expect(failed.status).toBe("failed");
+      expect(
+        replay(failed, [welcome, ready(2, "2026-10-08T20:03:00.000Z", target)]).status,
+      ).toBe("updated");
+    });
+
+    it("still sees ready when a migration notice follows it in the replay", () => {
+      expect(
+        replay(lost, [welcome, ready(2, "2026-10-08T20:01:00.000Z", target), migrated]).status,
+      ).toBe("updated");
+    });
+
+    it("keeps updating when the old server, still installing, replays its earlier ready", () => {
+      const announcing = {
+        version: 1,
+        sequence: 3,
+        type: "updating",
+        payload: {
+          at: "2026-10-08T20:00:00.000Z",
+          targetVersion: target,
+          phase: "restarting",
+          etaSeconds: 20,
+        },
+      } as ServerLifecycleStreamEvent;
+      expect(
+        replay(lost, [welcome, ready(2, "2026-10-08T19:00:00.000Z", "0.0.45"), announcing]),
+      ).toMatchObject({ status: "updating", phase: "restarting" });
     });
   });
 });

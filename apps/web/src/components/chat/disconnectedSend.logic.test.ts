@@ -4,7 +4,8 @@ import { canHoldSendWhileDisconnected, disconnectedDispatchMode } from "./discon
 
 const plain = {
   isExistingServerThread: true,
-  isFirstMessage: false,
+  serverMessageCount: 1,
+  pendingMessageCount: 0,
   text: "  keep going  ",
   attachmentCount: 0,
   contextCount: 0,
@@ -18,9 +19,15 @@ describe("holding a send while the server is down", () => {
     expect(canHoldSendWhileDisconnected(plain)).toBe(true);
   });
 
+  it("holds on a thread just created from a draft, before its first message is projected", () => {
+    expect(
+      canHoldSendWhileDisconnected({ ...plain, serverMessageCount: 0, pendingMessageCount: 1 }),
+    ).toBe(true);
+  });
+
   it.each([
     ["a new thread", { isExistingServerThread: false }],
-    ["a first message", { isFirstMessage: true }],
+    ["a first message", { serverMessageCount: 0 }],
     ["an empty message", { text: "   " }],
     ["a slash command", { text: "/compact" }],
     ["an attachment", { attachmentCount: 1 }],
