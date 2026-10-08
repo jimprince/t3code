@@ -633,6 +633,7 @@ function threadDetail(
     worktreePath: projection.thread.worktreePath,
     parentThreadId: projection.thread.lineage.parentThreadId,
     relationshipToParent: projection.thread.lineage.relationshipToParent,
+    queueHeld: projection.runs.some((run) => run.status === "queued" && run.queueHeld === true),
     runCount: projection.runs.length,
     itemCount,
     pendingRequestCount: projection.runtimeRequests.filter(
@@ -648,6 +649,7 @@ function threadDetail(
 function threadRun(run: OrchestrationV2Run): OrchestratorMcpThreadRun {
   return {
     runId: run.id,
+    queueHeld: run.queueHeld === true,
     ordinal: run.ordinal,
     status: run.status,
     providerInstanceId: run.modelSelection.instanceId,
@@ -2061,6 +2063,7 @@ const make = Effect.gen(function* () {
           runId: result.run.id,
           status: result.run.status,
           delivery: result.delivery,
+          queueHeld: result.run.status === "queued" && result.run.queueHeld === true,
         } satisfies OrchestratorMcpThreadSendResult;
       }),
     waitForThread: (scope, input) =>

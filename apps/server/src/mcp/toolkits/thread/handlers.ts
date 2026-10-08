@@ -39,6 +39,7 @@ function queueEntry(
   const characters = Array.from(message.text);
   return {
     queuedRunId: run.id,
+    queueHeld: run.queueHeld === true,
     text: characters.slice(0, limit).join(""),
     truncated: characters.length > limit,
   };
@@ -299,6 +300,7 @@ export const ThreadToolkitHandlersLive = ThreadToolkit.toLayer({
       const cursor = input.cursor ?? 0;
       const end = cursor + (input.limit ?? 20);
       return {
+        queueHeld: runs.some((run) => run.queueHeld === true),
         items: runs.slice(cursor, end).flatMap((run) => {
           const entry = queueEntry(projection, run.id, 1000);
           return entry === undefined ? [] : [entry];
@@ -318,6 +320,8 @@ export const ThreadToolkitHandlersLive = ThreadToolkit.toLayer({
         }))
       );
     }),
+  t3_queue_resume: (input) =>
+    dispatch(input.threadId, (common) => ({ ...common, type: "queue.resume" })),
   t3_queue_edit: (input) =>
     dispatch(input.threadId, (common) => ({
       ...common,

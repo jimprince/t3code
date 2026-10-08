@@ -1,4 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off globalTimers:off globalDate:off - shared Node boundary for the Promise-based CLI and server, preserving the CLI filesystem lock.
+import * as NodeChildProcess from "node:child_process";
+import { constants as fileFlags } from "node:fs";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -53,31 +55,62 @@ async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// flock belongs to the inherited open file description, so the parent's FD
+// retains it after Perl exits. Never unlink this sidecar: that splits the lock.
+const LOCK_HELPER = `use Fcntl qw(:flock);
+open(my $fh, '>&=', 3) or die "Cannot open inherited state lock: $!";
+if (flock($fh, LOCK_EX | LOCK_NB)) { exit 0; }
+exit 1;`;
+
+async function tryStateLock(fd: number): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    const unavailable = (cause: unknown) =>
+      new Error("State locking requires /usr/bin/perl with built-in flock on this host.", {
+        cause,
+      });
+    try {
+      const child = NodeChildProcess.spawn("/usr/bin/perl", ["-e", LOCK_HELPER], {
+        stdio: ["ignore", "ignore", "pipe", fd],
+      });
+      let stderr = "";
+      child.stderr?.setEncoding("utf8");
+      child.stderr?.on("data", (chunk: string) => {
+        stderr += chunk;
+      });
+      child.once("error", (error) => reject(unavailable(error)));
+      child.once("close", (code, signal) => {
+        if (code === 0) resolve(true);
+        else if (code === 1) resolve(false);
+        else reject(new Error(`State lock helper failed (${signal ?? code}): ${stderr.trim()}`));
+      });
+    } catch (error) {
+      reject(unavailable(error));
+    }
+  });
+}
+
 async function withStateLock<T>(stateFile: string, task: () => Promise<T>): Promise<T> {
   await ensureStateDir(stateFile);
   const lockFile = `${stateFile}.lock`;
+  const handle = await NodeFSP.open(lockFile, fileFlags.O_CREAT | fileFlags.O_RDWR, 0o600);
   const startedAt = Date.now();
-
-  for (;;) {
-    try {
-      const handle = await NodeFSP.open(lockFile, "wx");
-      try {
-        await handle.writeFile(`${process.pid}\n`, "utf8");
-        return await task();
-      } finally {
-        await handle.close();
-        await NodeFSP.unlink(lockFile).catch(() => {});
+  try {
+    let retryMs = STATE_LOCK_RETRY_MS;
+    while (!(await tryStateLock(handle.fd))) {
+      const remainingMs = STATE_LOCK_TIMEOUT_MS - (Date.now() - startedAt);
+      if (remainingMs <= 0) {
+        const holder = (await NodeFSP.readFile(lockFile, "utf8").catch(() => "")).trim();
+        const detail = /^\d+$/.test(holder) ? ` Last recorded holder: PID ${holder}.` : "";
+        throw new Error(`Timed out waiting for state lock '${lockFile}' after 10 s.${detail}`);
       }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (!message.includes("EEXIST")) {
-        throw error;
-      }
-      if (Date.now() - startedAt > STATE_LOCK_TIMEOUT_MS) {
-        throw new Error(`Timed out waiting for state lock '${lockFile}'.`, { cause: error });
-      }
-      await sleep(STATE_LOCK_RETRY_MS);
+      await sleep(Math.min(retryMs, remainingMs));
+      retryMs = Math.min(retryMs * 2, 250);
     }
+    await handle.truncate(0);
+    await handle.write(`${process.pid}\n`, 0, "utf8");
+    return await task();
+  } finally {
+    await handle.close();
   }
 }
 
