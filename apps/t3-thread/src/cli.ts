@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { ThreadId, MessageId } from "@t3tools/contracts";
+import { registerPlanCommands } from "./planCommands.js";
 import { registerGiteaTokenCommand, GiteaTokenCliError } from "./giteaToken.js";
 import type { QueuedSendOrigin } from "./types.js";
 import { registerAutomationCommands } from "./automations.js";
@@ -326,6 +327,7 @@ const AGENT_COMMAND_ALIASES = new Set([
   "nest",
   "unnest",
   "issue",
+  "plan",
   "rename",
   "nest",
   "unnest",
@@ -2149,6 +2151,8 @@ request
       }),
     );
   });
+
+registerPlanCommands(agent, withAgent, printJson);
 
 const dashboard = agent
   .command("dashboard")
