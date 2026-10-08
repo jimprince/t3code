@@ -12,6 +12,7 @@ import {
   type ProjectLayoutRevertInput,
   type ProjectLayoutTab,
   type ThreadId,
+  withoutRetiredWidgets,
 } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -32,7 +33,13 @@ import { findProjectRootThreadId } from "../projectIssues/projectIssues.logic.ts
 
 const fail = (message: string, layout?: ProjectLayout) =>
   new ProjectLayoutError({ message, ...(layout ? { layout } : {}) });
-const decodeLayout = Schema.decodeUnknownOption(ProjectLayout);
+const decodeSavedLayout = Schema.decodeUnknownOption(ProjectLayout);
+/** A saved revision, without widgets the page has since retired. */
+const decodeLayout = (entry: unknown) =>
+  Option.map(decodeSavedLayout(entry), (layout) => ({
+    ...layout,
+    tabs: withoutRetiredWidgets(layout.tabs),
+  }));
 
 /**
  * One project page layout per orchestrator (root) thread: tabs of widgets that
