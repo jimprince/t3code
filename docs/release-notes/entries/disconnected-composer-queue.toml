@@ -1,0 +1,4 @@
+id = "disconnected-composer-queue"
+category = "feature"
+functionality = "threads"
+text = "Messages composed during a server restart can wait for reconnection and retain their send identity when retried."

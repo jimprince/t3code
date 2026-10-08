@@ -3,6 +3,18 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./fork/server-restart": {
+      "types": "./src/fork/serverRestart.ts",
+      "default": "./src/fork/serverRestart.ts"
+    },
+    "./fork/disconnected-composer": {
+      "types": "./src/fork/disconnectedComposer.ts",
+      "default": "./src/fork/disconnectedComposer.ts"
+    },
+    "./fork/thread-recovery": {
+      "types": "./src/fork/threadRecovery.ts",
+      "default": "./src/fork/threadRecovery.ts"
+    },
     "./composerThreadItems": {
       "types": "./src/composerThreadItems.ts",
       "default": "./src/composerThreadItems.ts"
