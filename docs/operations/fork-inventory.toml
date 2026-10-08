@@ -2412,16 +2412,6 @@ decision = "adapt"
 note = "V2 has runs and shared runtime session records, not V1 session summaries. Successful provider interrupt effects already dispatch thread.background-work.settle; its receipt now settles the exact interrupted run, attempt and nodes and clears the matching session. A fork RPC preserves t3-thread session reconcile and refuses live/newer runs. Startup recovery already stops all process-bound sessions; no new migration is needed. Native terminal receipts settle the run, with a ten-second durable fallback after Stop acknowledgement."
 
 [[patch.decision]]
-id = "v2-starting-reconcile-ownership"
-decision = "adapt"
-note = "V2 already repairs a starting session left on its latest ended turn. A causal ownership guard now rejects reconciliation when the starting session updated after the terminal receipt, any provider turn is live, or any run is active; the fork reconcile-only dispatch branch rechecks the guard before invoking normal Stop settlement, preserving starts racing dispatch without changing Stop-ACK background interruption. Elapsed time never invalidates a newer start. Residual follow-up: a crash during the first start with no prior terminal turn remains starting; safe recovery needs provider-process or session-handle liveness, not a timer."
-
-[[patch.decision]]
-id = "v2-starting-reconcile-provider-write-window"
-decision = "defer"
-note = "Reconcile-only dispatch evaluates causal ownership on the same locked projection snapshot passed into Stop settlement; ordinary Stop keeps its default load and semantics. Remaining read-to-commit window: ProviderSessionManager writes directly to EventSink, and RunExecutionService -> ProviderEventIngestor -> EventSink bypasses ThreadCommandExecutor. A provider session or turn update can commit after the guarded snapshot read and before the planned reconcile commit; worst case, that reconcile can overwrite a newer session status or interrupt background work using stale ownership. The six focused cases cover the pre-dispatch race only, not this window. Follow-up: https://git.bradleyprince.com/brad/t3code-fork/issues/196. No EventSink recheck or outer SQL transaction is added."
-
-[[patch.decision]]
 id = "v2-ci4-native-terminal-before-reconcile"
 decision = "adapt"
 note = "Stop ACK records acknowledgement without terminalizing the run. Native finalization retains upstream ordering for rollback refs, usage and terminal receipts across all drivers. A replay-safe durable outbox fallback settles the exact run after ten seconds if native finalization never arrives; newer work wins. This replaces the OpenCode replay drain, leaving upstream testkit files unchanged. V1 ACK-to-ready remains bounded rather than waiting indefinitely for ingestion."
@@ -2542,3 +2532,23 @@ depends_on = [
 ]
 roles = []
 note = "Adds only WsForkRpcGroup RPCs and reuses fork_thread_metadata_receipts; no migration ID. V2 admission and binding commit with native events/outbox under existing ownership and thread lifecycle locks. Normal Claude handoffs use SDK next priority; explicit control retains now. Unknown transport outcomes stop automatic delivery/retry. Exact/coalesce lookup is sender-private; the own inbox uses existing environment read authorization and an exact-key bounded metadata index. Production fixtures require T3_LIFECYCLE_FIXTURES. Install/deployment remain separately gated per machine."
+
+[[patch]]
+name = "fork-starting-reconcile-causal-guard"
+subject = "fix(server): guard starting-session reconcile with causal ownership"
+class = "product"
+purpose = "Let session reconcile clear a session stuck in starting after its turn ended, while refusing whenever a newer start, live provider turn or active run owns the thread."
+retire_when = "Upstream reconciles stale starting sessions with an equivalent causal ownership guard."
+depends_on = ["fork-session-reconcile"]
+roles = []
+note = "Issue #191. Adds only the guard and the reconcile-only dispatch recheck; Stop semantics are unchanged. Residual provider-write window is #196."
+
+[[patch.decision]]
+id = "v2-starting-reconcile-ownership"
+decision = "adapt"
+note = "V2 already repairs a starting session left on its latest ended turn. A causal ownership guard now rejects reconciliation when the starting session updated after the terminal receipt, any provider turn is live, or any run is active; the fork reconcile-only dispatch branch rechecks the guard before invoking normal Stop settlement, preserving starts racing dispatch without changing Stop-ACK background interruption. Elapsed time never invalidates a newer start. Residual follow-up: a crash during the first start with no prior terminal turn remains starting; safe recovery needs provider-process or session-handle liveness, not a timer."
+
+[[patch.decision]]
+id = "v2-starting-reconcile-provider-write-window"
+decision = "defer"
+note = "Reconcile-only dispatch evaluates causal ownership on the same locked projection snapshot passed into Stop settlement; ordinary Stop keeps its default load and semantics. Remaining read-to-commit window: ProviderSessionManager writes directly to EventSink, and RunExecutionService -> ProviderEventIngestor -> EventSink bypasses ThreadCommandExecutor. A provider session or turn update can commit after the guarded snapshot read and before the planned reconcile commit; worst case, that reconcile can overwrite a newer session status or interrupt background work using stale ownership. The six focused cases cover the pre-dispatch race only, not this window. Follow-up: https://git.bradleyprince.com/brad/t3code-fork/issues/196. No EventSink recheck or outer SQL transaction is added."
