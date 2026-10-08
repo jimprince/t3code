@@ -61,6 +61,7 @@ export interface ExecutionEnvironmentDescriptor {
     reliableHandoffs?: boolean;
     threadSubprojects?: boolean;
     threadIssues?: boolean;
+    taskIssueLaunch?: boolean;
     remoteThreadNesting?: boolean;
     projectItemTypes?: boolean;
   };
