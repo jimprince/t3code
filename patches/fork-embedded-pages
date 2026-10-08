@@ -1,6 +1,6 @@
-Bottom: a9f19d815ffdb27d93c1b728895a965b77e0eca0
-Top:    8f2bc4a28f35a7f1e19c9d185cd34f4d6d50bf16
+Bottom: 4c5485c79d302f38b34d1d110e3f8e273698c9db
+Top:    671dda8f1f80158f92143afb38cd1f09dc3759b4
 Author: brad <bradprin@live.com>
-Date:   2026-10-08 10:08:52 +0000
+Date:   2026-10-08 10:10:54 +0000
 
 feat(web): pin web pages as sidebar footer icons
