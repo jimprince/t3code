@@ -1,0 +1,4 @@
+id = "session-check-recovery"
+category = "fix"
+functionality = "connections"
+text = "A temporary session-check timeout no longer disables Send; connected clients retry automatically while rejected credentials still lose their grants."
