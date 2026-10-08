@@ -1,0 +1,4 @@
+id = "dashboard-working-blocked-done-removed"
+category = "removal"
+functionality = "projects"
+text = "The Dashboard's Working now, Blocked and Done since your last visit widgets are gone: the threads under each workstream replace them, and a task nobody has touched for days shows 'blocked, stuck 4d'."
