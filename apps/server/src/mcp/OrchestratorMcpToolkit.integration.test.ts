@@ -1,3 +1,4 @@
+import * as ServerConfig from "../config.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import { listMetadata } from "../forkThreads/MetadataStore.ts";
 import * as SqlClient from "effect/sql/SqlClient";
@@ -702,6 +703,11 @@ describe("orchestrator MCP toolkit", () => {
               SecretRequests.layer.pipe(
                 Layer.provide(layerMemorySecretStore),
                 Layer.provide(layerOrchestration),
+              ),
+            ),
+            Layer.provide(
+              ServerConfig.layerTest(cwd, { prefix: "t3-mcp-toolkit-" }).pipe(
+                Layer.provide(NodeServices.layer),
               ),
             ),
             Layer.provide(NodeServices.layer),

@@ -1,3 +1,4 @@
+import { MessageForwardRpcs } from "./messageForward.ts";
 import { GiteaTokenSetInput, GiteaTokenSetResult, GiteaTokenSetError } from "./giteaToken.ts";
 import { SessionReconcileInput, SessionReconcileError } from "./sessionReconcile.ts";
 import { HandoffRpcs } from "./handoffs.ts";
@@ -1577,7 +1578,7 @@ const WsAgentSessionsImportRpc = Rpc.make(WS_METHODS.agentSessionsImport, {
   ]),
 });
 
-const WsAssetsCreateUrlRpc = Rpc.make(WS_METHODS.assetsCreateUrl, {
+export const WsAssetsCreateUrlRpc = Rpc.make(WS_METHODS.assetsCreateUrl, {
   payload: AssetCreateUrlInput,
   success: AssetCreateUrlResult,
   error: Schema.Union([AssetAccessError, EnvironmentAuthorizationError]),
@@ -1589,13 +1590,13 @@ const WsAssetsPersistChatAttachmentsRpc = Rpc.make(WS_METHODS.assetsPersistChatA
   error: Schema.Union([PersistChatAttachmentsError, EnvironmentAuthorizationError]),
 });
 
-const WsAttachmentsCreateUploadUrlRpc = Rpc.make(WS_METHODS.attachmentsCreateUploadUrl, {
+export const WsAttachmentsCreateUploadUrlRpc = Rpc.make(WS_METHODS.attachmentsCreateUploadUrl, {
   payload: AttachmentCreateUploadUrlInput,
   success: AttachmentCreateUploadUrlResult,
   error: Schema.Union([AttachmentUploadSigningKeyError, EnvironmentAuthorizationError]),
 });
 
-const WsAttachmentsDeleteRpc = Rpc.make(WS_METHODS.attachmentsDelete, {
+export const WsAttachmentsDeleteRpc = Rpc.make(WS_METHODS.attachmentsDelete, {
   payload: AttachmentDeleteInput,
   error: EnvironmentAuthorizationError,
 });
@@ -2422,6 +2423,7 @@ export const WsSessionReconcileRpc = Rpc.make("fork.session.reconcile", {
 // group's toHandlers type hits TS2589 and the server's handler-service types resolve to any in R.
 export const WsForkRpcGroup = RpcGroup.make(
   ...HandoffRpcs,
+  ...MessageForwardRpcs,
   WsGiteaSetTokenRpc,
   WsProjectRequestsDiscussRpc,
   WsSessionReconcileRpc,
