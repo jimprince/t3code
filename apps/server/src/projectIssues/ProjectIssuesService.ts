@@ -2,6 +2,7 @@ import {
   ProjectIssuesError,
   type GiteaInstanceConfig,
   type ProjectIssue,
+  type ProjectIssueDecision,
   type ProjectIssueRepository,
   type ProjectIssuesGetInput,
   type ProjectIssuesGetResult,
@@ -40,6 +41,7 @@ import {
   type GiteaRepositoryTarget,
 } from "./projectIssues.logic.ts";
 import { NEEDS_BRAD_LABEL, parseDecisionIssue } from "./decisions.logic.ts";
+import { parseDecisionDeadline, parseDeferral } from "./decisionFeed.logic.ts";
 
 const GiteaLabel = Schema.Struct({ name: Schema.String });
 const GiteaIssue = Schema.Struct({
@@ -290,6 +292,15 @@ export const make = Effect.gen(function* () {
     issueCache.delete(repositoryKey(target));
   };
 
+  /** The decision with the deadline its context names, when it names one. */
+  const withDeadline = (
+    decision: ProjectIssueDecision,
+    createdAt: string,
+  ): ProjectIssueDecision => {
+    const deadline = parseDecisionDeadline(decision.context, createdAt);
+    return deadline === null ? decision : { ...decision, deadline };
+  };
+
   const toProjectIssue = (
     target: GiteaRepositoryTarget,
     issue: GiteaIssue,
@@ -300,6 +311,7 @@ export const make = Effect.gen(function* () {
     const blockedBy = parseBlockedBy(issue.body);
     const asksBrad =
       issue.state === "open" && labels.some((label) => label.toLowerCase() === NEEDS_BRAD_LABEL);
+    const deferral = issue.state === "open" ? parseDeferral(issue.body) : null;
     return {
       host: target.host,
       repository: target.repository,
@@ -311,7 +323,10 @@ export const make = Effect.gen(function* () {
       isRequest,
       ...(isRequest ? { stage: deriveRequestStage(issue.state, labels) } : {}),
       ...(blockedBy.length > 0 ? { blockedBy } : {}),
-      ...(asksBrad ? { decision: parseDecisionIssue(issue.body) } : {}),
+      ...(asksBrad
+        ? { decision: withDeadline(parseDecisionIssue(issue.body), issue.created_at) }
+        : {}),
+      ...(deferral ? { deferral } : {}),
       milestone:
         issue.milestone && issue.milestone.id > 0 && issue.milestone.title.trim()
           ? { id: issue.milestone.id, title: issue.milestone.title.trim() }
