@@ -1,0 +1,4 @@
+id = "decisions-feed-newest-first"
+category = "feature"
+functionality = "projects"
+text = "The Decisions feed lists blocked threads first, then everything else, each newest first; a card moved to the end still sinks to the bottom."
