@@ -91,3 +91,4 @@ export * from "./threadTransfer.ts";
 export * from "./forkLegacyHistory.ts";
 
 export * from "./sessionReconcile.ts";
+export * from "./handoffs.ts";
