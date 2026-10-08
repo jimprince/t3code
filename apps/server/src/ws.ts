@@ -253,6 +253,7 @@ import { makeHandoffService } from "./forkThreads/HandoffService.ts";
 import * as PullRequestSyncReactor from "./orchestration-v2/PullRequestSyncReactor.ts";
 import * as ProjectIssuesService from "./projectIssues/ProjectIssuesService.ts";
 import * as RequestLedger from "./projectIssues/RequestLedger.ts";
+import * as DecisionFeed from "./projectIssues/DecisionFeed.ts";
 import * as ProjectDashboardService from "./projectDashboard/ProjectDashboardService.ts";
 import * as ProjectDashboardStore from "./projectDashboard/ProjectDashboardStore.ts";
 import * as ProjectLayoutService from "./projectLayout/ProjectLayoutService.ts";
@@ -1362,6 +1363,7 @@ const makeWsRpcLayer = (
       const withPullRequestViewer = pullRequests.withRoutingCredential;
       const projectIssues = yield* ProjectIssuesService.make;
       const requestLedger = yield* RequestLedger.make({ projectIssues, threadIssues });
+      const decisionFeed = yield* DecisionFeed.make({ projectIssues, ledger: requestLedger });
       const projectCanvas = yield* ProjectCanvasService.make;
       const requestIntake = yield* RequestIntake.make({
         providers: providerRegistry,
@@ -2811,9 +2813,10 @@ const makeWsRpcLayer = (
         [WS_METHODS.projectIssuesList]: (input) =>
           observeRpcEffect(
             WS_METHODS.projectIssuesList,
-            projectIssues
-              .list(input)
-              .pipe(Effect.flatMap((result) => requestLedger.decorate(result, input.rootThreadId))),
+            projectIssues.list(input).pipe(
+              Effect.flatMap((result) => requestLedger.decorate(result, input.rootThreadId)),
+              Effect.flatMap((result) => decisionFeed.enrich(result, input.rootThreadId)),
+            ),
             { "rpc.aggregate": "project-issues" },
           ),
         [WS_METHODS.projectRequestsSettle]: (input) =>
@@ -4036,6 +4039,24 @@ const makeWsRpcLayer = (
           ),
         [WS_METHODS.projectRequestsDiscuss]: (input) =>
           observeRpcEffect(WS_METHODS.projectRequestsDiscuss, requestLedger.discuss(input), {
+            "rpc.aggregate": "project-issues",
+          }),
+        [WS_METHODS.projectRequestsPendingAsks]: (input) =>
+          observeRpcEffect(WS_METHODS.projectRequestsPendingAsks, decisionFeed.pendingAsks(input), {
+            "rpc.aggregate": "project-issues",
+          }),
+        [WS_METHODS.projectRequestsApproveMerge]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectRequestsApproveMerge,
+            decisionFeed.approveAndMerge(input),
+            { "rpc.aggregate": "project-issues" },
+          ),
+        [WS_METHODS.projectRequestsSendBack]: (input) =>
+          observeRpcEffect(WS_METHODS.projectRequestsSendBack, decisionFeed.sendBack(input), {
+            "rpc.aggregate": "project-issues",
+          }),
+        [WS_METHODS.projectRequestsDefer]: (input) =>
+          observeRpcEffect(WS_METHODS.projectRequestsDefer, decisionFeed.defer(input), {
             "rpc.aggregate": "project-issues",
           }),
         [WS_METHODS.projectRequestsDecide]: (input) =>
