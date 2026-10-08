@@ -3880,7 +3880,7 @@ const makeWsRpcLayer = (
             }),
             { "rpc.aggregate": "server" },
           ),
-        [WS_METHODS.subscribeServerLifecycle]: (_input) =>
+        [WS_METHODS.subscribeServerLifecycle]: (input) =>
           observeRpcStreamEffect(
             WS_METHODS.subscribeServerLifecycle,
             Effect.gen(function* () {
@@ -3898,7 +3898,11 @@ const makeWsRpcLayer = (
               const liveEvents = Stream.fromQueue(liveBuffer).pipe(
                 Stream.filter((event) => event.sequence > snapshot.sequence),
               );
-              return Stream.concat(rpcInitialItems(snapshotEvents), liveEvents);
+              return Stream.concat(rpcInitialItems(snapshotEvents), liveEvents).pipe(
+                Stream.filter(
+                  (event) => input.includeUpdates === true || event.type !== "updating",
+                ),
+              );
             }),
             { "rpc.aggregate": "server" },
           ),
