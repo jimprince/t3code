@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { registerGiteaTokenCommand, GiteaTokenCliError } from "./giteaToken.js";
 import type { QueuedSendOrigin } from "./types.js";
 import { registerAutomationCommands } from "./automations.js";
 
@@ -2963,6 +2964,19 @@ namedAgentsCommand
   });
 
 registerAutomationCommands(program);
+registerGiteaTokenCommand(program);
+const sensitiveTokenCommand = ["source-control", "gitea", "set-token"].every((part) =>
+  process.argv.slice(2).includes(part),
+);
+if (sensitiveTokenCommand) {
+  // Commander includes unknown argv in diagnostics by default.
+  const redactParser = (command: Command) => {
+    command.configureOutput({ writeErr: () => undefined });
+    command.exitOverride();
+    command.commands.forEach(redactParser);
+  };
+  redactParser(program);
+}
 
 // The watcher dies with whatever process tree started it, so a server restart leaves
 // queued sends with no one to drain them until some command revives it. Any command
@@ -2971,7 +2985,7 @@ registerAutomationCommands(program);
 // refused command (env forget without --force) must leave the file untouched.
 program.hook("postAction", async (_command, action) => {
   if (action.name() === "threads" && action.opts().json) return;
-  if (action.name() === "watch") return;
+  if (action.name() === "watch" || sensitiveTokenCommand) return;
   try {
     if (hasQueuedWork(await loadState())) await ensureNotificationWatcher();
   } catch {
@@ -2980,6 +2994,12 @@ program.hook("postAction", async (_command, action) => {
 });
 
 program.parseAsync(process.argv).catch((error) => {
-  process.stderr.write(`${formatCliError(error)}\n`);
-  process.exitCode = 1;
+  if (sensitiveTokenCommand) {
+    const safe = error instanceof GiteaTokenCliError ? error : new GiteaTokenCliError(2);
+    process.stderr.write(`${safe.message}\n`);
+    process.exitCode = safe.exitCode;
+  } else {
+    process.stderr.write(`${formatCliError(error)}\n`);
+    process.exitCode = 1;
+  }
 });
