@@ -1971,7 +1971,8 @@ export const WsSubscribeServerConfigRpc = Rpc.make(WS_METHODS.subscribeServerCon
 });
 
 const WsSubscribeServerLifecycleRpc = Rpc.make(WS_METHODS.subscribeServerLifecycle, {
-  payload: Schema.Struct({}),
+  // Old clients cannot decode new event kinds. Updates are explicitly opted in.
+  payload: Schema.Struct({ includeUpdates: Schema.optionalKey(Schema.Boolean) }),
   success: ServerLifecycleStreamEvent,
   error: EnvironmentAuthorizationError,
   stream: true,

@@ -954,10 +954,30 @@ export const ServerLifecycleStreamLegacyThreadMigrationEvent = Schema.Struct({
 export type ServerLifecycleStreamLegacyThreadMigrationEvent =
   typeof ServerLifecycleStreamLegacyThreadMigrationEvent.Type;
 
+/** Announced before an intentional update takes this process offline. */
+export const ServerLifecycleUpdatingPayload = Schema.Struct({
+  at: IsoDateTime,
+  targetVersion: TrimmedNonEmptyString,
+  phase: Schema.Literals(["installing", "restarting", "failed"]),
+  etaSeconds: NonNegativeInt,
+  manualUpdateCommand: Schema.optionalKey(TrimmedNonEmptyString),
+  reason: Schema.optionalKey(TrimmedNonEmptyString),
+});
+export type ServerLifecycleUpdatingPayload = typeof ServerLifecycleUpdatingPayload.Type;
+
+export const ServerLifecycleStreamUpdatingEvent = Schema.Struct({
+  version: Schema.Literal(1),
+  sequence: NonNegativeInt,
+  type: Schema.Literal("updating"),
+  payload: ServerLifecycleUpdatingPayload,
+});
+export type ServerLifecycleStreamUpdatingEvent = typeof ServerLifecycleStreamUpdatingEvent.Type;
+
 export const ServerLifecycleStreamEvent = Schema.Union([
   ServerLifecycleStreamWelcomeEvent,
   ServerLifecycleStreamReadyEvent,
   ServerLifecycleStreamLegacyThreadMigrationEvent,
+  ServerLifecycleStreamUpdatingEvent,
 ]);
 export type ServerLifecycleStreamEvent = typeof ServerLifecycleStreamEvent.Type;
 
