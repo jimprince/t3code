@@ -11,7 +11,7 @@ import {
   WsRpcGroup,
 } from "./contracts.js";
 
-const RPC_METHODS = {
+export const RPC_METHODS = {
   "fork.message.forward.prepare": "fork.message.forward.prepare",
   "fork.message.forward.accept": "fork.message.forward.accept",
   [WS_METHODS.assetsCreateUrl]: WS_METHODS.assetsCreateUrl,
