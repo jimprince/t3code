@@ -16,3 +16,12 @@ This index owns fork-specific links so upstream's documentation index can evolve
 - [Fork patch inventory](./operations/fork-inventory/)
 
 - [Measure update reliability](./operations/fork-maintenance.md#measure-update-reliability)
+
+## Session reconciliation races
+
+Session reconciliation checks causal ownership before planning and validates the
+thread's event sequence again when committing. If provider work or another
+thread event arrives in between, reconciliation refuses without interrupting
+that work. Refresh the thread before requesting reconciliation again; reusing a
+rejected command ID continues to return its recorded rejection. Ordinary Stop
+acknowledgments retain their existing behavior.

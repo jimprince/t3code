@@ -5,6 +5,7 @@ import type {
 } from "@t3tools/contracts";
 import { interruptedSessionEvents } from "../forkThreads/InterruptedSession.ts";
 import { MessageAdmission } from "../forkThreads/MessageAdmission.ts";
+import { canReconcileStartingSession } from "../forkThreads/StartingSessionReconcile.ts";
 import { normalizeThreadIssueKey, threadIssueKeysEqual } from "@t3tools/shared/threadIssues";
 import {
   assertRootSlot,
@@ -8788,6 +8789,38 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       }
     });
 
+  const loadBackgroundWorkSettleSnapshot = (
+    command: Extract<
+      OrchestrationV2InternalCommand,
+      { readonly type: "thread.background-work.settle" }
+    >,
+  ) =>
+    Effect.all([
+      projectionStore.getThreadRecords(
+        command.threadId,
+        [
+          "runs",
+          "attempts",
+          "turnItems",
+          "providerThreads",
+          "providerTurns",
+          "providerSessions",
+          "nodes",
+        ],
+        {
+          turnItemTypes: ["command_execution", "dynamic_tool", "subagent", "run_interrupt_request"],
+        },
+      ),
+      projectionStore.getProviderControlContext(command.threadId, {
+        providerThreadId: command.providerThreadId,
+        providerTurnId: command.providerTurnId,
+      }),
+    ]).pipe(
+      Effect.mapError(
+        (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
+      ),
+    );
+
   const dispatchBackgroundWorkSettle = (
     command: Extract<
       OrchestrationV2InternalCommand,
@@ -8795,38 +8828,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     >,
     events: Ref.Ref<Array<OrchestrationV2DomainEvent>>,
     effects: Ref.Ref<Array<PendingOrchestrationEffectV2>>,
+    snapshot?: Effect.Success<ReturnType<typeof loadBackgroundWorkSettleSnapshot>>,
   ) =>
     Effect.gen(function* () {
-      const [projection, stopped] = yield* Effect.all([
-        projectionStore.getThreadRecords(
-          command.threadId,
-          [
-            "runs",
-            "attempts",
-            "turnItems",
-            "providerThreads",
-            "providerTurns",
-            "providerSessions",
-            "nodes",
-          ],
-          {
-            turnItemTypes: [
-              "command_execution",
-              "dynamic_tool",
-              "subagent",
-              "run_interrupt_request",
-            ],
-          },
-        ),
-        projectionStore.getProviderControlContext(command.threadId, {
-          providerThreadId: command.providerThreadId,
-          providerTurnId: command.providerTurnId,
-        }),
-      ]).pipe(
-        Effect.mapError(
-          (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
-        ),
-      );
+      const [projection, stopped] = snapshot ?? (yield* loadBackgroundWorkSettleSnapshot(command));
       const stoppedRunId = projection.attempts.find(
         (attempt) => attempt.id === stopped.providerTurn?.runAttemptId,
       )?.runId;
@@ -10801,9 +10806,36 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       case "checkpoint.rollback.fail":
         yield* dispatchCheckpointRollbackFail(command, events);
         break;
-      case "thread.background-work.settle":
-        yield* dispatchBackgroundWorkSettle(command, events, effects);
+      case "thread.background-work.settle": {
+        // Fork reconciliation must prove ownership before planning any Stop settlement.
+        // Normal provider Stop acknowledgements keep the upstream settle semantics.
+        const snapshot = command.reconcileOnly
+          ? yield* loadBackgroundWorkSettleSnapshot(command)
+          : undefined;
+        if (snapshot !== undefined) {
+          const [projection] = snapshot;
+          const providerThread = projection.providerThreads.find(
+            (thread) => thread.id === command.providerThreadId,
+          );
+          const turn = projection.providerTurns.find((turn) => turn.id === command.providerTurnId);
+          const session = projection.providerSessions.find(
+            (session) => session.id === providerThread?.providerSessionId,
+          );
+          if (
+            !turn ||
+            !session ||
+            !["starting", "running", "waiting"].includes(session.status) ||
+            !canReconcileStartingSession(projection, session, turn)
+          )
+            return yield* new OrchestratorDispatchError({
+              commandId: command.commandId,
+              commandType: command.type,
+              cause: "Session changed before reconciliation; newer work was preserved.",
+            });
+        }
+        yield* dispatchBackgroundWorkSettle(command, events, effects, snapshot);
         break;
+      }
       case "thread.fork":
         yield* dispatchThreadFork(command, events);
         break;
@@ -10926,6 +10958,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       if (shell !== null) yield* refuseAboveDispatchModeLimit(command, threadId, shell);
     }
 
+    // Only reconciliation uses optimistic commit validation. Provider events
+    // bypass the command lock, so capture before any planning projection reads.
+    const expectedThreadSequence =
+      command.type === "thread.background-work.settle" && command.reconcileOnly
+        ? yield* mapDispatchError(command)(eventSink.latestSequence({ threadId: command.threadId }))
+        : undefined;
     const plan = yield* dispatchOnce(command).pipe(
       Effect.flatMap((planned) =>
         // A settle that finds the provider already ended everything, or a
@@ -11019,6 +11057,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         acceptedAt,
         events: plan.events,
         effects: plan.effects,
+        ...(expectedThreadSequence === undefined ? {} : { expectedThreadSequence }),
         ...(plan.cancelUnsettledEffects === undefined
           ? {}
           : { cancelUnsettledEffects: plan.cancelUnsettledEffects }),
