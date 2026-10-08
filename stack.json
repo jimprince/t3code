@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "a1daa5b412c7a99a1a973c8654c49a917cc5c980",
-  "head": "1fbd1689f332532d6ab635e92693790f2e999e0a",
+  "prev": "50d7ac589a3e822cbf874000c545178abcf1d196",
+  "head": "b718505de302f45277e8d9c0808cf4650e0eaefa",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -101,10 +101,10 @@
     "fork-release-publication",
     "fork-maintenance-automation",
     "fork-antigravity-errors",
-    "fork-conversation-fork"
+    "fork-conversation-fork",
+    "fork-thread-transfer"
   ],
   "unapplied": [
-    "fork-thread-transfer",
     "fork-thread-history-compatibility",
     "fork-session-reconcile",
     "fork-codex-extra-skill-roots",
@@ -532,7 +532,7 @@
       "oid": "1c07654fb7ba641a9396d319986c0e6c9232d7ed"
     },
     "fork-thread-transfer": {
-      "oid": "6a19271642ad13c748739735a710934acee9d9ae"
+      "oid": "b718505de302f45277e8d9c0808cf4650e0eaefa"
     },
     "fork-unsupported-pr-hosts": {
       "oid": "64d1e7f673dd22f0ea098095ace2d4d5c9c43a83"
