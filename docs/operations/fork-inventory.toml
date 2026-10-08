@@ -2778,3 +2778,12 @@ retire_when = "Upstream provides durable General Chat workspaces and compatibili
 depends_on = ["fork-general-chat"]
 roles = []
 note = "#202: New chat roots use T3 home/chat-workspaces. Existing chat roots remain authoritative and are recreated when absent; no project or provider-session paths are rewritten. Fold into fork-general-chat. Copied Mac/VM fixture tests cover startup, restart, singleton identity, thread/transcript preservation, and migration ledgers. Integration fork.6: adapted replay to preserve UI theme/owner notes alongside BE authoritative contract and helpers. Fork.6 integration: adapt: union inventory, retain earlier integrated owner notes and later stanza (docs/operations/fork-inventory.toml). Retire/narrow/relocate do not apply to these retained UI behaviors or inventory insertions."
+[[patch]]
+name = "fork-message-forward"
+subject = "feat(threads): forward exact messages with portable attachments"
+class = "product"
+purpose = "Forward stored exact text and every attachment through agent CLI/MCP and fork RPCs, with original-message attribution and native reliable send/queue receipts."
+retire_when = "Upstream supports exact stored-message forwarding across environments, with real attachments, attribution and reliable send/queue semantics."
+depends_on = ["fork-reliable-handoffs", "fork-thread-transfer"]
+roles = []
+note = "Issue #170, including chief-of-staff#26. Source preparation returns metadata; cross-environment bytes stream through existing signed asset downloads and attachment uploads. The target reuses TransferAttachments for store-only copies under deterministic IDs before native handoff dispatch. MCP forwards within its own environment and directs remote targets to the CLI. The UI action remains a separate lane. Integration fork.6: adapted replay to preserve UI theme/owner notes alongside BE authoritative contract and helpers. Fork.6 integration: adapt: union inventory, retain earlier integrated owner notes and later stanza (docs/operations/fork-inventory.toml). Retire/narrow/relocate do not apply to these retained UI behaviors or inventory insertions."
