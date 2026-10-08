@@ -1,0 +1,4 @@
+id = "chat-workspace-startup"
+category = "fix"
+functionality = "general chat"
+text = "Changing the system temporary directory no longer prevents startup; existing General Chat threads retain their workspace, and new chat workspaces live under T3 home."
