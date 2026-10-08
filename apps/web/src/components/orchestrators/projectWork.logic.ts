@@ -1,18 +1,11 @@
 import {
   lastActivityAt as threadActivityAt,
   type OrchestratorBlockedItem,
-  type OrchestratorWorkingItem,
 } from "@t3tools/client-runtime/state/orchestrators";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import type { ProjectIssue } from "@t3tools/contracts";
 
-import {
-  answerSentences,
-  issueKey,
-  requestsByWorker,
-  type ProjectRequest,
-  type TaskStatus,
-} from "./projectRequests.logic";
+import { answerSentences, issueKey, type TaskStatus } from "./projectRequests.logic";
 
 /** An Active task nobody has touched for this long is stuck. */
 const STUCK_AFTER_MS = 3 * 24 * 60 * 60 * 1000;
@@ -30,18 +23,6 @@ export interface BlockedRow {
   readonly next: string | null;
   /** Only when Brad can unblock it himself, for example "Open #12". */
   readonly action: { readonly label: string; readonly url: string } | null;
-}
-
-/** One worker's outcome: the task it is on, what it does next, and who it is. */
-export interface WorkingRow {
-  readonly key: string;
-  readonly threadId: string;
-  readonly title: string;
-  /** The worker's own name; null when the row is already titled by the worker. */
-  readonly worker: string | null;
-  readonly next: string | null;
-  /** The requests this worker serves, other than the one that titles the row. */
-  readonly forRequests: ReadonlyArray<string>;
 }
 
 const isOpen = (issue: ProjectIssue) =>
@@ -177,32 +158,4 @@ export function deriveBlocked(input: {
       .toSorted((a, b) => b.idleMs - a.idleMs)
       .map(({ row }) => row),
   ];
-}
-
-/**
- * Working now as outcomes: the task each worker is on (its thread's title when
- * it has none), what it does next from the task's Progress note (never the
- * worker's own prose), and the worker's name; the requests it serves ride along
- * for the "for:" link.
- */
-export function deriveWorkingNow(
-  working: ReadonlyArray<OrchestratorWorkingItem>,
-  issues: ReadonlyArray<ProjectIssue>,
-  requests: ReadonlyArray<ProjectRequest>,
-): WorkingRow[] {
-  const served = requestsByWorker(requests);
-  return working.map(({ thread }) => {
-    const task = tasksOfWorker(thread.id, issues)[0];
-    const title = task?.title ?? thread.title;
-    return {
-      key: thread.id,
-      threadId: thread.id,
-      title,
-      worker: task ? thread.title : null,
-      next: progressNote(task?.latestComment?.body),
-      forRequests: (served.get(thread.id) ?? [])
-        .map((request) => request.issue.title)
-        .filter((requestTitle) => requestTitle !== title),
-    };
-  });
 }
