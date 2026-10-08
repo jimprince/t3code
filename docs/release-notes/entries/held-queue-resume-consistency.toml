@@ -1,0 +1,4 @@
+id = "held-queue-resume-consistency"
+category = "fix"
+functionality = "held queues"
+text = "The held queue strip and composer resume the same interrupted work and cannot resume while disconnected."
