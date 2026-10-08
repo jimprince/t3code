@@ -1,0 +1,4 @@
+id = "reconcile-commit-ownership"
+category = "fix"
+functionality = "session recovery"
+text = "Session reconciliation now preserves provider work that starts while recovery is being planned."
