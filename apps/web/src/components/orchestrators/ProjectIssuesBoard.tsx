@@ -1,7 +1,9 @@
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
 import type { ProjectIssue } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
 import { useMemo, useState } from "react";
 
+import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { InlineButton } from "../ui/button";
 
 import {
@@ -21,8 +23,10 @@ import {
   type SettleControls,
 } from "./ProjectRequestsSection";
 import { taskStepProgress } from "./taskProgress.logic";
+import { useWorkstreamBands, WorkstreamBands } from "./WorkstreamBands";
 import { TaskTitle } from "./TaskLink";
 
+const tasksViewSchema = Schema.Literals(["workstreams", "status"]);
 const DONE_PREVIEW = 8;
 const PENDING_PREVIEW = 10;
 
@@ -105,8 +109,16 @@ export function ProjectIssuesBoard({
   /** Pending cards shown before "Show all" (the layout's setting). */
   readonly pendingPreview?: number;
 }) {
-  const { statuses, query } = useTaskStatuses(summary);
+  const tasks = useTaskStatuses(summary);
+  const { statuses, query } = tasks;
   const settle = useSettle(summary, query.refresh);
+  const workstreams = useWorkstreamBands(summary, tasks);
+  // Tasks under their workstream, or the four status columns; remembered per project.
+  const [view, setView] = useLocalStorage(
+    `t3code:projects:tasks-view:${summary.root.environmentId}:${summary.root.id}`,
+    "workstreams",
+    tasksViewSchema,
+  );
   const [showBacklog, setShowBacklog] = useState(false);
   const [expanded, setExpanded] = useState<ReadonlySet<ProjectIssueLane>>(new Set());
   const grouped = useMemo(
@@ -131,6 +143,12 @@ export function ProjectIssuesBoard({
     );
   }
 
+  const failedNotice = (repositories: typeof failed) =>
+    repositories.length > 0 ? (
+      <p role="alert" className="text-xs text-warning-foreground">
+        Could not read {repositories.map((repository) => repository.repository).join(", ")}
+      </p>
+    ) : null;
   const row = (lane: ProjectIssueLane) => (issue: ProjectIssue) => (
     <IssueRow
       key={issueKey(issue)}
@@ -141,8 +159,32 @@ export function ProjectIssuesBoard({
       steps={lane === "active" ? taskStepProgress(issue, threadsById) : null}
     />
   );
+  const viewSwitch = (
+    <p className="flex gap-3 text-xs">
+      {(["workstreams", "status"] as const).map((option) => (
+        <InlineButton
+          key={option}
+          tone={view === option ? "default" : "muted"}
+          aria-pressed={view === option}
+          onClick={() => setView(option)}
+        >
+          {option === "workstreams" ? "By workstream" : "By status"}
+        </InlineButton>
+      ))}
+    </p>
+  );
+  if (view === "workstreams") {
+    return (
+      <div className="flex flex-col gap-2">
+        {viewSwitch}
+        <WorkstreamBands summary={summary} workstreams={workstreams} />
+        {failedNotice(failed)}
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-2">
+      {viewSwitch}
       <div className="grid grid-cols-1 gap-px overflow-hidden border border-border bg-border sm:grid-cols-2 xl:grid-cols-4">
         {PROJECT_ISSUE_LANES.map(({ lane, title }) => {
           const all = grouped.lanes[lane];
@@ -191,11 +233,7 @@ export function ProjectIssuesBoard({
           );
         })}
       </div>
-      {failed.length > 0 ? (
-        <p role="alert" className="text-xs text-warning-foreground">
-          Could not read {failed.map((repository) => repository.repository).join(", ")}
-        </p>
-      ) : null}
+      {failedNotice(failed)}
     </div>
   );
 }
