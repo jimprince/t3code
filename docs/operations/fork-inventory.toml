@@ -1041,3 +1041,88 @@ id = "v2-port-2689"
 date = "2026-10-05"
 decided = "reconcile-smaller"
 rationale = "Wrap the V2 effect executor and native recovery enqueue with the fork StartupResumePolicy: T3CODE_DISABLE_STARTUP_RESUME=1 suppresses copied automatic provider work and persisted continuations until command-ready, while reconciliation and fresh explicit turns proceed. Installed and custom-home servers keep native recovery. A full copied-state server launch test must precede release."
+
+[[patch]]
+name = "fork-thread-client-recovery"
+subject = "fix(threads): recover thread and client state after disruptions"
+class = "divergence"
+purpose = "Keep thread lifecycle, reconnect snapshots, pending-input, session-status, and loading state coherent across server restarts and client disruptions on web and mobile."
+retire_when = "Upstream supplies equivalent lifecycle recovery, bounded snapshot handoff, and client recovery semantics."
+depends_on = ["fork-provider-turn-safety"]
+roles = []
+note = "Busy-server recovery: retain the labelled six-miss Effect overlay after retiring the #15563 backport; only websocket-ticket requests get a thirty-second deadline. #214: Client-runtime exports reconnect outcome and ninety-second timeout helpers plus an identity-preserving disconnected composer queue; renderers own connection hooks and visible state. #218: Shared queue workflow exposes canResume for held queued items. Reorganized 2026-09-06 from fork-thread-lifecycle-recovery, fork-web-client-resilience. [fork-thread-lifecycle-recovery] Upstream1286 checkpoint validation is asynchronous; use it for the resolved revert workspace. Archived-thread lookup preserves upstream branch PR identity and active ordering fields. Keep upstream shell-only stop-session tests; do not restore tests for its removed startup heartbeat helper."
+
+[[patch.decision]]
+id = "upstream13764-queued-send-left-the-composer-handler"
+date = "2026-09-27"
+decided = "adapt"
+rationale = "Upstream moved queued-message sending out of the composer submit handler into QueuedMessageSender/sendQueuedMessage, dropping the handler's queuedMessage parameter. This concern only owns the submitIntent gate around that branch, so keep the blocked and respond-to-user-input checks and take upstream's inner directAnnotation test verbatim. The queue-holds-for-a-question rule now lives in QueuedMessageSender's blocked gate, which holds on any pending user input."
+
+[[patch.decision]]
+id = "upstream13167-tool-group-scroll-tests"
+date = "2026-09-23"
+decided = "relocate"
+rationale = "Upstream #13167 deleted toolGroupConsumesUpwardNavigation and its ChatView.logic tests while keeping nested tool-group scrolling in MessagesTimeline. The fork never owned that helper; its composer attachment-hydration test merely followed the block. Accept the deletion and re-anchor the fork test after the proactive turn-diff suite; do not restore the removed helper or its tests."
+
+[[patch.decision]]
+id = "upstream1895-viewed-files-test-layer"
+date = "2026-09-18"
+decided = "adapt"
+rationale = "Keep upstream's isolated in-memory persistence for viewed-file route tests while preserving the fork's split route layer used to inject checkpoint-diff recovery behavior."
+
+[[patch.decision]]
+id = "upstream1895-pending-input-scroll"
+date = "2026-09-18"
+decided = "adapt"
+rationale = "Retain upstream's bounded scrolling and long-word wrapping for pending-input choices around the fork's explicit-submit semantics and accessible selected-state controls."
+
+[[patch.decision]]
+id = "ws-snapshot-projection"
+date = "2026-07-28"
+decided = "retire"
+rationale = "Upstream's projectThreadDetailSnapshot spreads the complete snapshot and prunes activity payloads, a strict superset of the old hand-rolled projection. Retain upstream's call while binding it to the fork's threadDetailSnapshot name; do not restore the retired projection."
+[[patch.decision]]
+id = "thread-detail-snapshot-api"
+date = "2026-08-07"
+decided = "retire+narrow"
+rationale = "Upstream v0.0.33 shipped getThreadDetailSnapshot(threadId, window?) returning OrchestrationThreadDetailSnapshot with snapshotSequence read in one transaction — the fork's atomic-handoff guarantee verbatim, plus opt-in turn pagination the fork never had. That is this patch's recorded retire_when for the snapshot capability, so the fork's getThreadDetailSnapshotById is retired and every caller (http.ts, ws.ts, tests) moved to upstream's name. Lifecycle recovery itself is NOT retired and stays in this patch. Narrowed rather than fully retired because one fork behavior survives: upstream's pagination is opt-in, so the unwindowed activity read is still unbounded, and the fork keeps capping it at THREAD_DETAIL_ACTIVITY_LIMIT — an unbounded activity list is what stalls snapshot handoff on reconnect."
+[[patch.decision]]
+id = "provider-session-reconciliation"
+date = "2026-08-21"
+decided = "retire+narrow"
+rationale = "Upstream #7719 now reconciles orphaned provider sessions and running turns while also preserving live sessions, repairing provider-directory bindings, covering archived and stale-active-turn cases, and bounding per-thread failures. Retire the fork's earlier startup reconciler and its duplicate tests so it cannot settle sessions before upstream's stronger reconciliation runs; keep the remaining lifecycle and bounded snapshot behavior in this patch."
+
+[[patch.decision]]
+id = "upstream11338-checkpoint-rewind"
+date = "2026-09-16"
+decided = "retire+narrow"
+rationale = "Upstream now resolves checkpoint workspaces from persisted thread and project state, supports message-only rewind, and restores native provider history. Retire the fork's duplicate workspace fallback and tests; keep only its zero-turn baseline recovery, which does not require a provider rollback or persisted provider binding."
+
+[[patch.decision]]
+id = "upstream-follow-up-queue"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Upstream client-side follow-up queues must remain queued while a pending user-input prompt is open. Preserve the fork's submit-intent guard, but treat queued messages like direct annotations so neither is submitted as the prompt answer."
+
+[[patch.decision]]
+id = "upstream-title-state-archived-shell"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Select upstream's persisted title state in the fork's archived-thread shell query so the shared thread-row decoder receives the same fields as the active-thread query."
+
+[[patch.decision]]
+id = "upstream-reasoning-stream-test"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Route upstream's reasoning-compatibility live-event fixture through the fork's eager subscribeDomainEvents seam. Overriding only the lazy streamDomainEvents path bypasses the race-free snapshot handoff and drops the fixture events."
+
+[[patch.decision]]
+id = "upstream-worktree-storage-cleanup"
+date = "2026-09-17"
+decided = "adapt"
+rationale = "Keep upstream's policy-driven StorageCleanup reactor alongside the fork's archive/settle reactor: the former removes eligible worktrees, while the latter stops provider sessions and closes archived terminals. Exercise archived-inclusive lookup before upstream's test converts that archived row into a deletion tombstone."
+
+[[patch.decision]]
+id = "v2-port-2689-m2"
+decision = "reconcile-smaller"
+note = "Native bounded streams, exact-session archive cleanup and V2 runtime requests replace V1 machinery; retain accepted optimistic lifecycle changes through reconnect."
