@@ -1,6 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off globalTimers:off globalDate:off - shared Node boundary for the Promise-based CLI and server, preserving the CLI filesystem lock.
 import * as NodeChildProcess from "node:child_process";
-import { constants as fileFlags } from "node:fs";
+import * as NodeFS from "node:fs";
+import { promisify } from "node:util";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -10,6 +11,10 @@ const DEFAULT_STATE_DIR = NodePath.join(NodeOS.homedir(), ".config", "t3-remote-
 const DEFAULT_STATE_FILE = NodePath.join(DEFAULT_STATE_DIR, "state.json");
 const STATE_LOCK_TIMEOUT_MS = 10_000;
 const STATE_LOCK_RETRY_MS = 50;
+const openLockFile = promisify(NodeFS.open);
+const closeLockFile = promisify(NodeFS.close);
+const truncateLockFile = promisify(NodeFS.ftruncate);
+const writeLockFile = promisify(NodeFS.writeFile);
 
 export function resolveStateFile(): string {
   return process.env.T3_AGENT_STATE_FILE?.trim() || DEFAULT_STATE_FILE;
@@ -92,11 +97,17 @@ async function tryStateLock(fd: number): Promise<boolean> {
 async function withStateLock<T>(stateFile: string, task: () => Promise<T>): Promise<T> {
   await ensureStateDir(stateFile);
   const lockFile = `${stateFile}.lock`;
-  const handle = await NodeFSP.open(lockFile, fileFlags.O_CREAT | fileFlags.O_RDWR, 0o600);
+  // A raw FD has no FileHandle finalizer. An unresolved mutator's Promise chain
+  // can be collected even while its process remains alive; that must not unlock.
+  const fd = await openLockFile(
+    lockFile,
+    NodeFS.constants.O_CREAT | NodeFS.constants.O_RDWR,
+    0o600,
+  );
   const startedAt = Date.now();
   try {
     let retryMs = STATE_LOCK_RETRY_MS;
-    while (!(await tryStateLock(handle.fd))) {
+    while (!(await tryStateLock(fd))) {
       const remainingMs = STATE_LOCK_TIMEOUT_MS - (Date.now() - startedAt);
       if (remainingMs <= 0) {
         const holder = (await NodeFSP.readFile(lockFile, "utf8").catch(() => "")).trim();
@@ -106,11 +117,11 @@ async function withStateLock<T>(stateFile: string, task: () => Promise<T>): Prom
       await sleep(Math.min(retryMs, remainingMs));
       retryMs = Math.min(retryMs * 2, 250);
     }
-    await handle.truncate(0);
-    await handle.write(`${process.pid}\n`, 0, "utf8");
+    await truncateLockFile(fd, 0);
+    await writeLockFile(fd, `${process.pid}\n`, "utf8");
     return await task();
   } finally {
-    await handle.close();
+    await closeLockFile(fd);
   }
 }
 

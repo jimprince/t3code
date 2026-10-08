@@ -33,13 +33,14 @@ async function holdInChild() {
   const child = ChildProcess.spawn(
     process.execPath,
     [
+      "--expose-gc",
       "--experimental-strip-types",
       "--input-type=module",
       "-e",
       `import { updateState } from ${JSON.stringify(new URL("./threadRoutingState.ts", import.meta.url).href)};
      await updateState({ count: 0 }, async state => {
        process.send({ held: true });
-       await new Promise(() => { setInterval(() => {}, 1000); });
+       await new Promise(() => { setInterval(() => global.gc(), 100); });
        return { state, result: undefined };
      });`,
     ],

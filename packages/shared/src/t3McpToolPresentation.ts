@@ -31,6 +31,7 @@ export type T3McpToolSummaryAction =
   | "thread-update"
   | "queue-list"
   | "queue-read"
+  | "queue-resume"
   | "queue-edit"
   | "queue-cancel"
   | "queue-reorder"
