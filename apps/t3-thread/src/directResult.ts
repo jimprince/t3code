@@ -1,4 +1,5 @@
 import { loadState, updateState } from "./state.js";
+import { sendOutcomeFailure } from "./sendIntents.js";
 import type { SavedSubscription } from "./types.js";
 
 /** Record accepted direct results against the source turn, including durable queued sends. */
@@ -17,7 +18,7 @@ export async function sendDirectResult<T>(input: {
   // An unreachable source must not prevent a message reaching its recipient.
   const turnId = route ? await input.getSourceTurn(route).catch(() => null) : null;
   const outcome = await input.send();
-  if (route && turnId) {
+  if (route && turnId && !sendOutcomeFailure(outcome)) {
     await updateState((current) => ({
       state: {
         ...current,

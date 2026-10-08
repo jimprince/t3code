@@ -1,4 +1,5 @@
 import { interruptedSessionEvents } from "../forkThreads/InterruptedSession.ts";
+import { MessageAdmission } from "../forkThreads/MessageAdmission.ts";
 import { normalizeThreadIssueKey, threadIssueKeysEqual } from "@t3tools/shared/threadIssues";
 import {
   assertRootSlot,
@@ -4752,6 +4753,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         projection,
         command.dispatchMode,
         command.deliveryIntent,
+        !(command.createdBy === "agent" && command.creationSource === "server"),
       );
       if (dispatchMode.type === "steer_active") {
         const targetRunId = dispatchMode.targetRunId;
@@ -10168,6 +10170,21 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       "orchestration_v2.thread_id": commandThreadId(command),
     });
 
+    const admission = yield* MessageAdmission;
+    if (command.type === "message.dispatch" && admission?.commandId === command.commandId) {
+      const accepted = yield* admission.accept.pipe(
+        Effect.mapError(
+          (cause) =>
+            new OrchestratorDispatchError({
+              commandId: command.commandId,
+              commandType: command.type,
+              cause,
+            }),
+        ),
+      );
+      if (!accepted) return { sequence: 0, storedEvents: [] };
+    }
+
     const existingReceipt = yield* commandReceipts.getByCommandId(command.commandId).pipe(
       Effect.mapError(
         (cause) =>
@@ -10329,6 +10346,18 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         commandType: command.type,
         detail: committed.receipt.error ?? "Previously rejected.",
       });
+    }
+    if (admission?.commandId === command.commandId) {
+      yield* admission.finish(dispatchWithReceiptEffect).pipe(
+        Effect.mapError(
+          (cause) =>
+            new OrchestratorDispatchError({
+              commandId: command.commandId,
+              commandType: command.type,
+              cause,
+            }),
+        ),
+      );
     }
     if (command.type === "queue.resume") {
       yield* mapDispatchError(command)(startNextQueuedRun(command.threadId));
