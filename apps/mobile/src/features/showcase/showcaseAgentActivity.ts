@@ -129,6 +129,7 @@ export function showcaseAndroidActivityData(
     ...(alert
       ? {
           alert_id: "showcase-alert",
+          alert_eligible: "true",
           alert_title: alert.title,
           alert_body: alert.body,
           alert_path: alert.path,
