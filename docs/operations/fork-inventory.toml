@@ -2559,3 +2559,9 @@ id = "v2-subproject-metadata"
 date = "2026-10-06"
 decided = "adapt"
 rationale = "Subproject mode is canonical fork organizational metadata with receipt-backed updates and native shell refresh, independent of execution lineage. Migration 16 retains its published name and imports V1 modes read-only; startup also imports a pre-recorded V1 ledger 16 without rerunning it. CLI uses fork.threads.metadata.update. AUTO_PROMOTE_SUBPROJECTS remains false."
+
+[[patch.decision]]
+id = "socket-open-209-subprojects-server"
+date = "2026-10-08"
+decided = "adapt"
+rationale = "Preserve migration 16 ledger identity while persistence startup owns the idempotent metadata and legacy import."
