@@ -8221,12 +8221,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           "nodes",
         ],
         {
-          turnItemTypes: [
-            "command_execution",
-            "dynamic_tool",
-            "subagent",
-            "run_interrupt_request",
-          ],
+          turnItemTypes: ["command_execution", "dynamic_tool", "subagent", "run_interrupt_request"],
         },
       ),
       projectionStore.getProviderControlContext(command.threadId, {
@@ -10142,9 +10137,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           const providerThread = projection.providerThreads.find(
             (thread) => thread.id === command.providerThreadId,
           );
-          const turn = projection.providerTurns.find(
-            (turn) => turn.id === command.providerTurnId,
-          );
+          const turn = projection.providerTurns.find((turn) => turn.id === command.providerTurnId);
           const session = projection.providerSessions.find(
             (session) => session.id === providerThread?.providerSessionId,
           );

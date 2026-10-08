@@ -298,8 +298,7 @@ const reconcileScenario = (
     }
     if (starting) {
       const projection = yield* projections.getThreadProjection(threadId);
-      if (starting === "newer-start" || starting === "slow-alive")
-        yield* TestClock.adjust(1);
+      if (starting === "newer-start" || starting === "slow-alive") yield* TestClock.adjust(1);
       const startedAt = yield* DateTime.now;
       yield* projections.apply({
         id: EventId.make("starting-session"),
@@ -325,9 +324,7 @@ const reconcileScenario = (
       dispatch: (command) =>
         Effect.gen(function* () {
           if (starting === "start-race") {
-            const projection = yield* projections
-              .getThreadProjection(threadId)
-              .pipe(Effect.orDie);
+            const projection = yield* projections.getThreadProjection(threadId).pipe(Effect.orDie);
             yield* TestClock.adjust(1);
             const reopenedAt = yield* DateTime.now;
             yield* projections
@@ -364,7 +361,10 @@ const reconcileScenario = (
       const preserved = yield* projections.getThreadProjection(threadId);
       assert.equal(preserved.providerSessions[0]?.status, "starting");
       assert.equal(preserved.runs[0]?.status, "completed");
-      assert.equal(preserved.turnItems.find((item) => item.id === commandItem(1))?.status, "running");
+      assert.equal(
+        preserved.turnItems.find((item) => item.id === commandItem(1))?.status,
+        "running",
+      );
       return;
     }
     if (status === "running") {
