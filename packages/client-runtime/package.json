@@ -3,6 +3,14 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./fork/server-restart": {
+      "types": "./src/fork/serverRestart.ts",
+      "default": "./src/fork/serverRestart.ts"
+    },
+    "./fork/disconnected-composer": {
+      "types": "./src/fork/disconnectedComposer.ts",
+      "default": "./src/fork/disconnectedComposer.ts"
+    },
     "./decision-context": {
       "types": "./src/decisionContext.ts",
       "default": "./src/decisionContext.ts"
