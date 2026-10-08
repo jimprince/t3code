@@ -1,3 +1,5 @@
+import { EnvironmentAuthorizationError, AuthOrchestrationOperateScope } from "@t3tools/contracts";
+import { SocketOpenError, SocketReadError, SocketWriteError } from "effect/unstable/socket/Socket";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -207,7 +209,7 @@ describe("terminal recipients", () => {
     await withState(makeState(), async () => {
       const { clientFactory } = createClientFactory({
         onSend: () => {
-          throw new Error("subscriber unreachable");
+          throw new SocketOpenError({ kind: "Unknown", cause: "unreachable" });
         },
       });
 
@@ -239,7 +241,7 @@ describe("retry backoff and ordering", () => {
       let failing = true;
       const { clientFactory, sent } = createClientFactory({
         onSend: () => {
-          if (failing) throw new Error("subscriber unreachable");
+          if (failing) throw new SocketOpenError({ kind: "Unknown", cause: "unreachable" });
         },
       });
 
@@ -615,7 +617,7 @@ describe("notification onboarding", () => {
       const { clientFactory, sent } = createClientFactory({
         threads,
         onSend: () => {
-          if (failing) throw new Error("transport failed");
+          if (failing) throw new SocketOpenError({ kind: "Unknown", cause: "unreachable" });
         },
       });
       await detectAttentionEvents({ env: "dev-vm", clientFactory });
@@ -724,5 +726,146 @@ describe("subscriber onboarding isolation", () => {
       expect(first.sent[0]?.text).toContain("Thread communication quick start");
       expect(second.sent[0]?.text).toContain("Thread communication quick start");
     });
+  });
+});
+
+// The failure's phase, never its text, determines whether another automatic attempt is safe.
+describe("notification submission certainty", () => {
+  it.each([
+    ["socket open Unknown", new SocketOpenError({ kind: "Unknown", cause: "private sentinel" })],
+    [
+      "ECONNREFUSED at connect",
+      Object.assign(new Error("private sentinel"), { code: "ECONNREFUSED", syscall: "connect" }),
+    ],
+    [
+      "EHOSTUNREACH at connect",
+      Object.assign(new Error("private sentinel"), { code: "EHOSTUNREACH", syscall: "connect" }),
+    ],
+    [
+      "ENOTFOUND at lookup",
+      Object.assign(new Error("private sentinel"), { code: "ENOTFOUND", syscall: "getaddrinfo" }),
+    ],
+    [
+      "server scope rejection before admission",
+      new EnvironmentAuthorizationError({
+        message: "private sentinel",
+        requiredScope: AuthOrchestrationOperateScope,
+      }),
+    ],
+  ])("retries %s with backoff and preserves onboarding", async (_label, error) => {
+    await withState(makeState(), async () => {
+      let attempts = 0;
+      const { clientFactory, sent } = createClientFactory({
+        onSend: () => {
+          if (++attempts === 1) throw error;
+        },
+      });
+      await detectAttentionEvents({ clientFactory });
+      expect((await deliverPendingNotifications({ clientFactory }))[0]).toMatchObject({
+        status: "delivery-failed",
+        attempts: 1,
+      });
+      expect((await loadState()).notifications[0]?.onboardingDelivered).not.toBe(true);
+      expect(JSON.stringify((await loadState()).notifications)).not.toContain("private sentinel");
+      expect(await deliverPendingNotifications({ clientFactory })).toEqual([]);
+      await deliverPendingNotifications({
+        clientFactory,
+        now: () => new Date(Date.now() + 3600000).toISOString(),
+      });
+      expect(sent).toHaveLength(1);
+      expect(sent[0]!.text).toContain("Thread communication quick start");
+      expect(attempts).toBe(2);
+    });
+  });
+  it.each([
+    ["post-send timeout", Object.assign(new Error("private sentinel"), { name: "TimeoutError" })],
+    [
+      "open-socket heartbeat timeout",
+      new SocketOpenError({ kind: "Timeout", cause: "private sentinel" }),
+    ],
+    [
+      "read failure",
+      new SocketReadError({
+        cause: Object.assign(new Error("private sentinel"), {
+          code: "ECONNREFUSED",
+          syscall: "connect",
+        }),
+      }),
+    ],
+    ["write failure", new SocketWriteError({ cause: "private sentinel" })],
+    ["interrupted send", Object.assign(new Error("private sentinel"), { name: "AbortError" })],
+    ["opaque failure", new Error("private sentinel")],
+    ["unphased OS error", Object.assign(new Error("private sentinel"), { code: "ECONNREFUSED" })],
+  ])("keeps %s uncertain without resending", async (_label, error) => {
+    await withState(makeState(), async () => {
+      let submitted = 0;
+      const { clientFactory } = createClientFactory({
+        onSend: () => {
+          submitted++;
+          throw error;
+        },
+      });
+      await detectAttentionEvents({ clientFactory });
+      expect((await deliverPendingNotifications({ clientFactory }))[0]).toMatchObject({
+        status: "uncertain",
+        nextAttemptAt: null,
+      });
+      expect(
+        await deliverPendingNotifications({
+          clientFactory,
+          now: () => new Date(Date.now() + 3600000).toISOString(),
+        }),
+      ).toEqual([]);
+      expect(submitted).toBe(1);
+      expect(JSON.stringify((await loadState()).notifications)).not.toContain("private sentinel");
+    });
+  });
+  it("retries client construction failure before sendMessage is entered", async () => {
+    await withState(makeState(), async () => {
+      const normal = createClientFactory({});
+      await detectAttentionEvents({ clientFactory: normal.clientFactory });
+      let constructs = 0;
+      const failing: WatchClientFactory = () => {
+        constructs++;
+        throw new Error("private sentinel");
+      };
+      expect((await deliverPendingNotifications({ clientFactory: failing }))[0]?.status).toBe(
+        "delivery-failed",
+      );
+      await deliverPendingNotifications({
+        clientFactory: normal.clientFactory,
+        now: () => new Date(Date.now() + 3600000).toISOString(),
+      });
+      expect(normal.sent).toHaveLength(1);
+      expect(constructs).toBe(1);
+    });
+  });
+});
+
+it("backs off a returned provably-unsent outcome instead of making it terminal", async () => {
+  await withState(makeState(), async () => {
+    const normal = createClientFactory({});
+    await detectAttentionEvents({ clientFactory: normal.clientFactory });
+    let attempts = 0;
+    const clientFactory: WatchClientFactory = (environment) => ({
+      ...normal.clientFactory(environment),
+      sendMessage: async () => {
+        attempts++;
+        return {
+          dispatched: false,
+          queued: false,
+          uncertain: false,
+          retryable: true,
+          causeCode: "TRANSPORT_OS_ERROR",
+          sendId: "fixture",
+        };
+      },
+    });
+    expect((await deliverPendingNotifications({ clientFactory }))[0]).toMatchObject({
+      status: "delivery-failed",
+      attempts: 1,
+    });
+    expect(await deliverPendingNotifications({ clientFactory })).toEqual([]);
+    expect(attempts).toBe(1);
   });
 });
