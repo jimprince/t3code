@@ -17,6 +17,7 @@ import { create } from "zustand";
 
 import type { ComposerBannerStackItem } from "../components/chat/ComposerBannerStack";
 import { readForkNestingSupported } from "../components/chat/forkThreadCommands";
+import { setThreadSubprojectCommand } from "../state/forkSubproject";
 import { type CommandPaletteActionItem, ITEM_ICON_CLASS } from "../components/CommandPalette.logic";
 import { Button } from "../components/ui/button";
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
@@ -131,6 +132,7 @@ export function useNestedDraftBannerItem(
 /** Nesting actions shared by the sidebar menu, the thread header menu, and the details panel. */
 export function useThreadNestingActions() {
   const drop = useAtomCommand(supervisionDropCommand, { reportFailure: false });
+  const setSubproject = useAtomCommand(setThreadSubprojectCommand, { reportFailure: false });
   const handleNewThread = useNewThreadHandler();
 
   /** Nests `threadRef` under `parentThreadId`, or with null returns it to the sidebar. */
@@ -227,10 +229,24 @@ export function useThreadNestingActions() {
         await setThreadParent(threadRef, null);
         return;
       }
+      if (id === "subproject-on" || id === "subproject-off") {
+        const result = await setSubproject({
+          environmentId: threadRef.environmentId,
+          input: {
+            commandId: CommandId.make(randomUUID()),
+            threadId: threadRef.threadId,
+            subproject: id === "subproject-on" ? "on" : "off",
+          },
+        });
+        if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+          failureToast("Failed to change subproject", squashAtomCommandFailure(result));
+        }
+        return;
+      }
       const parentThreadId = nestUnderMenuTarget(id, state);
       if (parentThreadId !== null) await setThreadParent(threadRef, parentThreadId);
     },
-    [setThreadParent, startNestedThread],
+    [setSubproject, setThreadParent, startNestedThread],
   );
 
   /** After a nested draft's first send creates its thread, files the new thread under the draft's parent. */
