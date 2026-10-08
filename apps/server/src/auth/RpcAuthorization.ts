@@ -26,6 +26,7 @@ type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
  * runtime failure.
  */
 export const RPC_REQUIRED_SCOPES = {
+  "fork.plan.publish": AuthOrchestrationOperateScope,
   "fork.session.reconcile": AuthOrchestrationOperateScope,
   "fork.message.forward.prepare": AuthOrchestrationReadScope,
   "fork.message.forward.accept": AuthOrchestrationOperateScope,
