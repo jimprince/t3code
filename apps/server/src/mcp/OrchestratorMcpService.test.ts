@@ -1,9 +1,11 @@
+import * as TaskIssues from "../projectIssues/TaskIssueLaunchService.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import {
   EnvironmentId,
   NodeId,
   ProjectId,
+  ProjectIssuesError,
   ProviderDriverKind,
   ProviderInstanceId,
   RunId,
@@ -1169,6 +1171,81 @@ describe("OrchestratorMcpService provider resolution", () => {
             }
           }).pipe(Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(dependencies))));
         }
+      }),
+  );
+
+  it.effect(
+    "batch creation gates the first message on its issue and does not restart the issue on receipt replay",
+    () =>
+      Effect.gen(function* () {
+        const operations: string[] = [];
+        let reject = true;
+        let accepted = false;
+        const dependencies = Layer.mergeAll(
+          NodeServices.layer,
+          Layer.succeed(TaskIssues.TaskIssueLaunchService, {
+            start: (input) =>
+              Effect.gen(function* () {
+                operations.push(`issue:${input.reference}`);
+                if (reject)
+                  return yield* new ProjectIssuesError({ message: "Cannot record issue" });
+              }),
+          }),
+          Layer.mock(ThreadManagementService.ThreadManagementService)({
+            getThreadRecords: (id) =>
+              Effect.succeed(
+                id === parentThreadId
+                  ? parentProjection([])
+                  : { ...childProjection, thread: { ...parentProjection([]).thread, id } },
+              ),
+            getThreadShell: () =>
+              Effect.succeed({ latestRunId: accepted ? parentRunId : null } as never),
+            dispatch: (command) =>
+              Effect.sync(() => {
+                operations.push(command.type);
+                if (command.type === "message.dispatch") accepted = true;
+                return { sequence: 1, storedEvents: [] } as never;
+              }),
+          }),
+          Layer.mock(ProviderRegistry.ProviderRegistry)({
+            getProviders: Effect.succeed([
+              providerSnapshot({
+                instanceId: codexInstanceId,
+                driver: ProviderDriverKind.make("codex"),
+                model: "gpt-5.4",
+              }),
+            ]),
+          }),
+          adapterRegistryLayer([codexInstanceId]),
+          Layer.mock(ProjectService.ProjectService)({}),
+          Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),
+        );
+        yield* Effect.gen(function* () {
+          const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+          const input = {
+            clientRequestId: "task-create",
+            threads: [{ title: "Worker", prompt: "Build it", issue: "brad/tasks#7" }],
+          };
+          const error = yield* service.createThreads(scope, input).pipe(Effect.flip);
+          assert.equal(error.message, "Cannot record issue");
+          assert.deepEqual(operations, ["thread.create", "issue:brad/tasks#7"]);
+          reject = false;
+          operations.length = 0;
+          yield* service.createThreads(scope, input);
+          assert.deepEqual(operations, [
+            "thread.create",
+            "issue:brad/tasks#7",
+            "message.dispatch",
+            "thread.created.record",
+          ]);
+          operations.length = 0;
+          yield* service.createThreads(scope, input);
+          assert.deepEqual(operations, [
+            "thread.create",
+            "message.dispatch",
+            "thread.created.record",
+          ]);
+        }).pipe(Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(dependencies))));
       }),
   );
 });
