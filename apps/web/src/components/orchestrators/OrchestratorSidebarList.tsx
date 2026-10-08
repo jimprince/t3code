@@ -269,7 +269,8 @@ export function OrchestratorSidebarList() {
     ProjectKeys,
   );
   const toggleSubprojects = useCallback(
-    (projectKey: string) => setCollapsedProjects((current) => toggleProjectKey(current, projectKey)),
+    (projectKey: string) =>
+      setCollapsedProjects((current) => toggleProjectKey(current, projectKey)),
     [setCollapsedProjects],
   );
   const [quietCutoff] = useState(() => Date.now() - QUIET_AFTER_MS);

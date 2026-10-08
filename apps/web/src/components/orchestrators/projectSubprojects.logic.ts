@@ -59,7 +59,10 @@ export const subprojectBlocked = (summary: OrchestratorSummary) =>
 export const COLLAPSED_SUBPROJECTS_KEY = "t3code:projects:collapsed-subprojects";
 
 /** The keys with `key` added if it was missing, removed if it was there. */
-export const toggleProjectKey = (keys: ReadonlyArray<string>, key: string): ReadonlyArray<string> =>
+export const toggleProjectKey = (
+  keys: ReadonlyArray<string>,
+  key: string,
+): ReadonlyArray<string> =>
   keys.includes(key) ? keys.filter((candidate) => candidate !== key) : [...keys, key];
 
 /**
