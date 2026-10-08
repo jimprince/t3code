@@ -8,7 +8,14 @@ import {
   ProjectIssuesGetInput,
   ProjectIssuesGetResult,
 } from "@t3tools/contracts";
-import { WsSessionReconcileRpc, HandoffRpcs } from "@t3tools/contracts";
+import {
+  WsSessionReconcileRpc,
+  HandoffRpcs,
+  MessageForwardRpcs,
+  WsAssetsCreateUrlRpc,
+  WsAttachmentsCreateUploadUrlRpc,
+  WsAttachmentsDeleteRpc,
+} from "@t3tools/contracts";
 import {
   Automation,
   AutomationDefinition,
@@ -254,6 +261,10 @@ const WsAutomationScriptsRunRpc = Rpc.make("automationScripts.run", {
 
 export const WsRpcGroup = RpcGroup.make(
   ...HandoffRpcs,
+  ...MessageForwardRpcs,
+  WsAssetsCreateUrlRpc,
+  WsAttachmentsCreateUploadUrlRpc,
+  WsAttachmentsDeleteRpc,
   Rpc.make(WS_METHODS.serverGetSettings, {
     payload: Schema.Struct({}),
     success: SharedServerSettings,
