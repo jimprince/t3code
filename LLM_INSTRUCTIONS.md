@@ -7,8 +7,8 @@ in the linked skill and runbooks.
 
 ## Before changing the tree
 
-- Use focused tests, formatting, and typechecks for the files you change. Do
-  not run repo-wide checks locally unless requested; CI owns the broad gates.
+- Follow [Verifying](./AGENTS.md#verifying): workers check changed packages
+  and affected dependents locally; exact-SHA candidate CI owns the broad gates.
 - Tests import from `"vite-plus/test"`, not `"vitest"`. Prefer precise edits
   over bulk regex rewrites, and run `vp fmt` on touched files.
   Match Node to `package.json` engines. If `vp` is absent from PATH, use
