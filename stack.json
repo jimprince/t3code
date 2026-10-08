@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "2bb661eed7694db0cd302f88ac6100b2cfd6d120",
-  "head": "117c42184457407163cb462af22cc22101ba5f3c",
+  "prev": "44fe92e47a71431c3a0a984de4cb93c8dbc77ba9",
+  "head": "345889cec280c939b355fceed8c32f52650af35b",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -118,7 +118,8 @@
     "fork-gitea-token-setter",
     "fork-direct-endpoints-enumeration",
     "fork-create-task-issue",
-    "fork-decisions-feed-server"
+    "fork-decisions-feed-server",
+    "fork-dash-172"
   ],
   "unapplied": [],
   "hidden": [],
@@ -179,6 +180,9 @@
     },
     "fork-cross-project-thread-nesting": {
       "oid": "194a20c3b9aebafa2bbdf6987a23fedcc184c1b3"
+    },
+    "fork-dash-172": {
+      "oid": "345889cec280c939b355fceed8c32f52650af35b"
     },
     "fork-dashboard-polish": {
       "oid": "a0dafcec1f19fc3c206f25894181c38b0d3d42fb"
