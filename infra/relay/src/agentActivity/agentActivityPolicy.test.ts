@@ -28,7 +28,23 @@ const preferences = {
   notifyOnFailure: true,
 };
 const aggregate = (states: RelayAgentActivityState[]) =>
-  makeAggregateState({ activeStates: states, terminalState: null, nowMs: 0 })!;
+  makeAggregateState({
+    activeStates: states.map((s) => ({
+      ...s,
+      ...(s.phase === "completed"
+        ? {
+            notification: {
+              kind: "reply" as const,
+              origin: "human" as const,
+              identity: "turn",
+              occurredAt: s.updatedAt,
+            },
+          }
+        : {}),
+    })),
+    terminalState: null,
+    nowMs: 0,
+  })!;
 
 describe("shared agent activity policy", () => {
   it.each(["waiting_for_approval", "waiting_for_input"] as const)(
@@ -86,7 +102,18 @@ describe("shared agent activity policy", () => {
   });
 
   it("checks current permission, event preferences, and freshness together", () => {
-    const input = { ...state, phase: "completed" as const, preferences, nowMs: 0 };
+    const input = {
+      ...state,
+      phase: "completed" as const,
+      preferences,
+      nowMs: 0,
+      notification: {
+        kind: "reply" as const,
+        origin: "human" as const,
+        identity: "turn",
+        occurredAt: state.updatedAt,
+      },
+    };
     expect(shouldAlertForActivity(input)).toBe(true);
     expect(
       shouldAlertForActivity({
@@ -103,3 +130,18 @@ describe("shared agent activity policy", () => {
     expect(shouldAlertForActivity({ ...input, nowMs: 180_000 })).toBe(false);
   });
 });
+
+it.each(["worker", "routed", "automation", "unknown"] as const)(
+  "silences %s completion across APNs/FCM policy",
+  (origin) => {
+    expect(
+      shouldAlertForActivity({
+        ...state,
+        phase: "completed",
+        preferences,
+        nowMs: 0,
+        notification: { kind: "reply", identity: "turn", origin, occurredAt: state.updatedAt },
+      }),
+    ).toBe(false);
+  },
+);
