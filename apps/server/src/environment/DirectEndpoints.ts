@@ -117,11 +117,14 @@ export const make = Effect.gen(function* () {
   const httpClient = yield* HttpClient.HttpClient;
 
   const resolve = Effect.gen(function* () {
+    const interfaces = isWildcardHost(config.host)
+      ? yield* Effect.try(() => NodeOS.networkInterfaces()).pipe(Effect.orElseSucceed(() => ({})))
+      : {};
     const endpoints = [
       ...resolveBoundEndpoints({
         host: config.host,
         port: config.port,
-        interfaces: NodeOS.networkInterfaces(),
+        interfaces,
       }),
     ];
     // Tailscale Serve terminates HTTPS on the tailnet name and forwards to
