@@ -1,3 +1,4 @@
+import { readLegacyAutomationOutcome } from "./ForkAutomationRead.ts";
 import { makeHistoricalAttachmentRecovery } from "../../forkLegacy/AttachmentImport.ts";
 import { decodeHistoricalAttachments } from "../../forkLegacy/AttachmentDecoder.ts";
 import {
@@ -109,6 +110,13 @@ export class LegacyV1ThreadImportError extends Schema.TaggedError<LegacyV1Thread
 }
 
 export interface LegacyV1ThreadImporterShape {
+  readonly readAutomationOutcome: (
+    threadId: ThreadId,
+    messageId: MessageId,
+  ) => Effect.Effect<
+    { status: "completed" | "failed"; result: string } | null,
+    LegacyV1ThreadImportError
+  >;
   readonly pendingThreadCount: Effect.Effect<number, LegacyV1ThreadImportError>;
   readonly reconcileShells: Effect.Effect<LegacyV1ImportSummary, LegacyV1ThreadImportError>;
   readonly ensureTranscript: (
@@ -827,6 +835,17 @@ const make = Effect.gen(function* () {
   );
 
   return LegacyV1ThreadImporter.of({
+    readAutomationOutcome: (threadId, messageId) =>
+      readLegacyAutomationOutcome(sql, threadId, messageId).pipe(
+        Effect.mapError(
+          (cause) =>
+            new LegacyV1ThreadImportError({
+              operation: "read automation outcome",
+              threadId,
+              cause,
+            }),
+        ),
+      ),
     pendingThreadCount,
     reconcileShells,
     ensureTranscript,
