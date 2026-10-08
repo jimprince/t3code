@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "0cd677a8b5873646d829754f9c1c44863eef7c28",
-  "head": "b425221814c154f868f8f31794412e67927ee203",
+  "prev": "4bec31c3810882d71635cb797c524cbfc486c1eb",
+  "head": "ab3c9e7155b56f147473a379ffb0f7827094ed5e",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -71,8 +71,7 @@
     "fork-project-dashboard-widgets",
     "fork-project-roadmap",
     "fork-project-page-workflow",
-    "fork-project-canvas",
-    "refresh-temp"
+    "fork-project-canvas"
   ],
   "unapplied": [
     "fork-project-task-types",
@@ -365,7 +364,7 @@
       "oid": "78a22a6bcb9123afec789cc3ce8d7caa2ec71d34"
     },
     "fork-project-canvas": {
-      "oid": "b3621a18f47fd2ec8eef337a7794b45da16138d0"
+      "oid": "ab3c9e7155b56f147473a379ffb0f7827094ed5e"
     },
     "fork-project-dashboard-widgets": {
       "oid": "f6f62c18663de62fcbfc8e72b409bcb209f1893d"
@@ -540,9 +539,6 @@
     },
     "fork-worktree-cleanup": {
       "oid": "686549bc9289e8fa09c8a3022b0866c0524c4cc2"
-    },
-    "refresh-temp": {
-      "oid": "b425221814c154f868f8f31794412e67927ee203"
     }
   }
 }
