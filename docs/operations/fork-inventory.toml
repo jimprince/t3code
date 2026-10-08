@@ -2213,6 +2213,12 @@ roles = ["agent-docs-owner"]
 note = "Inactive by default: verified successful pushes can make one fixed-argv, bounded, non-fatal host-local post-release disk observation with notification and durable receipts; activation remains separately Deployment-gated. Requires authored release entries for user-visible changes and validates them before publication. CI owns the shared verify-source checks including Knip; verify-stgit-replay stages immutable source/metadata inputs and waits for exact candidate CI. Main and release dereference that evidence instead of rerunning source verification, retaining published-stack policy, transfer-report baselines and artifact checks. Server verification stops scheduling tests after the first failure; passing candidates still run the full suite. Independent verification stages collect failures in one pass without weakening the publication gate. Nightly release-tag discovery uses a constant number of Git processes and aborts on lookup failure. Removed unused subject-based metadata reconstruction and obsolete maintenance plans; leased publication remains authoritative. Retiring persisted functionality requires an explicit data transition, immutable shipped migration IDs and frozen historical upgrade coverage. Product-bug instructions require evidence for each reported symptom, including cross-project PR routing and existing saved links/snapshots. Review also checked snapshot plumbing, diagnostics and obsolete mobile controller removals: these did not remove persisted orchestration event types. Retry limits remain unchanged pending genuine unattended observations."
 
 [[patch.decision]]
+id = "v2-candidate-packaged-smokes"
+decision = "adapt"
+note = "#200: Extend the existing Linux Build job with server-bundle history smoke, SEA/Rust packaging and full headless smoke. Reuse its web/server output and release build commands; use unchanged source versions and runner-temp artifacts. Require successful packaged history, executable build, archive build and headless smoke steps in candidate evidence; missing, skipped or failed evidence falls back to normal verification. Candidate-CI evidence and reuse belong to fork-maintenance-automation, which follows release publication and headless delivery; no prerequisite relocation or reorder. T3 Orchestrator owns live CI rollout."
+
+
+[[patch.decision]]
 id = "focused-worker-verification"
 date = "2026-10-07"
 decided = "adapt"

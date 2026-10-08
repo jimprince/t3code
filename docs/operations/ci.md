@@ -4,6 +4,16 @@
   `vp run typecheck`, desktop build verification, repo tests, browser tests,
   mobile native static analysis, and release-smoke checks on pull requests and
   pushes to `main` or immutable `ci-candidate/<sha>` branches.
+- The Linux Build job runs historical startup and restart against the built
+  server bundle, then builds the release-format Linux x64 headless tarball and
+  smokes its installed executable with no Node on PATH. Both use disposable
+  homes and historical fixture databases; no provider or live state is needed.
+  Headless packaging uses the checked-in package version without rewriting
+  manifests, reuses the desktop pipeline's web/server output, and stores the
+  archive in runner temp. The job allows 30 minutes for SEA and Rust builds.
+  Candidate evidence reuse requires both smoke steps to have succeeded; missing
+  or skipped smoke evidence forces normal verification. Release builds still
+  verify their own version-stamped artifacts.
 - `.github/workflows/release.yml` publishes the fork release artifacts from
   release tags: macOS arm64 desktop DMG/zip/updater manifest plus the Linux x64
   headless tarball.

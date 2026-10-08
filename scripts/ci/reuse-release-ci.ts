@@ -51,6 +51,10 @@ export const candidateJobSteps = (job: string): readonly string[] => {
     return [
       "Build desktop pipeline",
       "Verify preload bundle output",
+      "Smoke packaged server history",
+      "Build CLI single-executable",
+      "Build headless artifact",
+      "Smoke headless artifact",
       "Check verified source unchanged",
     ];
   const step = verificationSteps[job] ?? (job.startsWith("Test Server ") ? "Test" : undefined);

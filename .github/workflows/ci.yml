@@ -134,7 +134,7 @@ jobs:
     if: ${{ !cancelled() && needs.candidate_ci.outputs.reused != 'true' }}
     name: Build
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -178,6 +178,41 @@ jobs:
 
       - name: Verify preload bundle output
         run: node apps/desktop/scripts/verify-preload-bundle.mjs
+
+      - name: Smoke packaged server history
+        run: node scripts/smoke-thread-history.ts node "$GITHUB_WORKSPACE/apps/server/dist/bin.mjs"
+
+      - name: Setup Rust for headless packaging
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Build CLI single-executable
+        env:
+          # Match the release build and SEA_NODE_VERSION.
+          VP_NODE_VERSION: "26.8.2"
+        run: node apps/server/scripts/cli.ts build-exe --verbose
+
+      - name: Build headless artifact
+        run: |
+          cargo build --locked --release \
+            --manifest-path native/resource-monitor/Cargo.toml \
+            --target x86_64-unknown-linux-gnu
+          mkdir -p "$RUNNER_TEMP/headless-resource-monitor/linux-x64"
+          cp native/resource-monitor/target/x86_64-unknown-linux-gnu/release/t3-resource-monitor \
+            "$RUNNER_TEMP/headless-resource-monitor/linux-x64/t3-resource-monitor"
+          version="$(node -p "require('./apps/server/package.json').version")"
+          node scripts/build-headless-artifact.ts \
+            --platform linux --arch x64 --build-version "$version" \
+            --output-dir "$RUNNER_TEMP/candidate-headless" \
+            --resource-monitor-dir "$RUNNER_TEMP/headless-resource-monitor"
+
+      - name: Smoke headless artifact
+        run: |
+          version="$(node -p "require('./apps/server/package.json').version")"
+          node scripts/smoke-headless-artifact.ts \
+            --artifact "$RUNNER_TEMP/candidate-headless/t3-headless-${version}-linux-x64.tar.gz" \
+            --version "$version"
 
       - name: Check verified source unchanged
         run: |

@@ -135,6 +135,27 @@ describe("candidate CI evidence", () => {
     assert.isFalse(result.reused);
   });
 
+  it.each(["Smoke packaged server history", "Smoke headless artifact"])(
+    "rejects candidate evidence without successful %s",
+    async (stepName) => {
+      for (const state of ["missing", "skipped", "failure"]) {
+        const evidence = jobs();
+        const build = evidence.jobs.find((job) => job.name === "Build")!;
+        const step = build.steps.find((step) => step.name === stepName)!;
+        if (state === "missing")
+          build.steps = build.steps.filter((candidate) => candidate !== step);
+        else step.conclusion = state;
+        const result = await reuseCandidateCI({
+          repository,
+          source,
+          query: (endpoint) =>
+            endpoint.includes("/workflows/") ? { workflow_runs: [runFor()] } : evidence,
+        });
+        assert.isFalse(result.reused, `${stepName}: ${state}`);
+      }
+    },
+  );
+
   it("waits through event creation and the candidate run, without accepting pending evidence", async () => {
     let phase = 0;
     const result = await reuseCandidateCI({
