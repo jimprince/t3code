@@ -1,0 +1,4 @@
+id = "task-card-todo-progress"
+category = "feature"
+functionality = "projects"
+text = "An Active task card shows '3 of 5 steps' while its agent is working, from the agent's own to-do list."
