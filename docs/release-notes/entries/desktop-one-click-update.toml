@@ -1,0 +1,4 @@
+id = "desktop-one-click-update"
+category = "feature"
+functionality = "desktop updates"
+text = "Updating the desktop app is one click: confirm that agents will be interrupted, and a card in the sidebar footer shows checking, downloading, verifying, installing and restarting, or why it failed, with Retry."
