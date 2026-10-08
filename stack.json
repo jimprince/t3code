@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "74671fb9b1393c2667d12cd956979c27f3d3ab5b",
-  "head": "f8eda1e01206d1fc2bfe6fc76d2e24be7c996406",
+  "prev": "8ba27f5048c505c3ff927b66a6bb5faa9ef8998b",
+  "head": "1b3cf878d2b73fba12fca0db43bdd36cd2d0bc58",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -103,7 +103,8 @@
     "fork-antigravity-errors",
     "fork-conversation-fork",
     "fork-thread-transfer",
-    "fork-thread-history-compatibility"
+    "fork-thread-history-compatibility",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-session-reconcile",
@@ -443,6 +444,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "59f5bb3765528295ed47a214763443995570f33c"
+    },
+    "refresh-temp": {
+      "oid": "1b3cf878d2b73fba12fca0db43bdd36cd2d0bc58"
     }
   }
 }
