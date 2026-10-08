@@ -1,3 +1,4 @@
+import { ChatAttachment, PROVIDER_SEND_TURN_MAX_ATTACHMENTS } from "./chatAttachment.ts";
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import { ThreadId } from "./baseSchemas.ts";
@@ -46,6 +47,9 @@ export const HandoffAcceptInput = Schema.Struct({
   recipientThreadId: ThreadId,
   senderThreadId: Schema.optional(ThreadId),
   context: Schema.optional(OrchestrationMessageContext),
+  attachments: Schema.optional(
+    Schema.Array(ChatAttachment).check(Schema.isMaxLength(PROVIDER_SEND_TURN_MAX_ATTACHMENTS)),
+  ),
   text: Schema.String.check(Schema.isMaxLength(1_000_000)),
   coalesceKey: Schema.NullOr(Schema.String.check(Schema.isMaxLength(128))),
   allowQueueFallback: Schema.optional(Schema.Boolean),
