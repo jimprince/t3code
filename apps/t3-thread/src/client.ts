@@ -759,12 +759,19 @@ export class RemoteEnvironmentClient {
     branch?: string;
     baseBranch?: string;
     initialMessage?: string;
+    issue?: string;
     workerContext?: WorkerContext;
     parentThreadId?: string | null;
     settleOnComplete?: boolean;
     pin?: boolean;
     remoteParent?: { environmentId: string; threadId: string };
   }): Promise<{ threadId: string; projectId: string; title: string; pinned: boolean }> {
+    if (
+      input.issue !== undefined &&
+      (await this.describe()).capabilities.taskIssueLaunch !== true
+    ) {
+      throw new Error("This server does not support task-linked creation. No worker was created.");
+    }
     const title = input.title.trim();
     if (!title) throw new Error("Thread title must not be empty.");
     if ((input.parentThreadId || input.remoteParent) && !(await this.supportsThreadNesting())) {
@@ -816,6 +823,7 @@ export class RemoteEnvironmentClient {
       projectId: project.id,
       title,
       generateTitle: false,
+      ...(input.issue === undefined ? {} : { issue: input.issue }),
       modelSelection: wireModel(modelSelection),
       runtimeMode,
       interactionMode,
@@ -868,6 +876,14 @@ export class RemoteEnvironmentClient {
           : {}),
       });
       await rpc.request("launchThread", { ...launch, reuseExistingThread: true });
+    } catch (cause) {
+      if (input.issue !== undefined) {
+        throw new Error(
+          `Task-linked creation did not return success for thread '${threadId}' (launch '${launch.commandId}'). Inspect that thread before creating another worker: ${cause instanceof Error ? cause.message : String(cause)}`,
+          { cause },
+        );
+      }
+      throw cause;
     } finally {
       await rpc.dispose();
     }
