@@ -2643,3 +2643,13 @@ id = "decisions-feed-later-in-body"
 date = "2026-10-08"
 decided = "adapt"
 rationale = "Brad asked for Later to live on the issue so it holds across devices. A hidden body line costs no extra requests and no tracker labels; a comment would need a fetch per card and would update the newest comment."
+
+[[patch]]
+name = "fork-dash-172"
+subject = "feat(web): collapse Release widget groups by default"
+class = "product"
+purpose = "Show each completed-release group in the Release widget as a title and count, collapsed until opened, so a long history does not push the dashboard down."
+retire_when = "The Release widget is retired or upstream provides an equivalent release history."
+depends_on = ["fork-project-dashboard-widgets"]
+roles = []
+note = "Issue #172. The groups the user opened are remembered per project and device in localStorage (t3code:projects:release-open:<environmentId>:<rootThreadId>); everything else starts closed. openGroups.logic holds the toggle and storage schema shared with the workstream bands."
