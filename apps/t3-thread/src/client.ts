@@ -7,6 +7,17 @@ import {
 import { openRpcConnection } from "./openRpc.js";
 import type { NamedAgentSummary } from "./namedAgents.js";
 import {
+  MessageForwardError,
+  ATTACHMENT_UPLOAD_URL_TTL_MS,
+  WS_METHODS,
+  ChatAttachmentId,
+  type ChatAttachment,
+  type AssetCreateUrlResult,
+  type AttachmentCreateUploadUrlResult,
+  type MessageForwardSource,
+  type MessageForwardBundle,
+  type MessageForwardAcceptInput,
+  type MessageForwardResult,
   HandoffError,
   EnvironmentAuthorizationError,
   type HandoffReceipt,
@@ -901,7 +912,98 @@ export class RemoteEnvironmentClient {
    * Acceptance is durable dispatch, not proof that the agent has read the message.
    * Explicit control can interrupt tools; normal handoffs never interrupt/restart.
    */
+  async prepareForward(input: MessageForwardSource): Promise<MessageForwardBundle> {
+    const rpc = await this.openRpc();
+    try {
+      return await rpc.request<MessageForwardBundle>("fork.message.forward.prepare", input);
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
+  /** Streams signed source downloads straight into the destination's normal upload store.
+   * Only pending IDs are returned; send/queue acceptance happens separately.
+   */
+  async stageForwardAttachments(
+    bundle: MessageForwardBundle,
+    destination: RemoteEnvironmentClient,
+  ): Promise<ReadonlyArray<ChatAttachment>> {
+    const sourceRpc = await this.openRpc();
+    let targetRpc: RemoteRpcClient | null = null;
+    const staged: ChatAttachment[] = [];
+    const signedUrl = (environment: SavedEnvironment, relative: string) => {
+      const base = new URL(environment.httpBaseUrl);
+      const url = new URL(relative, base);
+      if (url.origin !== base.origin)
+        throw new Error("Attachment URL must belong to its paired environment.");
+      return url;
+    };
+    try {
+      targetRpc = await destination.openRpc();
+      for (const attachment of bundle.attachments) {
+        if (attachment.type !== "image" && attachment.type !== "file")
+          throw new Error("The source has an unsupported or missing attachment.");
+        const download = await sourceRpc.request<AssetCreateUrlResult>(WS_METHODS.assetsCreateUrl, {
+          resource: {
+            _tag: "attachment",
+            attachmentId: attachment.id,
+            fileName: attachment.name,
+            mimeType: attachment.mimeType,
+          },
+        });
+        const upload = await targetRpc.request<AttachmentCreateUploadUrlResult>(
+          WS_METHODS.attachmentsCreateUploadUrl,
+          {
+            type: attachment.type,
+            name: attachment.name,
+            mimeType: attachment.mimeType,
+            sizeBytes: attachment.sizeBytes,
+          },
+        );
+        staged.push({ ...attachment, id: ChatAttachmentId.make(upload.attachmentId) });
+        const response = await fetch(signedUrl(this.environment, download.relativeUrl), {
+          redirect: "error",
+          signal: AbortSignal.timeout(ATTACHMENT_UPLOAD_URL_TTL_MS),
+        });
+        if (!response.ok || !response.body)
+          throw new Error("Unable to download a source attachment.");
+        const request: RequestInit & { duplex: "half" } = {
+          method: "POST",
+          body: response.body,
+          duplex: "half",
+          redirect: "error",
+          signal: AbortSignal.timeout(ATTACHMENT_UPLOAD_URL_TTL_MS),
+          headers: {
+            "Content-Type": attachment.mimeType,
+            "Content-Length": String(attachment.sizeBytes),
+          },
+        };
+        const stored = await fetch(signedUrl(destination.environment, upload.relativeUrl), request);
+        if (!stored.ok)
+          throw new Error("Unable to upload an attachment to the target environment.");
+        // Consume the small upload acknowledgement before asking for another URL.
+        await stored.arrayBuffer();
+      }
+      return staged;
+    } catch (cause) {
+      // No dispatch was attempted, so these pending uploads can be safely discarded.
+      for (const attachment of staged)
+        await targetRpc
+          ?.request(WS_METHODS.attachmentsDelete, { attachmentId: attachment.id })
+          .catch(() => undefined);
+      throw cause;
+    } finally {
+      await sourceRpc.dispose();
+      await targetRpc?.dispose();
+    }
+  }
+
   async sendMessage(input: {
+    forwardedMessage?: MessageForwardResult["forwardedMessage"];
+    forward?: Pick<
+      MessageForwardAcceptInput,
+      "bundle" | "stagedAttachments" | "sourceUrl" | "senderName" | "note"
+    >;
     commandId?: string;
     threadId: string;
     text: string;
@@ -926,6 +1028,16 @@ export class RemoteEnvironmentClient {
           input.origin ?? null,
           input.allowWhileRunning === true,
           input.queueWhileRunning !== false,
+          ...(input.forward
+            ? [
+                {
+                  bundle: input.forward.bundle,
+                  sourceUrl: input.forward.sourceUrl,
+                  senderName: input.forward.senderName,
+                  note: input.forward.note ?? null,
+                },
+              ]
+            : []),
         ],
       });
     } catch (cause) {
@@ -959,16 +1071,34 @@ export class RemoteEnvironmentClient {
       try {
         rpc = await this.openRpc();
         attempted = true;
-        const receipt = await rpc.request<HandoffReceipt>("fork.send.accept", {
-          sendId,
-          recipientThreadId: input.threadId,
-          text: input.text,
-          ...(input.origin?.fromThreadId ? { senderThreadId: input.origin.fromThreadId } : {}),
-          ...(input.origin ? { context: makeMessageOriginContext(input.origin) } : {}),
-          allowQueueFallback: input.queueWhileRunning !== false,
-          coalesceKey: input.coalesceKey ?? null,
-          intent: input.allowWhileRunning ? "control" : input.coalesceKey ? "queue" : "auto",
-        });
+        const response = await rpc.request<MessageForwardResult | HandoffReceipt>(
+          input.forward && !input.forwardedMessage
+            ? "fork.message.forward.accept"
+            : "fork.send.accept",
+          {
+            ...input.forward,
+            sendId,
+            recipientThreadId: input.threadId,
+            text: input.forwardedMessage?.text ?? input.text,
+            ...(input.forwardedMessage ? { attachments: input.forwardedMessage.attachments } : {}),
+            ...(input.origin?.fromThreadId ? { senderThreadId: input.origin.fromThreadId } : {}),
+            ...(input.origin ? { context: makeMessageOriginContext(input.origin) } : {}),
+            allowQueueFallback: input.queueWhileRunning !== false,
+            coalesceKey: input.coalesceKey ?? null,
+            intent: input.allowWhileRunning ? "control" : input.coalesceKey ? "queue" : "auto",
+          },
+        );
+        // Keep the rendered message private to held-queue replay, not the public receipt.
+        const receipt: HandoffReceipt = {
+          sendId: response.sendId,
+          recipientThreadId: response.recipientThreadId,
+          acceptedAt: response.acceptedAt,
+          status: response.status,
+          cause: response.cause,
+          ownerThreadId: response.ownerThreadId,
+        };
+        const forwardedMessage =
+          "forwardedMessage" in response ? response.forwardedMessage : input.forwardedMessage;
         if (
           receipt.status === "queued" ||
           receipt.status === "held" ||
@@ -983,6 +1113,8 @@ export class RemoteEnvironmentClient {
               agentName: input.agentName ?? null,
               environment: this.environment.name,
               text: input.text,
+              ...(input.forward ? { forward: input.forward } : {}),
+              ...(forwardedMessage ? { forwardedMessage } : {}),
               origin: input.origin ?? null,
               coalesceKey: input.coalesceKey ?? null,
               queuedDuringTurnId: null,
@@ -1028,6 +1160,14 @@ export class RemoteEnvironmentClient {
             retryable: true,
             sendId,
             causeCode: "ACCESS_DENIED",
+          };
+        if (cause instanceof MessageForwardError)
+          return {
+            dispatched: false,
+            queued: false,
+            uncertain: false,
+            sendId,
+            causeCode: "DISPATCH_REJECTED",
           };
         if (cause instanceof HandoffError)
           return {
