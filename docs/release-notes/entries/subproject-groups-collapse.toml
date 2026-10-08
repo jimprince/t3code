@@ -1,0 +1,4 @@
+id = "subproject-groups-collapse"
+category = "feature"
+functionality = "web sidebar"
+text = "Subprojects fold under their project in the Projects sidebar, remembered per device, and the project card says how many working agents are inside them."
