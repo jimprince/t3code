@@ -7,7 +7,6 @@ import {
 import { openRpcConnection } from "./openRpc.js";
 import { withThreadMetadata, type ThreadMetadata } from "./v2/nesting.js";
 import { projectionHasWork } from "./v2/workState.js";
-import { threadShell as gcThreadShell } from "./v2/reads.js";
 import type { WorktreeGcThread } from "./worktreeGc.js";
 import type { OrchestrationV2ShellSnapshot } from "@t3tools/contracts";
 import { refreshSavedEnvironmentSession } from "./sessionRefresh.js";
