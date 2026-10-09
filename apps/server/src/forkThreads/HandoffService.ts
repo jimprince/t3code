@@ -20,6 +20,7 @@ import * as Schema from "effect/Schema";
 import type * as SqlClient from "effect/unstable/sql/SqlClient";
 import type { ThreadManagementServiceShape } from "../orchestration-v2/ThreadManagementService.ts";
 import { MessageAdmission, type Admission } from "./MessageAdmission.ts";
+import { readMessageRun } from "./SendBindings.ts";
 import { readWorkerMetadata } from "./WorkerLifecycleMetadata.ts";
 
 const isHandoffError = Schema.is(HandoffError);
@@ -91,24 +92,23 @@ export const makeHandoffService = (
     }
   });
   const currentReceipt = Effect.fnUntraced(function* (stored: Stored) {
-    if (stored.receipt.status !== "accepted" && stored.receipt.status !== "queued")
-      return stored.receipt;
     const messageId = `${key(stored.receipt.sendId)}:message`;
-    // Indexed exact message/run joins; no transcript or tool-body hydration.
-    const rows = yield* sql<{
-      status: string;
-      initial_message: string;
-    }>`SELECT json_extract(r.payload_json,'$.status') AS status,json_extract(r.payload_json,'$.userMessageId') AS initial_message FROM orchestration_v2_projection_messages m JOIN orchestration_v2_projection_runs r ON r.run_id=json_extract(m.payload_json,'$.runId') WHERE m.message_id=${messageId} AND m.thread_id=${stored.receipt.recipientThreadId} LIMIT 1`;
-    const row = rows[0];
-    if (!row) return stored.receipt;
-    if (row.initial_message === messageId && row.status === "cancelled")
-      return { ...stored.receipt, status: "cancelled" as const, cause: "CANCELLED" as const };
-    return {
+    const binding = yield* readMessageRun(sql, stored.receipt.recipientThreadId, messageId);
+    const receipt = {
       ...stored.receipt,
+      runId: binding?.run.runId ?? null,
+      run: binding?.run ?? null,
+    };
+    if (!binding || !["accepted", "queued", "started", "steered"].includes(receipt.status))
+      return receipt;
+    if (binding.initialMessage === messageId && binding.run.status === "cancelled")
+      return { ...receipt, status: "cancelled" as const, cause: "CANCELLED" as const };
+    return {
+      ...receipt,
       status:
-        row.status === "queued"
+        binding.run.status === "queued"
           ? ("queued" as const)
-          : row.initial_message === messageId
+          : binding.initialMessage === messageId
             ? ("started" as const)
             : ("steered" as const),
     };

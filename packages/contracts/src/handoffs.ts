@@ -1,7 +1,7 @@
 import { ChatAttachment, PROVIDER_SEND_TURN_MAX_ATTACHMENTS } from "./chatAttachment.ts";
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/unstable/rpc/Rpc";
-import { ThreadId } from "./baseSchemas.ts";
+import { ThreadId, RunId } from "./baseSchemas.ts";
 import { EnvironmentAuthorizationError } from "./auth.ts";
 import { OrchestrationMessageContext } from "./composerContext.ts";
 
@@ -24,6 +24,28 @@ export const HandoffCause = Schema.Literals([
   "BUSY",
   "DORMANT",
 ]);
+export const SendRunBinding = Schema.Struct({
+  runId: RunId,
+  status: Schema.String,
+  terminal: Schema.Boolean,
+  queueHeld: Schema.Boolean,
+  requestedAt: Schema.String,
+  startedAt: Schema.NullOr(Schema.String),
+  completedAt: Schema.NullOr(Schema.String),
+});
+export type SendRunBinding = typeof SendRunBinding.Type;
+const SendBindingId = Schema.String.check(Schema.isMinLength(1)).check(Schema.isMaxLength(256));
+export const SendBindingInput = Schema.Struct({ threadId: ThreadId, sendId: SendBindingId });
+export type SendBindingInput = typeof SendBindingInput.Type;
+export const SendBindingResult = Schema.Struct({
+  threadId: ThreadId,
+  sendId: SendBindingId,
+  state: Schema.Literals(["unknown", "pending", "bound", "multiple"]),
+  delivery: Schema.NullOr(Schema.String),
+  runId: Schema.NullOr(RunId),
+  run: Schema.NullOr(SendRunBinding),
+});
+export type SendBindingResult = typeof SendBindingResult.Type;
 export const HandoffReceipt = Schema.Struct({
   sendId: HandoffSendId,
   recipientThreadId: ThreadId,
@@ -40,6 +62,8 @@ export const HandoffReceipt = Schema.Struct({
   ]),
   cause: Schema.NullOr(HandoffCause),
   ownerThreadId: Schema.NullOr(ThreadId),
+  runId: Schema.optional(Schema.NullOr(RunId)),
+  run: Schema.optional(Schema.NullOr(SendRunBinding)),
 });
 export type HandoffReceipt = typeof HandoffReceipt.Type;
 export const HandoffAcceptInput = Schema.Struct({
@@ -78,6 +102,11 @@ export const HandoffLookupResult = Schema.Struct({
 });
 export type HandoffLookupResult = typeof HandoffLookupResult.Type;
 export const HandoffRpcs = [
+  Rpc.make("thread.send.binding", {
+    payload: SendBindingInput,
+    success: SendBindingResult,
+    error: Schema.Union([HandoffError, EnvironmentAuthorizationError]),
+  }),
   Rpc.make("fork.send.accept", {
     payload: HandoffAcceptInput,
     success: HandoffReceipt,
