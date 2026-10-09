@@ -1,0 +1,18 @@
+name = "fork-provider-context-recovery"
+subject = "fix(server): recover provider context after restart"
+class = "product"
+purpose = "Resume retained Claude native sessions, compact fallback context without dropping pending requests, expose typed recovery limits and tear down only the exact Claude session."
+retire_when = "Upstream provides native-first restart recovery, protected deterministic fallback compaction and an exact-session reset boundary."
+depends_on = [
+  "fork-thread-transfer",
+  "fork-provider-turn-safety",
+  "fork-lifecycle-deadlines",
+  "fork-admin-thread-recovery",
+]
+roles = []
+
+[[decision]]
+id = "catchup-2908-provider-recovery-boundary"
+date = "2026-10-10"
+decided = "relocate+adapt"
+rationale = "Preserve native-first recovery, protected pending-human requests, upstream unsent-delivery rollback/uncertainty, redaction and native compaction allowance through the extracted provider-core recovery and handoffBudget boundaries (#17299). Admission reserves the live serialized MCP App context actually sent to Codex, so oversized current input refuses before native start with typed context_recovery_required rather than discarding protected input. Retain compatible failure classification and exact-session reset boundaries. The integrated start-service test pairs small and oversized App notes with preserved current input; source review passed, and full composed recovery/compaction behavior verification remains the gate."
