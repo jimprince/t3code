@@ -3205,6 +3205,7 @@ export default function ChatView(props: ChatViewProps) {
       for (const send of refused) {
         items.push({
           id: `held-sends:${routeThreadKey}:${send.commandId}`,
+          priority: "pending",
           variant: "warning",
           icon: <AlarmClockIcon />,
           title: `Not sent: ${preview(send, 60)}`,
@@ -3236,6 +3237,7 @@ export default function ChatView(props: ChatViewProps) {
         const count = `${waiting.length} message${waiting.length === 1 ? "" : "s"}`;
         items.push({
           id: `held-sends:${routeThreadKey}`,
+          priority: "pending",
           variant: notSent ? "warning" : "default",
           icon: <AlarmClockIcon />,
           title: notSent

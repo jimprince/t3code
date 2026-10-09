@@ -32,8 +32,9 @@ const IDLE: ServerRestartState = { status: "idle" };
 
 /** One restart state per environment, kept across transport loss so the banner survives the restart. */
 export const useServerRestartStore = create<{
+  readonly dismissedAt: Readonly<Record<string, string>>;
   readonly byEnvironment: Readonly<Record<string, ServerRestartState>>;
-}>(() => ({ byEnvironment: {} }));
+}>(() => ({ byEnvironment: {}, dismissedAt: {} }));
 
 function updateRestart(
   environmentId: EnvironmentId,
@@ -56,8 +57,18 @@ export const expireRestart = (environmentId: EnvironmentId, nowMs: number) => {
   updateRestart(environmentId, (state) => expireServerRestart(state, nowMs));
 };
 
-export const clearRestart = (environmentId: EnvironmentId) =>
-  updateRestart(environmentId, () => IDLE);
+export const clearRestart = (environmentId: EnvironmentId) => {
+  useServerRestartStore.setState(({ byEnvironment, dismissedAt }) => {
+    const state = byEnvironment[environmentId];
+    return {
+      byEnvironment: { ...byEnvironment, [environmentId]: IDLE },
+      dismissedAt:
+        state && state.status !== "idle"
+          ? { ...dismissedAt, [environmentId]: state.announcedAt }
+          : dismissedAt,
+    };
+  });
+};
 
 /**
  * Feeds every environment's lifecycle events and connection loss into its restart state. Mount
@@ -75,7 +86,14 @@ export function useServerRestartTracking() {
         return followServerRestartEvents(
           appAtomRegistry,
           serverLifecycleWithUpdates({ environmentId, input: { includeUpdates: true } }),
-          (event) => updateRestart(environmentId, (state) => applyServerRestartEvent(state, event)),
+          (event) =>
+            updateRestart(environmentId, (state) =>
+              applyServerRestartEvent(
+                state,
+                event,
+                useServerRestartStore.getState().dismissedAt[environmentId],
+              ),
+            ),
         );
       });
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());

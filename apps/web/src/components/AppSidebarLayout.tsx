@@ -305,7 +305,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
         className="h-dvh! min-h-0!"
         data-panel-animations={routePanelAnimationsActive ? "true" : "false"}
         defaultOpen
-        style={sidebarProviderStyle}
+        style={{ ...sidebarProviderStyle, paddingTop: "var(--server-restart-banner-height, 0px)" }}
       >
         <SidebarBrandWidthProbe onWidthChange={setBrandWidth} />
         <ProjectProjectionRetention />

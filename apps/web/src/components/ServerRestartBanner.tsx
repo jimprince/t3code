@@ -1,6 +1,6 @@
 import { useAtomCommand } from "../state/use-atom-command";
 import { CheckIcon, XIcon } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { EnvironmentId } from "@t3tools/contracts";
 
 import { environmentCatalog } from "../connection/catalog";
@@ -84,11 +84,13 @@ function RestartStrip({ environmentId }: { readonly environmentId: EnvironmentId
               </span>
             ))
           : null}
-        {model.canRetry ? (
+        {model.tone === "failed" ? (
           <>
-            <Button size="xs" variant="outline" onClick={() => void retry(environmentId)}>
-              Retry
-            </Button>
+            {model.canRetry ? (
+              <Button size="xs" variant="outline" onClick={() => void retry(environmentId)}>
+                Retry connection
+              </Button>
+            ) : null}
             <Button
               size="icon-xs"
               variant="ghost"
@@ -127,9 +129,26 @@ export function ServerRestartBanner() {
       .map(([environmentId]) => environmentId)
       .join("\n"),
   );
+  const banner = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const element = banner.current;
+    const reserve = () =>
+      document.documentElement.style.setProperty(
+        "--server-restart-banner-height",
+        `${element?.getBoundingClientRect().height ?? 0}px`,
+      );
+    reserve();
+    if (!element) return;
+    const observer = new ResizeObserver(reserve);
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+      document.documentElement.style.removeProperty("--server-restart-banner-height");
+    };
+  }, [restartingIds]);
   if (restartingIds === "") return null;
   return (
-    <div className="fixed inset-x-0 top-0 z-50 flex flex-col bg-background">
+    <div ref={banner} className="fixed inset-x-0 top-0 z-50 flex flex-col bg-background">
       {restartingIds.split("\n").map((environmentId) => (
         <div key={environmentId} className="relative">
           <RestartStrip environmentId={environmentId as EnvironmentId} />

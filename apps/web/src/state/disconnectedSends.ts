@@ -7,6 +7,7 @@ import { CommandId, type EnvironmentId, type ThreadId } from "@t3tools/contracts
 import { useMemo } from "react";
 import { create } from "zustand";
 
+import { setHeldSendUnloadGuard } from "../lib/heldSendUnloadGuard";
 import { newMessageId, randomUUID } from "../lib/utils";
 
 /** A send the composer built while its server was down, with the command id it will keep. */
@@ -47,6 +48,7 @@ function publish(environmentId: EnvironmentId) {
     const reason = queue.refusal(send.commandId);
     if (reason !== undefined) refusals[send.commandId] = reason;
   }
+  setHeldSendUnloadGuard([...queues.values()].some((entry) => entry.pending().length > 0));
   useQueueStore.setState((store) => ({
     held: { ...store.held, [environmentId]: pending },
     refusals: { ...store.refusals, [environmentId]: refusals },
@@ -69,6 +71,7 @@ function queueFor(environmentId: EnvironmentId): SendQueue {
     // A thread's messages keep their order; a refusal in one thread does not hold up another.
     queue = createDisconnectedComposerQueue<DisconnectedSend>({
       orderKey: (send) => send.threadId,
+      onChange: () => publish(environmentId),
     });
     queues.set(environmentId, queue);
   }
@@ -216,5 +219,6 @@ export const disconnectedSendRefusals = (environmentId: EnvironmentId): Refusals
 /** Test seam: forget every queue and outcome. */
 export function resetDisconnectedSendsForTest() {
   queues.clear();
+  setHeldSendUnloadGuard(false);
   useQueueStore.setState({ held: {}, refusals: {}, flushRequests: 0, stalled: new Set() });
 }

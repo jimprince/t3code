@@ -192,3 +192,19 @@ describe("server restart banner", () => {
     });
   });
 });
+
+it("offers reconnect Retry only for connection loss, while retaining update recovery guidance", () => {
+  const base = {
+    ...updating(),
+    status: "failed" as const,
+    reason: "rolled back",
+    manualUpdateCommand: "t3 service update",
+  };
+  expect(describeServerRestart({ ...base, failureKind: "update" }, null)).toMatchObject({
+    tone: "failed",
+    canRetry: false,
+    manualUpdateCommand: "t3 service update",
+  });
+  expect(serverRestartClearDelayMs({ ...base, failureKind: "update" })).toBeNull();
+  expect(describeServerRestart({ ...base, failureKind: "reconnect" }, null)?.canRetry).toBe(true);
+});

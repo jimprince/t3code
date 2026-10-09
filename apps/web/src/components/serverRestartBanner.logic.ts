@@ -74,7 +74,7 @@ export function describeServerRestart(
         detail: null,
         stepsDone: null,
         manualUpdateCommand: state.manualUpdateCommand ?? null,
-        canRetry: true,
+        canRetry: state.failureKind !== "update",
       };
   }
 }
