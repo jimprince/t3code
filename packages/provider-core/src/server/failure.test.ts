@@ -18,6 +18,7 @@ import {
   MAX_PROVIDER_FAILURE_CODE_LENGTH,
   MAX_PROVIDER_FAILURE_MESSAGE_LENGTH,
   ContextHandoffBudgetError,
+  ContextRecoveryRequiredError,
 } from "./failure.ts";
 import * as IdAllocator from "./IdAllocator.ts";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
@@ -245,4 +246,18 @@ it("redacts and bounds native Antigravity details and ignores unrelated transpor
     }).message,
     "provider session could not be opened",
   );
+});
+
+it("preserves the machine-readable recovery state through turn-start wrappers without automatic retries", () => {
+  const cause = new ProviderAdapter.ProviderAdapterTurnStartError({
+    driver: ProviderDriverKind.make("claudeAgent"),
+    threadId: ThreadId.make("thread:recovery"),
+    providerThreadId: ProviderThreadId.make("provider-thread:recovery"),
+    runId: RunId.make("run:recovery"),
+    cause: new ContextRecoveryRequiredError(),
+  });
+  const failure = makeProviderFailure({ cause: Cause.fail(cause), class: "provider_error" });
+  assert.equal(failure.code, "context_recovery_required");
+  assert.equal(failure.retryable, false);
+  assert.equal(failure.message, new ContextRecoveryRequiredError().message);
 });

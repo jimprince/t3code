@@ -1573,7 +1573,11 @@ describe("ClaudeAdapterV2 attachments", () => {
               text: `Ultrathink:\nFocus on the diagram labels.\n\n[Attached image "diagram.png" is saved at: ${expectedAttachmentPath}]\n\n[Attached file "requirements.pdf" is saved at: ${expectedDocumentPath}]`,
             },
           ]);
-        }).pipe(Effect.provide(Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer))),
+        }).pipe(
+          Effect.provide(
+            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),
+          ),
+        ),
       ),
   );
 
@@ -1848,7 +1852,12 @@ describe("ClaudeAdapterV2 native fork", () => {
 });
 
 describe("ClaudeAdapterV2 native session identity", () => {
-  const openTurnWithOrdinal = (providerTurnOrdinal: number, nativeThreadHasTurns?: boolean) =>
+  const openTurnWithOrdinal = (
+    providerTurnOrdinal: number,
+    nativeThreadHasTurns?: boolean,
+    storedSession?: boolean,
+    resumeFailureThreadId?: string,
+  ) =>
     Effect.scoped(
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
@@ -1867,6 +1876,10 @@ describe("ClaudeAdapterV2 native session identity", () => {
           crypto: yield* Crypto.Crypto,
           idAllocator,
           queryRunner: {
+            ...(resumeFailureThreadId === undefined ? {} : { resumeFailureThreadId }),
+            ...(storedSession === undefined
+              ? {}
+              : { hasSession: () => Effect.succeed(storedSession) }),
             allocateSessionId: Effect.succeed("native-session-identity"),
             open: (input) =>
               Effect.sync(() => {
@@ -1898,6 +1911,17 @@ describe("ClaudeAdapterV2 native session identity", () => {
           modelSelection: CLAUDE_TEST_MODEL_SELECTION,
           runtimePolicy: CLAUDE_TEST_RUNTIME_POLICY,
         });
+        if (storedSession !== undefined) {
+          const resumed = yield* runtime
+            .resumeThread({ providerThread, runtimePolicy: CLAUDE_TEST_RUNTIME_POLICY })
+            .pipe(Effect.result);
+          if (!storedSession || resumeFailureThreadId === threadId) {
+            assert.equal(resumed._tag, "Failure");
+            assert.equal(openedQueries.length, 0);
+            return openedQueries;
+          }
+          assert.equal(resumed._tag, "Success");
+        }
         const now = yield* DateTime.now;
         yield* runtime.startTurn(
           makeClaudeTestTurnInput({
@@ -1937,6 +1961,35 @@ describe("ClaudeAdapterV2 native session identity", () => {
         assert.equal(openedQueries[0]?.options.resume, "native-session-identity");
         assert.equal(openedQueries[0]?.options.sessionId, undefined);
       }),
+  );
+
+  it.effect(
+    "prefers a stored native session even when no accepted app turns survived restart",
+    () =>
+      Effect.gen(function* () {
+        const opened = yield* openTurnWithOrdinal(1, false, true);
+        assert.equal(opened[0]?.options.resume, "native-session-identity");
+        assert.equal(opened[0]?.options.sessionId, undefined);
+      }),
+  );
+
+  it.effect(
+    "fails native lookup before sending a prompt so the caller can recover with a fresh session",
+    () =>
+      Effect.gen(function* () {
+        const opened = yield* openTurnWithOrdinal(1500, true, false);
+        assert.equal(opened.length, 0);
+      }),
+  );
+
+  it.effect("injects resume failure only for the allowlisted test thread", () =>
+    Effect.gen(function* () {
+      assert.equal(
+        (yield* openTurnWithOrdinal(1500, true, true, "thread-claude-session-identity")).length,
+        0,
+      );
+      assert.equal((yield* openTurnWithOrdinal(1500, true, true, "different-thread")).length, 1);
+    }),
   );
 
   it.effect("creates a fresh native session despite earlier provider-thread turns", () =>
@@ -2295,6 +2348,76 @@ describe("ClaudeAdapterV2 background wake turns", () => {
       };
     });
   const makeWakeHarness = makeWakeHarnessWithOptions();
+
+  it.effect(
+    "resets only the exact Claude session, retains its native handle and refuses reuse",
+    () =>
+      Effect.gen(function* () {
+        let closeCount = 0;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const nativeHome = yield* fileSystem.makeTempDirectoryScoped({
+          prefix: "t3-reset-native-",
+        });
+        const nativeDir = path.join(nativeHome, "projects", "-workspace");
+        yield* fileSystem.makeDirectory(nativeDir, { recursive: true });
+        const transcriptPath = path.join(nativeDir, `${WAKE_NATIVE_SESSION}.jsonl`);
+        const transcript = '{"type":"user","message":"native history must survive"}\n';
+        yield* fileSystem.writeFileString(transcriptPath, transcript);
+        const harness = yield* makeWakeHarnessWithOptions({
+          environment: { CLAUDE_CONFIG_DIR: nativeHome },
+          close: (messages) =>
+            Effect.gen(function* () {
+              closeCount++;
+              yield* Queue.shutdown(messages);
+            }),
+        });
+        const turn = makeClaudeTestTurnInput({
+          threadId: harness.threadId,
+          providerThread: harness.providerThread,
+          now: yield* DateTime.now,
+          attemptId: RunAttemptId.make("reset-exact-session"),
+          text: "Do work",
+          attachments: [],
+        });
+        yield* harness.runtime.startTurn(turn);
+        const reset = harness.runtime.resetThread!;
+        const wrong = yield* reset({
+          threadId: harness.threadId,
+          runId: RunId.make("wrong-run"),
+        }).pipe(Effect.result);
+        assert.equal(wrong._tag, "Failure");
+        assert.equal(
+          (yield* reset({ threadId: ThreadId.make("wrong-thread"), runId: turn.runId }).pipe(
+            Effect.result,
+          ))._tag,
+          "Failure",
+        );
+        assert.equal(closeCount, 0);
+        assert.equal(harness.terminalEvents().length, 0);
+        const stopped = yield* reset({ threadId: harness.threadId, runId: turn.runId });
+        assert.deepEqual(stopped, { isolation: "session", stopped: true });
+        const terminal = yield* Queue.take(harness.terminalReceipts);
+        assert.equal(terminal.providerThreadId, harness.providerThread.id);
+        assert.equal(terminal.status, "interrupted");
+        assert.equal(harness.providerThread.nativeThreadRef?.nativeId, WAKE_NATIVE_SESSION);
+        assert.equal(yield* fileSystem.readFileString(transcriptPath), transcript);
+        assert.deepEqual(yield* reset({ threadId: harness.threadId, runId: turn.runId }), stopped);
+        assert.equal(closeCount, 1);
+        assert.equal(harness.terminalEvents().length, 1);
+        assert.equal((yield* harness.runtime.startTurn(turn).pipe(Effect.result))._tag, "Failure");
+        assert.equal(
+          (yield* harness.runtime
+            .resumeThread({ providerThread: harness.providerThread })
+            .pipe(Effect.result))._tag,
+          "Failure",
+        );
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),
+        ),
+      ),
+  );
 
   it.effect.each([
     { isError: false, title: "Check weather" },
