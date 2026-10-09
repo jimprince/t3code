@@ -5,6 +5,7 @@ import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
 import * as Stdio from "effect/Stdio";
 import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
@@ -685,6 +686,56 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
         method: "x/request",
         requestId: "1",
       });
+    }),
+  );
+
+  it.effect("bounds silent RPCs, ignores their late ACKs, and keeps another request usable", () =>
+    Effect.gen(function* () {
+      const { stdio, input, output } = yield* makeInMemoryStdio();
+      const transport = yield* CodexProtocol.makeCodexAppServerPatchedProtocol({
+        stdio,
+        requestTimeoutMs: 100,
+      });
+      const silent = yield* transport.request("turn/interrupt", {}).pipe(
+        Effect.match({
+          onFailure: (error) => error,
+          onSuccess: () => assert.fail("Expected request deadline to fail"),
+        }),
+        Effect.forkScoped,
+      );
+      yield* Queue.take(output);
+      yield* TestClock.adjust(100);
+      const error = yield* Fiber.join(silent);
+      assert.instanceOf(error, CodexError.CodexAppServerRequestTimeoutError);
+      assert.deepInclude(error, { method: "turn/interrupt", requestId: "1", timeoutMs: 100 });
+      const healthy = yield* transport.request("thread/read", {}).pipe(Effect.forkScoped);
+      yield* Queue.take(output);
+      yield* Queue.offer(input, encodeJsonl({ id: 1, result: "late" }));
+      yield* Queue.offer(input, encodeJsonl({ id: 2, result: "healthy" }));
+      assert.equal(yield* Fiber.join(healthy), "healthy");
+    }),
+  );
+
+  it.effect("includes a blocked outbound logger in the request deadline", () =>
+    Effect.gen(function* () {
+      const { stdio } = yield* makeInMemoryStdio();
+      const logging = yield* Deferred.make<void>();
+      const transport = yield* CodexProtocol.makeCodexAppServerPatchedProtocol({
+        stdio,
+        requestTimeoutMs: 100,
+        logOutgoing: true,
+        logger: () => Deferred.succeed(logging, undefined).pipe(Effect.andThen(Effect.never)),
+      });
+      const request = yield* transport.request("thread/start", {}).pipe(
+        Effect.match({
+          onFailure: (error) => error,
+          onSuccess: () => assert.fail("Expected request deadline to fail"),
+        }),
+        Effect.forkScoped,
+      );
+      yield* Deferred.await(logging);
+      yield* TestClock.adjust(100);
+      assert.instanceOf(yield* Fiber.join(request), CodexError.CodexAppServerRequestTimeoutError);
     }),
   );
 
