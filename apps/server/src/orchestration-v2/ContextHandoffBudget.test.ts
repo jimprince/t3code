@@ -22,6 +22,7 @@ import {
   historyCost,
   historyResponseItems,
   selectHistory,
+  selectRecoveryHistory,
   historicalMessage,
 } from "./ContextHandoffBudget.ts";
 import { projectContextHandoffForWire } from "./WireProjection.ts";
@@ -419,7 +420,11 @@ describe("handoff delivery", () => {
   ])("records omitted recovery coverage separately from $label text", ({ native }) =>
     Effect.gen(function* () {
       const omittedBeforeDelivery = TurnItemId.make("item:omitted-during-preparation");
-      const oversized = message("item:oversized", "user", "x".repeat(20_000));
+      const oversized = {
+        ...message("item:oversized", "user", "x".repeat(20_000)),
+        status: "completed" as const,
+        runStatus: "completed" as const,
+      };
       let durable: OrchestrationV2ContextHandoff = {
         ...handoff,
         history: {
@@ -688,4 +693,173 @@ describe("handoff delivery", () => {
       assert.equal(calls, 0);
     }),
   );
+});
+
+describe("recovery compaction", () => {
+  it.effect(
+    "delivers an over-budget long transcript with older summary, recent exact runs and pending input",
+    () =>
+      Effect.gen(function* () {
+        const completed = Array.from({ length: 1500 }, (_, index) => ({
+          ...message(
+            `item:long:${index}`,
+            index % 2 === 0 ? "user" : "assistant",
+            `Completed work ${index}. ` + "context ".repeat(40),
+          ),
+          runId: RunId.make(`run:long:${Math.floor(index / 2)}`),
+          status: "completed" as const,
+          runStatus: "completed" as const,
+        }));
+        const pending = {
+          ...message("item:pending:early", "user", "UNANSWERED\n  keep this exact request 🧪"),
+          runId: RunId.make("run:pending:early"),
+          runStatus: "failed" as const,
+        };
+        const transcript = [pending, ...completed];
+        let received: ProviderAdapterV2HistoricalContext | undefined;
+        let durable: OrchestrationV2ContextHandoff = {
+          ...handoff,
+          history: {
+            messages: transcript,
+            coverage: "Retrieve thread:handoff using t3_thread_read",
+            omittedItems: 0,
+          },
+        };
+        yield* deliverContextHandoffs({
+          handoffs: [durable],
+          providerThread,
+          budget: 16_000,
+          alreadyDeliveredItemIds: new Set(),
+          inject: (history) =>
+            Effect.sync(() => {
+              received = history;
+              return true;
+            }),
+          persist: (value) =>
+            Effect.sync(() => {
+              durable = value as typeof durable;
+            }),
+        });
+        assert.isDefined(received);
+        assert.isAtMost(historyCost(received!.messages, received!.context), 16_000);
+        assert.include(received!.context, "Deterministic recovery summary v1");
+        assert.deepEqual(
+          received!.messages.find((item) => item.itemId === pending.itemId),
+          pending,
+        );
+        assert.deepEqual(received!.messages.slice(-8), completed.slice(-8));
+        assert.equal(durable.delivery?.status, "injected");
+        assert.include(durable.delivery?.itemIds ?? [], pending.itemId);
+        assert.isAbove(durable.delivery?.omittedItemIds?.length ?? 0, 1400);
+        const second = yield* deliverContextHandoffs({
+          handoffs: [durable],
+          providerThread,
+          budget: 16_000,
+          alreadyDeliveredItemIds: new Set(),
+          persist: () => Effect.die("duplicate delivery"),
+        });
+        assert.equal(second.context, "");
+      }),
+  );
+
+  it.effect(
+    "keeps explicitly protected completed requests verbatim during delivery compaction",
+    () =>
+      Effect.gen(function* () {
+        const protectedRequest = {
+          ...message(
+            "item:completed:unaddressed",
+            "user",
+            "Please still do this.\n  exact whitespace 🧪",
+          ),
+          status: "completed" as const,
+          runStatus: "completed" as const,
+          runId: RunId.make("run:old"),
+        };
+        const unknownRequest = {
+          ...message("item:unknown", "user", "Unknown outcome must survive"),
+          status: "completed" as const,
+          runId: RunId.make("run:unknown"),
+        };
+        const completed = Array.from({ length: 50 }, (_, index) => ({
+          ...message(`item:completed:${index}`, "assistant", "older work ".repeat(100)),
+          status: "completed" as const,
+          runStatus: "completed" as const,
+          runId: RunId.make(`run:${index}`),
+        }));
+        let received: ProviderAdapterV2HistoricalContext | undefined;
+        yield* deliverContextHandoffs({
+          handoffs: [
+            {
+              ...handoff,
+              history: {
+                messages: [protectedRequest, unknownRequest, ...completed],
+                coverage: "source",
+                omittedItems: 0,
+              },
+            },
+          ],
+          providerThread,
+          budget: 6000,
+          protectedItemIds: new Set([protectedRequest.itemId]),
+          alreadyDeliveredItemIds: new Set(),
+          persist: () => Effect.void,
+          inject: (history) =>
+            Effect.sync(() => {
+              received = history;
+              return true;
+            }),
+        });
+        assert.deepEqual(
+          received!.messages.find((item) => item.itemId === protectedRequest.itemId),
+          protectedRequest,
+        );
+        assert.deepEqual(
+          received!.messages.find((item) => item.itemId === unknownRequest.itemId),
+          unknownRequest,
+        );
+        assert.isAtMost(historyCost(received!.messages, received!.context), 6000);
+        assert.isBelow(received!.messages.length, completed.length);
+      }),
+  );
+
+  it.effect("reports recoverable state instead of dropping an oversized pending user request", () =>
+    Effect.gen(function* () {
+      const pending = {
+        ...message("item:pending:large", "user", "pending ".repeat(3000)),
+        runStatus: "interrupted" as const,
+      };
+      const result = yield* deliverContextHandoffs({
+        handoffs: [
+          { ...handoff, history: { messages: [pending], coverage: "source", omittedItems: 0 } },
+        ],
+        providerThread,
+        budget: 16000,
+        alreadyDeliveredItemIds: new Set(),
+        persist: () => Effect.die("must not mark delivered"),
+        inject: () => Effect.die("must not start partial replay"),
+      }).pipe(Effect.result);
+      assert.equal(result._tag, "Failure");
+      if (result._tag === "Failure")
+        assert.equal(result.failure._tag, "ContextRecoveryRequiredError");
+      const selected = selectRecoveryHistory({
+        messages: [pending],
+        coverage: "source",
+        budget: 16000,
+      });
+      assert.deepEqual(selected.messages, [pending]);
+    }),
+  );
+
+  it("admits a recovery prompt on a full native Claude session so native auto-compaction can run", () => {
+    const input = {
+      tokenCap: 16000,
+      userText: "Continue",
+      attachments: [],
+      providerThread,
+      nativeContextEstimate: 500000,
+    };
+    assert.equal(handoffBudget(input), 0);
+    assert.equal(handoffBudget({ ...input, nativeAutoCompaction: true }), 16000);
+  });
 });
