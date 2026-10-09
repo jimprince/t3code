@@ -397,6 +397,12 @@ export interface SavedQueuedSend {
 }
 
 export interface StateFile {
+  handoverRedirects?: ReadonlyArray<{
+    oldThreadId: string;
+    successorThreadId: string;
+    targetEnvironment: string;
+    transferId: string;
+  }>;
   version: 1;
   environments: SavedEnvironment[];
   agents: SavedAgent[];
