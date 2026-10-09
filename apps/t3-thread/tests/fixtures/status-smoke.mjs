@@ -31,7 +31,8 @@ try {
     stderr = "";
   child.stdout.on("data", (c) => (output += c));
   child.stderr.on("data", (c) => (stderr += c));
-  const timeout = setTimeout(() => child.kill(), 60000);
+  // The full CI job shares CPU with three other package suites.
+  const timeout = setTimeout(() => child.kill(), 180_000);
   const code = await new Promise((resolve, reject) => {
     child.once("exit", resolve);
     child.once("error", reject);

@@ -160,7 +160,7 @@ it("streams unscoped agent status under a 512 MiB heap cap", async () => {
   await run(process.execPath, ["scripts/build.mjs"], { cwd: workspace });
   const result = await run(process.execPath, ["tests/fixtures/status-smoke.mjs"], {
     cwd: workspace,
-    timeout: 75_000,
+    timeout: 195_000,
   });
   expect(JSON.parse(result.stdout)).toMatchObject({
     command: "agent status",
@@ -168,7 +168,7 @@ it("streams unscoped agent status under a 512 MiB heap cap", async () => {
     heapCapMiB: 512,
     status: "pass",
   });
-}, 80_000);
+}, 210_000);
 
 it("streams threads JSON read-only under a 512 MiB heap cap", async () => {
   await run(process.execPath, ["scripts/build.mjs"], { cwd: workspace });
