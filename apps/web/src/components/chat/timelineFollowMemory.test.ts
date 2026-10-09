@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { resolveTimelineIsAtEnd } from "./MessagesTimeline.logic";
+import { resolveTimelineIsAtEnd, stepTimelineEndRestore } from "./MessagesTimeline.logic";
 import { readTimelinePosition, rememberTimelinePosition } from "./timelineScrollAnchoring";
 
 // Mirrors what the timeline saves on each scroll event: the measured end state
@@ -48,5 +48,43 @@ describe("remembered follow state while rows grow", () => {
       scrollOffset: 900,
       atEnd: false,
     });
+  });
+});
+
+describe("end restore after a thread switch", () => {
+  const viewport = { scrollLength: 748 };
+
+  // Runs the per-frame step over a sequence of list states, the way the
+  // timeline does after its scroll to the end resolves.
+  function runFrames(frames: ReadonlyArray<{ contentLength: number; scroll: number }>) {
+    let stableFrames = 0;
+    const actions: string[] = [];
+    for (const [frame, state] of frames.entries()) {
+      const step = stepTimelineEndRestore({ ...viewport, ...state }, stableFrames, frame);
+      stableFrames = step.stableFrames;
+      actions.push(step.action);
+      if (step.action === "settled") break;
+    }
+    return actions;
+  }
+
+  it("starts over when a late measurement pushes the end away between settled frames", () => {
+    expect(
+      runFrames([
+        { contentLength: 5_000, scroll: 4_252 },
+        { contentLength: 5_900, scroll: 4_252 },
+        { contentLength: 5_900, scroll: 5_152 },
+        { contentLength: 5_900, scroll: 5_152 },
+      ]),
+    ).toEqual(["wait", "scroll-to-end", "wait", "settled"]);
+  });
+
+  it("gives up on a view that never reaches the end, so follow takes over", () => {
+    const actions = runFrames(
+      Array.from({ length: 100 }, () => ({ contentLength: 10_000, scroll: 0 })),
+    );
+    expect(actions.at(-1)).toBe("settled");
+    expect(actions.slice(0, -1).every((action) => action === "scroll-to-end")).toBe(true);
+    expect(actions.length).toBeLessThan(100);
   });
 });
