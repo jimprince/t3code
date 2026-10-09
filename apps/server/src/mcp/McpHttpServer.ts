@@ -1,3 +1,4 @@
+import { RecoveryToolkit, RecoveryHandlersLive } from "./toolkits/recovery/tools.ts";
 import { PlansToolkitHandlersLive } from "./toolkits/plans/handlers.ts";
 import { PlansToolkit } from "./toolkits/plans/tools.ts";
 import { DecisionsToolkitHandlersLive } from "./toolkits/decisions/handlers.ts";
@@ -745,6 +746,7 @@ export const layer = Layer.mergeAll(
   PreviewToolkitRegistrationLive,
   OrchestratorToolkitRegistrationLive,
   ThreadToolkitRegistrationLive,
+  McpServer.toolkit(RecoveryToolkit).pipe(Layer.provide(RecoveryHandlersLive)),
   AttachmentRegistrationLive,
   ProjectRegistrationLive,
   EnvironmentRegistrationLive,
