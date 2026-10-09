@@ -262,8 +262,11 @@ effectIt.effect(
           },
         }),
       });
-      const error = yield* rollback.arm("2").pipe(Effect.flip);
-      expect(error.message).toContain("rollback protection could not be prepared");
+      const result = yield* rollback.arm("2").pipe(Effect.result);
+      expect(result._tag).toBe("Failure");
+      if (result._tag === "Failure") {
+        expect(result.failure.message).toContain("rollback protection could not be prepared");
+      }
     }),
 );
 it("restores the current bundle after stale cleanup ENOTEMPTY and an unhealthy launch", async () => {
