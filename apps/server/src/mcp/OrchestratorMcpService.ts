@@ -64,6 +64,7 @@ import {
 import { runRanAfter } from "@t3tools/shared/orchestrationV2ThreadError";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
+import * as Config from "effect/Config";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -840,6 +841,27 @@ function timelineItem(input: {
 }
 
 const make = Effect.gen(function* () {
+  const readTimeoutMs = yield* Config.Int("T3CODE_MCP_STATUS_TIMEOUT_MS").pipe(
+    Config.withDefault(10_000),
+    Config.map((value) => Math.max(1, value)),
+    Effect.orDie,
+  );
+  const boundedRead = <A, R>(
+    operation: string,
+    read: Effect.Effect<A, OrchestratorMcpFailure, R>,
+  ) =>
+    read.pipe(
+      Effect.timeoutOrElse({
+        duration: readTimeoutMs,
+        orElse: () =>
+          Effect.fail(
+            failure(
+              "orchestration_error",
+              `${operation} exceeded its ${readTimeoutMs} ms read deadline.`,
+            ),
+          ),
+      }),
+    );
   const taskIssues = yield* Effect.serviceOption(TaskIssues.TaskIssueLaunchService);
   const sql = yield* SqlClient.SqlClient;
   const crypto = yield* Crypto.Crypto;
@@ -1375,7 +1397,7 @@ const make = Effect.gen(function* () {
           );
       }
       return response;
-    });
+    }).pipe((read) => boundedRead("task_status", read));
 
   // Re-read the task only when an event on the parent or child thread can
   // change its status, instead of polling the projections every 50 ms.
@@ -1925,6 +1947,7 @@ const make = Effect.gen(function* () {
             completionWake: "always",
           })
           .pipe(
+            Effect.timeout(readTimeoutMs),
             // The tool result is the timed-out task either way, so failures
             // stay warnings. Keep the two shapes apart: a rejected receipt
             // means this exact command id already failed (a replay of a
@@ -2322,7 +2345,7 @@ const make = Effect.gen(function* () {
           nextCursor,
           total: filtered.length,
         } satisfies OrchestratorMcpThreadListResult;
-      }),
+      }).pipe((read) => boundedRead("listThreads", read)),
     readThread: (scope, input) =>
       Effect.gen(function* () {
         const { parent, target, shell } = yield* loadReadableThread(scope, input.threadId);
@@ -2420,7 +2443,7 @@ const make = Effect.gen(function* () {
           nextPosition: page.at(-1)?.position ?? null,
           hasMore: timeline.hasMore,
         } satisfies OrchestratorMcpThreadReadResult;
-      }),
+      }).pipe((read) => boundedRead("readThread", read)),
     sendToThread: (scope, input) =>
       Effect.gen(function* () {
         const { parent, limits, target } = yield* loadScopedThread(scope, input.threadId);
