@@ -41,6 +41,7 @@ const EMPTY_STATE: StateFile = {
 
 function normalizeState(parsed: Partial<StateFile>): StateFile {
   return {
+    ...parsed,
     version: 1,
     environments: Array.isArray(parsed.environments) ? parsed.environments : [],
     agents: Array.isArray(parsed.agents) ? parsed.agents : [],
