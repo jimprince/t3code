@@ -1,0 +1,26 @@
+name = "fork-lifecycle-deadlines"
+subject = "fix(server): bound provider lifecycle and shutdown waits"
+class = "upstream-bound"
+purpose = "Bound silent provider RPCs, accepted native starts, Stop settlement, administrative status reads and shutdown; keep Codex ACK decoding independent of ordered turn handlers, avoid fresh-session retries after ambiguous resume timeouts, and supply exact-session adapter reset teardown without killing multiplexed provider processes."
+retire_when = "Upstream bounds these lifecycle phases and supplies equivalent exact-session teardown with credential isolation and later-run fencing."
+depends_on = ["fork-provider-turn-safety", "fork-interrupted-turn-rewind"]
+roles = []
+note = "#240 S1 / #230: approved RPC ACK 10 s, provider start 120 s, Stop 20 s and process shutdown 20 s. Persist Stop fallback before the native ACK; preserve existing exact-turn/later-run guards. resetThread is the single optional adapter member, wrapped by the session manager to detach and revoke the recorded credential only. Codex retains its multiplexed process and reports thread isolation with stopped=true after target teardown; stopped=false remains retryable; S3 owns durable fences, exact-run terminalization and discard_native reference handling. Test faults require a named isolated development home plus exact allowlisted thread; packaged/static servers ignore them. This droppable concern is separate from general provider recovery because its timers, force-reset primitive and shutdown exit policy can be retired together."
+
+[[decision]]
+id = "catchup-2908-native-goal-deadlines"
+date = "2026-10-10"
+decided = "relocate+adapt"
+rationale = "Apply deadlines within upstream serialized Codex initialization and shared ordinary/native-goal starts (#15592, #17299). The absolute 120-second start budget includes ownership, MCP App context preparation, input construction and native start. Exact-run reset retires matching native goal holds/activations and fences late continuation without touching siblings. Keep nonretryable lost-native Stop handling; emit ACK only after a successful interrupt. ACK alone retains command work until a native terminal or the 10-second ACK fallback; preserve the 20-second pre-ACK safety net and later-run guards. Order pending interrupt-settle fallbacks by available_at with rowid ties so the earlier deadline wins, excluding running effects and preserving ordinary lifecycle FIFO/backoff. A recorded native process exit can independently interrupt command/node items while preserving an already completed root, without Stop detach/reset. Source SQL proof includes an old-FIFO negative control; CI14 confirms the replay fallback and exact native-exit path, while older-command cohort settlement and complete composed coverage remain pending."
+
+[[decision]]
+id = "catchup-2908-effects-only-stop-ack"
+date = "2026-10-10"
+decided = "adapt"
+rationale = "Preserve upstream eventless settle/no-op receipts while committing an effects-only Stop ACK receipt and its 10-second fallback deadline atomically. An auxiliary ACK on an older provider run can have no interrupt-request domain event; the empty-event path must still enqueue the fallback instead of dropping it. Keep the current sequence when no event is emitted, receipt reservation/idempotency, sequence fencing and transactional enqueue-failure rollback/retry. ACK alone does not terminalize work early; retain the strict 9999/1 ms boundary and the separate native-process-exit outcome. Candidate CI 38047341781 on 3fdb3753 is green before this inventory-only recording."
+
+[[decision]]
+id = "catchup-2908-guarded-interrupted-run-cleanup"
+date = "2026-10-10"
+decided = "adapt"
+rationale = "On an authorized 10-second Stop fallback for a still-running run, reuse upstream settleInterruptedRun cleanup for partial assistant streaming/items, child work, pending runtime requests and checkpoint capture. Invoke it only after the fork exact-run, ordinal, newer-work and native-terminal guards authorize settlement; fetch that run output only on this path so ACK read cost stays unchanged. Preserve ACK-only and native-completed outcomes, the original auxiliary background cohort path and strict running-at-9999 ms/settled-at-10000 ms behavior. CI19 exposed streaming left true before the repair; candidate CI 38047341781 on 3fdb3753 is green before this inventory-only recording."
