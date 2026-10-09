@@ -1,3 +1,4 @@
+// @effect-diagnostics globalTimers:off -- This imperative client queue owns acknowledgement deadlines outside an Effect runtime.
 /**
  * Thrown by a flush `send` when the server answered the command and said no. The command is
  * then terminal: its id is never replayed, and the queue keeps it as refused until the caller
