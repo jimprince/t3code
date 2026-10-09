@@ -202,6 +202,13 @@ jobs:
       - name: Test
         run: vp run --parallel --concurrency-limit 4 --filter '!t3' --filter '!@t3tools/monorepo' --filter '!@t3tools/web' test
 
+      - name: Smoke operator status and thread snapshots with a bounded heap
+        timeout-minutes: 3
+        run: |
+          node apps/t3-thread/scripts/build.mjs
+          timeout 90s node --max-old-space-size=512 apps/t3-thread/tests/fixtures/status-smoke.mjs
+          timeout 60s node --max-old-space-size=512 apps/t3-thread/tests/fixtures/threads-smoke.mjs
+
   # The web suite is the largest outside the server. In the shared Test job it
   # started last and ran alone for about 40s after everything else finished.
   test_web:
