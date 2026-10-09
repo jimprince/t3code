@@ -20,6 +20,7 @@ import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Clock from "effect/Clock";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
@@ -417,6 +418,53 @@ export function runOrderedV2StartupPhases<
   });
 }
 
+/** Detached reconciliation lets the finalizer return even if an adapter cannot cancel. */
+export const runBoundedShutdown = Effect.fn("ServerRuntimeStartup.runBoundedShutdown")(function* <
+  E,
+  R,
+>(
+  phases: ReadonlyArray<{ readonly name: string; readonly run: Effect.Effect<unknown, E, R> }>,
+  timeoutMs = 18_000,
+) {
+  const startedAt = yield* Clock.currentTimeMillis;
+  const reconciliation = yield* Effect.gen(function* () {
+    let succeeded = true;
+    for (const phase of phases) {
+      yield* Effect.logInfo("V2 shutdown phase started", { phase: phase.name });
+      const phaseResult = yield* Effect.exit(phase.run);
+      if (Exit.isFailure(phaseResult)) {
+        succeeded = false;
+        yield* Effect.logWarning("V2 shutdown phase failed", {
+          phase: phase.name,
+          cause: Cause.pretty(phaseResult.cause),
+        });
+        continue;
+      }
+      yield* Effect.logInfo("V2 shutdown phase completed", {
+        phase: phase.name,
+        elapsedMs: (yield* Clock.currentTimeMillis) - startedAt,
+      });
+    }
+    return succeeded;
+  }).pipe(Effect.exit, Effect.forkDetach({ startImmediately: true }));
+  const result = yield* Fiber.join(reconciliation).pipe(
+    Effect.timeoutOption(timeoutMs),
+    Effect.interruptible,
+  );
+  if (Option.isNone(result)) {
+    yield* Fiber.interrupt(reconciliation).pipe(Effect.forkDetach, Effect.asVoid);
+    yield* Effect.logWarning("V2 shutdown reconciliation deadline exceeded", { timeoutMs });
+    return false;
+  }
+  if (Exit.isFailure(result.value)) {
+    yield* Effect.logWarning("V2 orchestration shutdown reconciliation failed", {
+      cause: Cause.pretty(result.value.cause),
+    });
+    return false;
+  }
+  return result.value.value;
+});
+
 const make = (options?: StartupOptions) =>
   Effect.gen(function* () {
     const serverConfig = yield* ServerConfig.ServerConfig;
@@ -446,15 +494,28 @@ const make = (options?: StartupOptions) =>
             cause: "Server runtime is shutting down.",
           }),
         );
-        const workerFiber = yield* Ref.getAndSet(effectWorkerFiber, null);
-        if (workerFiber !== null) {
-          yield* Fiber.interrupt(workerFiber).pipe(Effect.ignore);
-        }
-        yield* providerRuntimeRecovery.prepareForShutdown.pipe(
-          Effect.ensuring(providerSessions.shutdown),
-        );
-        const reconciliation = yield* providerRuntimeRecovery.reconcile("shutdown");
-        yield* Effect.logInfo("V2 orchestration shutdown reconciliation completed", reconciliation);
+        yield* runBoundedShutdown([
+          {
+            name: "worker.interrupt",
+            run: Ref.getAndSet(effectWorkerFiber, null).pipe(
+              Effect.flatMap((worker) =>
+                worker === null ? Effect.void : Fiber.interrupt(worker).pipe(Effect.ignore),
+              ),
+            ),
+          },
+          { name: "recovery.prepare", run: providerRuntimeRecovery.prepareForShutdown },
+          { name: "sessions.shutdown", run: providerSessions.shutdown },
+          {
+            name: "recovery.reconcile",
+            run: providerRuntimeRecovery
+              .reconcile("shutdown")
+              .pipe(
+                Effect.tap((receipt) =>
+                  Effect.logInfo("V2 orchestration shutdown reconciliation completed", receipt),
+                ),
+              ),
+          },
+        ]);
       }).pipe(
         Effect.catchCause((cause) =>
           Effect.logWarning("V2 orchestration shutdown reconciliation failed", {
