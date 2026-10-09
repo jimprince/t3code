@@ -16,6 +16,21 @@ const isJsonRpcId = Schema.is(JsonRpcId);
 const isJsonRpcResponseEnvelope = Schema.is(JsonRpcResponseEnvelope);
 const isCodexAppServerError = Schema.is(CodexError.CodexAppServerError);
 const MAX_BUFFERED_RAW_MESSAGES = 32;
+const MAX_NOTIFICATION_TURNS = 128;
+const MAX_NOTIFICATIONS_PER_TURN = 256;
+
+function notificationKey(notification: CodexAppServerIncomingNotification): string {
+  const params = notification.params;
+  if (!isObject(params)) return "connection";
+  const turnId =
+    typeof params.turnId === "string"
+      ? params.turnId
+      : isObject(params.turn) && typeof params.turn.id === "string"
+        ? params.turn.id
+        : undefined;
+  const threadId = typeof params.threadId === "string" ? params.threadId : "connection";
+  return JSON.stringify([threadId, turnId ?? null]);
+}
 
 export interface CodexAppServerProtocolLogEvent {
   readonly direction: "incoming" | "outgoing";
@@ -36,6 +51,7 @@ export interface CodexAppServerIncomingRequest {
 
 export interface CodexAppServerPatchedProtocolOptions {
   readonly stdio: Stdio.Stdio;
+  readonly requestTimeoutMs?: number;
   readonly terminationError?: Effect.Effect<CodexError.CodexAppServerError>;
   readonly logIncoming?: boolean;
   readonly logOutgoing?: boolean;
@@ -155,9 +171,16 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
   function* (
     options: CodexAppServerPatchedProtocolOptions,
   ): Effect.fn.Return<CodexAppServerPatchedProtocol, never, Scope.Scope> {
+    const requestTimeoutMs = options.requestTimeoutMs ?? 10_000;
     const protocolScope = yield* Scope.Scope;
     const requestHandlerScope = yield* Scope.fork(protocolScope, "parallel");
-    const outgoing = yield* Queue.unbounded<string, Cause.Done<void>>();
+    const outgoing = yield* Queue.unbounded<
+      {
+        readonly encoded: string;
+        readonly written: Deferred.Deferred<void>;
+      },
+      Cause.Done<void>
+    >();
     const incomingNotifications =
       yield* Queue.sliding<CodexAppServerIncomingNotification>(MAX_BUFFERED_RAW_MESSAGES);
     const incomingRequests =
@@ -169,6 +192,7 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
     const terminationFailure = yield* Ref.make(Option.none<CodexError.CodexAppServerError>());
     const terminationSignal = yield* Deferred.make<void>();
     const activeRequestHandlers = yield* Ref.make(0);
+    const notificationQueues = new Map<string, Array<CodexAppServerIncomingNotification>>();
 
     const logProtocol = (event: CodexAppServerProtocolLogEvent) => {
       if (event.direction === "incoming" && !options.logIncoming) {
@@ -233,7 +257,8 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
           stage: "raw",
           payload: encoded,
         });
-        const accepted = yield* Queue.offer(outgoing, encoded);
+        const written = yield* Deferred.make<void>();
+        const accepted = yield* Queue.offer(outgoing, { encoded, written });
         if (!accepted) {
           const closed = yield* Ref.get(terminationFailure);
           return yield* Option.getOrElse(
@@ -241,6 +266,7 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
             () => new CodexError.CodexAppServerInputStreamEndedError({}),
           );
         }
+        yield* Deferred.await(written);
       });
 
     const removePending = (requestId: string) =>
@@ -344,11 +370,59 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
         Effect.asVoid,
       );
 
-    const handleNotification = (notification: CodexAppServerIncomingNotification) =>
-      Queue.offer(incomingNotifications, notification).pipe(
-        Effect.andThen(options.onNotification ? options.onNotification(notification) : Effect.void),
-        Effect.asVoid,
+    // A turn handler may wait for the turn/start response that this reader must decode.
+    // Keep each turn ordered, but never join its worker on the input stream.
+    const handleNotification = Effect.fnUntraced(function* (
+      notification: CodexAppServerIncomingNotification,
+    ) {
+      yield* Queue.offer(incomingNotifications, notification);
+      const handler = options.onNotification;
+      if (!handler) return;
+      const key = notificationKey(notification);
+      const existing = notificationQueues.get(key);
+      if (
+        (existing?.length ?? 0) >= MAX_NOTIFICATIONS_PER_TURN ||
+        (existing === undefined && notificationQueues.size >= MAX_NOTIFICATION_TURNS)
+      ) {
+        // Fail explicitly rather than lose live turn events or grow without a bound.
+        return yield* handleTermination(() =>
+          Effect.succeed(
+            CodexError.CodexAppServerRequestError.overloaded(
+              "Codex notification backlog exceeded its bound.",
+            ),
+          ),
+        );
+      }
+      if (existing !== undefined) {
+        existing.push(notification);
+        return;
+      }
+      const notifications = [notification];
+      notificationQueues.set(key, notifications);
+      yield* Effect.gen(function* () {
+        while (notifications.length > 0) {
+          const next = notifications[0]!;
+          yield* handler(next);
+          notifications.shift();
+          if (notifications.length === 0) {
+            notificationQueues.delete(key);
+            return;
+          }
+        }
+      }).pipe(
+        Effect.catchDefect((cause) =>
+          handleTermination(() =>
+            Effect.succeed(normalizeIncomingError(cause, "read-input-stream")),
+          ),
+        ),
+        Effect.ensuring(
+          Effect.sync(() => {
+            if (notificationQueues.get(key) === notifications) notificationQueues.delete(key);
+          }),
+        ),
+        Effect.forkIn(requestHandlerScope, { startImmediately: true }),
       );
+    });
 
     const routeMessage = Effect.fnUntraced(function* (message: unknown) {
       if (Option.isSome(yield* Ref.get(terminationFailure))) return;
@@ -368,13 +442,17 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
         payload: line,
       }).pipe(
         Effect.flatMap(() => decodeWireMessage(line)),
-        Effect.tap((decoded) =>
-          logProtocol({
+        Effect.flatMap((decoded) => {
+          const logged = logProtocol({
             direction: "incoming",
             stage: "decoded",
             payload: decoded,
-          }),
-        ),
+          });
+          // ACK completion measures wire decoding, not the logger or application callback.
+          return isIncomingResponse(decoded)
+            ? routeMessage(decoded).pipe(Effect.andThen(logged))
+            : logged.pipe(Effect.andThen(routeMessage(decoded)));
+        }),
         Effect.tapErrorTag("CodexAppServerProtocolParseError", (error) =>
           logProtocol({
             direction: "incoming",
@@ -391,7 +469,6 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
             },
           }),
         ),
-        Effect.flatMap(routeMessage),
       );
     };
 
@@ -445,7 +522,15 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
       Effect.forkScoped,
     );
 
-    yield* Stream.fromQueue(outgoing).pipe(Stream.run(options.stdio.stdout()), Effect.forkScoped);
+    yield* Stream.fromQueue(outgoing).pipe(
+      Stream.flatMap(({ encoded, written }) =>
+        Stream.make(encoded).pipe(
+          Stream.concat(Stream.fromEffect(Deferred.succeed(written, undefined)).pipe(Stream.drain)),
+        ),
+      ),
+      Stream.run(options.stdio.stdout()),
+      Effect.forkScoped,
+    );
 
     const request = (method: string, payload?: unknown) =>
       Effect.gen(function* () {
@@ -457,13 +542,42 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
         yield* Ref.update(pending, (current) =>
           new Map(current).set(String(requestId), { deferred, method }),
         );
-        yield* offerOutgoing({
+        // Bound dispatch separately; the ACK budget starts when the request is written.
+        return yield* offerOutgoing({
           id: requestId,
           method,
           ...(payload !== undefined ? { params: payload } : {}),
-        }).pipe(Effect.tapError(() => removePending(String(requestId))));
-        return yield* Deferred.await(deferred).pipe(
-          Effect.onInterrupt(() => removePending(String(requestId))),
+        }).pipe(
+          Effect.timeoutOrElse({
+            duration: requestTimeoutMs,
+            orElse: () =>
+              Effect.fail(
+                new CodexError.CodexAppServerRequestTimeoutError({
+                  method,
+                  requestId: String(requestId),
+                  timeoutMs: requestTimeoutMs,
+                }),
+              ),
+          }),
+          Effect.andThen(
+            Deferred.await(deferred).pipe(
+              Effect.timeoutOrElse({
+                duration: requestTimeoutMs,
+                orElse: () =>
+                  Effect.fail(
+                    new CodexError.CodexAppServerRequestTimeoutError({
+                      method,
+                      requestId: String(requestId),
+                      timeoutMs: requestTimeoutMs,
+                    }),
+                  ),
+              }),
+            ),
+          ),
+          // A decoded response itself proves the peer consumed the write. Some
+          // stdio sinks (including replay peers) keep processing after replying.
+          Effect.raceFirst(Deferred.await(deferred)),
+          Effect.ensuring(removePending(String(requestId))),
         );
       });
 
