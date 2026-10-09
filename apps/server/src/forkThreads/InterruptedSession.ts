@@ -48,7 +48,7 @@ export function interruptedSessionEvents(input: {
     const request = p.turnItems.find(
       (item) => item.runId === run.id && item.type === "run_interrupt_request",
     );
-    return request
+    return request?.type === "run_interrupt_request"
       ? [
           {
             id: EventId.make(`${input.commandId}:ack`),
@@ -56,7 +56,12 @@ export function interruptedSessionEvents(input: {
             threadId: p.thread.id,
             runId: run.id,
             occurredAt: input.now,
-            payload: { ...request, title: "Stop acknowledged", updatedAt: input.now },
+            payload: {
+              ...request,
+              stopOutcome: "ack",
+              title: "Stop acknowledged",
+              updatedAt: input.now,
+            },
           },
         ]
       : [];
@@ -97,6 +102,7 @@ export function interruptedSessionEvents(input: {
           completedAt: input.now,
           updatedAt: input.now,
           type: "run_interrupt_result",
+          stopOutcome: "fallback",
           message: "Run interrupted by user",
         },
       });
