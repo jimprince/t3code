@@ -1,6 +1,6 @@
-Bottom: b6c04106e8be504d825ba1cd96f82072b4337d4f
-Top:    05735cdbe80dcad543b4abb7c2cbff100f23197a
+Bottom: e004616297c12a58109058f1c106f40dc020c2ca
+Top:    e778239f34e0e4147be6fb930af068a8379ef598
 Author: brad <bradprin@live.com>
-Date:   2026-10-09 03:50:05 +0000
+Date:   2026-10-09 04:03:09 +0000
 
 feat(web): show a running thread's to-do progress on its task card
