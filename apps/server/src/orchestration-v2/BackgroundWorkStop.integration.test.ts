@@ -20,6 +20,7 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import * as EffectWorker from "./EffectWorker.ts";
 import * as EventSink from "./EventSink.ts";
@@ -716,6 +717,32 @@ const stopEarlierBackgroundWork = ({
                 ...(stopWithQueue === undefined ? {} : { holdQueue: true }),
               },
         );
+        yield* worker.drain();
+
+        // This mock only acknowledges Stop. Without a native terminal event,
+        // all background commands stay live until the bounded fallback.
+        const backgroundIds = [devServerId, ...(olderStart ? [] : [watcherId]), reviewerId];
+        const backgroundStatuses = () =>
+          orchestrator
+            .getThreadProjection(threadId)
+            .pipe(
+              Effect.map((projection) =>
+                backgroundIds.map(
+                  (id) => projection.turnItems.find((item) => item.id === id)?.status,
+                ),
+              ),
+            );
+        assert.deepEqual(
+          yield* backgroundStatuses(),
+          backgroundIds.map(() => "running"),
+        );
+        yield* TestClock.adjust("9999 millis");
+        yield* worker.drain();
+        assert.deepEqual(
+          yield* backgroundStatuses(),
+          backgroundIds.map(() => "running"),
+        );
+        yield* TestClock.adjust("1 millis");
         yield* worker.drain();
 
         // The Codex interrupt targets its latest pending work, the subagent's parent turn,
