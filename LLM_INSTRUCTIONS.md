@@ -128,9 +128,10 @@ upgrades, verification, and troubleshooting.
 The release matrix is intentionally limited to macOS arm64 Electron
 (DMG/zip/updater manifest) and Linux x64 headless tarball. Do not re-add Windows,
 Linux Electron/AppImage, or macOS x64 without an explicit product decision.
-Mobile is a separate lane: the legacy `mobile-eas-development.yml` runs only by
-manual dispatch, while production App Store/TestFlight delivery follows the
-release runbook.
+Mobile is a separate lane: both legacy `mobile-eas-development.yml` and
+production `mobile-eas-production.yml` run only by manual dispatch. Production
+builds and OTA updates use GitHub-hosted Ubuntu to orchestrate EAS; App
+Store/TestFlight delivery follows the release runbook.
 
 When reporting remote build status, distinguish macOS Electron, Linux/headless,
 and mobile rather than treating one green job as all deliverables.
