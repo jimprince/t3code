@@ -24,6 +24,7 @@ import { useProject, useThreadShell } from "../state/entities";
 import { useEnvironmentThread } from "../state/threads";
 import {
   resolvePendingThreadCreation,
+  resolveThreadDetailRef,
   pendingThreadCreationOutcomesAtom,
   pendingThreadCreationShell,
   type PendingThreadCreation,
@@ -159,12 +160,11 @@ function useResolvedThreadSelection(params: ThreadSelectionRouteParams | undefin
   }, [creationOutcome, queuedMessagesByThreadKey, selectedThreadKey]);
   // Until the creation is delivered the server has no thread to subscribe
   // to; subscribing anyway would retry "not found" for the whole setup.
-  const selectedThreadDetailRef =
-    selectedThreadShell !== null ||
-    pendingCreation === null ||
-    pendingCreation.outcome?.kind === "delivered"
-      ? selectedThreadRef
-      : null;
+  const selectedThreadDetailRef = resolveThreadDetailRef({
+    ref: selectedThreadRef,
+    hasShell: selectedThreadShell !== null,
+    pending: pendingCreation,
+  });
   const [previousCreation, setPreviousCreation] = useState<PendingThreadCreation | null>(null);
   // Normal selection is shell-only. Detail readers subscribe separately; only
   // optimistic creation needs the projection here until its prompt arrives.
