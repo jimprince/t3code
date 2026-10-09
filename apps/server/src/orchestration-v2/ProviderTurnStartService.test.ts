@@ -17,6 +17,7 @@ import {
   OrchestrationV2DomainEvent,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
+import { CodexAppServerRequestTimeoutError } from "effect-codex-app-server/errors";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -32,7 +33,10 @@ import * as EventSink from "./EventSink.ts";
 import * as IdAllocator from "./IdAllocator.ts";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
-import { ProviderAdapterEventStreamError } from "./ProviderAdapter.ts";
+import {
+  ProviderAdapterEventStreamError,
+  ProviderAdapterResumeThreadError,
+} from "./ProviderAdapter.ts";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import * as ProviderTurnStart from "./ProviderTurnStartService.ts";
 import * as RunExecutionService from "./RunExecutionService.ts";
@@ -166,6 +170,7 @@ function makeLocalCommandHarness(input: {
    * fallback succeeds, then reading history for its handoff fails.
    */
   readonly historyReadFailureAfterFallback?: unknown;
+  readonly resumeTimeout?: boolean;
   readonly interruptOpen?: boolean;
   readonly interruptRunBeforeOpenFailure?: boolean;
   readonly writeFailure?: unknown;
@@ -342,7 +347,7 @@ function makeLocalCommandHarness(input: {
     checkpoints: [],
     updatedAt: now,
   };
-  if ("historyReadFailureAfterFallback" in input) {
+  if ("historyReadFailureAfterFallback" in input || input.resumeTimeout) {
     const nativeThreadRef = {
       driver: providerThread.driver,
       nativeId: "native-resume-thread",
@@ -381,22 +386,41 @@ function makeLocalCommandHarness(input: {
       ),
     ),
   );
+  const freshThread = vi.fn(() => Effect.succeed(providerThread));
+  const resumedNativeIds: Array<string | null | undefined> = [];
   const resumeFallbackSession = {
     driver: providerThread.driver,
-    resumeThread: () =>
-      Effect.fail(
-        new ProviderAdapterEventStreamError({
-          driver: providerThread.driver,
-          providerSessionId,
-          cause: "native thread is gone",
-        }),
-      ),
-    ensureThread: () => Effect.succeed(providerThread),
+    resumeThread: (resumeInput: {
+      providerThread: OrchestrationV2ThreadProjection["providerThreads"][number];
+    }) => {
+      resumedNativeIds.push(resumeInput.providerThread.nativeThreadRef?.nativeId);
+      return input.resumeTimeout
+        ? Effect.fail(
+            new ProviderAdapterResumeThreadError({
+              driver: providerThread.driver,
+              providerSessionId,
+              providerThreadId,
+              cause: new CodexAppServerRequestTimeoutError({
+                method: "thread/resume",
+                requestId: "3",
+                timeoutMs: 10000,
+              }),
+            }),
+          )
+        : Effect.fail(
+            new ProviderAdapterEventStreamError({
+              driver: providerThread.driver,
+              providerSessionId,
+              cause: "native thread is gone",
+            }),
+          );
+    },
+    ensureThread: freshThread,
   };
   const open = vi.fn(() =>
     input.interruptOpen === true
       ? Effect.interrupt
-      : "historyReadFailureAfterFallback" in input
+      : "historyReadFailureAfterFallback" in input || input.resumeTimeout
         ? Effect.succeed(resumeFallbackSession as never)
         : "ensureThreadFailure" in input
           ? Effect.succeed({ driver: providerThread.driver, ensureThread } as never)
@@ -532,6 +556,8 @@ function makeLocalCommandHarness(input: {
   );
   return {
     open,
+    freshThread,
+    resumedNativeIds,
     writeIfRunCurrent,
     startRootRun,
     tryHandlePromptCommand,
@@ -855,3 +881,25 @@ for (const previousMessages of [[], ["/compact", " /COMPACT "]]) {
       }),
   );
 }
+
+effectIt.effect(
+  "retries an ambiguous resume timeout against the same native session without fresh starts",
+  () =>
+    Effect.gen(function* () {
+      const harness = makeLocalCommandHarness({ text: "Continue", resumeTimeout: true });
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const error = yield* harness.startWithRetry.pipe(Effect.flip);
+        expect(error._tag).toBe("ProviderTurnStartError");
+      }
+      expect(harness.resumedNativeIds).toEqual([
+        "native-resume-thread",
+        "native-resume-thread",
+        "native-resume-thread",
+      ]);
+      expect(harness.freshThread).not.toHaveBeenCalled();
+      expect(harness.startRootRun).not.toHaveBeenCalled();
+      expect(harness.projection().providerThreads.at(-1)?.nativeThreadRef?.nativeId).toBe(
+        "native-resume-thread",
+      );
+    }),
+);

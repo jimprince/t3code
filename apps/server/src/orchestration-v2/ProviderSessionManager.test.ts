@@ -15,6 +15,7 @@ import {
   ProviderInstanceId,
   type ProviderSessionId,
   ThreadId,
+  RunId,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
@@ -294,6 +295,7 @@ function makeProviderAdapter(
     readonly hasPendingBackgroundWork?: Effect.Effect<boolean>;
     readonly hangSessionScopeClose?: boolean;
     readonly beforeUnload?: Effect.Effect<void>;
+    readonly resetThread?: ProviderAdapterV2SessionRuntime["resetThread"];
   } = {},
 ): ProviderAdapterV2Shape {
   return {
@@ -342,6 +344,7 @@ function makeProviderAdapter(
         }
 
         return {
+          ...(options.resetThread === undefined ? {} : { resetThread: options.resetThread }),
           instanceId: ProviderInstanceId.make("codex"),
           driver: CODEX_DRIVER,
           providerSessionId: input.providerSessionId,
@@ -410,6 +413,7 @@ function makeTestLayer(input: {
   readonly hasPendingBackgroundWork?: Effect.Effect<boolean>;
   readonly hangSessionScopeClose?: boolean;
   readonly beforeUnload?: Effect.Effect<void>;
+  readonly resetThread?: ProviderAdapterV2SessionRuntime["resetThread"];
   readonly serverSettingsLayer?: ReturnType<typeof ServerSettings.layerTest>;
   readonly projectServiceLayer?: Layer.Layer<ProjectService.ProjectService>;
 }) {
@@ -432,6 +436,7 @@ function makeTestLayer(input: {
         ? {}
         : { hangSessionScopeClose: input.hangSessionScopeClose }),
       ...(input.beforeUnload === undefined ? {} : { beforeUnload: input.beforeUnload }),
+      ...(input.resetThread === undefined ? {} : { resetThread: input.resetThread }),
     }),
   );
   const providerEventIngestorTestLayer = ProviderEventIngestor.layer.pipe(
@@ -3527,4 +3532,109 @@ it.effect("resource recovery refuses a session touched after preview's idle cuto
       assert.equal((yield* Ref.get(state)).closeCount, 1);
     }).pipe(Effect.provide(makeTestLayer({ state, idleTimeoutMs: 60_000 })));
   }),
+);
+
+it.effect.each(["completed", "incomplete", "failed"] as const)(
+  "reset revokes only the recorded credential and keeps a shared sibling usable (first=%s)",
+  (first) =>
+    Effect.gen(function* () {
+      const state = yield* Ref.make(emptyState);
+      const resetCalls = yield* Ref.make(0);
+      const mcpConfigs = yield* Ref.make<
+        ReadonlyArray<McpProviderSession.McpProviderSessionConfig | undefined>
+      >([]);
+      yield* Effect.gen(function* () {
+        const sink = yield* EventSink.EventSinkV2;
+        const ids = yield* IdAllocator.IdAllocatorV2;
+        const manager = yield* ProviderSessionManager.ProviderSessionManagerV2;
+        const registry = yield* McpSessionRegistry.McpSessionRegistry;
+        const now = yield* DateTime.now;
+        const threadId = ThreadId.make("reset-target");
+        const sibling = ThreadId.make("reset-sibling");
+        const providerSessionId = yield* ids.allocate.providerSession({
+          providerInstanceId: modelSelection.instanceId,
+          threadId,
+        });
+        yield* sink.write({
+          events: [
+            yield* makeThreadCreatedEvent({ idAllocator: ids, threadId, now }),
+            yield* makeThreadCreatedEvent({ idAllocator: ids, threadId: sibling, now }),
+          ],
+        });
+        const runtime = yield* manager.open({
+          threadId,
+          providerSessionId,
+          modelSelection,
+          runtimePolicy,
+        });
+        const originalToken = (yield* Ref.get(mcpConfigs))[0]!.authorizationHeader.replace(
+          /^Bearer\s+/,
+          "",
+        );
+        yield* manager.open({
+          threadId: sibling,
+          providerSessionId,
+          modelSelection,
+          runtimePolicy,
+        });
+        const siblingConfig = McpProviderSession.readMcpProviderSession(sibling)!;
+        const siblingToken = siblingConfig.authorizationHeader.replace(/^Bearer\s+/, "");
+        assert.isDefined(yield* registry.resolve(originalToken));
+        const firstReset = yield* runtime.resetThread!({
+          threadId,
+          runId: RunId.make("reset-run"),
+        }).pipe(Effect.exit);
+        if (first === "failed") {
+          assert.isTrue(Exit.isFailure(firstReset));
+        } else {
+          assert.isTrue(Exit.isSuccess(firstReset));
+          if (Exit.isSuccess(firstReset))
+            assert.deepEqual(firstReset.value, {
+              isolation: "thread",
+              stopped: first === "completed",
+            });
+        }
+        assert.isUndefined(yield* registry.resolve(originalToken));
+        assert.isDefined(yield* registry.resolve(siblingToken));
+        assert.equal((yield* Ref.get(state)).closeCount, 0);
+        assert.isTrue(Option.isSome(yield* manager.get(providerSessionId)));
+        // Reattach rotates the old credential; retry must leave that replacement valid.
+        yield* manager.open({ threadId, providerSessionId, modelSelection, runtimePolicy });
+        const replacementToken = McpProviderSession.readMcpProviderSession(
+          threadId,
+        )!.authorizationHeader.replace(/^Bearer\s+/, "");
+        assert.isDefined(yield* registry.resolve(replacementToken));
+        assert.deepEqual(
+          yield* runtime.resetThread!({ threadId, runId: RunId.make("reset-run") }),
+          { isolation: "thread", stopped: true },
+        );
+        assert.equal(yield* Ref.get(resetCalls), first === "completed" ? 1 : 2);
+        assert.isDefined(yield* registry.resolve(replacementToken));
+        assert.isDefined(yield* registry.resolve(siblingToken));
+      }).pipe(
+        Effect.provide(
+          makeTestLayer({
+            state,
+            mcpConfigs,
+            idleTimeoutMs: 60_000,
+            resetThread: () =>
+              Ref.updateAndGet(resetCalls, (n) => n + 1).pipe(
+                Effect.flatMap((n) =>
+                  first === "failed" && n === 1
+                    ? Effect.fail(
+                        new ProviderAdapterProtocolError({
+                          driver: CODEX_DRIVER,
+                          detail: "first reset failed",
+                        }),
+                      )
+                    : Effect.succeed({
+                        isolation: "thread" as const,
+                        stopped: first === "completed" || n > 1,
+                      }),
+                ),
+              ),
+          }),
+        ),
+      );
+    }),
 );

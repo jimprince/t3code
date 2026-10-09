@@ -5,6 +5,7 @@ import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
 import * as Stdio from "effect/Stdio";
 import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
@@ -685,6 +686,197 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
         method: "x/request",
         requestId: "1",
       });
+    }),
+  );
+
+  it.effect("bounds silent RPCs, ignores their late ACKs, and keeps another request usable", () =>
+    Effect.gen(function* () {
+      const { stdio, input, output } = yield* makeInMemoryStdio();
+      const transport = yield* CodexProtocol.makeCodexAppServerPatchedProtocol({
+        stdio,
+        requestTimeoutMs: 100,
+      });
+      const silent = yield* transport.request("turn/interrupt", {}).pipe(
+        Effect.match({
+          onFailure: (error) => error,
+          onSuccess: () => assert.fail("Expected request deadline to fail"),
+        }),
+        Effect.forkScoped,
+      );
+      yield* Queue.take(output);
+      yield* TestClock.adjust(100);
+      const error = yield* Fiber.join(silent);
+      assert.instanceOf(error, CodexError.CodexAppServerRequestTimeoutError);
+      assert.deepInclude(error, { method: "turn/interrupt", requestId: "1", timeoutMs: 100 });
+      const healthy = yield* transport.request("thread/read", {}).pipe(Effect.forkScoped);
+      yield* Queue.take(output);
+      yield* Queue.offer(input, encodeJsonl({ id: 1, result: "late" }));
+      yield* Queue.offer(input, encodeJsonl({ id: 2, result: "healthy" }));
+      assert.equal(yield* Fiber.join(healthy), "healthy");
+    }),
+  );
+
+  it.effect("includes a blocked outbound logger in the request deadline", () =>
+    Effect.gen(function* () {
+      const { stdio } = yield* makeInMemoryStdio();
+      const logging = yield* Deferred.make<void>();
+      const transport = yield* CodexProtocol.makeCodexAppServerPatchedProtocol({
+        stdio,
+        requestTimeoutMs: 100,
+        logOutgoing: true,
+        logger: () => Deferred.succeed(logging, undefined).pipe(Effect.andThen(Effect.never)),
+      });
+      const request = yield* transport.request("thread/start", {}).pipe(
+        Effect.match({
+          onFailure: (error) => error,
+          onSuccess: () => assert.fail("Expected request deadline to fail"),
+        }),
+        Effect.forkScoped,
+      );
+      yield* Deferred.await(logging);
+      yield* TestClock.adjust(100);
+      assert.instanceOf(yield* Fiber.join(request), CodexError.CodexAppServerRequestTimeoutError);
+    }),
+  );
+
+  it.effect("replays resume ACKs while a historical notification handler is blocked", () =>
+    Effect.gen(function* () {
+      const { stdio, input, output } = yield* makeInMemoryStdio();
+      const blocked = yield* Deferred.make<void>();
+      const release = yield* Deferred.make<void>();
+      const completed = yield* Deferred.make<void>();
+      const siblingStarted = yield* Deferred.make<void>();
+      const order: Array<string> = [];
+      const transport = yield* CodexProtocol.makeCodexAppServerPatchedProtocol({
+        stdio,
+        onNotification: (notification) =>
+          Effect.gen(function* () {
+            order.push(notification.method);
+            if (notification.method === "thread/tokenUsage/updated") {
+              yield* Deferred.succeed(blocked, undefined);
+              yield* Deferred.await(release);
+            }
+            if (notification.method === "turn/started")
+              yield* Deferred.succeed(siblingStarted, undefined);
+            if (notification.method === "item/completed")
+              yield* Deferred.succeed(completed, undefined);
+          }),
+      });
+      let freshStarts = 0;
+      const resume = yield* transport.request("thread/resume", { threadId: "saved" }).pipe(
+        Effect.catch(() => {
+          freshStarts++;
+          return transport.request("thread/start", {});
+        }),
+        Effect.forkScoped,
+      );
+      yield* Queue.take(output);
+      yield* Queue.offer(
+        input,
+        encodeJsonl({
+          method: "thread/tokenUsage/updated",
+          params: { threadId: "saved", turnId: "historical" },
+        }),
+      );
+      yield* Deferred.await(blocked);
+      yield* Queue.offer(
+        input,
+        encodeJsonl({
+          method: "item/completed",
+          params: { threadId: "saved", turnId: "historical" },
+        }),
+      );
+      yield* Queue.offer(input, encodeJsonl({ id: 1, result: "resumed" }));
+      yield* TestClock.adjust(10_001);
+      assert.equal(freshStarts, 0, "an ACK already on the wire must decode before its deadline");
+      assert.equal(yield* Fiber.join(resume), "resumed");
+      const goal = yield* transport.request("thread/goal/get", {}).pipe(Effect.forkScoped);
+      yield* Queue.take(output);
+      yield* Queue.offer(input, encodeJsonl({ id: 2, result: "goal" }));
+      assert.equal(yield* Fiber.join(goal), "goal");
+      const sibling = yield* transport
+        .request("turn/start", { threadId: "sibling" })
+        .pipe(Effect.forkScoped);
+      yield* Queue.take(output);
+      yield* Queue.offer(
+        input,
+        encodeJsonl({
+          method: "turn/started",
+          params: { threadId: "sibling", turn: { id: "new-turn" } },
+        }),
+      );
+      yield* Queue.offer(input, encodeJsonl({ id: 3, result: "started" }));
+      assert.equal(yield* Fiber.join(sibling), "started");
+      yield* Deferred.await(siblingStarted);
+      yield* TestClock.adjust(11_000);
+      assert.equal(freshStarts, 0, "decoded ACKs must not trigger a resume-to-start retry storm");
+      assert.deepEqual(
+        order,
+        ["thread/tokenUsage/updated", "turn/started"],
+        "same-turn completion must stay behind its slow handler",
+      );
+      yield* Deferred.succeed(release, undefined);
+      yield* Deferred.await(completed);
+      assert.deepEqual(order, ["thread/tokenUsage/updated", "turn/started", "item/completed"]);
+    }),
+  );
+
+  it.effect.each(["one-turn", "many-turns"])(
+    "bounds a blocked orphan notification backlog: %s",
+    (shape) =>
+      Effect.gen(function* () {
+        const { stdio, input } = yield* makeInMemoryStdio();
+        const termination = yield* Deferred.make<CodexError.CodexAppServerError>();
+        let started = 0;
+        yield* CodexProtocol.makeCodexAppServerPatchedProtocol({
+          stdio,
+          onNotification: () =>
+            Effect.sync(() => {
+              started++;
+            }).pipe(Effect.andThen(Effect.never)),
+          onTermination: (error) => Deferred.succeed(termination, error).pipe(Effect.asVoid),
+        });
+        for (let i = 0; i < 300; i++) {
+          yield* Queue.offer(
+            input,
+            encodeJsonl({
+              method: "item/started",
+              params: {
+                threadId: "orphan",
+                turnId: shape === "one-turn" ? "old" : `old-${i}`,
+              },
+            }),
+          );
+        }
+        const error = yield* Deferred.await(termination);
+        assert.instanceOf(error, CodexError.CodexAppServerRequestError);
+        assert.equal(error.code, -32001);
+        assert.isAtMost(started, shape === "one-turn" ? 1 : 128);
+      }),
+  );
+
+  it.effect("counts the ACK deadline from the write after slow outbound logging", () =>
+    Effect.gen(function* () {
+      const { stdio, input, output } = yield* makeInMemoryStdio();
+      const logging = yield* Deferred.make<void>();
+      const release = yield* Deferred.make<void>();
+      const transport = yield* CodexProtocol.makeCodexAppServerPatchedProtocol({
+        stdio,
+        requestTimeoutMs: 100,
+        logOutgoing: true,
+        logger: (event) =>
+          event.stage === "raw"
+            ? Deferred.succeed(logging, undefined).pipe(Effect.andThen(Deferred.await(release)))
+            : Effect.void,
+      });
+      const request = yield* transport.request("thread/resume", {}).pipe(Effect.forkScoped);
+      yield* Deferred.await(logging);
+      yield* TestClock.adjust(80);
+      yield* Deferred.succeed(release, undefined);
+      yield* Queue.take(output);
+      yield* TestClock.adjust(80);
+      yield* Queue.offer(input, encodeJsonl({ id: 1, result: "resumed" }));
+      assert.equal(yield* Fiber.join(request), "resumed");
     }),
   );
 
