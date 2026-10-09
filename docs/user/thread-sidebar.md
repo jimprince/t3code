@@ -350,6 +350,25 @@ is idle with no live thread. `t3-thread agents handover <name>` replaces an idle
 live thread with a fresh one and archives the old one; ask the agent to rewrite
 `BRIEFING.md` first. Handover is refused while the agent is working.
 
+To follow a send through queueing and completion, use `t3-thread send-binding
+<thread> <send-id>` with an ordinary paired read credential. The result identifies
+the run created or joined, including its start and completion timestamps.
+
+### Administrative recovery
+
+With an administratively paired operator credential, `t3-thread session generation
+<thread>` reads the current recovery generation and server incarnation.
+`t3-thread session stop-receipt <thread> --run-id <run>` distinguishes an accepted
+interrupt, fallback terminalization and completed reset teardown. A terminal run
+alone does not prove its provider stopped.
+
+Resume with `t3-thread resume <thread> --expected-generation <generation>
+--request-id <id>`, optionally adding `--message <text>`. A changed generation,
+unfinished turn or incomplete teardown refuses the continuation. Retry the same
+request ID and arguments after an uncertain response to recover its receipt.
+`t3-thread human pending-list <thread>` returns pending human item IDs for recovery
+helpers; `human pending` retains the detailed requests and provenance.
+
 ## Snooze until later
 
 Choose **Snooze → Custom…** from a thread's menu to pick a date and time in your
