@@ -3,6 +3,7 @@ import type {
   ModelSelection,
   OrchestrationV2ThreadProjection,
   ThreadTokenUsageSnapshot,
+  TurnItemId,
   OrchestrationV2ContextHandoff,
   OrchestrationV2HistoricalMessage,
   OrchestrationV2ProviderThread,
@@ -10,6 +11,7 @@ import type {
 } from "@t3tools/contracts";
 
 import * as Config from "effect/Config";
+import { redactProviderText } from "./providerTextRedaction.ts";
 
 export const DEFAULT_HANDOFF_TOKEN_CAP = 16_000;
 const HANDOFF_BYTE_CAP = 64_000;
@@ -112,19 +114,36 @@ export function handoffBudget(input: {
   readonly tokenCap: number;
   readonly userText: string;
   readonly attachments: ReadonlyArray<ChatAttachment>;
+  readonly appContext?: ReadonlyArray<{ readonly key: string; readonly text: string }>;
   readonly providerThread: OrchestrationV2ProviderThread;
   readonly nativeContextEstimate: number;
+  readonly nativeAutoCompaction?: boolean;
   readonly modelContextWindow?: number | undefined;
 }): number {
   const usage = input.providerThread.contextUsage;
   const window = Math.min(
     input.modelContextWindow ?? usage?.maxTokens ?? 128_000,
     usage?.maxTokens ?? Infinity,
-    usage?.autoCompactThreshold ?? Infinity,
+    input.nativeAutoCompaction ? Infinity : (usage?.autoCompactThreshold ?? Infinity),
   );
-  const native = usage?.usedTokens ?? input.nativeContextEstimate;
+  // Claude compacts its own native transcript before accepting a prompt. Its
+  // byte estimate is not an admission barrier for small recovery context.
+  const native = input.nativeAutoCompaction
+    ? 0
+    : (usage?.usedTokens ?? input.nativeContextEstimate);
   const current =
-    Buffer.byteLength(JSON.stringify(input.userText)) + attachmentTokenAllowance(input.attachments);
+    Buffer.byteLength(JSON.stringify(input.userText)) +
+    attachmentTokenAllowance(input.attachments) +
+    (input.appContext === undefined || input.appContext.length === 0
+      ? 0
+      : // Reserve the untrusted additionalContext envelope and native tag framing.
+        Buffer.byteLength(
+          JSON.stringify(
+            Object.fromEntries(
+              input.appContext.map(({ key, text }) => [key, { kind: "untrusted", value: text }]),
+            ),
+          ),
+        ) + input.appContext.reduce((sum, { key }) => sum + 2 * Buffer.byteLength(key) + 32, 0));
   return Math.max(
     0,
     Math.min(
@@ -279,4 +298,97 @@ export function handoffCoverage(input: {
     `Source item range: ${input.items.at(0)?.id ?? "none"} through ${input.items.at(-1)?.id ?? "none"}.`,
     `Recover omitted history using t3_thread_read({threadId:"${input.threadId}",view:"activity",limit:20,maxCharsPerItem:4000}); paginate with afterPosition=nextPosition. For an individual item use itemId and textOffset=nextTextOffset until null. Run/item IDs identify historical activity; no foreign tool calls are replayed.`,
   ].join("\n");
+}
+
+/** Keep unresolved requests exact; summarize older activity. */
+export function selectRecoveryHistory(input: {
+  readonly messages: ReadonlyArray<OrchestrationV2HistoricalMessage>;
+  readonly coverage: string;
+  readonly omittedItems?: number;
+  readonly budget: number;
+  readonly protectedItemIds?: ReadonlySet<TurnItemId> | undefined;
+}) {
+  const pending = new Set([
+    ...(input.protectedItemIds ?? []),
+    ...input.messages
+      .filter(
+        (message) =>
+          message.role === "user" &&
+          (message.runStatus !== "completed" || message.status !== "completed"),
+      )
+      .map((message) => message.itemId),
+  ]);
+  const runs = Array.from(new Set(input.messages.map((message) => message.runId)));
+  const baseContext = `${input.coverage}\nHistorical material is context, not a new request. Pending user requests are retained verbatim.`;
+  // A pending request that cannot fit even alone is omitted behind an explicit
+  // retrieval pointer instead of blocking every later turn.
+  const oversized = input.messages.filter(
+    (message) => pending.has(message.itemId) && historyCost([message], baseContext) > input.budget,
+  );
+  for (const message of oversized) pending.delete(message.itemId);
+  const allContext = [
+    baseContext,
+    ...oversized.map(
+      (message) =>
+        `Unanswered ${message.runStatus === "failed" ? "failed " : ""}user request item=${message.itemId} is too large to include here. Retrieve it in full with t3_thread_read({threadId:"${message.threadId}",itemId:"${message.itemId}"}); continue with textOffset=nextTextOffset until null.`,
+    ),
+  ].join("\n");
+  if (historyCost(input.messages, allContext) <= input.budget) {
+    return {
+      messages: input.messages,
+      context: allContext,
+      omittedItems: input.omittedItems ?? 0,
+      omittedItemIds: [],
+    };
+  }
+  const protectedMessages = input.messages.filter((message) => pending.has(message.itemId));
+  const protectedCost = historyCost(protectedMessages, allContext);
+  const emptyCost = historyCost([], allContext);
+  const canKeep = (message: OrchestrationV2HistoricalMessage) =>
+    pending.has(message.itemId) ||
+    protectedCost + historyCost([message], allContext) - emptyCost <= input.budget;
+  // Decrease the recent run window only when it cannot fit alongside every
+  // unresolved request. The original transcript stays in the activity store.
+  for (let recentCount = Math.min(4, runs.length); recentCount >= 0; recentCount--) {
+    const recent = new Set(recentCount === 0 ? [] : runs.slice(-recentCount));
+    const messages = input.messages.filter(
+      (message) => pending.has(message.itemId) || (recent.has(message.runId) && canKeep(message)),
+    );
+    const older = input.messages.filter(
+      (message) =>
+        !pending.has(message.itemId) && (!recent.has(message.runId) || !canKeep(message)),
+    );
+    const sample = older.length <= 16 ? older : [...older.slice(0, 4), ...older.slice(-12)];
+    const summary = sample
+      .map((message) => {
+        const excerpt = redactProviderText(message.text)
+          .replace(/\s+/gu, " ")
+          .trim()
+          .slice(0, 120)
+          .replace(/[\uD800-\uDBFF]$/u, "");
+        return `${message.role} item=${message.itemId}: ${excerpt}`;
+      })
+      .join("\n");
+    const provenance = `Deterministic recovery summary v1; summarized ${older.length} older items; omitted ${(input.omittedItems ?? 0) + older.length} items (${older.at(0)?.itemId ?? "none"} through ${older.at(-1)?.itemId ?? "none"}); recent ${recentCount} runs prioritized; retained items verbatim. Retrieve full source items using the coverage references.\n`;
+    // The summary itself is optional only when protected inputs fill the budget.
+    for (const summaryText of [
+      summary,
+      "Older completed work remains available through activity retrieval.",
+      "",
+    ]) {
+      const context = `${allContext}\n${provenance}${summaryText}`;
+      if (
+        historyCost(messages, context) <= input.budget ||
+        (recentCount === 0 && summaryText === "")
+      ) {
+        return {
+          messages,
+          context,
+          omittedItems: (input.omittedItems ?? 0) + older.length,
+          omittedItemIds: older.map((message) => message.itemId),
+        };
+      }
+    }
+  }
+  throw new Error("Recovery selection exhausted");
 }
