@@ -14,6 +14,7 @@ import {
   AuthFilesystemReadScope,
   AuthFilesystemWriteScope,
   AuthDiagnosticsReadScope,
+  AuthAccessWriteScope,
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   AuthPreviewOperateScope,
@@ -42,6 +43,13 @@ type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
  */
 export const RPC_REQUIRED_SCOPES = {
   ...CLIENT_GUARDED_RPC_SCOPES,
+  "thread.session.reset": AuthAccessWriteScope,
+  "thread.handover.prepare": AuthAccessWriteScope,
+  "thread.handover.commit": AuthAccessWriteScope,
+  "thread.handover.status": AuthAccessWriteScope,
+  "thread.handover.routes": AuthAccessWriteScope,
+  "thread.human.pending": AuthAccessWriteScope,
+  "thread.human.resolve": AuthAccessWriteScope,
   "fork.plan.publish": AuthOrchestrationOperateScope,
   "fork.session.reconcile": AuthOrchestrationOperateScope,
   "fork.message.forward.prepare": AuthOrchestrationReadScope,
