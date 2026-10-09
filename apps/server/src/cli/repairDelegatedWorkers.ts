@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-global-process-runtime -- Standalone offline operator entry. */
 // @effect-diagnostics nodeBuiltinImport:off
 // @effect-diagnostics globalConsole:off
 import * as NodeFSP from "node:fs/promises";
