@@ -2071,6 +2071,7 @@ registerAutomationCommands(program);
 // It runs after a successful action: the liveness check rewrites the state file, so a
 // refused command (env forget without --force) must leave the file untouched.
 program.hook("postAction", async (_command, action) => {
+  if (action.name() === "threads" && action.opts().json) return;
   if (action.name() === "watch") return;
   try {
     if (hasQueuedWork(await loadState())) await ensureNotificationWatcher();
