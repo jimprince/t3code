@@ -35,6 +35,8 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
+import * as TestClock from "effect/testing/TestClock";
+import * as Fiber from "effect/Fiber";
 import * as Stream from "effect/Stream";
 
 import * as McpSessionRegistry from "../mcp/McpSessionRegistry.ts";
@@ -3504,8 +3506,17 @@ function captureRootRunTermination(input: {
     ProviderAdapter.ProviderAdapterV2Event,
     ProviderAdapter.ProviderAdapterV2Error
   >;
+  readonly shouldStartProviderTurn?: () => Effect.Effect<
+    boolean,
+    ProjectionStore.ProjectionStoreV2Error
+  >;
   readonly startTurn?: ProviderAdapter.ProviderAdapterV2SessionRuntime["startTurn"];
   readonly refreshAfterTurn?: Effect.Effect<void>;
+  readonly subscribeEvents?: ProviderAdapter.ProviderAdapterV2SessionRuntime["subscribeEvents"];
+  readonly loadInheritedBackgroundTurnItems?: Parameters<
+    RunExecutionService.RunExecutionServiceV2["Service"]["startRootRun"]
+  >[0]["loadInheritedBackgroundTurnItems"];
+  readonly appContext?: McpAppModelContext.McpAppModelContext["Service"]["forThread"];
 }) {
   return Effect.gen(function* () {
     const ids = backgroundScenarioIds(input.key);
@@ -3522,6 +3533,7 @@ function captureRootRunTermination(input: {
     const submittedEffects = yield* Ref.make<ReadonlyArray<PendingOrchestrationEffectV2>>([]);
     const committedEffects = yield* Ref.make<ReadonlyArray<PendingOrchestrationEffectV2>>([]);
     const ingestionDone = yield* Deferred.make<void>();
+    const subscribed = yield* Ref.make(false);
     const captureTurnItem = (payload: OrchestrationV2TurnItem) =>
       Ref.update(writtenItems, (current) => [...current, payload]);
     const captureFinalEvents = (events: ReadonlyArray<OrchestrationV2DomainEvent>) =>
@@ -3538,7 +3550,9 @@ function captureRootRunTermination(input: {
     const layerTest = RunExecutionService.layer.pipe(
       Layer.provide(
         Layer.mergeAll(
-          McpAppModelContext.layerEmpty,
+          input.appContext === undefined
+            ? McpAppModelContext.layerEmpty
+            : Layer.mock(McpAppModelContext.McpAppModelContext)({ forThread: input.appContext }),
           Layer.mock(CheckpointService.CheckpointServiceV2)({ captureBaseline: () => Effect.void }),
           Layer.mock(EventSink.EventSinkV2)({
             write: (payload) =>
@@ -3593,35 +3607,37 @@ function captureRootRunTermination(input: {
         providerSessionId: ProviderSessionId.make(`session:${input.key}`),
         session: {
           events: Stream.empty,
-          subscribeEvents: Effect.succeed({
-            events:
-              input.events?.(ids) ??
-              Stream.fromIterable([
-                ...(input.seedOpenSubagent
-                  ? [
-                      { type: "subagent.updated", driver, subagent: runningSubagent } as const,
-                      {
-                        type: "node.updated",
-                        driver,
-                        node: makeRunOwnedSubagentNodeFixture({ ids, status: "running" }),
-                      } as const,
-                      {
-                        type: "turn_item.updated",
-                        driver,
-                        turnItem: makeRunOwnedSubagentTurnItemFixture({
-                          ids,
-                          providerInstanceId,
-                          childThreadId: ids.childThreadId,
+          subscribeEvents:
+            input.subscribeEvents ??
+            Effect.succeed({
+              events:
+                input.events?.(ids) ??
+                Stream.fromIterable([
+                  ...(input.seedOpenSubagent
+                    ? [
+                        { type: "subagent.updated", driver, subagent: runningSubagent } as const,
+                        {
+                          type: "node.updated",
                           driver,
-                          status: "running",
-                        }),
-                      } as const,
-                    ]
-                  : []),
-                rootTerminalEvent(ids, "interrupted"),
-              ] satisfies ReadonlyArray<ProviderAdapter.ProviderAdapterV2Event>),
-            close: Deferred.succeed(ingestionDone, undefined),
-          }),
+                          node: makeRunOwnedSubagentNodeFixture({ ids, status: "running" }),
+                        } as const,
+                        {
+                          type: "turn_item.updated",
+                          driver,
+                          turnItem: makeRunOwnedSubagentTurnItemFixture({
+                            ids,
+                            providerInstanceId,
+                            childThreadId: ids.childThreadId,
+                            driver,
+                            status: "running",
+                          }),
+                        } as const,
+                      ]
+                    : []),
+                  rootTerminalEvent(ids, "interrupted"),
+                ] satisfies ReadonlyArray<ProviderAdapter.ProviderAdapterV2Event>),
+              close: Deferred.succeed(ingestionDone, undefined),
+            }).pipe(Effect.tap(() => Ref.set(subscribed, true))),
           startTurn: input.startTurn ?? (() => Effect.void),
         } as unknown as ProviderAdapter.ProviderAdapterV2SessionRuntime,
         run: {
@@ -3648,11 +3664,17 @@ function captureRootRunTermination(input: {
         attemptId: ids.attemptId,
         providerTurnOrdinal: 1,
         shouldFinalizeRun: input.shouldFinalizeRun,
+        ...(input.shouldStartProviderTurn === undefined
+          ? {}
+          : { shouldStartProviderTurn: input.shouldStartProviderTurn }),
         ...(input.hasUnpairedRunInterruptRequest === undefined
           ? {}
           : {
               hasUnpairedRunInterruptRequest: input.hasUnpairedRunInterruptRequest,
             }),
+        ...(input.loadInheritedBackgroundTurnItems === undefined
+          ? {}
+          : { loadInheritedBackgroundTurnItems: input.loadInheritedBackgroundTurnItems }),
         message: {
           messageId: MessageId.make(`message:${input.key}`),
           text: "interrupt projection",
@@ -3675,7 +3697,7 @@ function captureRootRunTermination(input: {
       });
     }).pipe(Effect.provide(layerTest));
 
-    yield* Deferred.await(ingestionDone);
+    if (yield* Ref.get(subscribed)) yield* Deferred.await(ingestionDone);
     return {
       written: yield* Ref.get(writtenItems),
       observed: yield* Ref.get(observed),
@@ -4156,4 +4178,54 @@ it.effect("releases ingestion after idle subagent rows and items settle", () =>
       "root-finalized",
     ]);
   }),
+);
+
+it.effect.each(["start", "ownership", "subscription", "inherited", "app-context"] as const)(
+  "terminalizes a blocked provider preparation or start with a visible timeout (phase=%s)",
+  (phase) =>
+    Effect.gen(function* () {
+      const started = yield* Deferred.make<void>();
+      const result = yield* captureRootRunTermination({
+        key: `never-returning-start-${phase}`,
+        shouldFinalizeRun: () => Effect.succeed(true),
+        events: () => Stream.never,
+        ...(phase === "ownership"
+          ? {
+              shouldStartProviderTurn: () =>
+                Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+              startTurn: () => Effect.die("must not start after ownership read timeout"),
+            }
+          : phase === "subscription"
+            ? {
+                subscribeEvents: Deferred.succeed(started, undefined).pipe(
+                  Effect.andThen(Effect.never),
+                ),
+                startTurn: () => Effect.die("must not start after subscription timeout"),
+              }
+            : phase === "inherited"
+              ? {
+                  loadInheritedBackgroundTurnItems: () =>
+                    Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+                  startTurn: () =>
+                    Effect.die("must not start after inherited background lookup timeout"),
+                }
+              : phase === "app-context"
+                ? {
+                    appContext: () =>
+                      Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+                    startTurn: () => Effect.die("must not start after app context timeout"),
+                  }
+                : {
+                    startTurn: () =>
+                      Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+                  }),
+      }).pipe(Effect.forkScoped);
+      yield* Deferred.await(started);
+      yield* TestClock.adjust("120 seconds");
+      const { observed, written } = yield* Fiber.join(result);
+      assert.equal(observed[0], "run:failed");
+      const error = written.find((item) => item.type === "error");
+      assert.equal(error?.failure.code, "provider_start_timeout");
+      assert.include(error?.failure.message ?? "", "120000 ms");
+    }),
 );
