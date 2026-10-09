@@ -11,6 +11,7 @@ import {
   type OrchestrationV2TurnItem,
   RunId,
   ThreadId,
+  type TurnItemId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import { CodexAppServerRequestTimeoutError } from "effect-codex-app-server/errors";
@@ -22,6 +23,8 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
+
+import { PendingHumanRequests } from "../threadRecovery/PendingHumanRequests.ts";
 
 import * as GitWorkflowService from "../git/GitWorkflowService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
@@ -50,6 +53,27 @@ import {
   pendingRestartCancelledBackgroundWork,
   restartCancelledBackgroundWorkNote,
 } from "./RestartBackgroundNote.ts";
+
+/** Capture the optional dependency before native start runs in a worker context. */
+export const makePendingHumanItemReader = Effect.gen(function* () {
+  const service = yield* Effect.serviceOption(PendingHumanRequests);
+  return Effect.fn("ProviderTurnStartService.pendingHumanItemIds")(function* (
+    threadId: ThreadId,
+    humanItemIds: ReadonlyArray<TurnItemId>,
+  ) {
+    if (Option.isNone(service)) return [];
+    return yield* service.value.listPending({ threadId }).pipe(
+      Effect.timeout("5 seconds"),
+      Effect.map((requests) => requests.map((request) => request.turnItemId)),
+      Effect.catchCause((cause) =>
+        Effect.logWarning(
+          "Pending human request lookup failed; preserving all human items in the handoff window",
+          { threadId, cause: Cause.pretty(cause) },
+        ).pipe(Effect.as(humanItemIds)),
+      ),
+    );
+  });
+});
 
 export class ProviderTurnStartError extends Schema.TaggedError<ProviderTurnStartError>()(
   "ProviderTurnStartError",
@@ -112,6 +136,7 @@ export const layer: Layer.Layer<
     const providerSessions = yield* ProviderSessionManager.ProviderSessionManagerV2;
     const runExecution = yield* RunExecutionService.RunExecutionServiceV2;
     const runtimePolicy = yield* RuntimePolicy.RuntimePolicyV2;
+    const readPendingHumanItemIds = yield* makePendingHumanItemReader;
 
     // These callbacks outlive startup while a run drains background work. Build
     // them outside start's scope so they cannot retain its full thread history.
@@ -722,6 +747,13 @@ export const layer: Layer.Layer<
           type: "provider_resume_fallback",
         });
         const createdAt = yield* DateTime.now;
+        const items = (yield* projectionStore.getTurnStartHistory(input.threadId)).filter(
+          (item) =>
+            item.runId === null ||
+            projection.runs.some(
+              (source) => source.id === item.runId && source.ordinal < run.ordinal,
+            ),
+        );
         const handoff = yield* contextHandoffService.prepareProviderHandoff({
           threadId: projection.thread.id,
           targetRunId: run.id,
@@ -732,14 +764,12 @@ export const layer: Layer.Layer<
           toProviderInstanceId: run.providerInstanceId,
           coveredRunOrdinals: { from: 1, to: Math.max(1, run.ordinal - 1) },
           strategy: "full_thread_summary",
-          runs: projection.runs,
-          items: (yield* projectionStore.getTurnStartHistory(input.threadId)).filter(
-            (item) =>
-              item.runId === null ||
-              projection.runs.some(
-                (source) => source.id === item.runId && source.ordinal < run.ordinal,
-              ),
+          pendingItemIds: yield* readPendingHumanItemIds(
+            projection.thread.id,
+            items.filter((item) => item.type === "user_message").map((item) => item.id),
           ),
+          runs: projection.runs,
+          items,
           createdAt,
         });
         effectiveHandoffs = [handoff, ...effectiveHandoffs];
@@ -1102,6 +1132,14 @@ export const layer: Layer.Layer<
         compact = false,
       ) =>
         Effect.gen(function* () {
+          const pendingItemIds = yield* readPendingHumanItemIds(projection.thread.id, [
+            ...effectiveHandoffs.flatMap((handoff) =>
+              (handoff.history?.messages ?? [])
+                .filter((message) => message.role === "user")
+                .map((message) => message.itemId),
+            ),
+            ...missedItems.filter((item) => item.type === "user_message").map((item) => item.id),
+          ]);
           // A failed turn/start can leave the requested turn absent from
           // native history even when its preceding handoff was injected.
           const retryHandoff =
@@ -1121,6 +1159,7 @@ export const layer: Layer.Layer<
                       to: missedRuns.at(-1)!.ordinal,
                     },
                     strategy: "delta_since_target_last_seen",
+                    pendingItemIds,
                     items: missedItems,
                     runs: projection.runs,
                     createdAt: yield* DateTime.now,
@@ -1128,17 +1167,21 @@ export const layer: Layer.Layer<
                 ];
           const delivery = yield* deliverContextHandoffs({
             handoffs: [...effectiveHandoffs, ...retryHandoff],
+            protectedItemIds: new Set(pendingItemIds),
             deferInline: compact,
             providerThread: runningProviderThread,
             budget: Effect.gen(function* () {
               return handoffBudget({
                 tokenCap,
+                nativeAutoCompaction: session.driver === "claudeAgent",
                 modelContextWindow,
                 // The note is sent with the user text, so it spends the same allowance.
                 userText: restartNote === "" ? userText : `${restartNote}\n\n${userText}`,
                 attachments: message.attachments,
+                ...(turnInput.appContext === undefined ? {} : { appContext: turnInput.appContext }),
                 providerThread: budgetProviderThread,
                 nativeContextEstimate:
+                  session.driver !== "claudeAgent" &&
                   budgetProviderThread.contextUsage?.usedTokens === undefined
                     ? yield* nativeContextEstimate
                     : 0,
