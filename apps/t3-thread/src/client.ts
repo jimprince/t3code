@@ -1026,6 +1026,8 @@ export class RemoteEnvironmentClient {
       uncertain: false,
       sendId,
       causeCode: "RECEIPTS_UNAVAILABLE",
+      targetServerVersion: descriptor.serverVersion,
+      message: `Target environment ${this.environment.name} runs T3 Code ${descriptor.serverVersion} and does not advertise capabilities.reliableHandoffs=true. Update the target app/server to a release supporting reliable handoffs, then retry with the same send ID ${sendId}. No message was dispatched.`,
     };
   }
 

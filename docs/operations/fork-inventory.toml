@@ -2579,3 +2579,9 @@ depends_on = [
 ]
 roles = []
 note = "Adds only WsForkRpcGroup RPCs and reuses fork_thread_metadata_receipts; no migration ID. V2 admission and binding commit with native events/outbox under existing ownership and thread lifecycle locks. Normal Claude handoffs use SDK next priority; explicit control retains now. Unknown transport outcomes stop automatic delivery/retry. Exact/coalesce lookup is sender-private; the own inbox uses existing environment read authorization and an exact-key bounded metadata index. Production fixtures require T3_LIFECYCLE_FIXTURES. Install/deployment remain separately gated per machine."
+
+[[patch.decision]]
+id = "receipt-version-error-215"
+date = "2026-10-09"
+decided = "adapt"
+rationale = "A capability refusal names the target environment and version, preserves the unsent identity and explains the supported target update; receipt safety has no legacy fallback."

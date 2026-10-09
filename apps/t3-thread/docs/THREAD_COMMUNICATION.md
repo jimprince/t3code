@@ -137,3 +137,5 @@ Live named-agent sends resolve the existing incarnation and use this same
 receipted path. A dormant named agent is refused with `DORMANT`: automatic
 incarnation through the older unreceipted resolve RPC is not protocol recovery.
 Start an incarnation with its explicit named-agent lifecycle command first.
+
+Receipt-backed sends require the **target server** to advertise `capabilities.reliableHandoffs=true`; updating only the sending CLI is insufficient. A `RECEIPTS_UNAVAILABLE` refusal includes the target version and environment. Update that environment through its supported app/server updater, confirm the capability in its descriptor, and retry with the same send ID. The refusal submits no message and never falls back to a send without receipts.
