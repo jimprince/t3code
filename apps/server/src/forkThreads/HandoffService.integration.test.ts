@@ -35,6 +35,7 @@ import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterReg
 import { makeOrchestratorV2ReplayLayerWithRegistry } from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
 import { CodexProviderCapabilitiesV2 } from "../orchestration-v2/Adapters/CodexAdapterV2.ts";
 import { initializeMetadata, writeMetadata } from "./MetadataStore.ts";
+import { makeSendBindingReader } from "./SendBindings.ts";
 import { makeHandoffService } from "./HandoffService.ts";
 
 const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
@@ -470,6 +471,19 @@ itFixture(
             );
             assert.isTrue(receipt.dispatched);
             assert.equal(receipt.receipt?.status, "steered");
+            const firstBinding = yield* makeSendBindingReader(sql).read({
+              threadId: ThreadId.make("handoff:recipient"),
+              sendId: "first-running",
+            });
+            const steerBinding = yield* makeSendBindingReader(sql).read({
+              threadId: ThreadId.make("handoff:recipient"),
+              sendId: receipt.receipt!.sendId,
+            });
+            assert.equal(steerBinding.runId, firstBinding.runId);
+            assert.equal(receipt.receipt?.runId, firstBinding.runId);
+            assert.equal(steerBinding.delivery, "steered");
+            assert.equal(steerBinding.run?.status, "running");
+            assert.isString(steerBinding.run?.startedAt);
             assert.equal(steerCalls, 0);
             yield* worker.drain();
             assert.equal(steerCalls, 1);
