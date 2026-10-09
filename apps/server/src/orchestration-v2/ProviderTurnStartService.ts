@@ -13,6 +13,7 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
+import { CodexAppServerRequestTimeoutError } from "effect-codex-app-server/errors";
 import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -684,6 +685,15 @@ export const layer: Layer.Layer<
         );
         if (resumed._tag === "Success") {
           return resumed.success;
+        }
+
+        // A timed-out resume may already have succeeded natively. Retain its
+        // reference so retries resume the same session instead of creating orphans.
+        if (
+          "cause" in resumed.failure &&
+          Schema.is(CodexAppServerRequestTimeoutError)(resumed.failure.cause)
+        ) {
+          return yield* loadFromProvider(Effect.fail(resumed.failure));
         }
 
         yield* Effect.logWarning("Provider resume failed; attempting a fresh native session", {

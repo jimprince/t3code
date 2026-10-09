@@ -1,0 +1,4 @@
+id = "provider-lifecycle-deadlines"
+category = "fix"
+functionality = "provider recovery"
+text = "Report stalled provider starts and status reads, settle Stop when Codex stops responding, and bound server shutdown so restart recovery can proceed."
