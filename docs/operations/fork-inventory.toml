@@ -2972,3 +2972,12 @@ retire_when = "Upstream bounds these lifecycle phases and supplies equivalent ex
 depends_on = ["fork-provider-turn-safety", "fork-interrupted-turn-rewind"]
 roles = []
 note = "#240 S1 / #230: approved RPC ACK 10 s, provider start 120 s, Stop 20 s and process shutdown 20 s. Persist Stop fallback before the native ACK; preserve existing exact-turn/later-run guards. resetThread is the single optional adapter member, wrapped by the session manager to detach and revoke the recorded credential only. Codex retains its multiplexed process and reports thread isolation with stopped=true after target teardown; stopped=false remains retryable; S3 owns durable fences, exact-run terminalization and discard_native reference handling. Test faults require a named isolated development home plus exact allowlisted thread; packaged/static servers ignore them. This droppable concern is separate from general provider recovery because its timers, force-reset primitive and shutdown exit policy can be retired together."
+
+[[patch]]
+name = "fork-provider-context-recovery"
+subject = "fix(server): recover provider context after restart"
+class = "product"
+purpose = "Resume retained Claude native sessions, compact fallback context without dropping pending requests, expose typed recovery limits and tear down only the exact Claude session."
+retire_when = "Upstream provides native-first restart recovery, protected deterministic fallback compaction and an exact-session reset boundary."
+depends_on = ["fork-thread-transfer", "fork-provider-turn-safety"]
+roles = []
