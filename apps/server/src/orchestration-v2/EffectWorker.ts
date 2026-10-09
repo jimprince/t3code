@@ -171,9 +171,13 @@ export const layerExecutor: Layer.Layer<
                 providerTurnId: effect.request.providerTurnId,
               })
               .pipe(
+                Effect.timeout("20 seconds"),
                 Effect.as(true),
                 Effect.catch((cause) =>
-                  isNonRetryableProviderTurnControlFailure(effect.request.type, Cause.pretty(Cause.fail(cause)))
+                  isNonRetryableProviderTurnControlFailure(
+                    effect.request.type,
+                    Cause.pretty(Cause.fail(cause)),
+                  )
                     ? Effect.succeed(false)
                     : Effect.fail(cause),
                 ),
