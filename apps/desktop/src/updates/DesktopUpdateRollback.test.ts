@@ -249,20 +249,22 @@ describe("update rollback watchdog", () => {
   });
 });
 
-effectIt.effect("the updater receives a preparation failure instead of proceeding unprotected", () =>
-  Effect.gen(function* () {
-    const rollback = yield* make({
-      paths,
-      appVersion: "1",
-      dependencies: dependencies({
-        copyBundle: async () => {
-          throw new Error("disk full");
-        },
-      }),
-    });
-    const error = yield* rollback.arm("2").pipe(Effect.flip);
-    expect(error.message).toContain("rollback protection could not be prepared");
-  }),
+effectIt.effect(
+  "the updater receives a preparation failure instead of proceeding unprotected",
+  () =>
+    Effect.gen(function* () {
+      const rollback = yield* make({
+        paths,
+        appVersion: "1",
+        dependencies: dependencies({
+          copyBundle: async () => {
+            throw new Error("disk full");
+          },
+        }),
+      });
+      const error = yield* rollback.arm("2").pipe(Effect.flip);
+      expect(error.message).toContain("rollback protection could not be prepared");
+    }),
 );
 it("restores the current bundle after stale cleanup ENOTEMPTY and an unhealthy launch", async () => {
   const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "rollback-swap-"));
