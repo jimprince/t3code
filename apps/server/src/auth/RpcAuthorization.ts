@@ -1,6 +1,7 @@
 import {
   type DeviceListInput,
   AuthAccessReadScope,
+  AuthAccessWriteScope,
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   AuthRelayReadScope,
@@ -26,6 +27,13 @@ type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
  * runtime failure.
  */
 export const RPC_REQUIRED_SCOPES = {
+  "thread.session.reset": AuthAccessWriteScope,
+  "thread.handover.prepare": AuthAccessWriteScope,
+  "thread.handover.commit": AuthAccessWriteScope,
+  "thread.handover.status": AuthAccessWriteScope,
+  "thread.handover.routes": AuthAccessWriteScope,
+  "thread.human.pending": AuthAccessWriteScope,
+  "thread.human.resolve": AuthAccessWriteScope,
   "fork.plan.publish": AuthOrchestrationOperateScope,
   "fork.session.reconcile": AuthOrchestrationOperateScope,
   "fork.message.forward.prepare": AuthOrchestrationReadScope,
