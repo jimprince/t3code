@@ -161,6 +161,20 @@ start a new discovery context; a tool installed on the same PATH can take up to 
 minutes to be discovered. PR sweeps and periodic Git refreshes share a five-attempts
 per second budget. Interactive operations retain their own deadlines.
 
+### Provider deadline faults
+
+For isolated Codex recovery tests, set `T3CODE_TEST_FAULTS` to one of
+`withhold-lifecycle-ack`, `never-native-start`, `withhold-interrupt-ack`, or
+`ignore-native-interrupt`. Also set `T3CODE_TEST_FAULT_THREAD_ID` to the exact test
+thread and `T3CODE_TEST_FAULT_HOME` to the server's isolated base directory.
+These hooks require a development URL, reject the normal live T3 homes, and are
+ignored by packaged/static servers. Keep startup recovery disabled when using
+copied state. The interrupt hooks affect Stop; they do not kill a shared provider.
+
+Deadline overrides for focused tests are `T3CODE_CODEX_RPC_TIMEOUT_MS` (10,000),
+`T3CODE_PROVIDER_START_TIMEOUT_MS` (120,000), and
+`T3CODE_MCP_STATUS_TIMEOUT_MS` (10,000). The process shutdown ceiling is 20 seconds.
+
 ### Unused code
 
 `vp run knip:check` checks unused files and dependencies across the repo, then
