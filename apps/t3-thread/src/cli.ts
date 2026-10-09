@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { registerRecoveryCommands } from "./recoveryCommands.js";
 import { ThreadId, MessageId } from "@t3tools/contracts";
 import { registerPlanCommands } from "./planCommands.js";
 import { registerGiteaTokenCommand, GiteaTokenCliError } from "./giteaToken.js";
@@ -360,6 +361,10 @@ const AGENT_COMMAND_ALIASES = new Set([
   "revise",
   "complete",
   "interrupt",
+  "resume",
+  "send-binding",
+  "human",
+  "handover",
   "session",
   "wait",
   "result",
@@ -2994,6 +2999,13 @@ namedAgentsCommand
     });
   });
 
+registerRecoveryCommands(
+  agent,
+  agentSession,
+  withAgent,
+  async (name) => new RemoteEnvironmentClient(requireEnvironment(await loadState(), name)),
+  printJson,
+);
 registerAutomationCommands(program);
 registerGiteaTokenCommand(program);
 const sensitiveTokenCommand = ["source-control", "gitea", "set-token"].every((part) =>
