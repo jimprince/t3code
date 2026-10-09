@@ -171,6 +171,7 @@ export const executorLayer: Layer.Layer<
                 providerTurnId: effect.request.providerTurnId,
               })
               .pipe(
+                Effect.timeout("20 seconds"),
                 // An ACK does not mean native finalization has been ingested.
                 // Record it durably and give the driver time to publish its
                 // rollback boundary, usage and terminal event before fallback.
