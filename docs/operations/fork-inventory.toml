@@ -1254,3 +1254,9 @@ id = "socket-open-209-nested-threads"
 date = "2026-10-08"
 decided = "adapt"
 rationale = "Initialize nesting metadata once per persistence environment; leave connection-scoped constructors inert and startup failures retryable."
+
+[[patch.decision]]
+id = "delegated-worker-organization-226"
+date = "2026-10-09"
+decided = "repair-existing-concern"
+rationale = "Seed app-owned child organizational metadata atomically with native creation, preserving later explicit reparent and unnest. The common child factory clears inherited pin/order/opt-out fields. MCP nest/unnest shares the CLI nesting service and exposes organizational metadata independently of execution lineage. Offline repair requires ownership and historical-event provenance; its default run repairs a private VACUUM INTO copy and never constructs repair layers on the source."
