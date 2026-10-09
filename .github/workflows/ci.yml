@@ -291,17 +291,17 @@ jobs:
       - name: Test
         run: scripts/ci/verify-source test-other
 
-      - name: Check verified source unchanged
-        run: |
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test -z "$(git status --porcelain)"
-
       - name: Smoke operator status and thread snapshots with a bounded heap
         timeout-minutes: 3
         run: |
           node apps/t3-thread/scripts/build.mjs
           timeout 90s node --max-old-space-size=512 apps/t3-thread/tests/fixtures/status-smoke.mjs
           timeout 60s node --max-old-space-size=512 apps/t3-thread/tests/fixtures/threads-smoke.mjs
+
+      - name: Check verified source unchanged
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
 
   # The web suite is the largest outside the server. In the shared Test job it
   # started last and ran alone for about 40s after everything else finished.
