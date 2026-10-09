@@ -1,0 +1,4 @@
+id = "admin-thread-recovery"
+category = "feature"
+functionality = "threads"
+text = "Administrators can reset a stuck thread attachment and hand orchestrator work to a successor with retry receipts. Handover preserves watcher settings, delivery identities, dashboard state, and unanswered human requests, and waits for every required host before settling the old thread."
