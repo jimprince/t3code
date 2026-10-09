@@ -1,0 +1,4 @@
+id = "recovery-schema-check-once"
+category = "performance"
+functionality = "threads"
+text = "Reduce event-writing overhead while continuing to check current handover fences before accepting new work."

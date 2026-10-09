@@ -1,6 +1,7 @@
 import {
   type DeviceListInput,
   AuthAccessReadScope,
+  AuthAccessWriteScope,
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   AuthRelayReadScope,
@@ -26,12 +27,24 @@ type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
  * runtime failure.
  */
 export const RPC_REQUIRED_SCOPES = {
+  "thread.session.generation": AuthAccessWriteScope,
+  "thread.resume": AuthAccessWriteScope,
+  "thread.stop.receipt": AuthAccessWriteScope,
+  "thread.human.pending.list": AuthAccessWriteScope,
+  "thread.session.reset": AuthAccessWriteScope,
+  "thread.handover.prepare": AuthAccessWriteScope,
+  "thread.handover.commit": AuthAccessWriteScope,
+  "thread.handover.status": AuthAccessWriteScope,
+  "thread.handover.routes": AuthAccessWriteScope,
+  "thread.human.pending": AuthAccessWriteScope,
+  "thread.human.resolve": AuthAccessWriteScope,
   "fork.plan.publish": AuthOrchestrationOperateScope,
   "fork.session.reconcile": AuthOrchestrationOperateScope,
   "fork.message.forward.prepare": AuthOrchestrationReadScope,
   "fork.message.forward.accept": AuthOrchestrationOperateScope,
   "fork.send.accept": AuthOrchestrationOperateScope,
   "fork.send.lookup": AuthOrchestrationReadScope,
+  "thread.send.binding": AuthOrchestrationReadScope,
   "fork.send.inbox": AuthOrchestrationReadScope,
   [WS_METHODS.automationsList]: AuthOrchestrationReadScope,
   [WS_METHODS.automationsRuns]: AuthOrchestrationReadScope,
