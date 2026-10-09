@@ -1,3 +1,4 @@
+import { ThreadRecoveryRpcs } from "@t3tools/contracts";
 import { WsPlanPublishRpc } from "@t3tools/contracts";
 import {
   WS_METHODS,
@@ -255,6 +256,7 @@ const WsAutomationScriptsRunRpc = Rpc.make("automationScripts.run", {
 });
 
 export const WsRpcGroup = RpcGroup.make(
+  ...ThreadRecoveryRpcs,
   WsPlanPublishRpc,
   ...HandoffRpcs,
   ...MessageForwardRpcs,

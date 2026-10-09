@@ -1,0 +1,14 @@
+name = "fork-admin-thread-recovery"
+subject = "feat(server): add scoped session reset and durable orchestrator handover"
+class = "product"
+purpose = "Recover one fenced provider attachment and transfer orchestrator ownership without losing pending human work, host watcher settings, delivery identities, or historical thread records (#240)."
+retire_when = "Upstream supplies authenticated exact-session recovery and receipt-based orchestrator handover across operator hosts, preserving pending human requests."
+depends_on = ["fork-reliable-handoffs", "fork-thread-transfer", "fork-lifecycle-deadlines"]
+roles = []
+note = "Administrative WS/CLI operations require both access:write and orchestration:operate. Provider MCP credentials remain refused. Durable generations and exact attachment fences precede manager-wrapped reset; handover settlement follows all required host receipts. Host routing redirects protect the interval before server metadata commit."
+
+[[decision]]
+id = "catchup-2908-human-only-recovery-access"
+date = "2026-10-10"
+decided = "adapt"
+rationale = "Preserve access.write RPC authorization and authenticated HumanIngress on direct human dispatch/launch through upstream runtime/auth boundaries (#9786–#9791, #10298, #16295). Provider MCP recovery tools remain unconditionally refused; their nominal read declarations perform no writes and do not authorize recovery. Keep current secret/MCP-app/outbox services and immutable fork migration 017. Static access/conflict review passed; composed human/agent recovery and historical upgrade tests remain required."
