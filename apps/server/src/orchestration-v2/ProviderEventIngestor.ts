@@ -694,6 +694,10 @@ export const layer: Layer.Layer<
           if (events.length === 0) {
             return [];
           }
+          const fenceRunId =
+            input.runId ??
+            input.writeIfProviderThreadOwner?.runId ??
+            input.writeIfRunCurrent?.runId;
           const mapWriteError = (cause: unknown) =>
             new ProviderEventPublishError({
               providerSessionId: input.providerSessionId,
@@ -703,6 +707,8 @@ export const layer: Layer.Layer<
           if (input.writeIfProviderThreadOwner !== undefined) {
             const ownerResult = yield* eventSink
               .writeIfProviderThreadOwner({
+                unlessSessionFenced: input.providerSessionId,
+                ...(fenceRunId === undefined ? {} : { sessionFenceRunId: fenceRunId }),
                 guardPendingUserInputCancellations: true,
                 ...(input.commandId === undefined ? {} : { commandId: input.commandId }),
                 ...input.writeIfProviderThreadOwner,
@@ -714,6 +720,8 @@ export const layer: Layer.Layer<
           if (input.writeIfRunCurrent === undefined) {
             return yield* eventSink
               .write({
+                unlessSessionFenced: input.providerSessionId,
+                ...(fenceRunId === undefined ? {} : { sessionFenceRunId: fenceRunId }),
                 guardPendingUserInputCancellations: true,
                 ...(input.commandId === undefined ? {} : { commandId: input.commandId }),
                 events,
@@ -722,6 +730,8 @@ export const layer: Layer.Layer<
           }
           const result = yield* eventSink
             .writeIfRunCurrent({
+              unlessSessionFenced: input.providerSessionId,
+              ...(fenceRunId === undefined ? {} : { sessionFenceRunId: fenceRunId }),
               guardPendingUserInputCancellations: true,
               ...(input.commandId === undefined ? {} : { commandId: input.commandId }),
               threadId: input.threadId,
