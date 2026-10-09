@@ -1,5 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off -- The watchdog tests run the real script against a temporary bundle.
 import * as Effect from "effect/Effect";
+import { it as effectIt } from "@effect/vitest";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
@@ -248,9 +249,9 @@ describe("update rollback watchdog", () => {
   });
 });
 
-it("the updater receives a preparation failure instead of proceeding unprotected", async () => {
-  const rollback = await Effect.runPromise(
-    make({
+effectIt.effect("the updater receives a preparation failure instead of proceeding unprotected", () =>
+  Effect.gen(function* () {
+    const rollback = yield* make({
       paths,
       appVersion: "1",
       dependencies: dependencies({
@@ -258,12 +259,11 @@ it("the updater receives a preparation failure instead of proceeding unprotected
           throw new Error("disk full");
         },
       }),
-    }),
-  );
-  await expect(Effect.runPromise(rollback.arm("2"))).rejects.toThrow(
-    "rollback protection could not be prepared",
-  );
-});
+    });
+    const error = yield* rollback.arm("2").pipe(Effect.flip);
+    expect(error.message).toContain("rollback protection could not be prepared");
+  }),
+);
 it("restores the current bundle after stale cleanup ENOTEMPTY and an unhealthy launch", async () => {
   const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "rollback-swap-"));
   try {
