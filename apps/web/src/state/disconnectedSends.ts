@@ -1,8 +1,13 @@
-import { createDisconnectedComposerQueue } from "@t3tools/client-runtime/fork/disconnected-composer";
+import {
+  createDisconnectedComposerQueue,
+  DisconnectedComposerRefusal,
+} from "@t3tools/client-runtime/fork/disconnected-composer";
 import type { StartThreadTurnInput } from "@t3tools/client-runtime/operations";
-import type { CommandId, EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { CommandId, type EnvironmentId, type ThreadId } from "@t3tools/contracts";
 import { useMemo } from "react";
 import { create } from "zustand";
+
+import { newMessageId, randomUUID } from "../lib/utils";
 
 /** A send the composer built while its server was down, with the command id it will keep. */
 export type DisconnectedSend = StartThreadTurnInput & { readonly commandId: CommandId };
@@ -12,6 +17,9 @@ type SendQueue = ReturnType<typeof createDisconnectedComposerQueue<DisconnectedS
 // One in-memory queue per environment, alive across transport loss; a reload drops it.
 const queues = new Map<EnvironmentId, SendQueue>();
 
+/** Why the server refused each held message, by command id. */
+type Refusals = Readonly<Record<string, string>>;
+
 const useQueueStore = create<{
   /**
    * A copy of each environment's held messages, oldest first, replaced on every change so the
@@ -19,33 +27,49 @@ const useQueueStore = create<{
    * a dependency the memo body does not use.
    */
   readonly held: Readonly<Partial<Record<EnvironmentId, ReadonlyArray<DisconnectedSend>>>>;
-  /** Counts the reasons to deliver now: a new held send or a user Retry. */
+  /** The held messages the server refused; they wait for Resend or Discard, never a replay. */
+  readonly refusals: Readonly<Partial<Record<EnvironmentId, Refusals>>>;
+  /** Counts the reasons to deliver now: a new held send, a Resend, a Discard or a Retry. */
   readonly flushRequests: number;
-  /** Environments whose last delivery was refused; they stay held until a Retry. */
-  readonly refused: ReadonlySet<EnvironmentId>;
-}>(() => ({ held: {}, flushRequests: 0, refused: new Set() }));
+  /** Environments whose last delivery failed in transit; they stay held until a Retry. */
+  readonly stalled: ReadonlySet<EnvironmentId>;
+}>(() => ({ held: {}, refusals: {}, flushRequests: 0, stalled: new Set() }));
 
 const NO_HELD_SENDS: ReadonlyArray<DisconnectedSend> = [];
+const NO_REFUSALS: Refusals = {};
 
-const heldIn = (
-  held: Readonly<Partial<Record<EnvironmentId, ReadonlyArray<DisconnectedSend>>>>,
-  environmentId: EnvironmentId,
-) => ({ ...held, [environmentId]: queueFor(environmentId).pending() });
+/** Publishes an environment's queue to the store so the composer strip sees it. */
+function publish(environmentId: EnvironmentId) {
+  const queue = queueFor(environmentId);
+  const pending = queue.pending();
+  const refusals: Record<string, string> = {};
+  for (const send of pending) {
+    const reason = queue.refusal(send.commandId);
+    if (reason !== undefined) refusals[send.commandId] = reason;
+  }
+  useQueueStore.setState((store) => ({
+    held: { ...store.held, [environmentId]: pending },
+    refusals: { ...store.refusals, [environmentId]: refusals },
+  }));
+}
 
-function setRefused(environmentId: EnvironmentId, refused: boolean) {
+function setStalled(environmentId: EnvironmentId, stalled: boolean) {
   useQueueStore.setState((store) => {
-    if (store.refused.has(environmentId) === refused) return store;
-    const next = new Set(store.refused);
-    if (refused) next.add(environmentId);
+    if (store.stalled.has(environmentId) === stalled) return store;
+    const next = new Set(store.stalled);
+    if (stalled) next.add(environmentId);
     else next.delete(environmentId);
-    return { refused: next };
+    return { stalled: next };
   });
 }
 
 function queueFor(environmentId: EnvironmentId): SendQueue {
   let queue = queues.get(environmentId);
   if (!queue) {
-    queue = createDisconnectedComposerQueue<DisconnectedSend>();
+    // A thread's messages keep their order; a refusal in one thread does not hold up another.
+    queue = createDisconnectedComposerQueue<DisconnectedSend>({
+      orderKey: (send) => send.threadId,
+    });
     queues.set(environmentId, queue);
   }
   return queue;
@@ -53,34 +77,58 @@ function queueFor(environmentId: EnvironmentId): SendQueue {
 
 export function enqueueDisconnectedSend(environmentId: EnvironmentId, send: DisconnectedSend) {
   queueFor(environmentId).enqueue(send);
-  useQueueStore.setState(({ held, flushRequests }) => ({
-    held: heldIn(held, environmentId),
-    flushRequests: flushRequests + 1,
-  }));
+  publish(environmentId);
+  useQueueStore.setState(({ flushRequests }) => ({ flushRequests: flushRequests + 1 }));
 }
 
 const hasDisconnectedSends = (environmentId: EnvironmentId) =>
   (queues.get(environmentId)?.pending().length ?? 0) > 0;
 
-/** Sends them first in, first out; whatever the server does not acknowledge stays held. */
+/**
+ * The server answered the command and said no: its typed dispatch error, as opposed to a socket
+ * or transport failure where it may never have seen the command.
+ */
+function refusalReason(error: unknown): string | undefined {
+  return typeof error === "object" &&
+    error !== null &&
+    "_tag" in error &&
+    error._tag === "OrchestrationV2DispatchCommandError" &&
+    "message" in error &&
+    typeof error.message === "string"
+    ? error.message
+    : undefined;
+}
+
+/**
+ * Sends them first in, first out. A refusal is terminal for that message (kept as refused, never
+ * replayed) and delivery goes on; anything else that fails leaves every message held for Retry.
+ */
 async function flushDisconnectedSends(
   environmentId: EnvironmentId,
   send: (command: DisconnectedSend) => Promise<unknown>,
 ): Promise<void> {
-  setRefused(environmentId, false);
+  setStalled(environmentId, false);
   try {
-    await queueFor(environmentId).flush(send);
+    await queueFor(environmentId).flush(async (command) => {
+      try {
+        await send(command);
+      } catch (error) {
+        const reason = refusalReason(error);
+        if (reason !== undefined) throw new DisconnectedComposerRefusal(reason);
+        throw error;
+      }
+    });
   } catch (error) {
-    setRefused(environmentId, true);
+    setStalled(environmentId, true);
     throw error;
   } finally {
-    useQueueStore.setState(({ held }) => ({ held: heldIn(held, environmentId) }));
+    publish(environmentId);
   }
 }
 
 /**
- * Delivers what every given (connected) environment holds. A refusal keeps the held messages,
- * marks the environment as refused and does not retry on its own; that is left to Retry.
+ * Delivers what every given (connected) environment holds. A failure in transit keeps the held
+ * messages, marks the environment as stalled and does not retry on its own; that is left to Retry.
  */
 export function flushHeldSends(
   environmentIds: ReadonlyArray<EnvironmentId>,
@@ -97,18 +145,46 @@ export function flushHeldSends(
   );
 }
 
-/** The user asked to deliver the held messages again; the same commands are replayed. */
+/** The user asked to deliver the held messages again after a transit failure; same commands. */
 export function retryDisconnectedSends(environmentId: EnvironmentId) {
-  setRefused(environmentId, false);
+  setStalled(environmentId, false);
+  useQueueStore.setState(({ flushRequests }) => ({ flushRequests: flushRequests + 1 }));
+}
+
+/**
+ * Sends a refused message again, same text under a new command id and message id, in its old
+ * place. The refused id stays rejected on the server, so it is never replayed.
+ */
+export function resendDisconnectedSend(environmentId: EnvironmentId, commandId: CommandId) {
+  const queue = queueFor(environmentId);
+  const refused = queue.pending().find((send) => send.commandId === commandId);
+  if (refused === undefined || queue.refusal(commandId) === undefined) return;
+  queue.replace(commandId, {
+    ...refused,
+    commandId: CommandId.make(randomUUID()),
+    message: { ...refused.message, messageId: newMessageId() },
+  });
+  publish(environmentId);
+  useQueueStore.setState(({ flushRequests }) => ({ flushRequests: flushRequests + 1 }));
+}
+
+/** Drops a held message for good; the messages of its thread that waited behind it go on. */
+export function discardDisconnectedSend(environmentId: EnvironmentId, commandId: CommandId) {
+  if (!queueFor(environmentId).remove(commandId)) return;
+  publish(environmentId);
   useQueueStore.setState(({ flushRequests }) => ({ flushRequests: flushRequests + 1 }));
 }
 
 /** Changes when held messages should be delivered now (a new one, or a Retry). */
 export const useDisconnectedFlushRequests = () => useQueueStore((store) => store.flushRequests);
 
-/** Whether the server refused the held messages of this environment and is waiting for Retry. */
-export const useDisconnectedSendsRefused = (environmentId: EnvironmentId) =>
-  useQueueStore((store) => store.refused.has(environmentId));
+/** Whether a delivery to this environment failed in transit and is waiting for Retry. */
+export const useDisconnectedSendsStalled = (environmentId: EnvironmentId) =>
+  useQueueStore((store) => store.stalled.has(environmentId));
+
+/** The reasons the server gave for refusing held messages of this environment, by command id. */
+export const useDisconnectedSendRefusals = (environmentId: EnvironmentId): Refusals =>
+  useQueueStore((store) => store.refusals[environmentId] ?? NO_REFUSALS);
 
 function heldForThread(
   held: ReadonlyArray<DisconnectedSend> | undefined,
@@ -132,11 +208,13 @@ export function usePendingDisconnectedSends(
 export const disconnectedFlushRequests = () => useQueueStore.getState().flushRequests;
 export const pendingDisconnectedSends = (environmentId: EnvironmentId, threadId: ThreadId) =>
   heldForThread(useQueueStore.getState().held[environmentId], threadId);
-export const isDisconnectedSendsRefused = (environmentId: EnvironmentId) =>
-  useQueueStore.getState().refused.has(environmentId);
+export const isDisconnectedSendsStalled = (environmentId: EnvironmentId) =>
+  useQueueStore.getState().stalled.has(environmentId);
+export const disconnectedSendRefusals = (environmentId: EnvironmentId): Refusals =>
+  useQueueStore.getState().refusals[environmentId] ?? NO_REFUSALS;
 
 /** Test seam: forget every queue and outcome. */
 export function resetDisconnectedSendsForTest() {
   queues.clear();
-  useQueueStore.setState({ held: {}, flushRequests: 0, refused: new Set() });
+  useQueueStore.setState({ held: {}, refusals: {}, flushRequests: 0, stalled: new Set() });
 }
