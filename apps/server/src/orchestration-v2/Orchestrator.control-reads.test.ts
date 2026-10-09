@@ -25,6 +25,10 @@ import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
+import * as TestClock from "effect/testing/TestClock";
+import * as Stream from "effect/Stream";
+import * as ProviderSessionManager from "./ProviderSessionManager.ts";
+import * as EffectOutbox from "./EffectOutbox.ts";
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
 import * as ProviderReplayHarness from "./testkit/ProviderReplayHarness.ts";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
@@ -39,15 +43,19 @@ const adapter = {
   openSession: () => Effect.die("No provider process needed for metadata controls"),
 } as ProviderAdapter.ProviderAdapterV2["Service"];
 const layerDatabase = SqlitePersistence.layerMemory;
-const layerTest = Layer.mergeAll(
-  layerDatabase,
-  ProjectionStore.layer.pipe(Layer.provide(layerDatabase)),
-  ProviderReplayHarness.layerWithRegistry(
-    { name: "control-reads" },
-    ProviderAdapterRegistry.layerFromAdapters([adapter]),
-    { databaseLayer: layerDatabase, runEffectWorker: false },
-  ),
-);
+const makeTestLayer = (providerAdapter: ProviderAdapter.ProviderAdapterV2["Service"]) =>
+  Layer.mergeAll(
+    layerDatabase,
+    ProjectionStore.layer.pipe(Layer.provide(layerDatabase)),
+    EffectOutbox.layer.pipe(Layer.provide(layerDatabase)),
+    ProviderReplayHarness.layerWithRegistry(
+      { name: "control-reads" },
+      ProviderAdapterRegistry.layerFromAdapters([providerAdapter]),
+      { databaseLayer: layerDatabase, runEffectWorker: false },
+    ),
+  );
+
+const layerTest = makeTestLayer(adapter);
 
 it.effect(
   "dispatches metadata, queue resume and request controls without hydrating unrelated history",
@@ -623,4 +631,256 @@ it.effect("keeps delegated child pull-request links independent of the parent", 
     assert.deepEqual(parentAfterChildLink.thread.linkedPullRequest, parentPullRequest);
     assert.deepEqual(parentAfterChildLink.thread.pullRequests, parent.thread.pullRequests);
   }).pipe(Effect.provide(layerTest)),
+);
+
+const stopAdapter: ProviderAdapter.ProviderAdapterV2["Service"] = {
+  ...adapter,
+  openSession: (input) =>
+    DateTime.now.pipe(
+      Effect.map(
+        (now) =>
+          ({
+            instanceId,
+            driver: adapter.driver,
+            providerSessionId: input.providerSessionId,
+            providerSession: {
+              id: input.providerSessionId,
+              driver: adapter.driver,
+              providerInstanceId: instanceId,
+              status: "ready",
+              cwd: input.runtimePolicy.cwd,
+              model: modelSelection.model,
+              capabilities: CodexProviderCapabilitiesV2,
+              createdAt: now,
+              updatedAt: now,
+              lastError: null,
+            },
+            events: Stream.never,
+            interruptTurn: () => Effect.never,
+          }) as unknown as ProviderAdapter.ProviderAdapterV2SessionRuntime,
+      ),
+    ),
+};
+
+it.effect.each([false, true])(
+  "persists Stop fallback before ACK and fences later work (later=%s)",
+  (later) =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const manager = yield* ProviderSessionManager.ProviderSessionManagerV2;
+      const projections = yield* ProjectionStore.ProjectionStoreV2;
+      const threadId = ThreadId.make("thread:silent-stop");
+      const providerThreadId = ProviderThreadId.make("provider-thread:silent-stop");
+      const outbox = yield* EffectOutbox.EffectOutboxV2;
+      const now = yield* DateTime.now;
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("create-silent-stop"),
+        threadId,
+        projectId: ProjectId.make("project:silent-stop"),
+        title: "Settle binding",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+        createdBy: "user",
+        creationSource: "web",
+      });
+      yield* projections.apply({
+        id: EventId.make("silent-stop:provider-thread"),
+        type: "provider-thread.updated",
+        threadId,
+        occurredAt: now,
+        payload: {
+          id: providerThreadId,
+          driver: adapter.driver,
+          providerInstanceId: instanceId,
+          providerSessionId: ProviderSessionId.make("session:silent-stop"),
+          appThreadId: threadId,
+          ownerNodeId: null,
+          nativeThreadRef: null,
+          nativeConversationHeadRef: null,
+          status: "idle",
+          firstRunOrdinal: 1,
+          lastRunOrdinal: 1,
+          handoffIds: [],
+          forkedFrom: null,
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
+      const commandItem = (ordinal: number) => TurnItemId.make(`turn-item:silent-stop:${ordinal}`);
+      const seedRun = (ordinal: number) =>
+        Effect.gen(function* () {
+          const runId = RunId.make(`run:silent-stop:${ordinal}`);
+          const attemptId = RunAttemptId.make(`attempt:silent-stop:${ordinal}`);
+          const nodeId = NodeId.make(`node:silent-stop:${ordinal}`);
+          const providerTurnId = ProviderTurnId.make(`provider-turn:silent-stop:${ordinal}`);
+          yield* projections.apply({
+            id: EventId.make(`silent-stop:node:${ordinal}`),
+            type: "node.updated",
+            threadId,
+            occurredAt: now,
+            payload: {
+              id: nodeId,
+              threadId,
+              runId,
+              parentNodeId: null,
+              rootNodeId: nodeId,
+              kind: "root_turn",
+              status: "running",
+              countsForRun: true,
+              providerThreadId,
+              providerTurnId,
+              nativeItemRef: null,
+              runtimeRequestId: null,
+              checkpointScopeId: null,
+              startedAt: now,
+              completedAt: null,
+            },
+          });
+          yield* projections.apply({
+            id: EventId.make(`silent-stop:run:${ordinal}`),
+            type: "run.created",
+            threadId,
+            occurredAt: now,
+            payload: {
+              id: runId,
+              threadId,
+              ordinal,
+              providerInstanceId: instanceId,
+              modelSelection,
+              providerThreadId,
+              userMessageId: MessageId.make(`message:silent-stop:${ordinal}`),
+              rootNodeId: nodeId,
+              activeAttemptId: attemptId,
+              status: "running",
+              requestedAt: now,
+              startedAt: now,
+              completedAt: null,
+              checkpointId: null,
+              contextHandoffId: null,
+            },
+          });
+          yield* projections.apply({
+            id: EventId.make(`silent-stop:attempt:${ordinal}`),
+            type: "run-attempt.created",
+            threadId,
+            occurredAt: now,
+            payload: {
+              id: attemptId,
+              runId,
+              attemptOrdinal: 1,
+              rootNodeId: nodeId,
+              providerInstanceId: instanceId,
+              providerThreadId,
+              providerTurnId,
+              reason: "initial",
+              status: "running",
+              startedAt: now,
+              completedAt: null,
+            },
+          });
+          yield* projections.apply({
+            id: EventId.make(`silent-stop:turn:${ordinal}`),
+            type: "provider-turn.updated",
+            threadId,
+            occurredAt: now,
+            payload: {
+              id: providerTurnId,
+              providerThreadId,
+              nodeId,
+              runAttemptId: attemptId,
+              nativeTurnRef: null,
+              ordinal,
+              status: "running",
+              startedAt: now,
+              completedAt: null,
+            },
+          });
+          yield* projections.apply({
+            id: EventId.make(`silent-stop:item:${ordinal}`),
+            type: "turn-item.updated",
+            threadId,
+            runId,
+            occurredAt: now,
+            payload: {
+              id: commandItem(ordinal),
+              threadId,
+              runId,
+              nodeId,
+              providerThreadId,
+              providerTurnId,
+              nativeItemRef: null,
+              parentItemId: null,
+              ordinal: ordinal * 10,
+              status: "running",
+              title: `Background command ${ordinal}`,
+              startedAt: now,
+              completedAt: null,
+              updatedAt: now,
+              type: "command_execution",
+              input: `sleep ${ordinal}`,
+            },
+          });
+        });
+      yield* manager.open({
+        threadId,
+        providerSessionId: ProviderSessionId.make("session:silent-stop"),
+        modelSelection,
+        runtimePolicy: {
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          cwd: "/tmp",
+          approvalPolicy: "never",
+          sandboxPolicy: { type: "readOnly", access: { type: "fullAccess" }, networkAccess: false },
+        },
+      });
+      yield* seedRun(1);
+      const commandId = CommandId.make("silent-stop:interrupt");
+      yield* orchestrator.dispatch({
+        type: "run.interrupt",
+        commandId,
+        threadId,
+        runId: RunId.make("run:silent-stop:1"),
+      });
+      const deadlineCommandId = CommandId.make(
+        "command:interrupt-deadline:silent-stop:interrupt:provider-turn:silent-stop:1",
+      );
+      const pending = yield* outbox.listByCommandId(deadlineCommandId);
+      assert.equal(pending.length, 1);
+      assert.equal(pending[0]?.request.type, "provider-turn.interrupt-settle");
+      assert.equal(
+        DateTime.toEpochMillis(DateTime.makeUnsafe(pending[0]!.availableAt)) -
+          DateTime.toEpochMillis(now),
+        20_000,
+      );
+      if (later) yield* seedRun(2);
+      yield* TestClock.adjust("20 seconds");
+      // No native ACK or provider turn completion was emitted in this test.
+      yield* orchestrator.dispatch({
+        type: "thread.background-work.settle",
+        commandId: deadlineCommandId,
+        threadId,
+        providerThreadId,
+        providerTurnId: ProviderTurnId.make("provider-turn:silent-stop:1"),
+      });
+      const projection = yield* projections.getThreadProjection(threadId);
+      assert.equal(
+        projection.runs.find((run) => run.ordinal === 1)?.status,
+        later ? "running" : "interrupted",
+      );
+      assert.equal(
+        projection.turnItems.find((item) => item.id === commandItem(1))?.status,
+        later ? "running" : "interrupted",
+      );
+      if (later) {
+        assert.equal(projection.runs.find((run) => run.ordinal === 2)?.status, "running");
+        assert.equal(
+          projection.turnItems.find((item) => item.id === commandItem(2))?.status,
+          "running",
+        );
+      }
+    }).pipe(Effect.provide(makeTestLayer(stopAdapter))),
 );
