@@ -10,6 +10,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Ref from "effect/Ref";
+import * as TestClock from "effect/testing/TestClock";
 
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 
@@ -192,5 +193,63 @@ it.effect("automatic pull only updates enabled, behind, clean default-branch che
       { ...overrides({ "/opted-out": false }), defaultAutoPull: true },
     ).pipe(Effect.provideService(GitVcsDriver.GitVcsDriver, git));
     assert.deepStrictEqual(pulled, ["/inherited"]);
+  }),
+);
+
+it.effect("bounds shutdown even inside an uninterruptible finalizer", () =>
+  Effect.gen(function* () {
+    const started = yield* Deferred.make<void>();
+    const release = yield* Deferred.make<void>();
+    const phases = yield* Ref.make<ReadonlyArray<string>>([]);
+    const shutdown = yield* ServerRuntimeStartup.runBoundedShutdown(
+      [
+        {
+          name: "stuck-adapter",
+          run: Deferred.succeed(started, undefined).pipe(
+            Effect.andThen(Deferred.await(release)),
+            Effect.uninterruptible,
+          ),
+        },
+        { name: "reconcile", run: Ref.update(phases, (xs) => [...xs, "reconcile"]) },
+      ],
+      100,
+    ).pipe(Effect.uninterruptible, Effect.forkScoped);
+    yield* Deferred.await(started);
+    yield* TestClock.adjust(100);
+    assert.isFalse(yield* Fiber.join(shutdown));
+    assert.deepEqual(yield* Ref.get(phases), []);
+    yield* Deferred.succeed(release, undefined);
+  }),
+);
+
+it.effect("completes ordered shutdown reconciliation within its budget", () =>
+  Effect.gen(function* () {
+    const phases = yield* Ref.make<ReadonlyArray<string>>([]);
+    assert.isTrue(
+      yield* ServerRuntimeStartup.runBoundedShutdown(
+        [
+          { name: "sessions", run: Ref.update(phases, (xs) => [...xs, "sessions"]) },
+          { name: "reconcile", run: Ref.update(phases, (xs) => [...xs, "reconcile"]) },
+        ],
+        100,
+      ),
+    );
+    assert.deepEqual(yield* Ref.get(phases), ["sessions", "reconcile"]);
+  }),
+);
+
+it.effect("still closes sessions and reconciles after shutdown preparation fails", () =>
+  Effect.gen(function* () {
+    const reconciled = yield* Ref.make(false);
+    assert.isFalse(
+      yield* ServerRuntimeStartup.runBoundedShutdown(
+        [
+          { name: "prepare", run: Effect.fail("prepare failed") },
+          { name: "sessions-and-reconcile", run: Ref.set(reconciled, true) },
+        ],
+        100,
+      ),
+    );
+    assert.isTrue(yield* Ref.get(reconciled));
   }),
 );
