@@ -1,3 +1,9 @@
+import * as RecoveryStore from "../threadRecovery/RecoveryStore.ts";
+import * as SessionReset from "../threadRecovery/SessionResetService.ts";
+import * as SessionResetHook from "../threadRecovery/ProviderSessionResetHook.ts";
+import * as PendingHumanRequests from "../threadRecovery/PendingHumanRequests.ts";
+import * as Handover from "../threadRecovery/HandoverService.ts";
+import * as HostRouteTransfer from "../threadRecovery/HostRouteTransfer.ts";
 import * as LegacyHistory from "../forkLegacy/HistoryReader.ts";
 import * as ThreadTransfer from "../forkThreads/TransferService.ts";
 import * as TransferWorkspace from "../forkThreads/TransferWorkspace.ts";
@@ -160,10 +166,14 @@ const layerRunExecutionServiceProvided = RunExecutionService.layer.pipe(
   ),
 );
 
+const layerPendingHumanProvided = PendingHumanRequests.layer.pipe(
+  Layer.provide(Layer.mergeAll(ProjectionStore.layer, IdAllocator.layer)),
+);
 const layerProviderTurnStartServiceProvided = ProviderTurnStartService.layer.pipe(
   Layer.provide(
     Layer.mergeAll(
       layerContextHandoffServiceProvided,
+      layerPendingHumanProvided,
       layerEventSinkProvided,
       IdAllocator.layer,
       ProjectionStore.layer,
@@ -256,7 +266,9 @@ export const layerProjectSetupScriptRunner = ProjectSetupScriptRunner.layer.pipe
 const layerManagedProjectFoldersProvided = ManagedProjectFolders.layer.pipe(
   Layer.provide(layerProjectService),
 );
-const layerTaskIssueLaunchProvided = TaskIssues.layer.pipe(Layer.provide(Layer.mergeAll(layerProjectService, layerThreadManagementProvided)));
+const layerTaskIssueLaunchProvided = TaskIssues.layer.pipe(
+  Layer.provide(Layer.mergeAll(layerProjectService, layerThreadManagementProvided)),
+);
 const layerThreadLaunchProvided = ThreadLaunchService.layer.pipe(
   Layer.provide(
     Layer.mergeAll(
@@ -307,6 +319,7 @@ const layerNativeEffectExecutorProvided = EffectWorker.layerExecutor.pipe(
       layerProviderSessionManagerProvided,
       layerProviderTurnControlServiceProvided,
       layerProviderTurnStartServiceProvided,
+      layerPendingHumanProvided,
       layerRuntimeRequestServiceProvided,
       layerThreadTitleRegenerationProvided,
       layerThreadManagementProvided,
@@ -373,10 +386,46 @@ const layerForkTransferProvided = ThreadTransfer.layer.pipe(
     ),
   ),
 );
+const layerRecoveryDependencies = Layer.mergeAll(
+  ThreadCommandExecutor.layer,
+  layerThreadManagementProvided,
+  layerStores,
+  layerEventSinkProvided,
+  RecoveryStore.layer,
+  layerPendingHumanProvided,
+);
+const layerSessionResetHookProvided = SessionResetHook.layer.pipe(
+  Layer.provide(layerProviderSessionManagerProvided),
+);
+const layerSessionResetProvided = SessionReset.layer.pipe(Layer.provide(layerRecoveryDependencies));
+const layerHandoverProvided = Handover.layer.pipe(Layer.provide(layerRecoveryDependencies));
 export const layerProduction = Layer.mergeAll(
-  LegacyHistory.layer.pipe(Layer.provide(Layer.merge(layerStores, ThreadManagementService.legacyHistoryLayer.pipe(Layer.provide(layerStores))))),
+  layerPendingHumanProvided,
+  layerSessionResetProvided,
+  layerSessionResetHookProvided,
+  layerHandoverProvided,
+  HostRouteTransfer.layer,
+  LegacyHistory.layer.pipe(
+    Layer.provide(
+      Layer.merge(
+        layerStores,
+        ThreadManagementService.legacyHistoryLayer.pipe(Layer.provide(layerStores)),
+      ),
+    ),
+  ),
   layerForkTransferProvided,
-  ForkWorkspace.layer.pipe(Layer.provide(Layer.mergeAll(layerThreadManagementProvided, layerProjectService, layerStores, PortableHistory.layer.pipe(Layer.provide(Layer.mergeAll(layerStores, layerEventSinkProvided)))))),
+  ForkWorkspace.layer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        layerThreadManagementProvided,
+        layerProjectService,
+        layerStores,
+        PortableHistory.layer.pipe(
+          Layer.provide(Layer.mergeAll(layerStores, layerEventSinkProvided)),
+        ),
+      ),
+    ),
+  ),
   layer.pipe(Layer.provide(layerProjectService)),
   layerProjectService,
   layerManagedProjectFoldersProvided,
