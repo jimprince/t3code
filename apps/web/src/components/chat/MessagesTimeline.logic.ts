@@ -307,6 +307,41 @@ export function resolveTimelineIsAtEnd(state: TimelineEndState | undefined): boo
   return contentLength - scroll - scrollLength <= TIMELINE_FOLLOW_REARM_THRESHOLD_PX;
 }
 
+/** Frames the view must stay within the follow band before an end restore counts as done. */
+const TIMELINE_END_RESTORE_STABLE_FRAMES = 2;
+/** Frames an end restore may keep re-aiming before it gives up and lets follow take over. */
+const TIMELINE_END_RESTORE_MAX_FRAMES = 30;
+
+/**
+ * One frame of the end restore (#225). Opening a thread at its end scrolls on
+ * estimated row heights, and the list can resolve that scroll before it has
+ * laid the thread's rows out, leaving the view at the top while the thread
+ * counts as positioned. Called once per frame after the scroll resolves: ask
+ * for another scroll to the end while the view is short of it, and report
+ * "settled" after it has stayed within the follow band for consecutive frames
+ * or after `frame` passes the frame budget, so a view that never holds still
+ * cannot keep the thread unpositioned or the loop running.
+ */
+export function stepTimelineEndRestore(
+  state: TimelineEndState | undefined,
+  stableFrames: number,
+  frame: number,
+): {
+  readonly action: "scroll-to-end" | "wait" | "settled";
+  readonly stableFrames: number;
+} {
+  if (frame >= TIMELINE_END_RESTORE_MAX_FRAMES) return { action: "settled", stableFrames };
+  const isAtEnd = resolveTimelineIsAtEnd(state);
+  // Nothing to measure: do not hold the thread unpositioned.
+  if (isAtEnd === undefined) return { action: "settled", stableFrames };
+  if (!isAtEnd) return { action: "scroll-to-end", stableFrames: 0 };
+  const stable = stableFrames + 1;
+  return {
+    action: stable >= TIMELINE_END_RESTORE_STABLE_FRAMES ? "settled" : "wait",
+    stableFrames: stable,
+  };
+}
+
 export function shouldPreserveAssistantLineBreaks(text: string): boolean {
   return /^★ Insight(?:\s|─)/mu.test(text);
 }
