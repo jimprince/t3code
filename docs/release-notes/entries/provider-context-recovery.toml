@@ -1,0 +1,4 @@
+id = "provider-context-recovery"
+category = "fix"
+functionality = "conversation recovery"
+text = "Resume existing Claude conversations after restart and compact fallback history while preserving pending requests, including all human messages when pending-request lookup is unavailable."
