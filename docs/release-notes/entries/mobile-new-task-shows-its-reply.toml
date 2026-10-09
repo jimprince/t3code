@@ -1,0 +1,4 @@
+id = "mobile-new-task-shows-its-reply"
+category = "fix"
+functionality = "mobile"
+text = "A new task on mobile now shows its reply as it streams in, even when the thread screen opened before the server created the thread."
