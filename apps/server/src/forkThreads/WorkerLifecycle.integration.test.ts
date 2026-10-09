@@ -1,3 +1,5 @@
+import * as EventSink from "../orchestration-v2/EventSink.ts";
+import { makeNestingService } from "./NestingService.ts";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { initializeMetadata, writeMetadata } from "./MetadataStore.ts";
 import { assert, it } from "@effect/vitest";
@@ -326,4 +328,88 @@ it.effect(
         ),
       ),
     ),
+);
+
+it.effect("settles completed nested workers bottom-up while retaining their settled history", () =>
+  Effect.gen(function* () {
+    const threads = yield* ThreadManagement.ThreadManagementService;
+    const store = yield* ProjectionStore.ProjectionStoreV2;
+    const sink = yield* EventSink.EventSinkV2;
+    const sql = yield* SqlClient.SqlClient;
+    const nesting = yield* makeNestingService(sql, threads.getThreadShell, threads.dispatch);
+    const now = yield* DateTime.now;
+    const ids = ["bottom-root", "bottom-worker", "bottom-child", "bottom-grandchild"].map((id) =>
+      ThreadId.make(id),
+    );
+    for (const [i, id] of ids.entries()) {
+      yield* threads.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make(`create-${id}`),
+        threadId: id,
+        projectId: ProjectId.make("bottom-project"),
+        title: id,
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+        createdBy: "user",
+        creationSource: "web",
+      });
+      if (i > 0)
+        yield* nesting.update({
+          commandId: CommandId.make(`nest-${id}`),
+          threadId: id,
+          parentThreadId: ids[i - 1]!,
+          settleOnComplete: true,
+          subproject: "off",
+        });
+    }
+    // Populate the full tree before publishing completion, so parents cannot settle early.
+    for (const id of ids) {
+      yield* sink.write({
+        events: [
+          {
+            id: EventId.make(`complete-${id}`),
+            type: "run.updated",
+            threadId: id,
+            occurredAt: now,
+            payload: {
+              id: RunId.make(`run-${id}`),
+              threadId: id,
+              ordinal: 1,
+              providerInstanceId: instanceId,
+              modelSelection,
+              providerThreadId: null,
+              userMessageId: MessageId.make(`message-${id}`),
+              rootNodeId: null,
+              activeAttemptId: null,
+              status: "completed",
+              requestedAt: now,
+              startedAt: now,
+              completedAt: now,
+              checkpointId: null,
+              contextHandoffId: null,
+            },
+          },
+        ],
+      });
+    }
+    const lifecycle = yield* WorkerLifecycle.WorkerLifecycle;
+    yield* lifecycle.drain;
+    for (const id of ids.slice(1)) {
+      const thread = yield* store.getThread(id);
+      assert.equal(thread.settledOverride, "settled");
+      assert.equal(thread.archivedAt, null);
+    }
+    assert.equal((yield* store.getThread(ids[0]!)).settledOverride, null);
+  }).pipe(
+    Effect.provide(
+      WorkerLifecycle.layer.pipe(
+        Layer.provideMerge(ThreadManagement.layer),
+        Layer.provideMerge(testLayer),
+        Layer.provideMerge(ServerSettings.layerTest({})),
+      ),
+    ),
+  ),
 );

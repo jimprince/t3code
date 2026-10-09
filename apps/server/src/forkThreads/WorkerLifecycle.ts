@@ -71,7 +71,7 @@ const make = Effect.gen(function* () {
           const projection = yield* threads.getThreadProjection(thread.id);
           if (
             completionEligible(projection, thread.latestRunId, metadata.get(thread.id)) &&
-            !(yield* hasLiveChildren(sql, thread.id))
+            !(yield* hasLiveChildren(sql, thread.id, threads.getThreadShell))
           ) {
             yield* threads
               .dispatch({

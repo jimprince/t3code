@@ -9621,7 +9621,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         }
         if (
           thread.pinnedAt != null ||
-          (yield* hasLiveChildren(sql, command.threadId).pipe(
+          (yield* hasLiveChildren(sql, command.threadId, projectionStore.getThreadShell).pipe(
             Effect.mapError(
               (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
             ),
