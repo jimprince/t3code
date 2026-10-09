@@ -893,7 +893,11 @@ export function materializeFixtureInput(input: {
             },
             { advanceClockAfter: false },
           );
-          steps.push({ type: "await_no_background_work", threadId: ids.threadId });
+          steps.push({
+            type: "await_no_background_work",
+            threadId: ids.threadId,
+            interruptRunId: runIdFor(step.targetRunIndex),
+          });
           break;
         case "release_replay_gate_after_waiting":
           steps.push({
