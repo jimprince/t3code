@@ -9,6 +9,7 @@ import {
 import { deriveSubagentElapsedMs, formatDuration } from "@t3tools/shared/orchestrationTiming";
 import { StackActions, useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import * as DateTime from "effect/DateTime";
+import { Atom } from "effect/reactivity";
 import * as Haptics from "expo-haptics";
 import { useEffect, useState } from "react";
 import { Platform, Pressable, ScrollView, View } from "react-native";
@@ -24,10 +25,18 @@ import { SubagentRow } from "./SubagentRow";
 
 const HEADER_SCROLL_EDGE_EFFECTS = nativeHeaderScrollEdgeEffects(Platform.OS, Platform.Version);
 
+const EMPTY_TURN_SUBAGENTS_ATOM = Atom.make<ThreadTurnSubagents | null>(null).pipe(
+  Atom.withLabel("mobile-turn-subagents:empty"),
+);
+
 type AgentsTarget = { readonly environmentId: EnvironmentId; readonly threadId: ThreadId };
 
-export function useThreadTurnSubagents(target: AgentsTarget): ThreadTurnSubagents | null {
-  return useAtomValue(environmentThreadDetails.turnSubagentsAtom(target));
+export function useThreadTurnSubagents(target: AgentsTarget | null): ThreadTurnSubagents | null {
+  return useAtomValue(
+    target === null
+      ? EMPTY_TURN_SUBAGENTS_ATOM
+      : environmentThreadDetails.turnSubagentsAtom(target),
+  );
 }
 
 export function ThreadAgentsSheet({ route }: StaticScreenProps<AgentsTarget>) {
