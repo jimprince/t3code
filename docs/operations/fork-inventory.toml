@@ -1627,6 +1627,7 @@ id = "delegated-worker-bottom-up-226"
 date = "2026-10-09"
 decided = "repair-existing-concern"
 rationale = "The existing completion sweep treats inactive settled descendants as completed, so successful workers settle bottom-up while active descendants still block. Pin and auto-settle opt-out guards remain authoritative. Unnesting preserves existing completion preferences through NestingService.update; auto-settle --off is the explicit opt-out."
+
 [[patch]]
 name = "fork-queue-idle-dispatch"
 subject = "fix(threads): deliver queued sends to idle targets promptly"
