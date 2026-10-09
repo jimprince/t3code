@@ -1840,3 +1840,59 @@ describe("reliable handoff notification recovery", () => {
     },
   );
 });
+
+it("keeps derived attention settings and the successor recipient while the server still reports the retired parent", async () => {
+  await withTempState(async () => {
+    const state = await loadState();
+    const worker = makeThread({ parentThreadId: "thread-coordinator-a" });
+    const factory = createClientFactory({ sourceThread: worker });
+    const route = {
+      ...state.subscriptions[0]!,
+      subscriberThreadId: "successor",
+      nestingDerived: true,
+      inputReminderMinutes: 7,
+      inactivityMinutes: 17,
+      lastSeenAssistantMessageId: "stable-baseline",
+    };
+    await saveState({
+      ...state,
+      subscriptions: [route],
+      agents: state.agents.map((a) =>
+        a.threadId === "thread-coordinator-a" ? { ...a, threadId: "successor" } : a,
+      ),
+      handoverRedirects: [
+        {
+          oldThreadId: "thread-coordinator-a",
+          successorThreadId: "successor",
+          targetEnvironment: "dev-vm",
+          transferId: "handover",
+        },
+      ],
+    });
+    await detectAttentionEvents({
+      clientFactory: (environment) => ({
+        ...factory.clientFactory(environment),
+        listThreads: async () => [
+          {
+            ...worker,
+            latestUserMessageAt: null,
+            hasPendingApprovals: false,
+            hasPendingUserInput: false,
+            hasActionableProposedPlan: false,
+          },
+        ],
+      }),
+    });
+    const current = await loadState();
+    expect(current.subscriptions).toHaveLength(1);
+    expect(current.subscriptions[0]).toMatchObject({
+      subscriberThreadId: "successor",
+      nestingDerived: true,
+      inputReminderMinutes: 7,
+      inactivityMinutes: 17,
+    });
+    expect(current.subscriptions.some((r) => r.subscriberThreadId === "thread-coordinator-a")).toBe(
+      false,
+    );
+  });
+});
