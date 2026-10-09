@@ -1,3 +1,9 @@
+import * as RecoveryStore from "../threadRecovery/RecoveryStore.ts";
+import * as SessionReset from "../threadRecovery/SessionResetService.ts";
+import * as SessionResetHook from "../threadRecovery/ProviderSessionResetHook.ts";
+import * as PendingHumanRequests from "../threadRecovery/PendingHumanRequests.ts";
+import * as Handover from "../threadRecovery/HandoverService.ts";
+import * as HostRouteTransfer from "../threadRecovery/HostRouteTransfer.ts";
 import * as LegacyHistory from "../forkLegacy/HistoryReader.ts";
 import * as ThreadTransfer from "../forkThreads/TransferService.ts";
 import * as TransferWorkspace from "../forkThreads/TransferWorkspace.ts";
@@ -157,10 +163,14 @@ const runExecutionServiceProvided = runExecutionServiceLayer.pipe(
   ),
 );
 
+const pendingHumanProvided = PendingHumanRequests.layer.pipe(
+  Layer.provide(Layer.mergeAll(projectionStoreLayer, idAllocatorLayer)),
+);
 const providerTurnStartServiceProvided = providerTurnStartServiceLayer.pipe(
   Layer.provide(
     Layer.mergeAll(
       contextHandoffServiceProvided,
+      pendingHumanProvided,
       eventSinkProvided,
       idAllocatorLayer,
       projectionStoreLayer,
@@ -293,6 +303,7 @@ const effectExecutorProvided = StartupResumePolicy.executorLayer.pipe(
           providerSessionManagerProvided,
           providerTurnControlServiceProvided,
           providerTurnStartServiceProvided,
+          pendingHumanProvided,
           runtimeRequestServiceProvided,
           threadTitleRegenerationProvided,
           threadManagementProvided,
@@ -345,7 +356,25 @@ const forkTransferProvided = ThreadTransfer.layer.pipe(
     ),
   ),
 );
+const recoveryDependencies = Layer.mergeAll(
+  ThreadCommandExecutor.layer,
+  threadManagementProvided,
+  storesLayer,
+  eventSinkProvided,
+  RecoveryStore.layer,
+  pendingHumanProvided,
+);
+const sessionResetHookProvided = SessionResetHook.layer.pipe(
+  Layer.provide(providerSessionManagerProvided),
+);
+const sessionResetProvided = SessionReset.layer.pipe(Layer.provide(recoveryDependencies));
+const handoverProvided = Handover.layer.pipe(Layer.provide(recoveryDependencies));
 export const OrchestrationV2ProductionLayerLive = Layer.mergeAll(
+  pendingHumanProvided,
+  sessionResetProvided,
+  sessionResetHookProvided,
+  handoverProvided,
+  HostRouteTransfer.layer,
   LegacyHistory.layer.pipe(
     Layer.provide(Layer.merge(storesLayer, legacyHistoryLayer.pipe(Layer.provide(storesLayer)))),
   ),
