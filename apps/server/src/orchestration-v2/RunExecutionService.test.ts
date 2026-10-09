@@ -3256,6 +3256,8 @@ it.effect("emits run_interrupt_result when hard-stop finalizes the active attemp
       ["run_interrupt_result"],
     );
     assert.deepEqual(observed, ["run:interrupted", "pull-requests-refreshed"]);
+    const result = written.find((item) => item.type === "run_interrupt_result");
+    assert.equal(result?.type === "run_interrupt_result" ? result.stopOutcome : undefined, "ack");
   }),
 );
 

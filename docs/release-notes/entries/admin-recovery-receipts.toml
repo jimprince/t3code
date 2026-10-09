@@ -1,0 +1,4 @@
+id = "admin-recovery-receipts"
+category = "feature"
+functionality = "threads"
+text = "Administrators can inspect a thread's recovery generation, identify server restarts, read exact stop receipts, and resume with a generation check and retry identity. Recovery helpers can request pending human item IDs directly from the server. Send receipts and a standard read command identify the exact run created or joined, including queued work and terminal timestamps."
