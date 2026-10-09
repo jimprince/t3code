@@ -3,8 +3,11 @@
 T3 Code transfers conversation context when you switch providers, continue through a portable
 restart, or use a fork that the provider cannot resume itself.
 
-Short conversations transfer intact. For longer conversations, T3 Code favors recent requests and
-answers, the original request, and relevant activity such as command outcomes. Selected messages
+After restart, T3 Code first resumes the existing native conversation when it is available.
+Short conversations transfer intact when recovery needs a fresh conversation. For longer recovery
+history, T3 Code summarizes older completed work and keeps recent requests and answers intact.
+Unfinished requests and requests with an unknown outcome retain their exact text. When pending-request
+tracking is available, completed but unanswered requests also retain their exact text. Selected messages
 keep their full text, order, and user or assistant role, including partial work from failed or
 interrupted turns. Your new request stays separate and is never shortened to make history fit.
 
@@ -14,15 +17,17 @@ copy the outgoing provider's reasoning, tool-call state, or attachments.
 
 The handoff includes references to omitted history. The agent can use T3 Code's thread-reading tool
 to retrieve saved messages and activity, including the remainder of a long item. For an important
-constraint, you can still repeat it in your next message. A handoff is a budgeted selection, not an
-agent-written summary.
+constraint, you can still repeat it in your next message. Recovery summaries derive from saved
+activity and link back to the original items.
 
 ## Context limits
 
 A handoff must leave room for existing provider context, your request and attachments, instructions,
-tools, and subsequent work. If even its retrieval references cannot fit, T3 Code reports an error
-instead of shortening your request. Compact the target conversation or select a larger-context
-model before trying again.
+tools, and subsequent work. Claude can compact its existing native conversation automatically during
+recovery. A pending request too large to fit on its own is replaced by a reference the agent uses to
+read it in full. If the remaining protected requests and retrieval references cannot fit, T3 Code reports that conversation
+recovery needs a larger allowance or a successor thread. Your saved requests remain intact. If T3 Code cannot identify pending requests during recovery,
+it preserves every human message in the handoff window.
 
 Server operators can set `T3CODE_CONTEXT_HANDOFF_TOKEN_CAP` to change the initial history allowance
 (default 16,000; clamped to 1,024–64,000). This is an upper bound, not a provider context-window
