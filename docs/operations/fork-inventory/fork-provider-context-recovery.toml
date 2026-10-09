@@ -1,0 +1,18 @@
+name = "fork-provider-context-recovery"
+subject = "fix(server): recover provider context after restart"
+class = "product"
+purpose = "Resume retained Claude native sessions, compact fallback context without dropping pending requests, expose typed recovery limits and tear down only the exact Claude session."
+retire_when = "Upstream provides native-first restart recovery, protected deterministic fallback compaction and an exact-session reset boundary."
+depends_on = [
+  "fork-thread-transfer",
+  "fork-provider-turn-safety",
+  "fork-lifecycle-deadlines",
+  "fork-admin-thread-recovery",
+]
+roles = []
+
+[[decision]]
+id = "catchup-2908-provider-recovery-boundary"
+date = "2026-10-10"
+decided = "relocate+adapt"
+rationale = "Move failure normalization/recovery classification and redaction into provider-core failure/providerTextRedaction, and budget/recovery selection into handoffBudget after upstream extraction (#17299). Keep server compatibility exports. Preserve upstream unsent-delivery rollback/uncertainty, protected pending-human requests and native compaction allowance alongside fork recovery. Static conflict review passed; composed provider recovery/compaction/compile tests remain required."
