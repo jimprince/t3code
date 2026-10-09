@@ -332,7 +332,9 @@ export const layer: Layer.Layer<EffectOutboxV2, never, SqlClient.SqlClient> = La
     // Title generation is correlated metadata work, so it has its own
     // per-thread lane and cannot delay provider lifecycle effects.
     // Delayed interrupt fallback is also independent: native checkpoints and
-    // newer lifecycle work must progress during its grace period.
+    // newer lifecycle work must progress during its grace period. Pending
+    // fallbacks use deadline order: ACK+10s must precede the older Stop+20s
+    // safety net. Running effects still exclude concurrent claims in this lane.
     const claimableCandidatePredicate = (
       availableBefore?: string,
       excludeRestartContinuations = false,
@@ -352,7 +354,16 @@ export const layer: Layer.Layer<EffectOutboxV2, never, SqlClient.SqlClient> = La
               active.status = 'running'
               OR (
                 active.status = 'pending'
-                AND active.rowid < candidate.rowid
+                AND (
+                  (
+                    candidate.effect_type = 'provider-turn.interrupt-settle'
+                    AND (
+                      active.available_at < candidate.available_at
+                      OR (active.available_at = candidate.available_at AND active.rowid < candidate.rowid)
+                    )
+                  )
+                  OR (candidate.effect_type != 'provider-turn.interrupt-settle' AND active.rowid < candidate.rowid)
+                )
                 AND ${
                   excludeRestartContinuations
                     ? sql`active.effect_type != 'provider-runtime.continue'`
