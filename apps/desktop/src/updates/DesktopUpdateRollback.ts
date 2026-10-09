@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
+import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Electron from "electron";
 import * as NodeCrypto from "node:crypto";
@@ -314,6 +315,15 @@ export async function takeUpdateRollbackRecord(
 
 const { logInfo, logWarning } = DesktopObservability.makeComponentLogger("desktop-updater");
 
+export class DesktopUpdateRollbackPreparationError extends Schema.TaggedError<DesktopUpdateRollbackPreparationError>()(
+  "DesktopUpdateRollbackPreparationError",
+  { cause: Schema.Defect() },
+) {
+  override get message(): string {
+    return "Update was not installed because rollback protection could not be prepared. Keep the current app and retry after checking available disk space and updater permissions.";
+  }
+}
+
 export interface DesktopUpdateRollback {
   /** A version that failed on this Mac and must not be offered again. */
   readonly quarantinedVersion: Effect.Effect<string | null>;
@@ -323,7 +333,9 @@ export interface DesktopUpdateRollback {
     pool: DesktopBackendPool.DesktopBackendPool["Service"],
     localEnvironmentEnabled: boolean,
   ) => Effect.Effect<void, never, Scope.Scope>;
-  readonly arm: (expectedVersion: string) => Effect.Effect<void, Error>;
+  readonly arm: (
+    expectedVersion: string,
+  ) => Effect.Effect<void, DesktopUpdateRollbackPreparationError>;
   readonly disarm: Effect.Effect<void>;
 }
 
@@ -396,10 +408,7 @@ export const make = Effect.fn("desktop.updates.makeRollback")(function* (input: 
         Effect.flatMap((pid) => Ref.set(watchdogPidRef, pid)),
         Effect.andThen(logInfo("update rollback armed", { expectedVersion })),
         Effect.mapError(
-          (error) =>
-            new Error(
-              `Update was not installed because rollback protection could not be prepared: ${String(error.cause)}`,
-            ),
+          (error) => new DesktopUpdateRollbackPreparationError({ cause: error.cause }),
         ),
       ),
     disarm: Ref.getAndSet(watchdogPidRef, undefined).pipe(

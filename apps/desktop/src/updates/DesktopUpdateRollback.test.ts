@@ -1,4 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off -- The watchdog tests run the real script against a temporary bundle.
+import * as Effect from "effect/Effect";
+import * as NodeFSP from "node:fs/promises";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -7,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
   armUpdateRollback,
+  make,
   resolveUpdateRollbackPaths,
   takeUpdateRollbackRecord,
   UPDATE_ROLLBACK_WATCHDOG_SCRIPT,
@@ -243,4 +246,79 @@ describe("update rollback watchdog", () => {
       outcome: "not-applied",
     });
   });
+});
+
+it("the updater receives a preparation failure instead of proceeding unprotected", async () => {
+  const rollback = await Effect.runPromise(
+    make({
+      paths,
+      appVersion: "1",
+      dependencies: dependencies({
+        copyBundle: async () => {
+          throw new Error("disk full");
+        },
+      }),
+    }),
+  );
+  await expect(Effect.runPromise(rollback.arm("2"))).rejects.toThrow(
+    "rollback protection could not be prepared",
+  );
+});
+it("restores the current bundle after stale cleanup ENOTEMPTY and an unhealthy launch", async () => {
+  const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "rollback-swap-"));
+  try {
+    const fixture: UpdateRollbackPaths = {
+      bundle: `${root}/T3.app`,
+      backup: `${root}/state/previous-app`,
+      health: `${root}/state/healthy`,
+      record: `${root}/state/record.json`,
+      log: `${root}/logs/watchdog.log`,
+    };
+    await NodeFSP.mkdir(`${fixture.bundle}/Contents/Resources`, { recursive: true });
+    await NodeFSP.writeFile(`${fixture.bundle}/Contents/Resources/version`, "previous-working");
+    await NodeFSP.mkdir(fixture.backup, { recursive: true });
+    await NodeFSP.writeFile(`${fixture.backup}/stale`, "older-backup");
+    const deps = dependencies({
+      copyBundle: (from, to) => NodeFSP.cp(from, to, { recursive: true }),
+      rename: NodeFSP.rename,
+      makeDirectory: async (path) => {
+        await NodeFSP.mkdir(path, { recursive: true });
+      },
+      remove: async (path) => {
+        if (path.includes(".stale-"))
+          throw Object.assign(new Error("directory not empty"), { code: "ENOTEMPTY" });
+        await NodeFSP.rm(path, { recursive: true, force: true });
+      },
+    });
+    await armUpdateRollback(fixture, { current: "1", expected: "2" }, deps);
+    expect(await NodeFSP.readFile(`${fixture.backup}/Contents/Resources/version`, "utf8")).toBe(
+      "previous-working",
+    );
+    await NodeFSP.writeFile(`${fixture.bundle}/Contents/Resources/version`, "unhealthy-update");
+    const result = NodeChildProcess.spawnSync(
+      "/bin/sh",
+      [
+        "-c",
+        UPDATE_ROLLBACK_WATCHDOG_SCRIPT,
+        "watchdog",
+        fixture.bundle,
+        fixture.backup,
+        "2",
+        "1",
+        fixture.health,
+        fixture.record,
+        "0",
+        "0",
+        "/usr/bin/true",
+      ],
+      { encoding: "utf8" },
+    );
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(await NodeFSP.readFile(fixture.record, "utf8")).outcome).toBe("rolled-back");
+    expect(await NodeFSP.readFile(`${fixture.bundle}/Contents/Resources/version`, "utf8")).toBe(
+      "previous-working",
+    );
+  } finally {
+    await NodeFSP.rm(root, { recursive: true, force: true });
+  }
 });

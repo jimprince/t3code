@@ -687,6 +687,12 @@ export const make = Effect.gen(function* () {
           return { accepted: true, completed: false, failed: false };
         }).pipe(
           Effect.catchTags({
+            DesktopUpdateRollbackPreparationError: (error) =>
+              Effect.gen(function* () {
+                yield* recoverFailedInstall(error.message);
+                yield* logUpdaterError(error.message, { errorTag: error._tag });
+                return { accepted: true, completed: false, failed: true };
+              }),
             ElectronUpdaterQuitAndInstallError: Effect.fn("desktop.updates.handleInstallFailure")(
               function* (error) {
                 yield* recoverFailedInstall(error.message);
