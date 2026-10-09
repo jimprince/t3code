@@ -1,0 +1,14 @@
+name = "fork-lifecycle-deadlines"
+subject = "fix(server): bound provider lifecycle and shutdown waits"
+class = "upstream-bound"
+purpose = "Bound silent provider RPCs, accepted native starts, Stop settlement, administrative status reads and shutdown; keep Codex ACK decoding independent of ordered turn handlers, avoid fresh-session retries after ambiguous resume timeouts, and supply exact-session adapter reset teardown without killing multiplexed provider processes."
+retire_when = "Upstream bounds these lifecycle phases and supplies equivalent exact-session teardown with credential isolation and later-run fencing."
+depends_on = ["fork-provider-turn-safety", "fork-interrupted-turn-rewind"]
+roles = []
+note = "#240 S1 / #230: approved RPC ACK 10 s, provider start 120 s, Stop 20 s and process shutdown 20 s. Persist Stop fallback before the native ACK; preserve existing exact-turn/later-run guards. resetThread is the single optional adapter member, wrapped by the session manager to detach and revoke the recorded credential only. Codex retains its multiplexed process and reports thread isolation with stopped=true after target teardown; stopped=false remains retryable; S3 owns durable fences, exact-run terminalization and discard_native reference handling. Test faults require a named isolated development home plus exact allowlisted thread; packaged/static servers ignore them. This droppable concern is separate from general provider recovery because its timers, force-reset primitive and shutdown exit policy can be retired together."
+
+[[decision]]
+id = "catchup-2908-native-goal-deadlines"
+date = "2026-10-10"
+decided = "relocate+adapt"
+rationale = "Apply fork reset/release/start/interrupt deadlines within upstream serialized Codex initialization and shared startNativeTurn for ordinary/native-goal turns (#15592, #17299). Keep app context, MCP reads, busy-turn accounting, metrics, late-finalizer logging and stopRemainingWork. ResetThread moves to provider-core and timeout status probing follows the current provider module. Static conflict review passed; composed tests must verify reset versus native goal holds and nonretryable Stop outcomes."
