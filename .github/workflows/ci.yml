@@ -291,6 +291,13 @@ jobs:
       - name: Test
         run: scripts/ci/verify-source test-other
 
+      - name: Smoke operator status and thread snapshots with a bounded heap
+        timeout-minutes: 3
+        run: |
+          node apps/t3-thread/scripts/build.mjs
+          timeout 90s node --max-old-space-size=512 apps/t3-thread/tests/fixtures/status-smoke.mjs
+          timeout 60s node --max-old-space-size=512 apps/t3-thread/tests/fixtures/threads-smoke.mjs
+
       - name: Check verified source unchanged
         run: |
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
