@@ -1,35 +1,12 @@
 name: Mobile EAS Production
 
-# Production builds and OTA updates run from CI (Linux) — never from a laptop.
-# Under the fingerprint runtime-version policy the fingerprint must be computed
-# in the same OS/pnpm as the EAS build; a macOS `eas build` computes a different
-# fingerprint (platform-specific deps + pnpm version) and errors. On this Linux
-# runner, with corepack pinning pnpm 10.24 in eas.json, local == build.
-#
-# Every merge to main that touches the mobile app reconciles, per platform:
-#   1. Store builds: if the latest production build's version differs from
-#      app.config.ts, cut a new build and submit it (TestFlight + Play internal
-#      track). Bumping `version` is therefore all it takes to
-#      start the next release train — the first build of a version enters
-#      external-TestFlight beta review immediately, and later builds of the
-#      same version auto-approve until that version is released. After App
-#      Store approval, Apple closes the release train and `version` must be
-#      bumped before another iOS build can be submitted. Releasing to the App
-#      Store stays a manual App Store Connect step.
-#   2. OTA: publish a production-channel update for each platform where at
-#      least one finished production build matches the current native
-#      fingerprint. Older binaries of the same major version with a matching
-#      fingerprint receive it too; the major version is part of the
-#      fingerprint (apps/mobile/fingerprint.config.js), so a new major never
-#      reaches the previous major's store binaries over the air. When native
-#      drift means no binary could install the update,
-#      it is skipped and flagged in the job summary instead of published
-#      into the void.
-# workflow_dispatch remains as a manual override for both modes (e.g. to
-# retry an errored build or force an OTA).
-# Manual v2-preview builds keep the production app identity and disable OTA.
-# They auto-submit to TestFlight and the Google Play closed testing track v2.
-# Select the v2 branch when dispatching a preview build.
+# Production builds and OTA updates are manually dispatched from GitHub Actions.
+# The hosted Ubuntu runner orchestrates remote EAS builds and computes OTA
+# fingerprints on Linux to match the EAS build environment.
+# mode=build auto-submits to TestFlight / Google Play; mode=update publishes
+# compatible production OTA updates. App Store release remains a manual step.
+# v2-preview builds keep the production identity and disable OTA; select the
+# v2 branch when dispatching a preview build.
 on:
   workflow_dispatch:
     inputs:
@@ -66,23 +43,8 @@ on:
         description: "OTA update message (mode=update only)"
         required: false
         type: string
-  push:
-    branches: [main]
-    paths:
-      - apps/mobile/**
-      - packages/client-runtime/**
-      - packages/contracts/**
-      - packages/shared/**
-      - assets/**
-      - scripts/**
-      - patches/**
-      - pnpm-lock.yaml
-      - pnpm-workspace.yaml
-      - .github/workflows/mobile-eas-production.yml
 
-# Serialize runs so OTAs publish in merge order. GitHub keeps at most one
-# queued run per group, so a burst of merges collapses into one run of the
-# newest commit — intermediate commits don't need their own OTA.
+# Serialize manually selected deliveries so builds and OTAs do not overlap.
 concurrency:
   group: mobile-eas-production
   cancel-in-progress: false
@@ -90,7 +52,7 @@ concurrency:
 jobs:
   production:
     name: EAS ${{ inputs.profile || 'production' }} ${{ github.event_name == 'push' && 'auto' || inputs.mode }}
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     env:
@@ -266,7 +228,7 @@ jobs:
       # No --status filter on build:list: an in-queue/in-progress build must
       # count as existing, or every merge during the build window would cut a
       # duplicate. After an errored build, retry via workflow_dispatch
-      # mode=build — pushes won't re-trigger it until the app version changes.
+      # The legacy push reconciliation steps below are inactive without a push trigger.
       - id: store_builds
         name: Ensure store builds exist for the current app version
         if: steps.expo-token.outputs.present == 'true' && github.event_name == 'push'
