@@ -6,6 +6,7 @@ import {
   ProviderThreadId,
   RunId,
   ThreadId,
+  TurnItemId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -20,6 +21,7 @@ import {
   historicalMessage,
   renderHistory,
   selectHistory,
+  selectRecoveryHistory,
 } from "./ContextHandoffBudget.ts";
 import * as IdAllocator from "./IdAllocator.ts";
 
@@ -79,6 +81,7 @@ export interface ContextHandoffServiceV2Shape {
     readonly toProviderInstanceId: ProviderInstanceId;
     readonly coveredRunOrdinals: OrchestrationV2ContextHandoff["coveredRunOrdinals"];
     readonly runs?: ReadonlyArray<OrchestrationV2Run>;
+    readonly pendingItemIds?: readonly TurnItemId[];
     readonly strategy: Extract<
       OrchestrationV2ContextHandoff["strategy"],
       "delta_since_target_last_seen" | "full_thread_summary"
@@ -419,6 +422,7 @@ const makeContextHandoffService = Effect.fn("orchestrationV2.ContextHandoffServi
       readonly toProviderInstanceId: ProviderInstanceId;
       readonly coveredRunOrdinals: OrchestrationV2ContextHandoff["coveredRunOrdinals"];
       readonly runs?: ReadonlyArray<OrchestrationV2Run>;
+      readonly pendingItemIds?: readonly TurnItemId[];
       readonly strategy: Extract<
         OrchestrationV2ContextHandoff["strategy"],
         "delta_since_target_last_seen" | "full_thread_summary"
@@ -446,7 +450,7 @@ const makeContextHandoffService = Effect.fn("orchestrationV2.ContextHandoffServi
         );
       const runStatuses = new Map(input.runs?.map((run) => [run.id, run.status]));
       const coverage = handoffCoverage(input);
-      const selected = selectHistory({
+      const selected = selectRecoveryHistory({
         messages: input.items.flatMap((item) => {
           const message = historicalMessage(item);
           return message === null
@@ -460,6 +464,7 @@ const makeContextHandoffService = Effect.fn("orchestrationV2.ContextHandoffServi
         }),
         coverage,
         budget: tokenCap,
+        protectedItemIds: new Set(input.pendingItemIds),
       });
       return {
         id: handoffId,
@@ -475,7 +480,7 @@ const makeContextHandoffService = Effect.fn("orchestrationV2.ContextHandoffServi
         summaryText: renderHistory(selected.messages, selected.context),
         history: {
           messages: selected.messages,
-          coverage,
+          coverage: selected.context,
           omittedItems: selected.omittedItems,
           omittedItemIds: selected.omittedItemIds,
         },
