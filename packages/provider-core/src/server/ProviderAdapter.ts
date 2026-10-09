@@ -530,6 +530,15 @@ export interface ProviderAdapterV2McpApps {
 }
 
 export interface ProviderAdapterV2SessionRuntime {
+  /** stopped confirms target teardown; a multiplexed process may remain alive. */
+  readonly resetThread?: (input: {
+    readonly threadId: ThreadId;
+    readonly runId: RunId;
+  }) => Effect.Effect<
+    { readonly isolation: "session" | "thread"; readonly stopped: boolean },
+    ProviderAdapterV2Error
+  >;
+
   readonly instanceId: ProviderInstanceId;
   readonly driver: ProviderDriverKind;
   readonly providerSessionId: ProviderSessionId;
