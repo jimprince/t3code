@@ -2930,3 +2930,19 @@ retire_when = "Upstream merges pingdotgg/t3code#17348, or #14916 or #16930, whic
 depends_on = []
 roles = []
 note = "Backport of pingdotgg/t3code#17348 as opened, unchanged: rememberTimelinePosition takes liveFollowEnabled and stores atEnd as liveFollowEnabled || position.atEnd, handleScroll passes it, and the list's settling identity starts at the mounted thread. The three follow-intent tests are the PR's; timelineFollowMemory.test.ts adds a growing-row case. Manual wheel-up or navigation already turns follow off, so a deliberate reading position is still saved and restored. Upstream's reading-position restore (#12144) is deliberately left alone, pending Brad's decision."
+
+[[patch]]
+name = "fork-mobile-manual-production"
+subject = "ci(mobile): dispatch production delivery manually on hosted Ubuntu"
+class = "divergence"
+purpose = "Keep production mobile builds and OTA publication deliberately dispatched, with a standard hosted runner for remote EAS orchestration."
+retire_when = "Upstream supplies manual-only production mobile delivery on a runner supported by the fork, or the fork changes this delivery policy."
+depends_on = ["fork-mobile-delivery"]
+roles = []
+note = "Brad 2026-10-09: mobile production manual-only; no Blacksmith runner on the fork. Existing build/update dispatch inputs and EAS auto-submit remain; the historical direct macOS IPA uploader is not configured."
+
+[[patch.decision]]
+id = "mobile-production-manual-only"
+date = "2026-10-09"
+decided = "adapt"
+rationale = "Remove the upstream production push trigger, use GitHub-hosted Ubuntu for remote EAS orchestration, and reconcile delivery guidance with the actual manual inputs. Restoring the old direct submit job remains a separate follow-up."
