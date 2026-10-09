@@ -1068,6 +1068,10 @@ export const OrchestrationV2Notification = Schema.Struct({
 export type OrchestrationV2Notification = typeof OrchestrationV2Notification.Type;
 
 export const OrchestrationV2ConversationMessage = Schema.Struct({
+  humanOrigin: Schema.optional(
+    Schema.Struct({ principal: Schema.String, sourceMessageId: MessageId }),
+  ),
+  addressedRequestIds: Schema.optional(Schema.Array(MessageId)),
   notification: Schema.optional(OrchestrationV2Notification),
   ...OrchestrationV2CreationFields,
   scheduledTaskId: Schema.optional(ScheduledTaskId),
