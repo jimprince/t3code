@@ -36,6 +36,7 @@ export interface CodexAppServerIncomingRequest {
 
 export interface CodexAppServerPatchedProtocolOptions {
   readonly stdio: Stdio.Stdio;
+  readonly requestTimeoutMs?: number;
   readonly terminationError?: Effect.Effect<CodexError.CodexAppServerError>;
   readonly logIncoming?: boolean;
   readonly logOutgoing?: boolean;
@@ -155,6 +156,7 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
   function* (
     options: CodexAppServerPatchedProtocolOptions,
   ): Effect.fn.Return<CodexAppServerPatchedProtocol, never, Scope.Scope> {
+    const requestTimeoutMs = options.requestTimeoutMs ?? 10_000;
     const protocolScope = yield* Scope.Scope;
     const requestHandlerScope = yield* Scope.fork(protocolScope, "parallel");
     const outgoing = yield* Queue.unbounded<string, Cause.Done<void>>();
@@ -457,13 +459,25 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
         yield* Ref.update(pending, (current) =>
           new Map(current).set(String(requestId), { deferred, method }),
         );
-        yield* offerOutgoing({
+        // Include enqueue/logging in the ACK budget. Cleanup also fences late responses.
+        return yield* offerOutgoing({
           id: requestId,
           method,
           ...(payload !== undefined ? { params: payload } : {}),
-        }).pipe(Effect.tapError(() => removePending(String(requestId))));
-        return yield* Deferred.await(deferred).pipe(
-          Effect.onInterrupt(() => removePending(String(requestId))),
+        }).pipe(
+          Effect.andThen(Deferred.await(deferred)),
+          Effect.timeoutOrElse({
+            duration: requestTimeoutMs,
+            orElse: () =>
+              Effect.fail(
+                new CodexError.CodexAppServerRequestTimeoutError({
+                  method,
+                  requestId: String(requestId),
+                  timeoutMs: requestTimeoutMs,
+                }),
+              ),
+          }),
+          Effect.ensuring(removePending(String(requestId))),
         );
       });
 

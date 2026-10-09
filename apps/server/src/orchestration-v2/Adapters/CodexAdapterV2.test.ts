@@ -5604,6 +5604,138 @@ describe("CodexAdapterV2 post-settle continuation", () => {
     ],
   });
 
+  it.effect("fails a turn accepted without native start exactly once", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const nativeThreadId = "never-start-thread";
+        const nativeTurnId = "never-start-turn";
+        const prompt = "waiting";
+        const preamble = codexReplayPreamble({ nativeThreadId, nativeTurnId, prompt });
+        const transcript = makeCodexReplayTranscript({
+          scenario: "never-native-start",
+          entries: [
+            ...preamble.slice(0, -2),
+            {
+              type: "emit_inbound",
+              label: "turn/start",
+              frame: {
+                id: 3,
+                result: {
+                  turn: {
+                    ...makeCodexReplayTurn({ id: nativeTurnId, status: "inProgress" }),
+                    startedAt: null,
+                  },
+                },
+              },
+            },
+          ],
+        });
+        const harness = yield* makeCodexReplayHarness(transcript);
+        const turn = makeCodexTestTurnInput({
+          threadId: harness.threadId,
+          providerThread: harness.providerThread,
+          now: yield* DateTime.now,
+          attemptId: RunAttemptId.make("never-start"),
+          text: prompt,
+        });
+        yield* harness.runtime.startTurn(turn);
+        yield* TestClock.adjust("119 seconds");
+        assert.equal(harness.terminalEvents().length, 0);
+        yield* TestClock.adjust("1 second");
+        yield* harness.firstTerminal;
+        assert.equal(harness.terminalEvents()[0]?.status, "failed");
+        assert.equal(harness.terminalEvents()[0]?.failure?.code, "provider_start_timeout");
+        assert.equal(harness.terminalEvents().length, 1);
+        yield* TestClock.adjust("120 seconds");
+        assert.equal(harness.terminalEvents().length, 1);
+      }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
+    ),
+  );
+
+  it.effect("settles a silent interrupt ACK by the whole-operation deadline", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const requested = yield* Deferred.make<void>();
+        const registered = yield* Deferred.make<ProviderTurnId>();
+        const harness = yield* makeCodexReplayHarness(
+          interruptTimeoutTranscript,
+          (event) =>
+            event.type === "provider_turn.updated"
+              ? Deferred.succeed(registered, event.providerTurn.id)
+              : Effect.void,
+          (method) =>
+            method === "turn/interrupt"
+              ? Deferred.succeed(requested, undefined).pipe(Effect.andThen(Effect.never))
+              : Effect.void,
+        );
+        const turn = makeCodexTestTurnInput({
+          threadId: harness.threadId,
+          providerThread: harness.providerThread,
+          now: yield* DateTime.now,
+          attemptId: RunAttemptId.make("silent-stop"),
+          text: INTERRUPT_PROMPT,
+        });
+        yield* harness.runtime.startTurn(turn);
+        const providerTurnId = yield* Deferred.await(registered);
+        const stopping = yield* harness.runtime
+          .interruptTurn({
+            providerThread: harness.providerThread,
+            providerTurnId,
+          })
+          .pipe(Effect.exit, Effect.forkScoped);
+        yield* Deferred.await(requested);
+        yield* TestClock.adjust("20 seconds");
+        assert.isTrue((yield* Fiber.join(stopping))._tag === "Failure");
+        yield* harness.firstTerminal;
+        assert.equal(harness.terminalEvents().length, 1);
+        assert.equal(harness.terminalEvents()[0]?.status, "interrupted");
+      }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
+    ),
+  );
+
+  it.effect(
+    "reset clears the exact run's blocked lifecycle without closing the shared runtime",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const requested = yield* Deferred.make<void>();
+          const harness = yield* makeCodexReplayHarness(
+            interruptTimeoutTranscript,
+            () => Effect.void,
+            (method) =>
+              method === "turn/start"
+                ? Deferred.succeed(requested, undefined).pipe(Effect.andThen(Effect.never))
+                : Effect.void,
+          );
+          const turn = makeCodexTestTurnInput({
+            threadId: harness.threadId,
+            providerThread: harness.providerThread,
+            now: yield* DateTime.now,
+            attemptId: RunAttemptId.make("reset-start"),
+            text: INTERRUPT_PROMPT,
+          });
+          const starting = yield* harness.runtime
+            .startTurn(turn)
+            .pipe(Effect.exit, Effect.forkScoped);
+          yield* Deferred.await(requested);
+          assert.deepEqual(
+            yield* harness.runtime.resetThread!({ threadId: turn.threadId, runId: turn.runId }),
+            { isolation: "thread", stopped: true },
+          );
+          assert.isTrue((yield* Fiber.await(starting))._tag === "Failure");
+          assert.deepEqual(
+            yield* harness.runtime.resetThread!({ threadId: turn.threadId, runId: turn.runId }),
+            { isolation: "thread", stopped: true },
+          );
+          assert.isTrue(
+            (yield* harness.runtime.startTurn(turn).pipe(Effect.exit))._tag === "Failure",
+          );
+          // A shared session remains able to serve read-only capabilities.
+          assert.isFalse(yield* harness.hasPendingBackgroundWork);
+        }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
+      ),
+  );
+
   it.effect("bounds interrupt settlement and drops late completion events", () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -6382,6 +6514,39 @@ describe("CodexAdapterV2 post-settle continuation", () => {
           assert.isFalse(yield* harness.hasPendingBackgroundWork);
         }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
       ),
+  );
+
+  it.effect("reset retires retained background tools without rewriting a completed root", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const retired = yield* Deferred.make<void>();
+        const harness = yield* makeCodexReplayHarness(orphanedDynamicToolTranscript, (event) =>
+          event.type === "turn_item.updated" &&
+          event.turnItem.nativeItemRef?.nativeId === PERSISTENT_MONITOR_ITEM &&
+          event.turnItem.status === "interrupted"
+            ? Deferred.succeed(retired, undefined)
+            : Effect.void,
+        );
+        const turn = makeCodexTestTurnInput({
+          threadId: harness.threadId,
+          providerThread: harness.providerThread,
+          now: yield* DateTime.now,
+          attemptId: RunAttemptId.make("reset-retained-tool"),
+          text: ORPHAN_WAIT_PROMPT,
+        });
+        yield* harness.runtime.startTurn(turn);
+        yield* harness.firstTerminal;
+        assert.isTrue(yield* harness.hasPendingBackgroundWork);
+        assert.deepEqual(
+          yield* harness.runtime.resetThread!({ threadId: turn.threadId, runId: turn.runId }),
+          { isolation: "thread", stopped: true },
+        );
+        yield* Deferred.await(retired);
+        assert.isFalse(yield* harness.hasPendingBackgroundWork);
+        assert.lengthOf(harness.terminalEvents(), 1);
+        assert.equal(harness.terminalEvents()[0]?.status, "completed");
+      }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
+    ),
   );
 
   const RESUME_SCENARIO = "codex-resume-subagent";
@@ -7416,4 +7581,50 @@ describe("CodexAdapterV2 post-settle continuation", () => {
       assert.include(errorCauseChainText(error), "fork exploded");
     }).pipe(Effect.scoped, Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
   );
+});
+
+describe("Codex fault admission", () => {
+  const input = {
+    config: {
+      devUrl: new URL("http://localhost:5173"),
+      staticDir: undefined,
+      baseDir: "/tmp/lane-f",
+    },
+    home: "/home/test",
+    faultHome: "/tmp/lane-f",
+    faultThreadId: "fault-thread",
+    faultName: "never-native-start",
+    name: "never-native-start",
+    threadId: ThreadId.make("fault-thread"),
+  };
+  it("admits the named fault for its exact isolated development thread", () => {
+    assert.isTrue(CodexAdapterV2.codexTestFaultEnabled(input));
+  });
+  it("ignores faults in packaged servers, live homes, and nonallowlisted threads", () => {
+    assert.isFalse(
+      CodexAdapterV2.codexTestFaultEnabled({
+        ...input,
+        config: { ...input.config, devUrl: undefined },
+      }),
+    );
+    assert.isFalse(
+      CodexAdapterV2.codexTestFaultEnabled({
+        ...input,
+        config: { ...input.config, staticDir: "/app/static" },
+      }),
+    );
+    assert.isFalse(CodexAdapterV2.codexTestFaultEnabled({ ...input, home: undefined }));
+    assert.isFalse(CodexAdapterV2.codexTestFaultEnabled({ ...input, faultHome: "" }));
+    assert.isFalse(
+      CodexAdapterV2.codexTestFaultEnabled({ ...input, threadId: ThreadId.make("other") }),
+    );
+    assert.isFalse(CodexAdapterV2.codexTestFaultEnabled({ ...input, faultName: "" }));
+    assert.isFalse(
+      CodexAdapterV2.codexTestFaultEnabled({
+        ...input,
+        faultHome: "/home/test/.t3",
+        config: { ...input.config, baseDir: "/home/test/.t3" },
+      }),
+    );
+  });
 });
