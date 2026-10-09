@@ -1,15 +1,16 @@
 import type {
   OrchestrationV2ContextHandoff,
   OrchestrationV2ProviderThread,
+  TurnItemId,
 } from "@t3tools/contracts";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
-import { ContextHandoffBudgetError } from "@t3tools/provider-core/server/failure";
+import { ContextRecoveryRequiredError } from "@t3tools/provider-core/server/failure";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import {
   historyCost,
   renderHistory,
-  selectHistory,
+  selectRecoveryHistory,
 } from "@t3tools/provider-core/server/handoffBudget";
 
 /**
@@ -24,6 +25,7 @@ export const deliverContextHandoffs = Effect.fn("orchestrationV2.deliverContextH
     readonly budget: number | Effect.Effect<number, BudgetError>;
     readonly deferInline?: boolean;
     readonly alreadyDeliveredItemIds: ReadonlySet<string>;
+    readonly protectedItemIds?: ReadonlySet<TurnItemId>;
     readonly inject?: (
       history: ProviderAdapter.ProviderAdapterV2HistoricalContext,
     ) => Effect.Effect<boolean, InjectError>;
@@ -73,15 +75,16 @@ export const deliverContextHandoffs = Effect.fn("orchestrationV2.deliverContextH
       oldContext && historyCost([], `${coverage}\n${oldContext}`) + 512 <= budget
         ? `${coverage}\n${oldContext}`
         : coverage;
-    const selected = selectHistory({
+    const selected = selectRecoveryHistory({
       messages,
       coverage: fullCoverage,
+      protectedItemIds: input.protectedItemIds,
       omittedItems: pending.reduce((sum, handoff) => sum + (handoff.history?.omittedItems ?? 0), 0),
       budget,
     });
     if (historyCost(selected.messages, selected.context) > budget) {
       if (input.deferInline) return { context: "", delivered: Effect.void, unsent: Effect.void };
-      return yield* new ContextHandoffBudgetError();
+      return yield* new ContextRecoveryRequiredError();
     }
     const omittedItemIds = new Set(selected.omittedItemIds);
     const persist = (status: "pending" | "injected" | "inline") =>
@@ -159,3 +162,5 @@ export class ContextHandoffDeliveryUncertainError extends Schema.TaggedError<Con
     return "Historical context delivery is uncertain; replace the native thread before retrying.";
   }
 }
+
+export { ContextRecoveryRequiredError } from "@t3tools/provider-core/server/failure";
