@@ -1,6 +1,6 @@
-Bottom: 72f6cc350d60c7e7e8f2f32f514e4453cb33ff99
-Top:    799ac7a667cc340a37e7f7e6764d86911e61603d
+Bottom: 3fe8d2e0874634fe7935d23cf5e6db71c0051cc0
+Top:    ce4c7b3505c829e7ec95452a4965ff434ff12f4d
 Author: brad <bradprin@live.com>
-Date:   2026-10-09 05:56:20 +0000
+Date:   2026-10-09 06:14:21 +0000
 
 fix(antigravity): show native transport failure details
