@@ -1,3 +1,5 @@
+import { authenticatedHandlers as recoveryHandlers } from "./threadRecovery/rpc.ts";
+import { HumanIngress } from "./threadRecovery/HumanIngress.ts";
 import { makeMessageForwardService } from "./forkThreads/MessageForwardService.ts";
 import * as PlanPublicationService from "./projectIssues/PlanPublicationService.ts";
 import * as PlanTaskLaunch from "./projectIssues/PlanTaskLaunch.ts";
@@ -123,6 +125,7 @@ import {
   WS_METHODS,
   WsCoreRpcGroup,
   WsForkRpcGroup,
+  WsRecoveryRpcGroup,
   WsRpcGroup,
   withoutPageAgentThreads,
 } from "@t3tools/contracts";
@@ -1010,7 +1013,9 @@ export const subscribeOrchestrationV2Shell = Effect.fn("ws.orchestrationV2.subsc
       const base = buildActiveShellSnapshot(
         yield* loadShellSnapshotParts({
           sql,
-          readThreads: threadManagement.readShellSnapshot({ location: "active" }).pipe(Effect.map(Effect.map(withoutPageAgentThreads))),
+          readThreads: threadManagement
+            .readShellSnapshot({ location: "active" })
+            .pipe(Effect.map(Effect.map(withoutPageAgentThreads))),
           listProjects: projects.listShells(),
           latestSequence: applicationEvents.latestApplicationSequence,
         }),
@@ -1908,7 +1913,10 @@ const layerWsRpc = (
                             "creationSource" in command ? command.creationSource : "web",
                         }),
                       )
-                  ).pipe(Effect.provide(intakeContext)),
+                  ).pipe(
+                    Effect.provide(intakeContext),
+                    Effect.provideService(HumanIngress, currentSession.subject),
+                  ),
                 )
                 .pipe(
                   Effect.tap(() => recordClientCommandAnalytics(command)),
@@ -2050,7 +2058,10 @@ const layerWsRpc = (
                         }),
                     createdBy: "user",
                     creationSource: input.creationSource ?? "web",
-                  }).pipe(Effect.provide(intakeContext)),
+                  }).pipe(
+                    Effect.provide(intakeContext),
+                    Effect.provideService(HumanIngress, currentSession.subject),
+                  ),
                 )
                 .pipe(
                   Effect.tap(() =>
@@ -2499,13 +2510,20 @@ const layerWsRpc = (
         [WS_METHODS.serverReportHostPowerState]: (input) =>
           backgroundPolicy.reportHostPowerState(input),
         [WS_METHODS.serverGetBackgroundPolicy]: (_input) => backgroundPolicy.snapshot,
-        [WS_METHODS.automationsList]: (input) => automations.list(input.projectId).pipe(Effect.map((list) => ({ automations: list }))),
+        [WS_METHODS.automationsList]: (input) =>
+          automations.list(input.projectId).pipe(Effect.map((list) => ({ automations: list }))),
         [WS_METHODS.automationsSave]: (input) => automations.save(input),
         [WS_METHODS.automationsRemove]: (input) => automations.remove(input.automationId),
-        [WS_METHODS.automationsSetEnabled]: (input) => automations.setEnabled(input.automationId, input.enabled),
-        [WS_METHODS.automationsRun]: (input) => automations.run(input.automationId, { dryRun: input.dryRun === true }),
-        [WS_METHODS.automationsRuns]: (input) => automations.runs(input).pipe(Effect.map((runs) => ({ runs }))),
-        [WS_METHODS.automationScriptsList]: (input) => automations.listScripts(input.projectId ?? null).pipe(Effect.map((scripts) => ({ scripts }))),
+        [WS_METHODS.automationsSetEnabled]: (input) =>
+          automations.setEnabled(input.automationId, input.enabled),
+        [WS_METHODS.automationsRun]: (input) =>
+          automations.run(input.automationId, { dryRun: input.dryRun === true }),
+        [WS_METHODS.automationsRuns]: (input) =>
+          automations.runs(input).pipe(Effect.map((runs) => ({ runs }))),
+        [WS_METHODS.automationScriptsList]: (input) =>
+          automations
+            .listScripts(input.projectId ?? null)
+            .pipe(Effect.map((scripts) => ({ scripts }))),
         [WS_METHODS.automationScriptsSave]: (input) => automations.saveScript(input),
         [WS_METHODS.automationScriptsRemove]: (input) => automations.removeScript(input.scriptId),
         [WS_METHODS.automationScriptsRun]: (input) => automations.runScript(input),
@@ -2543,7 +2561,11 @@ const layerWsRpc = (
                 Effect.forkScoped,
               ),
           ),
-        [WS_METHODS.projectIssuesList]: (input) => projectIssues.list(input).pipe(Effect.flatMap((result) => requestLedger.decorate(result, input.rootThreadId)), Effect.flatMap((result) => decisionFeed.enrich(result, input.rootThreadId))),
+        [WS_METHODS.projectIssuesList]: (input) =>
+          projectIssues.list(input).pipe(
+            Effect.flatMap((result) => requestLedger.decorate(result, input.rootThreadId)),
+            Effect.flatMap((result) => decisionFeed.enrich(result, input.rootThreadId)),
+          ),
         [WS_METHODS.projectRequestsSettle]: (input) => requestLedger.settle(input),
         [WS_METHODS.projectRequestsCreate]: (input) => requestLedger.create(input),
         [WS_METHODS.projectRequestsUpdate]: (input) => requestLedger.update(input),
@@ -2552,7 +2574,8 @@ const layerWsRpc = (
         [WS_METHODS.projectRoadmapGet]: (input) => projectRoadmap.get(input),
         [WS_METHODS.projectRoadmapMove]: (input) => projectRoadmap.move(input),
         [WS_METHODS.projectRoadmapSaveVersion]: (input) => projectRoadmap.saveVersion(input),
-        [WS_METHODS.projectDashboardGet]: (input) => projectDashboard.get(input).pipe(Effect.tap(() => pullRequestSync.refreshStale)),
+        [WS_METHODS.projectDashboardGet]: (input) =>
+          projectDashboard.get(input).pipe(Effect.tap(() => pullRequestSync.refreshStale)),
         [WS_METHODS.projectDashboardSetWidgets]: (input) => projectDashboard.setWidgets(input),
         [WS_METHODS.projectDashboardSetTracker]: (input) => projectDashboard.setTracker(input),
         [WS_METHODS.projectRequestsList]: (input) => requestLedger.listForThread(input),
@@ -2809,8 +2832,13 @@ const layerWsRpc = (
               return yield* issueAssetUrl({ resource: input.resource });
             }
             if (input.resource._tag === "gitea-media") {
-              const settings = yield* serverSettings.getSettings.pipe(Effect.mapError(() => new AssetGiteaMediaUrlValidationError({})));
-              return yield* issueAssetUrl({ resource: input.resource, giteaMedia: giteaMediaFetchTarget(input.resource.url, settings.giteaInstances) });
+              const settings = yield* serverSettings.getSettings.pipe(
+                Effect.mapError(() => new AssetGiteaMediaUrlValidationError({})),
+              );
+              return yield* issueAssetUrl({
+                resource: input.resource,
+                giteaMedia: giteaMediaFetchTarget(input.resource.url, settings.giteaInstances),
+              });
             }
             if (input.resource._tag === "draft-workspace-file") {
               // A project draft names its workspace directly; there is no
@@ -3246,47 +3274,40 @@ const layerWsRpc = (
         "orchestration.forkThread": (input) => conversationFork.fork(input),
         [WS_METHODS.projectIssuesGet]: (input) =>
           projectIssues
-              .get(input)
-              .pipe(
-                Effect.flatMap((result) =>
-                  requestLedger
-                    .withAnswers([result.issue])
-                    .pipe(Effect.map(([issue]) => ({ ...result, issue: issue ?? result.issue }))),
-                ),
+            .get(input)
+            .pipe(
+              Effect.flatMap((result) =>
+                requestLedger
+                  .withAnswers([result.issue])
+                  .pipe(Effect.map(([issue]) => ({ ...result, issue: issue ?? result.issue }))),
               ),
-        [WS_METHODS.projectRequestsSubmit]: (input) =>
-          requestLedger.submit(input),
-        [WS_METHODS.projectRequestsStartIntake]: (input) =>
-          requestIntake.start(input),
-        [WS_METHODS.projectDashboardSetHealth]: (input) =>
-          projectDashboard.setHealth(input),
+            ),
+        [WS_METHODS.projectRequestsSubmit]: (input) => requestLedger.submit(input),
+        [WS_METHODS.projectRequestsStartIntake]: (input) => requestIntake.start(input),
+        [WS_METHODS.projectDashboardSetHealth]: (input) => projectDashboard.setHealth(input),
         // Brad's edits from a client; the orchestrator edits through the MCP tools.
-        [WS_METHODS.projectLayoutGet]: (input) =>
-          projectLayout.get(input.threadId),
+        [WS_METHODS.projectLayoutGet]: (input) => projectLayout.get(input.threadId),
         [WS_METHODS.projectLayoutApply]: (input) =>
           projectLayout.apply(input, { kind: "user", threadId: null, reason: null }),
         [WS_METHODS.projectLayoutRevert]: (input) =>
           projectLayout.revert(input, { kind: "user", threadId: null, reason: null }),
-        [WS_METHODS.projectLayoutHistory]: (input) =>
-          projectLayout.history(input),
-        [WS_METHODS.subscribeProjectLayout]: (input) =>
-          projectLayout.stream(input.threadId),
-        [WS_METHODS.projectRequestsDiscuss]: (input) =>
-          requestLedger.discuss(input),
-        [WS_METHODS.projectRequestsPendingAsks]: (input) =>
-          decisionFeed.pendingAsks(input),
-        [WS_METHODS.projectRequestsApproveMerge]: (input) =>
-          decisionFeed.approveAndMerge(input),
-        [WS_METHODS.projectRequestsSendBack]: (input) =>
-          decisionFeed.sendBack(input),
-        [WS_METHODS.projectRequestsDefer]: (input) =>
-          decisionFeed.defer(input),
-        [WS_METHODS.projectRequestsDecide]: (input) =>
-          requestLedger.decide(input),
+        [WS_METHODS.projectLayoutHistory]: (input) => projectLayout.history(input),
+        [WS_METHODS.subscribeProjectLayout]: (input) => projectLayout.stream(input.threadId),
+        [WS_METHODS.projectRequestsDiscuss]: (input) => requestLedger.discuss(input),
+        [WS_METHODS.projectRequestsPendingAsks]: (input) => decisionFeed.pendingAsks(input),
+        [WS_METHODS.projectRequestsApproveMerge]: (input) => decisionFeed.approveAndMerge(input),
+        [WS_METHODS.projectRequestsSendBack]: (input) => decisionFeed.sendBack(input),
+        [WS_METHODS.projectRequestsDefer]: (input) => decisionFeed.defer(input),
+        [WS_METHODS.projectRequestsDecide]: (input) => requestLedger.decide(input),
       });
       return Context.merge(
-        yield* WsCoreRpcGroup.toHandlers(handlers),
-        yield* WsForkRpcGroup.toHandlers(forkHandlers),
+        Context.merge(
+          yield* WsCoreRpcGroup.toHandlers(handlers),
+          yield* WsForkRpcGroup.toHandlers(forkHandlers),
+        ),
+        yield* WsRecoveryRpcGroup.toHandlers(
+          recoveryHandlers({ principal: currentSession.subject, scopes: currentSession.scopes }),
+        ),
       );
     }),
   );

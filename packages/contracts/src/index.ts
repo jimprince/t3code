@@ -99,3 +99,5 @@ export * from "./notification.ts";
 
 export * from "./messageForward.ts";
 export * from "./planPublication.ts";
+
+export * from "./threadRecovery.ts";
