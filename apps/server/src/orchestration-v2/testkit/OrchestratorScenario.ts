@@ -18,6 +18,7 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
+import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
@@ -51,6 +52,8 @@ export type OrchestratorV2ScenarioStep =
       /** Waits until the thread's Waiting strip lists no background work. */
       readonly type: "await_no_background_work";
       readonly threadId: ThreadId;
+      /** Advances the fallback only after this run's persisted Stop ACK receipt. */
+      readonly interruptRunId?: OrchestrationV2Run["id"];
     }
   | {
       readonly type: "await_run_steerable";
@@ -272,9 +275,18 @@ export function runOrchestratorV2Scenario(
       const orchestrator = yield* Orchestrator.OrchestratorV2;
       const storedEventGroups: Array<ReadonlyArray<OrchestrationV2StoredEvent>> = [];
       const observedStoredEvents = yield* Ref.make<Array<OrchestrationV2StoredEvent>>([]);
+      const stopAcknowledgements = yield* Queue.unbounded<OrchestrationV2DomainEvent>();
       yield* orchestrator.streamStoredEvents.pipe(
-        Stream.runForEach((event) =>
-          Ref.update(observedStoredEvents, (existing) => [...existing, event]),
+        Stream.runForEach((stored) =>
+          Ref.update(observedStoredEvents, (existing) => [...existing, stored]).pipe(
+            Effect.andThen(
+              stored.event.type === "turn-item.updated" &&
+                stored.event.payload.type === "run_interrupt_request" &&
+                stored.event.payload.title === "Stop acknowledged"
+                ? Queue.offer(stopAcknowledgements, stored.event)
+                : Effect.void,
+            ),
+          ),
         ),
         Effect.forkScoped,
       );
@@ -659,7 +671,21 @@ export function runOrchestratorV2Scenario(
             yield* waitForThreadIdle(step.threadId);
             break;
           case "await_no_background_work":
-            yield* waitForNoBackgroundWork(step.threadId);
+            yield* step.interruptRunId === undefined
+              ? waitForNoBackgroundWork(step.threadId)
+              : Effect.raceFirst(
+                  waitForNoBackgroundWork(step.threadId),
+                  Stream.fromQueue(stopAcknowledgements).pipe(
+                    Stream.filter(
+                      (event) =>
+                        event.threadId === step.threadId && event.runId === step.interruptRunId,
+                    ),
+                    Stream.runHead,
+                    // The ACK and its 10s fallback are committed atomically.
+                    Effect.andThen(TestClock.adjust("10 seconds")),
+                    Effect.andThen(waitForNoBackgroundWork(step.threadId)),
+                  ),
+                );
             break;
           case "await_run_steerable":
             yield* waitForRunSteerable(step.threadId, step.runId);
