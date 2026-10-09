@@ -8713,8 +8713,42 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       });
       if (command.holdQueue === true) yield* holdQueuedRuns;
       yield* stopCompletionCohort();
+      const interruptEffects: Array<PendingOrchestrationEffectV2> = [
+        {
+          id: `effect:interrupt-deadline:${command.commandId}:${providerTurn.id}`,
+          commandId: CommandId.make(
+            `command:interrupt-deadline:${command.commandId}:${providerTurn.id}`,
+          ),
+          threadId: command.threadId,
+          availableAt: DateTime.add(now, { milliseconds: 20_000 }),
+          request: {
+            type: "provider-turn.interrupt-settle",
+            providerThreadId: providerThread.id,
+            providerTurnId: providerTurn.id,
+          },
+        },
+        ...otherProviderInterrupts.map((effect) => ({
+          id: `effect:interrupt-deadline:${effect.id}`,
+          commandId: CommandId.make(`command:interrupt-deadline:${effect.id}`),
+          threadId: effect.threadId,
+          availableAt: DateTime.add(now, { milliseconds: 20_000 }),
+          request: {
+            type: "provider-turn.interrupt-settle" as const,
+            providerThreadId:
+              effect.request.type === "provider-turn.interrupt"
+                ? effect.request.providerThreadId
+                : providerThread.id,
+            providerTurnId:
+              effect.request.type === "provider-turn.interrupt"
+                ? effect.request.providerTurnId
+                : providerTurn.id,
+          },
+        })),
+      ];
+      // Persist before the native ACK; a silent provider cannot suppress settlement.
       yield* Ref.update(effects, (existing) => [
         ...existing,
+        ...interruptEffects,
         {
           id: `effect:${command.commandId}:provider-turn.interrupt:${providerTurn.id}`,
           commandId: command.commandId,
