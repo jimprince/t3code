@@ -1,0 +1,4 @@
+id = "thread-reopens-at-newest-message"
+category = "fix"
+functionality = "web chat"
+text = "A thread you left while it was streaming a reply reopens at the newest message instead of partway up with live follow off."
