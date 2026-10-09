@@ -59,6 +59,7 @@ export const RPC_METHODS = {
   serverDiscoverSourceControl: WS_METHODS.serverDiscoverSourceControl,
   projectIssuesGet: WS_METHODS.projectIssuesGet,
   dispatchCommand: ORCHESTRATION_V2_WS_METHODS.dispatchCommand,
+  getThreadProjection: ORCHESTRATION_V2_WS_METHODS.getThreadProjection,
   getArchivedShellSnapshot: ORCHESTRATION_V2_WS_METHODS.getArchivedShellSnapshot,
   getTurnDiff: ORCHESTRATION_V2_WS_METHODS.getTurnDiff,
   getFullThreadDiff: ORCHESTRATION_V2_WS_METHODS.getFullThreadDiff,
@@ -130,7 +131,11 @@ export class T3RpcClient {
     }
   }
 
-  async request<T>(method: keyof typeof RPC_METHODS, input: unknown): Promise<T> {
+  async request<T>(
+    method: keyof typeof RPC_METHODS,
+    input: unknown,
+    signal?: AbortSignal,
+  ): Promise<T> {
     const client = (await this.clientPromise) as unknown as Record<
       string,
       (payload: unknown) => Effect.Effect<T, unknown, never>
@@ -147,11 +152,13 @@ export class T3RpcClient {
         }),
       );
     }
-    return this.runtime.runPromise(operation);
+    return this.runtime.runPromise(operation, { signal });
   }
 
-  async subscribeShellSnapshot<T>(): Promise<T> {
-    return decodeShellSnapshotItem(await this.requestStreamFirst("subscribeShell", {})) as T;
+  async subscribeShellSnapshot<T>(signal?: AbortSignal): Promise<T> {
+    return decodeShellSnapshotItem(
+      await this.requestStreamFirst("subscribeShell", {}, signal),
+    ) as T;
   }
 
   async subscribeThreadSnapshot<T>(threadId: string): Promise<T> {
@@ -186,13 +193,14 @@ export class T3RpcClient {
   private async requestStreamFirst<T>(
     method: "subscribeShell" | "subscribeThread",
     input: unknown,
+    signal?: AbortSignal,
   ): Promise<T> {
     const client = (await this.clientPromise) as unknown as Record<
       string,
       (payload: unknown) => Stream.Stream<T, unknown, never>
     >;
     const stream = client[RPC_METHODS[method]](input);
-    const item = await this.runtime.runPromise(Stream.runHead(stream));
+    const item = await this.runtime.runPromise(Stream.runHead(stream), { signal });
     const value = Option.getOrNull(item);
     if (value === null) {
       throw new Error(`No initial snapshot received for '${RPC_METHODS[method]}'.`);
