@@ -2,6 +2,7 @@ import * as ServerConfig from "../config.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import { listMetadata } from "../forkThreads/MetadataStore.ts";
 import * as SqlClient from "effect/sql/SqlClient";
+import { makeSendBindingReader } from "../forkThreads/SendBindings.ts";
 import * as WorkerLifecycle from "../forkThreads/WorkerLifecycle.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -2630,6 +2631,12 @@ describe("orchestrator MCP toolkit", () => {
               senderThreadId: parentThreadId,
             });
             expect(sent.delivery).toBe("started");
+            expect(
+              yield* makeSendBindingReader(sql).read({
+                threadId: emptyThread.threadId,
+                sendId: "ordinary-loop-send-1",
+              }),
+            ).toMatchObject({ state: "bound", runId: sent.runId });
             const waitCall = yield* invoke("t3_thread_wait", {
               threadId: emptyThread.threadId,
               runId: sent.runId,
@@ -2713,6 +2720,12 @@ describe("orchestrator MCP toolkit", () => {
               runId: activeRun.id,
               delivery: "steered",
             });
+            expect(
+              yield* makeSendBindingReader(sql).read({
+                threadId: activeThread.threadId,
+                sendId: "managed-active-steer-1",
+              }),
+            ).toMatchObject({ state: "bound", runId: activeRun.id, delivery: "steered" });
             const steeredSource = yield* orchestrator.getThreadProjection(activeThread.threadId);
             expect(
               steeredSource.messages.find((message) => message.id === steered.messageId),
