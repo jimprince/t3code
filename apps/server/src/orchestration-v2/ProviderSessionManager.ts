@@ -10,6 +10,7 @@ import {
   ProviderSessionId,
   ThreadId,
   type ProviderThreadId,
+  type RunId,
   isPageAgentThreadId,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
@@ -54,7 +55,7 @@ import * as ProjectionStore from "./ProjectionStore.ts";
 
 const DEFAULT_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 const DEFAULT_MAX_IDLE_PIN_MS = 4 * 60 * 60 * 1000;
-const RELEASE_SCOPE_CLOSE_TIMEOUT_MS = 30 * 1000;
+const RELEASE_SCOPE_CLOSE_TIMEOUT_MS = 10 * 1000;
 
 const busyTurnPrefix = (providerThreadId: ProviderThreadId) => `${providerThreadId}#`;
 /** The identity a turn's start and its `turn.terminal` share. */
@@ -877,7 +878,8 @@ export const layerWithOptions = (
               }
               if (
                 input.onlyIfIdleBeforeMs !== undefined &&
-                (existing.busyCount > 0 || existing.lastActivityAtMs > input.onlyIfIdleBeforeMs)
+                (existing.busyTurns.size > 0 ||
+                  existing.lastActivityAtMs > input.onlyIfIdleBeforeMs)
               ) {
                 return ["kept", current] as const;
               }
@@ -942,7 +944,7 @@ export const layerWithOptions = (
           return closeExit;
         });
 
-      const releaseEntry = (input: {
+      const releaseEntryUnbounded = (input: {
         readonly providerSessionId: ProviderSessionId;
         readonly reason: ProviderSessionReleaseReason;
         readonly detail?: string;
@@ -1053,6 +1055,32 @@ export const layerWithOptions = (
             ),
           ),
         );
+
+      // Waiting is interruptible even when release is called by a scope finalizer.
+      // The adapter owns child-process escalation; this never kills a shared process.
+      const releaseEntry = (input: Parameters<typeof releaseEntryUnbounded>[0]) =>
+        Effect.gen(function* () {
+          const closing = yield* releaseEntryUnbounded(input).pipe(
+            Effect.exit,
+            Effect.forkDetach({ startImmediately: true }),
+          );
+          const result = yield* Fiber.join(closing).pipe(
+            Effect.timeoutOption(18_000),
+            Effect.interruptible,
+          );
+          if (Option.isNone(result)) {
+            yield* Fiber.interrupt(closing).pipe(Effect.forkDetach, Effect.asVoid);
+            return yield* Effect.fail(
+              new ProviderSessionReleaseError({
+                providerSessionId: input.providerSessionId,
+                reason: input.reason,
+                cause:
+                  "Provider session release exceeded 18 seconds; boot reconciliation is required.",
+              }),
+            );
+          }
+          return yield* result.value;
+        });
 
       // Annotated to break the releaseIfStillIdle <-> scheduleIdleReleaseInternal
       // inference cycle introduced by the pin re-arm below.
@@ -1695,8 +1723,109 @@ export const layerWithOptions = (
               modelFamily: normalizeModelMetricLabel(model),
             },
           });
+        const resets = new Map<
+          string,
+          {
+            readonly credentialId: string | undefined;
+            teardown?: Fiber.Fiber<
+              { readonly isolation: "session" | "thread"; readonly stopped: boolean },
+              ProviderAdapter.ProviderAdapterV2Error
+            >;
+            result?: { readonly isolation: "session" | "thread"; readonly stopped: boolean };
+          }
+        >();
         return {
           ...runtime,
+          ...(runtime.resetThread === undefined
+            ? {}
+            : {
+                resetThread: (target: { readonly threadId: ThreadId; readonly runId: RunId }) =>
+                  threadAttachment.withLock(
+                    threadAttachmentKey({ providerSessionId, threadId: target.threadId }),
+                    Effect.gen(function* () {
+                      const resetKey = `${target.threadId}:${target.runId}`;
+                      const previous = resets.get(resetKey);
+                      if (previous?.result !== undefined) return previous.result;
+                      const entry = (yield* Ref.get(sessions)).get(sessionKey(providerSessionId));
+                      // A stale exposed runtime must never detach or revoke its replacement.
+                      if (entry?.runtime !== runtime)
+                        return { isolation: "thread" as const, stopped: true };
+                      const reset: NonNullable<ReturnType<typeof resets.get>> = previous ?? {
+                        credentialId: entry.mcpCredentialIdByThread.get(target.threadId),
+                      };
+                      resets.set(resetKey, reset);
+                      if (previous === undefined)
+                        yield* Ref.update(sessions, (current) => {
+                          const live = current.get(sessionKey(providerSessionId));
+                          if (live?.runtime !== runtime) return current;
+                          const attachedThreadIds = new Set(live.attachedThreadIds);
+                          attachedThreadIds.delete(target.threadId);
+                          const loadedProviderThreadKeyByThread = new Map(
+                            live.loadedProviderThreadKeyByThread,
+                          );
+                          loadedProviderThreadKeyByThread.delete(target.threadId);
+                          const mcpCredentialIdByThread = new Map(live.mcpCredentialIdByThread);
+                          mcpCredentialIdByThread.delete(target.threadId);
+                          const updated = new Map(current);
+                          updated.set(sessionKey(providerSessionId), {
+                            ...live,
+                            attachedThreadIds,
+                            loadedProviderThreadKeyByThread,
+                            mcpCredentialIdByThread,
+                          });
+                          return updated;
+                        });
+                      // No thread-wide fallback: it could revoke a newer session's credential.
+                      if (reset.credentialId !== undefined)
+                        yield* clearMcpSession(target.threadId, reset.credentialId);
+                      const priorExit = yield* Effect.sync(() => reset.teardown?.pollUnsafe());
+                      if (priorExit !== undefined && Exit.isFailure(priorExit))
+                        delete reset.teardown;
+                      reset.teardown ??= yield* runtime.resetThread!(target).pipe(
+                        Effect.forkDetach({ startImmediately: true }),
+                      );
+                      const outcome = yield* Fiber.await(reset.teardown).pipe(
+                        Effect.timeoutOption(10_000),
+                        Effect.interruptible,
+                      );
+                      if (Option.isNone(outcome)) {
+                        yield* Fiber.interrupt(reset.teardown).pipe(
+                          Effect.forkDetach,
+                          Effect.asVoid,
+                        );
+                        return yield* Effect.fail(
+                          new ProviderAdapter.ProviderAdapterProtocolError({
+                            driver: runtime.driver,
+                            detail: "Exact-session reset exceeded 10 seconds.",
+                          }),
+                        );
+                      }
+                      if (Exit.isFailure(outcome.value)) {
+                        delete reset.teardown;
+                        return yield* outcome.value;
+                      }
+                      const result = outcome.value.value;
+                      if (!result.stopped) {
+                        delete reset.teardown;
+                        return result;
+                      }
+                      if (!entry.supportsMultipleProviderThreads) {
+                        yield* releaseEntry({ providerSessionId, reason: "manual_shutdown" });
+                      }
+                      reset.result = result;
+                      return result;
+                    }).pipe(
+                      Effect.mapError(
+                        (cause) =>
+                          new ProviderAdapter.ProviderAdapterProtocolError({
+                            driver: runtime.driver,
+                            detail: "Exact-session reset teardown failed.",
+                            cause,
+                          }),
+                      ),
+                    ),
+                  ),
+              }),
           subscribeEvents,
           events: Stream.unwrap(
             subscribeEvents.pipe(Effect.map((subscription) => subscription.events)),

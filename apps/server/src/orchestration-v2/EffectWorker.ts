@@ -162,18 +162,23 @@ export const layerExecutor: Layer.Layer<
                     }),
                 ),
               );
-          case "provider-turn.interrupt":
+          case "provider-turn.interrupt": {
+            const request = effect.request;
             return providerTurnControl
               .interrupt({
                 threadId: effect.threadId,
-                providerSessionId: effect.request.providerSessionId,
-                providerThreadId: effect.request.providerThreadId,
-                providerTurnId: effect.request.providerTurnId,
+                providerSessionId: request.providerSessionId,
+                providerThreadId: request.providerThreadId,
+                providerTurnId: request.providerTurnId,
               })
               .pipe(
+                Effect.timeout("20 seconds"),
                 Effect.as(true),
                 Effect.catch((cause) =>
-                  isNonRetryableProviderTurnControlFailure(effect.request.type, Cause.pretty(Cause.fail(cause)))
+                  isNonRetryableProviderTurnControlFailure(
+                    request.type,
+                    Cause.pretty(Cause.fail(cause)),
+                  )
                     ? Effect.succeed(false)
                     : Effect.fail(cause),
                 ),
@@ -186,19 +191,20 @@ export const layerExecutor: Layer.Layer<
                     commandId: CommandId.make(`${effect.id}:background-work-settled`),
                     ...(interruptAcknowledged ? { interruptAcknowledged: true } : {}),
                     threadId: effect.threadId,
-                    providerThreadId: effect.request.providerThreadId,
-                    providerTurnId: effect.request.providerTurnId,
+                    providerThreadId: request.providerThreadId,
+                    providerTurnId: request.providerTurnId,
                   }),
                 ),
                 Effect.mapError(
                   (cause) =>
                     new OrchestrationEffectExecutionError({
                       effectId: effect.id,
-                      effectType: effect.request.type,
+                      effectType: request.type,
                       cause,
                     }),
                 ),
               );
+          }
           case "provider-turn.interrupt-settle":
             return threads
               .dispatch({
