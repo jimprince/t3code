@@ -74,12 +74,12 @@ preferred path when the goal is exactly one production app on the phone.
 
 ## 3. Deploy the production build through TestFlight
 
-This is the repository's current remote-install path. CI creates the production
-IPA on EAS and auto-submits it to TestFlight. Pushes to `main` reconcile both
-platforms: a new app version schedules a store build, while compatible
-JavaScript-only changes publish a fingerprint-gated OTA update.
+This is the repository's current remote-install path. Manually dispatch
+`mobile-eas-production.yml` to create the production IPA on EAS and auto-submit
+it to TestFlight. Pushes to `main` do not build, submit, or publish production
+mobile updates. Production OTA updates also require an explicit manual dispatch.
 
-Start a production build:
+Start a production build (`profile=production` is the default):
 
 ```bash
 gh workflow run mobile-eas-production.yml --repo jimprince/t3code \
@@ -87,8 +87,10 @@ gh workflow run mobile-eas-production.yml --repo jimprince/t3code \
   -f platform=ios
 ```
 
-Use the optional `version` input when the checked-in app version cannot start a
-new Apple release train:
+The optional `version` input commits a version override to the dispatched
+branch before building. It requires the release GitHub App credentials
+(`RELEASE_APP_ID` and `RELEASE_APP_PRIVATE_KEY`); leave it blank to build the
+checked-in version:
 
 ```bash
 gh workflow run mobile-eas-production.yml --repo jimprince/t3code \
@@ -129,9 +131,9 @@ and [distribution methods](https://developer.apple.com/help/app-store-connect/ma
 
 ## 5. Publish an EAS OTA update
 
-An OTA update is not a fresh installation. It updates JavaScript and bundled
-assets inside an already installed production binary whose runtime version is
-compatible.
+Manually dispatch `mode=update` to publish JavaScript and bundled assets to an
+already installed production binary whose runtime version is compatible.
+Pushes do not publish production OTA updates.
 
 ```bash
 gh workflow run mobile-eas-production.yml --repo jimprince/t3code \

@@ -2946,3 +2946,19 @@ id = "end-restore-settles-own-patch"
 date = "2026-10-09"
 decided = "relocate"
 rationale = "The first cut lived inside fork-backport-upstream-17348-scroll-follow, but that patch is upstream-bound and is dropped on the sync that brings #17348 in; #17348 does not settle the end restore, so the fix would have been lost with it. Keep it in its own patch with its own retirement condition and leave the backport's text as the unchanged PR."
+
+[[patch]]
+name = "fork-mobile-manual-production"
+subject = "ci(mobile): dispatch production delivery manually on hosted Ubuntu"
+class = "divergence"
+purpose = "Keep production mobile builds and OTA publication deliberately dispatched, with a standard hosted runner for remote EAS orchestration."
+retire_when = "Upstream supplies manual-only production mobile delivery on a runner supported by the fork, or the fork changes this delivery policy."
+depends_on = ["fork-mobile-delivery"]
+roles = []
+note = "Brad 2026-10-09: mobile production manual-only; no Blacksmith runner on the fork. Existing build/update dispatch inputs and EAS auto-submit remain; the historical direct macOS IPA uploader is not configured."
+
+[[patch.decision]]
+id = "mobile-production-manual-only"
+date = "2026-10-09"
+decided = "adapt"
+rationale = "Remove the upstream production push trigger, use GitHub-hosted Ubuntu for remote EAS orchestration, and reconcile delivery guidance with the actual manual inputs. Restoring the old direct submit job remains a separate follow-up."
