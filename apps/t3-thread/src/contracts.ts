@@ -118,6 +118,16 @@ export const WsRpcGroup = RpcGroup.make(
     success: schema.getFullThreadDiff.output,
     error: Schema.Union([OrchestrationGetFullThreadDiffError, EnvironmentAuthorizationError]),
   }),
+  Rpc.make(ORCHESTRATION_V2_WS_METHODS.getThreadProjection, {
+    payload: schema.getThreadProjection.input,
+    success: schema.getThreadProjection.output,
+    error: Schema.Union([OrchestrationV2GetThreadProjectionError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make(ORCHESTRATION_V2_WS_METHODS.getArchivedShellSnapshot, {
+    payload: schema.getArchivedShellSnapshot.input,
+    success: schema.getArchivedShellSnapshot.output,
+    error: Schema.Union([OrchestrationV2GetShellSnapshotError, EnvironmentAuthorizationError]),
+  }),
   Rpc.make(ORCHESTRATION_V2_WS_METHODS.subscribeShell, {
     payload: schema.subscribeShell.input,
     success: schema.subscribeShell.output,

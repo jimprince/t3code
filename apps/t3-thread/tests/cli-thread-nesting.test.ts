@@ -99,8 +99,13 @@ async function run(args: string[]) {
   const printed = new Promise<string>((resolve) => {
     finish = resolve;
   });
-  vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
-    finish(String(chunk));
+  const chunks: string[] = [];
+  vi.spyOn(process.stdout, "write").mockImplementation((chunk, encodingOrCallback, callback) => {
+    chunks.push(String(chunk));
+    const done = typeof encodingOrCallback === "function" ? encodingOrCallback : callback;
+    done?.();
+    const expected = args[0] === "status" && args.length === 1 ? fixture.state!.agents.length : 1;
+    if (chunks.length === expected) finish(chunks.join(""));
     return true;
   });
   process.argv = [process.execPath, "cli.ts", ...args];

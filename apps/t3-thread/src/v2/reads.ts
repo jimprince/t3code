@@ -59,6 +59,7 @@ function latestRun(
 export function threadShell(thread: OrchestrationV2ThreadShell): OrchestrationThreadShell {
   return {
     ...thread,
+    latestRunStartedAt: nullableIso(thread.latestRunStartedAt),
     modelSelection: modelSelection(thread.modelSelection),
     parentThreadId: null,
     executionParentThreadId: thread.lineage.parentThreadId,

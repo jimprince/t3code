@@ -137,6 +137,9 @@ export interface OrchestrationShellSnapshot {
 }
 
 export interface OrchestrationThreadShell {
+  activeRunId?: string | null;
+  latestRunStartedAt?: string | null;
+  status?: string;
   lastError?: string | null;
   parentThreadId?: string | null;
   executionParentThreadId?: string | null;
