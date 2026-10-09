@@ -23,6 +23,14 @@ import {
 } from "./contracts.js";
 
 export const RPC_METHODS = {
+  "thread.session.reset": "thread.session.reset",
+  "thread.handover.prepare": "thread.handover.prepare",
+  "thread.handover.commit": "thread.handover.commit",
+  "thread.handover.status": "thread.handover.status",
+  "thread.handover.routes": "thread.handover.routes",
+  "thread.human.pending": "thread.human.pending",
+  "thread.human.resolve": "thread.human.resolve",
+
   "fork.message.forward.prepare": "fork.message.forward.prepare",
   "fork.message.forward.accept": "fork.message.forward.accept",
   [WS_METHODS.assetsCreateUrl]: WS_METHODS.assetsCreateUrl,
