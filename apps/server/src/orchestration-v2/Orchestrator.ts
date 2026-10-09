@@ -8806,9 +8806,18 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           "providerTurns",
           "providerSessions",
           "nodes",
+          "subagents",
+          "runtimeRequests",
         ],
         {
-          turnItemTypes: ["command_execution", "dynamic_tool", "subagent", "run_interrupt_request"],
+          turnItemTypes: [
+            "command_execution",
+            "dynamic_tool",
+            "subagent",
+            "run_interrupt_request",
+            "assistant_message",
+            "reasoning",
+          ],
         },
       ),
       projectionStore.getProviderControlContext(command.threadId, {
@@ -8852,8 +8861,44 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                 signal: "interrupt-result",
               }),
       });
-      if (reconciled.length > 0)
+      const recoverRunningRun =
+        command.interruptAcknowledged !== true &&
+        stoppedRun?.status === "running" &&
+        stopped.providerTurn !== undefined &&
+        reconciled.some((event) => event.type === "run.updated");
+      if (recoverRunningRun && stoppedRun !== undefined && stopped.providerTurn !== undefined) {
+        // The exact-run/native-terminal guards above authorize the fallback.
+        // Keep upstream's complete finalization: close partial output and
+        // runtime requests, cascade child work, and capture the checkpoint.
+        const output = yield* projectionStore
+          .getThreadRecords(command.threadId, ["messages"], {
+            messageRunIds: [stoppedRun.id],
+            messageRoles: ["assistant"],
+          })
+          .pipe(mapDispatchError(command));
+        yield* settleInterruptedRun({
+          command,
+          projection: { ...projection, messages: output.messages },
+          providerTurn: stopped.providerTurn,
+          events,
+          effects,
+          now,
+        });
+        // Session readiness and the native background roster are fork recovery
+        // state; upstream's run finalizer owns the rest of these terminal rows.
+        const sessionEvents = reconciled.filter((event) => {
+          if (event.type === "provider-session.updated") return true;
+          if (event.type !== "provider-thread.updated") return false;
+          const providerThreadId = event.payload.id;
+          return projection.providerThreads.some(
+            (thread) =>
+              thread.id === providerThreadId && (thread.pendingBackgroundTasks?.length ?? 0) > 0,
+          );
+        });
+        yield* Ref.update(events, (existing) => [...existing, ...sessionEvents]);
+      } else if (reconciled.length > 0) {
         yield* Ref.update(events, (existing) => [...existing, ...reconciled]);
+      }
       if (command.interruptAcknowledged) {
         // The receipt and delayed fallback commit atomically. The existing exact-run
         // guard is checked again when this replay-safe effect becomes claimable.
@@ -8878,6 +8923,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       if (
         checkpointScopeId != null &&
         stoppedRun &&
+        !recoverRunningRun &&
         reconciled.some((event) => event.type === "run.updated")
       ) {
         yield* Ref.update(effects, (existing) => [
@@ -9288,8 +9334,42 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         payload: interruptRequestItem,
       });
       yield* stopRemainingWork();
+      const interruptEffects: Array<PendingOrchestrationEffectV2> = [
+        {
+          id: `effect:interrupt-deadline:${command.commandId}:${providerTurn.id}`,
+          commandId: CommandId.make(
+            `command:interrupt-deadline:${command.commandId}:${providerTurn.id}`,
+          ),
+          threadId: command.threadId,
+          availableAt: DateTime.add(now, { milliseconds: 20_000 }),
+          request: {
+            type: "provider-turn.interrupt-settle",
+            providerThreadId: providerThread.id,
+            providerTurnId: providerTurn.id,
+          },
+        },
+        ...otherProviderInterrupts.map((effect) => ({
+          id: `effect:interrupt-deadline:${effect.id}`,
+          commandId: CommandId.make(`command:interrupt-deadline:${effect.id}`),
+          threadId: effect.threadId,
+          availableAt: DateTime.add(now, { milliseconds: 20_000 }),
+          request: {
+            type: "provider-turn.interrupt-settle" as const,
+            providerThreadId:
+              effect.request.type === "provider-turn.interrupt"
+                ? effect.request.providerThreadId
+                : providerThread.id,
+            providerTurnId:
+              effect.request.type === "provider-turn.interrupt"
+                ? effect.request.providerTurnId
+                : providerTurn.id,
+          },
+        })),
+      ];
+      // Persist before the native ACK; a silent provider cannot suppress settlement.
       yield* Ref.update(effects, (existing) => [
         ...existing,
+        ...interruptEffects,
         {
           id: `effect:${command.commandId}:provider-turn.interrupt:${providerTurn.id}`,
           commandId: command.commandId,
@@ -11021,7 +11101,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       ),
     );
 
-    if (plan.events.length === 0) {
+    if (plan.events.length === 0 && plan.effects.length === 0) {
       // A settle that ended nothing still records its receipt: a replayed Stop
       // effect then finds it instead of settling work that appeared since.
       const resultSequence = yield* Effect.gen(function* () {
