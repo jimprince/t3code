@@ -597,6 +597,26 @@ it.layer(
       }),
     );
 
+    it.effect("reports a Codex request ACK deadline as a provider status timeout", () =>
+      Effect.gen(function* () {
+        const status = yield* checkCodexProviderStatus(defaultCodexSettings, () =>
+          Effect.fail(
+            new CodexErrors.CodexAppServerRequestTimeoutError({
+              method: "initialize",
+              requestId: "1",
+              timeoutMs: 10_000,
+            }),
+          ),
+        );
+        assert.strictEqual(status.status, "error");
+        assert.strictEqual(status.installed, true);
+        assert.strictEqual(
+          status.message,
+          "Timed out while checking Codex app-server provider status.",
+        );
+      }),
+    );
+
     it.effect("closes the app-server probe scope when provider status times out", () =>
       Effect.gen(function* () {
         const killCalls = yield* Ref.make(0);

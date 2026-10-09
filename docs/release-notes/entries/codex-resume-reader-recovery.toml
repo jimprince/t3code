@@ -1,0 +1,4 @@
+id = "codex-resume-reader-recovery"
+category = "fix"
+functionality = "provider recovery"
+text = "Keep Codex responses flowing during resume and slow turn updates, preserving turn event order and preventing duplicate sessions after a resume timeout."
