@@ -112,3 +112,58 @@ it("names the Perl requirement if the helper cannot be started", async () => {
     "State locking requires /usr/bin/perl with built-in flock",
   );
 });
+
+it("refuses stale watcher routes after a locked handover without losing delivery settings", async () => {
+  const redirect = {
+    oldThreadId: "old",
+    successorThreadId: "new",
+    targetEnvironment: "vm",
+    transferId: "handover",
+  };
+  const state = {
+    handoverRedirects: [redirect],
+    subscriptions: [
+      {
+        subscriberThreadId: "new",
+        subscriberEnvironment: "vm",
+        sourceThreadId: "child",
+        inactivityMinutes: 17,
+        baselineTurnId: "baseline",
+      },
+    ],
+    notifications: [
+      {
+        id: "delivery",
+        subscriberThreadId: "new",
+        subscriberEnvironment: "vm",
+        status: "pending",
+        eventKey: "stable-key",
+      },
+    ],
+  };
+  await updateState(state, () => ({ state, result: undefined }));
+  await expect(
+    updateState(state, (current) => ({
+      state: {
+        ...current,
+        subscriptions: current.subscriptions.map((r) => ({ ...r, subscriberThreadId: "old" })),
+      },
+      result: undefined,
+    })),
+  ).rejects.toThrow("retry with successor new");
+  expect(await loadState({})).toEqual(state);
+  await expect(
+    updateState(state, (current) => ({
+      state: {
+        ...current,
+        notifications: current.notifications.map((r) => ({
+          ...r,
+          subscriberThreadId: "old",
+          deliveryClaimId: "late-claim",
+        })),
+      },
+      result: undefined,
+    })),
+  ).rejects.toThrow("retry with successor new");
+  expect(await loadState({})).toEqual(state);
+});
