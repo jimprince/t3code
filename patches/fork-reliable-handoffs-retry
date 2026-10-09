@@ -1,6 +1,6 @@
-Bottom: 756142c047e5d09d50f330b644685fbb77c3614f
-Top:    929b54bf4ef21c7f4cc7e8a505d94dbc5de910a9
+Bottom: dedfd632571c8d6f14aeea8069a79973ae0e7a7a
+Top:    26a0f8b1bd9fa57613cbd4692c1fba4db7d987e9
 Author: brad <bradprin@live.com>
-Date:   2026-10-08 23:04:01 +0000
+Date:   2026-10-09 01:35:45 +0000
 
 fix(agents): retry handoffs only when delivery is provably unsent
