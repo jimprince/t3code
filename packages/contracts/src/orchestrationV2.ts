@@ -1068,6 +1068,10 @@ export const OrchestrationV2Notification = Schema.Struct({
 export type OrchestrationV2Notification = typeof OrchestrationV2Notification.Type;
 
 export const OrchestrationV2ConversationMessage = Schema.Struct({
+  humanOrigin: Schema.optional(
+    Schema.Struct({ principal: Schema.String, sourceMessageId: MessageId }),
+  ),
+  addressedRequestIds: Schema.optional(Schema.Array(MessageId)),
   notification: Schema.optional(OrchestrationV2Notification),
   ...OrchestrationV2CreationFields,
   scheduledTaskId: Schema.optional(ScheduledTaskId),
@@ -1419,11 +1423,14 @@ export const OrchestrationV2TurnItem = Schema.Union([
   Schema.Struct({
     ...OrchestrationV2TurnItemBaseFields,
     type: Schema.Literal("run_interrupt_request"),
+    sessionGeneration: Schema.optional(NonNegativeInt),
+    stopOutcome: Schema.optional(Schema.Literal("ack")),
     message: Schema.String,
   }),
   Schema.Struct({
     ...OrchestrationV2TurnItemBaseFields,
     type: Schema.Literal("run_interrupt_result"),
+    stopOutcome: Schema.optional(Schema.Literals(["ack", "fallback"])),
     message: Schema.String,
   }),
   Schema.Struct({
@@ -2202,11 +2209,14 @@ export const OrchestrationV2TurnItemJson = Schema.Union([
   Schema.Struct({
     ...OrchestrationV2TurnItemJsonBaseFields,
     type: Schema.Literal("run_interrupt_request"),
+    sessionGeneration: Schema.optional(NonNegativeInt),
+    stopOutcome: Schema.optional(Schema.Literal("ack")),
     message: Schema.String,
   }),
   Schema.Struct({
     ...OrchestrationV2TurnItemJsonBaseFields,
     type: Schema.Literal("run_interrupt_result"),
+    stopOutcome: Schema.optional(Schema.Literals(["ack", "fallback"])),
     message: Schema.String,
   }),
   Schema.Struct({
