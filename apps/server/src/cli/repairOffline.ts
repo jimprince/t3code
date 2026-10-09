@@ -1,4 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off -- Privileged offline operator boundary.
+import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeChildProcess from "node:child_process";
 
@@ -11,8 +12,9 @@ export async function verifyRepairOffline(
   port: number,
   procRoot = "/proc",
 ): Promise<void> {
+  const platform = HostProcessPlatform.defaultValue();
   const paths = [databasePath, `${databasePath}-wal`, `${databasePath}-shm`];
-  if (process.platform === "darwin") {
+  if (platform === "darwin") {
     const check = (args: string[]) => {
       const result = NodeChildProcess.spawnSync("/usr/sbin/lsof", args, { encoding: "utf8" });
       if (result.error || (result.status !== 0 && result.status !== 1) || result.stderr.trim())
@@ -37,7 +39,7 @@ export async function verifyRepairOffline(
     check(["-t", "--", ...existing]);
     return;
   }
-  if (process.platform !== "linux") throw new Error("Offline apply requires Linux or macOS.");
+  if (platform !== "linux") throw new Error("Offline apply requires Linux or macOS.");
   for (const table of [`${procRoot}/net/tcp`, `${procRoot}/net/tcp6`]) {
     const sockets = await NodeFSP.readFile(table, "utf8");
     if (

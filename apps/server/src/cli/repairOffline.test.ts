@@ -1,4 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off -- Offline ownership uses real filesystem identities.
+import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -20,7 +21,7 @@ async function fixture() {
   for (const table of ["tcp", "tcp6"]) await NodeFSP.writeFile(`${proc}/net/${table}`, "header\n");
   return { proc, database };
 }
-it.skipIf(process.platform !== "linux")(
+it.skipIf(HostProcessPlatform.defaultValue() !== "linux")(
   "permits an offline DB and refuses each main/WAL/SHM holder",
   async () => {
     const { proc, database } = await fixture();
@@ -37,7 +38,7 @@ it.skipIf(process.platform !== "linux")(
     await expect(verifyRepairOffline(database, 12345, proc)).resolves.toBeUndefined();
   },
 );
-it.skipIf(process.platform !== "linux")(
+it.skipIf(HostProcessPlatform.defaultValue() !== "linux")(
   "refuses a real listener before opening the database",
   async () => {
     const server = NodeNet.createServer();
@@ -55,7 +56,7 @@ it.skipIf(process.platform !== "linux")(
     }
   },
 );
-it.skipIf(process.platform !== "linux")(
+it.skipIf(HostProcessPlatform.defaultValue() !== "linux")(
   "fails closed when ownership inspection cannot be completed",
   async () => {
     const { proc, database } = await fixture();
