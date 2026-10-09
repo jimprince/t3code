@@ -1,9 +1,14 @@
+import { SendBindingWrite } from "../forkThreads/SendBindings.ts";
+import { ResumeAdmission } from "../threadRecovery/ResumeAdmission.ts";
+import { ThreadRecoveryError } from "@t3tools/contracts";
+import { HumanIngress } from "../threadRecovery/HumanIngress.ts";
 import { seedDelegatedMetadata } from "../forkThreads/MetadataStore.ts";
 import { MessageAdmission } from "../forkThreads/MessageAdmission.ts";
 import {
   CommandId,
   type OrchestrationV2Run,
   OrchestrationV2DomainEvent,
+  OrchestrationV2ConversationMessageJson,
   OrchestrationV2StoredEvent,
   ProviderThreadId,
   RunAttemptId,
@@ -74,17 +79,23 @@ export type EventSinkV2Error = typeof EventSinkV2Error.Type;
  */
 export interface EventSinkV2Shape {
   readonly write: (input: {
+    readonly unlessSessionFenced?: string;
+    readonly sessionFenceRunId?: RunId;
     readonly guardPendingUserInputCancellations?: boolean;
     readonly commandId?: CommandId;
     readonly events: ReadonlyArray<OrchestrationV2DomainEvent>;
   }) => Effect.Effect<ReadonlyArray<OrchestrationV2StoredEvent>, EventSinkV2Error>;
   readonly writeWithEffects: (input: {
+    readonly unlessSessionFenced?: string;
+    readonly sessionFenceRunId?: RunId;
     readonly guardPendingUserInputCancellations?: boolean;
     readonly commandId?: CommandId;
     readonly events: ReadonlyArray<OrchestrationV2DomainEvent>;
     readonly effects: ReadonlyArray<EffectOutbox.PendingOrchestrationEffectV2>;
   }) => Effect.Effect<ReadonlyArray<OrchestrationV2StoredEvent>, EventSinkV2Error>;
   readonly writeIfRunCurrent: (input: {
+    readonly unlessSessionFenced?: string;
+    readonly sessionFenceRunId?: RunId;
     readonly guardPendingUserInputCancellations?: boolean;
     readonly commandId?: CommandId;
     readonly threadId: ThreadId;
@@ -106,6 +117,8 @@ export interface EventSinkV2Shape {
    * a newer attempt that already claimed the thread.
    */
   readonly writeIfProviderThreadOwner: (input: {
+    readonly unlessSessionFenced?: string;
+    readonly sessionFenceRunId?: RunId;
     readonly guardPendingUserInputCancellations?: boolean;
     readonly commandId?: CommandId;
     readonly providerThreadId: ProviderThreadId;
@@ -309,28 +322,99 @@ const baseLayer: Layer.Layer<
         });
       });
 
-    const normalizeEvents = (events: ReadonlyArray<OrchestrationV2DomainEvent>) => {
-      const runOrdinals = new Map(
-        events.flatMap((event) =>
-          event.type === "run.created" || event.type === "run.updated"
-            ? [[event.payload.id, event.payload.ordinal] as const]
-            : [],
-        ),
-      );
-      return Effect.forEach(
-        events,
-        (event): Effect.Effect<OrchestrationV2DomainEvent, unknown> =>
-          event.type === "turn-item.updated"
-            ? turnItemPositions
-                .normalize(
-                  event.payload,
-                  event.payload.runId === null ? undefined : runOrdinals.get(event.payload.runId),
-                )
-                .pipe(Effect.map((payload) => ({ ...event, payload })))
-            : Effect.succeed(event),
-        { concurrency: 1 },
-      );
-    };
+    const fencedTables = yield* sql<{
+      name: string;
+    }>`SELECT name FROM sqlite_master WHERE name='fork_recovery_thread_fences'`.pipe(Effect.orDie);
+
+    const normalizeEvents = (events: ReadonlyArray<OrchestrationV2DomainEvent>) =>
+      Effect.gen(function* () {
+        if (fencedTables.length > 0) {
+          for (const event of events) {
+            if (
+              (event.type === "message.updated" && event.payload.role === "user") ||
+              event.type === "run.created" ||
+              (event.type === "run.updated" &&
+                ["preparing", "starting", "running", "waiting"].includes(event.payload.status))
+            ) {
+              const fence = yield* sql<{
+                successor_thread_id: string;
+              }>`SELECT successor_thread_id FROM fork_recovery_thread_fences WHERE thread_id=${event.threadId}`;
+              if (fence[0])
+                return yield* new ThreadRecoveryError({
+                  code: "conflict",
+                  message: `Thread handed over; send new work to successor ${fence[0].successor_thread_id}.`,
+                });
+            }
+          }
+        }
+        const principal = yield* HumanIngress;
+        const normalized: OrchestrationV2DomainEvent[] = [];
+        for (const event of events) {
+          if (event.type === "message.updated" && event.payload.role === "user") {
+            const previous = yield* sql<{
+              payload_json: string;
+            }>`SELECT payload_json FROM orchestration_v2_projection_messages WHERE thread_id=${event.threadId} AND message_id=${event.payload.id}`;
+            const original = previous[0]
+              ? yield* Schema.decodeUnknownEffect(
+                  Schema.fromJsonString(OrchestrationV2ConversationMessageJson),
+                )(previous[0].payload_json)
+              : undefined;
+            // An edit cannot promote historical provenance to authenticated human ingress.
+            const origin = original
+              ? original.humanOrigin
+              : principal !== null &&
+                  event.payload.createdBy === "user" &&
+                  ["web", "mobile"].includes(event.payload.creationSource) &&
+                  event.payload.scheduledTaskId === undefined &&
+                  event.payload.senderThreadId === undefined
+                ? { principal, sourceMessageId: event.payload.id }
+                : event.payload.humanOrigin;
+            const { humanOrigin: _incoming, ...payload } = event.payload;
+            normalized.push({
+              ...event,
+              payload: { ...payload, ...(origin ? { humanOrigin: origin } : {}) },
+            });
+          } else normalized.push(event);
+        }
+        events = normalized;
+        if (recoveryTables.length > 0) {
+          for (const event of events) {
+            if (
+              (event.type === "run.created" || event.type === "run.updated") &&
+              ["preparing", "starting", "running", "waiting"].includes(event.payload.status)
+            ) {
+              const pending =
+                yield* sql`SELECT 1 FROM fork_recovery_session_fences f JOIN fork_recovery_operations o ON o.operation_id=f.operation_id WHERE f.thread_id=${event.threadId} AND json_extract(o.payload,'$.status')='fenced' LIMIT 1`;
+              if (pending.length > 0)
+                return yield* new ThreadRecoveryError({
+                  code: "pending",
+                  message:
+                    "Session reset teardown is still pending; retry the recorded reset before starting new work.",
+                });
+            }
+          }
+        }
+        const runOrdinals = new Map(
+          events.flatMap((event) =>
+            event.type === "run.created" || event.type === "run.updated"
+              ? [[event.payload.id, event.payload.ordinal] as const]
+              : [],
+          ),
+        );
+        return yield* Effect.forEach(
+          events,
+          (event): Effect.Effect<OrchestrationV2DomainEvent, unknown> =>
+            event.type === "turn-item.updated"
+              ? turnItemPositions
+                  .normalize(
+                    event.payload,
+                    event.payload.runId === null ? undefined : runOrdinals.get(event.payload.runId),
+                  )
+                  .pipe(Effect.map((payload) => ({ ...event, payload })))
+              : Effect.succeed(event),
+          { concurrency: 1 },
+        );
+      });
 
     const applyStoredEvents = (storedEvents: ReadonlyArray<OrchestrationV2StoredEvent>) =>
       Effect.gen(function* () {
@@ -377,6 +461,42 @@ const baseLayer: Layer.Layer<
         }
       });
 
+    const recoveryTables = yield* sql<{
+      name: string;
+    }>`SELECT name FROM sqlite_master WHERE name='fork_recovery_session_fences'`.pipe(Effect.orDie);
+    const isFenced = (
+      sessionId: string | undefined,
+      events: ReadonlyArray<OrchestrationV2DomainEvent>,
+      sourceRunId?: RunId,
+    ) =>
+      sessionId === undefined || recoveryTables.length === 0
+        ? Effect.succeed(false)
+        : Effect.gen(function* () {
+            const fences = yield* sql<{
+              thread_id: string;
+              run_ordinal: number;
+              status: string;
+            }>`SELECT f.thread_id,f.run_ordinal,json_extract(o.payload,'$.status') AS status FROM fork_recovery_session_fences f JOIN fork_recovery_operations o ON o.operation_id=f.operation_id WHERE f.session_id=${sessionId}`;
+            for (const event of events) {
+              const fence = fences.find((f) => f.thread_id === event.threadId);
+              if (!fence) continue;
+              if (fence.status !== "completed") return true;
+              const runId =
+                sourceRunId ??
+                event.runId ??
+                ("runId" in event.payload ? event.payload.runId : undefined) ??
+                (event.type === "run.created" || event.type === "run.updated"
+                  ? event.payload.id
+                  : undefined);
+              if (!runId) return true;
+              const runs = yield* sql<{
+                ordinal: number;
+              }>`SELECT ordinal FROM orchestration_v2_projection_runs WHERE thread_id=${event.threadId} AND run_id=${runId}`;
+              if (!runs[0] || runs[0].ordinal <= fence.run_ordinal) return true;
+            }
+            return false;
+          });
+
     const writeEffect = Effect.fn("orchestrationV2.EventSink.write")(function* (
       input: Parameters<EventSinkV2Shape["writeWithEffects"]>[0],
     ) {
@@ -388,6 +508,8 @@ const baseLayer: Layer.Layer<
 
       return yield* commitThenPublish(
         Effect.gen(function* () {
+          if (yield* isFenced(input.unlessSessionFenced, input.events, input.sessionFenceRunId))
+            return [];
           const normalized = yield* normalizeEvents(
             input.guardPendingUserInputCancellations === true
               ? yield* guardUserInputCancellations(input.events)
@@ -422,6 +544,11 @@ const baseLayer: Layer.Layer<
 
         return yield* commitThenPublish(
           Effect.gen(function* () {
+            if (yield* isFenced(input.unlessSessionFenced, input.events, input.sessionFenceRunId))
+              return {
+                committed: false as const,
+                storedEvents: [] as ReadonlyArray<OrchestrationV2StoredEvent>,
+              };
             const rows = yield* sql<{
               readonly status: string;
               readonly active_attempt_id: string | null;
@@ -477,6 +604,11 @@ const baseLayer: Layer.Layer<
 
       return yield* commitThenPublish(
         Effect.gen(function* () {
+          if (yield* isFenced(input.unlessSessionFenced, input.events, input.sessionFenceRunId))
+            return {
+              committed: false as const,
+              storedEvents: [] as ReadonlyArray<OrchestrationV2StoredEvent>,
+            };
           const rows = yield* sql<{
             readonly active_attempt_id: string | null;
             readonly last_run_ordinal: number | null;
@@ -577,8 +709,13 @@ const baseLayer: Layer.Layer<
             }
           }
 
+          const sendBinding = yield* SendBindingWrite;
+          if (sendBinding?.commandId === input.commandId) yield* sendBinding.persist;
           const admission = yield* MessageAdmission;
           if (admission?.commandId === input.commandId) yield* admission.persist;
+          const resumeAdmission = yield* ResumeAdmission;
+          if (resumeAdmission?.commandId === input.commandId)
+            yield* resumeAdmission.persist(input.events);
           const normalized = yield* normalizeEvents(input.events);
           const storedEvents = yield* eventStore.append({
             commandId: input.commandId,
