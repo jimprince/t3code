@@ -80,24 +80,30 @@ export async function routeToNamedAgent(input: {
   state: StateFile;
   name: string;
   message: string;
+  requireLive?: boolean;
   clientFactory: NamedAgentClientFactory;
 }): Promise<{ environment: string; threadId: string; started: boolean } | null> {
   if (resolveSavedAgentTarget(input.state, input.name) || isRawThreadUuid(input.name)) return null;
-  const owners: string[] = [];
+  const owners: Array<{ environment: string; liveThreadId: string | null }> = [];
   for (const environment of input.state.environments) {
     const agents = await input
       .clientFactory(environment.name)
       .listNamedAgents()
       .catch(() => [] as NamedAgentSummary[]);
-    if (agents.some((agent) => agent.name === input.name)) owners.push(environment.name);
+    const agent = agents.find((agent) => agent.name === input.name);
+    if (agent) owners.push({ environment: environment.name, liveThreadId: agent.liveThreadId });
   }
   if (owners.length === 0) return null;
   if (owners.length > 1) {
     throw new Error(
-      `Named agent '${input.name}' exists in several paired environments: ${owners.join(", ")}.`,
+      `Named agent '${input.name}' exists in several paired environments: ${owners.map((owner) => owner.environment).join(", ")}.`,
     );
   }
-  const environment = owners[0]!;
+  const { environment, liveThreadId } = owners[0]!;
+  if (input.requireLive) {
+    if (!liveThreadId) throw new Error("DORMANT");
+    return { environment, threadId: liveThreadId, started: false };
+  }
   const resolved = await input
     .clientFactory(environment)
     .resolveNamedAgent(input.name, input.message);
