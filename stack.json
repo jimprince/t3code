@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "d3a7763fde6b97ddc5a8a27fdeddeded806104ff",
-  "head": "8394966ffe0f1fd54b34cc57179938f0da56560e",
+  "prev": "7a49b3bf73c08544c54a0db2dae282eb4a80388c",
+  "head": "5212240a4d1f0a28fb51de984152e874f3862308",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -141,11 +141,10 @@
     "fork-held-queue-resume",
     "fork-mobile-new-task-reply",
     "fork-backport-upstream-17348-scroll-follow",
-    "fork-timeline-end-restore-settles"
-  ],
-  "unapplied": [
+    "fork-timeline-end-restore-settles",
     "fork-mobile-manual-production"
   ],
+  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
@@ -329,7 +328,7 @@
       "oid": "79cb0081258f154e8a82b652706943bf9793137a"
     },
     "fork-mobile-manual-production": {
-      "oid": "df7d3aa4effbfa85d8c5f3448c93dc7488c7af14"
+      "oid": "5212240a4d1f0a28fb51de984152e874f3862308"
     },
     "fork-mobile-new-task-reply": {
       "oid": "045fb7d4ced09523431ed92a72a85b537b698716"
