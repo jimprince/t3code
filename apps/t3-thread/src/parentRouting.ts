@@ -44,8 +44,20 @@ type Recipient = {
 };
 type Route = Recipient & { sourceThreadId: string; sourceEnvironment: string };
 type Environments = {
+  handoverRedirects?: StateFile["handoverRedirects"];
   environments: ReadonlyArray<Pick<SavedEnvironment, "name" | "environmentId">>;
 };
+
+/** A host cutover redirects derived parent routes while the server completes its later metadata step. */
+function handoverParent(threadId: string, environment: string, state?: Environments): string {
+  const name =
+    state?.environments.find((e) => e.name === environment || e.environmentId === environment)
+      ?.name ?? environment;
+  const redirect = state?.handoverRedirects?.find(
+    (r) => r.oldThreadId === threadId && r.targetEnvironment === name,
+  );
+  return redirect?.successorThreadId ?? threadId;
+}
 
 /** Stable descriptors survive pairing aliases changing; an unpaired descriptor stays scoped. */
 export function recipientKey(route: Recipient, state?: Environments): string {
@@ -73,16 +85,27 @@ export function matchesCurrentParent(
   if (thread.remoteParent) {
     return (
       recipientKey(route, state) ===
-      JSON.stringify([thread.remoteParent.environmentId, thread.remoteParent.threadId])
+      JSON.stringify([
+        thread.remoteParent.environmentId,
+        handoverParent(thread.remoteParent.threadId, thread.remoteParent.environmentId, state),
+      ])
     );
   }
-  if (!thread.parentThreadId || thread.parentThreadId !== route.subscriberThreadId) return false;
+  if (
+    !thread.parentThreadId ||
+    handoverParent(thread.parentThreadId, route.sourceEnvironment, state) !==
+      route.subscriberThreadId
+  )
+    return false;
   const sourceId = state?.environments.find(
     (environment) => environment.name === route.sourceEnvironment,
   )?.environmentId;
   return (
     recipientKey(route, state) ===
-    JSON.stringify([sourceId ?? route.sourceEnvironment, thread.parentThreadId])
+    JSON.stringify([
+      sourceId ?? route.sourceEnvironment,
+      handoverParent(thread.parentThreadId, route.sourceEnvironment, state),
+    ])
   );
 }
 
