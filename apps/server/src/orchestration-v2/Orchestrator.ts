@@ -3,6 +3,7 @@ import type {
   OrchestrationV2SearchThreadResult,
   OrchestrationV2ThreadHistoryPage,
 } from "@t3tools/contracts";
+import { ResumeAdmission } from "../threadRecovery/ResumeAdmission.ts";
 import { interruptedSessionEvents } from "../forkThreads/InterruptedSession.ts";
 import { MessageAdmission } from "../forkThreads/MessageAdmission.ts";
 import { canReconcileStartingSession } from "../forkThreads/StartingSessionReconcile.ts";
@@ -9092,6 +9093,19 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         completedAt: now,
         updatedAt: now,
         type: "run_interrupt_request",
+        sessionGeneration:
+          (yield* sql<{
+            generation: number;
+          }>`SELECT generation FROM fork_recovery_generations WHERE thread_id=${command.threadId}`.pipe(
+            Effect.mapError(
+              (cause) =>
+                new OrchestratorDispatchError({
+                  commandId: command.commandId,
+                  commandType: command.type,
+                  cause,
+                }),
+            ),
+          ))[0]?.generation ?? 0,
         message: command.reason ?? "Interrupt requested",
       };
 
@@ -9186,6 +9200,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           completedAt: now,
           updatedAt: now,
           type: "run_interrupt_result",
+          stopOutcome: "fallback",
           message: "Run interrupted before provider start",
         };
         yield* emitEvent({
@@ -10970,6 +10985,20 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       "orchestration_v2.thread_id": commandThreadId(command),
     });
 
+    const resumeAdmission = yield* ResumeAdmission;
+    if (resumeAdmission?.commandId === command.commandId) {
+      const accepted = yield* resumeAdmission.accept.pipe(
+        Effect.mapError(
+          (cause) =>
+            new OrchestratorDispatchError({
+              commandId: command.commandId,
+              commandType: command.type,
+              cause,
+            }),
+        ),
+      );
+      if (!accepted) return { sequence: 0, storedEvents: [] };
+    }
     const admission = yield* MessageAdmission;
     if (command.type === "message.dispatch" && admission?.commandId === command.commandId) {
       const accepted = yield* admission.accept.pipe(
