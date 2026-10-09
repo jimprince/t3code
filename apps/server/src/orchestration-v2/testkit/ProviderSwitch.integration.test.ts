@@ -775,40 +775,30 @@ describe("orchestration v2 provider switching", () => {
           const projection = yield* orchestrator.getThreadProjection(threadId);
           assert.equal(projection.runs.at(-1)?.status, "completed");
           if (priorImages) {
-            const handoff = projection.contextHandoffs.at(-1)!;
             const context = scenario.endsWith("-native")
               ? yield* encodeJson(yield* Ref.get(injectedHistory))
               : (yield* Ref.get(capturedTurns)).at(-1)!.text;
-            const shouldFit =
-              turnUsageScenario ||
-              scenario.startsWith("imported") ||
-              scenario.includes("telemetry") ||
-              scenario.includes("unsent") ||
-              replaceNative;
             const sourceText =
               `${replaceNative ? "Another" : "New"} source constraint ` + "q".repeat(9_000);
             const sourceItem = projection.turnItems.find(
               (item) => item.type === "user_message" && item.text === sourceText,
             )!;
             assert.isDefined(sourceItem);
-            if (shouldFit) {
-              assert.include(context, sourceText);
-              assert.include(
-                projection.contextHandoffs
-                  .filter(
-                    (record) =>
-                      record.targetRunId ===
-                      (scenario.includes("retry")
-                        ? projection.runs.find((run) => run.ordinal === targetOrdinal)!.id
-                        : projection.runs.at(-1)!.id),
-                  )
-                  .flatMap((record) => record.delivery?.itemIds ?? []),
-                sourceItem.id,
-              );
-            } else {
-              assert.notInclude(context, "q".repeat(9_000));
-              assert.isAbove(handoff.delivery!.omittedItemIds!.length, 0);
-            }
+            // Every target here is Claude, which compacts its native transcript itself, so
+            // prior images no longer crowd the source request out of the handoff.
+            assert.include(context, sourceText);
+            assert.include(
+              projection.contextHandoffs
+                .filter(
+                  (record) =>
+                    record.targetRunId ===
+                    (scenario.includes("retry")
+                      ? projection.runs.find((run) => run.ordinal === targetOrdinal)!.id
+                      : projection.runs.at(-1)!.id),
+                )
+                .flatMap((record) => record.delivery?.itemIds ?? []),
+              sourceItem.id,
+            );
             const latestRun = projection.runs.at(-1)!;
             const latestAttempt = projection.attempts.find(
               (attempt) => attempt.id === latestRun.activeAttemptId,
