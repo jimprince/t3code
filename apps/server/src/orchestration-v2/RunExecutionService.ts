@@ -3,6 +3,7 @@ import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import {
   isOrchestrationV2WorkActive,
   CommandId,
+  RunId,
   type EventId,
   type ModelSelection,
   type NodeId,
@@ -25,7 +26,9 @@ import {
   type TurnItemId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
+import * as Config from "effect/Config";
 import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -461,6 +464,17 @@ export function routeProviderEvent(
 /**
  * ERRORS
  */
+class ProviderRunStartTimeoutError extends Schema.TaggedError<ProviderRunStartTimeoutError>()(
+  "ProviderRunStartTimeoutError",
+  { runId: RunId, timeoutMs: Schema.Number },
+) {
+  override get message() {
+    return `The provider did not start this turn within ${this.timeoutMs} ms. Retry the turn.`;
+  }
+}
+
+const isProviderRunStartTimeoutError = Schema.is(ProviderRunStartTimeoutError);
+
 export class RunExecutionStartError extends Schema.TaggedError<RunExecutionStartError>()(
   "RunExecutionStartError",
   {
@@ -548,6 +562,11 @@ export const layer: Layer.Layer<
   RunExecutionServiceV2,
   Effect.gen(function* () {
     const checkpointService = yield* CheckpointService.CheckpointServiceV2;
+    const startTimeoutMs = yield* Config.Int("T3CODE_PROVIDER_START_TIMEOUT_MS").pipe(
+      Config.withDefault(120_000),
+      Config.map((value) => Math.max(1, value)),
+      Effect.orDie,
+    );
     const eventSink = yield* EventSink.EventSinkV2;
     const idAllocator = yield* IdAllocator.IdAllocatorV2;
     const providerEventIngestor = yield* ProviderEventIngestor.ProviderEventIngestorV2;
@@ -796,6 +815,14 @@ export const layer: Layer.Layer<
     return RunExecutionServiceV2.of({
       startRootRun: (input) =>
         Effect.gen(function* () {
+          const startDeadline = (yield* Clock.currentTimeMillis) + startTimeoutMs;
+          const startTimeout = () =>
+            Effect.fail(
+              new ProviderRunStartTimeoutError({
+                runId: input.run.id,
+                timeoutMs: startTimeoutMs,
+              }),
+            );
           // Startup failure and stream shutdown can report the same attempt.
           const refreshAfterTurn = yield* Effect.cached(
             finalizationObserver.refreshAfterTurn(input.appThread.projectId).pipe(
@@ -858,6 +885,10 @@ export const layer: Layer.Layer<
             }
             return responseStreamingMode;
           }).pipe(
+            Effect.timeoutOrElse({
+              duration: Math.max(1, startDeadline - (yield* Clock.currentTimeMillis)),
+              orElse: startTimeout,
+            }),
             Effect.catchCause((cause) =>
               Effect.gen(function* () {
                 if (Cause.hasInterruptsOnly(cause)) {
@@ -876,9 +907,14 @@ export const layer: Layer.Layer<
                   terminal: makeFailedTerminalEvent(
                     makeProviderFailure({
                       cause: Cause.squash(cause),
+                      ...(isProviderRunStartTimeoutError(Cause.squash(cause))
+                        ? { code: "provider_start_timeout" }
+                        : {}),
                       // Keep exact underlying text in the logged cause only;
                       // the persisted turn item gets a bounded curated message.
-                      message: "Run preparation failed.",
+                      message: isProviderRunStartTimeoutError(Cause.squash(cause))
+                        ? (Cause.squash(cause) as ProviderRunStartTimeoutError).message
+                        : "Run preparation failed.",
                       class: "unknown",
                     }),
                     input.providerTurnOrdinal * 100 + 1,
@@ -1333,7 +1369,14 @@ export const layer: Layer.Layer<
           const shouldStart =
             input.shouldStartProviderTurn === undefined
               ? Exit.succeed(true)
-              : yield* Effect.exit(input.shouldStartProviderTurn());
+              : yield* Effect.exit(
+                  input.shouldStartProviderTurn().pipe(
+                    Effect.timeoutOrElse({
+                      duration: Math.max(1, startDeadline - (yield* Clock.currentTimeMillis)),
+                      orElse: startTimeout,
+                    }),
+                  ),
+                );
           if (Exit.isSuccess(shouldStart) && !shouldStart.value) {
             yield* Fiber.interrupt(providerEventFiber);
             return;
@@ -1380,6 +1423,10 @@ export const layer: Layer.Layer<
               ))
             : input.session.startTurn(turnInput);
           yield* Effect.andThen(shouldStart, startTurn).pipe(
+            Effect.timeoutOrElse({
+              duration: Math.max(1, startDeadline - (yield* Clock.currentTimeMillis)),
+              orElse: startTimeout,
+            }),
             Effect.catchCause((cause) =>
               Effect.logError("orchestration V2 provider turn start failed", {
                 runId: input.run.id,
@@ -1408,6 +1455,13 @@ export const layer: Layer.Layer<
                             terminal: makeFailedTerminalEvent(
                               makeProviderFailure({
                                 cause: Cause.squash(cause),
+                                ...(isProviderRunStartTimeoutError(Cause.squash(cause))
+                                  ? {
+                                      message: (Cause.squash(cause) as ProviderRunStartTimeoutError)
+                                        .message,
+                                      code: "provider_start_timeout",
+                                    }
+                                  : {}),
                                 // A failed ownership read is not the provider's fault.
                                 class: Exit.isFailure(shouldStart) ? "unknown" : "provider_error",
                               }),
