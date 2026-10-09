@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
-import { createDisconnectedComposerQueue } from "./disconnectedComposer.ts";
+import {
+  createDisconnectedComposerQueue,
+  DisconnectedComposerRefusal,
+} from "./disconnectedComposer.ts";
 
 describe("disconnected composer sends", () => {
   it("keeps original intent, IDs and attachments, then drains FIFO once on reconnect", async () => {
@@ -67,5 +70,81 @@ describe("disconnected composer sends", () => {
     queue.enqueue({ commandId: "same", text: "first" });
     expect(() => queue.enqueue({ commandId: "same", text: "different" })).toThrow("reused");
     expect(queue.pending()).toEqual([{ commandId: "same", text: "first" }]);
+  });
+
+  describe("a server refusal", () => {
+    type Send = { commandId: string; thread: string };
+    const makeQueue = () =>
+      createDisconnectedComposerQueue<Send>({ orderKey: (command) => command.thread });
+
+    it("is terminal for that command, never replayed, while other threads still send", async () => {
+      const queue = makeQueue();
+      const refused = { commandId: "a1", thread: "a" };
+      const behind = { commandId: "a2", thread: "a" };
+      const other = { commandId: "b1", thread: "b" };
+      for (const command of [refused, behind, other]) queue.enqueue(command);
+
+      const sent: string[] = [];
+      const refuse = async (command: Send) => {
+        sent.push(command.commandId);
+        if (command === refused) throw new DisconnectedComposerRefusal("no running turn");
+      };
+      await queue.flush(refuse);
+      // The later message of the SAME thread waits; the other thread went on past the refusal.
+      expect(sent).toEqual(["a1", "b1"]);
+      expect(queue.pending()).toEqual([refused, behind]);
+      expect(queue.refusal("a1")).toBe("no running turn");
+      expect(queue.refusal("a2")).toBeUndefined();
+
+      // A later flush does not replay the refused id and keeps the one behind it waiting.
+      await queue.flush(refuse);
+      expect(sent).toEqual(["a1", "b1"]);
+    });
+
+    it("lets the thread go on once the refused command is removed or replaced in place", async () => {
+      const queue = makeQueue();
+      const refused = { commandId: "a1", thread: "a" };
+      const behind = { commandId: "a2", thread: "a" };
+      queue.enqueue(refused);
+      queue.enqueue(behind);
+      await queue.flush(async (command) => {
+        if (command === refused) throw new DisconnectedComposerRefusal("nope");
+      });
+
+      const resent = { commandId: "a1-again", thread: "a" };
+      queue.replace("a1", resent);
+      expect(queue.refusal("a1")).toBeUndefined();
+      const sent: string[] = [];
+      await queue.flush(async (command) => void sent.push(command.commandId));
+      // Replaced in its old place, so it still goes before the message that waited behind it.
+      expect(sent).toEqual(["a1-again", "a2"]);
+
+      const second = makeQueue();
+      second.enqueue(refused);
+      second.enqueue(behind);
+      await second.flush(async (command) => {
+        if (command === refused) throw new DisconnectedComposerRefusal("nope");
+      });
+      expect(second.remove("a1")).toBe(true);
+      expect(second.remove("a1")).toBe(false);
+      expect(second.refusal("a1")).toBeUndefined();
+      await second.flush(async () => undefined);
+      expect(second.pending()).toEqual([]);
+    });
+
+    it("keeps a transport failure retryable with the same command and stops the drain", async () => {
+      const queue = makeQueue();
+      const first = { commandId: "a1", thread: "a" };
+      const other = { commandId: "b1", thread: "b" };
+      queue.enqueue(first);
+      queue.enqueue(other);
+      await expect(
+        queue.flush(async () => {
+          throw new Error("socket closed before acknowledgement");
+        }),
+      ).rejects.toThrow("socket closed");
+      expect(queue.refusal("a1")).toBeUndefined();
+      expect(queue.pending()).toEqual([first, other]);
+    });
   });
 });
