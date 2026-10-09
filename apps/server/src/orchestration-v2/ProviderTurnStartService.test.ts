@@ -1,6 +1,12 @@
+import * as Stream from "effect/Stream";
+import * as CheckpointService from "./CheckpointService.ts";
+import * as ProviderEventIngestor from "./ProviderEventIngestor.ts";
+import * as McpAppModelContext from "../mcpApps/McpAppModelContext.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import { expect, it, vi } from "vite-plus/test";
 import { it as effectIt } from "@effect/vitest";
 import {
+  ContextHandoffId,
   CheckpointScopeId,
   MessageId,
   NodeId,
@@ -12,6 +18,7 @@ import {
   RunAttemptId,
   RunId,
   ThreadId,
+  TurnItemId,
   ProjectId,
   type OrchestrationV2ThreadProjection,
   OrchestrationV2DomainEvent,
@@ -21,6 +28,8 @@ import { CodexAppServerRequestTimeoutError } from "effect-codex-app-server/error
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Fiber from "effect/Fiber";
+import * as TestClock from "effect/testing/TestClock";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -38,6 +47,8 @@ import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import * as ProviderTurnStart from "./ProviderTurnStartService.ts";
 import * as RunExecutionService from "./RunExecutionService.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
+
+import { PendingHumanRequests } from "../threadRecovery/PendingHumanRequests.ts";
 
 const isDomainEvent = Schema.is(OrchestrationV2DomainEvent);
 
@@ -156,6 +167,7 @@ it("does not commit running state when inherited background routing cannot be re
 
 function makeLocalCommandHarness(input: {
   readonly text: string;
+  readonly appBudget?: { readonly notes: ReadonlyArray<string> };
   readonly previousNativeSession?: boolean;
   readonly previousMessages?: ReadonlyArray<string>;
   readonly logoutFailure?: string;
@@ -357,6 +369,66 @@ function makeLocalCommandHarness(input: {
       ),
     };
   }
+  if (input.appBudget !== undefined) {
+    projection = {
+      ...projection,
+      contextHandoffs: [
+        {
+          id: ContextHandoffId.make("handoff:app-budget"),
+          threadId,
+          targetRunId: runId,
+          fromProviderThreadIds: [],
+          toProviderThreadId: providerThreadId,
+          coveredRunOrdinals: { from: 1, to: 1 },
+          strategy: "full_thread_summary",
+          status: "ready",
+          summaryMessageId: null,
+          summaryText: "",
+          createdByProviderInstanceId: null,
+          history: {
+            coverage: "Earlier work",
+            omittedItems: 0,
+            messages: [
+              {
+                itemId: TurnItemId.make("item:earlier-human"),
+                role: "user",
+                text: "Keep the exact earlier request.",
+                threadId,
+                runId: RunId.make("earlier-run"),
+                providerThreadId,
+                status: "interrupted",
+                kind: "user_message",
+              },
+            ],
+          },
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
+    };
+  }
+  const nativeStarts = vi.fn((turn: ProviderAdapter.ProviderAdapterV2TurnInput) =>
+    Effect.asVoid(Effect.succeed(turn)),
+  );
+  const budgetSession = {
+    driver: providerThread.driver,
+    providerSession: {
+      id: providerSessionId,
+      driver: providerThread.driver,
+      providerInstanceId: newInstanceId,
+      status: "ready",
+      cwd: "/tmp/native-account-command",
+      model: null,
+      capabilities: CodexProviderCapabilitiesV2,
+      createdAt: now,
+      updatedAt: now,
+      lastError: null,
+    },
+    ensureThread: () => Effect.succeed(providerThread),
+    getModelContextWindow: () => 32_000,
+    events: Stream.empty,
+    startTurn: nativeStarts,
+  };
   const events: Array<OrchestrationV2DomainEvent> = [];
   const interruptRun = () => {
     projection = {
@@ -415,44 +487,46 @@ function makeLocalCommandHarness(input: {
     ensureThread: freshThread,
   };
   const open = vi.fn(() =>
-    input.interruptOpen === true
-      ? Effect.interrupt
-      : "historyReadFailureAfterFallback" in input || input.resumeTimeout
-        ? Effect.succeed(resumeFallbackSession as never)
-        : "ensureThreadFailure" in input
-          ? Effect.succeed({ driver: providerThread.driver, ensureThread } as never)
-          : "openFailure" in input
-            ? Effect.sync(() => {
-                if (input.interruptRunBeforeOpenFailure === true) interruptRun();
-              }).pipe(
-                Effect.andThen(
-                  Effect.fail(
-                    new ProviderSessionManager.ProviderSessionOpenError({
-                      instanceId: newInstanceId,
-                      providerSessionId,
-                      cause: input.openFailure,
-                    }),
+    input.appBudget !== undefined
+      ? Effect.succeed(budgetSession as never)
+      : input.interruptOpen === true
+        ? Effect.interrupt
+        : "historyReadFailureAfterFallback" in input || input.resumeTimeout
+          ? Effect.succeed(resumeFallbackSession as never)
+          : "ensureThreadFailure" in input
+            ? Effect.succeed({ driver: providerThread.driver, ensureThread } as never)
+            : "openFailure" in input
+              ? Effect.sync(() => {
+                  if (input.interruptRunBeforeOpenFailure === true) interruptRun();
+                }).pipe(
+                  Effect.andThen(
+                    Effect.fail(
+                      new ProviderSessionManager.ProviderSessionOpenError({
+                        instanceId: newInstanceId,
+                        providerSessionId,
+                        cause: input.openFailure,
+                      }),
+                    ),
                   ),
-                ),
-              )
-            : input.failReadsAfterRunning === true
-              ? Effect.succeed({
-                  driver: providerThread.driver,
-                  providerSession: {
-                    id: providerSessionId,
+                )
+              : input.failReadsAfterRunning === true
+                ? Effect.succeed({
                     driver: providerThread.driver,
-                    providerInstanceId: newInstanceId,
-                    status: "ready",
-                    cwd: "/tmp/native-account-command",
-                    model: null,
-                    capabilities: CodexProviderCapabilitiesV2,
-                    createdAt: now,
-                    updatedAt: now,
-                    lastError: null,
-                  },
-                  ensureThread: () => Effect.succeed(providerThread),
-                } as never)
-              : Effect.die("A local command must not open a native session."),
+                    providerSession: {
+                      id: providerSessionId,
+                      driver: providerThread.driver,
+                      providerInstanceId: newInstanceId,
+                      status: "ready",
+                      cwd: "/tmp/native-account-command",
+                      model: null,
+                      capabilities: CodexProviderCapabilitiesV2,
+                      createdAt: now,
+                      updatedAt: now,
+                      lastError: null,
+                    },
+                    ensureThread: () => Effect.succeed(providerThread),
+                  } as never)
+                : Effect.die("A local command must not open a native session."),
   );
   const startRootRun = vi.fn<
     (input: RunExecutionService.RunExecutionServiceV2StartRootRunInput) => Effect.Effect<void>
@@ -471,7 +545,7 @@ function makeLocalCommandHarness(input: {
   );
   const tryHandlePromptCommand = vi.fn(() =>
     input.logoutFailure === undefined
-      ? Effect.succeed(true)
+      ? Effect.succeed(input.appBudget === undefined)
       : Effect.fail(
           new ProviderSetupError({
             instanceId: oldInstanceId,
@@ -504,13 +578,45 @@ function makeLocalCommandHarness(input: {
           return { committed, storedEvents: [] };
         }),
   );
+  const write = ({ events: incoming }: { events: ReadonlyArray<OrchestrationV2DomainEvent> }) =>
+    Effect.sync(() => {
+      for (const event of incoming) {
+        events.push(event);
+        projection = ProjectionStore.applyToProjection(projection, event);
+      }
+      return [];
+    });
+  const liveRunExecution = RunExecutionService.layer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        Layer.mock(CheckpointService.CheckpointServiceV2)({ captureBaseline: () => Effect.void }),
+        Layer.mock(EventSink.EventSinkV2)({ write, writeIfRunCurrent }),
+        IdAllocator.layer,
+        Layer.mock(ProviderEventIngestor.ProviderEventIngestorV2)({
+          ingestNormalized: () => Effect.succeed([]),
+        }),
+        ServerSettings.layerTest(),
+        Layer.mock(McpAppModelContext.McpAppModelContext)({
+          forThread: () =>
+            Effect.succeed(
+              (input.appBudget?.notes ?? []).map((text, index) => ({
+                itemId: `app-${index}`,
+                server: "test",
+                tool: "notes",
+                text,
+              })),
+            ),
+        }),
+      ),
+    ),
+  );
   const layer = ProviderTurnStart.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
         Layer.mock(ContextHandoffService.ContextHandoffServiceV2)({
           prepareProviderHandoff: () => Effect.die("history read must fail first"),
         }),
-        Layer.mock(EventSink.EventSinkV2)({ writeIfRunCurrent }),
+        Layer.mock(EventSink.EventSinkV2)({ write, writeIfRunCurrent }),
         IdAllocator.layer,
         FileSystem.layerNoop({}),
         Layer.mock(GitWorkflow.GitWorkflowService)({}),
@@ -535,16 +641,20 @@ function makeLocalCommandHarness(input: {
               ),
             }),
           getTurnStartHistory: () =>
-            Effect.fail(
-              new ProjectionStore.ProjectionStoreReadError({
-                threadId,
-                cause: input.historyReadFailureAfterFallback,
-              }),
-            ),
+            input.appBudget !== undefined
+              ? Effect.succeed([])
+              : Effect.fail(
+                  new ProjectionStore.ProjectionStoreReadError({
+                    threadId,
+                    cause: input.historyReadFailureAfterFallback,
+                  }),
+                ),
         }),
         Layer.mock(ProviderSessionManager.ProviderSessionManagerV2)({ open }),
         Layer.mock(ProviderAuthService.ProviderAuthService)({ tryHandlePromptCommand }),
-        Layer.mock(RunExecutionService.RunExecutionServiceV2)({ startRootRun }),
+        input.appBudget === undefined
+          ? Layer.mock(RunExecutionService.RunExecutionServiceV2)({ startRootRun })
+          : liveRunExecution,
         Layer.mock(RuntimePolicy.RuntimePolicyV2)({
           resolve: () => Effect.succeed({} as never),
         }),
@@ -553,6 +663,7 @@ function makeLocalCommandHarness(input: {
   );
   return {
     open,
+    nativeStarts,
     freshThread,
     resumedNativeIds,
     writeIfRunCurrent,
@@ -898,5 +1009,80 @@ effectIt.effect(
       expect(harness.projection().providerThreads.at(-1)?.nativeThreadRef?.nativeId).toBe(
         "native-resume-thread",
       );
+    }),
+);
+
+effectIt.effect(
+  "captures pending human turn-item IDs from the optional layer for later worker execution",
+  () =>
+    Effect.gen(function* () {
+      const threadId = ThreadId.make("thread:pending-human");
+      const turnItemId = TurnItemId.make("item:completed-unaddressed");
+      const absent = yield* ProviderTurnStart.makePendingHumanItemReader;
+      expect(yield* absent(threadId, [turnItemId])).toEqual([]);
+      const found = yield* ProviderTurnStart.makePendingHumanItemReader.pipe(
+        Effect.provide(
+          Layer.mock(PendingHumanRequests)({
+            listPending: (input) => {
+              expect(input.threadId).toBe(threadId);
+              return Effect.succeed([
+                {
+                  turnItemId,
+                  sourceMessageId: MessageId.make("message:human"),
+                  reason: "unanswered" as const,
+                },
+              ]);
+            },
+          }),
+        ),
+      );
+      // Call outside the layer that supplied the service, just as the native worker does.
+      expect(yield* found(threadId, [turnItemId, TurnItemId.make("item:addressed")])).toEqual([
+        turnItemId,
+      ]);
+      const failed = yield* ProviderTurnStart.makePendingHumanItemReader.pipe(
+        Effect.provide(
+          Layer.mock(PendingHumanRequests)({
+            listPending: () => Effect.die("lookup storage failure"),
+          }),
+        ),
+      );
+      expect(yield* failed(threadId, [turnItemId])).toEqual([turnItemId]);
+    }),
+);
+
+effectIt.effect("bounds a stalled optional pending-human lookup", () =>
+  Effect.gen(function* () {
+    const read = yield* ProviderTurnStart.makePendingHumanItemReader.pipe(
+      Effect.provide(Layer.mock(PendingHumanRequests)({ listPending: () => Effect.never })),
+    );
+    const lookup = yield* read(ThreadId.make("thread:stalled-lookup"), [
+      TurnItemId.make("item:human"),
+    ]).pipe(Effect.forkChild);
+    yield* TestClock.adjust("5 seconds");
+    expect(yield* Fiber.join(lookup)).toEqual([TurnItemId.make("item:human")]);
+  }),
+);
+
+effectIt.effect.each([false, true])(
+  "reserves live MCP app context before handoff delivery (large=%s)",
+  (large) =>
+    Effect.gen(function* () {
+      const notes = large ? ["a".repeat(16_000), "b".repeat(16_000)] : ["small live app note"];
+      const harness = makeLocalCommandHarness({ text: "Continue my work", appBudget: { notes } });
+      yield* harness.start;
+      if (large) {
+        expect(harness.nativeStarts).not.toHaveBeenCalled();
+        expect(harness.projection().runs.at(-1)?.status).toBe("failed");
+        expect(harness.projection().turnItems).toMatchObject([
+          { type: "error", failure: { code: "context_recovery_required" } },
+        ]);
+      } else {
+        expect(harness.nativeStarts).toHaveBeenCalledOnce();
+        const turn = harness.nativeStarts.mock.calls[0]![0];
+        expect(turn.appContext).toEqual([{ key: "mcp_app_app-0", text: notes[0] }]);
+        expect(turn.message.text).toContain("Keep the exact earlier request.");
+        expect(turn.message.text).toContain("Continue my work");
+      }
     }),
 );
