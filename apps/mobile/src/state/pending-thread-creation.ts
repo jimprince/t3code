@@ -76,6 +76,21 @@ export function resolvePendingThreadCreation(input: {
   return creation;
 }
 
+/**
+ * The thread detail may be read once the server has the thread: its shell
+ * arrived, nothing is queued for creation, or the creation was delivered. A
+ * read earlier gets "not found", which parks the shared detail stream for good.
+ */
+export function resolveThreadDetailRef<Ref>(input: {
+  readonly ref: Ref | null;
+  readonly hasShell: boolean;
+  readonly pending: PendingThreadCreation | null;
+}): Ref | null {
+  return input.hasShell || input.pending === null || input.pending.outcome?.kind === "delivered"
+    ? input.ref
+    : null;
+}
+
 export const pendingThreadCreationOutcomesAtom = Atom.make<
   Readonly<Record<string, PendingThreadCreationOutcome>>
 >({}).pipe(Atom.keepAlive, Atom.withLabel("mobile:pending-thread-creation:outcomes"));
