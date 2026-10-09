@@ -2982,3 +2982,17 @@ retire_when = "Upstream supplies authenticated exact-session recovery and receip
 depends_on = ["fork-reliable-handoffs", "fork-thread-transfer", "fork-lifecycle-deadlines"]
 roles = []
 note = "Administrative WS/CLI operations require both access:write and orchestration:operate. Provider MCP credentials remain refused. Durable generations and exact attachment fences precede manager-wrapped reset; handover settlement follows all required host receipts. Host routing redirects protect the interval before server metadata commit. Administrative generation/incarnation and exact stop readbacks feed watchdog decisions; generation-fenced resume commits its retry receipt with the new run. Pending-human list transport calls the canonical server method. Standard read send bindings join exact run lifecycle; native MCP associations commit with acceptance."
+
+[[patch]]
+name = "fork-provider-context-recovery"
+subject = "fix(server): recover provider context after restart"
+class = "product"
+purpose = "Resume retained Claude native sessions, compact fallback context without dropping pending requests, expose typed recovery limits and tear down only the exact Claude session."
+retire_when = "Upstream provides native-first restart recovery, protected deterministic fallback compaction and an exact-session reset boundary."
+depends_on = [
+  "fork-thread-transfer",
+  "fork-provider-turn-safety",
+  "fork-lifecycle-deadlines",
+  "fork-admin-thread-recovery",
+]
+roles = []
