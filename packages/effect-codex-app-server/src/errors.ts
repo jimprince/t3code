@@ -265,6 +265,15 @@ export class CodexAppServerInputStreamEndedError extends Schema.TaggedError<Code
   }
 }
 
+export class CodexAppServerRequestTimeoutError extends Schema.TaggedError<CodexAppServerRequestTimeoutError>()(
+  "CodexAppServerRequestTimeoutError",
+  { method: Schema.String, requestId: Schema.String, timeoutMs: Schema.Number },
+) {
+  override get message() {
+    return `Codex request '${this.method}' did not acknowledge within ${this.timeoutMs} ms.`;
+  }
+}
+
 export class CodexAppServerRequestError extends Schema.TaggedError<CodexAppServerRequestError>()(
   "CodexAppServerRequestError",
   {
@@ -417,6 +426,7 @@ export class CodexAppServerRequestError extends Schema.TaggedError<CodexAppServe
 
 export const CodexAppServerError = Schema.Union([
   CodexAppServerRequestError,
+  CodexAppServerRequestTimeoutError,
   CodexAppServerSpawnError,
   CodexAppServerProcessExitedError,
   CodexAppServerProtocolParseError,
