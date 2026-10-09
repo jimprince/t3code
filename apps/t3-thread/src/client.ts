@@ -96,7 +96,13 @@ export type SendMessageOutcome = (
     }
   | { dispatched: false; queued: false; uncertain: true; sendId: string; causeCode: string }
   | { dispatched: false; queued: false; uncertain: false; sendId: string; causeCode: string }
-) & { receipt?: HandoffReceipt; sendId?: string; retryable?: boolean };
+) & {
+  receipt?: HandoffReceipt;
+  sendId?: string;
+  retryable?: boolean;
+  targetServerVersion?: string;
+  message?: string;
+};
 
 function buildPlanImplementationPrompt(planMarkdown: string): string {
   return `PLEASE IMPLEMENT THIS PLAN:\n${planMarkdown.trim()}`;
