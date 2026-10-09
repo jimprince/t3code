@@ -1,0 +1,4 @@
+id = "mobile-manual-production"
+category = "maintenance"
+functionality = "mobile delivery"
+text = "Production mobile builds and OTA updates now require a manual release dispatch."
