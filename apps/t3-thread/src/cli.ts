@@ -396,6 +396,11 @@ program
 
 program
   .command("threads")
+  .option("--json", "stream a read-only host snapshot as a JSON array")
+  .option(
+    "--active-only",
+    "only read queues with active runs or shell queue hints (requires --json)",
+  )
   .requiredOption("--env <name>", "saved environment name")
   .option(
     "--parent <agent-or-thread>",
@@ -409,6 +414,42 @@ program
     const client = new RemoteEnvironmentClient(environment);
     if (options.recursive && !options.parent) {
       throw new Error("--recursive requires --parent");
+    }
+    if (options.activeOnly && !options.json) throw new Error("--active-only requires --json");
+    if (options.json) {
+      // Resolve saved names from the already-read file; raw IDs belong to --env.
+      const savedParent = state.agents.find((agent) => agent.name === options.parent);
+      const parentId = savedParent?.threadId ?? options.parent;
+      const parentEnvironmentId = savedParent
+        ? requireEnvironment(state, savedParent.environment).environmentId
+        : environment.environmentId;
+      const write = (text: string) =>
+        new Promise<void>((resolve, reject) =>
+          process.stdout.write(text, (error) => (error ? reject(error) : resolve())),
+        );
+      let first = true;
+      await write("[\n");
+      await client.streamThreadsJson(
+        async (row) => {
+          await write(`${first ? "" : ",\n"}${JSON.stringify(row)}`);
+          first = false;
+        },
+        {
+          activeOnly: Boolean(options.activeOnly),
+          select: (threads) =>
+            !parentId
+              ? threads
+              : parentEnvironmentId === environment.environmentId
+                ? selectThreadChildren(threads, parentId, Boolean(options.recursive))
+                : selectRemoteThreadChildren(
+                    threads,
+                    { environmentId: parentEnvironmentId, threadId: parentId },
+                    Boolean(options.recursive),
+                  ),
+        },
+      );
+      await write("\n]\n");
+      return;
     }
     const parent = options.parent ? await resolveParentEndpoint(state, options.parent) : null;
     const parentEnvironment = parent ? requireEnvironment(state, parent.environment) : null;

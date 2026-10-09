@@ -338,3 +338,9 @@ titles, state, settlement and pin status, using the server read model.
 ## V2 server compatibility
 
 This port connects with orchestration protocol 2 and launches threads through the native launch RPC. `pending`, `answer --answers JSON`, `approve`, and `deny` address durable runtime request IDs. Responses to requests marked not resumable fail before dispatch. Scoped reads preserve native message attachments and provider instance IDs. Project automation commands require the M3 port. Native order reset and nesting mutation require their later concern ports.
+
+### Read-only thread snapshots
+
+Use `t3-thread threads --env dev-vm --json` for a JSON array of thread state and server queue counts. Queue reads run in bounded batches on one connection; a failed or timed-out queue read produces null queue fields and a `queueError` on that thread. This command does not refresh credentials or change the routing file.
+
+`--active-only` skips queue reads without an active run or a queued shell status. Skipped fields are null with an explanatory `queueError`; this option cannot discover idle queues that the shell does not advertise. Omit it for a complete queue scan.

@@ -1,3 +1,9 @@
+import { threadShell as gcThreadShell } from "./v2/reads.js";
+import {
+  streamThreadSnapshot,
+  summarizeThreadQueue,
+  type ThreadSnapshotRow,
+} from "./threadSnapshot.js";
 import { openRpcConnection } from "./openRpc.js";
 import { withThreadMetadata, type ThreadMetadata } from "./v2/nesting.js";
 import { pendingRequests, requirePendingRequest } from "./v2/requests.js";
@@ -240,6 +246,62 @@ export class RemoteEnvironmentClient {
         projects: item.snapshot.projects,
         threads: await this.applyThreadMetadata(item.snapshot.threads, rpc),
       };
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
+  /** Strict read-only host snapshot: no session refresh, routing lock or persisted state. */
+  async streamThreadsJson(
+    write: (row: ThreadSnapshotRow) => Promise<void>,
+    options: {
+      activeOnly?: boolean;
+      select?: (threads: OrchestrationThreadShell[]) => OrchestrationThreadShell[];
+    } = {},
+  ): Promise<void> {
+    const rpc = this.rpcFactory
+      ? this.rpcFactory(this.environment.wsBaseUrl)
+      : await openRpcConnection(this.environment);
+    try {
+      const descriptor = this.descriptorFactory
+        ? await this.descriptorFactory()
+        : await fetchEnvironmentDescriptor(
+            this.environment.httpBaseUrl,
+            AbortSignal.timeout(15_000),
+          );
+      const item = await rpc.subscribeShellSnapshot<{
+        kind: "snapshot";
+        snapshot: OrchestrationShellSnapshot;
+      }>(AbortSignal.timeout(15_000));
+      if (item.kind !== "snapshot") throw new Error("Expected a shell snapshot.");
+      const metadata =
+        descriptor.capabilities.threadNesting === true
+          ? await rpc.request<ThreadMetadata[]>(
+              "threadMetadataList",
+              {},
+              AbortSignal.timeout(15_000),
+            )
+          : [];
+      const archived = await rpc.request<
+        import("@t3tools/contracts").OrchestrationV2ArchivedShellSnapshot
+      >("getArchivedShellSnapshot", {}, AbortSignal.timeout(15_000));
+      const byId = new Map(item.snapshot.threads.map((thread) => [thread.id, thread]));
+      for (const raw of archived.threads)
+        if (!byId.has(raw.id)) byId.set(raw.id, gcThreadShell(raw));
+      const threads = [...byId.values()].map((thread) => withThreadMetadata(thread, metadata));
+      await streamThreadSnapshot(
+        options.select ? options.select(threads) : threads,
+        async (threadId, signal) =>
+          summarizeThreadQueue(
+            await rpc.request<import("@t3tools/contracts").OrchestrationV2ThreadProjection>(
+              "getThreadProjection",
+              { threadId },
+              signal,
+            ),
+          ),
+        write,
+        options,
+      );
     } finally {
       await rpc.dispose();
     }
