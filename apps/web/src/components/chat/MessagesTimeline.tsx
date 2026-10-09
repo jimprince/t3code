@@ -215,6 +215,7 @@ import {
   resolveWorkGroupScrollIndex,
   shouldFollowWorkGroupAppend,
   shouldPreserveAssistantLineBreaks,
+  stepTimelineEndRestore,
   toolGroupAction,
   workEntryDisplayLabel,
   workEntryReadOutput,
@@ -891,7 +892,44 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         : list.scrollToEnd({ animated: false });
     void Promise.resolve(scrolling).then(() => {
       if (cancelled) return;
-      if (position?.atEnd !== false || index < 0) {
+      if (position?.atEnd !== false) {
+        // The end scroll above ran on estimates; keep asking until the
+        // measured geometry actually reaches the end.
+        let endStableFrames = 0;
+        let endFrames = 0;
+        const settleAtEnd = () => {
+          if (cancelled) return;
+          const step = stepTimelineEndRestore(list.getState(), endStableFrames, endFrames++);
+          endStableFrames = step.stableFrames;
+          if (step.action === "settled") {
+            setPositionedThreadKey(listIdentityKey);
+            return;
+          }
+          if (step.action === "scroll-to-end") {
+            // scrollToEnd can resolve without moving while the list's own
+            // offsets are stale. Aim at the DOM's end; the list clamps the
+            // target to its own, so the view lands on the nearer of the two.
+            const element = list.getScrollableNode();
+            if (!element) {
+              setPositionedThreadKey(listIdentityKey);
+              return;
+            }
+            void list
+              .scrollToOffset({
+                offset: Math.max(0, element.scrollHeight - element.clientHeight),
+                animated: false,
+              })
+              .then(() => {
+                if (!cancelled) settleFrame = requestAnimationFrame(settleAtEnd);
+              });
+            return;
+          }
+          settleFrame = requestAnimationFrame(settleAtEnd);
+        };
+        settleFrame = requestAnimationFrame(settleAtEnd);
+        return;
+      }
+      if (index < 0) {
         setPositionedThreadKey(listIdentityKey);
         return;
       }
