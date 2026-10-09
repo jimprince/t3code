@@ -59,7 +59,7 @@ const server = NodeHttp.createServer((req, res) => {
         platform: { os: "linux", arch: "x64" },
         serverVersion: "fixture",
         orchestrationProtocolVersion: 2,
-        capabilities: {},
+        capabilities: { sessionRefresh: jsonMode },
       }),
     );
 });
