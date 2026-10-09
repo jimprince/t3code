@@ -19,7 +19,9 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Queue from "effect/Queue";
+import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import * as EffectWorker from "./EffectWorker.ts";
 import * as EventSink from "./EventSink.ts";
@@ -697,6 +699,12 @@ const stopEarlierBackgroundWork = ({
           });
         }
 
+        const stopReceipts = yield* Ref.make<OrchestrationV2DomainEvent[]>([]);
+        yield* orchestrator.streamDomainEvents.pipe(
+          Stream.filter((event) => event.threadId === threadId),
+          Stream.runForEach((event) => Ref.update(stopReceipts, (events) => [...events, event])),
+          Effect.forkChild({ startImmediately: true }),
+        );
         yield* orchestrator.dispatch(
           stopWithQueue === "thread.stop"
             ? {
@@ -716,6 +724,32 @@ const stopEarlierBackgroundWork = ({
                 ...(stopWithQueue === undefined ? {} : { holdQueue: true }),
               },
         );
+        yield* worker.drain();
+
+        // This mock only acknowledges Stop. Without a native terminal event,
+        // all background commands stay live until the bounded fallback.
+        const backgroundIds = [devServerId, ...(olderStart ? [] : [watcherId]), reviewerId];
+        const backgroundStatuses = () =>
+          orchestrator
+            .getThreadProjection(threadId)
+            .pipe(
+              Effect.map((projection) =>
+                backgroundIds.map(
+                  (id) => projection.turnItems.find((item) => item.id === id)?.status,
+                ),
+              ),
+            );
+        assert.deepEqual(
+          yield* backgroundStatuses(),
+          backgroundIds.map(() => "running"),
+        );
+        yield* TestClock.adjust("9999 millis");
+        yield* worker.drain();
+        assert.deepEqual(
+          yield* backgroundStatuses(),
+          backgroundIds.map(() => "running"),
+        );
+        yield* TestClock.adjust("1 millis");
         yield* worker.drain();
 
         // The Codex interrupt targets its latest pending work, the subagent's parent turn,
@@ -746,6 +780,39 @@ const stopEarlierBackgroundWork = ({
           olderStart
             ? ["interrupted", "interrupted"]
             : ["interrupted", "interrupted", "interrupted"],
+          JSON.stringify({
+            clock: DateTime.formatIso(yield* DateTime.now),
+            runs: after.runs.map(({ id, ordinal, status, activeAttemptId, providerThreadId }) => ({
+              id,
+              ordinal,
+              status,
+              activeAttemptId,
+              providerThreadId,
+            })),
+            providerThreads: after.providerThreads.map(
+              ({ id, lastRunOrdinal, providerSessionId }) => ({
+                id,
+                lastRunOrdinal,
+                providerSessionId,
+              }),
+            ),
+            items: after.turnItems
+              .filter((item) => backgroundIds.includes(item.id))
+              .map(({ id, runId, providerThreadId, providerTurnId, status }) => ({
+                id,
+                runId,
+                providerThreadId,
+                providerTurnId,
+                status,
+              })),
+            receipts: (yield* Ref.get(stopReceipts)).map((event) => ({
+              id: event.id,
+              type: event.type,
+              at: DateTime.formatIso(event.occurredAt),
+              payloadId: "id" in event.payload ? event.payload.id : undefined,
+              status: "status" in event.payload ? event.payload.status : undefined,
+            })),
+          }),
         );
       }).pipe(
         Effect.provide(

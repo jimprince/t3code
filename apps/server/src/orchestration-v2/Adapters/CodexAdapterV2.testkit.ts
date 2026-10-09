@@ -221,6 +221,9 @@ export function makeReplayServerConfig(
 export function layer(input: {
   readonly transcript: CodexReplay.CodexAppServerReplayTranscript;
   readonly driver?: CodexReplay.CodexAppServerReplayDriver;
+  readonly mapClient?: (
+    client: CodexClient.CodexAppServerClient["Service"],
+  ) => CodexClient.CodexAppServerClient["Service"];
 }) {
   const layerReplay =
     input.driver === undefined
@@ -240,7 +243,10 @@ export function layer(input: {
           ),
         );
         return yield* Effect.service(CodexClient.CodexAppServerClient).pipe(
-          Effect.map((client) => withCodexReplayChildMetadata(client, input.transcript)),
+          Effect.map((client) => {
+            const replayClient = withCodexReplayChildMetadata(client, input.transcript);
+            return input.mapClient?.(replayClient) ?? replayClient;
+          }),
           Effect.provide(context),
         );
       }),
