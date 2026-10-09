@@ -2889,3 +2889,13 @@ retire_when = "Upstream holds every mobile detail reader back while a queued cre
 depends_on = []
 roles = []
 note = "A new task opens its thread screen on a stand-in shell before the creation is delivered. use-thread-selection already withholds its own detail subscription then (selectedThreadDetailRef), but the screen's reported-model, queued-count and subagent readers and the composer's queue workflow read the stand-in's reserved id directly, and one not-found answer parks that shared stream as deleted for the life of the screen. ThreadDetailScreen and the composer now read through selectedThreadDetailRef, and the rule is the pure resolveThreadDetailRef in pending-thread-creation.ts. Found by static reading; not reproduced in a running client."
+
+[[patch]]
+name = "fork-backport-upstream-17348-scroll-follow"
+subject = "fix(web): a thread that was following its reply reopens at the newest message"
+class = "upstream-bound"
+purpose = "Save a thread's scroll position as 'at the end' while live follow is on, so a reply that grows rows faster than the follow scroll no longer reopens the thread partway up with follow off (brad/t3code-fork#225)."
+retire_when = "Upstream merges pingdotgg/t3code#17348, or #14916 or #16930, which make the remembered timeline position honor live follow. Drop this patch on the sync that brings the merge in."
+depends_on = []
+roles = []
+note = "Backport of pingdotgg/t3code#17348 as opened, unchanged: rememberTimelinePosition takes liveFollowEnabled and stores atEnd as liveFollowEnabled || position.atEnd, handleScroll passes it, and the list's settling identity starts at the mounted thread. The three follow-intent tests are the PR's; timelineFollowMemory.test.ts adds a growing-row case. Manual wheel-up or navigation already turns follow off, so a deliberate reading position is still saved and restored. Upstream's reading-position restore (#12144) is deliberately left alone, pending Brad's decision."
