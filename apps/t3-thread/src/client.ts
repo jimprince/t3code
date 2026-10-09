@@ -84,7 +84,12 @@ export type SendMessageOutcome = (
     }
   | { dispatched: false; queued: false; uncertain: true; sendId: string; causeCode: string }
   | { dispatched: false; queued: false; uncertain: false; sendId: string; causeCode: string }
-) & { receipt?: HandoffReceipt; sendId?: string };
+) & {
+  receipt?: HandoffReceipt;
+  sendId?: string;
+  targetServerVersion?: string;
+  message?: string;
+};
 
 function buildPlanImplementationPrompt(planMarkdown: string): string {
   return `PLEASE IMPLEMENT THIS PLAN:\n${planMarkdown.trim()}`;
