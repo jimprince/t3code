@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "761ede00c38f3f3278ec436f49a12ae5a0b385f1",
-  "head": "c3d638fc9ac0a80b8eb88d061f0d5fdb7b24cebe",
+  "prev": "181e85390b5d8359b7dcfd20cfeadd69529c25e2",
+  "head": "5284154beb3361980c6d2856e36dcba93864d538",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -115,7 +115,8 @@
     "fork-reliable-handoffs",
     "fork-starting-reconcile-causal-guard",
     "fork-notification-eligibility",
-    "fork-gitea-token-setter"
+    "fork-gitea-token-setter",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-direct-endpoints-enumeration",
@@ -559,6 +560,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "57096d2fcc7a312f2127e45f8343e7a4ed2deae0"
+    },
+    "refresh-temp": {
+      "oid": "5284154beb3361980c6d2856e36dcba93864d538"
     }
   }
 }
