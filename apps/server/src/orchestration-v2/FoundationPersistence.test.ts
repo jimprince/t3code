@@ -1409,6 +1409,64 @@ it.layer(layerTest)("orchestration V2 foundation persistence", (it) => {
     }),
   );
 
+  it.effect(
+    "rolls back an effects-only receipt and partial enqueue, then commits the retry once",
+    () =>
+      Effect.gen(function* () {
+        const sink = yield* EventSink.EventSinkV2;
+        const receipts = yield* CommandReceiptStore.CommandReceiptStoreV2;
+        const outbox = yield* EffectOutbox.EffectOutboxV2;
+        const sql = yield* SqlClient.SqlClient;
+        const now = yield* DateTime.now;
+        const commandId = CommandId.make("command:effects-only-atomicity");
+        const threadId = ThreadId.make("thread:effects-only-atomicity");
+        yield* sink.write({
+          events: [
+            threadCreatedEvent({
+              id: "event:effects-only-baseline",
+              thread: makeThread(threadId, now),
+              now,
+            }),
+          ],
+        });
+        const sequence = yield* sink.latestSequence({ threadId });
+        const input = {
+          commandId,
+          threadId,
+          commandType: "thread.background-work.settle",
+          acceptedAt: now,
+          expectedThreadSequence: sequence,
+          events: [],
+          effects: ["effect:effects-only:first", "effect:effects-only:second"].map((id) => ({
+            id,
+            commandId,
+            threadId,
+            availableAt: DateTime.add(now, { seconds: 10 }),
+            request: { type: "terminal.cleanup" as const },
+          })),
+        };
+        yield* sql`CREATE TEMP TRIGGER fail_effects_only_enqueue BEFORE INSERT ON orchestration_v2_effect_outbox
+        WHEN NEW.effect_id = 'effect:effects-only:second'
+        BEGIN SELECT RAISE(ABORT, 'injected enqueue failure'); END`;
+        const failed = yield* Effect.exit(sink.commitCommand(input));
+        assert.equal(failed._tag, "Failure");
+        assert.isTrue(Option.isNone(yield* receipts.getByCommandId(commandId)));
+        assert.deepEqual(yield* outbox.listByCommandId(commandId), []);
+        assert.equal(yield* sink.latestSequence({ threadId }), sequence);
+        yield* sql`DROP TRIGGER fail_effects_only_enqueue`;
+        const committed = yield* sink.commitCommand(input);
+        assert.isTrue(committed.committed);
+        assert.equal(committed.receipt.resultSequence, sequence);
+        assert.lengthOf(committed.storedEvents, 0);
+        assert.lengthOf(yield* outbox.listByCommandId(commandId), 2);
+        const replayed = yield* sink.commitCommand(input);
+        assert.isFalse(replayed.committed);
+        assert.equal(replayed.receipt.resultSequence, sequence);
+        assert.lengthOf(replayed.storedEvents, 0);
+        assert.lengthOf(yield* outbox.listByCommandId(commandId), 2);
+      }),
+  );
+
   it.effect("keeps one durable effect across command retries and executes it after recovery", () =>
     Effect.gen(function* () {
       const eventSink = yield* EventSink.EventSinkV2;
