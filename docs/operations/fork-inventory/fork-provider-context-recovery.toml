@@ -1,0 +1,12 @@
+name = "fork-provider-context-recovery"
+subject = "fix(server): recover provider context after restart"
+class = "product"
+purpose = "Resume retained Claude native sessions, compact fallback context without dropping pending requests, expose typed recovery limits and tear down only the exact Claude session."
+retire_when = "Upstream provides native-first restart recovery, protected deterministic fallback compaction and an exact-session reset boundary."
+depends_on = [
+  "fork-thread-transfer",
+  "fork-provider-turn-safety",
+  "fork-lifecycle-deadlines",
+  "fork-admin-thread-recovery",
+]
+roles = []
