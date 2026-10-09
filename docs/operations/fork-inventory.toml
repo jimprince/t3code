@@ -2972,3 +2972,13 @@ retire_when = "Upstream bounds these lifecycle phases and supplies equivalent ex
 depends_on = ["fork-provider-turn-safety", "fork-interrupted-turn-rewind"]
 roles = []
 note = "#240 S1 / #230: approved RPC ACK 10 s, provider start 120 s, Stop 20 s and process shutdown 20 s. Persist Stop fallback before the native ACK; preserve existing exact-turn/later-run guards. resetThread is the single optional adapter member, wrapped by the session manager to detach and revoke the recorded credential only. Codex retains its multiplexed process and reports thread isolation with stopped=true after target teardown; stopped=false remains retryable; S3 owns durable fences, exact-run terminalization and discard_native reference handling. Test faults require a named isolated development home plus exact allowlisted thread; packaged/static servers ignore them. This droppable concern is separate from general provider recovery because its timers, force-reset primitive and shutdown exit policy can be retired together."
+
+[[patch]]
+name = "fork-admin-thread-recovery"
+subject = "feat(server): add scoped session reset and durable orchestrator handover"
+class = "product"
+purpose = "Recover one fenced provider attachment and transfer orchestrator ownership without losing pending human work, host watcher settings, delivery identities, or historical thread records (#240)."
+retire_when = "Upstream supplies authenticated exact-session recovery and receipt-based orchestrator handover across operator hosts, preserving pending human requests."
+depends_on = ["fork-reliable-handoffs", "fork-thread-transfer", "fork-lifecycle-deadlines"]
+roles = []
+note = "Administrative WS/CLI operations require both access:write and orchestration:operate. Provider MCP credentials remain refused. Durable generations and exact attachment fences precede manager-wrapped reset; handover settlement follows all required host receipts. Host routing redirects protect the interval before server metadata commit."
