@@ -1,5 +1,6 @@
 import { listMetadata, readMetadata } from "../forkThreads/MetadataStore.ts";
 import * as SqlClient from "effect/sql/SqlClient";
+import { SendBindingWrite, recordSendBinding } from "../forkThreads/SendBindings.ts";
 import * as TaskIssues from "../projectIssues/TaskIssueLaunchService.ts";
 import {
   CommandId,
@@ -2458,14 +2459,11 @@ const make = Effect.gen(function* () {
           requestKey: key,
           operation: "thread-send",
         });
+        const commandId = stableCommandId({ scope, requestKey: key, operation: "thread-send" });
         const result = yield* threadManagement
           .sendToThread({
             projectId: target.thread.projectId,
-            commandId: stableCommandId({
-              scope,
-              requestKey: key,
-              operation: "thread-send",
-            }),
+            commandId,
             threadId: input.threadId,
             ...(parent === undefined ? {} : { senderThreadId: parent.thread.id }),
             messageId,
@@ -2476,6 +2474,15 @@ const make = Effect.gen(function* () {
             creationSource: "mcp",
           })
           .pipe(
+            Effect.provideService(SendBindingWrite, {
+              commandId,
+              persist: recordSendBinding(sql, {
+                threadId: input.threadId,
+                sendId: key,
+                namespace: scope.requestNamespace,
+                messageId,
+              }),
+            }),
             Effect.mapError((error) =>
               isThreadManagementError(error)
                 ? threadManagementFailure(error)
