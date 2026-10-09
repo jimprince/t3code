@@ -484,6 +484,26 @@ export class RemoteEnvironmentClient {
     return snapshot.threads;
   }
 
+  /** Administrative recovery uses the same paired credential and websocket ticket as ordinary RPCs. */
+  async recoveryRpc<T = unknown>(
+    method:
+      | "thread.session.reset"
+      | "thread.handover.prepare"
+      | "thread.handover.commit"
+      | "thread.handover.status"
+      | "thread.handover.routes"
+      | "thread.human.pending"
+      | "thread.human.resolve",
+    input: unknown,
+  ): Promise<T> {
+    const rpc = await this.openRpc();
+    try {
+      return await rpc.request<T>(method, input);
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
   /** Scripts and automation rules; see apps/server/src/automations. */
   async automationRpc<T = unknown>(
     method: AutomationRpcMethod,
