@@ -96,22 +96,7 @@ export class T3RpcClient {
       string,
       (payload: unknown) => Effect.Effect<T, unknown, never>
     >;
-<<<<<<< ours
-    return this.runtime.runPromise(Effect.suspend(() => client[RPC_METHODS[method]](input)));
-=======
-    const operation = Effect.suspend(() => client[RPC_METHODS[method]](input));
-    if (method.startsWith("fork.send.") || method.startsWith("fork.message.forward.")) {
-      const result = await this.runtime.runPromise(
-        Effect.exit(operation.pipe(Effect.timeout("15 seconds"))),
-      );
-      if (Exit.isSuccess(result)) return result.value;
-      throw Option.getOrElse(Cause.findErrorOption(result.cause), () =>
-        Object.assign(new Error("TRANSPORT_ERROR"), {
-          name: Cause.hasInterrupts(result.cause) ? "AbortError" : "Error",
-        }),
-      );
-    }
-    return this.runtime.runPromise(operation, { signal });
+    return this.runtime.runPromise(Effect.suspend(() => client[RPC_METHODS[method]](input)), { signal });
   }
 
   async subscribeShellSnapshot<T>(signal?: AbortSignal): Promise<T> {
