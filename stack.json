@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "ddd56f1d9a811147d780a364ae0c5e963dd753e4",
-  "head": "7aa8a45e9045f1d414ff53e545489ad407df4ef6",
+  "prev": "2f917e73736149f12932a740c1b43ca7d588cc58",
+  "head": "5378fd2b73b3df51c39eef9801f2752ccec6b55f",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -33,7 +33,9 @@
     "fork-sandbox-session-recovery",
     "fork-thread-client-recovery",
     "fork-resource-recovery",
-    "fork-worktree-cleanup",
+    "fork-worktree-cleanup"
+  ],
+  "unapplied": [
     "fork-enter-sends-queued",
     "fork-restart-when-idle",
     "fork-nested-threads",
@@ -140,7 +142,6 @@
     "fork-update-progress",
     "fork-held-queue-resume"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
