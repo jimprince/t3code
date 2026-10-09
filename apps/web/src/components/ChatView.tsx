@@ -291,9 +291,12 @@ import {
   disconnectedDispatchMode,
 } from "./chat/disconnectedSend.logic";
 import {
+  discardDisconnectedSend,
   enqueueDisconnectedSend,
+  resendDisconnectedSend,
   retryDisconnectedSends,
-  useDisconnectedSendsRefused,
+  useDisconnectedSendRefusals,
+  useDisconnectedSendsStalled,
   usePendingDisconnectedSends,
 } from "../state/disconnectedSends";
 import { isEditableFocused } from "../lib/editableFocus";
@@ -3055,7 +3058,8 @@ export default function ChatView(props: ChatViewProps) {
     routeThreadRef.environmentId,
     isServerThread ? routeThreadRef.threadId : null,
   );
-  const heldSendsRefused = useDisconnectedSendsRefused(routeThreadRef.environmentId);
+  const heldSendsStalled = useDisconnectedSendsStalled(routeThreadRef.environmentId);
+  const heldSendRefusals = useDisconnectedSendRefusals(routeThreadRef.environmentId);
   const systemComposerBannerItems = useMemo<ComposerBannerStackItem[]>(() => {
     const items: ComposerBannerStackItem[] = [];
     const updateRunning = serverUpdateState.status === "running";
@@ -3190,35 +3194,78 @@ export default function ChatView(props: ChatViewProps) {
       });
     }
     if (heldSends.length > 0) {
-      const latest = heldSends[heldSends.length - 1]!.message.text.trim();
-      const notSent = heldSendsRefused && !activeEnvironmentUnavailableState;
-      const count = `${heldSends.length} message${heldSends.length === 1 ? "" : "s"}`;
-      items.push({
-        id: `held-sends:${routeThreadKey}`,
-        variant: notSent ? "warning" : "default",
-        icon: <AlarmClockIcon />,
-        title: notSent ? `${count} not sent` : `${count} will send when back`,
-        description: latest.length > 80 ? `${latest.slice(0, 80)}…` : latest,
-        ...(notSent
-          ? {
-              actions: (
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  onClick={() => retryDisconnectedSends(routeThreadRef.environmentId)}
-                >
-                  Retry
-                </Button>
-              ),
-            }
-          : {}),
-      });
+      const preview = (send: (typeof heldSends)[number], max: number) => {
+        const text = send.message.text.trim();
+        return text.length > max ? `${text.slice(0, max)}…` : text;
+      };
+      // A refused message is terminal: the user resends it (new id) or discards it. Later
+      // messages of this thread wait behind it; other threads are not held up.
+      const refused = heldSends.filter((send) => heldSendRefusals[send.commandId] !== undefined);
+      const waiting = heldSends.filter((send) => heldSendRefusals[send.commandId] === undefined);
+      for (const send of refused) {
+        items.push({
+          id: `held-sends:${routeThreadKey}:${send.commandId}`,
+          variant: "warning",
+          icon: <AlarmClockIcon />,
+          title: `Not sent: ${preview(send, 60)}`,
+          description: heldSendRefusals[send.commandId],
+          actions: (
+            <>
+              <Button
+                size="xs"
+                variant="ghost"
+                onClick={() => resendDisconnectedSend(routeThreadRef.environmentId, send.commandId)}
+              >
+                Resend
+              </Button>
+              <Button
+                size="xs"
+                variant="ghost"
+                onClick={() =>
+                  discardDisconnectedSend(routeThreadRef.environmentId, send.commandId)
+                }
+              >
+                Discard
+              </Button>
+            </>
+          ),
+        });
+      }
+      if (waiting.length > 0) {
+        const notSent = heldSendsStalled && !activeEnvironmentUnavailableState;
+        const count = `${waiting.length} message${waiting.length === 1 ? "" : "s"}`;
+        items.push({
+          id: `held-sends:${routeThreadKey}`,
+          variant: notSent ? "warning" : "default",
+          icon: <AlarmClockIcon />,
+          title: notSent
+            ? `${count} not sent`
+            : refused.length > 0
+              ? `${count} waiting for the message not sent`
+              : `${count} will send when back`,
+          description: preview(waiting[waiting.length - 1]!, 80),
+          ...(notSent
+            ? {
+                actions: (
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    onClick={() => retryDisconnectedSends(routeThreadRef.environmentId)}
+                  >
+                    Retry
+                  </Button>
+                ),
+              }
+            : {}),
+        });
+      }
     }
     if (autoBalanceUpdateBanner) items.push(autoBalanceUpdateBanner);
     return items;
   }, [
     heldSends,
-    heldSendsRefused,
+    heldSendRefusals,
+    heldSendsStalled,
     routeThreadKey,
     automaticEnvironment,
     autoBalanceUpdateBanner,
@@ -8565,7 +8612,7 @@ export default function ChatView(props: ChatViewProps) {
    * While the server is down a plain text message is kept and sent when it is back: the command
    * is built once here, with its ids, and replayed unchanged. Returns whether it was kept. The
    * provider is not checked here: its status is stale while the server is away, so the server
-   * decides on delivery and a refusal shows as "not sent" with Retry.
+   * decides on delivery and a refusal shows as "not sent" with Resend and Discard.
    */
   const holdSendWhileDisconnected = (
     dispatchMode: ComposerDispatchMode,
