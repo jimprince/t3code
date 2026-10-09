@@ -6,11 +6,18 @@ const fixture = vi.hoisted(() => ({ state: null as StateFile | null }));
 vi.mock("../src/state.js", async (original) => ({
   ...(await original<typeof import("../src/state.js")>()),
   loadState: async () => fixture.state!,
+  updateState: async (
+    update: (state: StateFile) => Promise<{ state: StateFile; result: unknown }>,
+  ) => {
+    const changed = await update(fixture.state!);
+    fixture.state = changed.state;
+    return changed.result;
+  },
 }));
 const timestamp = "2026-10-02T00:00:00.000Z";
 const rootId = "11111111-1111-4111-8111-111111111111";
-const childId = "22222222-2222-4222-8222-222222222222";
-const grandchildId = "33333333-3333-4333-8333-333333333333";
+const childId = "thread:delegated-task:command%3Amcp%3Aworker";
+const grandchildId = "automation:scheduled:grandchild";
 function shell(id: string, parentThreadId: string | null, title: string): OrchestrationThreadShell {
   return {
     id,
@@ -40,8 +47,10 @@ const threads = [
   shell("unrelated", null, "Other"),
 ];
 const originalArgv = process.argv;
+const originalExitCode = process.exitCode;
 afterEach(() => {
   process.argv = originalArgv;
+  process.exitCode = originalExitCode;
   vi.restoreAllMocks();
 });
 async function run(args: string[]) {
@@ -61,6 +70,19 @@ async function run(args: string[]) {
       },
     ],
     agents: [
+      ...(!args.includes(childId)
+        ? [
+            {
+              name: "worker",
+              environment: "local",
+              threadId: childId,
+              projectId: "project",
+              title: "Worker",
+              createdAt: timestamp,
+              lastSeenAssistantMessageId: null,
+            },
+          ]
+        : []),
       {
         name: "supervisor",
         environment: "local",
@@ -75,12 +97,7 @@ async function run(args: string[]) {
     notifications: [],
     queuedSends: [],
   };
-  fixture.state.agents.push({
-    ...fixture.state.agents[0]!,
-    name: "worker",
-    threadId: childId,
-    title: "Worker",
-  });
+
   vi.resetModules();
   const { RemoteEnvironmentClient } = await import("../src/client.js");
   const list = vi
@@ -95,9 +112,37 @@ async function run(args: string[]) {
       checkpoints: [],
       proposedPlans: [],
     }));
+  const parent = vi
+    .spyOn(RemoteEnvironmentClient.prototype, "setThreadParent")
+    .mockResolvedValue({ threadId: childId as never, parentThreadId: rootId as never });
+  const settle = vi.spyOn(RemoteEnvironmentClient.prototype, "settleThread").mockResolvedValue({
+    threadId: childId,
+    environment: "local",
+    settledOverride: "settled",
+    settledAt: timestamp,
+    unsettledAt: null,
+  });
+  const rename = vi
+    .spyOn(RemoteEnvironmentClient.prototype, "renameThread")
+    .mockResolvedValue({ threadId: childId, title: "Changed", scope: null });
+  const result = vi
+    .spyOn(RemoteEnvironmentClient.prototype, "getThreadDetail")
+    .mockImplementation(async (id) => ({
+      ...threads.find((thread) => thread.id === id)!,
+      messages: [],
+      activities: [],
+      checkpoints: [],
+      proposedPlans: [],
+    }));
   let finish!: (value: string) => void;
-  const printed = new Promise<string>((resolve) => {
+  let reject!: (error: Error) => void;
+  const printed = new Promise<string>((resolve, fail) => {
     finish = resolve;
+    reject = fail;
+  });
+  vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+    reject(new Error(String(chunk)));
+    return true;
   });
   vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
     finish(String(chunk));
@@ -105,7 +150,7 @@ async function run(args: string[]) {
   });
   process.argv = [process.execPath, "cli.ts", ...args];
   await import("../src/cli.js");
-  return { output: await printed, list, detail };
+  return { output: await printed, list, detail, parent, settle, rename, result };
 }
 
 describe("CLI nesting readback", () => {
@@ -158,3 +203,24 @@ describe("CLI nesting readback", () => {
     expect(selectThreadChildren(cycle, "missing", true)).toEqual([]);
   });
 });
+
+it.each([
+  ["nest", ["--parent", rootId]],
+  ["unnest", []],
+  ["settle", []],
+  ["rename", ["--title", "Changed"]],
+  ["result", []],
+] as const)(
+  "CLI %s accepts an unsaved delegated thread ID with embedded percent escapes",
+  async (command, options) => {
+    const seen = await run([command, childId, ...options]);
+    expect(seen.output).toContain(childId);
+    if (command === "nest" || command === "unnest")
+      expect(seen.parent).toHaveBeenCalledWith(childId, command === "nest" ? rootId : null, null);
+    if (command === "settle")
+      expect(seen.settle).toHaveBeenCalledWith(childId, { self: undefined });
+    if (command === "rename")
+      expect(seen.rename).toHaveBeenCalledWith({ threadId: childId, title: "Changed" });
+    if (command === "result") expect(seen.result).toHaveBeenCalledWith(childId);
+  },
+);

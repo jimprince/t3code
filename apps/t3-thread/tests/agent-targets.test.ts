@@ -95,6 +95,23 @@ describe("agent target resolution", () => {
     expect(isRawThreadUuid("worker-a")).toBe(false);
   });
 
+  it.each(["thread:delegated-task:command%3Amcp%3Arequest", "automation:scheduled:request%3A1"])(
+    "resolves opaque %s without decoding its namespace",
+    async (id) => {
+      const clientFactory = vi.fn(() => ({ listThreads: vi.fn(async () => [makeThread({ id })]) }));
+      const resolved = await resolveAgentTarget(makeState(), id, { clientFactory });
+      expect(resolved.threadId).toBe(id);
+      expect(() => assertThreadSearchUuid(id)).not.toThrow();
+    },
+  );
+
+  it("keeps case-insensitive lookup for UUID thread IDs", async () => {
+    const id = "abcdefab-abcd-4abc-8abc-abcdefabcdef";
+    const clientFactory = vi.fn(() => ({ listThreads: vi.fn(async () => [makeThread({ id })]) }));
+    const resolved = await resolveAgentTarget(makeState(), id.toUpperCase(), { clientFactory });
+    expect(resolved.threadId).toBe(id);
+  });
+
   it("resolves saved names without remote scanning", async () => {
     const clientFactory = vi.fn(() => ({
       listThreads: vi.fn(async () => []),
@@ -186,7 +203,7 @@ describe("agent target resolution", () => {
     });
 
     expect(() => assertSavedAgentCapability(target, "`result --mark-seen`")).toThrow(
-      "`result --mark-seen` requires a saved agent name. Raw thread UUIDs do not persist local state.",
+      "`result --mark-seen` requires a saved agent name. Raw thread IDs do not persist local state.",
     );
   });
 
@@ -283,7 +300,7 @@ describe("thread UUID search", () => {
 
   it("rejects malformed search input before lookup", () => {
     expect(() => assertThreadSearchUuid("worker-a")).toThrow(
-      "Expected a full T3 thread UUID, received 'worker-a'.",
+      "Expected a full T3 thread ID, received 'worker-a'.",
     );
   });
 

@@ -137,8 +137,10 @@ t3-thread archive 22222222-2222-4222-8222-222222222222
 t3-thread forget worker-a
 ```
 
-Supported direct-UUID lifecycle commands: `settle`, `unsettle`, `status`, `result`, `worklog`, `implement`, `send`,
+Supported direct-ID lifecycle commands: `settle`, `unsettle`, `status`, `result`, `worklog`, `implement`, `send`,
 `clarify`, `revise`, `complete`, `wait`, `archive`, and `subscribe --watch`.
+
+Use the complete ID printed by the server, including `thread:delegated-task:command%3A...` or `automation:...`, for nesting, settlement, metadata updates, and results. IDs are opaque: do not URL-decode the embedded command namespace.
 
 ### Sending to a thread that is still running
 

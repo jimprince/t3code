@@ -52,12 +52,14 @@ function orderedEnvironmentNames(
 }
 
 export function isRawThreadUuid(value: string): boolean {
-  return THREAD_UUID_PATTERN.test(value.trim());
+  // IDs are opaque. Preserve embedded percent escapes in delegated command namespaces.
+  const id = value.trim();
+  return THREAD_UUID_PATTERN.test(id) || /^(?:thread:|automation:)[^\s]+$/.test(id);
 }
 
 export function assertThreadSearchUuid(value: string): void {
   if (!isRawThreadUuid(value)) {
-    throw new Error(`Expected a full T3 thread UUID, received '${value}'.`);
+    throw new Error(`Expected a full T3 thread ID, received '${value}'.`);
   }
 }
 
@@ -67,7 +69,7 @@ export function assertSavedAgentCapability(
 ): asserts target is ResolvedAgentTarget & { savedAgent: SavedAgent } {
   if (!target.savedAgent) {
     throw new Error(
-      `${capability} requires a saved agent name. Raw thread UUIDs do not persist local state.`,
+      `${capability} requires a saved agent name. Raw thread IDs do not persist local state.`,
     );
   }
 }
@@ -147,7 +149,11 @@ export async function resolveAgentTarget(
       unreachableEnvironments.push(environmentName);
       continue;
     }
-    const thread = threads.find((candidate) => candidate.id === input);
+    const thread = threads.find((candidate) =>
+      THREAD_UUID_PATTERN.test(input.trim())
+        ? candidate.id.toLowerCase() === input.trim().toLowerCase()
+        : candidate.id === input.trim(),
+    );
     if (thread) {
       const match = {
         input,

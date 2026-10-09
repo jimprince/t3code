@@ -169,3 +169,9 @@ id = "socket-open-209-worker-operations"
 date = "2026-10-08"
 decided = "adapt"
 rationale = "Retry only socket opening before RPC delivery with fresh tickets and scopes, a bounded deadline, and no mutation replay."
+
+[[patch.decision]]
+id = "opaque-thread-identifiers-219"
+date = "2026-10-09"
+decided = "repair-existing-concern"
+rationale = "Operator target resolution accepts delegated thread:* and automation:* IDs as opaque strings across command paths. Embedded percent escapes are preserved; unsaved raw-ID command tests exercise nesting, settlement, update and result reads."
