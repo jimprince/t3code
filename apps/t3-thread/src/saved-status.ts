@@ -20,3 +20,14 @@ export async function readSavedStatus(
     return `${agent.name} [missing] ${agent.threadId} ${agent.title} :: saved mapping is stale; use t3-thread forget ${agent.name}`;
   }
 }
+
+/** Keep one projection alive at a time and let the output consumer apply backpressure. */
+export async function streamSavedStatuses(
+  state: StateFile,
+  write: (line: string) => Promise<void>,
+  factory: WatchClientFactory = (environment) => new RemoteEnvironmentClient(environment),
+): Promise<void> {
+  for (const agent of state.agents) {
+    await write(await readSavedStatus(agent, state, factory));
+  }
+}

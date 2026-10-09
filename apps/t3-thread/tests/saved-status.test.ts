@@ -70,3 +70,36 @@ describe("saved status listing", () => {
     ).rejects.toThrow("unauthorized");
   });
 });
+
+it("streams each status before reading the next history, even with cyclic parent links", async () => {
+  const { streamSavedStatuses } = await import("../src/saved-status.js");
+  const events: string[] = [];
+  const agents = Array.from({ length: 48 }, (_, index) => ({
+    ...agent,
+    name: `worker-${index}`,
+    threadId: `worker-${index}`,
+  }));
+  await streamSavedStatuses(
+    { ...state, agents },
+    async (line) => {
+      expect(line).toContain("[idle]");
+      events.push("write");
+    },
+    () => ({
+      async findThread(id) {
+        events.push("read");
+        return {
+          id,
+          parentThreadId: id,
+          archivedAt: null,
+          latestTurn: null,
+          session: null,
+          proposedPlans: [],
+          messages: [],
+        } as unknown as OrchestrationThread;
+      },
+      async sendMessage() {},
+    }),
+  );
+  expect(events).toEqual(agents.flatMap(() => ["read", "write"]));
+});

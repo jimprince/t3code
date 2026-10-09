@@ -8,7 +8,7 @@ import { registerAutomationCommands } from "./automations.js";
 import { parseInactivityMinutes } from "./inactivity.js";
 import { Command } from "commander";
 
-import { readSavedStatus } from "./saved-status.js";
+import { streamSavedStatuses } from "./saved-status.js";
 
 import {
   assertSavedAgentCapability,
@@ -1920,12 +1920,11 @@ agent
   .action(async (name) => {
     if (!name) {
       const state = await loadState();
-      const summaries = await Promise.all(
-        state.agents.map(async (savedAgent) => {
-          return readSavedStatus(savedAgent, state);
-        }),
-      );
-      printLines(summaries);
+      await streamSavedStatuses(state, async (line) => {
+        await new Promise<void>((resolve, reject) => {
+          process.stdout.write(`${line}\n`, (error) => (error ? reject(error) : resolve()));
+        });
+      });
       return;
     }
 
@@ -3016,6 +3015,7 @@ if (sensitiveTokenCommand) {
 // It runs after a successful action: the liveness check rewrites the state file, so a
 // refused command (env forget without --force) must leave the file untouched.
 program.hook("postAction", async (_command, action) => {
+  if (action.name() === "threads" && action.opts().json) return;
   if (action.name() === "watch" || sensitiveTokenCommand) return;
   try {
     if (hasQueuedWork(await loadState())) await ensureNotificationWatcher();

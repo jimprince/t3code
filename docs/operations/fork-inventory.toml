@@ -996,7 +996,7 @@ purpose = "Reduce operator CLI launches through explicit prebuilt JavaScript, re
 retire_when = "The worker operator CLI supplies equivalent prebuilt launch and adaptive polling behavior."
 depends_on = ["fork-worker-operations"]
 roles = []
-note = "#220: The exact Perl flock-helper/no-loader guard test is maintained in earlier fork-worker-operations; preserve that tested guard during replay while keeping prebuilt launcher and watcher behavior here."
+note = "#222: Unscoped agent status reads one saved-agent projection at a time and streams each unchanged summary with stdout backpressure, avoiding aggregate history retention. #220: The exact Perl flock-helper/no-loader guard test is maintained in earlier fork-worker-operations; preserve that tested guard during replay while keeping prebuilt launcher and watcher behavior here."
 
 
 [[patch.decision]]
