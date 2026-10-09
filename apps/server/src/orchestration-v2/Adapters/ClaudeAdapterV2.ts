@@ -96,6 +96,7 @@ import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
 import {
   claudeSignedOutMessage,
   makeClaudeEnvironment,
+  resolveClaudeHomePath,
 } from "../../provider/Drivers/ClaudeHome.ts";
 import {
   BUNDLED_CLAUDE_MODEL_CATALOG,
@@ -365,7 +366,14 @@ export class ClaudeBackgroundWorkBlocksQueryReplacementError extends Schema.Tagg
 }
 
 export interface ClaudeAgentSdkQueryRunnerShape {
+  readonly resumeFailureThreadId?: string;
   readonly allocateSessionId: Effect.Effect<string, ClaudeAgentSdkQueryRunnerError>;
+  /** Test runners may override this to inject a missing native resume handle. */
+  readonly hasSession?: (input: {
+    readonly sessionId: string;
+    readonly configDir: string;
+    readonly cwd: string;
+  }) => Effect.Effect<boolean, ClaudeAgentSdkQueryRunnerError>;
   readonly open: (
     input: ClaudeAgentSdkQueryOpenInput,
   ) => Effect.Effect<ClaudeAgentSdkQuerySession, ClaudeAgentSdkQueryRunnerError>;
@@ -601,14 +609,77 @@ export function makeClaudeAgentSdkProtocolLogger(input: {
 export const layerQueryRunner: Layer.Layer<
   ClaudeAgentSdkQueryRunner,
   never,
-  Crypto.Crypto | ProviderEventLoggers.ProviderEventLoggers
+  | Crypto.Crypto
+  | FileSystem.FileSystem
+  | Path.Path
+  | ServerConfig.ServerConfig
+  | ProviderEventLoggers.ProviderEventLoggers
 > = Layer.effect(
   ClaudeAgentSdkQueryRunner,
   Effect.gen(function* () {
     const crypto = yield* Crypto.Crypto;
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
     const { native: nativeEventLogger } = yield* ProviderEventLoggers.ProviderEventLoggers;
+    const serverConfig = yield* ServerConfig.ServerConfig;
+    const environment = yield* HostProcess.Environment;
+    const homeDirectory = yield* HostProcess.HomeDirectory;
+    const faultRequested = environment.T3CODE_TEST_FAULTS === "resume_failure";
+    const faultHome = environment.T3CODE_TEST_FAULT_HOME;
+    const faultThreadId = environment.T3CODE_TEST_FAULT_THREAD_ID;
+    const isolatedHome =
+      faultHome !== undefined &&
+      path.resolve(faultHome) === path.resolve(serverConfig.baseDir) &&
+      !path.resolve(faultHome).startsWith(path.resolve(expandHomePath("~/.t3", homeDirectory))) &&
+      !path
+        .resolve(faultHome)
+        .startsWith(path.resolve(expandHomePath("~/.local/share/t3code-dev", homeDirectory)));
+    // A bundled entrypoint has a .mjs URL. A dev URL alone is not proof that
+    // the executable is an uninstalled source server.
+    const resumeFailureThreadId =
+      faultRequested &&
+      import.meta.url.endsWith("/ClaudeAdapterV2.ts") &&
+      serverConfig.devUrl !== undefined &&
+      isolatedHome &&
+      faultThreadId
+        ? faultThreadId
+        : undefined;
+    if (faultRequested && resumeFailureThreadId === undefined) {
+      yield* Effect.logWarning(
+        "Ignoring resume_failure test fault: requires a source dev server, isolated explicit home and allowlisted thread.",
+      );
+    }
 
     return ClaudeAgentSdkQueryRunner.of({
+      ...(resumeFailureThreadId === undefined ? {} : { resumeFailureThreadId }),
+      hasSession: Effect.fn("ClaudeAgentSdkQueryRunner.hasSession")(
+        function* (input) {
+          // Native handles are UUIDs, never paths. Search only this account's
+          // projects; cwd aliases and the SDK's long-path encoding may differ.
+          if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/iu.test(input.sessionId))
+            return false;
+          const projectsDir = path.join(input.configDir, "projects");
+          if (!(yield* fileSystem.exists(projectsDir))) return false;
+          const expected = input.cwd.replace(/[^a-zA-Z0-9]/gu, "-");
+          const directories = yield* fileSystem.readDirectory(projectsDir);
+          const ordered = [
+            expected,
+            ...directories.filter((directory) => directory !== expected).sort(),
+          ];
+          for (const directory of ordered) {
+            const sessionPath = path.join(projectsDir, directory, `${input.sessionId}.jsonl`);
+            if (!(yield* fileSystem.exists(sessionPath))) continue;
+            const stat = yield* fileSystem.stat(sessionPath);
+            if (stat.type === "File" && stat.size > 0n) return true;
+          }
+          return false;
+        },
+        (effect) =>
+          effect.pipe(
+            Effect.timeout("5 seconds"),
+            Effect.mapError((cause) => queryRunnerError(cause, "hasSession")),
+          ),
+      ),
       allocateSessionId: crypto.randomUUIDv4.pipe(
         Effect.mapError((cause) => queryRunnerError(cause, "allocateSessionId")),
       ),
@@ -3083,6 +3154,18 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
         const steeredTurns = yield* Ref.make(new Set<OrchestrationV2ProviderTurn["id"]>());
         const queryContext = yield* Ref.make<ClaudeLiveQueryContext | null>(null);
         const openedNativeThreads = yield* Ref.make(new Set<string>());
+        const recoveringNativeSession = yield* Ref.make(false);
+        const resetRunId = yield* Ref.make<
+          ProviderAdapter.ProviderAdapterV2TurnInput["runId"] | null
+        >(null);
+        const assertSessionNotReset = Effect.gen(function* () {
+          if ((yield* Ref.get(resetRunId)) !== null) {
+            return yield* new ProviderAdapter.ProviderAdapterProtocolError({
+              driver: CLAUDE_PROVIDER,
+              detail: "Claude session was reset; open a replacement session to continue.",
+            });
+          }
+        });
         const latestPlanByKind = yield* Ref.make(new Map<string, OrchestrationV2PlanArtifact>());
         const planIdsByNativeItem = yield* Ref.make(
           new Map<string, OrchestrationV2PlanArtifact["id"]>(),
@@ -7163,6 +7246,10 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               if (request.dialogKind !== "resume_return") {
                 return { behavior: "cancelled" as const };
               }
+              if (yield* Ref.get(recoveringNativeSession)) {
+                yield* Ref.set(recoveringNativeSession, false);
+                return { behavior: "completed" as const, result: "compact" as const };
+              }
               const ageMinutes =
                 typeof request.payload.sessionAgeMinutes === "number" &&
                 Number.isFinite(request.payload.sessionAgeMinutes)
@@ -7480,6 +7567,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
 
         const startTurn = Effect.fn("ClaudeAdapterV2.startTurn")(
           function* (turnInput: ProviderAdapter.ProviderAdapterV2TurnInput) {
+            yield* assertSessionNotReset;
             const startedAt = yield* DateTime.now;
             const nativeThreadId = yield* getNativeThreadId(turnInput.providerThread);
             const nativeTurnId = `turn:${turnInput.attemptId}`;
@@ -7764,6 +7852,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
 
         const steerTurn = Effect.fn("ClaudeAdapterV2.steerTurn")(
           function* (turnInput: ProviderAdapter.ProviderAdapterV2SteerInput) {
+            yield* assertSessionNotReset;
             const existing = yield* Ref.get(queryContext);
             if (existing === null) {
               return yield* new ProviderAdapter.ProviderAdapterProtocolError({
@@ -7913,6 +8002,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             }),
           ensureThread: Effect.fn("ClaudeAdapterV2.ensureThread")(
             function* (threadInput: ProviderAdapter.ProviderAdapterV2EnsureThreadInput) {
+              yield* assertSessionNotReset;
               const createdAt = yield* DateTime.now;
               const nativeThreadId = yield* queryRunner.allocateSessionId;
               return makeProviderThread({
@@ -7937,7 +8027,39 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               ),
           ),
           resumeThread: Effect.fn("ClaudeAdapterV2.resumeThread")(
-            function* (threadInput: { readonly providerThread: OrchestrationV2ProviderThread }) {
+            function* (
+              threadInput: Parameters<
+                ProviderAdapter.ProviderAdapterV2SessionRuntime["resumeThread"]
+              >[0],
+            ) {
+              yield* assertSessionNotReset;
+              const nativeThreadId = yield* getNativeThreadId(threadInput.providerThread);
+              if (queryRunner.resumeFailureThreadId === threadInput.providerThread.appThreadId) {
+                return yield* queryRunnerError("Injected isolated resume failure", "resumeThread");
+              }
+              if (
+                queryRunner.hasSession !== undefined &&
+                !(yield* Ref.get(openedNativeThreads)).has(nativeThreadId)
+              ) {
+                const configDir = yield* resolveClaudeHomePath(
+                  adapterOptions.settings,
+                  adapterOptions.environment,
+                ).pipe(Effect.provideService(Path.Path, path));
+                const exists = yield* queryRunner.hasSession({
+                  sessionId: nativeThreadId,
+                  configDir,
+                  cwd: threadInput.runtimePolicy?.cwd ?? input.runtimePolicy.cwd ?? ".",
+                });
+                if (!exists)
+                  return yield* queryRunnerError("Native Claude session not found", "resumeThread");
+                yield* Ref.set(recoveringNativeSession, true);
+                // A persisted handle can predate accepted app attempts. Always
+                // use SDK resume, never create/replay over that native session.
+                yield* Ref.update(
+                  openedNativeThreads,
+                  (current) => new Set([...current, nativeThreadId]),
+                );
+              }
               const updatedAt = yield* DateTime.now;
               return {
                 ...threadInput.providerThread,
@@ -7954,6 +8076,77 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                       driver: CLAUDE_PROVIDER,
                       providerSessionId: input.providerSessionId,
                       providerThreadId: threadInput.providerThread.id,
+                      cause,
+                    }),
+                ),
+              ),
+          ),
+          resetThread: Effect.fn("ClaudeAdapterV2.resetThread")(
+            function* (resetInput) {
+              const currentTurn = yield* Ref.get(activeTurn);
+              const previousReset = yield* Ref.get(resetRunId);
+              if (
+                resetInput.threadId !== input.threadId ||
+                (previousReset !== null && previousReset !== resetInput.runId) ||
+                (currentTurn !== null && currentTurn.input.runId !== resetInput.runId)
+              ) {
+                return yield* new ProviderAdapter.ProviderAdapterProtocolError({
+                  driver: CLAUDE_PROVIDER,
+                  detail: "Claude reset does not match the exact session thread and run.",
+                });
+              }
+              // Retire before closing: a concurrent start cannot reuse this
+              // session while S3's durable old-generation fence is in force.
+              yield* Ref.set(resetRunId, resetInput.runId);
+              if (currentTurn !== null) {
+                yield* Ref.update(
+                  interruptedTurns,
+                  (current) => new Set([...current, currentTurn.providerTurnId]),
+                );
+              }
+              for (const pending of (yield* Ref.get(pendingRuntimeRequests)).values()) {
+                if (pending.type === "approval")
+                  yield* Deferred.succeed(pending.decision, "decline");
+                else yield* Deferred.succeed(pending.answers, {});
+              }
+              yield* Ref.set(pendingRuntimeRequests, new Map());
+              const existing = yield* Ref.get(queryContext);
+              if (existing !== null) {
+                existing.stopping = true;
+                const stopped = yield* Effect.gen(function* () {
+                  yield* existing.query.close;
+                  yield* Deferred.await(existing.closed);
+                }).pipe(Effect.timeoutOption("10 seconds"));
+                if (Option.isNone(stopped))
+                  return { isolation: "session" as const, stopped: false };
+                yield* Ref.update(queryContext, (current) =>
+                  current?.query === existing.query ? null : current,
+                );
+              }
+              // A previous close can finish after its timeout and clear the
+              // query reference. Retire its wake state on the successful retry too.
+              for (const nativeThreadId of yield* Ref.get(openedNativeThreads)) {
+                yield* clearWakeStateForNativeThread(nativeThreadId);
+                yield* resetBackgroundTaskStateForNativeThreadProcess(nativeThreadId, {
+                  status: "idle",
+                });
+              }
+              if (currentTurn !== null && (yield* Ref.get(activeTurn)) === currentTurn) {
+                yield* finalizeActiveTurn({
+                  context: currentTurn,
+                  status: "interrupted",
+                  completedAt: yield* DateTime.now,
+                });
+              }
+              return { isolation: "session" as const, stopped: true };
+            },
+            (effect) =>
+              effect.pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new ProviderAdapter.ProviderAdapterProtocolError({
+                      driver: CLAUDE_PROVIDER,
+                      detail: "Failed to stop the exact Claude session during reset.",
                       cause,
                     }),
                 ),
