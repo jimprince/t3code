@@ -87,14 +87,20 @@ it.each(["rolled-back", "failed"] as const)(
     const state = applyServerRestartEvent({ status: "idle" }, update);
     const returned = ready("1.0.0-fork.5");
     if (returned.type !== "ready") throw new Error("fixture");
-    returned.payload.updateOutcome = {
-      id: "update-1",
-      fromVersion: "1.0.0-fork.5",
-      targetVersion: "1.0.0-fork.6",
-      status,
-      reason: "Startup failed; restore the previous build",
+    const returnedWithOutcome = {
+      ...returned,
+      payload: {
+        ...returned.payload,
+        updateOutcome: {
+          id: "update-1",
+          fromVersion: "1.0.0-fork.5",
+          targetVersion: "1.0.0-fork.6",
+          status,
+          reason: "Startup failed; restore the previous build",
+        },
+      },
     };
-    const failed = applyServerRestartEvent(state, returned);
+    const failed = applyServerRestartEvent(state, returnedWithOutcome);
     expect(failed).toMatchObject({
       status: "failed",
       failureKind: "update",
