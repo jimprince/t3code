@@ -8,6 +8,7 @@ import * as CliError from "effect/unstable/cli/CliError";
 
 import * as ServerConfig from "../config.ts";
 import { runServer } from "../server.ts";
+import { installShutdownDeadline } from "./shutdownDeadline.ts";
 import { type CliServerFlags, resolveServerConfig, sharedServerCommandFlags } from "./config.ts";
 
 const encodeCommand = Schema.encodeEffect(Schema.fromJsonString(Schema.String));
@@ -21,6 +22,11 @@ const runServerCommand = (
   },
 ) =>
   Effect.gen(function* () {
+    // Register before server resources so the ceiling outlives their finalizers.
+    yield* Effect.acquireRelease(
+      Effect.sync(() => installShutdownDeadline()),
+      (dispose) => Effect.sync(dispose),
+    );
     const logLevel = yield* GlobalFlag.LogLevel;
     const config = yield* resolveServerConfig(flags, logLevel, options);
     return yield* runServer.pipe(Effect.provideService(ServerConfig.ServerConfig, config));
