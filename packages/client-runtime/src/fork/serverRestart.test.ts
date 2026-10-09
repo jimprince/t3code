@@ -73,6 +73,7 @@ describe("server restart announcements", () => {
     };
     expect(applyServerRestartEvent({ status: "idle" }, event)).toEqual({
       status: "failed",
+      failureKind: "update",
       targetVersion: "1.0.0-fork.6",
       announcedAt: update.payload.at,
       reason: "disk full",
