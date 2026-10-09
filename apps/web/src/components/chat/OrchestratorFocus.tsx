@@ -2,7 +2,7 @@ import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
 import { Atom } from "effect/unstable/reactivity";
 import { useCallback, useMemo, useRef, useState } from "react";
-import { useThreadShells, useThreadProjection } from "../../state/entities";
+import { useThreadShell, useThreadShells, useThreadProjection } from "../../state/entities";
 import { supervisionForest, supervisionKey } from "@t3tools/client-runtime/state/forkNesting";
 import {
   deriveBackgroundTraffic,
@@ -94,7 +94,13 @@ export function useOrchestratorFocus(input: {
   liveRunId: string | null;
 }) {
   const shells = useThreadShells();
-  const projection = useThreadProjection(parseScopedThreadKey(input.threadKey))?.projection;
+  const threadRef = parseScopedThreadKey(input.threadKey);
+  // A draft's reserved id has no server thread until its first send. Reading it
+  // earlier makes the detail stream see "not found" and park, and ChatView
+  // inherits that parked stream once the thread exists.
+  const projection = useThreadProjection(
+    useThreadShell(threadRef) === null ? null : threadRef,
+  )?.projection;
   const forest = useMemo(() => supervisionForest(shells), [shells]);
   const allTraffic = useAtomValue(allTrafficAtom(input.threadKey));
   const setAllTraffic = useAtomSet(allTrafficAtom(input.threadKey));
