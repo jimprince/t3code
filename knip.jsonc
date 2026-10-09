@@ -30,6 +30,10 @@
         "ci/render-fork-release-notes.ts",
       ],
     },
+    "apps/t3-thread": {
+      // CLI tests and CI spawn these fixtures by filename.
+      "entry": ["tests/fixtures/*.mjs"],
+    },
     "apps/server": {
       // Vite+ pack entries and the launcher used by installed background services.
       "entry": [
