@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "7a482ba3d064a5949ee754052ad8dfbbc7f59315",
-  "head": "81eadb824535929ba89832d272d65fd93f1f0c32",
+  "prev": "ec777fb2808f172afc4754ef1128069a32f8ccff",
+  "head": "5914ff655fd3834e24b626dfe5b8a7ce8b8258bc",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -113,6 +113,9 @@
     "fork-decision-context-media",
     "fork-subprojects-server",
     "fork-reliable-handoffs",
+    "refresh-temp"
+  ],
+  "unapplied": [
     "fork-starting-reconcile-causal-guard",
     "fork-notification-eligibility",
     "fork-gitea-token-setter",
@@ -140,10 +143,8 @@
     "fork-update-progress",
     "fork-held-queue-resume",
     "fork-mobile-new-task-reply",
-    "fork-backport-upstream-17348-scroll-follow",
-    "refresh-temp"
+    "fork-backport-upstream-17348-scroll-follow"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
@@ -561,7 +562,7 @@
       "oid": "041a47cc642d1a5ed58d3271b078de993cd77625"
     },
     "refresh-temp": {
-      "oid": "81eadb824535929ba89832d272d65fd93f1f0c32"
+      "oid": "5914ff655fd3834e24b626dfe5b8a7ce8b8258bc"
     }
   }
 }
