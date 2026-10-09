@@ -133,6 +133,33 @@ const thread = (
   };
 };
 
+it("Projects includes only a delegator and explicitly marked subprojects after joining seeded metadata", () => {
+  const root = thread("delegator", null, { pinnedAt: "2026-10-01T00:00:00.000Z" });
+  const workers = Array.from({ length: 5 }, (_, i) =>
+    thread(`delegate-${i}`, null, { pinnedAt: i === 0 ? "2026-10-01T00:00:00.000Z" : null }),
+  );
+  const rows = workers.map((worker) => ({
+    environmentId: root.environmentId,
+    threadId: worker.id,
+    parentThreadId: root.id,
+    subproject: "off" as const,
+    settleOnComplete: true,
+  }));
+  const joined = joinOrchestratorMetadata([root, ...workers], rows);
+  expect(
+    buildOrchestratorSummaries(joined, [project("project-a")]).map((summary) => summary.root.id),
+  ).toEqual([root.id]);
+  const withSubproject = joinOrchestratorMetadata(
+    [root, ...workers],
+    rows.map((row, i) => (i === 1 ? { ...row, subproject: "on" as const } : row)),
+  );
+  expect(
+    buildOrchestratorSummaries(withSubproject, [project("project-a")]).map(
+      (summary) => summary.root.id,
+    ),
+  ).toEqual([root.id, workers[1]!.id]);
+});
+
 describe("buildOrchestratorSummaries", () => {
   it("finds top-level orchestrators and rolls nested activity, attention, projects, and links up", () => {
     const root = thread("root", null, {
