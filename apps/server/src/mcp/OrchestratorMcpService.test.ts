@@ -18,6 +18,9 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
+import * as Deferred from "effect/Deferred";
+import * as Fiber from "effect/Fiber";
+import * as TestClock from "effect/testing/TestClock";
 
 import { OrchestratorProjectionError } from "../orchestration-v2/Orchestrator.ts";
 import type { ProviderAdapterV2Shape } from "../orchestration-v2/ProviderAdapter.ts";
@@ -31,6 +34,56 @@ import type { McpInvocationScope } from "./McpInvocationContext.ts";
 import * as OrchestratorMcpService from "./OrchestratorMcpService.ts";
 
 describe("OrchestratorMcpService", () => {
+  it.effect("bounds a stalled task status read without dispatching or cancelling work", () =>
+    Effect.gen(function* () {
+      const reading = yield* Deferred.make<void>();
+      const scope: McpInvocationScope = {
+        environmentId: EnvironmentId.make("environment:bounded-read"),
+        requestNamespace: "bounded-read",
+        thread: {
+          threadId: ThreadId.make("bounded-parent"),
+          providerSessionId: "bounded-session",
+          providerInstanceId: ProviderInstanceId.make("codex"),
+        },
+        client: undefined,
+        capabilities: new Set(["orchestration"]),
+        issuedAt: 1,
+      };
+      const dependencies = Layer.mergeAll(
+        NodeServices.layer,
+        Layer.mock(ThreadManagementService.ThreadManagementService)({
+          getThreadRecords: () =>
+            Deferred.succeed(reading, undefined).pipe(Effect.andThen(Effect.never)),
+          dispatch: () => Effect.die("A status timeout must not cancel work"),
+        }),
+        Layer.mock(ProviderRegistry.ProviderRegistry)({ getProviders: Effect.succeed([]) }),
+        Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({
+          list: () => Effect.succeed([]),
+        }),
+        Layer.mock(ProjectService.ProjectService)({}),
+        Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),
+      );
+      yield* Effect.gen(function* () {
+        const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+        const status = yield* service
+          .taskStatus(scope, NodeId.make("bounded-task"))
+          .pipe(Effect.flip, Effect.forkScoped);
+        yield* Deferred.await(reading);
+        yield* TestClock.adjust("10 seconds");
+        const error = yield* Fiber.join(status);
+        assert.equal(error.code, "orchestration_error");
+        assert.include(error.message, "read deadline");
+      }).pipe(
+        Effect.provide(
+          OrchestratorMcpService.layer.pipe(
+            Layer.provide(dependencies),
+            Layer.provide(SqlitePersistenceMemory),
+          ),
+        ),
+      );
+    }),
+  );
+
   it.effect("retries terminal acknowledgement with a fresh command id", () =>
     Effect.gen(function* () {
       const parentThreadId = ThreadId.make("thread:mcp-ack-parent");
