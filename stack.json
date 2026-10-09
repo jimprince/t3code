@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "48b6a82f52f61bf297c6ef23be562e22ba773a5c",
-  "head": "8e424d41ab2a07b63ae16d6730ee8a99e0b7cf90",
+  "prev": "761ede00c38f3f3278ec436f49a12ae5a0b385f1",
+  "head": "c3d638fc9ac0a80b8eb88d061f0d5fdb7b24cebe",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -112,12 +112,12 @@
     "fork-decision-discuss",
     "fork-decision-context-media",
     "fork-subprojects-server",
-    "fork-reliable-handoffs"
-  ],
-  "unapplied": [
+    "fork-reliable-handoffs",
     "fork-starting-reconcile-causal-guard",
     "fork-notification-eligibility",
-    "fork-gitea-token-setter",
+    "fork-gitea-token-setter"
+  ],
+  "unapplied": [
     "fork-direct-endpoints-enumeration",
     "fork-create-task-issue",
     "fork-decisions-feed-server",
@@ -297,7 +297,7 @@
       "oid": "0866455cedcfe7db762e3866b17d35bae3004910"
     },
     "fork-gitea-token-setter": {
-      "oid": "5882257b04886f5fbdb492a230d2b49745b4802d"
+      "oid": "c3d638fc9ac0a80b8eb88d061f0d5fdb7b24cebe"
     },
     "fork-headless-delivery": {
       "oid": "3735656e51cc54d3d7a30e0603014f83019b631a"
@@ -339,7 +339,7 @@
       "oid": "19fd90fb8c7a681b73af222853f6d843eac36ce8"
     },
     "fork-notification-eligibility": {
-      "oid": "f20d8e528af54fd67bc359f9f0f676f4b3389954"
+      "oid": "4e985395e11838b88dff76508cea1455c8785345"
     },
     "fork-notification-preferences": {
       "oid": "aa373a1e6efb477209b64a0f3c2c8e33796e3a19"
@@ -504,7 +504,7 @@
       "oid": "2396d130854423cd50e1db95bfba07b5352cdad6"
     },
     "fork-starting-reconcile-causal-guard": {
-      "oid": "9f6863fe7ebb4ac041022543117c70c22d3a9fd9"
+      "oid": "1831ea6f12c3638f207bc5f0d780d43cd3598309"
     },
     "fork-step-preview": {
       "oid": "2ba4b4e05a77302d6fabc6aeb1dd8b7256eeeb43"
