@@ -35,6 +35,8 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
+import * as TestClock from "effect/testing/TestClock";
+import * as Fiber from "effect/Fiber";
 import * as Stream from "effect/Stream";
 
 import * as McpSessionRegistry from "../mcp/McpSessionRegistry.ts";
@@ -3504,8 +3506,13 @@ function captureRootRunTermination(input: {
     ProviderAdapter.ProviderAdapterV2Event,
     ProviderAdapter.ProviderAdapterV2Error
   >;
+  readonly shouldStartProviderTurn?: () => Effect.Effect<
+    boolean,
+    ProjectionStore.ProjectionStoreV2Error
+  >;
   readonly startTurn?: ProviderAdapter.ProviderAdapterV2SessionRuntime["startTurn"];
   readonly refreshAfterTurn?: Effect.Effect<void>;
+  readonly appContext?: McpAppModelContext.McpAppModelContext["Service"]["forThread"];
 }) {
   return Effect.gen(function* () {
     const ids = backgroundScenarioIds(input.key);
@@ -3522,6 +3529,7 @@ function captureRootRunTermination(input: {
     const submittedEffects = yield* Ref.make<ReadonlyArray<PendingOrchestrationEffectV2>>([]);
     const committedEffects = yield* Ref.make<ReadonlyArray<PendingOrchestrationEffectV2>>([]);
     const ingestionDone = yield* Deferred.make<void>();
+    const subscribed = yield* Ref.make(false);
     const captureTurnItem = (payload: OrchestrationV2TurnItem) =>
       Ref.update(writtenItems, (current) => [...current, payload]);
     const captureFinalEvents = (events: ReadonlyArray<OrchestrationV2DomainEvent>) =>
@@ -3538,7 +3546,9 @@ function captureRootRunTermination(input: {
     const layerTest = RunExecutionService.layer.pipe(
       Layer.provide(
         Layer.mergeAll(
-          McpAppModelContext.layerEmpty,
+          input.appContext === undefined
+            ? McpAppModelContext.layerEmpty
+            : Layer.mock(McpAppModelContext.McpAppModelContext)({ forThread: input.appContext }),
           Layer.mock(CheckpointService.CheckpointServiceV2)({ captureBaseline: () => Effect.void }),
           Layer.mock(EventSink.EventSinkV2)({
             write: (payload) =>
@@ -3621,7 +3631,7 @@ function captureRootRunTermination(input: {
                 rootTerminalEvent(ids, "interrupted"),
               ] satisfies ReadonlyArray<ProviderAdapter.ProviderAdapterV2Event>),
             close: Deferred.succeed(ingestionDone, undefined),
-          }),
+          }).pipe(Effect.tap(() => Ref.set(subscribed, true))),
           startTurn: input.startTurn ?? (() => Effect.void),
         } as unknown as ProviderAdapter.ProviderAdapterV2SessionRuntime,
         run: {
@@ -3648,6 +3658,9 @@ function captureRootRunTermination(input: {
         attemptId: ids.attemptId,
         providerTurnOrdinal: 1,
         shouldFinalizeRun: input.shouldFinalizeRun,
+        ...(input.shouldStartProviderTurn === undefined
+          ? {}
+          : { shouldStartProviderTurn: input.shouldStartProviderTurn }),
         ...(input.hasUnpairedRunInterruptRequest === undefined
           ? {}
           : {
@@ -3675,7 +3688,7 @@ function captureRootRunTermination(input: {
       });
     }).pipe(Effect.provide(layerTest));
 
-    yield* Deferred.await(ingestionDone);
+    if (yield* Ref.get(subscribed)) yield* Deferred.await(ingestionDone);
     return {
       written: yield* Ref.get(writtenItems),
       observed: yield* Ref.get(observed),
@@ -4156,4 +4169,40 @@ it.effect("releases ingestion after idle subagent rows and items settle", () =>
       "root-finalized",
     ]);
   }),
+);
+
+it.effect.each(["start", "ownership", "app-context"] as const)(
+  "terminalizes a blocked start or ownership read with a visible timeout (phase=%s)",
+  (phase) =>
+    Effect.gen(function* () {
+      const started = yield* Deferred.make<void>();
+      const result = yield* captureRootRunTermination({
+        key: `never-returning-start-${phase}`,
+        shouldFinalizeRun: () => Effect.succeed(true),
+        events: () => Stream.never,
+        ...(phase === "ownership"
+          ? {
+              shouldStartProviderTurn: () =>
+                Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+              startTurn: () => Effect.die("must not start after ownership read timeout"),
+            }
+          : phase === "app-context"
+            ? {
+                appContext: () =>
+                  Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+                startTurn: () => Effect.die("must not start after app context timeout"),
+              }
+            : {
+                startTurn: () =>
+                  Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+              }),
+      }).pipe(Effect.forkScoped);
+      yield* Deferred.await(started);
+      yield* TestClock.adjust("120 seconds");
+      const { observed, written } = yield* Fiber.join(result);
+      assert.equal(observed[0], "run:failed");
+      const error = written.find((item) => item.type === "error");
+      assert.equal(error?.failure.code, "provider_start_timeout");
+      assert.include(error?.failure.message ?? "", "120000 ms");
+    }),
 );
