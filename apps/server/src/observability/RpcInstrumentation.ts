@@ -15,6 +15,18 @@ type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
  * prefix. Adding an RPC to `WsRpcGroup` without a label is a type error.
  */
 const RPC_AGGREGATES = {
+  "thread.handover.commit": "thread-recovery",
+  "thread.handover.prepare": "thread-recovery",
+  "thread.handover.routes": "thread-recovery",
+  "thread.handover.status": "thread-recovery",
+  "thread.human.pending": "thread-recovery",
+  "thread.human.pending.list": "thread-recovery",
+  "thread.human.resolve": "thread-recovery",
+  "thread.resume": "thread-recovery",
+  "thread.send.binding": "thread-recovery",
+  "thread.session.generation": "thread-recovery",
+  "thread.session.reset": "thread-recovery",
+  "thread.stop.receipt": "thread-recovery",
   "fork.plan.publish": "project-issues",
   "fork.message.forward.accept": "message-forward",
   "fork.message.forward.prepare": "message-forward",
