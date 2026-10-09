@@ -1,6 +1,6 @@
-Bottom: b8e16423191eb3873e13c32bed3ad0e6041f49ff
-Top:    4976f94b5e481f54402876967c5c85dc12dbcd77
+Bottom: aaaf734e7a19368c8c919d4998823742d8a291a1
+Top:    b8099e79b7d8ac7bd7db504d4c24a4bf10bd9e8c
 Author: brad <bradprin@live.com>
-Date:   2026-10-09 03:47:07 +0000
+Date:   2026-10-09 03:47:50 +0000
 
 fix(mobile): a new task shows its reply without reopening the thread
