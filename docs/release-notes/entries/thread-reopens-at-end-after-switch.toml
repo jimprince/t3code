@@ -1,0 +1,4 @@
+id = "thread-reopens-at-end-after-switch"
+category = "fix"
+functionality = "web chat"
+text = "A long thread you switch back to no longer opens blank at the top; it lands on the newest message."
