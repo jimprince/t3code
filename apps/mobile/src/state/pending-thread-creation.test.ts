@@ -14,6 +14,7 @@ import {
   pendingThreadCreationMessage,
   pendingThreadCreationShell,
   resolvePendingThreadCreation,
+  resolveThreadDetailRef,
   type PendingThreadCreation,
 } from "./pending-thread-creation";
 import type { QueuedThreadMessage } from "./thread-outbox-model";
@@ -44,6 +45,38 @@ const creation: QueuedThreadMessage = {
   },
   createdAt: "2026-08-24T12:00:00.000Z",
 };
+
+describe("resolveThreadDetailRef", () => {
+  const ref = { environmentId: creation.environmentId, threadId: creation.threadId };
+  const queued: PendingThreadCreation = { message: creation, outcome: null };
+
+  it("holds the detail back while a queued creation has no server thread", () => {
+    expect(resolveThreadDetailRef({ ref, hasShell: false, pending: queued })).toBeNull();
+    expect(
+      resolveThreadDetailRef({
+        ref,
+        hasShell: false,
+        pending: {
+          message: creation,
+          outcome: { kind: "failed", message: creation, reason: "no" },
+        },
+      }),
+    ).toBeNull();
+  });
+
+  it("opens the detail once the thread is delivered, has a shell, or was never queued", () => {
+    expect(
+      resolveThreadDetailRef({
+        ref,
+        hasShell: false,
+        pending: { message: creation, outcome: { kind: "delivered", message: creation } },
+      }),
+    ).toBe(ref);
+    expect(resolveThreadDetailRef({ ref, hasShell: true, pending: queued })).toBe(ref);
+    expect(resolveThreadDetailRef({ ref, hasShell: false, pending: null })).toBe(ref);
+    expect(resolveThreadDetailRef({ ref: null, hasShell: true, pending: null })).toBeNull();
+  });
+});
 
 describe("resolvePendingThreadCreation", () => {
   const threadKey = `${creation.environmentId}:${creation.threadId}`;
