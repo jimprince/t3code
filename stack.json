@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "1148d02b4fcd52156dce0101ccaca341cac954b6",
-  "head": "a4374b7d91481dc78efe72687cefd52e86471997",
+  "prev": "352e859d596240bbe7778b94a06af7d1eac1cb34",
+  "head": "06ab54ce1db236e54376ec91ca9605bf49641963",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -140,8 +140,7 @@
     "fork-update-progress",
     "fork-held-queue-resume",
     "fork-mobile-new-task-reply",
-    "fork-backport-upstream-17348-scroll-follow",
-    "refresh-temp"
+    "fork-backport-upstream-17348-scroll-follow"
   ],
   "unapplied": [],
   "hidden": [],
@@ -165,7 +164,7 @@
       "oid": "324e7cae5833d8b47ebac8eac94daecd08cdaaea"
     },
     "fork-backport-upstream-17348-scroll-follow": {
-      "oid": "d33f13d8b00bbaa73b2ee0e028aca39544256eaa"
+      "oid": "06ab54ce1db236e54376ec91ca9605bf49641963"
     },
     "fork-board-blocked-working": {
       "oid": "b299543e2d91d1657a34f535be7253cc5212d2da"
@@ -303,7 +302,7 @@
       "oid": "3735656e51cc54d3d7a30e0603014f83019b631a"
     },
     "fork-held-queue-resume": {
-      "oid": "c3159111a2d2bc3ce6cf721d09873ad0a4b5e3c9"
+      "oid": "ef5824e03858006e0e5c00c7d8b7ba10be1fdee5"
     },
     "fork-inline-3d-objects": {
       "oid": "8089f6f7406fcbf99ba30b1ccd11ad7d0cf15e0c"
@@ -327,7 +326,7 @@
       "oid": "79cb0081258f154e8a82b652706943bf9793137a"
     },
     "fork-mobile-new-task-reply": {
-      "oid": "b1c76f763c1e51ab42846ed2cbfffa7efddfaa66"
+      "oid": "67db9ec5e7fc44b90a69746202813140a60deea4"
     },
     "fork-named-agents": {
       "oid": "d186f6e497a05f0ecaa0f43239cb0f5c52bff5c7"
@@ -546,7 +545,7 @@
       "oid": "d948b5c2dcdf923e2efe757c441cc21be4d5f57a"
     },
     "fork-update-progress": {
-      "oid": "272df30021402997a64520aee4dffa58873c8726"
+      "oid": "0c4dd0c215d68336c5e1ecbb3e2c3f1a86cb1fcc"
     },
     "fork-worker-inactivity": {
       "oid": "aff1f5df49b876cbd334a92878478f30752cae57"
@@ -559,9 +558,6 @@
     },
     "fork-worktree-cleanup": {
       "oid": "bb26263dd4985b8ed3b870c02c7499d38c63e137"
-    },
-    "refresh-temp": {
-      "oid": "a4374b7d91481dc78efe72687cefd52e86471997"
     }
   }
 }
