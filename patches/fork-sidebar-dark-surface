@@ -1,6 +1,6 @@
-Bottom: 96f4784172720e9ba98125636e7bc0e23b40c7f9
-Top:    8e2fc27e5d3377de464ed11f1c5f26b513aa2d78
+Bottom: db9c63b12968edc122231e68292272fdd9d88ac1
+Top:    d613d3778214dfc6b7eeaeb7f91dec2be7421bef
 Author: brad <bradprin@live.com>
-Date:   2026-10-09 06:14:21 +0000
+Date:   2026-10-09 07:24:57 +0000
 
 fix(web): the dark sidebar uses the standard dark surface, not pure black

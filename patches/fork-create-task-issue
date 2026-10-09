@@ -1,6 +1,6 @@
-Bottom: f9d994ce7ab6cbbc7869f88439cbae721aa6f9fa
-Top:    8729227a83b3f3da14ee383cc4f5ea959b4d36e2
+Bottom: cdcc61fc02224bf0972de7ffb6a60d5b1ecb3cc4
+Top:    5d22bb092744a5ce5b1244ab32649aa919b21e80
 Author: brad <bradprin@live.com>
-Date:   2026-10-09 06:14:21 +0000
+Date:   2026-10-09 07:24:57 +0000
 
 feat(agents): link and start task issues before launching workers
