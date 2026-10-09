@@ -1,3 +1,4 @@
+import { RecoveryToolkit, RecoveryHandlersLive } from "./toolkits/recovery/tools.ts";
 import { PlansToolkitHandlersLive } from "./toolkits/plans/handlers.ts";
 import { PlansToolkit } from "./toolkits/plans/tools.ts";
 import { DecisionsToolkitHandlersLive } from "./toolkits/decisions/handlers.ts";
@@ -856,9 +857,15 @@ export const layerPullRequestsToolkit = toolkitRegistration(
   PullRequestsHandlers.layer,
 );
 
-const layerProjectLayoutToolkit = toolkitRegistration(ProjectLayoutToolkit, ProjectLayoutToolkitHandlersLive);
+const layerProjectLayoutToolkit = toolkitRegistration(
+  ProjectLayoutToolkit,
+  ProjectLayoutToolkitHandlersLive,
+);
 
-const layerThreadIssuesToolkit = toolkitRegistration(ThreadIssuesToolkit, ThreadIssuesToolkitHandlersLive);
+const layerThreadIssuesToolkit = toolkitRegistration(
+  ThreadIssuesToolkit,
+  ThreadIssuesToolkitHandlersLive,
+);
 
 const layerDeviceStandardToolkitRegistration = toolkitRegistration(
   DeviceStandardToolkit,
@@ -888,6 +895,7 @@ export const layer = Layer.mergeAll(
   layerPreviewToolkit,
   layerOrchestratorToolkit,
   layerThreadToolkit,
+  toolkitRegistration(RecoveryToolkit, RecoveryHandlersLive),
   layerAttachmentToolkit,
   layerProjectRegistration,
   layerEnvironmentToolkit,
