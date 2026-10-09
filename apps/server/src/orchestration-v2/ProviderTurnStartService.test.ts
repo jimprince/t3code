@@ -12,6 +12,7 @@ import {
   RunAttemptId,
   RunId,
   ThreadId,
+  TurnItemId,
   ProjectId,
   type OrchestrationV2ThreadProjection,
   OrchestrationV2DomainEvent,
@@ -20,6 +21,8 @@ import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Fiber from "effect/Fiber";
+import * as TestClock from "effect/testing/TestClock";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -37,6 +40,8 @@ import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import * as ProviderTurnStart from "./ProviderTurnStartService.ts";
 import * as RunExecutionService from "./RunExecutionService.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
+
+import { PendingHumanRequests } from "../threadRecovery/PendingHumanRequests.ts";
 
 const isDomainEvent = Schema.is(OrchestrationV2DomainEvent);
 
@@ -855,3 +860,55 @@ for (const previousMessages of [[], ["/compact", " /COMPACT "]]) {
       }),
   );
 }
+
+effectIt.effect(
+  "captures pending human turn-item IDs from the optional layer for later worker execution",
+  () =>
+    Effect.gen(function* () {
+      const threadId = ThreadId.make("thread:pending-human");
+      const turnItemId = TurnItemId.make("item:completed-unaddressed");
+      const absent = yield* ProviderTurnStart.makePendingHumanItemReader;
+      expect(yield* absent(threadId, [turnItemId])).toEqual([]);
+      const found = yield* ProviderTurnStart.makePendingHumanItemReader.pipe(
+        Effect.provide(
+          Layer.mock(PendingHumanRequests)({
+            listPending: (input) => {
+              expect(input.threadId).toBe(threadId);
+              return Effect.succeed([
+                {
+                  turnItemId,
+                  sourceMessageId: MessageId.make("message:human"),
+                  reason: "unanswered" as const,
+                },
+              ]);
+            },
+          }),
+        ),
+      );
+      // Call outside the layer that supplied the service, just as the native worker does.
+      expect(yield* found(threadId, [turnItemId, TurnItemId.make("item:addressed")])).toEqual([
+        turnItemId,
+      ]);
+      const failed = yield* ProviderTurnStart.makePendingHumanItemReader.pipe(
+        Effect.provide(
+          Layer.mock(PendingHumanRequests)({
+            listPending: () => Effect.die("lookup storage failure"),
+          }),
+        ),
+      );
+      expect(yield* failed(threadId, [turnItemId])).toEqual([turnItemId]);
+    }),
+);
+
+effectIt.effect("bounds a stalled optional pending-human lookup", () =>
+  Effect.gen(function* () {
+    const read = yield* ProviderTurnStart.makePendingHumanItemReader.pipe(
+      Effect.provide(Layer.mock(PendingHumanRequests)({ listPending: () => Effect.never })),
+    );
+    const lookup = yield* read(ThreadId.make("thread:stalled-lookup"), [
+      TurnItemId.make("item:human"),
+    ]).pipe(Effect.forkChild);
+    yield* TestClock.adjust("5 seconds");
+    expect(yield* Fiber.join(lookup)).toEqual([TurnItemId.make("item:human")]);
+  }),
+);
