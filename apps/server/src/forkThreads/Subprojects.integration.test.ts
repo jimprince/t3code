@@ -277,7 +277,7 @@ it.effect(
       const sql = yield* SqlClient.SqlClient;
       yield* sql`CREATE TABLE effect_sql_fork_migrations (migration_id INTEGER PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`;
       yield* sql`INSERT INTO effect_sql_fork_migrations (migration_id, name) VALUES (16, 'ProjectionThreadsSubproject')`;
-      assert.deepEqual(yield* runForkMigrations(), []);
+      assert.deepEqual(yield* runForkMigrations({ toMigrationInclusive: 16 }), []);
       const ledger = yield* sql`SELECT * FROM effect_sql_fork_migrations ORDER BY migration_id`;
       yield* sql`CREATE TABLE projection_threads (thread_id TEXT PRIMARY KEY, parent_thread_id TEXT, scope TEXT, settle_on_complete INTEGER, subproject TEXT)`;
       yield* sql`INSERT INTO projection_threads VALUES ('mid', 'top', 'charter', 1, 'on'), ('worker', 'mid', NULL, NULL, 'off')`;
@@ -309,7 +309,7 @@ it.effect(
         "v2 charter",
       );
       assert.deepEqual(yield* sql`SELECT * FROM projection_threads ORDER BY thread_id`, before);
-      assert.deepEqual(yield* runForkMigrations(), []);
+      assert.deepEqual(yield* runForkMigrations({ toMigrationInclusive: 16 }), []);
       assert.deepEqual(
         yield* sql`SELECT * FROM effect_sql_fork_migrations ORDER BY migration_id`,
         ledger,
