@@ -1,3 +1,5 @@
+import { authenticatedHandlers as recoveryHandlers } from "./threadRecovery/rpc.ts";
+import { HumanIngress } from "./threadRecovery/HumanIngress.ts";
 import { makeMessageForwardService } from "./forkThreads/MessageForwardService.ts";
 import * as PlanPublicationService from "./projectIssues/PlanPublicationService.ts";
 import * as PlanTaskLaunch from "./projectIssues/PlanTaskLaunch.ts";
@@ -123,6 +125,7 @@ import {
   WS_METHODS,
   WsCoreRpcGroup,
   WsForkRpcGroup,
+  WsRecoveryRpcGroup,
   WsRpcGroup,
   withoutPageAgentThreads,
 } from "@t3tools/contracts";
@@ -256,6 +259,7 @@ import * as PullRequestService from "./pullRequest/PullRequestService.ts";
 import { listLinkedPullRequestThreads } from "./pullRequest/linkedThreads.ts";
 import { pullRequestSyncKey } from "./pullRequest/pullRequestSyncKey.ts";
 import * as SqlClient from "effect/sql/SqlClient";
+import { makeSendBindingReader } from "./forkThreads/SendBindings.ts";
 import { makeHandoffService } from "./forkThreads/HandoffService.ts";
 import * as PullRequestSyncReactor from "./orchestration-v2/PullRequestSyncReactor.ts";
 import * as ProjectIssuesService from "./projectIssues/ProjectIssuesService.ts";
@@ -1924,7 +1928,10 @@ const layerWsRpc = (
                             "creationSource" in command ? command.creationSource : "web",
                         }),
                       )
-                  ).pipe(Effect.provide(intakeContext)),
+                  ).pipe(
+                    Effect.provide(intakeContext),
+                    Effect.provideService(HumanIngress, currentSession.subject),
+                  ),
                 )
                 .pipe(
                   Effect.tap(() => recordClientCommandAnalytics(command)),
@@ -2091,7 +2098,10 @@ const layerWsRpc = (
                     ...(nested === null ? {} : { afterClaim: nested.afterClaim }),
                     createdBy: "user",
                     creationSource: input.creationSource ?? "web",
-                  }).pipe(Effect.provide(intakeContext)),
+                  }).pipe(
+                    Effect.provide(intakeContext),
+                    Effect.provideService(HumanIngress, currentSession.subject),
+                  ),
                 )
                 .pipe(
                   Effect.tap(() =>
@@ -3299,6 +3309,7 @@ const layerWsRpc = (
         "fork.plan.publish": (input) => planPublication.publish(input),
         "fork.send.accept": (input) => handoffs.accept(input),
         "fork.send.lookup": (input) => handoffs.lookup(input),
+        "thread.send.binding": (input) => makeSendBindingReader(sql).read(input),
         "fork.send.inbox": (input) => handoffs.inbox(input.threadId),
         [WS_METHODS.giteaSetToken]: makeGiteaTokenRpcHandler(serverSettings),
         "fork.session.reconcile": (input) =>
@@ -3336,8 +3347,13 @@ const layerWsRpc = (
         [WS_METHODS.projectRequestsDecide]: (input) => requestLedger.decide(input),
       });
       return Context.merge(
-        yield* WsCoreRpcGroup.toHandlers(handlers),
-        yield* WsForkRpcGroup.toHandlers(forkHandlers),
+        Context.merge(
+          yield* WsCoreRpcGroup.toHandlers(handlers),
+          yield* WsForkRpcGroup.toHandlers(forkHandlers),
+        ),
+        yield* WsRecoveryRpcGroup.toHandlers(
+          recoveryHandlers({ principal: currentSession.subject, scopes: currentSession.scopes }),
+        ),
       );
     }),
   );
