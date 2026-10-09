@@ -1,3 +1,4 @@
+import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { initializeMetadata, listMetadata } from "./MetadataStore.ts";
 import { isPermanentRoot } from "./PermanentRoots.ts";
@@ -33,6 +34,7 @@ const make = Effect.gen(function* () {
   const orchestrator = yield* Orchestrator.OrchestratorV2;
   const threads = yield* ThreadManagement.ThreadManagementService;
   const settingsService = yield* ServerSettings.ServerSettingsService;
+  const projects = yield* ProjectStore.ProjectStoreV2;
   const scope = yield* Scope.Scope;
   let timer: Fiber.Fiber<void> | undefined;
   let queued = false;
@@ -48,6 +50,22 @@ const make = Effect.gen(function* () {
       const archived = yield* threads.getShellSnapshot({ location: "archive" });
       const all = [...active.threads, ...archived.threads];
       const metadata = new Map((yield* listMetadata(sql)).map((row) => [row.threadId, row]));
+      const namedProjects = new Set(
+        (yield* projects.listShells())
+          .filter((project) => project.permanentAgent != null)
+          .map((project) => project.id),
+      );
+      const permanentRoots = new Set(
+        all
+          .filter(
+            (thread) =>
+              namedProjects.has(thread.projectId) &&
+              thread.lineage.parentThreadId === null &&
+              metadata.get(thread.id)?.parentThreadId == null &&
+              metadata.get(thread.id)?.remoteParent == null,
+          )
+          .map((thread) => thread.id),
+      );
       const settings = yield* settingsService.getSettings;
       const now = DateTime.toEpochMillis(yield* DateTime.now);
       let nearest = Infinity;
@@ -63,14 +81,19 @@ const make = Effect.gen(function* () {
           thread.settledOverride == null &&
           !thread.autoSettleDisabledAt &&
           !thread.pinnedAt &&
-          !isPermanentRoot(thread.id) &&
+          !isPermanentRoot(thread.id, permanentRoots) &&
           !hasActiveWork(thread) &&
           thread.status === "completed" &&
           thread.latestRunId
         ) {
           const projection = yield* threads.getThreadProjection(thread.id);
           if (
-            completionEligible(projection, thread.latestRunId, metadata.get(thread.id)) &&
+            completionEligible(
+              projection,
+              thread.latestRunId,
+              metadata.get(thread.id),
+              permanentRoots,
+            ) &&
             !(yield* hasLiveChildren(sql, thread.id, threads.getThreadShell))
           ) {
             yield* threads
@@ -92,7 +115,10 @@ const make = Effect.gen(function* () {
           }
         }
         const days = policy.settledSubthreadArchiveAfterDays;
-        if (days == null || !archiveEligible(thread, all, now, metadata.get(thread.id), metadata))
+        if (
+          days == null ||
+          !archiveEligible(thread, all, now, metadata.get(thread.id), metadata, permanentRoots)
+        )
           continue;
         const deadline = archiveDeadline(thread, days);
         if (deadline == null) continue;
@@ -165,7 +191,7 @@ const make = Effect.gen(function* () {
   });
 });
 
-export const layer = Layer.effect(WorkerLifecycle, make);
+export const layer = Layer.effect(WorkerLifecycle, make).pipe(Layer.provide(ProjectStore.layer));
 export const live = Layer.effectDiscard(
   Effect.gen(function* () {
     const service = yield* WorkerLifecycle;
