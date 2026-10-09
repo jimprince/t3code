@@ -1,6 +1,6 @@
-Bottom: e9120b6691b8ae3b9a9f9acab70998e04430f731
-Top:    97633705fa3496db5ce4fc34987a566250c600ee
+Bottom: a990c73f968864d3f5fc327358c01d895d0c0a81
+Top:    37ab91582e249e9b6ab0dd2e16883a930ba4fbb8
 Author: brad <bradprin@live.com>
-Date:   2026-10-09 01:14:43 +0000
+Date:   2026-10-09 01:29:23 +0000
 
 feat(threads): nest threads under an orchestrating thread
