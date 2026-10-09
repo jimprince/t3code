@@ -42,7 +42,48 @@ export async function loadState<T>(empty: T): Promise<T> {
   return loadStateFromFile(resolveStateFile(), empty);
 }
 
+/** A stale watcher snapshot may not re-create routes or claimed deliveries to a retired subscriber. */
+function assertHandoverRecipients(state: unknown): void {
+  if (typeof state !== "object" || state === null) return;
+  const value = state as Record<string, unknown>;
+  if (!Array.isArray(value.handoverRedirects)) return;
+  const record = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
+  const terminal = new Set([
+    "delivered",
+    "superseded",
+    "undeliverable",
+    "cancelled",
+    "completed",
+    "failed",
+    "dispatched",
+  ]);
+  for (const redirect of value.handoverRedirects) {
+    if (!record(redirect)) throw new Error("Invalid handover redirect.");
+    for (const key of ["subscriptions", "notifications", "queuedSends", "agents"]) {
+      const rows = value[key];
+      if (!Array.isArray(rows)) continue;
+      if (
+        rows.some(
+          (row) =>
+            record(row) &&
+            (key === "subscriptions" || key === "agents" || !terminal.has(String(row.status))) &&
+            (key === "queuedSends" || key === "agents" ? row.threadId : row.subscriberThreadId) ===
+              redirect.oldThreadId &&
+            (key === "queuedSends" || key === "agents"
+              ? row.environment
+              : row.subscriberEnvironment) === redirect.targetEnvironment,
+        )
+      ) {
+        throw new Error(
+          `Thread routing was handed over; retry with successor ${String(redirect.successorThreadId)}.`,
+        );
+      }
+    }
+  }
+}
+
 async function saveStateToFile<T>(stateFile: string, state: T): Promise<void> {
+  assertHandoverRecipients(state);
   await ensureStateDir(stateFile);
   const tempFile = NodePath.join(
     NodePath.dirname(stateFile),
