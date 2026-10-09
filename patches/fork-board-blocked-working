@@ -1,6 +1,6 @@
-Bottom: 8709a7b86cb60741e414420dd902019bc5ac0483
-Top:    d0122baf7bcc8cfd9ee3e98a608a91f3b0c52008
+Bottom: 672a1fac5bbb21c8b66a823ef02905b485aee47a
+Top:    a2774969828a4e8e8e71cbc28bef6fdafae853d3
 Author: brad <bradprin@live.com>
-Date:   2026-10-09 07:25:26 +0000
+Date:   2026-10-09 07:26:30 +0000
 
 feat(projects): derived Blocked and outcome rows for Working now
