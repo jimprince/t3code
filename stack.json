@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "9b77b73852ab6e5690d611c03fd8ea54b61471a2",
-  "head": "85d652846c64b67abcf0f4d2d5747ed2e51b1497",
+  "prev": "f7c91f6f81b1095c3039bbe04649406e30d20304",
+  "head": "0bad83b82cb2babec00239b2c8e2533796de545b",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -56,10 +56,10 @@
     "fork-agent-thread-ordering",
     "fork-cross-environment-nesting",
     "fork-queue-coalesced-notes",
-    "fork-standing-agent-autosettle"
+    "fork-standing-agent-autosettle",
+    "fork-queue-idle-dispatch"
   ],
   "unapplied": [
-    "fork-queue-idle-dispatch",
     "fork-textgen-tempfile-cause",
     "fork-textgen-own-scope",
     "fork-dev-vm-heavy-check-gate",
@@ -432,7 +432,7 @@
       "oid": "e17a60d177b374d55fcc6f83a22725f50ee5451f"
     },
     "fork-queue-idle-dispatch": {
-      "oid": "66bf8d31933eb904a832ff782b2986719d2b5104"
+      "oid": "0bad83b82cb2babec00239b2c8e2533796de545b"
     },
     "fork-release-horizon": {
       "oid": "ac3acdb0f5c676a57d8835c89e4719e4a8ac012b"
