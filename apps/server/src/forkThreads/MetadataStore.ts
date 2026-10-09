@@ -72,12 +72,6 @@ export const listMetadata = (sql: SqlClient.SqlClient) =>
   sql<{ payload: string }>`SELECT payload FROM fork_thread_metadata ORDER BY thread_id`.pipe(
     Effect.flatMap((rows) => Effect.forEach(rows, (row) => decodeMetadata(row.payload))),
   );
-export const writeMetadata = (sql: SqlClient.SqlClient, value: ForkThreadMetadata) =>
-  Effect.gen(function* () {
-    const payload = yield* encodeMetadata(value);
-    yield* sql`INSERT INTO fork_thread_metadata (thread_id, payload) VALUES (${value.threadId}, ${payload}) ON CONFLICT(thread_id) DO UPDATE SET payload = excluded.payload`;
-  });
-
 /** Seed delegation ownership in the creation transaction; later organizational edits always win. */
 export const seedDelegatedMetadata = (
   sql: SqlClient.SqlClient,
@@ -104,3 +98,8 @@ export const readMetadata = (sql: SqlClient.SqlClient, threadId: ThreadId) =>
       rows[0] ? decodeMetadata(rows[0].payload) : Effect.succeed(undefined),
     ),
   );
+export const writeMetadata = (sql: SqlClient.SqlClient, value: ForkThreadMetadata) =>
+  Effect.gen(function* () {
+    const payload = yield* encodeMetadata(value);
+    yield* sql`INSERT INTO fork_thread_metadata (thread_id, payload) VALUES (${value.threadId}, ${payload}) ON CONFLICT(thread_id) DO UPDATE SET payload = excluded.payload`;
+  });
