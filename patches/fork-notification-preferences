@@ -1,6 +1,6 @@
-Bottom: f33b022020f18f70bc506af47cbd9244657a91e6
-Top:    2f995e56bc30b6b2a5d5e7144db4fba8aee6e912
+Bottom: 0de4e865d7afb4cfd25c4413263a8d2a877989a8
+Top:    2fc33e58730ec394bd61095422fa5554bc1d0033
 Author: User <user@example.com>
-Date:   2026-10-08 23:03:44 +0000
+Date:   2026-10-09 01:10:27 +0000
 
 feat(t3-thread): control worker notification preferences
