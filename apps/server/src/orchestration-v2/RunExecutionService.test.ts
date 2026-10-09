@@ -35,6 +35,8 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
+import * as TestClock from "effect/testing/TestClock";
+import * as Fiber from "effect/Fiber";
 import * as Stream from "effect/Stream";
 
 import * as McpSessionRegistry from "../mcp/McpSessionRegistry.ts";
@@ -3387,6 +3389,10 @@ function captureRootRunTermination(input: {
   readonly events?: (
     ids: BackgroundScenarioIds,
   ) => Stream.Stream<ProviderAdapterV2Event, ProviderAdapterV2Error>;
+  readonly shouldStartProviderTurn?: () => Effect.Effect<
+    boolean,
+    ProjectionStore.ProjectionStoreV2Error
+  >;
   readonly startTurn?: ProviderAdapterV2SessionRuntime["startTurn"];
   readonly refreshAfterTurn?: Effect.Effect<void>;
 }) {
@@ -3403,6 +3409,7 @@ function captureRootRunTermination(input: {
     const writtenItems = yield* Ref.make<ReadonlyArray<OrchestrationV2TurnItem>>([]);
     const observed = yield* Ref.make<ReadonlyArray<string>>([]);
     const ingestionDone = yield* Deferred.make<void>();
+    const subscribed = yield* Ref.make(false);
     const captureTurnItem = (payload: OrchestrationV2TurnItem) =>
       Ref.update(writtenItems, (current) => [...current, payload]);
     const captureFinalEvents = (events: ReadonlyArray<OrchestrationV2DomainEvent>) =>
@@ -3488,7 +3495,7 @@ function captureRootRunTermination(input: {
                 rootTerminalEvent(ids, "interrupted"),
               ] satisfies ReadonlyArray<ProviderAdapterV2Event>),
             close: Deferred.succeed(ingestionDone, undefined),
-          }),
+          }).pipe(Effect.tap(() => Ref.set(subscribed, true))),
           startTurn: input.startTurn ?? (() => Effect.void),
         } as unknown as ProviderAdapterV2SessionRuntime,
         run: {
@@ -3515,6 +3522,9 @@ function captureRootRunTermination(input: {
         attemptId: ids.attemptId,
         providerTurnOrdinal: 1,
         shouldFinalizeRun: input.shouldFinalizeRun,
+        ...(input.shouldStartProviderTurn === undefined
+          ? {}
+          : { shouldStartProviderTurn: input.shouldStartProviderTurn }),
         ...(input.hasUnpairedRunInterruptRequest === undefined
           ? {}
           : {
@@ -3542,7 +3552,7 @@ function captureRootRunTermination(input: {
       });
     }).pipe(Effect.provide(testLayer));
 
-    yield* Deferred.await(ingestionDone);
+    if (yield* Ref.get(subscribed)) yield* Deferred.await(ingestionDone);
     return { written: yield* Ref.get(writtenItems), observed: yield* Ref.get(observed) };
   });
 }
@@ -4015,4 +4025,34 @@ it.effect("releases ingestion after idle subagent rows and items settle", () =>
       "root-finalized",
     ]);
   }),
+);
+
+it.effect.each([false, true])(
+  "terminalizes a blocked start or ownership read with a visible timeout (read=%s)",
+  (blockedRead) =>
+    Effect.gen(function* () {
+      const started = yield* Deferred.make<void>();
+      const result = yield* captureRootRunTermination({
+        key: `never-returning-start-${blockedRead}`,
+        shouldFinalizeRun: () => Effect.succeed(true),
+        events: () => Stream.never,
+        ...(blockedRead
+          ? {
+              shouldStartProviderTurn: () =>
+                Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+              startTurn: () => Effect.die("must not start after ownership read timeout"),
+            }
+          : {
+              startTurn: () =>
+                Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+            }),
+      }).pipe(Effect.forkScoped);
+      yield* Deferred.await(started);
+      yield* TestClock.adjust("120 seconds");
+      const { observed, written } = yield* Fiber.join(result);
+      assert.equal(observed[0], "run:failed");
+      const error = written.find((item) => item.type === "error");
+      assert.equal(error?.failure.code, "provider_start_timeout");
+      assert.include(error?.failure.message ?? "", "120000 ms");
+    }),
 );
