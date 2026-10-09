@@ -51,6 +51,9 @@ import {
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import packageJson from "../../package.json" with { type: "json" };
 const isCodexAppServerSpawnError = Schema.is(CodexErrors.CodexAppServerSpawnError);
+const isCodexAppServerRequestTimeoutError = Schema.is(
+  CodexErrors.CodexAppServerRequestTimeoutError,
+);
 const RATE_LIMITS_PROBE_TIMEOUT_MS = 3_000;
 
 type CodexRateLimitsProbe =
@@ -633,7 +636,8 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
     Effect.result,
   );
 
-  if (Result.isFailure(probeResult)) {
+  // A request ACK deadline shares the probe's budget; report either as a timeout.
+  if (Result.isFailure(probeResult) && !isCodexAppServerRequestTimeoutError(probeResult.failure)) {
     const error = probeResult.failure;
     const installed = !isCodexAppServerSpawnError(error);
     return buildServerProvider({
@@ -657,7 +661,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
     });
   }
 
-  if (Option.isNone(probeResult.success)) {
+  if (Result.isFailure(probeResult) || Option.isNone(probeResult.success)) {
     return buildServerProvider({
       presentation: CODEX_PRESENTATION,
       enabled: codexSettings.enabled,
