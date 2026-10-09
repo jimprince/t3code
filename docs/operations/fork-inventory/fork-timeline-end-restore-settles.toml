@@ -1,0 +1,20 @@
+name = "fork-timeline-end-restore-settles"
+subject = "fix(web): a long thread you switch back to opens at the newest message, not blank at the top"
+class = "divergence"
+purpose = "Make the restore of a thread that was at its end verify it got there. The scroll to the end can resolve before the list has laid the thread's rows out and leave the view at the top while the thread counts as positioned; the restore now keeps re-aiming each frame until two frames in a row are within the follow band, then marks the thread positioned (brad/t3code-fork#225)."
+retire_when = "Upstream's restore to the end verifies the measured end before it marks the thread positioned (checks the view against the list's content size and re-scrolls until it holds). Until then keep this patch; dropping it reopens switched-back threads at the top."
+depends_on = ["fork-backport-upstream-17348-scroll-follow"]
+roles = []
+note = "The end branch of the restore effect in MessagesTimeline.tsx runs stepTimelineEndRestore once per frame after scrollToEnd resolves: scroll again while short of the end, settle after two stable frames, and settle after 30 frames regardless so a view that never holds still falls back to the pre-fix outcome (positioned, with maintainScrollAtEnd and the jump-to-latest pill live). It is the end-branch twin of the reading-position reconcile loop and shares its cancellation, but it is separate from that loop on purpose: the reconcile path belongs to upstream's reading-position restore (#12144) and is deliberately left alone, pending Brad's decision. It is not part of the #17348 backport it sits above, which is dropped when upstream merges that PR; this fix is not."
+
+[[decision]]
+id = "end-restore-settles-own-patch"
+date = "2026-10-09"
+decided = "relocate"
+rationale = "The first cut lived inside fork-backport-upstream-17348-scroll-follow, but that patch is upstream-bound and is dropped on the sync that brings #17348 in; #17348 does not settle the end restore, so the fix would have been lost with it. Keep it in its own patch with its own retirement condition and leave the backport's text as the unchanged PR."
+
+[[decision]]
+id = "catchup-2908-end-restore-helper-boundary"
+date = "2026-10-10"
+decided = "relocate+adapt"
+rationale = "Retain bounded measured end restoration while upstream #10439 moves the unrelated shouldPreserveAssistantLineBreaks helper into shared markdownPipeline. Do not restore that extracted implementation. The pinned target still marks end positioning complete without the fork measured-end settle loop, so this concern is not absorbed; reading-position policy #12144 is unchanged. Static restore/cancellation review passed; composed CI remains required."
