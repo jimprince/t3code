@@ -19,9 +19,14 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Queue from "effect/Queue";
+import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import * as EffectWorker from "./EffectWorker.ts";
+import * as EffectOutbox from "./EffectOutbox.ts";
+import * as CommandReceiptStore from "./CommandReceiptStore.ts";
+import * as Option from "effect/Option";
 import * as EventSink from "./EventSink.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
@@ -354,32 +359,106 @@ const stopEarlierBackgroundWork = ({
                 },
           );
           yield* worker.drain();
+          const nativeCompletion = stalledRun === "returned-interrupt-terminal";
+          if (stalledRun === "returned-interrupt" || nativeCompletion) {
+            // This adapter returns an ACK without a terminal receipt. The run
+            // must remain live through the grace period, even when a native
+            // provider-turn update has already reached the projection.
+            const acknowledged = yield* orchestrator.getThreadProjection(threadId);
+            assert.equal(acknowledged.runs[0]?.status, "running");
+            assert.equal(acknowledged.attempts[0]?.status, "running");
+            assert.equal(
+              acknowledged.turnItems.find((item) => item.type === "run_interrupt_request")?.title,
+              "Stop acknowledged",
+            );
+            yield* TestClock.adjust("9999 millis");
+            yield* worker.drain();
+            assert.equal(
+              (yield* orchestrator.getThreadProjection(threadId)).runs[0]?.status,
+              "running",
+            );
+            if (nativeCompletion) {
+              // Complete the native receipt's checkpoint path during grace;
+              // Stop must retain that outcome instead of replacing it.
+              const completed = yield* watch(
+                (event) =>
+                  event.type === "run.updated" &&
+                  event.payload.id === run.id &&
+                  event.payload.status === "waiting",
+              );
+              const partial = yield* orchestrator.getThreadProjection(threadId);
+              const message = partial.messages.find((candidate) => candidate.id === messageId);
+              const assistant = partial.turnItems.find(
+                (candidate) => candidate.id === TurnItemId.make("partial-output"),
+              );
+              assert.ok(message);
+              assert.ok(assistant?.type === "assistant_message");
+              const finishedAt = yield* DateTime.now;
+              // Codex item/completed closes its message and turn item before
+              // turn/completed. Deliver that native path through ingestion.
+              yield* Queue.offer(events, {
+                type: "message.updated",
+                driver,
+                message: { ...message, streaming: false, updatedAt: finishedAt },
+              });
+              yield* Queue.offer(events, {
+                type: "turn_item.updated",
+                driver,
+                turnItem: {
+                  ...assistant,
+                  status: "completed",
+                  streaming: false,
+                  completedAt: finishedAt,
+                  updatedAt: finishedAt,
+                },
+              });
+              yield* Queue.offer(events, {
+                type: "turn.terminal",
+                driver,
+                providerThreadId: codexTurn.providerThreadId,
+                providerTurnId: codexTurn.id,
+                runOrdinal: first.runOrdinal,
+                status: "completed",
+                failure: null,
+                threadDisposition: "reusable",
+              });
+              yield* Fiber.join(completed);
+              yield* worker.drain();
+            }
+            yield* TestClock.adjust("1 millis");
+            yield* worker.drain();
+          }
           const after = yield* orchestrator.getThreadProjection(threadId);
-          const interrupted = stalledRun !== "superseded-attempt";
-          assert.equal(after.runs[0]?.status, interrupted ? "interrupted" : "running");
-          assert.equal(after.attempts[0]?.status, interrupted ? "interrupted" : "running");
+          const interrupted = stalledRun !== "superseded-attempt" && !nativeCompletion;
+          const runStatus = nativeCompletion
+            ? "completed"
+            : interrupted
+              ? "interrupted"
+              : "running";
+          assert.equal(after.runs[0]?.status, runStatus);
+          assert.equal(after.attempts[0]?.status, runStatus);
           assert.equal(
             after.providerTurns[0]?.status,
             terminalProviderTurn ? "completed" : interrupted ? "interrupted" : "running",
           );
           assert.equal(
             after.nodes.find((candidate) => candidate.id === node.id)?.status,
-            interrupted ? "interrupted" : "running",
+            runStatus,
           );
           const output = after.messages.find((message) => message.id === messageId)!;
-          assert.equal(output.streaming, !interrupted);
+          assert.equal(output.streaming, !interrupted && !nativeCompletion);
           assert.equal(output.text, "Partial output");
           assert.equal(
             after.turnItems.find((candidate) => candidate.id === devServerId)?.status,
             stalledRun === "missing-session-terminal"
               ? "completed"
-              : interrupted
+              : interrupted || nativeCompletion
                 ? "interrupted"
                 : "running",
           );
           assert.equal(
             after.turnItems.find((candidate) => candidate.type === "assistant_message")?.status,
-            interrupted ? "interrupted" : "running",
+            runStatus,
           );
           assert.equal(
             after.turnItems.filter((candidate) => candidate.type === "run_interrupt_result").length,
@@ -581,6 +660,13 @@ const stopEarlierBackgroundWork = ({
             ...watcherRun.events,
             ...reviewerRun.events,
             {
+              id: EventId.make("provider-thread:codex-latest"),
+              type: "provider-thread.updated",
+              threadId,
+              occurredAt: now,
+              payload: { ...codexProviderThread, lastRunOrdinal: 3 },
+            },
+            {
               id: EventId.make("provider-thread:other"),
               type: "provider-thread.updated",
               threadId,
@@ -697,6 +783,12 @@ const stopEarlierBackgroundWork = ({
           });
         }
 
+        const stopReceipts = yield* Ref.make<OrchestrationV2DomainEvent[]>([]);
+        yield* orchestrator.streamDomainEvents.pipe(
+          Stream.filter((event) => event.threadId === threadId),
+          Stream.runForEach((event) => Ref.update(stopReceipts, (events) => [...events, event])),
+          Effect.forkChild({ startImmediately: true }),
+        );
         yield* orchestrator.dispatch(
           stopWithQueue === "thread.stop"
             ? {
@@ -716,6 +808,71 @@ const stopEarlierBackgroundWork = ({
                 ...(stopWithQueue === undefined ? {} : { holdQueue: true }),
               },
         );
+        yield* worker.drain();
+
+        if (!olderStart && !failedStart && stopWithQueue === undefined) {
+          const receipts = yield* CommandReceiptStore.CommandReceiptStoreV2;
+          const outbox = yield* EffectOutbox.EffectOutboxV2;
+          const ackCommand = {
+            type: "thread.background-work.settle" as const,
+            commandId: CommandId.make(
+              `effect:stop-background-work:provider-turn.interrupt:${reviewerRun.providerTurnId}:background-work-settled`,
+            ),
+            threadId,
+            providerThreadId: codexProviderThread.id,
+            providerTurnId: reviewerRun.providerTurnId,
+            interruptAcknowledged: true,
+          };
+          assert.equal(
+            Option.getOrThrow(yield* receipts.getByCommandId(ackCommand.commandId)).status,
+            "accepted",
+          );
+          assert.lengthOf(
+            yield* sink
+              .readByCommandId({ commandId: ackCommand.commandId })
+              .pipe(Stream.runCollect),
+            0,
+          );
+          const fallback = Option.getOrThrow(
+            yield* outbox.get(`effect:interrupt-settle:${ackCommand.commandId}`),
+          );
+          assert.equal(fallback.status, "pending");
+          assert.equal(Date.parse(fallback.availableAt), DateTime.toEpochMillis(now) + 10_000);
+          assert.deepEqual(fallback.request, {
+            type: "provider-turn.interrupt-settle",
+            providerThreadId: codexProviderThread.id,
+            providerTurnId: reviewerRun.providerTurnId,
+          });
+          yield* orchestrator.dispatch(ackCommand);
+          const replayed = yield* outbox.listByCommandId(fallback.commandId);
+          assert.lengthOf(replayed, 1);
+          assert.equal(Date.parse(replayed[0]!.availableAt), Date.parse(fallback.availableAt));
+        }
+
+        // This mock only acknowledges Stop. Without a native terminal event,
+        // all background commands stay live until the bounded fallback.
+        const backgroundIds = [devServerId, ...(olderStart ? [] : [watcherId]), reviewerId];
+        const backgroundStatuses = () =>
+          orchestrator
+            .getThreadProjection(threadId)
+            .pipe(
+              Effect.map((projection) =>
+                backgroundIds.map(
+                  (id) => projection.turnItems.find((item) => item.id === id)?.status,
+                ),
+              ),
+            );
+        assert.deepEqual(
+          yield* backgroundStatuses(),
+          backgroundIds.map(() => "running"),
+        );
+        yield* TestClock.adjust("9999 millis");
+        yield* worker.drain();
+        assert.deepEqual(
+          yield* backgroundStatuses(),
+          backgroundIds.map(() => "running"),
+        );
+        yield* TestClock.adjust("1 millis");
         yield* worker.drain();
 
         // The Codex interrupt targets its latest pending work, the subagent's parent turn,
@@ -746,6 +903,39 @@ const stopEarlierBackgroundWork = ({
           olderStart
             ? ["interrupted", "interrupted"]
             : ["interrupted", "interrupted", "interrupted"],
+          JSON.stringify({
+            clock: DateTime.formatIso(yield* DateTime.now),
+            runs: after.runs.map(({ id, ordinal, status, activeAttemptId, providerThreadId }) => ({
+              id,
+              ordinal,
+              status,
+              activeAttemptId,
+              providerThreadId,
+            })),
+            providerThreads: after.providerThreads.map(
+              ({ id, lastRunOrdinal, providerSessionId }) => ({
+                id,
+                lastRunOrdinal,
+                providerSessionId,
+              }),
+            ),
+            items: after.turnItems
+              .filter((item) => backgroundIds.includes(item.id))
+              .map(({ id, runId, providerThreadId, providerTurnId, status }) => ({
+                id,
+                runId,
+                providerThreadId,
+                providerTurnId,
+                status,
+              })),
+            receipts: (yield* Ref.get(stopReceipts)).map((event) => ({
+              id: event.id,
+              type: event.type,
+              at: DateTime.formatIso(event.occurredAt),
+              payloadId: "id" in event.payload ? event.payload.id : undefined,
+              status: "status" in event.payload ? event.payload.status : undefined,
+            })),
+          }),
         );
       }).pipe(
         Effect.provide(
