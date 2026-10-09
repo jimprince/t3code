@@ -1560,6 +1560,7 @@ export function makeInterruptResultTurnItem(input: {
     completedAt: input.completedAt,
     updatedAt: input.completedAt,
     type: "run_interrupt_result",
+    stopOutcome: "ack",
     message: "Run interrupted by user",
   };
 }
