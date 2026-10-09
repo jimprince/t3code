@@ -26,6 +26,7 @@ function dependencies(
   overrides: Partial<UpdateRollbackDependencies> = {},
 ): UpdateRollbackDependencies {
   return {
+    rename: vi.fn(async () => undefined),
     copyBundle: vi.fn(async () => undefined),
     spawnWatchdog: vi.fn(() => 4242),
     stopWatchdog: vi.fn(),
@@ -69,7 +70,14 @@ describe("armUpdateRollback", () => {
     ).resolves.toBe(4242);
 
     expect(deps.remove).toHaveBeenCalledWith(paths.health);
-    expect(deps.copyBundle).toHaveBeenCalledWith(paths.bundle, paths.backup);
+    expect(deps.copyBundle).toHaveBeenCalledWith(
+      paths.bundle,
+      expect.stringContaining(`${paths.backup}.preparing-`),
+    );
+    expect(deps.rename).toHaveBeenCalledWith(
+      expect.stringContaining(`${paths.backup}.preparing-`),
+      paths.backup,
+    );
     expect(deps.spawnWatchdog).toHaveBeenCalledWith(
       [
         paths.bundle,
@@ -86,7 +94,7 @@ describe("armUpdateRollback", () => {
     );
   });
 
-  it("leaves no partial copy and starts no watchdog when the copy fails", async () => {
+  it("retains the old backup and starts no watchdog when the copy fails", async () => {
     const deps = dependencies({
       copyBundle: vi.fn(async () => {
         throw new Error("disk full");
@@ -96,7 +104,29 @@ describe("armUpdateRollback", () => {
       armUpdateRollback(paths, { current: "1.0.0", expected: "1.1.0" }, deps),
     ).rejects.toThrow("disk full");
     expect(deps.spawnWatchdog).not.toHaveBeenCalled();
-    expect(vi.mocked(deps.remove).mock.calls.at(-1)).toEqual([paths.backup]);
+    expect(deps.rename).not.toHaveBeenCalled();
+    expect(deps.remove).not.toHaveBeenCalled();
+  });
+  it("arms a fresh copy despite ENOTEMPTY while cleaning the stale backup", async () => {
+    const deps = dependencies({
+      remove: vi.fn(async (path) => {
+        if (path.includes(".stale-"))
+          throw Object.assign(new Error("directory not empty"), { code: "ENOTEMPTY" });
+      }),
+    });
+    expect(await armUpdateRollback(paths, { current: "1.0.0", expected: "1.1.0" }, deps)).toBe(
+      4242,
+    );
+    expect(deps.remove).not.toHaveBeenCalledWith(paths.backup);
+    expect(deps.spawnWatchdog).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses installation when no watchdog was spawned", async () => {
+    const deps = dependencies({ spawnWatchdog: vi.fn(() => undefined) });
+    await expect(armUpdateRollback(paths, { current: "1", expected: "2" }, deps)).rejects.toThrow(
+      "not installed",
+    );
+    expect(deps.remove).not.toHaveBeenCalledWith(paths.backup);
   });
 });
 

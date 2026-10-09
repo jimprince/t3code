@@ -6,6 +6,7 @@ import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
 import * as Scope from "effect/Scope";
 import * as Electron from "electron";
+import * as NodeCrypto from "node:crypto";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodeFSP from "node:fs/promises";
@@ -178,6 +179,7 @@ function describeUpdateRollback(record: UpdateRollbackRecord): {
 }
 
 export interface UpdateRollbackDependencies {
+  readonly rename: (source: string, target: string) => Promise<void>;
   readonly copyBundle: (source: string, target: string) => Promise<void>;
   /** Starts the detached watchdog and returns its pid. */
   readonly spawnWatchdog: (args: readonly string[], logPath: string) => number | undefined;
@@ -190,6 +192,7 @@ export interface UpdateRollbackDependencies {
 }
 
 const nodeUpdateRollbackDependencies: UpdateRollbackDependencies = {
+  rename: NodeFSP.rename,
   copyBundle: async (source, target) => {
     // --clone makes an APFS copy-on-write clone, falling back to a copy.
     await execFile("/usr/bin/ditto", ["--clone", source, target]);
@@ -229,38 +232,54 @@ const nodeUpdateRollbackDependencies: UpdateRollbackDependencies = {
 
 /**
  * Copies the running bundle aside and starts the watchdog. Call right before
- * quitAndInstall; throws, leaving nothing behind, when protection is not in
- * place.
+ * quitAndInstall; throws before installation when protection is not in place.
+ * Failed preparations retain copies for operator recovery.
  */
 export async function armUpdateRollback(
   paths: UpdateRollbackPaths,
   versions: { readonly current: string; readonly expected: string },
   dependencies: UpdateRollbackDependencies,
 ): Promise<number | undefined> {
-  await dependencies.remove(paths.health);
-  await dependencies.remove(paths.backup);
+  const attempt = NodeCrypto.randomUUID();
+  const preparing = `${paths.backup}.preparing-${attempt}`;
+  const stale = `${paths.backup}.stale-${attempt}`;
   await dependencies.makeDirectory(NodePath.dirname(paths.backup));
   await dependencies.makeDirectory(NodePath.dirname(paths.log));
+  // Copy into a fresh destination. Recursive deletion of a stale bundle can fail
+  // with ENOTEMPTY, so it must never be a prerequisite for rollback protection.
+  await dependencies.copyBundle(paths.bundle, preparing);
   try {
-    await dependencies.copyBundle(paths.bundle, paths.backup);
-    return dependencies.spawnWatchdog(
-      [
-        paths.bundle,
-        paths.backup,
-        versions.expected,
-        versions.current,
-        paths.health,
-        paths.record,
-        String(WATCHDOG_INTERVAL_SECONDS),
-        String(WATCHDOG_ATTEMPTS),
-        "/usr/bin/open",
-      ],
-      paths.log,
-    );
+    await dependencies.rename(paths.backup, stale);
   } catch (error) {
-    await dependencies.remove(paths.backup);
+    if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+  }
+  try {
+    await dependencies.rename(preparing, paths.backup);
+  } catch (error) {
+    await dependencies.rename(stale, paths.backup).catch(() => undefined);
     throw error;
   }
+  await dependencies.remove(paths.health);
+  const pid = dependencies.spawnWatchdog(
+    [
+      paths.bundle,
+      paths.backup,
+      versions.expected,
+      versions.current,
+      paths.health,
+      paths.record,
+      String(WATCHDOG_INTERVAL_SECONDS),
+      String(WATCHDOG_ATTEMPTS),
+      "/usr/bin/open",
+    ],
+    paths.log,
+  );
+  if (pid === undefined)
+    throw new Error("Rollback watchdog did not start; update was not installed.");
+  // The fresh copy is published and protected before old-copy cleanup. A cleanup
+  // failure leaves the old copy aside and cannot remove the active backup.
+  await dependencies.remove(stale).catch(() => undefined);
+  return pid;
 }
 
 /** Undoes armUpdateRollback after an install failed without restarting. */
@@ -304,7 +323,7 @@ export interface DesktopUpdateRollback {
     pool: DesktopBackendPool.DesktopBackendPool["Service"],
     localEnvironmentEnabled: boolean,
   ) => Effect.Effect<void, never, Scope.Scope>;
-  readonly arm: (expectedVersion: string) => Effect.Effect<void>;
+  readonly arm: (expectedVersion: string) => Effect.Effect<void, Error>;
   readonly disarm: Effect.Effect<void>;
 }
 
@@ -376,8 +395,11 @@ export const make = Effect.fn("desktop.updates.makeRollback")(function* (input: 
       ).pipe(
         Effect.flatMap((pid) => Ref.set(watchdogPidRef, pid)),
         Effect.andThen(logInfo("update rollback armed", { expectedVersion })),
-        Effect.catch((error) =>
-          logWarning("installing without rollback protection", { error: String(error.cause) }),
+        Effect.mapError(
+          (error) =>
+            new Error(
+              `Update was not installed because rollback protection could not be prepared: ${String(error.cause)}`,
+            ),
         ),
       ),
     disarm: Ref.getAndSet(watchdogPidRef, undefined).pipe(
