@@ -4,12 +4,17 @@ Older app-owned delegates may lack organizational metadata or carry their owner'
 ordering, and automatic-settlement opt-out. The repair keeps IDs, task results,
 execution ancestry, history, and explicit organizational edits.
 
-Inspect from a source checkout matching the installed release and its dependencies.
-Point the dry-run at the environment database.
+Use the installed `t3` binary matching the release. The headless executable and
+server bin bundled with desktop both include `repair-delegated-workers`.
+`--base-dir` (or `--home-dir`) selects the environment home; `T3CODE_HOME` and
+the server default home are respected. The command uses the server's V2 path
+derivation, including development state when no explicit home is supplied.
+`--database` can instead select a consistent snapshot. Never substitute the legacy
+`state.sqlite` for the live V2 database.
 The server can stay running:
 
 ```bash
-node apps/server/scripts/repair-delegated-workers.ts --database /path/to/statev2.sqlite
+t3 repair-delegated-workers --base-dir /path/to/environment-home
 ```
 
 The script opens the source only through a read-only SQLite connection to produce a
@@ -25,16 +30,24 @@ history, with no later deliberate event for that field. Imported records without
 creation provenance require separate review.
 
 Deployment owns application after install and manifest review. The repair service has
-no operator RPC; this script uses its normal nesting and event-write services directly.
-Direct application requires the owning server stopped. Stop it,
+no operator RPC; this command uses its normal nesting and event-write services directly.
+Direct application requires a maintenance hold: stop the owning server and hold
+service, updater and cutover restart sources for the entire backup/apply/readback
+window. A one-time offline check does not replace that operational hold. Stop it,
 then run against that environment's database and retain stdout as the repair receipt:
 
 ```bash
-node apps/server/scripts/repair-delegated-workers.ts --database /path/to/statev2.sqlite --apply --offline > repair-receipt.json
+t3 repair-delegated-workers --base-dir /path/to/environment-home --port <configured-port> --apply --offline > repair-receipt.json
 ```
 
-Application requires both flags and refuses a database opened by another process
-(Linux `/proc`, macOS `lsof`). It re-audits candidates, uses versioned command receipts
+Dry-run is the default (`--dry-run` is also accepted); application requires both
+`--apply` and `--offline`. It refuses a listener on the configured port or any
+holder of the main database, WAL or SHM (Linux `/proc`, macOS `lsof`). Inspection
+errors, including permission gaps, refuse application; use an approved privileged
+operator route. Supply the actual configured port, or it is read from the saved
+server-runtime record/environment. Missing port information refuses application.
+Take a stopped-state backup before applying and retain it through readback; do not
+re-arm stale cutover jobs. It re-audits candidates, uses versioned command receipts
 and the normal nesting service, and records field corrections as replayable native
 metadata events. An interrupted or repeated pass preserves subsequent explicit edits.
 The receipt lists applied IDs and the remaining manifest; an empty `changes` list is

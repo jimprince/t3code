@@ -198,16 +198,23 @@ it.effect(
         Effect.promise(() => NodeFSP.mkdtemp("/tmp/t3-delegated-repair-")),
         (path) => Effect.promise(() => NodeFSP.rm(path, { recursive: true, force: true })),
       );
-      const snapshot = `${directory}/statev2.sqlite`;
+      yield* Effect.promise(() => NodeFSP.mkdir(`${directory}/userdata`));
+      const snapshot = `${directory}/userdata/statev2.sqlite`;
       yield* sql.unsafe("VACUUM INTO ?", [snapshot]);
       const execFile = NodeUtil.promisify(NodeChildProcess.execFile);
-      const script = NodeURL.fileURLToPath(
-        new URL("../../scripts/repair-delegated-workers.ts", import.meta.url),
-      );
+      const script = NodeURL.fileURLToPath(new URL("../bin.ts", import.meta.url));
       const executablePath = yield* HostProcessExecutablePath;
       const runScript = (flags: string[]) =>
         Effect.tryPromise(() =>
-          execFile(executablePath, [script, "--database", snapshot, ...flags]),
+          execFile(executablePath, [
+            script,
+            "repair-delegated-workers",
+            "--base-dir",
+            directory,
+            "--port",
+            "65534",
+            ...flags,
+          ]),
         );
       const hashSource = () =>
         Effect.promise(async () =>
@@ -235,12 +242,23 @@ it.effect(
       assert.equal((yield* Effect.exit(runScript(["--apply"])))._tag, "Failure");
       assert.equal((yield* Effect.exit(runScript(["--apply", "--offline"])))._tag, "Failure");
       sourceOwner.close();
-      const scriptApply = decodeScriptReceipt((yield* runScript(["--apply", "--offline"])).stdout);
-      assert.deepStrictEqual(scriptApply.applied, ["thread:delegated-task:affected"]);
-      assert.deepStrictEqual(
-        decodeScriptReceipt((yield* runScript(["--apply", "--offline"])).stdout).applied,
-        [],
-      );
+      // Unprivileged hosts must refuse incomplete /proc inspection. Privileged
+      // CI can prove the packaged command's successful apply on this same fixture.
+      const scriptApply = yield* Effect.result(runScript(["--apply", "--offline"]));
+      if (scriptApply._tag === "Success") {
+        assert.deepStrictEqual(decodeScriptReceipt(scriptApply.success.stdout).applied, [
+          "thread:delegated-task:affected",
+        ]);
+        assert.deepStrictEqual(
+          decodeScriptReceipt((yield* runScript(["--apply", "--offline"])).stdout).applied,
+          [],
+        );
+      } else {
+        assert.match(
+          String(scriptApply.failure.cause),
+          /Cannot inspect process .*sufficient privileges/,
+        );
+      }
       const applied = yield* repair.apply();
       assert.deepStrictEqual(applied.applied, ["thread:delegated-task:affected"]);
       assert.deepStrictEqual(applied.remaining.changes, []);

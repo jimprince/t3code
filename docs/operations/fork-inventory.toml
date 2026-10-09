@@ -1233,6 +1233,12 @@ roles = []
 note = "parentThreadId is an optional thread field (fork migration 6, projection_threads.parent_thread_id) set at creation or by thread.parent.set, which emits thread.meta-updated so older clients ignore it; existing flat rows stay valid as NULL and need no new migration. Servers advertise threadNesting on the environment descriptor, which is where t3-thread reads it (serverGetConfig does not carry it). The original one-level cap was lifted because delegated callers can themselves orchestrate workers; ancestor-chain validation preserves the actual invariant, an acyclic tree, without flattening ownership or routing notifications past the direct caller. Nesting supports arbitrary acyclic depth within one project; the decider rejects self, descendants, cross-project, cyclic, missing, and archived parents. Children of an archived or missing parent show in the sidebar. Parent lifecycle changes never cascade to children. The parent's sidebar row rolls up all descendants' approvals, questions, and working or monitoring state. Nested attention remains visually surfaced but never plays completion or attention sounds; only top-level work makes notification sounds. Desktop and web only; mobile lists every thread until a follow-up. t3-thread nests workers directly under the caller at every depth, and pending/answer/approve/deny let the parent escalate instead of the user."
 
 [[patch.decision]]
+id = "installed-offline-worker-repair-226"
+date = "2026-10-09"
+decided = "adapt"
+rationale = "Expose dry-run-first repair through the packaged headless/Desktop server bin. Reuse server home and V2 path derivation; apply requires the actual configured port and verifies listener absence and every main/WAL/SHM owner, failing closed on inspection permission gaps. Deployment must hold service and updater restarts throughout application."
+
+[[patch.decision]]
 id = "agents-panel-settled-shelf"
 date = "2026-09-29"
 decided = "extract-to-additive"
