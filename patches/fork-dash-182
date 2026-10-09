@@ -1,6 +1,6 @@
-Bottom: dd6b8a19cb148449a1c5ee9cae9c56fadad2b45f
-Top:    55d2fdd9059f8a001ce386574da8f944b0ba49d2
+Bottom: 2f97dd7dcbc2881150a32bc5a5864f8606a499ef
+Top:    0ccb66b49b1980922ea11cb8551ffaf1897c6ae0
 Author: brad <bradprin@live.com>
-Date:   2026-10-09 07:27:03 +0000
+Date:   2026-10-09 21:44:36 +0000
 
 feat(web): add a Team strip of standing agents above the workstreams
