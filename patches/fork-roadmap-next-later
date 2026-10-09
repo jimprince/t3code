@@ -1,6 +1,6 @@
-Bottom: 1ba922ba88cd5a2d8bdd22c4e716f2f84e27f498
-Top:    2eb0fd00ba6b85982f89d66dff9f8195181e242b
+Bottom: c30e9d127149e7a1795228798d9cc92cdc70582d
+Top:    65ea78ca82d9b7c18caf2d54c15bcf53c37c6b97
 Author: brad <bradprin@live.com>
-Date:   2026-10-09 01:10:49 +0000
+Date:   2026-10-09 01:12:15 +0000
 
 feat(projects): automatic next version and a Later bucket on the roadmap
