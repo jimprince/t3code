@@ -774,8 +774,8 @@ function timelineItem(input: {
 }
 
 const make = Effect.gen(function* () {
-  const sql = yield* SqlClient.SqlClient;
   const taskIssues = yield* Effect.serviceOption(TaskIssues.TaskIssueLaunchService);
+  const sql = yield* SqlClient.SqlClient;
   const crypto = yield* Crypto.Crypto;
   const threadManagement = yield* ThreadManagementService.ThreadManagementService;
   const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
