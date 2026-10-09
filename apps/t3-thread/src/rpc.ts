@@ -23,6 +23,18 @@ import {
 } from "./contracts.js";
 
 export const RPC_METHODS = {
+  "thread.session.generation": "thread.session.generation",
+  "thread.resume": "thread.resume",
+  "thread.stop.receipt": "thread.stop.receipt",
+  "thread.human.pending.list": "thread.human.pending.list",
+  "thread.session.reset": "thread.session.reset",
+  "thread.handover.prepare": "thread.handover.prepare",
+  "thread.handover.commit": "thread.handover.commit",
+  "thread.handover.status": "thread.handover.status",
+  "thread.handover.routes": "thread.handover.routes",
+  "thread.human.pending": "thread.human.pending",
+  "thread.human.resolve": "thread.human.resolve",
+
   "fork.message.forward.prepare": "fork.message.forward.prepare",
   "fork.message.forward.accept": "fork.message.forward.accept",
   [WS_METHODS.assetsCreateUrl]: WS_METHODS.assetsCreateUrl,
@@ -30,6 +42,7 @@ export const RPC_METHODS = {
   [WS_METHODS.attachmentsDelete]: WS_METHODS.attachmentsDelete,
   "fork.send.accept": "fork.send.accept",
   "fork.send.lookup": "fork.send.lookup",
+  "thread.send.binding": "thread.send.binding",
   "fork.send.inbox": "fork.send.inbox",
   sessionReconcile: "fork.session.reconcile",
   threadIssuesLink: "threadIssues.link",
