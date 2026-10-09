@@ -3,6 +3,7 @@ import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import {
   isOrchestrationV2WorkActive,
   CommandId,
+  RunId,
   type EventId,
   type ModelSelection,
   type NodeId,
@@ -25,7 +26,9 @@ import {
   type TurnItemId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
+import * as Config from "effect/Config";
 import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -462,6 +465,17 @@ export function routeProviderEvent(
 /**
  * ERRORS
  */
+class ProviderRunStartTimeoutError extends Schema.TaggedError<ProviderRunStartTimeoutError>()(
+  "ProviderRunStartTimeoutError",
+  { runId: RunId, timeoutMs: Schema.Number },
+) {
+  override get message() {
+    return `The provider did not start this turn within ${this.timeoutMs} ms. Retry the turn.`;
+  }
+}
+
+const isProviderRunStartTimeoutError = Schema.is(ProviderRunStartTimeoutError);
+
 export class RunExecutionStartError extends Schema.TaggedError<RunExecutionStartError>()(
   "RunExecutionStartError",
   {
@@ -550,6 +564,11 @@ export const layer: Layer.Layer<
   RunExecutionServiceV2,
   Effect.gen(function* () {
     const checkpointService = yield* CheckpointService.CheckpointServiceV2;
+    const startTimeoutMs = yield* Config.Int("T3CODE_PROVIDER_START_TIMEOUT_MS").pipe(
+      Config.withDefault(120_000),
+      Config.map((value) => Math.max(1, value)),
+      Effect.orDie,
+    );
     const eventSink = yield* EventSink.EventSinkV2;
     const idAllocator = yield* IdAllocator.IdAllocatorV2;
     const providerEventIngestor = yield* ProviderEventIngestor.ProviderEventIngestorV2;
@@ -799,6 +818,14 @@ export const layer: Layer.Layer<
     return RunExecutionServiceV2.of({
       startRootRun: (input) =>
         Effect.gen(function* () {
+          const startDeadline = (yield* Clock.currentTimeMillis) + startTimeoutMs;
+          const startTimeout = () =>
+            Effect.fail(
+              new ProviderRunStartTimeoutError({
+                runId: input.run.id,
+                timeoutMs: startTimeoutMs,
+              }),
+            );
           // Startup failure and stream shutdown can report the same attempt.
           const refreshAfterTurn = yield* Effect.cached(
             finalizationObserver.refreshAfterTurn(input.appThread.projectId).pipe(
@@ -830,7 +857,7 @@ export const layer: Layer.Layer<
             failure,
             threadDisposition: "reusable",
           });
-          const responseStreamingMode = yield* Effect.gen(function* () {
+          const startup = yield* Effect.gen(function* () {
             const responseStreamingMode = yield* serverSettings.getSettings.pipe(
               Effect.map(
                 (settings) =>
@@ -859,8 +886,29 @@ export const layer: Layer.Layer<
             ) {
               return null;
             }
-            return responseStreamingMode;
+            const eventSubscription =
+              input.session.subscribeEvents === undefined
+                ? { events: input.session.events, close: Effect.void }
+                : yield* input.session.subscribeEvents;
+            const inheritedBackgroundTurnItems = yield* (
+              input.loadInheritedBackgroundTurnItems?.() ?? Effect.succeed([])
+            ).pipe(
+              Effect.onError(() => eventSubscription.close),
+              Effect.mapError(
+                (cause) =>
+                  new RunExecutionStartError({
+                    commandId: input.commandId,
+                    runId: input.run.id,
+                    cause,
+                  }),
+              ),
+            );
+            return { responseStreamingMode, eventSubscription, inheritedBackgroundTurnItems };
           }).pipe(
+            Effect.timeoutOrElse({
+              duration: Math.max(1, startDeadline - (yield* Clock.currentTimeMillis)),
+              orElse: startTimeout,
+            }),
             Effect.catchCause((cause) =>
               Effect.gen(function* () {
                 if (Cause.hasInterruptsOnly(cause)) {
@@ -879,9 +927,14 @@ export const layer: Layer.Layer<
                   terminal: makeFailedTerminalEvent(
                     makeProviderFailure({
                       cause: Cause.squash(cause),
+                      ...(isProviderRunStartTimeoutError(Cause.squash(cause))
+                        ? { code: "provider_start_timeout" }
+                        : {}),
                       // Keep exact underlying text in the logged cause only;
                       // the persisted turn item gets a bounded curated message.
-                      message: "Run preparation failed.",
+                      message: isProviderRunStartTimeoutError(Cause.squash(cause))
+                        ? (Cause.squash(cause) as ProviderRunStartTimeoutError).message
+                        : "Run preparation failed.",
                       class: "unknown",
                     }),
                     input.providerTurnOrdinal * 100 + 1,
@@ -905,9 +958,11 @@ export const layer: Layer.Layer<
                 }),
             ),
           );
-          if (responseStreamingMode === null) {
+          if (startup === null) {
             return;
           }
+          const { responseStreamingMode, eventSubscription, inheritedBackgroundTurnItems } =
+            startup;
           const terminalEvent = yield* Ref.make<ProviderTerminalEvent | null>(null);
           const latestTurnItemOrdinal = yield* Ref.make(input.providerTurnOrdinal * 100);
           const latestProviderThread = yield* Ref.make(input.providerThread);
@@ -917,23 +972,6 @@ export const layer: Layer.Layer<
             attemptId: input.attempt.id,
             providerThreadId: input.providerThread.id,
           };
-          const eventSubscription =
-            input.session.subscribeEvents === undefined
-              ? { events: input.session.events, close: Effect.void }
-              : yield* input.session.subscribeEvents;
-          const inheritedBackgroundTurnItems = yield* (
-            input.loadInheritedBackgroundTurnItems?.() ?? Effect.succeed([])
-          ).pipe(
-            Effect.onError(() => eventSubscription.close),
-            Effect.mapError(
-              (cause) =>
-                new RunExecutionStartError({
-                  commandId: input.commandId,
-                  runId: input.run.id,
-                  cause,
-                }),
-            ),
-          );
           const inheritedBackgroundTurnItemsById = new Map(
             inheritedBackgroundTurnItems.map((item) => [item.id, item.runId]),
           );
@@ -1347,71 +1385,88 @@ export const layer: Layer.Layer<
           const shouldStart =
             input.shouldStartProviderTurn === undefined
               ? Exit.succeed(true)
-              : yield* Effect.exit(input.shouldStartProviderTurn());
+              : yield* Effect.exit(
+                  input.shouldStartProviderTurn().pipe(
+                    Effect.timeoutOrElse({
+                      duration: Math.max(1, startDeadline - (yield* Clock.currentTimeMillis)),
+                      orElse: startTimeout,
+                    }),
+                  ),
+                );
           if (Exit.isSuccess(shouldStart) && !shouldStart.value) {
             yield* Fiber.interrupt(providerEventFiber);
             return;
           }
 
-          // A provider turn is a sign that the session is still alive. Keep
-          // its already-issued MCP credential valid even when the agent goes
-          // a long time between browser-tool calls.
-          yield* McpSessionRegistry.touchActiveMcpThread(input.run.threadId);
-          // A context read that fails costs the agent the apps' notes for
-          // this turn, not the turn itself.
-          const appContext = (yield* mcpAppModelContext
-            .forThread(input.run.threadId)
-            .pipe(
-              Effect.catch((cause) =>
-                Effect.logWarning("Failed to read MCP app model context.", { cause }).pipe(
-                  Effect.as([]),
+          // Preparation and native start share the same absolute deadline.
+          const startTurn = Effect.gen(function* () {
+            if ((yield* Clock.currentTimeMillis) >= startDeadline) return yield* startTimeout();
+            // A provider turn is a sign that the session is still alive. Keep
+            // its already-issued MCP credential valid even when the agent goes
+            // a long time between browser-tool calls.
+            yield* McpSessionRegistry.touchActiveMcpThread(input.run.threadId);
+            // A context read that fails costs the agent the apps' notes for
+            // this turn, not the turn itself.
+            const appContext = (yield* mcpAppModelContext
+              .forThread(input.run.threadId)
+              .pipe(
+                Effect.catch((cause) =>
+                  Effect.logWarning("Failed to read MCP app model context.", { cause }).pipe(
+                    Effect.as([]),
+                  ),
                 ),
-              ),
-            )).map((entry) => ({
-            // The item id alone is unique and needs no escaping; server and
-            // tool names are free text that would break the tag Codex wraps
-            // the context in.
-            key: `mcp_app_${entry.itemId.replace(/[^\w.-]/g, "_")}`,
-            text: entry.text,
-          }));
-          const turnInput = {
-            appThread: input.appThread,
-            threadId: input.run.threadId,
-            runId: input.run.id,
-            runOrdinal: input.run.ordinal,
-            providerTurnOrdinal: input.providerTurnOrdinal,
-            ...(input.nativeThreadHasTurns === undefined
-              ? {}
-              : { nativeThreadHasTurns: input.nativeThreadHasTurns }),
-            ...(input.run.restartContinuationOfRunId === undefined
-              ? {}
-              : {
-                  restartContinuationOfRunId: input.run.restartContinuationOfRunId,
-                }),
-            attemptId: input.attemptId,
-            rootNodeId: input.rootNode.id,
-            providerThread: input.providerThread,
-            message: input.message,
-            modelSelection: input.modelSelection,
-            runtimePolicy: input.runtimePolicy,
-            ...(appContext.length === 0 ? {} : { appContext }),
-          };
-          const compact =
-            input.message.attachments.length === 0 &&
-            input.message.text.trim().toLowerCase() === "/compact";
-          const startTurn = compact
-            ? (input.session.compactThread?.(turnInput) ??
-              Effect.fail(
-                new ProviderAdapter.ProviderAdapterTurnStartError({
-                  driver: input.session.driver,
-                  threadId: input.run.threadId,
-                  providerThreadId: input.providerThread.id,
-                  runId: input.run.id,
-                  cause: "This provider does not support context compaction.",
-                }),
-              ))
-            : input.session.startTurn(turnInput);
+              )).map((entry) => ({
+              // The item id alone is unique and needs no escaping; server and
+              // tool names are free text that would break the tag Codex wraps
+              // the context in.
+              key: `mcp_app_${entry.itemId.replace(/[^\w.-]/g, "_")}`,
+              text: entry.text,
+            }));
+            const turnInput = {
+              appThread: input.appThread,
+              threadId: input.run.threadId,
+              runId: input.run.id,
+              runOrdinal: input.run.ordinal,
+              providerTurnOrdinal: input.providerTurnOrdinal,
+              ...(input.nativeThreadHasTurns === undefined
+                ? {}
+                : { nativeThreadHasTurns: input.nativeThreadHasTurns }),
+              ...(input.run.restartContinuationOfRunId === undefined
+                ? {}
+                : {
+                    restartContinuationOfRunId: input.run.restartContinuationOfRunId,
+                  }),
+              attemptId: input.attemptId,
+              rootNodeId: input.rootNode.id,
+              providerThread: input.providerThread,
+              message: input.message,
+              modelSelection: input.modelSelection,
+              runtimePolicy: input.runtimePolicy,
+              ...(appContext.length === 0 ? {} : { appContext }),
+            };
+            const compact =
+              input.message.attachments.length === 0 &&
+              input.message.text.trim().toLowerCase() === "/compact";
+            if ((yield* Clock.currentTimeMillis) >= startDeadline) return yield* startTimeout();
+            const nativeStart = compact
+              ? (input.session.compactThread?.(turnInput) ??
+                Effect.fail(
+                  new ProviderAdapter.ProviderAdapterTurnStartError({
+                    driver: input.session.driver,
+                    threadId: input.run.threadId,
+                    providerThreadId: input.providerThread.id,
+                    runId: input.run.id,
+                    cause: "This provider does not support context compaction.",
+                  }),
+                ))
+              : input.session.startTurn(turnInput);
+            return yield* nativeStart;
+          });
           yield* Effect.andThen(shouldStart, startTurn).pipe(
+            Effect.timeoutOrElse({
+              duration: Math.max(1, startDeadline - (yield* Clock.currentTimeMillis)),
+              orElse: startTimeout,
+            }),
             Effect.catchCause((cause) =>
               Effect.logError("orchestration V2 provider turn start failed", {
                 runId: input.run.id,
@@ -1440,6 +1495,13 @@ export const layer: Layer.Layer<
                             terminal: makeFailedTerminalEvent(
                               makeProviderFailure({
                                 cause: Cause.squash(cause),
+                                ...(isProviderRunStartTimeoutError(Cause.squash(cause))
+                                  ? {
+                                      message: (Cause.squash(cause) as ProviderRunStartTimeoutError)
+                                        .message,
+                                      code: "provider_start_timeout",
+                                    }
+                                  : {}),
                                 // A failed ownership read is not the provider's fault.
                                 class: Exit.isFailure(shouldStart) ? "unknown" : "provider_error",
                               }),
