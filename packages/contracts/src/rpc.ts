@@ -1,3 +1,4 @@
+import { ThreadRecoveryRpcs } from "./threadRecovery.ts";
 import { MessageForwardRpcs } from "./messageForward.ts";
 import { PlanPublicationInput, PlanPublicationResult } from "./planPublication.ts";
 import { GiteaTokenSetInput, GiteaTokenSetResult, GiteaTokenSetError } from "./giteaToken.ts";
@@ -2488,4 +2489,8 @@ export const WsForkRpcGroup = RpcGroup.make(
   WsProjectRequestsDeferRpc,
 ).middleware(RpcScopeAuthorization);
 
-export const WsRpcGroup = WsCoreRpcGroup.merge(WsForkRpcGroup);
+export const WsRecoveryRpcGroup = RpcGroup.make(...ThreadRecoveryRpcs).middleware(
+  RpcScopeAuthorization,
+);
+
+export const WsRpcGroup = WsCoreRpcGroup.merge(WsForkRpcGroup).merge(WsRecoveryRpcGroup);
