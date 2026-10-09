@@ -341,32 +341,35 @@ gh workflow run mobile-eas-development-rollback.yml --repo jimprince/t3code \
   -f message="rollback bad Hermes bytecode update"
 ```
 
-### Production build lane
+### Manual production build and OTA lane
 
-`.github/workflows/mobile-eas-production.yml` dispatches non-interactive EAS
-production builds. Uploading a completed iOS build is a separate, explicit
-step so one build cannot create duplicate EAS and App Store Connect
-submissions. The main app and widget extension require separate App Store
-provisioning profiles for
-`com.brad.t3code` and `com.brad.t3code.widgets`; both profiles reuse the same
-distribution certificate stored on EAS.
+`.github/workflows/mobile-eas-production.yml` runs only through
+`workflow_dispatch`. A GitHub-hosted `ubuntu-24.04` runner orchestrates remote
+EAS builds; pushes to `main` do not build, submit, or publish production mobile
+updates.
 
-When uploading an already completed iOS build, use `mode=submit` with its EAS
-build ID. That lane downloads the signed IPA and uploads it directly with
-Xcode's bundled App Store uploader on a hosted macOS runner, so it does not
-depend on the EAS Submit service. Apple requires the initial app record to be
-created on the App Store Connect website; the API intentionally does not permit
-creating apps. Create one iOS record named `T3 Code - Fork` for bundle ID
-`com.brad.t3code`, primary language `English (U.S.)`, SKU
-`t3code-ios-production`, and full user access. The workflow confirms that record
-exists before uploading:
+The current dispatch inputs are:
 
-```bash
-gh workflow run mobile-eas-production.yml --repo jimprince/t3code \
-  -f mode=submit \
-  -f platform=ios \
-  -f build_id=<eas-build-id>
-```
+- `mode`: `build` (default) creates a store binary and auto-submits through EAS
+  to TestFlight / Google Play; `update` publishes compatible production OTA.
+- `profile`: `production` (default) or `v2-preview`; preview is build-only and
+  must be dispatched from the `v2` branch.
+- `platform`: `ios`, `android`, or `all` (default).
+- `version`: optional build version override, committed to the dispatched
+  branch before building. It requires `RELEASE_APP_ID` and
+  `RELEASE_APP_PRIVATE_KEY`; blank uses the checked-in app version.
+- `message`: optional OTA message for `mode=update`.
+
+The former `mode=submit` / `build_id` inputs and separate `macos-15` direct IPA
+uploader are not currently configured. Use the current build mode's EAS
+auto-submit route; restoring a separate upload of an existing IPA is a follow-up.
+Do not submit the same build through both routes.
+
+The main app and widget extension require separate App Store provisioning
+profiles for `com.brad.t3code` and `com.brad.t3code.widgets`; both reuse the
+certificate stored on EAS. Before the first submission, create the iOS record
+in App Store Connect: name `T3 Code - Fork`, bundle ID `com.brad.t3code`, primary
+language `English (U.S.)`, SKU `t3code-ios-production`, and full user access.
 
 Do not try to bootstrap Apple signing by piping answers into an interactive
 EAS command in CI. On this individual Apple Developer account, a trusted Mac
@@ -385,8 +388,13 @@ normal non-interactive production workflow:
 ```bash
 gh workflow run mobile-eas-production.yml --repo jimprince/t3code \
   -f mode=build \
+  -f profile=production \
   -f platform=ios
 ```
+
+For a compatible OTA update, dispatch the same workflow with `mode=update`,
+`platform=ios|android|all`, and an optional `message`. Store release/App Review
+remains a separate manual App Store Connect step.
 
 PRs still use `mobile-eas-preview.yml`, which deploys preview builds/updates
 with Expo fingerprinting and the `preview:dev` EAS profile.
