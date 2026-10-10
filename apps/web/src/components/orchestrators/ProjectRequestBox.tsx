@@ -40,8 +40,25 @@ function imageAttachment(file: File): ComposerImageAttachment {
 const imageFiles = (files: FileList | null | undefined) =>
   [...(files ?? [])].filter((file) => file.type.startsWith("image/"));
 
+/** A request Brad starts often: the chip's label and the text it puts in the box. */
+export interface RequestQuickAction {
+  readonly label: string;
+  readonly text: string;
+}
+
+/** The Dashboard's starters, from the requests Brad sends agents most. */
+export const REQUEST_QUICK_ACTIONS: ReadonlyArray<RequestQuickAction> = [
+  { label: "Bug report", text: "Bug: " },
+  { label: "Feature request", text: "Feature: " },
+  { label: "Have an agent…", text: "Have an agent " },
+  { label: "Speed up…", text: "Speed up " },
+  { label: "Check every…", text: "Every 30 minutes, check " },
+  { label: "Update dashboard", text: "Update the dashboard." },
+  { label: "Clean up threads", text: "Settle finished threads and tidy this project." },
+];
+
 /**
- * The project page's New request box, above the tabs so every tab has it. Send
+ * The project page's New request box, first on every tab. Send
  * files a new request and gives the text (and pasted or dropped images) verbatim
  * to the project's intake thread, or its orchestrator, in the background,
  * through the normal send path where the request ledger captures it, and says
@@ -49,9 +66,18 @@ const imageFiles = (files: FileList | null | undefined) =>
  * roadmap's Later column without waking the orchestrator. One line until focused;
  * it folds back after sending, or on Escape when empty.
  */
-export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorSummary }) {
+export function ProjectRequestBox({
+  summary,
+  quickActions,
+}: {
+  readonly summary: OrchestratorSummary;
+  /** Chips under the closed box that start a request with their text. */
+  readonly quickActions?: ReadonlyArray<RequestQuickAction> | undefined;
+}) {
   const [text, setText] = useState("");
   const [expanded, setExpanded] = useState(false);
+  // Set by a quick action so the box opens with the caret after its text.
+  const caretToEnd = useRef(false);
   const submit = useAtomCommand(submitProjectRequest, { reportFailure: false });
   const startIntake = useAtomCommand(startRequestIntake, { reportFailure: false });
   const archiveThread = useAtomCommand(threadEnvironment.archive, { reportFailure: false });
@@ -271,6 +297,12 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
           disabled={busy}
           autoFocus
           placeholder="New request"
+          onFocus={(event) => {
+            if (!caretToEnd.current) return;
+            caretToEnd.current = false;
+            const end = event.currentTarget.value.length;
+            event.currentTarget.setSelectionRange(end, end);
+          }}
           onBlur={() => setExpanded(false)}
           onChange={(event) => setText(event.target.value)}
           onPaste={(event: ClipboardEvent) => {
@@ -289,6 +321,24 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
             }
           }}
         />
+      ) : null}
+      {!open && quickActions && quickActions.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5">
+          {quickActions.map((action) => (
+            <Button
+              key={action.label}
+              size="xs"
+              variant="outline"
+              onClick={() => {
+                caretToEnd.current = true;
+                setText(action.text);
+                setExpanded(true);
+              }}
+            >
+              {action.label}
+            </Button>
+          ))}
+        </div>
       ) : null}
       {images.length > 0 ? (
         <ul className="flex flex-wrap gap-2">
