@@ -1,0 +1,8 @@
+Bottom: 95d5ec30ce2923d76b04c0a1249ff347d467f6e5
+Top:    52261336805370bf82c1c7ed3b069f29996b7b6a
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 08:07:41 +0000
+
+fix(threads): pinned and parent threads never auto-settle; t3-thread auto-settle toggle
+
+

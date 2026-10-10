@@ -1,0 +1,7 @@
+Bottom: 81469fe26dc3397a5c4f8c03ae19cdad649ec0ac
+Top:    10c846423e788779917e4a64ac27681ef816b647
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 08:07:46 +0000
+
+feat(projects): pinned request box that sends in the background
+

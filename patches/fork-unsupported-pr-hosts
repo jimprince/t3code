@@ -1,0 +1,7 @@
+Bottom: c49a72821fc6f1ffdfa1b790b3180c3f0071e6a2
+Top:    6159e3c9d5174736a4fb0cb42938fe42ac6e73a3
+Author: User <user@example.com>
+Date:   2026-10-10 08:07:28 +0000
+
+fix(server): skip PR status lookups for unsupported hosts
+
