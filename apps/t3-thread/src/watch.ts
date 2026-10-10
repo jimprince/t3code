@@ -58,9 +58,33 @@ const SETTLED_COMPLETION_WINDOW_MS = 60 * 60_000;
 /** Keeps the watcher awake just long enough to record a completion that settled before the next pass. */
 const SETTLED_COMPLETION_GRACE_MS = 2 * 60_000;
 
-function finishedWithin(thread: OrchestrationThread, nowMs: number, windowMs: number): boolean {
+function finishedWithin(
+  thread: Pick<OrchestrationThread, "latestTurn" | "settledAt">,
+  nowMs: number,
+  windowMs: number,
+): boolean {
   const finishedAt = Date.parse(thread.latestTurn?.completedAt ?? thread.settledAt ?? "");
   return Number.isFinite(finishedAt) && nowMs - finishedAt <= windowMs;
+}
+
+/**
+ * A settled source whose shell shows no live work and no completion inside `windowMs`. Reading
+ * its full thread could only conclude the same, so watch passes skip that read: each one opened
+ * a connection and a thread snapshot per settled source, every tick.
+ */
+function quietSettledSource(
+  shell: OrchestrationThreadShell | undefined,
+  nowMs: number,
+  windowMs: number,
+): boolean {
+  return (
+    shell !== undefined &&
+    shell.settledOverride === "settled" &&
+    !shell.activeRunId &&
+    !shell.hasPendingApprovals &&
+    !shell.hasPendingUserInput &&
+    !finishedWithin(shell, nowMs, windowMs)
+  );
 }
 
 /**
@@ -100,25 +124,125 @@ function createWatchClient(environment: SavedEnvironment): WatchClient {
   return new RemoteEnvironmentClient(environment);
 }
 
+/**
+ * What a full read of a quiet thread could add beyond its shell. Undefined while a run is
+ * live: inactivity and progress come from the full thread, so those are always read.
+ */
+function quietShellSignature(shell: OrchestrationThreadShell): string | undefined {
+  if (shell.activeRunId || ["running", "queued", "starting"].includes(shell.status ?? "")) {
+    return undefined;
+  }
+  return JSON.stringify([
+    shell.updatedAt,
+    shell.status ?? null,
+    shell.lastError ?? null,
+    shell.settledOverride ?? null,
+    shell.settledAt ?? null,
+    shell.unsettledAt ?? null,
+    shell.archivedAt,
+    shell.latestTurn?.turnId ?? null,
+    shell.latestTurn?.state ?? null,
+    shell.latestTurn?.completedAt ?? null,
+    shell.latestUserMessageAt,
+    shell.hasPendingApprovals,
+    shell.hasPendingUserInput,
+    shell.hasActionableProposedPlan,
+    shell.parentThreadId ?? null,
+    shell.remoteParent ?? null,
+  ]);
+}
+
+/** What makes a live source worth reading again before LIVE_SOURCE_REREAD_MS passes. */
+function liveShellSignature(shell: OrchestrationThreadShell): string {
+  return JSON.stringify([
+    shell.status ?? null,
+    shell.activeRunId ?? null,
+    shell.latestTurn?.turnId ?? null,
+    shell.hasPendingApprovals,
+    shell.hasPendingUserInput,
+    shell.hasActionableProposedPlan,
+  ]);
+}
+// Passes are seconds apart once settled and unchanged sources cost nothing. A live run's
+// inactivity thresholds are minutes, and its requests and completion show in the shell, so
+// its full read and the shell list itself are refreshed on these slower clocks.
+const LIVE_SOURCE_REREAD_MS = 30_000;
+const SHELL_LIST_TTL_MS = 15_000;
+
 /** Per-watcher cache: share reads within a pass, park terminal mappings for its lifetime.
- * Settled sources re-check each minute so remote unsettle remains observable.
+ * Settled sources re-check each minute so remote unsettle remains observable. A source
+ * whose shell is unchanged since its last full read reuses that read (a live one for at most
+ * LIVE_SOURCE_REREAD_MS): each full read is a connection and a thread snapshot.
  */
 export function createWatchPoller(factory: WatchClientFactory = createWatchClient, now = Date.now) {
   const reads = new Map<string, Promise<OrchestrationThread>>();
+  // One shell list per environment per pass: the attention scan and the liveness check both
+  // discover routes from it.
+  const lists = new Map<string, { at: number; list: Promise<OrchestrationThreadShell[]> }>();
+  // This pass's quiet-shell signatures, and the full read each source last had under one.
+  const signatures = new Map<string, { signature: string; live: boolean }>();
+  const signedReads = new Map<
+    string,
+    { signature: string; at: number; read: Promise<OrchestrationThread> }
+  >();
   const parked = new Map<
     string,
     { until: number; read: Promise<OrchestrationThread>; reason: string }
   >();
   const clientFactory: WatchClientFactory = (environment) => ({
-    listThreads: () => factory(environment).listThreads?.() ?? Promise.resolve([]),
+    listThreads() {
+      const cached = lists.get(environment.name);
+      if (cached && now() - cached.at < SHELL_LIST_TTL_MS) return cached.list;
+      const forget = () => {
+        for (const key of signatures.keys())
+          if (key.startsWith(`${environment.name}:`)) signatures.delete(key);
+      };
+      const list = (factory(environment).listThreads?.() ?? Promise.resolve([])).then((shells) => {
+        forget();
+        for (const shell of shells) {
+          const quiet = quietShellSignature(shell);
+          signatures.set(
+            `${environment.name}:${shell.id}`,
+            quiet === undefined
+              ? { signature: liveShellSignature(shell), live: true }
+              : { signature: quiet, live: false },
+          );
+        }
+        return shells;
+      });
+      // A failed list is retried by the next caller rather than reused.
+      list.catch(() => {
+        lists.delete(environment.name);
+        forget();
+      });
+      lists.set(environment.name, { at: now(), list });
+      return list;
+    },
     findThread(threadId) {
       const key = `${environment.name}:${threadId}`;
       const skipped = parked.get(key);
       if (skipped && now() < skipped.until) return skipped.read;
+      const signed = signatures.get(key);
+      const previous = signedReads.get(key);
+      if (
+        !reads.has(key) &&
+        signed !== undefined &&
+        previous?.signature === signed.signature &&
+        (!signed.live || now() - previous.at < LIVE_SOURCE_REREAD_MS)
+      ) {
+        return previous.read;
+      }
       if (!reads.has(key)) {
         const read: Promise<OrchestrationThread> = factory(environment)
           .findThread(threadId)
           .then((thread) => {
+            if (signed !== undefined)
+              signedReads.set(key, {
+                signature: signed.signature,
+                at: now(),
+                read: Promise.resolve(thread),
+              });
+            else signedReads.delete(key);
             const reason =
               thread.archivedAt || thread.deletedAt
                 ? "archived"
@@ -250,6 +374,7 @@ async function discoverParentRoutes(state: StateFile, options: AttentionScanOpti
   const factory = options.clientFactory ?? createWatchClient;
   const agents = [...state.agents];
   const observedSources = new Set<string>();
+  const shellsBySource = new Map<string, OrchestrationThreadShell>();
   let subscriptions = [...state.subscriptions];
   for (const environment of state.environments) {
     if (options.env && environment.name !== options.env) continue;
@@ -263,6 +388,7 @@ async function discoverParentRoutes(state: StateFile, options: AttentionScanOpti
     for (const shell of shells) {
       const key = JSON.stringify([environment.name, shell.id]);
       observedSources.add(key);
+      shellsBySource.set(key, shell);
       let source = agents.find(
         (agent) => agent.environment === environment.name && agent.threadId === shell.id,
       );
@@ -291,7 +417,7 @@ async function discoverParentRoutes(state: StateFile, options: AttentionScanOpti
         subscriptions.push(parent);
     }
   }
-  return { state: { ...state, agents, subscriptions }, observedSources };
+  return { state: { ...state, agents, subscriptions }, observedSources, shellsBySource };
 }
 
 export async function scanAttentionNotifications(
@@ -299,12 +425,14 @@ export async function scanAttentionNotifications(
   options: AttentionScanOptions = {},
 ): Promise<SavedNotification[]> {
   const discovered = await discoverParentRoutes(state, options);
-  return (await scanAttentionState(discovered.state, options)).notifications;
+  return (await scanAttentionState(discovered.state, options, discovered.shellsBySource))
+    .notifications;
 }
 
 async function scanAttentionState(
   state: StateFile,
   options: AttentionScanOptions,
+  shellsBySource: ReadonlyMap<string, OrchestrationThreadShell> = new Map(),
 ): Promise<{ notifications: SavedNotification[]; observedSubscriptions: SavedSubscription[] }> {
   const clientFactory = options.clientFactory ?? createWatchClient;
   const now = options.now ?? nowIso;
@@ -320,6 +448,14 @@ async function scanAttentionState(
         (subscription) =>
           subscription.sourceThreadId === sourceAgent.threadId &&
           subscription.sourceEnvironment === sourceAgent.environment,
+      )
+    )
+      continue;
+    if (
+      quietSettledSource(
+        shellsBySource.get(JSON.stringify([sourceAgent.environment, sourceAgent.threadId])),
+        Date.parse(now()),
+        SETTLED_COMPLETION_WINDOW_MS,
       )
     )
       continue;
@@ -521,7 +657,8 @@ export async function hasActiveWork(
     return true;
   }
 
-  state = (await discoverParentRoutes(state, options)).state;
+  const discovered = await discoverParentRoutes(state, options);
+  state = discovered.state;
   const subscribedSourceThreadIds = new Set(
     state.subscriptions.map((subscription) =>
       JSON.stringify([subscription.sourceEnvironment, subscription.sourceThreadId]),
@@ -538,6 +675,14 @@ export async function hasActiveWork(
     if (options.env && agent.environment !== options.env) {
       continue;
     }
+    if (
+      quietSettledSource(
+        discovered.shellsBySource.get(JSON.stringify([agent.environment, agent.threadId])),
+        Date.now(),
+        SETTLED_COMPLETION_GRACE_MS,
+      )
+    )
+      continue;
     try {
       const environment = requireEnvironment(state, agent.environment);
       const thread = await clientFactory(environment).findThread(agent.threadId);
@@ -579,6 +724,7 @@ export async function detectAttentionEvents(
   const { notifications: scanned, observedSubscriptions } = await scanAttentionState(
     discovered.state,
     options,
+    discovered.shellsBySource,
   );
 
   return updateState(async (currentState) => {
