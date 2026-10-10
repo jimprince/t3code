@@ -1,0 +1,17 @@
+Bottom: dd9899cef4b1a8ba4392a9b7ab684e0853aaef2c
+Top:    1dc11fdfdcf6571b29eac95badabeea2449c002f
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 18:34:48 +0000
+
+fix(desktop): open DevTools only when it is asked for
+
+A development run opened a detached DevTools window on every launch, over
+the app, with no way to turn it off.
+
+The window now opens only when T3CODE_DESKTOP_DEVTOOLS=1 is set, read
+through DesktopConfig like the other desktop flags and carried on the
+desktop environment as openDevToolsOnLaunch. Development is still a
+precondition, so a packaged build is unaffected.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+

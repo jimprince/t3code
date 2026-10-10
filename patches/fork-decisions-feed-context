@@ -1,0 +1,7 @@
+Bottom: b46aba07b0d51c226ff1464948a09fe389c4e6c3
+Top:    9c4d4e1ee0e21f0f4364148ac87ed22ae55612ed
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 18:34:44 +0000
+
+fix(decisions): clean decision context and mark which asks can be answered
+
