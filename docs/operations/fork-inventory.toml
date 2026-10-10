@@ -3043,7 +3043,13 @@ subject = "feat(web): Plan widget with task progress bars and Ask first on proje
 class = "product"
 purpose = "Answer Brad's most frequent question to agents, 'where are we at?', on the project page: a Plan layout widget groups tasks by project and workstream with progress bars, what finished in a chosen window and where that pace leads, stalled work, and what waits on him; the New request box comes first with quick-action chips (Brad, 2026-10-10)."
 retire_when = "Upstream or another fork concern shows per-workstream task progress and recent movement across projects, or Brad drops the Plan widget from his layouts."
-depends_on = ["fork-project-layout", "fork-project-workstreams", "fork-dash-187-todo-progress", "fork-dash-173", "fork-project-dashboard-widgets"]
+depends_on = [
+  "fork-project-layout",
+  "fork-project-workstreams",
+  "fork-dash-187-todo-progress",
+  "fork-dash-173",
+  "fork-project-dashboard-widgets",
+]
 roles = []
 note = "Droppable: removing the patch removes the 'plan' PROJECT_WIDGET_TYPES entry, ProjectPlanWidget, planProgress.logic, the request-box chips and the ProjectRequestBox move back above the tabs; a saved layout that still holds a plan widget renders nothing for it (BuiltinWidget default). Web only, no server code, RPC, migration or setting; the server and t3-thread pick the type up from contracts. Task fraction: complete 1, for-review 0.9, active from the working thread's to-do list up to 0.9 (0.1 without a list), pending 0; window movement counts tasks closed in the window (tracker closedAt), the projection extends that pace one window, capped at what is left. Step movement has no history (to-do lists are latest-state projection items), so steps show live but do not count as movement. allProjects lists every summary with no parent project; utilities is a text setting of project titles. With a plan widget in the layout the built-in Subprojects and Workstreams blocks hide. Mobile has no layouts, so no Plan there."
 
