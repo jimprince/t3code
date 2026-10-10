@@ -1328,6 +1328,9 @@ export const make = Effect.gen(function* () {
                 }
               : {}),
           }),
+          // A cached provider failure still needs fresh repository identity
+          // before retaining the last known PR on a periodic status poll.
+          Effect.andThen(invalidatePrConfigReads(cwd)),
           Effect.andThen(resolveLookupHeadContext(cwd, details)),
           Effect.map(({ headContext }) =>
             resolveLastKnownPr(branchKey, {

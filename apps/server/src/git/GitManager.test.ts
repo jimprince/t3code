@@ -1836,6 +1836,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
         const initialConfigReads = configReads.length;
         for (let sweep = 0; sweep < 5; sweep++) expect(yield* lookup).toBeNull();
         expect(launches).toHaveLength(3);
+        expect(configReads).toHaveLength(12);
         // A warm update only launches one fresh identity config read. Before
         // caching/coalescing it launched the trio plus two identical URL reads.
         expect(configReads.slice(initialConfigReads)).toEqual(
@@ -3289,11 +3290,18 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
       const first = yield* manager.status({ cwd: repoDir });
       expect(first.pr?.number).toBe(216);
 
+      // First populate the failed-provider backoff while retaining the old PR.
+      yield* manager.invalidateStatus(repoDir);
+      expect((yield* manager.status({ cwd: repoDir })).pr?.number).toBe(216);
+
       const replacementRemoteDir = yield* createBareRemote();
       yield* runGit(repoDir, ["remote", "add", "replacement", replacementRemoteDir]);
       yield* runGit(repoDir, ["push", "replacement", "feature/pr-repointed"]);
       yield* runGit(repoDir, ["remote", "set-url", "origin", replacementRemoteDir]);
-      yield* manager.invalidateStatus(repoDir);
+      // A periodic poll keeps the failed provider answer, but its last-known
+      // fallback must verify the new identity with fresh config.
+      yield* manager.invalidateLocalStatus(repoDir);
+      yield* manager.invalidateRemoteStatus(repoDir);
 
       const second = yield* manager.status({ cwd: repoDir });
       expect(second.pr).toBeNull();
