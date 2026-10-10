@@ -33,12 +33,13 @@ export const readMessageRun = (sql: SqlClient.SqlClient, threadId: string, messa
   sql<{
     run_id: string;
     initial_message: string;
+    input_intent: string | null;
     status: string;
     queue_held: number | null;
     requested_at: string;
     started_at: string | null;
     completed_at: string | null;
-  }>`SELECT r.run_id,json_extract(r.payload_json,'$.userMessageId') AS initial_message,r.status,json_extract(r.payload_json,'$.queueHeld') AS queue_held,json_extract(r.payload_json,'$.requestedAt') AS requested_at,json_extract(r.payload_json,'$.startedAt') AS started_at,json_extract(r.payload_json,'$.completedAt') AS completed_at FROM orchestration_v2_projection_messages m JOIN orchestration_v2_projection_runs r ON r.run_id=json_extract(m.payload_json,'$.runId') WHERE m.message_id=${messageId} AND m.thread_id=${threadId} LIMIT 1`.pipe(
+  }>`SELECT (SELECT json_extract(i.payload_json,'$.inputIntent') FROM orchestration_v2_projection_turn_items i WHERE i.run_id=r.run_id AND i.type='user_message' AND json_extract(i.payload_json,'$.messageId')=m.message_id LIMIT 1) AS input_intent,r.run_id,json_extract(r.payload_json,'$.userMessageId') AS initial_message,r.status,json_extract(r.payload_json,'$.queueHeld') AS queue_held,json_extract(r.payload_json,'$.requestedAt') AS requested_at,json_extract(r.payload_json,'$.startedAt') AS started_at,json_extract(r.payload_json,'$.completedAt') AS completed_at FROM orchestration_v2_projection_messages m JOIN orchestration_v2_projection_runs r ON r.run_id=json_extract(m.payload_json,'$.runId') WHERE m.message_id=${messageId} AND m.thread_id=${threadId} LIMIT 1`.pipe(
     Effect.map((rows) => {
       const row = rows[0];
       if (!row) return null;
@@ -53,7 +54,14 @@ export const readMessageRun = (sql: SqlClient.SqlClient, threadId: string, messa
         startedAt: row.started_at,
         completedAt: row.completed_at,
       } satisfies SendRunBinding;
-      return { run, initialMessage: row.initial_message };
+      // Steering can replace run.userMessageId while retaining the run. The
+      // persisted input intent keeps each send's original delivery identity.
+      const initialMessage = row.input_intent
+        ? ["turn_start", "queued_turn"].includes(row.input_intent)
+          ? messageId
+          : null
+        : row.initial_message;
+      return { run, initialMessage };
     }),
   );
 

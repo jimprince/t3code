@@ -163,6 +163,7 @@ it.live("resume refuses pending reset and rolls its receipt back if run commit f
       assert.isUndefined(yield* store.get("resume:recovery-operator:rollback"));
       assert.equal((yield* orchestrator.getThreadProjection(threadId)).runs.length, 0);
       yield* sql.unsafe("DROP TRIGGER fail_resume");
+      const active = yield* service.resume({ ...input, requestId: "active-before-queue" });
       yield* orchestrator.dispatch({
         type: "message.dispatch",
         commandId: CommandId.make("preserved-queue"),
@@ -174,8 +175,16 @@ it.live("resume refuses pending reset and rolls its receipt back if run commit f
         creationSource: "web",
         dispatchMode: { type: "queue_after_active" },
       });
-      const queuedRun = (yield* orchestrator.getThreadProjection(threadId)).runs[0]!;
+      const queuedRun = (yield* orchestrator.getThreadProjection(threadId)).runs.find(
+        (r) => r.status === "queued",
+      )!;
       assert.equal(queuedRun.status, "queued");
+      yield* orchestrator.dispatch({
+        type: "run.interrupt",
+        commandId: CommandId.make("preserve-queued-on-interrupt"),
+        threadId,
+        runId: active.runId,
+      });
       const receipt = yield* service.resume(input);
       const runs = (yield* orchestrator.getThreadProjection(threadId)).runs;
       assert.notEqual(runs.find((r) => r.id === receipt.runId)?.status, "queued");

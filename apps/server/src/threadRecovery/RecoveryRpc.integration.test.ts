@@ -40,6 +40,7 @@ import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.t
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as ResumeRuntime from "./Resume.testkit.ts";
+import * as Reset from "./SessionResetService.ts";
 import * as ResetHook from "./ProviderSessionResetHook.ts";
 import * as HostRouteTransfer from "./HostRouteTransfer.ts";
 import { authenticatedHandlers } from "./rpc.ts";
@@ -62,13 +63,12 @@ const hostIdentity = Layer.effect(
     });
   }),
 ).pipe(Layer.provide(ServerEnvironment.identityLayer), Layer.provide(config));
+const dependencies = Layer.mergeAll(layer, ResumeRuntime.runtime);
 const runtime = Layer.mergeAll(
   auth,
+  Layer.fresh(Reset.layer).pipe(Layer.provide(dependencies)),
   HostRouteTransfer.layer.pipe(Layer.provide(hostIdentity)),
-).pipe(
-  Layer.provideMerge(Layer.mergeAll(layer, ResumeRuntime.runtime)),
-  Layer.provide(NodeServices.layer),
-);
+).pipe(Layer.provideMerge(dependencies), Layer.provide(NodeServices.layer));
 
 it.live(
   "real CLI client exchanges a scoped token for a websocket ticket; standard token is refused and administrative reset/route transfer works",
