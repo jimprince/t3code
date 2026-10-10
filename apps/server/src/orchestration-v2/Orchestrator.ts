@@ -350,6 +350,9 @@ export interface OrchestratorV2Shape {
     Effect.Effect<OrchestrationV2ThreadShellSnapshot, OrchestratorV2Error>,
     OrchestratorV2Error
   >;
+  readonly getThreadShells: (
+    threadIds: ReadonlyArray<ThreadId>,
+  ) => Effect.Effect<ReadonlyArray<OrchestrationV2ThreadShell | null>, OrchestratorV2Error>;
   readonly getThreadShell: (
     threadId: ThreadId,
   ) => Effect.Effect<OrchestrationV2ThreadShell | null, OrchestratorV2Error>;
@@ -4476,8 +4479,15 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   ) =>
     Effect.gen(function* () {
       let projection = yield* getProjectionWithPendingEvents(command.threadId, events);
-      if (command.recoveryExpectedUpdatedAt !== undefined && !legacyNoticeCanStart(projection, command.recoveryExpectedUpdatedAt)) {
-        return yield* new OrchestratorDispatchError({ commandId: command.commandId, commandType: command.type, cause: "Recovery notice no longer matches idle thread state." });
+      if (
+        command.recoveryExpectedUpdatedAt !== undefined &&
+        !legacyNoticeCanStart(projection, command.recoveryExpectedUpdatedAt)
+      ) {
+        return yield* new OrchestratorDispatchError({
+          commandId: command.commandId,
+          commandType: command.type,
+          cause: "Recovery notice no longer matches idle thread state.",
+        });
       }
       if (command.manualContinuationOfRunId !== undefined) {
         const source = projection.runs.find((run) => run.id === command.manualContinuationOfRunId);
@@ -10913,6 +10923,15 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           Effect.mapError(shellProjectionError),
           Effect.map(Effect.mapError(shellProjectionError)),
         ),
+    getThreadShells: (threadIds) =>
+      projectionStore
+        .getThreadShells(threadIds)
+        .pipe(
+          Effect.mapError(
+            (cause) =>
+              new OrchestratorProjectionError({ threadId: ThreadId.make("thread:shell"), cause }),
+          ),
+        ),
     getThreadShell: (threadId) =>
       projectionStore
         .getThreadShell(threadId)
@@ -11047,6 +11066,13 @@ const layerUnavailable: Layer.Layer<OrchestratorV2> = Layer.succeed(
         }),
       ),
     readShellSnapshot: () =>
+      Effect.fail(
+        new OrchestratorProjectionError({
+          threadId: ThreadId.make("thread:shell"),
+          cause: "Orchestration V2 live runtime is not configured.",
+        }),
+      ),
+    getThreadShells: () =>
       Effect.fail(
         new OrchestratorProjectionError({
           threadId: ThreadId.make("thread:shell"),
