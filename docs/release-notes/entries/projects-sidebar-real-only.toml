@@ -1,0 +1,4 @@
+id = "projects-sidebar-real-only"
+category = "fix"
+functionality = "projects"
+text = "The Projects sidebar lists only real, unfinished projects: pinning a thread no longer turns it into a project (a pin only orders the list), a project's orchestrator no longer repeats in Threads, settling a project moves it into Quiet at once unless it still needs you or is working, and project rows have the usual right-click menu."
