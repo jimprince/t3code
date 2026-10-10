@@ -75,6 +75,8 @@ export class DesktopEnvironment extends Context.Service<
     // Preload that turns on the V8 compile cache for the local backend.
     readonly compileCachePath: string;
     readonly appUpdateYmlPath: string;
+    /** Development only: open the detached DevTools window with the main window. */
+    readonly openDevToolsOnLaunch?: boolean;
     readonly devServerUrl: Option.Option<URL>;
     readonly devRemoteT3ServerEntryPath: Option.Option<string>;
     readonly configuredBackendPort: Option.Option<number>;
@@ -244,6 +246,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
     appUpdateYmlPath: input.isPackaged
       ? path.join(resourcesPath, "app-update.yml")
       : path.join(input.appPath, "dev-app-update.yml"),
+    openDevToolsOnLaunch: config.openDevTools,
     devServerUrl,
     devRemoteT3ServerEntryPath: config.devRemoteT3ServerEntryPath,
     configuredBackendPort: config.configuredBackendPort,
