@@ -1,0 +1,4 @@
+id = "projects-quiet-mobile"
+category = "fix"
+functionality = "mobile projects"
+text = "On mobile, the Projects list folds settled and long-quiet projects into a collapsed Quiet group, as on the web sidebar; a settled project whose workers still need you stays in the list."
