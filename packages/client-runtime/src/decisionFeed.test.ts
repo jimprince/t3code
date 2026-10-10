@@ -70,36 +70,51 @@ const feed = (input: Partial<Parameters<typeof buildDecisionFeed>[0]> = {}) =>
   });
 
 describe("buildDecisionFeed", () => {
-  it("leads with stalled threads, then everything else oldest first", () => {
+  it("leads with stalled threads, then everything else, each group newest first", () => {
     const result = feed({
-      asks: [ask("late", "2026-10-07T10:00:00.000Z"), ask("early", "2026-10-06T10:00:00.000Z")],
+      asks: [
+        ask("old", "2026-10-06T10:00:00.000Z"),
+        ask("new", "2026-10-07T10:00:00.000Z"),
+        // Same instant as "new": the key breaks the tie, whatever order they arrive in.
+        ask("also-new", "2026-10-07T10:00:00.000Z"),
+      ],
       plans: [
         {
           threadId: "p1",
           title: "Plan thread",
           projectTitle: "Printcell",
-          since: "2026-10-07T00:00:00.000Z",
+          since: "2026-10-06T20:00:00.000Z",
         },
       ],
-      decisions: [decision(3), decision(1)],
+      decisions: [decision(1), decision(3)],
       items: [{ issue: issue(2), group: "review" }],
     });
     expect(result.cards.map((card) => card.key)).toEqual([
-      "t-early:early",
+      "t-also-new:also-new",
+      "t-new:new",
       "p1:plan",
-      "t-late:late",
-      "brad/repo#1",
-      "brad/repo#2",
+      "t-old:old",
       "brad/repo#3",
+      "brad/repo#2",
+      "brad/repo#1",
     ]);
-    expect(result.cards.map((card) => card.kind)).toEqual([
-      "question",
-      "plan",
-      "question",
-      "decision",
-      "review",
-      "decision",
+    expect(result.cards.map((card) => card.blocked)).toEqual([
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
     ]);
+  });
+
+  it("orders cards that were filed at the same instant by key, not by arrival", () => {
+    const same = { createdAt: "2026-10-05T00:00:00.000Z" };
+    const forward = feed({ decisions: [decision(1, same), decision(2, same)] });
+    const backward = feed({ decisions: [decision(2, same), decision(1, same)] });
+    expect(forward.cards.map((card) => card.key)).toEqual(["brad/repo#1", "brad/repo#2"]);
+    expect(backward.cards.map((card) => card.key)).toEqual(["brad/repo#1", "brad/repo#2"]);
   });
 
   it("shows an issue that is both a decision and an item once, as the decision", () => {
@@ -118,10 +133,10 @@ describe("buildDecisionFeed", () => {
         { issue: issue(4), group: "test", testStep: "Press the button" },
       ],
     });
-    expect(result.cards.map((card) => card.kind)).toEqual(["answer", "decision", "review", "test"]);
-    const approve = result.cards[1];
+    expect(result.cards.map((card) => card.kind)).toEqual(["test", "review", "decision", "answer"]);
+    const approve = result.cards[2];
     expect(approve?.kind === "decision" && approve.approve).toBe(true);
-    const test = result.cards[3];
+    const test = result.cards[0];
     expect(test?.kind === "test" && test.testStep).toBe("Press the button");
   });
 
@@ -161,8 +176,24 @@ describe("buildDecisionFeed", () => {
     });
     const result = feed({ decisions: [moved, decision(2), decision(3)] });
     expect(result.cards.map((card) => card.key)).toEqual([
-      "brad/repo#2",
       "brad/repo#3",
+      "brad/repo#2",
+      "brad/repo#1",
+    ]);
+  });
+
+  it("sinks cards moved to the end below the rest, the latest move last", () => {
+    const first = decision(5, {
+      deferral: { until: null, movedToEndAt: "2026-10-08T09:00:00.000Z" },
+    });
+    const second = decision(1, {
+      deferral: { until: null, movedToEndAt: "2026-10-08T11:00:00.000Z" },
+    });
+    const result = feed({ decisions: [second, decision(2), first, decision(3)] });
+    expect(result.cards.map((card) => card.key)).toEqual([
+      "brad/repo#3",
+      "brad/repo#2",
+      "brad/repo#5",
       "brad/repo#1",
     ]);
   });
@@ -177,7 +208,7 @@ describe("buildDecisionFeed", () => {
       { project: "Printcell", count: 2 },
       { project: "Home Assistant", count: 1 },
     ]);
-    expect(result.cards.map((card) => card.key)).toEqual(["brad/repo#1", "brad/repo#2"]);
+    expect(result.cards.map((card) => card.key)).toEqual(["brad/repo#2", "brad/repo#1"]);
     expect(result.total).toBe(3);
   });
 });
@@ -373,7 +404,7 @@ describe("asksWithFallbacks", () => {
     const asks = asksWithFallbacks({ returned: [], waiting, loading: false });
     expect(asks.map((entry) => entry.kind)).toEqual(["question", "approval"]);
     const shown = feed({ asks });
-    expect(shown.cards.map((card) => card.kind)).toEqual(["question", "approval"]);
+    expect(shown.cards.map((card) => card.kind).sort()).toEqual(["approval", "question"]);
   });
 });
 

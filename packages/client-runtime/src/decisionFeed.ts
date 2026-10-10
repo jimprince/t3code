@@ -75,7 +75,7 @@ export interface DecisionFeedChip {
 }
 
 export interface DecisionFeed {
-  /** What shows now, blocked threads first, then oldest first. */
+  /** What shows now: blocked threads first, then the rest, each group newest first. */
   readonly cards: ReadonlyArray<DecisionFeedCard>;
   /** Cards Brad deferred that are still hidden, soonest to return first. */
   readonly later: ReadonlyArray<{
@@ -180,10 +180,8 @@ export function buildDecisionFeed(input: {
       project: plan.projectTitle,
       plan,
     })),
-  ].sort((a, b) => a.since.localeCompare(b.since));
-  const rest = [...shown].sort(
-    (a, b) => sortTimeOf(a) - sortTimeOf(b) || a.key.localeCompare(b.key),
-  );
+  ].sort(newestFirst);
+  const rest = [...shown].sort(newestFirst);
 
   const all = [...blocked, ...rest];
   const counts = new Map<string, number>();
@@ -205,10 +203,27 @@ export function buildDecisionFeed(input: {
   };
 }
 
-function sortTimeOf(card: DecisionFeedCard): number {
-  return card.blocked
-    ? Date.parse(card.since)
-    : decisionSortTime(card.issue.createdAt, card.issue.deferral);
+/**
+ * Newest first within a group, the key breaking ties so the order never depends on how the
+ * cards arrived. A card Brad moved to the end sinks below the rest of its group, the latest
+ * move last.
+ */
+function newestFirst(a: DecisionFeedCard, b: DecisionFeedCard): number {
+  const movedA = movedToEndAt(a);
+  const movedB = movedToEndAt(b);
+  if (movedA !== null || movedB !== null) {
+    if (movedA === null) return -1;
+    if (movedB === null) return 1;
+    return movedA - movedB || a.key.localeCompare(b.key);
+  }
+  return Date.parse(b.since) - Date.parse(a.since) || a.key.localeCompare(b.key);
+}
+
+/** When Brad moved a card to the end, if that was after it was filed. */
+function movedToEndAt(card: DecisionFeedCard): number | null {
+  if (card.blocked) return null;
+  const sortTime = decisionSortTime(card.issue.createdAt, card.issue.deferral);
+  return sortTime > Date.parse(card.since) ? sortTime : null;
 }
 
 /** Who a card is for, in words: "End Effector Orchestrator" in "Printcell". */
