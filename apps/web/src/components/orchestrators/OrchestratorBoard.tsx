@@ -348,7 +348,7 @@ const SUBPROJECT_COLUMN = {
   progress: "hidden w-16 shrink-0 text-right sm:block",
   working: "hidden w-16 shrink-0 text-right sm:block",
   needsYou: "hidden w-24 shrink-0 text-right sm:block",
-  activity: "w-16 shrink-0 text-right",
+  activity: "w-20 shrink-0 text-right",
 } as const;
 
 /**
