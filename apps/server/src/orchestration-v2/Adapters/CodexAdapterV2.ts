@@ -2001,17 +2001,23 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
             );
           });
 
+        const pendingTurnRegistrations = new Map<string, Deferred.Deferred<void>>();
+
         const awaitActiveTurn = (
           nativeTurnId: string,
-          attemptsRemaining = 1_000,
+          nativeThreadId?: string,
         ): Effect.Effect<ActiveCodexTurnContext | undefined> =>
           Effect.gen(function* () {
             const context = (yield* Ref.get(activeTurns)).get(nativeTurnId);
-            if (context !== undefined || attemptsRemaining <= 0) {
-              return context;
-            }
-            yield* Effect.yieldNow;
-            return yield* awaitActiveTurn(nativeTurnId, attemptsRemaining - 1);
+            if (context !== undefined) return context;
+            // Only a genuine in-flight start can register this turn. The notification
+            // worker may wait for it; the protocol reader continues decoding its ACK.
+            const registration =
+              nativeThreadId === undefined
+                ? undefined
+                : pendingTurnRegistrations.get(nativeThreadId);
+            if (registration !== undefined) yield* Deferred.await(registration);
+            return (yield* Ref.get(activeTurns)).get(nativeTurnId);
           });
 
         /**
@@ -2019,13 +2025,13 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
          * already settled (background command completions) resolve the
          * retained settled context instead of dropping.
          */
-        const resolveItemEventContext = (nativeTurnId: string) =>
+        const resolveItemEventContext = (nativeTurnId: string, nativeThreadId: string) =>
           Effect.gen(function* () {
             const settled = (yield* Ref.get(settledTurns)).get(nativeTurnId);
             if (settled !== undefined) {
               return { context: settled, settled: true } as const;
             }
-            const context = yield* awaitActiveTurn(nativeTurnId);
+            const context = yield* awaitActiveTurn(nativeTurnId, nativeThreadId);
             return context === undefined ? undefined : ({ context, settled: false } as const);
           });
 
@@ -2595,9 +2601,14 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
               return;
             }
             yield* Ref.update(pendingSubagentTurns, (current) => {
+              const pending = current.get(input.nativeThreadId);
+              // Unowned turn/started events can arrive after a timed-out request.
+              // Retain a small start-race buffer, never an unbounded orphan history.
+              if (pending === undefined && current.size >= 128) return current;
+              if ((pending?.length ?? 0) >= 16) return current;
               const updated = new Map(current);
               updated.set(input.nativeThreadId, [
-                ...(updated.get(input.nativeThreadId) ?? []),
+                ...(pending ?? []),
                 { nativeTurnId: input.nativeTurnId, startedAt: input.startedAt },
               ]);
               return updated;
@@ -3159,11 +3170,11 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
           return key;
         };
         const appendReasoning = Effect.fn("CodexAdapterV2.appendReasoning")(function* (
-          payload: { turnId: string; itemId: string; delta: string },
+          payload: { threadId: string; turnId: string; itemId: string; delta: string },
           stream: "summary" | "content",
           index: number,
         ) {
-          const context = yield* awaitActiveTurn(payload.turnId);
+          const context = yield* awaitActiveTurn(payload.turnId, payload.threadId);
           if (context === undefined || payload.delta.length === 0) return;
           yield* completeProviderRetry(context, yield* DateTime.now);
           const itemId = reasoningPartKey(payload.turnId, payload.itemId, stream, index);
@@ -3894,10 +3905,9 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
 
         yield* client.handleServerNotification("item/agentMessage/delta", (payload) =>
           Effect.gen(function* () {
-            const context = (yield* Ref.get(activeTurns)).get(payload.turnId);
-            if (context !== undefined) {
-              yield* completeProviderRetry(context, yield* DateTime.now);
-            }
+            const context = yield* awaitActiveTurn(payload.turnId, payload.threadId);
+            if (context === undefined) return;
+            yield* completeProviderRetry(context, yield* DateTime.now);
             yield* agentMessageDeltas.append({
               turnId: payload.turnId,
               itemId: payload.itemId,
@@ -3915,7 +3925,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
 
         yield* client.handleServerNotification("item/plan/delta", (payload) =>
           Effect.gen(function* () {
-            const context = yield* awaitActiveTurn(payload.turnId);
+            const context = yield* awaitActiveTurn(payload.turnId, payload.threadId);
             if (context === undefined) {
               return;
             }
@@ -3948,7 +3958,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
 
         yield* client.handleServerNotification("turn/plan/updated", (payload) =>
           Effect.gen(function* () {
-            const context = yield* awaitActiveTurn(payload.turnId);
+            const context = yield* awaitActiveTurn(payload.turnId, payload.threadId);
             if (context === undefined) {
               return;
             }
@@ -4032,7 +4042,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
               payload.turnId,
               payload.tokenUsage,
             );
-            const context = yield* awaitActiveTurn(payload.turnId);
+            const context = (yield* Ref.get(activeTurns)).get(payload.turnId);
             if (context === undefined) {
               return;
             }
@@ -4111,7 +4121,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
 
         yield* client.handleServerNotification("error", (payload) =>
           Effect.gen(function* () {
-            const context = yield* awaitActiveTurn(payload.turnId);
+            const context = yield* awaitActiveTurn(payload.turnId, payload.threadId);
             if (context === undefined) {
               return;
             }
@@ -4233,7 +4243,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
 
         yield* client.handleServerNotification("item/started", (payload) =>
           Effect.gen(function* () {
-            const context = yield* awaitActiveTurn(payload.turnId);
+            const context = yield* awaitActiveTurn(payload.turnId, payload.threadId);
             if (context === undefined) {
               return;
             }
@@ -4360,8 +4370,8 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
         yield* client.handleServerNotification("item/completed", (payload) =>
           Effect.gen(function* () {
             if (payload.item.type === "contextCompaction")
-              // The notification callback runs on the input reader. Let it read
-              // the injection response while the session-scoped request waits.
+              // Context restoration outlives this item; it must not delay later
+              // notifications in the turn's queue.
               yield* restoreAdditionalContext(payload.threadId).pipe(
                 Effect.forkIn(scope, { startImmediately: true }),
               );
@@ -4380,7 +4390,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
               yield* updateSubagentStates({ item: payload.item });
               return;
             }
-            const resolved = yield* resolveItemEventContext(payload.turnId);
+            const resolved = yield* resolveItemEventContext(payload.turnId, payload.threadId);
             if (resolved === undefined) {
               return;
             }
@@ -4671,7 +4681,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
 
         yield* client.handleServerRequest("item/commandExecution/requestApproval", (payload) =>
           Effect.gen(function* () {
-            const context = yield* awaitActiveTurn(payload.turnId);
+            const context = yield* awaitActiveTurn(payload.turnId, payload.threadId);
             if (context === undefined) {
               return yield* toProtocolError(
                 `No active Codex turn context for approval turn ${payload.turnId}.`,
@@ -4736,7 +4746,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
 
         yield* client.handleServerRequest("item/fileChange/requestApproval", (payload) =>
           Effect.gen(function* () {
-            const context = yield* awaitActiveTurn(payload.turnId);
+            const context = yield* awaitActiveTurn(payload.turnId, payload.threadId);
             if (context === undefined) {
               return yield* toProtocolError(
                 `No active Codex turn context for file change approval turn ${payload.turnId}.`,
@@ -4798,7 +4808,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
 
         yield* client.handleServerRequest("item/permissions/requestApproval", (payload) =>
           Effect.gen(function* () {
-            const context = yield* awaitActiveTurn(payload.turnId);
+            const context = yield* awaitActiveTurn(payload.turnId, payload.threadId);
             if (context === undefined) {
               return yield* toProtocolError(
                 `No active Codex turn context for permissions approval turn ${payload.turnId}.`,
@@ -4876,7 +4886,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
             const context =
               payload.turnId === undefined || payload.turnId === null
                 ? undefined
-                : yield* awaitActiveTurn(payload.turnId);
+                : yield* awaitActiveTurn(payload.turnId, payload.threadId);
             if (context === undefined) {
               yield* Effect.logWarning(
                 "Declined an MCP elicitation without an active Codex turn context.",
@@ -5071,7 +5081,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
 
         yield* client.handleServerRequest("item/tool/requestUserInput", (payload) =>
           Effect.gen(function* () {
-            const context = yield* awaitActiveTurn(payload.turnId);
+            const context = yield* awaitActiveTurn(payload.turnId, payload.threadId);
             if (context === undefined) {
               return yield* toProtocolError(
                 `No active Codex turn context for user input request turn ${payload.turnId}.`,
@@ -5909,6 +5919,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
                 else next.delete(threadId);
                 return next;
               });
+              pendingTurnRegistrations.set(threadId, yield* Deferred.make<void>());
               const started = yield* fault("withhold-lifecycle-ack", turnInput.threadId)
                 ? Effect.never.pipe(Effect.timeout("10 seconds"))
                 : client.request("turn/start", turnStartParams);
@@ -5954,10 +5965,16 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
             }).pipe(
               Effect.ensuring(
                 Effect.flatMap(getNativeThreadId(turnInput.providerThread), (threadId) =>
-                  Ref.update(pendingRootTurns, (current) => {
-                    const updated = new Map(current);
-                    updated.delete(threadId);
-                    return updated;
+                  Effect.gen(function* () {
+                    const registration = pendingTurnRegistrations.get(threadId);
+                    pendingTurnRegistrations.delete(threadId);
+                    if (registration !== undefined)
+                      yield* Deferred.succeed(registration, undefined);
+                    yield* Ref.update(pendingRootTurns, (current) => {
+                      const updated = new Map(current);
+                      updated.delete(threadId);
+                      return updated;
+                    });
                   }),
                 ).pipe(Effect.ignore),
               ),
