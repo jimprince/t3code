@@ -1,0 +1,6 @@
+Bottom: 974adef9892aeb3b5e4c9182fba28d7e13991a42
+Top:    974adef9892aeb3b5e4c9182fba28d7e13991a42
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 10:22:57 +0000
+
+fix(t3-thread): stop polling settled threads every few seconds
