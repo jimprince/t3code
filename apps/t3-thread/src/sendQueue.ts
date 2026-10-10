@@ -62,7 +62,7 @@ const OPEN_STATUSES = new Set<SavedQueuedSend["status"]>(["queued", "dispatching
 export interface QueueClient {
   supportsReliableHandoffs?(): Promise<boolean>;
   lookupSendReceipt?(input: HandoffLookupInput): Promise<HandoffLookupResult>;
-  findThread(threadId: string): Promise<OrchestrationThread>;
+  findThread(threadId: string, options?: { nesting?: boolean }): Promise<OrchestrationThread>;
   sendMessage(input: {
     forwardedMessage?: MessageForwardResult["forwardedMessage"];
     forward?: Pick<
@@ -465,7 +465,7 @@ export async function drainQueuedSends(options: {
     let thread: OrchestrationThread;
     try {
       thread = await withTimeout(
-        client.findThread(head.threadId),
+        client.findThread(head.threadId, { nesting: false }),
         options.readTimeoutMs ?? THREAD_READ_TIMEOUT_MS,
         "Reading the target thread",
       );

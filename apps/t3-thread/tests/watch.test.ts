@@ -976,6 +976,36 @@ describe("watch polling cost", () => {
     expect(reads).toBe(5);
   });
 
+  it("reads a listed source without the metadata table and keeps the shell's nesting", async () => {
+    const options: unknown[] = [];
+    const shell = {
+      ...makeThread({ id: "child" }),
+      parentThreadId: "parent-x",
+      remoteParent: null,
+      scope: "lane",
+      activeRunId: null,
+      latestUserMessageAt: null,
+      hasPendingApprovals: false,
+      hasPendingUserInput: false,
+      hasActionableProposedPlan: false,
+    } as OrchestrationThreadShell;
+    const poller = createWatchPoller(() => ({
+      listThreads: async () => [shell],
+      async findThread(_id, readOptions) {
+        options.push(readOptions);
+        return makeThread({ id: "child", parentThreadId: null });
+      },
+      async sendMessage() {},
+    }));
+    const client = poller.clientFactory(makeEnvironment());
+    poller.beginPoll();
+    await client.listThreads!();
+    const thread = await client.findThread("child");
+    expect(options).toEqual([{ nesting: false }]);
+    expect(thread.parentThreadId).toBe("parent-x");
+    expect(thread.scope).toBe("lane");
+  });
+
   it("shares reads and parks missing, archived and settled sources", async () => {
     let time = 0;
     const calls: string[] = [];

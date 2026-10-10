@@ -106,7 +106,7 @@ function isNotificationReply(thread: OrchestrationThread): boolean {
 
 export interface WatchClient {
   listThreads?(): Promise<OrchestrationThreadShell[]>;
-  findThread(threadId: string): Promise<OrchestrationThread>;
+  findThread(threadId: string, options?: { nesting?: boolean }): Promise<OrchestrationThread>;
   supportsReliableHandoffs?(): Promise<boolean>;
   lookupSendReceipt?(input: HandoffLookupInput): Promise<HandoffLookupResult>;
   sendMessage(input: {
@@ -152,6 +152,20 @@ function quietShellSignature(shell: OrchestrationThreadShell): string | undefine
   ]);
 }
 
+/** A full read without metadata, given the nesting fields its listed shell carries. */
+function withListedNesting(
+  thread: OrchestrationThread,
+  shell: OrchestrationThreadShell,
+): OrchestrationThread {
+  return {
+    ...thread,
+    ...("parentThreadId" in shell ? { parentThreadId: shell.parentThreadId } : {}),
+    ...("remoteParent" in shell ? { remoteParent: shell.remoteParent } : {}),
+    ...("scope" in shell ? { scope: shell.scope } : {}),
+    ...("subproject" in shell ? { subproject: shell.subproject } : {}),
+  };
+}
+
 /** What makes a live source worth reading again before LIVE_SOURCE_REREAD_MS passes. */
 function liveShellSignature(shell: OrchestrationThreadShell): string {
   return JSON.stringify([
@@ -181,6 +195,8 @@ export function createWatchPoller(factory: WatchClientFactory = createWatchClien
   const lists = new Map<string, { at: number; list: Promise<OrchestrationThreadShell[]> }>();
   // This pass's quiet-shell signatures, and the full read each source last had under one.
   const signatures = new Map<string, { signature: string; live: boolean }>();
+  // The current list's shells, which already carry nesting fields from one metadata read.
+  const listedShells = new Map<string, OrchestrationThreadShell>();
   const signedReads = new Map<
     string,
     { signature: string; at: number; read: Promise<OrchestrationThread> }
@@ -196,10 +212,13 @@ export function createWatchPoller(factory: WatchClientFactory = createWatchClien
       const forget = () => {
         for (const key of signatures.keys())
           if (key.startsWith(`${environment.name}:`)) signatures.delete(key);
+        for (const key of listedShells.keys())
+          if (key.startsWith(`${environment.name}:`)) listedShells.delete(key);
       };
       const list = (factory(environment).listThreads?.() ?? Promise.resolve([])).then((shells) => {
         forget();
         for (const shell of shells) {
+          listedShells.set(`${environment.name}:${shell.id}`, shell);
           const quiet = quietShellSignature(shell);
           signatures.set(
             `${environment.name}:${shell.id}`,
@@ -233,8 +252,15 @@ export function createWatchPoller(factory: WatchClientFactory = createWatchClien
         return previous.read;
       }
       if (!reads.has(key)) {
-        const read: Promise<OrchestrationThread> = factory(environment)
-          .findThread(threadId)
+        const shell = listedShells.get(key);
+        // Listed: take nesting from the shell instead of re-reading every thread's metadata.
+        const read: Promise<OrchestrationThread> = (
+          shell
+            ? factory(environment)
+                .findThread(threadId, { nesting: false })
+                .then((thread) => withListedNesting(thread, shell))
+            : factory(environment).findThread(threadId)
+        )
           .then((thread) => {
             if (signed !== undefined)
               signedReads.set(key, {

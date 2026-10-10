@@ -67,6 +67,7 @@ describe("deferred self settlement", () => {
       alreadySettled: true,
     });
     expect(h.client.findThread).toHaveBeenCalledTimes(1);
+    expect(h.client.findThread).toHaveBeenCalledWith(request.threadId, { nesting: false });
     expect(h.client.settleThread).not.toHaveBeenCalled();
     expect(h.options.wait).not.toHaveBeenCalled();
   });
