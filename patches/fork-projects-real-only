@@ -1,6 +1,28 @@
 Bottom: 974adef9892aeb3b5e4c9182fba28d7e13991a42
 Top:    5e7b0abe1929bb61981898d8634be1b45049ddd2
 Author: brad <bradprin@live.com>
-Date:   2026-10-10 11:17:52 +0000
+Date:   2026-10-10 11:18:03 +0000
 
 fix(web): keep the Projects sidebar to real, unfinished projects
+
+The Projects sidebar filled up with rows that are not projects and rows
+that are finished, and offered no way to act on either.
+
+A pin no longer promotes a thread into Projects. A project is a top-level
+thread that owns workers, or a thread explicitly marked as a project; the
+pin goes back to doing one job, ordering the list. The menu's subproject
+item now covers both directions of that mark: "Show as subproject" for a
+nested thread, "Show in Projects" for a standing orchestrator between
+jobs, and nothing for a thread whose workers already make it a project.
+Project roots leave the Threads list whatever their pin state, so a
+project and its orchestrator stop occupying both lists.
+
+Settling a project folds it into Quiet straight away instead of waiting
+out the seven-day quiet window. Attention and live work still win: a
+settled project whose workers need you stays in the list.
+
+Project rows take the same right-click menu every other thread row has,
+so pin order, settle, nest and archive are reachable without the CLI.
+Rename is left out there, since the row has no inline title editor.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
