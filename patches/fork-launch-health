@@ -1,6 +1,6 @@
-Bottom: fb0ed320ed4656674e168c9b8ea366d707d2a6e0
-Top:    99521ca50d3bd6566d6fe7ae30612b7e16196121
+Bottom: 0e04bdbf761f0f9821f776b02513fe9526760262
+Top:    a8f5856a9e590178f15999a68efba6fc60574713
 Author: Codex <codex@users.noreply.github.com>
-Date:   2026-10-10 12:04:35 +0000
+Date:   2026-10-10 12:06:31 +0000
 
 feat(diagnostics): warn before macOS process launches stall

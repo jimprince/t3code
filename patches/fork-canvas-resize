@@ -1,6 +1,6 @@
-Bottom: b117bf673cf9755640bc44c0daac1a432b4f510b
-Top:    8f7873184390472173acc42504d7175bea790f56
+Bottom: a5b8df4e239326cdd4b40e14a719f67fbbb70552
+Top:    825c932c77acef1f1d11aff2d1fc9c2ad93e9982
 Author: brad <bradprin@live.com>
-Date:   2026-10-10 12:04:35 +0000
+Date:   2026-10-10 12:06:31 +0000
 
 feat(projects): a canvas can set its own height
