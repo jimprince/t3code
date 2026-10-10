@@ -1,0 +1,8 @@
+Bottom: 04e77f69c92e44d28b961dc300184e7768a4973a
+Top:    29ab2df064b1d672d5fde97b3e4ef1d8df18901a
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 08:52:12 +0000
+
+fix(threads): deliver queued sends to idle targets promptly
+
+
