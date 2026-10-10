@@ -1,0 +1,7 @@
+Bottom: 6b328165e52eb38d2ab87c007b17e70e485f4c72
+Top:    0fd23548df957e756cfcf900e69e84c127d93e67
+Author: User <user@example.com>
+Date:   2026-10-10 09:03:36 +0000
+
+fix(server): protect provider turns across recovery and restarts
+

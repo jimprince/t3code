@@ -1,0 +1,7 @@
+Bottom: c390b0298cf91a70f56cd982ba4aa0f5522d4cbb
+Top:    279d92b72e97f994d8a14a8e9c34aababbdc0406
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 09:04:02 +0000
+
+feat(codex): configure extra skill roots for runtime and picker
+
