@@ -1,0 +1,7 @@
+Bottom: acb1925a30455f471ca826e4632ad8f7853feb37
+Top:    db50165ec871db500af5cf7e845d821516b05955
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 08:50:47 +0000
+
+fix(web): a thread that was following its reply reopens at the newest message
+

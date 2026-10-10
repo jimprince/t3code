@@ -1,0 +1,7 @@
+Bottom: 577396e657f815666733b7610896e65f4362121d
+Top:    4d2ec5f337dc3bba9938f782c3adc5d7e593d869
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 08:50:36 +0000
+
+fix(threads): deliver reliable handoffs with durable receipts
+

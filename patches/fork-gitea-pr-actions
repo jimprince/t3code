@@ -1,0 +1,7 @@
+Bottom: 08518397a45ab2dd5f40cd8fea8b3491a56cd377
+Top:    47f7d89faf1808ebe439e3a332a2d1f89b24320c
+Author: User <user@example.com>
+Date:   2026-10-10 08:50:07 +0000
+
+feat(source-control): create and check out Gitea pull requests
+
