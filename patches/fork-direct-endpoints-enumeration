@@ -1,0 +1,15 @@
+Bottom: 5920630101c2bc53520cb14b8315c119abce2b3f
+Top:    3843a7ddeb74dc230233a4ac65172158c11ab91f
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 09:50:06 +0000
+
+fix(server): tolerate unavailable network interface enumeration
+
+Skip OS interface enumeration for non-wildcard binds. Treat unavailable
+wildcard enumeration as absent optional bound addresses, without hiding
+config, auth, settings or unrelated discovery failures.
+
+Refs: brad/t3code-fork#199
+Fork-Class: divergence
+Fork-Retire-When: Direct endpoint discovery no longer enumerates OS interfaces or its replacement handles unavailable enumeration without failing server config.
+

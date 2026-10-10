@@ -1,0 +1,7 @@
+Bottom: 7e0f6d993cfd97474a1c7891c610068ac1e20939
+Top:    bb3c2cbeff114868f9635a17d1fc0e78f205f6e6
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 09:49:42 +0000
+
+feat(threads): nest threads under an orchestrating thread
+

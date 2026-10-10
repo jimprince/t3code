@@ -1,0 +1,7 @@
+Bottom: 1b27e8eb64ef40129775a5fec216f539ea20364e
+Top:    e8048902b06e845fcf3b88a38e1b8533f6a65a23
+Author: User <user@example.com>
+Date:   2026-10-10 09:50:04 +0000
+
+feat(projects): nested threads can be subprojects with their own page data
+
