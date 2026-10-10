@@ -24,7 +24,10 @@ const failure = (cause: unknown) =>
         code: "storage",
         message: "Could not read pending human requests.",
       });
-/** Completed user turn items describe ingestion, not whether the user received an answer. */
+/**
+ * Completed user turn items describe ingestion, not whether the user received an answer.
+ * Explicit dispositions and addressedRequestIds override the run-completion rule.
+ */
 export class PendingHumanRequests extends Context.Service<
   PendingHumanRequests,
   {
@@ -64,6 +67,29 @@ const make = Effect.gen(function* () {
         message_id: string;
       }>`SELECT message_id FROM fork_recovery_human_dispositions WHERE thread_id=${input.threadId} AND disposition='addressed'`;
       for (const row of dispositions) addressed.add(MessageId.make(row.message_id));
+      const unanswered = new Set(
+        (yield* sql<{
+          message_id: string;
+        }>`SELECT message_id FROM fork_recovery_human_dispositions WHERE thread_id=${input.threadId} AND disposition='unanswered'`).map(
+          (row) => MessageId.make(row.message_id),
+        ),
+      );
+      // A request is answered once its own run, or a later one, completed with
+      // assistant output. Failed, interrupted and unstarted runs stay pending.
+      const runs = new Map(projection.runs.map((run) => [run.id, run]));
+      const lastAnsweredOrdinal = Math.max(
+        -Infinity,
+        ...projection.messages.flatMap((m) => {
+          const run = m.role === "assistant" && m.runId ? runs.get(m.runId) : undefined;
+          return run?.status === "completed" ? [run.ordinal] : [];
+        }),
+      );
+      const isPending = (m: (typeof projection.messages)[number]) => {
+        if (unanswered.has(m.id)) return true;
+        if (addressed.has(m.id)) return false;
+        const run = m.runId ? runs.get(m.runId) : undefined;
+        return run?.status !== "completed" || run.ordinal > lastAnsweredOrdinal;
+      };
       const candidates = projection.messages.filter(
         (m) =>
           m.role === "user" &&
@@ -86,7 +112,7 @@ const make = Effect.gen(function* () {
         watermark: candidates.at(-1)?.id ?? null,
         requests: candidates
           .slice(index + 1)
-          .filter((m) => !addressed.has(m.id))
+          .filter(isPending)
           .map((m) => ({
             itemId:
               projection.turnItems.find((i) => i.type === "user_message" && i.messageId === m.id)

@@ -27,6 +27,7 @@ import * as Dashboards from "../projectDashboard/ProjectDashboardStore.ts";
 import {
   execute,
   seed,
+  seedConversation,
   old,
   successor,
   sibling,
@@ -177,7 +178,7 @@ it.live(
 );
 
 it.live(
-  "completed-but-unaddressed human requests remain pending; automation and agent sends are excluded and explicit evidence resolves them",
+  "a completed run without assistant output leaves its human request pending; automation and agent sends are excluded and explicit evidence resolves them",
   () => {
     return execute(
       Effect.gen(function* () {
@@ -199,17 +200,6 @@ it.live(
               ...message(MessageId.make("notification")),
               createdBy: "system",
               creationSource: "server",
-            },
-          }),
-          event({
-            type: "message.updated",
-            threadId: old,
-            payload: {
-              ...message(MessageId.make("assistant")),
-              role: "assistant",
-              createdBy: "agent",
-              creationSource: "provider",
-              text: "Unrelated complete assistant output",
             },
           }),
         ]);
@@ -577,6 +567,33 @@ it.live(
             reference: "answer:queued",
           })).requests,
         ).toEqual([]);
+      }),
+    ),
+);
+
+it.live(
+  "a later completed assistant reply answers earlier requests; failed, interrupted, queued and newest requests stay pending",
+  () =>
+    execute(
+      Effect.gen(function* () {
+        yield* seed("completed").pipe(Effect.provideService(HumanIngress, "Brad"));
+        yield* seedConversation(30, { 12: "interrupted", 20: "failed", 30: "queued" });
+        const pending = yield* Pending.PendingHumanRequests;
+        // The seeded run-old request (ordinal 1) is answered by later replies.
+        expect(yield* pending.listPending({ threadId: old })).toEqual([
+          {
+            turnItemId: "item-human-12",
+            sourceMessageId: "human-12",
+            reason: "interrupted",
+          },
+          { turnItemId: "item-human-20", sourceMessageId: "human-20", reason: "failed" },
+          { turnItemId: "item-human-30", sourceMessageId: "human-30", reason: "queued" },
+        ]);
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`INSERT INTO fork_recovery_human_dispositions(message_id,thread_id,disposition,principal,reference) VALUES('human-5',${old},'unanswered','Brad','still-open')`;
+        expect(
+          (yield* pending.listPending({ threadId: old })).map((r) => r.sourceMessageId),
+        ).toEqual(["human-5", "human-12", "human-20", "human-30"]);
       }),
     ),
 );

@@ -135,7 +135,7 @@ it.live(
         if (server.address._tag === "UnixPathAddress") return yield* Effect.die("TCP required");
         const url = `http://127.0.0.1:${server.address.port}`;
         // Compile the Promise-based CLI in its own package; exercise its actual implementation here.
-        const cliPath = "../../../t3-thread/src/client.ts";
+        const cliPath = new URL("../../../t3-thread/src/client.ts", import.meta.url).href;
         const cli: {
           RemoteEnvironmentClient: new (environment: SavedEnvironment) => {
             recoveryRpc: <A = unknown>(method: string, input: unknown) => Promise<A>;

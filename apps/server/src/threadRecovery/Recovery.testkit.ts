@@ -225,6 +225,64 @@ const seed = (status: OrchestrationV2Run["status"] = "running") =>
       },
     }),
   ]);
+/**
+ * Appends numbered web turns to `seed()`'s thread; each completed turn has an assistant reply.
+ * Turns listed in `statuses` take that run status and get no reply.
+ */
+const seedConversation = (
+  turns: number,
+  statuses: Readonly<Record<number, OrchestrationV2Run["status"]>> = {},
+) =>
+  write(
+    Array.from({ length: turns }, (_, index) => {
+      const turn = index + 1;
+      // seed() owns run ordinal 1.
+      const ordinal = turn + 1;
+      const status = statuses[turn] ?? "completed";
+      const turnRunId = RunId.make(`run-${turn}`);
+      const userMessageId = MessageId.make(`human-${turn}`);
+      return [
+        event({
+          type: "run.created",
+          threadId: old,
+          payload: { ...run(status), id: turnRunId, ordinal, userMessageId },
+        }),
+        event({
+          type: "message.updated",
+          threadId: old,
+          payload: { ...message(userMessageId), runId: turnRunId },
+        }),
+        event({
+          type: "turn-item.updated",
+          threadId: old,
+          payload: {
+            ...item,
+            id: TurnItemId.make(`item-human-${turn}`),
+            runId: turnRunId,
+            ordinal: ordinal * 10,
+            messageId: userMessageId,
+            text: `Human request ${userMessageId}`,
+          },
+        }),
+        ...(status === "completed"
+          ? [
+              event({
+                type: "message.updated",
+                threadId: old,
+                payload: {
+                  ...message(MessageId.make(`assistant-${turn}`)),
+                  runId: turnRunId,
+                  role: "assistant" as const,
+                  createdBy: "agent" as const,
+                  creationSource: "provider" as const,
+                  text: `Answer ${turn}`,
+                },
+              }),
+            ]
+          : []),
+      ];
+    }).flat(),
+  );
 const input = {
   threadId: old,
   runId,
@@ -255,6 +313,7 @@ export {
   write,
   event,
   seed,
+  seedConversation,
   execute,
   input,
 };
