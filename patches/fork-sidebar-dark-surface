@@ -1,0 +1,7 @@
+Bottom: 4d12fa58d1b8e54f3d8aabf8a08f3e588196eaf7
+Top:    8337dd3e0ee93702aa2a0f4b5bbfc3cd532f4d6f
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 08:36:54 +0000
+
+fix(web): the dark sidebar uses the standard dark surface, not pure black
+

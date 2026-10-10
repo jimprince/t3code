@@ -1,0 +1,7 @@
+Bottom: e7f140397502568c658f8e88407f5b59a863f2f4
+Top:    877ec578c39063ec47dda43deea62c67edde58e0
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 08:36:21 +0000
+
+feat(t3-thread): rename threads and preserve explicit titles
+
