@@ -1,6 +1,8 @@
 Bottom: 6d3806b8faf555c0709cbb127066a8d9814fc445
-Top:    da617db0ac2c56f0dee8338128f14185744717cb
+Top:    f041abd5aa2e0fb4f19904b10fd5b1e48059ab1f
 Author: brad <bradprin@live.com>
-Date:   2026-10-10 13:03:48 +0000
+Date:   2026-10-10 21:48:39 +0000
 
 chore(fork): automate StGit stack maintenance and upstream replay
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
