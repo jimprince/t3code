@@ -411,3 +411,5 @@ Use `rename <thread> --title <text>` to change a title without starting a turn.
 `--scope <text>` sets a shared scope and `--clear-scope` clears it. Explicit
 creation titles survive automatic generation. Return to automatic order clears
 only the row's current pinned or active order key.
+
+<!-- Automatic DEV follow documentation-classification probe, test branch only. -->

@@ -65,7 +65,9 @@ html[data-mobile-composer-route-transition="true"]::view-transition-new(t3-mobil
   }
 }
 
-html[data-mobile-composer-route-transition="true"]::view-transition-group(t3-mobile-draft-headline) {
+html[data-mobile-composer-route-transition="true"]::view-transition-group(
+    t3-mobile-draft-headline
+  ) {
   animation-duration: var(--mobile-composer-transition-duration);
 }
 
@@ -2364,4 +2366,16 @@ code {
       );
     }
   }
+}
+
+body::after {
+  content: "Dev live-follow probe 20261010 docs";
+  position: fixed;
+  bottom: 8px;
+  right: 8px;
+  z-index: 99999;
+  background: #263238;
+  color: white;
+  padding: 6px;
+  pointer-events: none;
 }
