@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "8489fdd861bc88bfe84a45322ca3506894dae9e9",
-  "head": "4b815d8a90117ea37c28a561299c7de73a8e9ab0",
+  "prev": "d709dedd8356a7e007fcef70abffc4afc942ad4d",
+  "head": "f4bd80228b50ebd9f44a907b99ccf67ec3d21b4c",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -50,16 +50,16 @@
     "fork-worker-inactivity",
     "fork-thread-titles",
     "fork-subthread-lifecycle",
-    "refresh-temp",
+    "refresh-temp"
+  ],
+  "unapplied": [
     "fork-orchestrator-focus",
     "fork-sidebar-nested-tidiness",
     "fork-interrupted-turn-rewind",
     "fork-agent-thread-ordering",
     "fork-cross-environment-nesting",
     "fork-queue-coalesced-notes",
-    "fork-standing-agent-autosettle"
-  ],
-  "unapplied": [
+    "fork-standing-agent-autosettle",
     "fork-queue-idle-dispatch",
     "fork-textgen-tempfile-cause",
     "fork-textgen-own-scope",
