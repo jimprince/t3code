@@ -2,7 +2,6 @@ import type { DecisionFeedCard, FeedPullRequest } from "@t3tools/client-runtime/
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  deadlineNote,
   laterUntil,
   parseCustomLater,
   pullRequestSummary,
@@ -22,16 +21,6 @@ describe("Later", () => {
     expect(parseCustomLater("2026-10-07T09:00", NOW)).toBeNull();
     expect(parseCustomLater("", NOW)).toBeNull();
     expect(parseCustomLater("soon", NOW)).toBeNull();
-  });
-});
-
-describe("deadlineNote", () => {
-  it("counts a date deadline from its UTC day", () => {
-    expect(deadlineNote("2026-10-08", NOW)).toBe("due today");
-    expect(deadlineNote("2026-10-09", NOW)).toBe("due tomorrow");
-    expect(deadlineNote("2026-10-20", NOW)).toMatch(/^due .*20/);
-    expect(deadlineNote("2026-10-05", NOW)).toBe("overdue");
-    expect(deadlineNote("garbage", NOW)).toBe("");
   });
 });
 

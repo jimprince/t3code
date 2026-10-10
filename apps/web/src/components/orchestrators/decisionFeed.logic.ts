@@ -23,17 +23,6 @@ export function parseCustomLater(value: string, now: number): string | null {
   return Number.isNaN(at) || at <= now ? null : new Date(at).toISOString();
 }
 
-/** A deadline in a few words, by UTC day: "overdue", "due today", "due tomorrow", "due Oct 8". */
-export function deadlineNote(deadline: string, now: number): string {
-  const at = Date.parse(deadline);
-  if (Number.isNaN(at)) return "";
-  const days = Math.floor(at / DAY_MS) - Math.floor(now / DAY_MS);
-  if (days < 0) return "overdue";
-  if (days === 0) return "due today";
-  if (days === 1) return "due tomorrow";
-  return `due ${new Date(at).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })}`;
-}
-
 /** The kind tag on a card. */
 export function kindLabel(card: DecisionFeedCard): string {
   switch (card.kind) {
