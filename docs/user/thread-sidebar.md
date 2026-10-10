@@ -307,8 +307,9 @@ task progress, working agents, needs-you count and last activity. A folded card 
 a count of the subprojects it hides, such as `1 sub`.
 
 To turn a subproject back into a plain worker, choose **Show as worker** from its
-menu or from **Edit** on its page. Mobile lists a subproject as its own project,
-and its decisions show only there, not on the parent's card.
+menu or from **Edit** on its page. On mobile, **Projects** nests a subproject in
+its parent's card as the same one-line row, with the card's counts rolled up and a
+**Hide subprojects** fold; the subproject's requests and decisions show under its row.
 
 Nested threads in the Agents panel show their latest output, model and effort,
 provider pool, tokens and tools when available, turn duration, last activity and
