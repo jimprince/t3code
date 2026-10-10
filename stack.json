@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "97a4e2472f3e565548a7b656fff04d2756ada8d7",
-  "head": "60eb921f88dfe6ff8996cd94270a2fc702242839",
+  "prev": "fbfc466f51161c1eb3507580938c3b64a6d6f973",
+  "head": "496cea7d4ff75bb2c47e31f21b23fe014e8f4e8d",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -133,7 +133,9 @@
     "fork-publish-task-plan",
     "fork-dash-layout-retire",
     "fork-decisions-feed-context",
-    "fork-decisions-feed-model",
+    "fork-decisions-feed-model"
+  ],
+  "unapplied": [
     "fork-decisions-feed-ui",
     "fork-decisions-feed-mobile",
     "fork-sidebar-dark-surface",
@@ -147,7 +149,6 @@
     "fork-admin-thread-recovery",
     "fork-provider-context-recovery"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
