@@ -1,6 +1,6 @@
-Bottom: 59f746ea1657569f87ce105b32a20f5a8d75aab8
-Top:    b2f7c1f83a71fca41fc7ee036475b9067f95f5f3
+Bottom: c3f33f5f183e190415e653c2caf9ba91c3c0b352
+Top:    6a0ee0a8f64a6dd76be8acf710508373097ac6cb
 Author: brad <bradprin@live.com>
-Date:   2026-10-10 08:43:31 +0000
+Date:   2026-10-10 13:02:27 +0000
 
 feat(threads): nest workers across environments
