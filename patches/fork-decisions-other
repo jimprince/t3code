@@ -1,6 +1,6 @@
-Bottom: aeece2c1ee56957909027aa61db2f0e2b19649eb
-Top:    adcc224da814f061f10eb5224335ac7d6d11a170
+Bottom: 661b03ae8e21354f8444db75290ae2eebe45a4d0
+Top:    b95142f85be021182b679c37648ffab2ce1f906c
 Author: brad <bradprin@live.com>
-Date:   2026-10-10 12:57:03 +0000
+Date:   2026-10-10 13:03:48 +0000
 
 feat(projects): decisions get Other, an explicit Sent strip, and a note after picking
