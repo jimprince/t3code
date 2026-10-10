@@ -1,6 +1,6 @@
-Bottom: adaa6f1b06a9963f2a7780398122d90674ffe302
-Top:    63984f67348ba53dc359dbffc3be45707de4d465
+Bottom: 464cfccb0c0d71c40d1ad177e060b868d15550a6
+Top:    06f7b6d9df99d666eca6bd5ddf8df8047e6affa8
 Author: brad <bradprin@live.com>
-Date:   2026-10-10 11:52:55 +0000
+Date:   2026-10-10 11:53:23 +0000
 
 feat(threads): let agents control sidebar order

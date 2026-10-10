@@ -1,6 +1,6 @@
-Bottom: d4cf149975100613573ecb71a83040b4af4c0914
-Top:    04dd8f2c4b330a9c20b565dab5c43e202eb53884
+Bottom: 110f8ab4e2fe42e1d1c2e434ef9d4fca4a75f48a
+Top:    3f5c2d2e01ae05200c1c6c8b78cdff1371faf4ec
 Author: User <user@example.com>
-Date:   2026-10-10 11:52:55 +0000
+Date:   2026-10-10 11:53:23 +0000
 
 feat(web): show detailed nested thread activity in Agents panel
