@@ -498,6 +498,30 @@ describe("subprojects", () => {
     expect(projectSidebarBucket(live!, 0)).toBe("idle");
   });
 
+  it("keeps pin order when a pinned project settles into Quiet", () => {
+    const pinned = thread("pinned", null, {
+      pinnedAt: "2026-10-05T00:00:00.000Z",
+      pinOrderKey: "a",
+      settledOverride: "settled",
+    });
+    const pinnedWorker = thread("pinned-worker", "pinned");
+    const asking = thread("asking", null);
+    const askingWorker = thread("asking-worker", "asking", { hasPendingUserInput: true });
+    const summaries = buildOrchestratorSummaries([pinned, pinnedWorker, asking, askingWorker], []);
+    const bucketOf = (id: string) =>
+      projectSidebarBucket(
+        summaries.find((item) => item.root.id === id)!,
+        0,
+      );
+    expect(bucketOf("pinned")).toBe("quiet");
+    expect(bucketOf("asking")).toBe("needs-you");
+    // The pin leads the list whatever bucket the project is in.
+    expect(sortOrchestratorSummariesForSidebar(summaries, 0).map((item) => item.root.id)).toEqual([
+      "pinned",
+      "asking",
+    ]);
+  });
+
   it("orders a project's subprojects by what needs you first", () => {
     const root = thread("root", null);
     const calm = thread("calm", "root", { subproject: "on", title: "Calm" });
