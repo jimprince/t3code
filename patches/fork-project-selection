@@ -1,0 +1,7 @@
+Bottom: 00a2a5558d22058d33f7d71144e8c86081721853
+Top:    4422c418a299e93a8f370cf502a858aeb557d457
+Author: User <user@example.com>
+Date:   2026-10-10 09:18:57 +0000
+
+feat(web): select multiple projects in the sidebar
+

@@ -1,0 +1,7 @@
+Bottom: 5abf6f19df807e842b63c5044449ed1a1f1f3b15
+Top:    e5d3f78e6adfaa26a15da7410734e45053d4c649
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 09:19:03 +0000
+
+fix(server): keep copied sandbox sessions stopped on startup
+

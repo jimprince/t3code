@@ -1,0 +1,7 @@
+Bottom: 2b31ddb3252e83c48340ab3cbda033ce021b943a
+Top:    653ecc636c014a576bfe1f5405eed1d0dfd10fc9
+Author: User <user@example.com>
+Date:   2026-10-10 09:19:05 +0000
+
+feat(server): resume monitors and background agents after restarts
+
