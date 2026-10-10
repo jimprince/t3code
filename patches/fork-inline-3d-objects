@@ -1,0 +1,7 @@
+Bottom: c46d6b8721c8904d10621cead29119bd8cad153e
+Top:    8f57c002c20438e5b040847c499b3eaa9d97d229
+Author: User <user@example.com>
+Date:   2026-10-10 08:45:42 +0000
+
+feat(web): preview GLB and STL models inline
+

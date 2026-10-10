@@ -1,0 +1,7 @@
+Bottom: 0a439df0cd79289da36b23c11c12c1c90279be28
+Top:    08011955950246a3a3c7c29ea4c638f1b8ac0c8d
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 08:45:43 +0000
+
+fix(threads): recover thread and client state after disruptions
+

@@ -1,0 +1,7 @@
+Bottom: 132842734468cbc8d9229340364f1706b975a626
+Top:    ab179d8af37519b52c50b11bbb2717241bfc1cae
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 08:46:07 +0000
+
+feat(web): show tasks under their workstream, as a table or by status
+
