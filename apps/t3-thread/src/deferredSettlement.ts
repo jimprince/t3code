@@ -16,7 +16,7 @@ export interface SettlementRequest {
 }
 
 interface SettlementClient {
-  findThread(threadId: string): Promise<OrchestrationThread>;
+  findThread(threadId: string, options?: { nesting?: boolean }): Promise<OrchestrationThread>;
   settleThread(threadId: string, options: { self: boolean }): Promise<unknown>;
 }
 
@@ -42,7 +42,12 @@ export async function settleAfterTurn(
       if (await options.isCancelled?.()) {
         return { ...request, deferred: false, cancelled: true, reason: "Cancelled by unsettle." };
       }
-      const thread = await client.findThread(request.threadId);
+      const thread = await client.findThread(request.threadId, { nesting: false });
+      // Someone else already settled it (the server's auto-settle, another helper): the goal is
+      // met, and polling on would hold a connection open every 5 s until the 24 h deadline.
+      if (thread.settledOverride === "settled") {
+        return { ...request, deferred: false, settled: true, alreadySettled: true };
+      }
       if (
         thread.archivedAt ||
         thread.deletedAt ||
