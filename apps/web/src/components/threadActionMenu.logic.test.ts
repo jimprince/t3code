@@ -51,6 +51,19 @@ describe("buildThreadActionMenuItems", () => {
     expect(ids({ ...manual, isSettled: true, isPinned: true })).toContain("order-reset");
     expect(ids({ ...baseState, orderIsManual: true })).not.toContain("order-reset");
   });
+  it("drops Rename on a surface with no inline title editor, moving the separator down", () => {
+    const withRename = buildThreadActionMenuItems(baseState);
+    expect(withRename.find((item) => item.id === "rename")?.separatorBefore).toBe(true);
+
+    const noRename = buildThreadActionMenuItems({ ...baseState, canRename: false });
+    expect(noRename.map((item) => item.id)).not.toContain("rename");
+    // The title group still opens its own section.
+    expect(noRename.find((item) => item.id === "regenerate-title")?.separatorBefore).toBe(true);
+    // Everything else the surface can still do is untouched.
+    expect(noRename.map((item) => item.id)).toContain("mark-unread");
+    expect(noRename.map((item) => item.id)).toContain("archive");
+  });
+
   it("hides lifecycle items when the environment lacks the capabilities", () => {
     expect(
       ids({
