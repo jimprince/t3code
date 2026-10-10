@@ -1,0 +1,7 @@
+Bottom: 920d0f6e4f072e0023bb78760a6e360a4cac99b6
+Top:    e5fbc1f185275776c60fa336620dd39169f067ca
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 10:15:43 +0000
+
+fix(projects): older servers get a task fallback instead of an unreadable error
+

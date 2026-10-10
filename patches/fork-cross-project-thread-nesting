@@ -1,0 +1,7 @@
+Bottom: 8b47dcf33ad581bfb58859f6d796065c137b9ce6
+Top:    528d59a09db738d0a7a41ee2fd4839ca01234cfd
+Author: Codex <codex@users.noreply.github.com>
+Date:   2026-10-10 10:15:28 +0000
+
+feat(threads): nest workers across projects
+

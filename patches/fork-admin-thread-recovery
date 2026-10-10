@@ -1,0 +1,8 @@
+Bottom: bd96597976249d98a14529debeec6f26367822a3
+Top:    5e574e6070dd6b27437e6396c65ea9299d5c2d85
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 10:15:56 +0000
+
+feat(server): add scoped session reset and durable orchestrator handover
+
+
