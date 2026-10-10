@@ -1,0 +1,7 @@
+Bottom: 02db5ae1a4075f1148a74122b7d27dbbff8af5f5
+Top:    8df43fd8a3a2ddb1f233fd0a1231a67163d10b3c
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 09:09:29 +0000
+
+feat(web): list threads under each workstream and retire Working, Blocked and Done
+

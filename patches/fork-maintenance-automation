@@ -1,0 +1,7 @@
+Bottom: 7a7ea7e571abe8600aadca3ce82e7e4cac9237d5
+Top:    44f12e4f9becac9492037bf5ad4dd8fbe9497bd8
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 09:09:19 +0000
+
+chore(fork): automate StGit stack maintenance and upstream replay
+

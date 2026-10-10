@@ -1,0 +1,7 @@
+Bottom: ec6b27e7a14c094083d95c7db4f23ea80327d4d9
+Top:    95f4edcb30ba30835be1616767be6952e0748b71
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 09:09:01 +0000
+
+feat(sidebar): fold quiet nested threads
+
