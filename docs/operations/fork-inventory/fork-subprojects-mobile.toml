@@ -1,0 +1,14 @@
+name = "fork-subprojects-mobile"
+subject = "feat(mobile): nest subprojects inside their project card on the Projects list"
+class = "product"
+purpose = "Show a subproject on the mobile Projects list the way the web sidebar does: nested inside its parent's card as a compact '/ Name' row, with the card's counts rolled up, the 'N of M working in subprojects' line and a fold, not as a project of its own (#156, mock B plus A's rollup line; Brad, 2026-10-10)."
+retire_when = "Mobile shares the web sidebar's project list, or fork-subprojects-ui retires."
+depends_on = ["fork-subprojects-ui", "fork-projects-quiet-mobile"]
+roles = []
+note = "Rendering only: every rule is client-runtime's state/projectSubprojects (topLevelProjects, subprojectWorkingLabel, subprojectCountLabel, toggleProjectKey) and sortOrchestratorSummariesForSidebar, the same ones the web sidebar uses. MobileOrchestratorList lists top-level projects only and buckets them (Quiet) by rollup; the card's need-you and working counts are the rollup's, so subproject work counts in the parent. MobileSubprojectRows renders one tappable row per subproject (dot: needs you, busy, idle; Blocked; need-you count; age) under a fold line ('Hide subprojects' or 'Show 2 subs'); a subproject's own requests and decisions render beneath its row, so nesting does not hide what the flat list used to show. Fold state is per screen visit and starts expanded; the web sidebar's per-device persistence is not ported. Not exercised on a device or simulator: typecheck, lint and the client-runtime logic tests only."
+
+[[decision]]
+id = "catchup-2908-native-home-scroll"
+date = "2026-10-10"
+decided = "adapt"
+rationale = "Upstream .2908 turned MobileOrchestratorList into a full-screen HomeScrollView (header first, safe-area and native column insets, empty state inside the scroll view). The nesting, rollup counts, working line and fold are re-applied by hand on that structure rather than taking the fork.12-based function; behavior is unchanged."
