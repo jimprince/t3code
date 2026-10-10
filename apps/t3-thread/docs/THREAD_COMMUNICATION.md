@@ -99,8 +99,9 @@ Receipts describe durable admission (`started`, `steered`, `queued`, `held`,
 Settled recipients are held even for control sends; confirmed selected-provider
 quota exhaustion is refused with `QUOTA_EXHAUSTED` and an owner thread reference.
 Neither refusal nor uncertainty switches providers/accounts or wakes an owner.
-Held messages retain their private pending payload and can be released by the
-local watcher after an explicit unsettle; quota refusals require an explicit send.
+Held messages retain their private pending payload. Unsettling the thread from
+any client (web, mobile, MCP or CLI) makes the server replay them oldest first
+under their original send IDs; quota refusals require an explicit send.
 
 Timeout, OS transport failure and interruption return fixed sanitized cause codes
 and `uncertain: true` when transport might already have accepted the message.

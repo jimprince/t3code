@@ -350,3 +350,51 @@ export const makeHandoffService = (
     inbox: (threadId: ThreadId) => sanitize(inbox(threadId)),
   };
 };
+
+/**
+ * Replays a recipient's held sends, oldest first, once it is no longer settled.
+ * Called for every thread.unsettled (UI, MCP or CLI), so a held delivery is
+ * never left waiting for the sender's local watcher. Each replay is the same
+ * send ID under its original authenticated subject, so it stays idempotent and
+ * re-checks admission: a thread settled again in the meantime keeps it held.
+ * Uses the recipient's bounded inbox index (latest 50 sends), not a table scan.
+ */
+export const releaseHeldHandoffs = Effect.fnUntraced(function* (
+  sql: SqlClient.SqlClient,
+  threads: ThreadManagementServiceShape,
+  providers: Effect.Effect<ReadonlyArray<ServerProvider>>,
+  threadId: ThreadId,
+) {
+  const rows = yield* sql<{
+    payload: string;
+  }>`SELECT payload FROM fork_thread_metadata_receipts WHERE command_id=${inboxKey(threadId)}`;
+  const index = rows[0] ? yield* decodeInbox(rows[0].payload) : { ids: [], truncated: false };
+  const held: Stored[] = [];
+  // The index is newest first; walk it oldest first so equal timestamps keep send order.
+  for (const sendId of [...index.ids].reverse()) {
+    const row = (yield* sql<{
+      payload: string;
+    }>`SELECT payload FROM fork_thread_metadata_receipts WHERE command_id=${key(sendId)}`)[0];
+    if (!row) continue;
+    const stored = yield* decode(row.payload);
+    if (stored.receipt.status === "held" && stored.pendingInput) held.push(stored);
+  }
+  held.sort((a, b) => a.receipt.acceptedAt.localeCompare(b.receipt.acceptedAt));
+  const released: Array<typeof HandoffReceipt.Type> = [];
+  for (const stored of held) {
+    const receipt = yield* makeHandoffService(sql, threads, providers, stored.subject)
+      .accept(stored.pendingInput!)
+      .pipe(
+        Effect.tapError((error) =>
+          Effect.logWarning("Held handoff release failed", {
+            threadId,
+            sendId: stored.receipt.sendId,
+            error,
+          }),
+        ),
+        Effect.option,
+      );
+    if (Option.isSome(receipt)) released.push(receipt.value);
+  }
+  return released;
+});
