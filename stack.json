@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "72b4df75e3a06fa5119168ca042a9a4c2598f09b",
-  "head": "7b314f41e7b367cd519a707110bfe2e45fe9580f",
+  "prev": "2c74ebc544bd481877a79ebbdbefbc8337f28f1d",
+  "head": "ab1ae405515ab36cb4677f49683bd5167e7fd258",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -48,7 +48,9 @@
     "fork-agent-panel-thread-details",
     "fork-sidebar-drag-to-nest",
     "fork-worker-inactivity",
-    "fork-thread-titles",
+    "fork-thread-titles"
+  ],
+  "unapplied": [
     "fork-subthread-lifecycle",
     "fork-orchestrator-focus",
     "fork-sidebar-nested-tidiness",
@@ -147,7 +149,6 @@
     "fork-admin-thread-recovery",
     "fork-provider-context-recovery"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
