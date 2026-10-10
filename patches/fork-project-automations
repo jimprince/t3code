@@ -1,6 +1,6 @@
-Bottom: 09dafa04320911c462bb9bbd95951cea90383117
-Top:    df07c5e09827eed42e8785d55d847eee1bf842ae
+Bottom: fdcbcf43bbf0e507b8a54a3903f70ba979f7dd39
+Top:    244a4c41f48756f0817d0c5d60451f12186e7f2d
 Author: brad <bradprin@live.com>
-Date:   2026-10-10 09:16:59 +0000
+Date:   2026-10-10 09:22:18 +0000
 
 feat(projects): run timed project automations
