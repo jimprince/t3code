@@ -99,6 +99,8 @@ export interface ThreadActionMenuState {
   readonly move?: { readonly up: boolean; readonly down: boolean } | undefined;
   /** The thread holds a manual order slot; reset has nothing to do for an automatic one. */
   readonly orderIsManual?: boolean | undefined;
+  /** False on a surface with nowhere to edit the title inline, which hides Rename. */
+  readonly canRename?: boolean | undefined;
   readonly supports: {
     readonly settlement: boolean;
     /** Server understands thread.auto-settle.set. */
@@ -123,6 +125,28 @@ export function threadActionRequiresOperate(action: ThreadActionMenuId): boolean
     "copy-branch",
     "copy-thread-id",
   ].includes(action);
+}
+
+/** Rename, regenerate title and mark unread: the items that act on the thread's identity. */
+function identityItems(
+  state: ThreadActionMenuState,
+): ReadonlyArray<ContextMenuItem<ThreadActionMenuId>> {
+  return [
+    ...(state.canRename === false
+      ? []
+      : [{ id: "rename" as const, label: "Rename thread", icon: "pencil" }]),
+    ...(state.supports.titleRegeneration
+      ? [
+          {
+            id: "regenerate-title" as const,
+            label: state.isRegeneratingTitle ? "Regenerating…" : "Regenerate title",
+            icon: "refresh-cw",
+            disabled: state.isRegeneratingTitle,
+          },
+        ]
+      : []),
+    { id: "mark-unread" as const, label: "Mark unread", icon: "mail-open" },
+  ];
 }
 
 /**
@@ -195,18 +219,11 @@ export function buildThreadActionMenuItems(
               },
         ]
       : []),
-    { id: "rename", label: "Rename thread", icon: "pencil", separatorBefore: true },
-    ...(state.supports.titleRegeneration
-      ? [
-          {
-            id: "regenerate-title" as const,
-            label: state.isRegeneratingTitle ? "Regenerating…" : "Regenerate title",
-            icon: "refresh-cw",
-            disabled: state.isRegeneratingTitle,
-          },
-        ]
-      : []),
-    { id: "mark-unread", label: "Mark unread", icon: "mail-open" },
+    // The title group opens a section, so whichever item survives the gates
+    // above carries the separator.
+    ...identityItems(state).map((item, index) =>
+      index === 0 ? { ...item, separatorBefore: true } : item,
+    ),
     ...(state.projectFilter
       ? [
           {
