@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "02775578f630c2b72dbe089e67e6997c52f27c58",
-  "head": "be74b25d27f2dcd2d7eac3947b26a6a6da13f239",
+  "prev": "ed9afb4fc1cf011934377ede7bbe6b3a4e1ad812",
+  "head": "5bffefe6e99f73e2d61e68886714b23dba4ab00c",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -99,7 +99,8 @@
     "fork-request-titles",
     "fork-page-agent-tray",
     "fork-release-publication",
-    "fork-maintenance-automation"
+    "fork-maintenance-automation",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-antigravity-errors",
@@ -595,6 +596,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "b5ba7265da5e5013b33e5e457ac0983dd6fc4374"
+    },
+    "refresh-temp": {
+      "oid": "5bffefe6e99f73e2d61e68886714b23dba4ab00c"
     }
   }
 }
