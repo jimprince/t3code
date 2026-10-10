@@ -1,6 +1,6 @@
-Bottom: ef58b19a4cae24844a3fd6a765ae32e2478d2910
-Top:    6140c621a72c700b629bcc24a618a136c30b2151
+Bottom: 5e83864aa5545373dd2f0aced6776fe8dbbece83
+Top:    bd339c55b9c8cef6284846c9e4233a892758d07e
 Author: brad <bradprin@live.com>
-Date:   2026-10-10 08:43:31 +0000
+Date:   2026-10-10 09:14:03 +0000
 
 feat(projects): orchestrator-written health line on the project page
