@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "a7505ed9a62f4d857b70f22f01b180f630924694",
-  "head": "ac872b23034ebe9a63c675542ece6868cea6f072",
+  "prev": "198945290c2bfb00ac306a25490e1d2f1bcfe946",
+  "head": "8deb1591da74f7b4bda61e09886af58219b4854b",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -100,7 +100,9 @@
     "fork-page-agent-tray",
     "fork-release-publication",
     "fork-maintenance-automation",
-    "fork-antigravity-errors",
+    "fork-antigravity-errors"
+  ],
+  "unapplied": [
     "fork-conversation-fork",
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
@@ -150,7 +152,6 @@
     "fork-desktop-devtools-opt-in",
     "fork-projects-quiet-mobile"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
