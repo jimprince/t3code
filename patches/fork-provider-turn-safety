@@ -1,6 +1,8 @@
 Bottom: 8613259e79dd9d5ff7dc8480998667702590b710
 Top:    0ec57e41c57fcdd5e875c5f7e2e5cae28207cc91
 Author: User <user@example.com>
-Date:   2026-10-10 18:10:35 +0000
+Date:   2026-10-10 18:11:26 +0000
 
 fix(server): protect provider turns across recovery and restarts
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

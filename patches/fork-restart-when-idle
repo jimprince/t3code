@@ -1,6 +1,6 @@
 Bottom: c19ffe04936681d6f4d69aa28111f21426937654
 Top:    37b81633a1ae7a54029f1d70a44c80d835e7b75f
 Author: User <user@example.com>
-Date:   2026-10-10 18:10:36 +0000
+Date:   2026-10-10 18:11:26 +0000
 
 feat(desktop): restart for updates when local agents finish
