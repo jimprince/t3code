@@ -1,6 +1,6 @@
-Bottom: 0a0b919c5de30ebce95efbc43be9295e780c64f4
-Top:    3bdd96b13071b1f81a9b903f221a40d2a36d4b36
+Bottom: 51d989ea167618b38a229bb335b721ad77a81598
+Top:    e9d477ab7323dd890471a586039948338705fa7c
 Author: brad <bradprin@live.com>
-Date:   2026-10-10 12:02:33 +0000
+Date:   2026-10-10 12:04:35 +0000
 
 feat(web): show project issues as a board
