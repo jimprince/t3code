@@ -1,0 +1,4 @@
+id = "t3-thread-settled-poll-load"
+category = "performance"
+functionality = "t3-thread"
+text = "t3-thread watchers and settle helpers stop re-reading settled threads every few seconds, cutting server load from background CLI processes."
