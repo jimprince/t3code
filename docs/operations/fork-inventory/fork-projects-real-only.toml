@@ -1,0 +1,14 @@
+name = "fork-projects-real-only"
+subject = "fix(web): keep the Projects sidebar to real, unfinished projects"
+class = "product"
+purpose = "Keep the Projects sidebar to real, unfinished projects: a pin only orders the list, a root explicitly marked as a project or created by an agent leaves Threads, a user-created root stays after delegation, settling a project folds it into Quiet, and project rows take the standard thread context menu (Brad, 2026-10-10)."
+retire_when = "Upstream provides project grouping with its own pin, settle and context-menu rules, or the fork stops listing orchestrators as projects."
+depends_on = ["fork-projects-pinned", "fork-subprojects-ui", "fork-subthread-lifecycle"]
+roles = []
+note = "Narrows fork-projects-pinned: buildOrchestratorSummaries and threadsVisibleInThreadsMode treat a top-level thread as a project only when it owns workers or carries subproject mode `on`; a pinned thread with neither stays a Threads row, and pinOrderKey still leads sortOrchestratorSummariesForSidebar. Agent-created project roots leave Threads whatever their pin state; UI-created user roots stay in Threads when children alone make them a project. Explicit mode-on projects and harness-purpose roots remain excluded, and descendants stay hidden. projectSidebarBucket returns `quiet` for a settled project (settledOverride) after the needs-you and working checks, so attention and live work win. The thread menu's subproject item covers both directions of the mark (Show as subproject for a nested thread, Show in Projects for a standing orchestrator, nothing when workers already make it a project). ProjectRow reuses useThreadActionMenu with rename omitted. Web and desktop; mobile parity is fork-projects-quiet-mobile. Brad ran this on his dev app from origin/live before it joined the stack."
+
+[[decision]]
+id = "user-created-roots-visible-20261013"
+date = "2026-10-13"
+decided = "refresh-existing-concern"
+rationale = "Brad-created roots must stay in Threads after delegation. Use the existing V2 shell source.createdBy=user and creationSource=web/mobile; keep explicit Projects marks, harness-purpose exclusions, descendant hiding and active ordering. Mobile's separate builder reuses threadsVisibleInThreadsMode with HomeScreen's joined organizational metadata. No contracts, server, migrations, Projects or Harness list changes. Own the focused tests, mobile parity and user-created-threads-visible release entry in fork-projects-real-only."
