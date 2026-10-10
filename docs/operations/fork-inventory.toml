@@ -1184,3 +1184,9 @@ rationale = "Retain guarded local worktree retirement; the CLI adapter uses the 
 id = "v2-port-2689-m2"
 decision = "keep-on-top"
 note = "GC reads archived V2 shells and all live execution resources, preserving non-forced Git removal and environment identity validation."
+
+[[patch.decision]]
+id = "storage-cleanup-sweep-budget"
+date = "2026-10-10"
+decided = "narrow"
+rationale = "Own the server's guarded worktree reclamation alongside local retirement. Session and deletion events request coalesced deleted-only passes; hourly and settings-triggered full sweeps retain policy coverage. Check cheap age eligibility before Git and reuse successful repository default context within a sweep, preserving fresh deletion safety checks."
