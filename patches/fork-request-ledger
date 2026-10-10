@@ -1,0 +1,7 @@
+Bottom: a15e654ed978f66fa0aa80a9232e1a419cc01130
+Top:    fcb637e21291e3cce51d6bdcebd1cb34c84aab63
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 09:35:15 +0000
+
+feat(projects): track requests as Gitea issues
+

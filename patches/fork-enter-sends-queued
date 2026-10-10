@@ -1,0 +1,7 @@
+Bottom: fa605dc74383901ee286428c377c90dde837bca8
+Top:    a2753cedf3ee9ddd4be55dd38f8fca052e721ea5
+Author: User <user@example.com>
+Date:   2026-10-10 09:35:05 +0000
+
+feat(web): send the next queued message with Enter
+

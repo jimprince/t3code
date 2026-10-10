@@ -1,0 +1,7 @@
+Bottom: 82698815d984d7b466ad7e5724e868dda24b41c4
+Top:    bc2f75ad5a8e027c3c2351bad02628d1fc18d040
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 09:35:06 +0000
+
+feat(desktop): install updates overnight and roll back failed ones
+

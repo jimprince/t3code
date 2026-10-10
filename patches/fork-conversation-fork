@@ -1,0 +1,7 @@
+Bottom: d0f921d1c15a5b2b18b644d2b86e91f10973ccd7
+Top:    a7369bdc4f43fca5fff4bfc9dd54ef74c38d6b68
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 09:35:25 +0000
+
+feat(threads): fork a conversation from a selected message
+

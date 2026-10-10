@@ -1,0 +1,7 @@
+Bottom: b3c8834dc91d83118a185acdcf116cfa1737362b
+Top:    bd5dce7334d2cdb5503f3cf69af4d44573cecc40
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 09:35:01 +0000
+
+feat(desktop): deliver the fork desktop app with its own identity and updates
+
