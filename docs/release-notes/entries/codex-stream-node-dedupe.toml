@@ -1,0 +1,4 @@
+id = "codex-stream-node-dedupe"
+category = "performance"
+functionality = "Codex turns"
+text = "Codex reasoning and replies use less server work while streaming, with every content update preserved."

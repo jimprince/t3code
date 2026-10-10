@@ -184,7 +184,13 @@ purpose = "Reserve pending sends against reaper recovery, keep live turn markers
 retire_when = "Upstream adds equivalent pending-turn reservation, boot-generation reconciliation, and provider runtime recovery."
 depends_on = []
 roles = []
-note = "Removed unused OpenCode server-pool scaffolding. Active upstream OpenCode server ownership, live steering, reservations and runtime recovery remain."
+note = "Removed unused OpenCode server-pool scaffolding. Active upstream OpenCode server ownership, live steering, reservations and runtime recovery remain. Codex text-stream nodes suppress byte-identical running snapshots; item/message updates and every terminal snapshot remain, and a finished turn releases its cached payloads."
+
+[[patch.decision]]
+id = "codex-stream-node-dedupe"
+date = "2026-10-10"
+decided = "repair-existing-concern"
+rationale = "Streaming Codex text re-emitted an unchanged running node.updated before every coalesced message or reasoning flush, one extra projection write per flush. makeStreamedNodeDedupe emits a running text node only when its encoded payload changes; terminal snapshots always emit and the turn terminal clears its entries, which can only add an emit, never lose one. Droppable: revert the three CodexAdapterV2.ts hunks (helper, emitTextNode at the reasoning and agent-message flushes, clearTurn in finalizeCodexTurn), the dedupe tests in CodexAdapterV2.test.ts, and docs/release-notes/entries/codex-stream-node-dedupe.toml."
 
 [[patch.decision]]
 id = "v2-port-2689"
