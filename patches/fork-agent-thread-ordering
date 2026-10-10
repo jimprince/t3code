@@ -1,0 +1,7 @@
+Bottom: 74c4f69f21640e3858bd1c8e543b17b04fc122a0
+Top:    fd7abfc87352bfefcb7a5236f711ac75358f07ca
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 09:47:09 +0000
+
+feat(threads): let agents control sidebar order
+

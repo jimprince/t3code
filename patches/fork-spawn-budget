@@ -1,0 +1,7 @@
+Bottom: 49b25b94fbf84914c79ce0cc893e66856805a49c
+Top:    793ce88f3fc33ee0a9c84054fea0bc8215e95b0c
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 09:47:06 +0000
+
+fix(server): prevent background process launch storms
+
