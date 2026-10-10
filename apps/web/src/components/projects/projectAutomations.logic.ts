@@ -1,3 +1,4 @@
+import { automationScheduleText } from "@t3tools/client-runtime/automation-schedule";
 import type {
   Automation,
   AutomationAgentTarget,
@@ -76,8 +77,6 @@ export function fromDraft(draft: AutomationDraft, projectId: ProjectId): Automat
   };
 }
 
-const SHORT_DAYS = DAY_NAMES.map((day) => day.slice(0, 3));
-
 /** A compact duration: "<1m", "45m", "5h", "3d". */
 export function shortDuration(ms: number): string {
   const minutes = Math.round(Math.abs(ms) / 60_000);
@@ -88,48 +87,19 @@ export function shortDuration(ms: number): string {
   return `${Math.round(hours / 24)}d`;
 }
 
-function parts(at: number, timeZone: string) {
-  const values = Object.fromEntries(
-    new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      weekday: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23",
-      timeZoneName: "short",
-    })
-      .formatToParts(at)
-      .map((part) => [part.type, part.value]),
-  );
-  return {
-    weekday: values.weekday ?? "",
-    time: `${values.hour}:${values.minute}`,
-    zone: values.timeZoneName ?? "",
-  };
-}
-
-/** "Daily 01:00 MDT"; the zone abbreviation is the one in force at `at`. */
-function scheduleText(schedule: AutomationSchedule, at: number): string {
-  if (schedule.kind === "hourly") return "Hourly";
-  const zone = parts(at, schedule.timeZone).zone;
-  if (schedule.kind === "cron") return `Cron ${schedule.expression} ${zone}`;
-  const when =
-    schedule.kind === "daily"
-      ? "Daily"
-      : schedule.kind === "weekly"
-        ? SHORT_DAYS[schedule.day]
-        : [...schedule.days].sort((a, b) => a - b).join(",") === "1,2,3,4,5"
-          ? "Weekdays"
-          : [...schedule.days]
-              .sort((a, b) => a - b)
-              .map((day) => SHORT_DAYS[day])
-              .join(", ");
-  return `${when} ${schedule.time} ${zone}`;
+/** "Tue 01:00" in the device zone. */
+function deviceWeekdayTime(at: number): string {
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(at);
 }
 
 /** "On ci.failed · jimprince/t3code" for event rules, the schedule otherwise. */
 function triggerText(trigger: AutomationTrigger, at: number): string {
-  if (trigger.type === "schedule") return scheduleText(trigger.schedule, at);
+  if (trigger.type === "schedule") return automationScheduleText(trigger.schedule, at);
   const filter = trigger.filter ?? {};
   return [`On ${trigger.event}`, filter.repository, filter.label].filter(Boolean).join(" · ");
 }
@@ -157,9 +127,6 @@ export function ruleLine(input: {
 }): { readonly summary: string; readonly last: string | null } {
   const { automation, now, target, lastRun } = input;
   const next = automation.nextRunAt === null ? null : Date.parse(automation.nextRunAt);
-  const timeZone = automation.triggers.flatMap((trigger) =>
-    trigger.type === "schedule" ? [trigger.schedule.timeZone] : [],
-  )[0];
   const triggers = automation.triggers.map((trigger) => triggerText(trigger, next ?? now));
   const nextText = !automation.enabled
     ? "paused"
@@ -167,9 +134,7 @@ export function ruleLine(input: {
       ? null
       : next <= now
         ? "due now"
-        : `next in ${shortDuration(next - now)}${
-            timeZone ? ` (${parts(next, timeZone).weekday} ${parts(next, timeZone).time})` : ""
-          }`;
+        : `next in ${shortDuration(next - now)} (${deviceWeekdayTime(next)})`;
   const repeatsName =
     target !== null &&
     (normalize(automation.name).includes(normalize(target)) ||

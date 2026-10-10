@@ -3036,3 +3036,25 @@ retire_when = "Upstream's CLI watcher reads settled threads only when their stat
 depends_on = ["fork-worker-operations", "fork-reliable-handoffs"]
 roles = []
 note = "Load hotfix 2026-10-10 (dev-vm main thread saturated). Measured in the server trace: three settled threads were re-subscribed every 7-15 s from the VM credential. Causes: a settle-after-turn helper that polled an already-settled thread every 5 s for up to 24 h; the queue drain reading every held send's settled target on each 5 s pass; and the watcher fully reading settled sources it had already parked or could judge from the shell list. Settle-after-turn now returns once the thread is settled. The drain re-reads a settled target once a minute, the same cadence the watcher already used for settled sources, so an unsettle still delivers held sends. The watcher skips the full read when the shell it already fetched shows a settled source with no active run or pending request and no completion inside the reporting window (60 min for notices, 2 min for liveness). A completion that lands right before a self-settle is therefore still read and delivered. The watch poller also shares one shell list per environment per pass between the attention scan and the liveness check, and reuses a source's last full read while its shell in that list is unchanged and shows no live run (quietShellSignature). The loop is sequential, so its read rate is bounded by read latency: skipping only settled sources would just cycle the unsettled ones faster. Live runs are re-read at most every 30 s (LIVE_SOURCE_REREAD_MS), or at once when their status, run or pending-request flags change in the shell; the shell list itself lives 15 s across passes (SHELL_LIST_TTL_MS). Without those two bounds, fast passes would re-read live sources and re-list every shell each 5 s. findThread enriches nesting by reading the whole fork_thread_metadata table (1000+ rows) after a one-thread snapshot; it takes nesting: false where nothing reads parent, scope or subproject (pending, queue drain, deferred settlement), and the watch poller takes those fields from the pass's already-enriched shell. status and listings keep the enrichment because their output shows nesting."
+
+[[patch]]
+name = "fork-local-time"
+subject = "fix(web,mobile): show dates and times in the device time zone"
+class = "product"
+purpose = "Show every date and time T3 prints for Brad in the device's own time zone, never bare UTC or ISO: decision deadlines and their Later return time, automation schedules, and the timestamps in copied error and crash reports (Operations R068, 2026-10-10)."
+retire_when = "Upstream renders these surfaces in the device zone itself, or the fork retires the Decisions feed and automation rules and upstream's copied reports carry a local offset."
+depends_on = [
+  "fork-decisions-feed-model",
+  "fork-decisions-feed-ui",
+  "fork-decisions-feed-mobile",
+  "fork-scripts-automations",
+  "fork-thread-transfer",
+]
+roles = []
+note = "One helper, packages/shared/src/localTime.ts, reads the device zone at call time. A date-only deadline (`2026-10-08`) is the start of that day in the device zone (deadlineInstant), so a Later card returns at local midnight the day before instead of 18:00 MDT two evenings early, and formatDeadline counts days by the local calendar instead of flipping at 18:00 MDT. client-runtime's automationScheduleText converts a schedule's wall clock into the device zone and appends the schedule's own zone only when the wall clock differs (`Daily 03:00 MDT (09:00 UTC)`); when the zones disagree on the day it shifts the days and keeps the schedule's own in brackets. Copied reports (web error page, thread move failure, mobile startup crashes) use formatLocalIso, an ISO timestamp with the device offset. Web and mobile share both helpers; desktop wraps web. Not covered: Settings > Scheduled tasks, whose times are the server's wall clock and need the server zone on the wire first."
+
+[[patch.decision]]
+id = "r068-device-zone"
+date = "2026-10-10"
+decided = "new-concern"
+rationale = "Operations decided every date and time T3 shows Brad renders in the device local zone. The fixes cross three feature patches and two upstream files, and can be dropped without dropping any of them, so they form their own concern instead of refreshing each owner. Scheduled-task labels are left out because the client does not know the server's zone; that follow-up needs a contract field."

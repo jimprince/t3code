@@ -1,8 +1,15 @@
-import { describe, expect, it } from "vite-plus/test";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
 import { decisionSortTime, decisionVisibility } from "./decisionDeferral.ts";
 
 const at = (value: string) => Date.parse(value);
+
+beforeAll(() => {
+  vi.stubEnv("TZ", "America/Edmonton");
+});
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("decisionVisibility", () => {
   it("shows a card nobody deferred, and one whose time has passed", () => {
@@ -24,7 +31,7 @@ describe("decisionVisibility", () => {
     });
   });
 
-  it("brings a card back the day before its deadline, and says so", () => {
+  it("brings a card back at the start of the local day before its deadline, and says so", () => {
     const deferral = { until: "2026-10-20T00:00:00.000Z", movedToEndAt: null };
     const early = decisionVisibility({
       deferral,
@@ -33,14 +40,19 @@ describe("decisionVisibility", () => {
     });
     expect(early).toEqual({
       hidden: true,
-      returnsAt: "2026-10-07T00:00:00.000Z",
+      returnsAt: "2026-10-07T06:00:00.000Z",
       forDeadline: true,
     });
 
+    // 18:00 on Oct 6 in Edmonton is midnight UTC: not yet the day before.
+    expect(
+      decisionVisibility({ deferral, deadline: "2026-10-08", now: at("2026-10-07T00:00:00Z") })
+        .hidden,
+    ).toBe(true);
     const back = decisionVisibility({
       deferral,
       deadline: "2026-10-08",
-      now: at("2026-10-07T00:00:00Z"),
+      now: at("2026-10-07T06:00:00Z"),
     });
     expect(back.hidden).toBe(false);
     expect(back.forDeadline).toBe(true);
