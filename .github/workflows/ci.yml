@@ -602,9 +602,12 @@ jobs:
     name: Fork patch policy
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    env:
+      STACK_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ env.STACK_SHA }}
           fetch-depth: 0
 
       - name: Setup Vite+
@@ -626,6 +629,15 @@ jobs:
           if [[ "$GITHUB_REF" == refs/heads/ci-candidate/* ]]; then
             test "$GITHUB_REF" = "refs/heads/ci-candidate/$GITHUB_SHA"
             git fetch origin "refs/ci-stacks/$GITHUB_SHA:refs/stacks/stgit/adopt"
+            git show refs/stacks/stgit/adopt:stack.json | bun -e '
+              const stack = await Bun.stdin.json();
+              for (const name of stack.applied) {
+                const result = Bun.spawnSync(["git", "update-ref", `refs/patches/stgit/adopt/${name}`, stack.patches[name].oid]);
+                if (result.exitCode !== 0) process.exit(result.exitCode);
+              }
+            '
+          elif [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            git fetch origin "refs/ci-stacks/$STACK_SHA:refs/stacks/stgit/adopt"
             git show refs/stacks/stgit/adopt:stack.json | bun -e '
               const stack = await Bun.stdin.json();
               for (const name of stack.applied) {
