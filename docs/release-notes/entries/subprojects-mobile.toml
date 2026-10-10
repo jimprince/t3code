@@ -1,0 +1,4 @@
+id = "subprojects-mobile"
+category = "feature"
+functionality = "mobile projects"
+text = "On mobile, a subproject now sits inside its parent's card on the Projects list as a compact row, with the parent's counts rolled up, a 'working in subprojects' line and a fold, instead of appearing as a separate project."
