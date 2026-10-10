@@ -13,8 +13,15 @@ import type {
 import * as DateTime from "effect/DateTime";
 import * as Cause from "effect/Cause";
 
+import { redactProviderText } from "./ProviderTextRedaction.ts";
+
 import type { IdAllocatorV2Shape } from "./IdAllocator.ts";
-import { ContextHandoffBudgetError } from "./ContextHandoffDelivery.ts";
+import {
+  ContextHandoffBudgetError,
+  ContextRecoveryRequiredError,
+} from "./ContextHandoffDelivery.ts";
+
+const CONTEXT_RECOVERY_REQUIRED_CODE = "context_recovery_required";
 
 export const MAX_PROVIDER_FAILURE_MESSAGE_LENGTH = 4_096;
 export const MAX_PROVIDER_FAILURE_CODE_LENGTH = 128;
@@ -41,6 +48,8 @@ function causeMessage(cause: unknown): string | undefined {
           if (detail) return detail;
           break;
         }
+        case "ContextRecoveryRequiredError":
+          return new ContextRecoveryRequiredError().message;
         case "ContextHandoffBudgetError":
           return new ContextHandoffBudgetError().message;
         case "ClaudeBackgroundWorkBlocksQueryReplacementError":
@@ -82,56 +91,8 @@ function stringField(value: unknown, key: "message" | "code" | "detail"): string
   }
 }
 
-function redactUrl(match: string): string {
-  const trailing = /[),.;!?]+$/u.exec(match)?.[0] ?? "";
-  const candidate = trailing.length === 0 ? match : match.slice(0, -trailing.length);
-  try {
-    const url = new URL(candidate);
-    url.username = "";
-    url.password = "";
-    url.search = "";
-    url.hash = "";
-    return `${url.toString()}${trailing}`;
-  } catch {
-    return "[REDACTED_URL]";
-  }
-}
-
-function replaceUnsafeControlCharacters(value: string): string {
-  const sanitized: Array<string> = [];
-  for (const character of value) {
-    const codePoint = character.codePointAt(0) ?? 0;
-    sanitized.push(
-      codePoint <= 0x08 ||
-        (codePoint >= 0x0b && codePoint <= 0x0c) ||
-        (codePoint >= 0x0e && codePoint <= 0x1f) ||
-        codePoint === 0x7f
-        ? " "
-        : character,
-    );
-  }
-  return sanitized.join("");
-}
-
-/** Removes common credential forms before provider text crosses a transport boundary. */
-function redactProviderFailureText(value: string): string {
-  return replaceUnsafeControlCharacters(value)
-    .replace(/\bhttps?:\/\/[^\s<>"']+/giu, redactUrl)
-    .replace(/\b(Bearer|Basic)\s+[^\s,;]+/giu, "$1 [REDACTED]")
-    .replace(
-      /(["'](?:access[_-]?token|api[_-]?key|authorization|credential|password|secret|token)["']\s*:\s*["'])[^"']*(["'])/giu,
-      "$1[REDACTED]$2",
-    )
-    .replace(
-      /(\b(?:access[_-]?token|api[_-]?key|authorization|credential|password|secret|token)\b\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;]+)/giu,
-      "$1[REDACTED]",
-    )
-    .replace(/\bsk-[A-Za-z0-9_-]{16,}\b/gu, "[REDACTED]")
-    .trim();
-}
-
 function boundedText(value: string, maxLength: number): string {
-  const redacted = redactProviderFailureText(value);
+  const redacted = redactProviderText(value);
   if (redacted.length <= maxLength) return redacted;
   let end = Math.max(0, maxLength - 1);
   const finalCodeUnit = redacted.charCodeAt(end - 1);
@@ -149,9 +110,33 @@ export function makeProviderFailure(input: {
   readonly retryable?: boolean | null;
   readonly resetAt?: string | null;
 }): OrchestrationV2ProviderFailure {
+  let recoveryRequired = false;
+  let current = input.cause;
+  const inspected = new Set<unknown>();
+  for (let depth = 0; depth < 16 && current != null && !inspected.has(current); depth++) {
+    inspected.add(current);
+    try {
+      if (Cause.isCause(current)) {
+        current = Cause.squash(current);
+        continue;
+      }
+      if (typeof current !== "object") break;
+      if ((current as Record<string, unknown>)._tag === "ContextRecoveryRequiredError") {
+        recoveryRequired = true;
+        break;
+      }
+      current = (current as Record<string, unknown>).cause;
+    } catch {
+      break;
+    }
+  }
   const rawMessage = input.message ?? causeMessage(input.cause) ?? DEFAULT_PROVIDER_FAILURE_MESSAGE;
   const message = boundedText(rawMessage, MAX_PROVIDER_FAILURE_MESSAGE_LENGTH);
-  const rawCode = input.code ?? stringField(input.cause, "code") ?? null;
+  const rawCode =
+    input.code ??
+    (recoveryRequired ? CONTEXT_RECOVERY_REQUIRED_CODE : undefined) ??
+    stringField(input.cause, "code") ??
+    null;
   const code =
     rawCode === null ? null : boundedText(rawCode, MAX_PROVIDER_FAILURE_CODE_LENGTH) || null;
 
@@ -159,7 +144,7 @@ export function makeProviderFailure(input: {
     class: input.class ?? "unknown",
     message: message || DEFAULT_PROVIDER_FAILURE_MESSAGE,
     code,
-    retryable: input.retryable ?? null,
+    retryable: recoveryRequired ? false : (input.retryable ?? null),
     ...(input.class === "usage_limit" &&
     input.resetAt != null &&
     Number.isFinite(Date.parse(input.resetAt))
