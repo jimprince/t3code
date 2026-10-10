@@ -60,9 +60,33 @@ const SETTLED_COMPLETION_WINDOW_MS = 60 * 60_000;
 /** Keeps the watcher awake just long enough to record a completion that settled before the next pass. */
 const SETTLED_COMPLETION_GRACE_MS = 2 * 60_000;
 
-function finishedWithin(thread: OrchestrationThread, nowMs: number, windowMs: number): boolean {
+function finishedWithin(
+  thread: Pick<OrchestrationThread, "latestTurn" | "settledAt">,
+  nowMs: number,
+  windowMs: number,
+): boolean {
   const finishedAt = Date.parse(thread.latestTurn?.completedAt ?? thread.settledAt ?? "");
   return Number.isFinite(finishedAt) && nowMs - finishedAt <= windowMs;
+}
+
+/**
+ * A settled source whose shell shows no live work and no completion inside `windowMs`. Reading
+ * its full thread could only conclude the same, so watch passes skip that read: each one opened
+ * a connection and a thread snapshot per settled source, every tick.
+ */
+function quietSettledSource(
+  shell: OrchestrationThreadShell | undefined,
+  nowMs: number,
+  windowMs: number,
+): boolean {
+  return (
+    shell !== undefined &&
+    shell.settledOverride === "settled" &&
+    !shell.activeRunId &&
+    !shell.hasPendingApprovals &&
+    !shell.hasPendingUserInput &&
+    !finishedWithin(shell, nowMs, windowMs)
+  );
 }
 
 /**
@@ -84,7 +108,7 @@ function isNotificationReply(thread: OrchestrationThread): boolean {
 
 export interface WatchClient {
   listThreads?(): Promise<OrchestrationThreadShell[]>;
-  findThread(threadId: string): Promise<OrchestrationThread>;
+  findThread(threadId: string, options?: { nesting?: boolean }): Promise<OrchestrationThread>;
   supportsReliableHandoffs?(): Promise<boolean>;
   lookupSendReceipt?(input: HandoffLookupInput): Promise<HandoffLookupResult>;
   sendMessage(input: {
@@ -388,6 +412,7 @@ async function discoverParentRoutes(state: StateFile, options: AttentionScanOpti
   const factory = options.clientFactory ?? createWatchClient;
   const agents = [...state.agents];
   const observedSources = new Set<string>();
+  const shellsBySource = new Map<string, OrchestrationThreadShell>();
   let subscriptions = [...state.subscriptions];
   for (const environment of state.environments) {
     if (options.env && environment.name !== options.env) continue;
@@ -429,6 +454,7 @@ async function discoverParentRoutes(state: StateFile, options: AttentionScanOpti
     for (const shell of shells) {
       const key = JSON.stringify([environment.name, shell.id]);
       observedSources.add(key);
+      shellsBySource.set(key, shell);
       let source = agents.find(
         (agent) => agent.environment === environment.name && agent.threadId === shell.id,
       );
@@ -464,7 +490,7 @@ async function discoverParentRoutes(state: StateFile, options: AttentionScanOpti
         subscriptions.push(parent);
     }
   }
-  return { state: { ...state, agents, subscriptions }, observedSources };
+  return { state: { ...state, agents, subscriptions }, observedSources, shellsBySource };
 }
 
 export async function scanAttentionNotifications(
@@ -472,12 +498,14 @@ export async function scanAttentionNotifications(
   options: AttentionScanOptions = {},
 ): Promise<SavedNotification[]> {
   const discovered = await discoverParentRoutes(state, options);
-  return (await scanAttentionState(discovered.state, options)).notifications;
+  return (await scanAttentionState(discovered.state, options, discovered.shellsBySource))
+    .notifications;
 }
 
 async function scanAttentionState(
   state: StateFile,
   options: AttentionScanOptions,
+  shellsBySource: ReadonlyMap<string, OrchestrationThreadShell> = new Map(),
 ): Promise<{ notifications: SavedNotification[]; observedSubscriptions: SavedSubscription[] }> {
   const clientFactory = options.clientFactory ?? createWatchClient;
   const now = options.now ?? nowIso;
@@ -493,6 +521,14 @@ async function scanAttentionState(
         (subscription) =>
           subscription.sourceThreadId === sourceAgent.threadId &&
           subscription.sourceEnvironment === sourceAgent.environment,
+      )
+    )
+      continue;
+    if (
+      quietSettledSource(
+        shellsBySource.get(JSON.stringify([sourceAgent.environment, sourceAgent.threadId])),
+        Date.parse(now()),
+        SETTLED_COMPLETION_WINDOW_MS,
       )
     )
       continue;
@@ -697,7 +733,8 @@ export async function hasActiveWork(
     return true;
   }
 
-  state = (await discoverParentRoutes(state, options)).state;
+  const discovered = await discoverParentRoutes(state, options);
+  state = discovered.state;
   const subscribedSourceThreadIds = new Set(
     state.subscriptions
       .filter((subscription) => !subscription.expiryReason)
@@ -716,6 +753,14 @@ export async function hasActiveWork(
     if (options.env && agent.environment !== options.env) {
       continue;
     }
+    if (
+      quietSettledSource(
+        discovered.shellsBySource.get(JSON.stringify([agent.environment, agent.threadId])),
+        Date.now(),
+        SETTLED_COMPLETION_GRACE_MS,
+      )
+    )
+      continue;
     try {
       const environment = requireEnvironment(state, agent.environment);
       const thread = await clientFactory(environment).findThread(agent.threadId);
@@ -757,6 +802,7 @@ export async function detectAttentionEvents(
   const { notifications: scanned, observedSubscriptions } = await scanAttentionState(
     discovered.state,
     options,
+    discovered.shellsBySource,
   );
 
   return updateState(async (currentState) => {
