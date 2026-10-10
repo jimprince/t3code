@@ -12,6 +12,7 @@ import {
   CheckpointId,
   CodexSettings,
   EnvironmentId,
+  EventId,
   MessageId,
   type ModelSelection,
   NodeId,
@@ -56,6 +57,12 @@ import * as ProviderEventLoggers from "../../provider/Layers/ProviderEventLogger
 import * as IdAllocator from "../IdAllocator.ts";
 import * as EffectWorker from "../EffectWorker.ts";
 import * as Orchestrator from "../Orchestrator.ts";
+import * as ProjectionStore from "../ProjectionStore.ts";
+import * as ProviderEventIngestor from "../ProviderEventIngestor.ts";
+import * as EventSink from "../EventSink.ts";
+import * as EventStore from "../EventStore.ts";
+import * as ThreadCommandExecutor from "../ThreadCommandExecutor.ts";
+import { SqlitePersistenceMemory } from "../../persistence/Layers/Sqlite.ts";
 import { makeOrchestratorV2ReplayLayerWithRegistry } from "../testkit/ProviderReplayHarness.ts";
 import {
   ProviderAdapterForkThreadError,
@@ -3664,6 +3671,251 @@ describe("CodexAdapterV2 post-settle continuation", () => {
             );
           }
           assert.deepEqual(assistantMessages(harness.events), []);
+        }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
+      ),
+  );
+
+  it.effect.each(["completed", "failed", "interrupted"] as const)(
+    "deduplicates streamed nodes while preserving content and final projection when %s",
+    (terminalStatus) =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const scenario = `codex-node-dedupe-${terminalStatus}`;
+          const nativeThreadId = `native-${scenario}-thread`;
+          const nativeTurnId = `native-${scenario}-turn`;
+          const prompt = "Explain the check.";
+          const flushCount = 3;
+          const ready = yield* Effect.forEach(Array.from({ length: flushCount }), () =>
+            Deferred.make<void>(),
+          );
+          const proceed = yield* Effect.forEach(ready, () => Deferred.make<void>());
+          const flushed = yield* Effect.forEach(ready, () => Deferred.make<void>());
+          let notificationIndex = 0;
+          let streamedItems = 0;
+          const transcript = makeCodexReplayTranscript({
+            scenario,
+            entries: [
+              ...codexReplayPreamble({ nativeThreadId, nativeTurnId, prompt }),
+              ...["a", "b", "c"].flatMap((delta) =>
+                [
+                  {
+                    method: "item/agentMessage/delta",
+                    params: { itemId: "answer", delta },
+                  },
+                  {
+                    method: "item/reasoning/summaryTextDelta",
+                    params: { itemId: "thought", summaryIndex: 0, delta },
+                  },
+                ].map((event) => ({
+                  type: "emit_inbound" as const,
+                  frame: {
+                    method: event.method,
+                    params: { threadId: nativeThreadId, turnId: nativeTurnId, ...event.params },
+                  },
+                })),
+              ),
+              {
+                type: "emit_inbound",
+                frame: {
+                  method: "turn/completed",
+                  params: {
+                    threadId: nativeThreadId,
+                    turn: {
+                      ...makeCodexReplayTurn({ id: nativeTurnId, status: terminalStatus }),
+                      ...(terminalStatus === "failed"
+                        ? {
+                            error: {
+                              message: "Native failure",
+                              codexErrorInfo: null,
+                              additionalDetails: null,
+                            },
+                          }
+                        : {}),
+                    },
+                  },
+                },
+              },
+            ],
+          });
+          const harness = yield* makeCodexReplayHarness(
+            transcript,
+            (event) => {
+              if (
+                event.type !== "turn_item.updated" ||
+                (event.turnItem.type !== "reasoning" &&
+                  event.turnItem.type !== "assistant_message") ||
+                !event.turnItem.streaming
+              )
+                return Effect.void;
+              streamedItems++;
+              return streamedItems % 2 === 0
+                ? Deferred.succeed(flushed[streamedItems / 2 - 1]!, undefined)
+                : Effect.void;
+            },
+            undefined,
+            undefined,
+            undefined,
+            (method) => {
+              if (method !== "item/reasoning/summaryTextDelta") return Effect.void;
+              const index = notificationIndex++;
+              return Deferred.succeed(ready[index]!, undefined).pipe(
+                Effect.andThen(Deferred.await(proceed[index]!)),
+              );
+            },
+          );
+          const turnInput = makeCodexTestTurnInput({
+            threadId: harness.threadId,
+            providerThread: harness.providerThread,
+            now: yield* DateTime.now,
+            attemptId: RunAttemptId.make(`attempt-${scenario}`),
+            text: prompt,
+          });
+          yield* harness.runtime.startTurn(turnInput);
+          for (let index = 0; index < flushCount; index++) {
+            yield* Deferred.await(ready[index]!);
+            yield* TestClock.adjust("50 millis");
+            yield* Deferred.await(flushed[index]!);
+            yield* Deferred.succeed(proceed[index]!, undefined);
+          }
+          yield* harness.firstTerminal;
+
+          // Restore the pre-dedupe node-before-every-content-update stream, then
+          // replay both through the production projector, including terminal state.
+          const undeduplicated: Array<ProviderAdapterV2Event> = [];
+          const nodes = new Map<
+            NodeId,
+            Extract<ProviderAdapterV2Event, { type: "node.updated" }>
+          >();
+          const freshNodes = new Set<NodeId>();
+          for (const event of harness.events) {
+            if (event.type === "node.updated") {
+              nodes.set(event.node.id, event);
+              freshNodes.add(event.node.id);
+            }
+            const content =
+              event.type === "message.updated" && event.message.role === "assistant"
+                ? event.message
+                : event.type === "turn_item.updated" && event.turnItem.type === "reasoning"
+                  ? event.turnItem
+                  : null;
+            if (content?.nodeId != null && content.streaming) {
+              const node = nodes.get(content.nodeId);
+              assert.isDefined(node);
+              if (node && !freshNodes.has(content.nodeId)) undeduplicated.push(node);
+              freshNodes.delete(content.nodeId);
+            }
+            undeduplicated.push(event);
+          }
+          const stores = Layer.merge(EventStore.layer, ProjectionStore.layer).pipe(
+            Layer.provide(SqlitePersistenceMemory),
+          );
+          const sink = EventSink.layer.pipe(
+            Layer.provide(Layer.merge(stores, SqlitePersistenceMemory)),
+          );
+          const dependencies = Layer.mergeAll(
+            stores,
+            sink,
+            IdAllocator.layer,
+            ThreadCommandExecutor.layer,
+          );
+          const projectionLayer = ProviderEventIngestor.layer.pipe(
+            Layer.provideMerge(dependencies),
+          );
+          const project = (events: ReadonlyArray<ProviderAdapterV2Event>) =>
+            Effect.gen(function* () {
+              const store = yield* ProjectionStore.ProjectionStoreV2;
+              const ingestor = yield* ProviderEventIngestor.ProviderEventIngestorV2;
+              const envelope = {
+                id: EventId.make("node-dedupe-replay"),
+                threadId: harness.threadId,
+                occurredAt: turnInput.appThread.createdAt,
+              };
+              yield* store.apply({
+                ...envelope,
+                type: "thread.created",
+                payload: turnInput.appThread,
+              });
+              for (const event of events) {
+                const normalized = yield* ingestor.normalize({
+                  providerSessionId: harness.runtime.providerSessionId,
+                  providerInstanceId: harness.runtime.instanceId,
+                  threadId: harness.threadId,
+                  runId: turnInput.runId,
+                  nodeId: turnInput.rootNodeId,
+                  event,
+                });
+                for (const domain of normalized) yield* store.apply(domain);
+              }
+              return yield* store.getThreadProjection(harness.threadId);
+            }).pipe(Effect.provide(Layer.fresh(projectionLayer)));
+          const actualProjection = yield* project(harness.events);
+          const originalProjection = yield* project(undeduplicated);
+          assert.deepEqual(actualProjection, originalProjection);
+          assert.equal(actualProjection.providerTurns.at(-1)?.status, terminalStatus);
+          assert.equal(harness.terminalEvents()[0]?.status, terminalStatus);
+          if (terminalStatus === "failed")
+            assert.equal(harness.terminalEvents()[0]?.failure?.message, "Native failure");
+          assert.deepEqual(
+            assistantMessages(harness.events).map((event) => [
+              event.message.text,
+              event.message.streaming,
+            ]),
+            [
+              ["a", true],
+              ["ab", true],
+              ["abc", true],
+              ["abc", false],
+            ],
+          );
+          assert.deepEqual(
+            ["assistant_message", "reasoning"].map(
+              (kind) =>
+                harness.events.filter(
+                  (event) =>
+                    event.type === "node.updated" &&
+                    event.node.kind === kind &&
+                    event.node.status === "running",
+                ).length,
+            ),
+            [1, 1],
+            "one running node per text item across three real adapter flushes",
+          );
+          for (const kind of ["assistant_message", "reasoning"] as const) {
+            const runningNodes = (events: ReadonlyArray<ProviderAdapterV2Event>) =>
+              events.filter(
+                (event) =>
+                  event.type === "node.updated" &&
+                  event.node.kind === kind &&
+                  event.node.status === "running",
+              );
+            assert.equal(runningNodes(undeduplicated).length, flushCount);
+            assert.equal(
+              runningNodes(harness.events).length,
+              1,
+              `${kind}: one node across ${flushCount} flushes`,
+            );
+            const items = harness.events.flatMap((event) =>
+              event.type === "turn_item.updated" && event.turnItem.type === kind
+                ? [event.turnItem]
+                : [],
+            );
+            assert.deepEqual(
+              items.filter((item) => item.streaming).map((item) => item.text),
+              ["a", "ab", "abc"],
+            );
+            assert.equal(items.length, flushCount + 1);
+            assert.equal(items.at(-1)?.streaming, false);
+            assert.equal(items.at(-1)?.text, "abc");
+            assert.equal(
+              harness.events.filter(
+                (event) =>
+                  event.type === "node.updated" &&
+                  event.node.kind === kind &&
+                  event.node.status !== "running",
+              ).length,
+              1,
+            );
+          }
         }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
       ),
   );

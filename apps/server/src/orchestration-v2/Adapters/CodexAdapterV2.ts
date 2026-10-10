@@ -168,6 +168,7 @@ import {
 } from "../SubagentProjection.ts";
 
 const CODEX_PROVIDER = ProviderDriverKind.make("codex");
+const encodeStreamedNodePayload = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 export const CODEX_DRIVER_KIND = CODEX_PROVIDER;
 export const CODEX_DEFAULT_INSTANCE_ID = defaultInstanceIdForDriver(CODEX_DRIVER_KIND);
 
@@ -3113,6 +3114,20 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
             return { node, message, turnItem };
           });
 
+        // Text lives in message/item updates. Remember only active text nodes;
+        // terminal snapshots always emit and release their cached payload.
+        const streamedNodePayloads = new Map<OrchestrationV2ExecutionNode["id"], string>();
+        const emitTextNode = Effect.fnUntraced(function* (node: OrchestrationV2ExecutionNode) {
+          if (node.status === "running") {
+            const payload = encodeStreamedNodePayload(node);
+            if (streamedNodePayloads.get(node.id) === payload) return;
+            streamedNodePayloads.set(node.id, payload);
+          } else {
+            streamedNodePayloads.delete(node.id);
+          }
+          yield* emitProviderEvent({ type: "node.updated", driver: CODEX_PROVIDER, node });
+        });
+
         // Summary and raw reasoning are separate streams, with independently indexed parts.
         // Reuse the text coalescer so token bursts do not create one database write per token.
         const reasoningParts = new Map<
@@ -3137,15 +3152,11 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
               );
               const { messageId: _messageId, ...item } = artifacts.turnItem;
               const nativeItemRef = codexNativeItemRef(part.nativeItemId);
-              yield* emitProviderEvent({
-                type: "node.updated",
-                driver: CODEX_PROVIDER,
-                node: {
-                  ...artifacts.node,
-                  kind: "reasoning",
-                  nativeItemRef,
-                  ...(interrupted ? { status: "interrupted" as const } : {}),
-                },
+              yield* emitTextNode({
+                ...artifacts.node,
+                kind: "reasoning",
+                nativeItemRef,
+                ...(interrupted ? { status: "interrupted" as const } : {}),
               });
               yield* emitProviderEvent({
                 type: "turn_item.updated",
@@ -3239,11 +3250,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
                 { id: update.itemId, text: update.text },
                 update.completed,
               );
-              yield* emitProviderEvent({
-                type: "node.updated",
-                driver: CODEX_PROVIDER,
-                node: artifacts.node,
-              });
+              yield* emitTextNode(artifacts.node);
               yield* emitProviderEvent({
                 type: "message.updated",
                 driver: CODEX_PROVIDER,

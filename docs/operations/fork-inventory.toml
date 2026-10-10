@@ -184,7 +184,7 @@ purpose = "Reserve pending sends against reaper recovery, keep live turn markers
 retire_when = "Upstream adds equivalent pending-turn reservation, boot-generation reconciliation, and provider runtime recovery."
 depends_on = []
 roles = []
-note = "Removed unused OpenCode server-pool scaffolding. Active upstream OpenCode server ownership, live steering, reservations and runtime recovery remain."
+note = "Removed unused OpenCode server-pool scaffolding. Active upstream OpenCode server ownership, live steering, reservations and runtime recovery remain. Codex text-stream nodes suppress byte-identical running snapshots; item/message updates and every terminal snapshot remain, and item timestamps drive inactivity detection."
 
 [[patch.decision]]
 id = "v2-port-2689"
