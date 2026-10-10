@@ -4,6 +4,8 @@ import { computeThreadMoveAvailability } from "../threads/threadOrder";
 import { LegendList, type LegendListRef } from "@legendapp/list/react-native";
 import {
   buildOrchestratorSummaries,
+  PROJECT_QUIET_AFTER_MS,
+  projectSidebarBucket,
   type OrchestratorSummary,
 } from "@t3tools/client-runtime/state/orchestrators";
 import { MobileDecisionFeed } from "./MobileDecisionFeed";
@@ -239,6 +241,10 @@ function MobileOrchestratorList({
   readonly summaries: readonly OrchestratorSummary[];
   readonly onSelectThread: (thread: EnvironmentThreadShell) => void;
 }) {
+  // Settled or long-quiet projects fold into one collapsed group, the same rule
+  // as the web sidebar (projectSidebarBucket).
+  const [quietExpanded, setQuietExpanded] = useState(false);
+  const [quietCutoff] = useState(() => Date.now() - PROJECT_QUIET_AFTER_MS);
   if (summaries.length === 0) {
     return (
       <View className="flex-1 items-center justify-center px-8">
@@ -250,88 +256,108 @@ function MobileOrchestratorList({
       </View>
     );
   }
+  const active = summaries.filter(
+    (summary) => projectSidebarBucket(summary, quietCutoff) !== "quiet",
+  );
+  const quiet = summaries.filter(
+    (summary) => projectSidebarBucket(summary, quietCutoff) === "quiet",
+  );
+  const renderProject = (summary: OrchestratorSummary) => {
+    const project =
+      summary.projects.find(
+        (candidate) =>
+          candidate.environmentId === summary.root.environmentId &&
+          candidate.id === summary.root.projectId,
+      ) ?? summary.projects[0];
+    return (
+      <Pressable
+        key={`${summary.root.environmentId}:${summary.root.id}`}
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${summary.root.title}`}
+        className="border-b border-border px-2 py-3 active:bg-card"
+        onPress={() => onSelectThread(summary.root)}
+      >
+        <View className="flex-row items-center gap-2">
+          {project ? (
+            <ProjectFavicon
+              environmentId={project.environmentId}
+              projectTitle={project.title}
+              workspaceRoot={project.workspaceRoot}
+              faviconPath={project.faviconPath}
+              projectIcon={project.projectIcon}
+              size={20}
+            />
+          ) : null}
+          <Text className="min-w-0 flex-1 text-sm font-t3-medium text-foreground" numberOfLines={2}>
+            {summary.root.title}
+          </Text>
+          {summary.needsYou.length > 0 ? (
+            <Text className="text-xs text-warning-foreground">
+              {summary.needsYou.length} need you
+            </Text>
+          ) : null}
+        </View>
+        <View className="mt-1.5 flex-row items-center gap-2">
+          <Text
+            className={cn(
+              "text-xs",
+              summary.status === "working" || summary.status === "supervising"
+                ? "text-adaptive-sky-600-400"
+                : summary.status === "approval" || summary.status === "input"
+                  ? "text-warning-foreground"
+                  : "text-foreground-muted",
+            )}
+          >
+            {summary.status === "supervising"
+              ? "Supervising"
+              : summary.status === "working"
+                ? "Working"
+                : summary.status === "approval"
+                  ? "Needs approval"
+                  : summary.status === "input"
+                    ? "Needs input"
+                    : "Idle"}
+          </Text>
+          {summary.activeWorkerCount > 0 ? (
+            <Text className="text-xs text-foreground-muted">
+              {summary.activeWorkerCount} working
+            </Text>
+          ) : null}
+        </View>
+        {summary.projects.length > 0 ? (
+          <Text className="mt-1 text-xs text-foreground-muted" numberOfLines={1}>
+            {summary.projects.map((project) => project.title).join(" · ")}
+          </Text>
+        ) : null}
+        <MobileProjectRequests summary={summary} />
+        <MobileDecisionFeed
+          summary={summary}
+          // Selection reads only the environment and id; a new discussion
+          // thread may not be in this list yet.
+          onOpenThread={(threadId) => onSelectThread({ ...summary.root, id: threadId })}
+        />
+      </Pressable>
+    );
+  };
   return (
     <ScrollView className="flex-1" contentContainerClassName="px-3 pb-24">
-      {summaries.map((summary) => {
-        const project =
-          summary.projects.find(
-            (candidate) =>
-              candidate.environmentId === summary.root.environmentId &&
-              candidate.id === summary.root.projectId,
-          ) ?? summary.projects[0];
-        return (
+      {active.map(renderProject)}
+      {quiet.length > 0 ? (
+        <>
           <Pressable
-            key={`${summary.root.environmentId}:${summary.root.id}`}
             accessibilityRole="button"
-            accessibilityLabel={`Open ${summary.root.title}`}
-            className="border-b border-border px-2 py-3 active:bg-card"
-            onPress={() => onSelectThread(summary.root)}
+            accessibilityLabel={`${quietExpanded ? "Hide" : "Show"} quiet projects`}
+            className="flex-row items-center justify-between px-2 py-3 active:bg-card"
+            onPress={() => setQuietExpanded((value) => !value)}
           >
-            <View className="flex-row items-center gap-2">
-              {project ? (
-                <ProjectFavicon
-                  environmentId={project.environmentId}
-                  projectTitle={project.title}
-                  workspaceRoot={project.workspaceRoot}
-                  faviconPath={project.faviconPath}
-                  projectIcon={project.projectIcon}
-                  size={20}
-                />
-              ) : null}
-              <Text
-                className="min-w-0 flex-1 text-sm font-t3-medium text-foreground"
-                numberOfLines={2}
-              >
-                {summary.root.title}
-              </Text>
-              {summary.needsYou.length > 0 ? (
-                <Text className="text-xs text-warning-foreground">
-                  {summary.needsYou.length} need you
-                </Text>
-              ) : null}
-            </View>
-            <View className="mt-1.5 flex-row items-center gap-2">
-              <Text
-                className={cn(
-                  "text-xs",
-                  summary.status === "working" || summary.status === "supervising"
-                    ? "text-adaptive-sky-600-400"
-                    : summary.status === "approval" || summary.status === "input"
-                      ? "text-warning-foreground"
-                      : "text-foreground-muted",
-                )}
-              >
-                {summary.status === "supervising"
-                  ? "Supervising"
-                  : summary.status === "working"
-                    ? "Working"
-                    : summary.status === "approval"
-                      ? "Needs approval"
-                      : summary.status === "input"
-                        ? "Needs input"
-                        : "Idle"}
-              </Text>
-              {summary.activeWorkerCount > 0 ? (
-                <Text className="text-xs text-foreground-muted">
-                  {summary.activeWorkerCount} working
-                </Text>
-              ) : null}
-            </View>
-            {summary.projects.length > 0 ? (
-              <Text className="mt-1 text-xs text-foreground-muted" numberOfLines={1}>
-                {summary.projects.map((project) => project.title).join(" · ")}
-              </Text>
-            ) : null}
-            <MobileProjectRequests summary={summary} />
-            <MobileDecisionFeed
-              summary={summary}
-              // Selection reads only the environment and id; a new discussion
-              // thread may not be in this list yet.
-              onOpenThread={(threadId) => onSelectThread({ ...summary.root, id: threadId })}
-            />
+            <Text className="text-xs font-t3-medium text-foreground-muted">
+              Quiet {quiet.length}
+            </Text>
+            <Text className="text-xs text-foreground-muted">{quietExpanded ? "Hide" : "Show"}</Text>
           </Pressable>
-        );
-      })}
+          {quietExpanded ? quiet.map(renderProject) : null}
+        </>
+      ) : null}
     </ScrollView>
   );
 }
