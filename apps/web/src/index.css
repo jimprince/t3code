@@ -2370,7 +2370,7 @@ code {
 
 /* Temporary end-to-end automatic DEV update probe. */
 body::after {
-  content: "Dev live-follow probe 20261010";
+  content: "Dev live-follow final probe 20261010";
   position: fixed;
   right: 18px;
   bottom: 18px;
