@@ -3,6 +3,7 @@ import { it as effectIt } from "@effect/vitest";
 import {
   ProjectId,
   ProviderInstanceId,
+  ProviderDriverKind,
   RunId,
   ThreadId,
   type OrchestrationV2ThreadShell,
@@ -232,8 +233,8 @@ const runSweepFixture = (input: {
         faviconPath: null,
         projectIcon: null,
         scripts: [],
-        createdAt: IsoDateTime.make(new Date(NOW_MS).toISOString()),
-        updatedAt: IsoDateTime.make(new Date(NOW_MS).toISOString()),
+        createdAt: IsoDateTime.make(DateTime.formatIso(at(0))),
+        updatedAt: IsoDateTime.make(DateTime.formatIso(at(0))),
       });
       for (let index = 0; index < input.worktreesPerRepository; index++) {
         const branch = `feature-${repository}-${index}`;
@@ -247,7 +248,7 @@ const runSweepFixture = (input: {
             projectId,
             branch,
             worktreePath,
-            createdAt: input.recent ? DateTime.makeUnsafe(Date.now()) : at(-30 * DAY_MS),
+            createdAt: input.recent ? yield* DateTime.now : at(-30 * DAY_MS),
           }),
         );
       }
@@ -293,7 +294,9 @@ const runSweepFixture = (input: {
                 yield* Deferred.await(releaseEventRead);
               }
               if (input.dirtyBeforeRemoval && reads === 3) {
-                yield* fs.writeFileString(`${threads[0]!.worktreePath}/keep.txt`, "new local work");
+                yield* fs
+                  .writeFileString(`${threads[0]!.worktreePath}/keep.txt`, "new local work")
+                  .pipe(Effect.orDie);
               }
               return {
                 schemaVersion: 1,
@@ -375,7 +378,7 @@ const runSweepFixture = (input: {
               id: EventId.make("delete"),
               threadId: target.id,
               occurredAt: at(0),
-              payload: { ...target, deletedAt: at(0) },
+              payload: { ...target, lastVisitedAt: target.lastVisitedAt ?? null, deletedAt: at(0) },
             }
           : {
               type: "provider-session.updated",
@@ -384,7 +387,7 @@ const runSweepFixture = (input: {
               occurredAt: at(0),
               payload: {
                 id: ProviderSessionId.make("session"),
-                driver: "codex",
+                driver: ProviderDriverKind.make("codex"),
                 providerInstanceId: ProviderInstanceId.make("codex"),
                 status: "stopped",
                 cwd: target.worktreePath!,
@@ -398,7 +401,7 @@ const runSweepFixture = (input: {
       if (input.liveSession) {
         const payload = encodeSession({
           id: ProviderSessionId.make("live-session"),
-          driver: "codex",
+          driver: ProviderDriverKind.make("codex"),
           providerInstanceId: ProviderInstanceId.make("codex"),
           status: "ready",
           cwd: target.worktreePath!,
@@ -416,6 +419,7 @@ const runSweepFixture = (input: {
         }
         const payload = encodeThread({
           ...target,
+          lastVisitedAt: target.lastVisitedAt ?? null,
           deletedAt: at(0),
         });
         yield* sql`INSERT INTO orchestration_v2_projection_threads VALUES (${payload}, ${target.projectId}, 'deleted')`;
