@@ -918,17 +918,19 @@ export function OrchestratorBoard({
               </WorkspaceBreadcrumbItem>
             </WorkspaceBreadcrumb>
             <div className="flex-1" />
-            <Button size="sm" variant="ghost" onClick={openEditor}>
+            {/* Icon-only below `sm`: the labels would leave the breadcrumb about 100px. */}
+            <Button size="sm" variant="ghost" aria-label="Edit" onClick={openEditor}>
               <PencilIcon />
-              Edit
+              <span className="hidden sm:inline">Edit</span>
             </Button>
             <Button
               size="sm"
               variant={chatOpen ? "secondary" : "outline"}
+              aria-label={chatOpen ? "Hide chat" : "Chat"}
               onClick={() => setChatOpen((open) => !open)}
             >
               <MessageSquareIcon />
-              {chatOpen ? "Hide chat" : "Chat"}
+              <span className="hidden sm:inline">{chatOpen ? "Hide chat" : "Chat"}</span>
             </Button>
           </WorkspacePageHeader>
           <div className="flex min-h-0 flex-1 border-t border-border">
