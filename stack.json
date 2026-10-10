@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "9f7f7fe2efb9a6eb4239ec27ac80ac03ae6584ae",
-  "head": "c3092c4438f0830657632f92a04ad50aa6a215b3",
+  "prev": "29ecc1ff971b179f757333878dbaffea3ead4bd9",
+  "head": "d853117c7b403358bd4264f08c94531b1c3ea9ea",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -135,9 +135,7 @@
     "fork-decisions-feed-context",
     "fork-decisions-feed-model",
     "fork-decisions-feed-ui",
-    "fork-decisions-feed-mobile"
-  ],
-  "unapplied": [
+    "fork-decisions-feed-mobile",
     "fork-sidebar-dark-surface",
     "fork-update-progress",
     "fork-held-queue-resume",
@@ -149,13 +147,14 @@
     "fork-admin-thread-recovery",
     "fork-provider-context-recovery"
   ],
+  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
       "oid": "653d21d7071abebdcf1fca5dcf012e9ebed48dc5"
     },
     "fork-admin-thread-recovery": {
-      "oid": "bb31895c12f48ec9055ac7898d7b5002842476da"
+      "oid": "fb9da3e162a6936cedee59159922b83b0b6e3c7f"
     },
     "fork-agent-panel-thread-details": {
       "oid": "a44c2e7d72139c93675da0df752d67be52ea92f4"
@@ -173,7 +172,7 @@
       "oid": "324e7cae5833d8b47ebac8eac94daecd08cdaaea"
     },
     "fork-backport-upstream-17348-scroll-follow": {
-      "oid": "839dc39cf79a268781d8a6a98c7a47e73794c02e"
+      "oid": "8ceb1c635a4e9af68e80906a04ddaea813454fc6"
     },
     "fork-board-blocked-working": {
       "oid": "7eb573007704656f5e68e48452286063ec0dc4fe"
@@ -311,7 +310,7 @@
       "oid": "3735656e51cc54d3d7a30e0603014f83019b631a"
     },
     "fork-held-queue-resume": {
-      "oid": "b32508eef4cec59c221bb94e7119cb2a1831bb5b"
+      "oid": "a6ce84723f13ee1910e88054761793590cda5b17"
     },
     "fork-inline-3d-objects": {
       "oid": "8089f6f7406fcbf99ba30b1ccd11ad7d0cf15e0c"
@@ -326,7 +325,7 @@
       "oid": "e1dd41f7ea9d73deaa3fa0498ae8afeac3aa4da2"
     },
     "fork-lifecycle-deadlines": {
-      "oid": "9d8bb1231467efcb3c52fea804c5f35352ef19ce"
+      "oid": "b13f1871079cf9c99f26fe6c9eee5e426b1181c0"
     },
     "fork-maintenance-automation": {
       "oid": "e6390a0e8199df30fedce000df89d302548cb3dc"
@@ -338,10 +337,10 @@
       "oid": "79cb0081258f154e8a82b652706943bf9793137a"
     },
     "fork-mobile-manual-production": {
-      "oid": "7aa214806e369fad1ada1260e5d7620814381018"
+      "oid": "449edaae6536a2859baeac1763502f29557ed0e0"
     },
     "fork-mobile-new-task-reply": {
-      "oid": "16d387ff5d0ba9e663146019f058331041d4f8b0"
+      "oid": "8a96f7c8845bead3f722a90a82588e7b939dd567"
     },
     "fork-named-agents": {
       "oid": "e339eb925bdfce5e7f4a8c908db09c8ac052e04b"
@@ -437,7 +436,7 @@
       "oid": "b9c248873c599d8b2f35b7360755c0a3a9d37ff9"
     },
     "fork-provider-context-recovery": {
-      "oid": "5ef53dc2b6b5063bceea6ec0260ff1ac027996c1"
+      "oid": "d853117c7b403358bd4264f08c94531b1c3ea9ea"
     },
     "fork-provider-turn-safety": {
       "oid": "e7b1cca7275e4c4274a6ac9b9fea1626a48d9993"
@@ -506,7 +505,7 @@
       "oid": "4d26eba1e1869d12c7d14d285b8bfb3ab0ba5220"
     },
     "fork-sidebar-dark-surface": {
-      "oid": "6b95a9ded3839e88b8164654fae14d01b83c22f4"
+      "oid": "7e207351057f49d985c5f580bbca3e468e5f395f"
     },
     "fork-sidebar-drag-to-nest": {
       "oid": "4231510f8f16dc89f3635476cc6af370f711a7f1"
@@ -560,13 +559,13 @@
       "oid": "9adecc47d10b9ef176ecdbfed4e3096d7c83bcf7"
     },
     "fork-timeline-end-restore-settles": {
-      "oid": "f2ba0e0173eaedb21219979e13a6f5ada587c63b"
+      "oid": "1b26bf13d4414a7f145aac132281b17f4e95cccd"
     },
     "fork-unsupported-pr-hosts": {
       "oid": "d948b5c2dcdf923e2efe757c441cc21be4d5f57a"
     },
     "fork-update-progress": {
-      "oid": "d783ea3eb996c9580e3bd4e3cad1c6473cc91321"
+      "oid": "2b5ec1e25821dd127e5e695b381c78d62050c617"
     },
     "fork-worker-inactivity": {
       "oid": "7d250c1b7328f3f483738862ed034aa5748e10a8"
