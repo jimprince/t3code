@@ -1,0 +1,8 @@
+name = "fork-desktop-devtools-opt-in"
+subject = "fix(desktop): open DevTools only when it is asked for"
+class = "divergence"
+purpose = "Stop a development run from opening a detached DevTools window over the app on every launch; open it only when T3CODE_DESKTOP_DEVTOOLS=1 is set (Brad, 2026-10-10)."
+retire_when = "Upstream makes the development DevTools window optional, or the fork stops running the desktop app from a development build."
+depends_on = ["fork-desktop-delivery"]
+roles = []
+note = "DesktopConfig reads T3CODE_DESKTOP_DEVTOOLS like the other desktop flags and DesktopEnvironment carries it as openDevToolsOnLaunch; DesktopWindow still requires isDevelopment, so a packaged build is unaffected and has no release-note entry. Desktop only: web, mobile and the server have no DevTools window."
