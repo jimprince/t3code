@@ -3025,4 +3025,4 @@ purpose = "Hold the Projects list to the same finished-project rule on mobile as
 retire_when = "Mobile shares the web sidebar's project list, or fork-projects-real-only retires."
 depends_on = ["fork-projects-real-only", "fork-orchestrators-view"]
 roles = []
-note = "The rule is client-runtime's projectSidebarBucket; PROJECT_QUIET_AFTER_MS is the one shared quiet window, now used by web and mobile. MobileOrchestratorList splits summaries by bucket and shows a collapsed Quiet N toggle after the active rows; mobile has no deferred-bucket debounce, so a row moves as soon as its state changes. Every summary is still listed flat, subprojects included, so each folds by its own bucket."
+note = "The rule is client-runtime's projectSidebarBucket; PROJECT_QUIET_AFTER_MS is the one shared quiet window, now used by web and mobile. MobileOrchestratorList splits summaries by bucket and shows a collapsed Quiet N toggle after the active rows; mobile has no deferred-bucket debounce, so a row moves as soon as its state changes. Only top-level projects fold by bucket; fork-subprojects-mobile nests their subprojects inside the card."
