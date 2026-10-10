@@ -62,6 +62,8 @@ environment's time zone, which may differ from your phone's.
 
 You can edit, pause, resume, run immediately, or delete a task from the list.
 Leaving an edited form asks before discarding unsaved changes.
+Tasks bound to a settled thread skip their checks and show **skipped: thread settled**.
+Un-settle the thread to resume its next check; skipped checks do not build a backlog.
 
 ## Defaults and inheritance
 
