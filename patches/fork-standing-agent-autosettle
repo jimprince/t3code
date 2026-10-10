@@ -1,7 +1,7 @@
-Bottom: 3ada0890cea72396a9d694790e3dc51a14dc992b
-Top:    c409215623781f14bc8518ef14baec1364229610
+Bottom: 5568d9a52a0aebe4cccd4e3e4f967d670f454ed2
+Top:    c82c4bf5ddff3c028fe3b10d865d1b7b21519485
 Author: brad <bradprin@live.com>
-Date:   2026-10-09 21:44:36 +0000
+Date:   2026-10-10 08:36:04 +0000
 
 fix(threads): pinned and parent threads never auto-settle; t3-thread auto-settle toggle
 
