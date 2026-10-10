@@ -39,6 +39,20 @@ const makeEnvironment = (
 ) => DesktopEnvironment.DesktopEnvironment.pipe(Effect.provide(layerEnvironment(overrides, env)));
 
 describe("DesktopEnvironment", () => {
+  it.effect("leaves the launch DevTools window off unless it is asked for", () =>
+    Effect.gen(function* () {
+      const off = yield* makeEnvironment({}, { VITE_DEV_SERVER_URL: "http://localhost:5173" });
+      assert.strictEqual(off.isDevelopment, true);
+      assert.strictEqual(off.openDevToolsOnLaunch, false);
+
+      const on = yield* makeEnvironment(
+        {},
+        { VITE_DEV_SERVER_URL: "http://localhost:5173", T3CODE_DESKTOP_DEVTOOLS: "1" },
+      );
+      assert.strictEqual(on.openDevToolsOnLaunch, true);
+    }),
+  );
+
   it.effect("derives state paths and development identity inside Effect", () =>
     Effect.gen(function* () {
       const environment = yield* makeEnvironment(

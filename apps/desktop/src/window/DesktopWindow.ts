@@ -863,7 +863,10 @@ export const make = Effect.gen(function* () {
     });
 
     loadApplication();
-    if (environment.isDevelopment) {
+    // DevTools is opt-in: a development run used to open a detached DevTools
+    // window every launch, over the app (Brad, 2026-10-10). Set
+    // T3CODE_DESKTOP_DEVTOOLS=1 to get it back.
+    if (environment.isDevelopment && environment.openDevToolsOnLaunch === true) {
       window.webContents.openDevTools({ mode: "detach" });
     }
 
