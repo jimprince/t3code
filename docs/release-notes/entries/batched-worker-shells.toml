@@ -1,0 +1,4 @@
+id = "batched-worker-shells"
+category = "performance"
+functionality = "threads"
+text = "Reduce server work when several threads update together, keeping live and archived thread details unchanged."
