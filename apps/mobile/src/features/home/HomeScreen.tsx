@@ -720,7 +720,7 @@ export function HomeScreen(props: HomeScreenProps) {
     // "hidden from lists" meaning.
     return buildThreadListV2Items({
       pendingOrder,
-      threads: props.threads.filter((thread) => thread.archivedAt === null),
+      threads: joinedThreads,
       environmentId: props.selectedEnvironmentId,
       projectRefs: v2ScopedProjectGroup === null ? null : v2ScopedProjectGroup.projectRefs,
       searchQuery: props.searchQuery,
@@ -753,6 +753,7 @@ export function HomeScreen(props: HomeScreenProps) {
     props.searchQuery,
     props.selectedEnvironmentId,
     props.threads,
+    joinedThreads,
     matchedThreadKeys,
     v2ScopedProjectGroup,
   ]);
