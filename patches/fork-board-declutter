@@ -1,0 +1,7 @@
+Bottom: 7da12803821ef471e4d6526b628e8f34a0423704
+Top:    920d0f6e4f072e0023bb78760a6e360a4cac99b6
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 10:20:43 +0000
+
+feat(projects): remove meta lines, ids, duplicate rows and narration from the project page
+
