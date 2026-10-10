@@ -21,7 +21,7 @@ import {
   ContextRecoveryRequiredError,
 } from "./ContextHandoffDelivery.ts";
 
-export const CONTEXT_RECOVERY_REQUIRED_CODE = "context_recovery_required";
+const CONTEXT_RECOVERY_REQUIRED_CODE = "context_recovery_required";
 
 export const MAX_PROVIDER_FAILURE_MESSAGE_LENGTH = 4_096;
 export const MAX_PROVIDER_FAILURE_CODE_LENGTH = 128;
