@@ -2,6 +2,7 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   buildOrchestratorSummaries,
   buildStandaloneThreadGroups,
+  PROJECT_QUIET_AFTER_MS,
   projectSidebarBucket,
   sortOrchestratorSummariesForSidebar,
   type OrchestratorSummary,
@@ -35,7 +36,6 @@ import {
 } from "./projectSubprojects.logic";
 import { useOrchestratorThreadShells } from "./useOrchestratorThreads";
 
-const QUIET_AFTER_MS = 7 * 24 * 60 * 60 * 1_000;
 const STANDALONE_STATUS: Record<
   StandaloneThreadStatus,
   { readonly label: string; readonly className: string }
@@ -296,7 +296,7 @@ export function OrchestratorSidebarList() {
       setCollapsedProjects((current) => toggleProjectKey(current, projectKey)),
     [setCollapsedProjects],
   );
-  const [quietCutoff] = useState(() => Date.now() - QUIET_AFTER_MS);
+  const [quietCutoff] = useState(() => Date.now() - PROJECT_QUIET_AFTER_MS);
   // Every project, subprojects included: each carries its own sidebar bucket.
   const allSummaries = useMemo(
     () => buildOrchestratorSummaries(threads, projects),
