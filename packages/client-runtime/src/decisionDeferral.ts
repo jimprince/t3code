@@ -1,13 +1,8 @@
 import type { ProjectIssueDeferral } from "@t3tools/contracts";
+import { deadlineInstant } from "@t3tools/shared/localTime";
 import * as DateTime from "effect/DateTime";
 
 const DAY_MS = 86_400_000;
-
-/**
- * When a deadline passes, as an instant: a date (`2026-10-08`) is the start of that day,
- * UTC, which is the earliest reading and so the safest one to count a day back from.
- */
-const deadlineMs = (deadline: string) => Date.parse(deadline);
 
 export interface DecisionVisibility {
   /** Later is in force: the card stays out of the feed. */
@@ -31,7 +26,8 @@ export function decisionVisibility(input: {
   if (until === null || Number.isNaN(until) || until <= input.now) {
     return { hidden: false, returnsAt: null, forDeadline: false };
   }
-  const deadline = input.deadline === undefined ? Number.NaN : deadlineMs(input.deadline);
+  // A date deadline (`2026-10-08`) starts at local midnight, so the card returns the day before.
+  const deadline = input.deadline === undefined ? Number.NaN : deadlineInstant(input.deadline);
   const cutoff = Number.isNaN(deadline) ? Number.POSITIVE_INFINITY : deadline - DAY_MS;
   const forDeadline = cutoff < until;
   const returns = Math.min(until, cutoff);
