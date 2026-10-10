@@ -1,3 +1,4 @@
+import { type OrchestratorThreadShell } from "@t3tools/client-runtime/state/orchestrators";
 import { presentThreadShell } from "@t3tools/client-runtime/state/models";
 import * as DateTime from "effect/DateTime";
 import { planPinnedMove } from "@t3tools/client-runtime/state/thread-sort";
@@ -2435,5 +2436,75 @@ describe("Working section beta", () => {
       "v2-settled-shelf",
       "settled",
     ]);
+  });
+});
+
+describe("Projects visibility in the mobile Threads builder", () => {
+  const root = (
+    id: string,
+    createdBy: "user" | "agent",
+    fields: Partial<OrchestratorThreadShell> = {},
+  ): OrchestratorThreadShell => {
+    const shell = makeThread({ id: ThreadId.make(id), title: id, ...fields });
+    return {
+      ...shell,
+      ...fields,
+      parentThreadId: null,
+      source: {
+        ...shell.source,
+        createdBy,
+        creationSource: createdBy === "user" ? "mobile" : "mcp",
+      },
+    };
+  };
+  const child = (parent: OrchestratorThreadShell): OrchestratorThreadShell => {
+    const shell = root(`${parent.id}-child`, "agent");
+    const lineage = {
+      rootThreadId: parent.id,
+      parentThreadId: parent.id,
+      relationshipToParent: "subagent" as const,
+    };
+    return {
+      ...shell,
+      parentThreadId: parent.id,
+      lineage,
+      source: { ...shell.source, lineage },
+      settledOverride: "settled",
+      settledAt: NOW,
+    };
+  };
+  const ids = (threads: OrchestratorThreadShell[]) =>
+    buildThreadListV2Items({
+      threads,
+      environmentId: null,
+      searchQuery: "",
+      now: NOW,
+    }).items.map((item) => item.thread.id);
+
+  it("keeps Mac-shaped user roots with settled delegates, hides their children and agent project roots, and orders newest first", () => {
+    const older = root("older", "user", { createdAt: "2026-06-01T08:00:00.000Z" });
+    const creation = root("creation", "user", {
+      title: "Agent Creation and Communication Options",
+      createdAt: "2026-06-01T10:00:00.000Z",
+    });
+    const review = root("review", "user", {
+      title: "Review Agent Creation and Communication",
+      createdAt: "2026-06-01T11:00:00.000Z",
+    });
+    const agent = root("agent", "agent");
+    expect(
+      ids([older, creation, child(creation), review, child(review), agent, child(agent)]),
+    ).toEqual(["review", "creation", "older"]);
+  });
+
+  it("keeps explicit projects and harness user roots out", () => {
+    const project = root("project", "user", { subproject: "on" });
+    const harness = root("harness", "user", { purpose: "harness" });
+    expect(ids([project, child(project), harness, child(harness)])).toEqual([]);
+  });
+
+  it("ignores archived children when deciding whether an agent root is a project", () => {
+    const agent = root("agent", "agent");
+    expect(ids([agent, { ...child(agent), archivedAt: NOW }])).toEqual(["agent"]);
   });
 });
