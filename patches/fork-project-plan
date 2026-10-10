@@ -1,0 +1,8 @@
+Bottom: e8d6c9ff1a62f4cb96967322b5694350fe915b66
+Top:    e8d6c9ff1a62f4cb96967322b5694350fe915b66
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 22:24:36 +0000
+
+feat(web): Plan widget with task progress bars and Ask first on project pages
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
