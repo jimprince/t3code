@@ -1,0 +1,13 @@
+Bottom: 13bc217c0cac5d8cd3ec3d71ac7f576318c6142f
+Top:    13bc217c0cac5d8cd3ec3d71ac7f576318c6142f
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 22:24:35 +0000
+
+feat(web): arrange projects by dragging them in the Projects sidebar
+
+Drag a project row (or Alt+Up/Down on it) to move it. The move pins the
+project, and any project shown above it, at that spot with the same pin
+order keys threads use, so the list reads as dropped on every client.
+Unpin returns a project to automatic order.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
