@@ -1,0 +1,7 @@
+Bottom: f6525e6d302bc3608731387e9c1b8778ca41edee
+Top:    cdda4bbd7b434371a1cd8e3b689de4f807f01884
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 10:32:44 +0000
+
+fix(web): allow editing interrupted turns without checkpoints
+

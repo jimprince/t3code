@@ -1,0 +1,7 @@
+Bottom: f793e8cd281103e88b928af399d6b99633b5c03c
+Top:    f59b6971ab79fcab5b6ed9f825d13072a5b78023
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 10:32:56 +0000
+
+fix(projects): each question keeps its own answer; requests stop flickering
+

@@ -1,0 +1,8 @@
+Bottom: dfc45faaad33397c28c9884a6aedd0b75b3ffbc4
+Top:    7baa5e9603d9933edc146ff3e9cc06cbe39cefe6
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 10:32:47 +0000
+
+fix(server): say why a text-generation temp file could not be written
+
+
