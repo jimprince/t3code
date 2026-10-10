@@ -48,7 +48,7 @@ import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import * as EventSink from "./EventSink.ts";
 import * as Orchestrator from "./Orchestrator.ts";
-import type { ProviderAdapterV2Shape } from "./ProviderAdapter.ts";
+import type { ProviderAdapterV2Shape, ProviderAdapterV2SessionRuntime } from "./ProviderAdapter.ts";
 import {
   OrchestrationV2EventSinkLayerLive,
   OrchestrationV2LayerLive,
@@ -134,10 +134,14 @@ const orchestrationAdapter = {
             started.push(turn.message.text);
           }),
         interruptTurn: () => Effect.void,
-        close: Effect.void,
-      };
+        steerTurn: () => Effect.die("unused steering"),
+        respondToRuntimeRequest: () => Effect.die("unused runtime request"),
+        readThreadSnapshot: () => Effect.die("unused snapshot"),
+        rollbackThread: () => Effect.die("unused rollback"),
+        forkThread: () => Effect.die("unused fork"),
+      } satisfies ProviderAdapterV2SessionRuntime;
     }),
-} as ProviderAdapterV2Shape;
+} satisfies ProviderAdapterV2Shape;
 const providerInstance = {
   instanceId: modelSelection.instanceId,
   driverKind: driver,
@@ -462,8 +466,8 @@ describe.each([undefined, "0", "1", "invalid"])(
               importLegacyShells: Effect.void,
               recover: recovery.recover,
               recoverDelegatedTasks: orchestrator.recoverDelegatedTasks,
-              // Hold the workers until command-ready to reproduce the time-gate bypass.
-              startEffectWorker: Effect.void,
+              // Delay continuation delivery until ready; drain startup effects normally.
+              startEffectWorker: worker.drain().pipe(Effect.asVoid),
               autoBootstrap: Effect.void,
             });
             yield* policy.markCommandReady;
@@ -490,8 +494,6 @@ describe.each([undefined, "0", "1", "invalid"])(
               type: "thread.archive",
               commandId: CommandId.make("command:receipt-archive"),
               threadId: archived,
-              createdBy: "user",
-              creationSource: "web",
             });
             const drainContinuations = Effect.gen(function* () {
               const cleared = yield* Deferred.make<void>();
@@ -565,12 +567,16 @@ describe.each([undefined, "0", "1", "invalid"])(
               }
             }).pipe(Effect.provide(continuation), Effect.scoped);
           }).pipe(
-            Effect.provide(TestLayer),
             Effect.provide(
-              ConfigProvider.layer(
-                ConfigProvider.fromEnv({
-                  env: disabled === undefined ? {} : { T3CODE_DISABLE_STARTUP_RESUME: disabled },
-                }),
+              TestLayer.pipe(
+                Layer.provideMerge(
+                  ConfigProvider.layer(
+                    ConfigProvider.fromEnv({
+                      env:
+                        disabled === undefined ? {} : { T3CODE_DISABLE_STARTUP_RESUME: disabled },
+                    }),
+                  ),
+                ),
               ),
             ),
             Effect.scoped,
