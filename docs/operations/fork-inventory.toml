@@ -3036,3 +3036,25 @@ retire_when = "Upstream's CLI watcher reads settled threads only when their stat
 depends_on = ["fork-worker-operations", "fork-reliable-handoffs"]
 roles = []
 note = "Load hotfix 2026-10-10 (dev-vm main thread saturated). Measured in the server trace: three settled threads were re-subscribed every 7-15 s from the VM credential. Causes: a settle-after-turn helper that polled an already-settled thread every 5 s for up to 24 h; the queue drain reading every held send's settled target on each 5 s pass; and the watcher fully reading settled sources it had already parked or could judge from the shell list. Settle-after-turn now returns once the thread is settled. The drain re-reads a settled target once a minute, the same cadence the watcher already used for settled sources, so an unsettle still delivers held sends. The watcher skips the full read when the shell it already fetched shows a settled source with no active run or pending request and no completion inside the reporting window (60 min for notices, 2 min for liveness). A completion that lands right before a self-settle is therefore still read and delivered. The watch poller also shares one shell list per environment per pass between the attention scan and the liveness check, and reuses a source's last full read while its shell in that list is unchanged and shows no live run (quietShellSignature). The loop is sequential, so its read rate is bounded by read latency: skipping only settled sources would just cycle the unsettled ones faster. Live runs are re-read at most every 30 s (LIVE_SOURCE_REREAD_MS), or at once when their status, run or pending-request flags change in the shell; the shell list itself lives 15 s across passes (SHELL_LIST_TTL_MS). Without those two bounds, fast passes would re-read live sources and re-list every shell each 5 s. findThread enriches nesting by reading the whole fork_thread_metadata table (1000+ rows) after a one-thread snapshot; it takes nesting: false where nothing reads parent, scope or subproject (pending, queue drain, deferred settlement), and the watch poller takes those fields from the pass's already-enriched shell. status and listings keep the enrichment because their output shows nesting."
+
+[[patch]]
+name = "fork-project-plan"
+subject = "feat(web): Plan widget with task progress bars and Ask first on project pages"
+class = "product"
+purpose = "Answer Brad's most frequent question to agents, 'where are we at?', on the project page: a Plan layout widget groups tasks by project and workstream with progress bars, what finished in a chosen window and where that pace leads, stalled work, and what waits on him; the New request box comes first with quick-action chips (Brad, 2026-10-10)."
+retire_when = "Upstream or another fork concern shows per-workstream task progress and recent movement across projects, or Brad drops the Plan widget from his layouts."
+depends_on = [
+  "fork-project-layout",
+  "fork-project-workstreams",
+  "fork-dash-187-todo-progress",
+  "fork-dash-173",
+  "fork-project-dashboard-widgets",
+]
+roles = []
+note = "Droppable: removing the patch removes the 'plan' PROJECT_WIDGET_TYPES entry, ProjectPlanWidget, planProgress.logic, the request-box chips and the ProjectRequestBox move back above the tabs; a saved layout that still holds a plan widget renders nothing for it (BuiltinWidget default). Web only, no server code, RPC, migration or setting; the server and t3-thread pick the type up from contracts. Task fraction: complete 1, for-review 0.9, active from the working thread's to-do list up to 0.9 (0.1 without a list), pending 0; window movement counts tasks closed in the window (tracker closedAt), the projection extends that pace one window, capped at what is left. Step movement has no history (to-do lists are latest-state projection items), so steps show live but do not count as movement. allProjects lists every summary with no parent project; utilities is a text setting of project titles. With a plan widget in the layout the built-in Subprojects and Workstreams blocks hide. Mobile has no layouts, so no Plan there."
+
+[[patch.decision]]
+id = "plan-from-research-interaction-taxonomy"
+date = "2026-10-10"
+decided = "new-concern"
+rationale = "Brad chose dashboard design A from the interaction-taxonomy research (status asks are 10% of his 7,312 messages to agents) and asked for task-level progress per workstream instead of thread rows. Shipped first on live as 69b7da56 (cherry-pick of 92d72ea4); folded here as its own droppable patch rather than into fork-project-workstreams because it can be removed without removing the Workstreams block."

@@ -5,14 +5,14 @@ import {
 import type { ProjectIssue } from "@t3tools/contracts";
 
 /**
- * "3 of 5 steps" for a task card: the to-do list of the task's linked thread that
- * is working right now. Null when none is, so a finished thread's stale list
- * never shows.
+ * Steps done and total of the task's linked thread that is working right now (the
+ * one with the most steps left). Null when none is, so a finished thread's stale
+ * list never counts.
  */
-export function taskStepProgress(
+export function taskSteps(
   issue: Pick<ProjectIssue, "linkedThreadIds">,
   threadsById: ReadonlyMap<string, OrchestratorThreadShell>,
-): string | null {
+): { readonly completed: number; readonly total: number } | null {
   let best: { readonly completed: number; readonly total: number } | null = null;
   for (const threadId of issue.linkedThreadIds) {
     const thread = threadsById.get(threadId);
@@ -24,5 +24,14 @@ export function taskStepProgress(
       best = progress;
     }
   }
-  return best === null ? null : `${best.completed} of ${best.total} steps`;
+  return best;
+}
+
+/** "3 of 5 steps" for a task card, from taskSteps. */
+export function taskStepProgress(
+  issue: Pick<ProjectIssue, "linkedThreadIds">,
+  threadsById: ReadonlyMap<string, OrchestratorThreadShell>,
+): string | null {
+  const steps = taskSteps(issue, threadsById);
+  return steps === null ? null : `${steps.completed} of ${steps.total} steps`;
 }
