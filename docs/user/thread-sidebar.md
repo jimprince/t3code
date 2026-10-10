@@ -302,7 +302,9 @@ yet. In **Projects** it appears as a one-line `/ Name` row inside its parent's
 card, with its needs-you count and last activity. The parent's card, status and
 header count what is happening inside its subprojects too. Open a subproject for
 its own page, health line, layout, tasks and Decisions; the breadcrumb leads back
-to its parent, whose page lists its subprojects.
+to its parent, whose page lists its subprojects in a table with each one's health,
+task progress, working agents, needs-you count and last activity. A folded card keeps
+a count of the subprojects it hides, such as `1 sub`.
 
 To turn a subproject back into a plain worker, choose **Show as worker** from its
 menu or from **Edit** on its page. Mobile lists a subproject as its own project,
