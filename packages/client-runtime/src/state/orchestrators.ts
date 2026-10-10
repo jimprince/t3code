@@ -187,6 +187,9 @@ export interface OrchestratorSummary {
   readonly pullRequests: ReadonlyArray<ThreadPullRequestLink>;
 }
 
+/** A project with no activity for this long folds into Quiet on web and mobile. */
+export const PROJECT_QUIET_AFTER_MS = 7 * 24 * 60 * 60 * 1_000;
+
 export type ProjectSidebarBucket = "needs-you" | "working" | "idle" | "quiet";
 
 const PROJECT_SIDEBAR_BUCKET_PRIORITY: Record<ProjectSidebarBucket, number> = {
