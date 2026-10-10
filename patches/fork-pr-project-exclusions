@@ -1,0 +1,7 @@
+Bottom: 19ba7e606078ce6567a9e633125b81be841fe656
+Top:    c2f278d93dd333bac56fd668cc96b50a32591f3b
+Author: User <user@example.com>
+Date:   2026-10-10 10:03:53 +0000
+
+feat(web): hide projects from the pull request list
+
