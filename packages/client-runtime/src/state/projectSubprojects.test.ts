@@ -5,10 +5,11 @@ import {
   openTaskCount,
   ownTreeContains,
   projectTrail,
+  subprojectCountLabel,
   subprojectIsActive,
   subprojectNeedsYou,
-  subprojectCountLabel,
   subprojectWorkingLabel,
+  taskProgressLabel,
   toggleProjectKey,
   topLevelProjects,
 } from "./projectSubprojects.ts";
@@ -108,6 +109,17 @@ describe("project subprojects", () => {
     expect(subprojectWorkingLabel(project(3, 0))).toBe("3 working in subprojects");
     expect(subprojectWorkingLabel(project(2, 2))).toBeNull();
     expect(subprojectWorkingLabel(project(0, 0))).toBeNull();
+  });
+
+  it("shows progress as closed of linked tasks, each linked issue once, subprojects included", () => {
+    const sub = summary("sub", { issues: [issue(1, "closed"), issue(2, "open")] });
+    const root = summary("root", {
+      issues: [issue(2, "open"), issue(3, "open")],
+      subprojects: [sub],
+    });
+    expect(taskProgressLabel(root)).toBe("1 of 3");
+    expect(taskProgressLabel(sub)).toBe("1 of 2");
+    expect(taskProgressLabel(summary("none"))).toBeNull();
   });
 
   it("hints how many subprojects a folded card hides, at any depth", () => {
