@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "b32c4e73c279fe1a8bda9446b42cfefec46b9c4e",
-  "head": "79156a9eeb724de83dba0cb5f7f32ff4829f8f2b",
+  "prev": "ca46f49308f119cd781b758f8cb94350d1347c40",
+  "head": "9807b6b297637681e118d313a5297fcb7171d615",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -143,11 +143,12 @@
     "fork-backport-upstream-17348-scroll-follow",
     "fork-timeline-end-restore-settles",
     "fork-mobile-manual-production",
-    "fork-lifecycle-deadlines",
+    "fork-lifecycle-deadlines"
+  ],
+  "unapplied": [
     "fork-admin-thread-recovery",
     "fork-provider-context-recovery"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
