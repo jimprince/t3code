@@ -1,0 +1,7 @@
+Bottom: a4366506f9bd8535c4e51053c88549dd74147c30
+Top:    55f1bfa0a3ab2f19135bd865be088789c3b79a15
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 08:29:01 +0000
+
+feat(threads): forward exact messages with portable attachments
+

@@ -1,0 +1,7 @@
+Bottom: e363d164fea3bd4b527d0164e71e3758be0fbeb7
+Top:    474b9d0c57ab86be86364ee38758608b0fa7ef9a
+Author: User <user@example.com>
+Date:   2026-10-10 08:28:30 +0000
+
+feat(recovery): diagnose resource pressure and recover bounded resources
+

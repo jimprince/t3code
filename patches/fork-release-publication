@@ -1,0 +1,7 @@
+Bottom: fde4b4b4f25ca5c2213d61c380f885faab8886fe
+Top:    6701cd2381ed18ac8ba002b3310382f3f5def3ad
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 08:28:51 +0000
+
+ci: publish fork releases with version stamping and notes
+

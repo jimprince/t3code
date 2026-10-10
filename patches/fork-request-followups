@@ -1,0 +1,7 @@
+Bottom: 1f77d4dc0ccf0661ffeac91bf1d54281ec3c130f
+Top:    56dd165ab451ad25124ca524e9bbffbb0ac95876
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 08:28:42 +0000
+
+feat(projects): fold chat follow-ups into tracked issues instead of filing each message
+
