@@ -3074,3 +3074,25 @@ id = "projects-dnd-pin-keys"
 date = "2026-10-10"
 decided = "reconcile-smaller"
 rationale = "The project-layout service stores a project page's widgets, not the sidebar's project order, so arranging reuses pin order keys, which already order Projects and sync to every client, instead of adding an order store. Brad ran it from feature/projects-dnd-live (8dc73699) on origin/live first."
+
+[[patch]]
+name = "fork-local-time"
+subject = "fix(web,mobile): show dates and times in the device time zone"
+class = "product"
+purpose = "Show every date and time T3 prints for Brad in the device's own time zone, never bare UTC or ISO: decision deadlines and their Later return time, automation schedules, and the timestamps in copied error and crash reports (Operations R068, 2026-10-10)."
+retire_when = "Upstream renders these surfaces in the device zone itself, or the fork retires the Decisions feed and automation rules and upstream's copied reports carry a local offset."
+depends_on = [
+  "fork-decisions-feed-model",
+  "fork-decisions-feed-ui",
+  "fork-decisions-feed-mobile",
+  "fork-scripts-automations",
+  "fork-thread-transfer",
+]
+roles = []
+note = "One helper, packages/shared/src/localTime.ts, reads the device zone at call time. A date-only deadline (`2026-10-08`) is the start of that day in the device zone (deadlineInstant), so a Later card returns at local midnight the day before instead of 18:00 MDT two evenings early, and formatDeadline counts days by the local calendar instead of flipping at 18:00 MDT. client-runtime's automationScheduleText converts a schedule's wall clock into the device zone and appends the schedule's own zone only when the wall clock differs (`Daily 03:00 MDT (09:00 UTC)`); when the zones disagree on the day it shifts the days and keeps the schedule's own in brackets. Copied reports (web error page, thread move failure, mobile startup crashes) use formatLocalIso, an ISO timestamp with the device offset. Web and mobile share both helpers; desktop wraps web. Not covered: Settings > Scheduled tasks, whose times are the server's wall clock and need the server zone on the wire first."
+
+[[patch.decision]]
+id = "r068-device-zone"
+date = "2026-10-10"
+decided = "new-concern"
+rationale = "Operations decided every date and time T3 shows Brad renders in the device local zone. The fixes cross three feature patches and two upstream files, and can be dropped without dropping any of them, so they form their own concern instead of refreshing each owner. Scheduled-task labels are left out because the client does not know the server's zone; that follow-up needs a contract field."
