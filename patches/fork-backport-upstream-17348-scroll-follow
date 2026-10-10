@@ -1,6 +1,6 @@
-Bottom: e4d575320b4155596387fe7128ee816528a4d35c
-Top:    ce3bb654d2aca018c410c58097bc466367ed63f0
+Bottom: 0b43ba881dc56683dfacbed2c96315e5dbbf5f40
+Top:    901bc5b896e89d3476aabafdd38818a1662c9c93
 Author: brad <bradprin@live.com>
-Date:   2026-10-10 08:42:56 +0000
+Date:   2026-10-10 08:43:31 +0000
 
 fix(web): a thread that was following its reply reopens at the newest message
