@@ -371,7 +371,7 @@ export const releaseHeldHandoffs = Effect.fnUntraced(function* (
   const index = rows[0] ? yield* decodeInbox(rows[0].payload) : { ids: [], truncated: false };
   const held: Stored[] = [];
   // The index is newest first; walk it oldest first so equal timestamps keep send order.
-  for (const sendId of [...index.ids].reverse()) {
+  for (const sendId of index.ids.toReversed()) {
     const row = (yield* sql<{
       payload: string;
     }>`SELECT payload FROM fork_thread_metadata_receipts WHERE command_id=${key(sendId)}`)[0];
