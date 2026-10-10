@@ -322,11 +322,12 @@ const baseLayer: Layer.Layer<
         });
       });
 
+    const fencedTables = yield* sql<{
+      name: string;
+    }>`SELECT name FROM sqlite_master WHERE name='fork_recovery_thread_fences'`.pipe(Effect.orDie);
+
     const normalizeEvents = (events: ReadonlyArray<OrchestrationV2DomainEvent>) =>
       Effect.gen(function* () {
-        const fencedTables = yield* sql<{
-          name: string;
-        }>`SELECT name FROM sqlite_master WHERE name='fork_recovery_thread_fences'`;
         if (fencedTables.length > 0) {
           for (const event of events) {
             if (
