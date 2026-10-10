@@ -43,6 +43,11 @@ export async function settleAfterTurn(
         return { ...request, deferred: false, cancelled: true, reason: "Cancelled by unsettle." };
       }
       const thread = await client.findThread(request.threadId);
+      // Someone else already settled it (the server's auto-settle, another helper): the goal is
+      // met, and polling on would hold a connection open every 5 s until the 24 h deadline.
+      if (thread.settledOverride === "settled") {
+        return { ...request, deferred: false, settled: true, alreadySettled: true };
+      }
       if (
         thread.archivedAt ||
         thread.deletedAt ||
