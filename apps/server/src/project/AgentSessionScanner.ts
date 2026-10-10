@@ -625,8 +625,12 @@ export const make = Effect.gen(function* () {
   const serverConfig = yield* ServerConfig.ServerConfig;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const projectStore = yield* ProjectStore.ProjectStoreV2;
-  const baseDir = path.resolve(serverConfig.baseDir);
-  const worktreesDir = path.resolve(serverConfig.worktreesDir);
+  const canonicalizeDirectory = (directory: string) => {
+    const resolved = path.resolve(directory);
+    return fileSystem.realPath(resolved).pipe(Effect.orElseSucceed(() => resolved));
+  };
+  const baseDir = yield* canonicalizeDirectory(serverConfig.baseDir);
+  const worktreesDir = yield* canonicalizeDirectory(serverConfig.worktreesDir);
   // Windows filesystems are case-insensitive, so path prefix checks there
   // must case fold.
   const foldWorktreeCase = (yield* HostProcess.Platform) === "win32";

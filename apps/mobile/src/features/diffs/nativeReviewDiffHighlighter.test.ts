@@ -19,7 +19,12 @@ vi.mock("@shikijs/core", async (importOriginal) => {
         ...highlighter,
         codeToTokensBase: (...input: Parameters<typeof highlighter.codeToTokensBase>) => {
           tokenization.calls.push(input[0]);
-          const result = highlighter.codeToTokensBase(...input);
+          // Grammar-boundary assertions must not depend on Shiki's wall-clock
+          // cutoff when the complete repository gate saturates the test host.
+          const result = highlighter.codeToTokensBase(input[0], {
+            ...input[1],
+            tokenizeTimeLimit: 0,
+          });
           tokenization.afterCall?.();
           return result;
         },
