@@ -3016,3 +3016,13 @@ retire_when = "Upstream makes the development DevTools window optional, or the f
 depends_on = ["fork-desktop-delivery"]
 roles = []
 note = "DesktopConfig reads T3CODE_DESKTOP_DEVTOOLS like the other desktop flags and DesktopEnvironment carries it as openDevToolsOnLaunch; DesktopWindow still requires isDevelopment, so a packaged build is unaffected and has no release-note entry. Desktop only: web, mobile and the server have no DevTools window."
+
+[[patch]]
+name = "fork-projects-quiet-mobile"
+subject = "fix(mobile): fold finished projects into Quiet"
+class = "product"
+purpose = "Hold the Projects list to the same finished-project rule on mobile as on the web sidebar: settled and long-quiet projects fold into a collapsed Quiet group (Brad, 2026-10-10)."
+retire_when = "Mobile shares the web sidebar's project list, or fork-projects-real-only retires."
+depends_on = ["fork-projects-real-only", "fork-orchestrators-view"]
+roles = []
+note = "The rule is client-runtime's projectSidebarBucket; PROJECT_QUIET_AFTER_MS is the one shared quiet window, now used by web and mobile. MobileOrchestratorList splits summaries by bucket and shows a collapsed Quiet N toggle after the active rows; mobile has no deferred-bucket debounce, so a row moves as soon as its state changes. Only top-level projects fold by bucket; fork-subprojects-mobile nests their subprojects inside the card."
