@@ -3058,3 +3058,19 @@ id = "mobile-nesting-standalone-on-main"
 date = "2026-10-10"
 decided = "narrow+adapt"
 rationale = "Standalone form of the catch-up's fork-subprojects-mobile (b3ae7b12) so the nesting can ship as a JS-only OTA on fork.12 main. Main keeps the web subproject rules in apps/web, which mobile cannot import, and has no client-runtime projectSubprojects, so this patch adds that module and its package export with only the six functions mobile calls (projectKeyOf, subprojectCountLabel, subprojectIsActive, subprojectWorkingLabel, toggleProjectKey, topLevelProjects); b3ae7b12's module also carries ownTreeContains, openTaskCount, taskProgressLabel, projectTrail, subprojectNeedsYou, subprojectBlocked and COLLAPSED_SUBPROJECTS_KEY for the web, which stay in apps/web here. The two mobile TSX files and the release note are byte-identical to b3ae7b12; the docs sentence matches its wording. When the catch-up's stack replaces this patch, take its projectSubprojects.ts (a superset of this one, same exports) and drop this patch."
+
+[[patch]]
+name = "fork-projects-dnd"
+subject = "feat(web): arrange projects by dragging them in the Projects sidebar"
+class = "product"
+purpose = "Let Brad arrange the Projects sidebar by dragging a project row, or with Alt+Up/Down on it (Brad, 2026-10-10)."
+retire_when = "Upstream offers its own way to arrange projects, or fork-projects-real-only stops ordering projects by pin."
+depends_on = ["fork-projects-real-only", "fork-projects-pinned"]
+roles = []
+note = "No new store: a move writes the existing thread pin order keys (thread.pin with orderKey, thread.pin.reorder) through useThreadActions. Pinned projects lead in pin order and the rest sort by bucket, so planProjectMove pins the moved project and every project shown above it in the dropped order, keeping pinned projects below; the list then reads as dropped. Quiet pinned keys are reserved. The list holds the dropped order until the assigned keys land, a membership change, or a failed write. Reverse: Unpin thread in the row menu returns a project to automatic order. Drag into or out of a parent stays on the menu (Show as subproject / worker). Web and desktop; mobile does not arrange projects."
+
+[[patch.decision]]
+id = "projects-dnd-pin-keys"
+date = "2026-10-10"
+decided = "reconcile-smaller"
+rationale = "The project-layout service stores a project page's widgets, not the sidebar's project order, so arranging reuses pin order keys, which already order Projects and sync to every client, instead of adding an order store. Brad ran it from feature/projects-dnd-live (8dc73699) on origin/live first."
