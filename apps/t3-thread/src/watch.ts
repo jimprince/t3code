@@ -124,14 +124,47 @@ function createWatchClient(environment: SavedEnvironment): WatchClient {
   return new RemoteEnvironmentClient(environment);
 }
 
+/**
+ * What a full read of a quiet thread could add beyond its shell. Undefined while a run is
+ * live: inactivity and progress come from the full thread, so those are always read.
+ */
+function quietShellSignature(shell: OrchestrationThreadShell): string | undefined {
+  if (shell.activeRunId || ["running", "queued", "starting"].includes(shell.status ?? "")) {
+    return undefined;
+  }
+  return JSON.stringify([
+    shell.updatedAt,
+    shell.status ?? null,
+    shell.lastError ?? null,
+    shell.settledOverride ?? null,
+    shell.settledAt ?? null,
+    shell.unsettledAt ?? null,
+    shell.archivedAt,
+    shell.latestTurn?.turnId ?? null,
+    shell.latestTurn?.state ?? null,
+    shell.latestTurn?.completedAt ?? null,
+    shell.latestUserMessageAt,
+    shell.hasPendingApprovals,
+    shell.hasPendingUserInput,
+    shell.hasActionableProposedPlan,
+    shell.parentThreadId ?? null,
+    shell.remoteParent ?? null,
+  ]);
+}
+
 /** Per-watcher cache: share reads within a pass, park terminal mappings for its lifetime.
- * Settled sources re-check each minute so remote unsettle remains observable.
+ * Settled sources re-check each minute so remote unsettle remains observable. A quiet
+ * source whose shell in this pass's list is unchanged since its last full read reuses that
+ * read: each full read is a connection and a thread snapshot, every pass, per source.
  */
 export function createWatchPoller(factory: WatchClientFactory = createWatchClient, now = Date.now) {
   const reads = new Map<string, Promise<OrchestrationThread>>();
   // One shell list per environment per pass: the attention scan and the liveness check both
   // discover routes from it.
   const lists = new Map<string, Promise<OrchestrationThreadShell[]>>();
+  // This pass's quiet-shell signatures, and the full read each source last had under one.
+  const signatures = new Map<string, string>();
+  const quietReads = new Map<string, { signature: string; read: Promise<OrchestrationThread> }>();
   const parked = new Map<
     string,
     { until: number; read: Promise<OrchestrationThread>; reason: string }
@@ -140,7 +173,14 @@ export function createWatchPoller(factory: WatchClientFactory = createWatchClien
     listThreads() {
       let list = lists.get(environment.name);
       if (!list) {
-        list = factory(environment).listThreads?.() ?? Promise.resolve([]);
+        list = (factory(environment).listThreads?.() ?? Promise.resolve([])).then((shells) => {
+          for (const shell of shells) {
+            const signature = quietShellSignature(shell);
+            if (signature !== undefined)
+              signatures.set(`${environment.name}:${shell.id}`, signature);
+          }
+          return shells;
+        });
         // A failed list is retried by the next caller rather than reused for the whole pass.
         list.catch(() => lists.delete(environment.name));
         lists.set(environment.name, list);
@@ -151,10 +191,18 @@ export function createWatchPoller(factory: WatchClientFactory = createWatchClien
       const key = `${environment.name}:${threadId}`;
       const skipped = parked.get(key);
       if (skipped && now() < skipped.until) return skipped.read;
+      const signature = signatures.get(key);
+      const quiet = quietReads.get(key);
+      if (!reads.has(key) && signature !== undefined && quiet?.signature === signature) {
+        return quiet.read;
+      }
       if (!reads.has(key)) {
         const read: Promise<OrchestrationThread> = factory(environment)
           .findThread(threadId)
           .then((thread) => {
+            if (signature !== undefined)
+              quietReads.set(key, { signature, read: Promise.resolve(thread) });
+            else quietReads.delete(key);
             const reason =
               thread.archivedAt || thread.deletedAt
                 ? "archived"
@@ -195,6 +243,7 @@ export function createWatchPoller(factory: WatchClientFactory = createWatchClien
     beginPoll: () => {
       reads.clear();
       lists.clear();
+      signatures.clear();
     },
     skippedMappings: () =>
       [...parked].map(([mapping, value]) => ({ mapping, reason: value.reason })),

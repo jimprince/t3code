@@ -918,6 +918,45 @@ describe("notification ownership and attention", () => {
 });
 
 describe("watch polling cost", () => {
+  it("re-reads a quiet source only when its shell changes, and a live one every pass", async () => {
+    const thread = makeThread({ id: "worker" });
+    let shell = {
+      ...thread,
+      activeRunId: null,
+      status: "idle",
+      latestUserMessageAt: null,
+      hasPendingApprovals: false,
+      hasPendingUserInput: false,
+      hasActionableProposedPlan: false,
+    } as OrchestrationThreadShell;
+    let reads = 0;
+    const poller = createWatchPoller(() => ({
+      listThreads: async () => [shell],
+      async findThread() {
+        reads += 1;
+        return thread;
+      },
+      async sendMessage() {},
+    }));
+    const client = poller.clientFactory(makeEnvironment());
+    const pass = async () => {
+      poller.beginPoll();
+      await client.listThreads!();
+      await client.findThread("worker");
+    };
+    await pass();
+    await pass();
+    await pass();
+    expect(reads).toBe(1);
+    shell = { ...shell, updatedAt: "2026-04-17T01:00:00.000Z" };
+    await pass();
+    expect(reads).toBe(2);
+    shell = { ...shell, activeRunId: "run-2", status: "running" };
+    await pass();
+    await pass();
+    expect(reads).toBe(4);
+  });
+
   it("lists shells once per environment per pass", async () => {
     let lists = 0;
     const poller = createWatchPoller(() => ({
