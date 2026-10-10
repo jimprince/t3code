@@ -1,6 +1,6 @@
-Bottom: a965625f3af0b709f7319c8806a3866a93f18644
-Top:    65c6734351cf15bcd0d316aa2d199e6a79d30285
+Bottom: d17b4aaef40bc4b5a6015a831514578e2ae235a7
+Top:    70ee6e9b4810e20359994eb4a65cf3a050b4bef2
 Author: brad <bradprin@live.com>
-Date:   2026-10-10 08:43:31 +0000
+Date:   2026-10-10 10:56:35 +0000
 
 fix(projects): PR widget resolves alias hosts, refreshes on load and folds closed PRs
