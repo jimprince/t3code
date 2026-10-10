@@ -1,0 +1,12 @@
+Bottom: 8007ef419d4072368064d894f1d4cfbc1e0359b3
+Top:    752ee6c087930e5ab6f05f8acd121af93545ffcc
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 10:47:20 +0000
+
+fix(server): guard starting-session reconcile with causal ownership
+
+Preserve newer starts and reuse the same locked planning snapshot. Provider read-to-commit window remains follow-up #196.
+
+Fork-Class: divergence
+Fork-Retire-When: reconcile has equivalent causal ownership and liveness guarantees
+

@@ -1,0 +1,8 @@
+Bottom: 8c880c8406819606d0462070e3d8ee4e510edd64
+Top:    56aa91595677c4a723645310e6ce539dca881900
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 10:47:29 +0000
+
+fix(server): recover provider context after restart
+
+
