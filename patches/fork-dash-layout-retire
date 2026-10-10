@@ -1,6 +1,6 @@
-Bottom: 39934b587d56794cd2740ed9f14559ab5a7ced34
-Top:    a2707f937ba824e1da70ca27bb9b792ada5afa9c
+Bottom: 5a6e450e73bdb2ced3d0202ea05c1793698266cb
+Top:    a4b04d75a071d0f918e1fc3816b0b482b961cf38
 Author: brad <bradprin@live.com>
-Date:   2026-10-10 08:43:31 +0000
+Date:   2026-10-10 12:08:18 +0000
 
 fix(projects): stop offering the retired Working, Blocked and Done widgets
