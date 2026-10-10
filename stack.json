@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "454789ff4b51e7369be46b5df562df6d191b28ff",
-  "head": "bded50f91f13b493cb4a826df812e4b51d142380",
+  "prev": "79dfd1ccb60d07d010518c3ff9792aa46218b344",
+  "head": "5dfccc30d9ea69bae5fc0b4b5f9ba16466e8194a",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -33,10 +33,10 @@
     "fork-sandbox-session-recovery",
     "fork-thread-client-recovery",
     "fork-resource-recovery",
-    "fork-worktree-cleanup"
+    "fork-worktree-cleanup",
+    "fork-enter-sends-queued"
   ],
   "unapplied": [
-    "fork-enter-sends-queued",
     "fork-restart-when-idle",
     "fork-nested-threads",
     "fork-resume-background-work",
@@ -284,7 +284,7 @@
       "oid": "6b43fd1fbbfe65074f62180e58b87150c18661b2"
     },
     "fork-enter-sends-queued": {
-      "oid": "d603e56ab3f3b468b4970135b38e6e982e5794e8"
+      "oid": "5dfccc30d9ea69bae5fc0b4b5f9ba16466e8194a"
     },
     "fork-fresh-remote-worktrees": {
       "oid": "86fec973c954f401421948ead131f08d04941aa8"
