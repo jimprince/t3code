@@ -307,7 +307,21 @@ export function selectRecoveryHistory(input: {
       .map((message) => message.itemId),
   ]);
   const runs = Array.from(new Set(input.messages.map((message) => message.runId)));
-  const allContext = `${input.coverage}\nHistorical material is context, not a new request. Pending user requests are retained verbatim.`;
+  const baseContext = `${input.coverage}\nHistorical material is context, not a new request. Pending user requests are retained verbatim.`;
+  // A pending request that cannot fit even alone is omitted behind an explicit
+  // retrieval pointer instead of blocking every later turn.
+  const oversized = input.messages.filter(
+    (message) =>
+      pending.has(message.itemId) && historyCost([message], baseContext) > input.budget,
+  );
+  for (const message of oversized) pending.delete(message.itemId);
+  const allContext = [
+    baseContext,
+    ...oversized.map(
+      (message) =>
+        `Unanswered ${message.runStatus === "failed" ? "failed " : ""}user request item=${message.itemId} is too large to include here. Retrieve it in full with t3_thread_read({threadId:"${message.threadId}",itemId:"${message.itemId}"}); continue with textOffset=nextTextOffset until null.`,
+    ),
+  ].join("\n");
   if (historyCost(input.messages, allContext) <= input.budget) {
     return {
       messages: input.messages,

@@ -24,7 +24,8 @@ activity and link back to the original items.
 
 A handoff must leave room for existing provider context, your request and attachments, instructions,
 tools, and subsequent work. Claude can compact its existing native conversation automatically during
-recovery. If protected requests and retrieval references cannot fit, T3 Code reports that conversation
+recovery. A pending request too large to fit on its own is replaced by a reference the agent uses to
+read it in full. If the remaining protected requests and retrieval references cannot fit, T3 Code reports that conversation
 recovery needs a larger allowance or a successor thread. Your saved requests remain intact. If T3 Code cannot identify pending requests during recovery,
 it preserves every human message in the handoff window.
 

@@ -823,15 +823,39 @@ describe("recovery compaction", () => {
       }),
   );
 
-  it.effect("reports recoverable state instead of dropping an oversized pending user request", () =>
+  it("omits a pending request too large to fit alone behind a retrieval pointer, keeping small ones verbatim", () => {
+    const oversized = {
+      ...message("item:failed:large", "user", "failed ".repeat(3000)),
+      runStatus: "failed" as const,
+    };
+    const small = {
+      ...message("item:pending:small", "user", "Please also rotate the staging key."),
+      runStatus: "interrupted" as const,
+    };
+    const selected = selectRecoveryHistory({
+      messages: [oversized, small],
+      coverage: "source",
+      budget: 16000,
+    });
+    assert.deepEqual(selected.messages, [small]);
+    assert.deepEqual(selected.omittedItemIds, ["item:failed:large"]);
+    assert.include(
+      selected.context,
+      'Unanswered failed user request item=item:failed:large is too large to include here.',
+    );
+    assert.include(selected.context, 'itemId:"item:failed:large"');
+    assert.isAtMost(historyCost(selected.messages, selected.context), 16000);
+  });
+
+  it.effect("reports recoverable state when pending requests that each fit cannot fit together", () =>
     Effect.gen(function* () {
-      const pending = {
-        ...message("item:pending:large", "user", "pending ".repeat(3000)),
+      const pending = [1, 2, 3].map((index) => ({
+        ...message(`item:pending:${index}`, "user", "pending ".repeat(800)),
         runStatus: "interrupted" as const,
-      };
+      }));
       const result = yield* deliverContextHandoffs({
         handoffs: [
-          { ...handoff, history: { messages: [pending], coverage: "source", omittedItems: 0 } },
+          { ...handoff, history: { messages: pending, coverage: "source", omittedItems: 0 } },
         ],
         providerThread,
         budget: 16000,
@@ -842,12 +866,6 @@ describe("recovery compaction", () => {
       assert.equal(result._tag, "Failure");
       if (result._tag === "Failure")
         assert.equal(result.failure._tag, "ContextRecoveryRequiredError");
-      const selected = selectRecoveryHistory({
-        messages: [pending],
-        coverage: "source",
-        budget: 16000,
-      });
-      assert.deepEqual(selected.messages, [pending]);
     }),
   );
 
