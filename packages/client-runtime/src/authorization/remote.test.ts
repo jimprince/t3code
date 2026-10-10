@@ -386,21 +386,23 @@ describe("remote environment authorization", () => {
         issueRemoteWebSocketTicket({
           httpBaseUrl: "https://remote.example.com",
           bearerToken: "bearer",
-        }),
+        }).pipe(Effect.asVoid),
         issueRemoteDpopWebSocketTicket({
           httpBaseUrl: "https://remote.example.com",
           accessToken: "access",
           dpopProof: "proof",
-        }),
+        }).pipe(Effect.asVoid),
         bootstrapRemoteBearerSession({
           httpBaseUrl: "https://remote.example.com",
           credential: "pairing",
-        }),
+        }).pipe(Effect.asVoid),
         fetchRemoteSessionState({
           httpBaseUrl: "https://remote.example.com",
           bearerToken: "bearer",
-        }),
-        fetchRemoteEnvironmentDescriptor({ httpBaseUrl: "https://remote.example.com" }),
+        }).pipe(Effect.asVoid),
+        fetchRemoteEnvironmentDescriptor({ httpBaseUrl: "https://remote.example.com" }).pipe(
+          Effect.asVoid,
+        ),
       ];
       const fibers = [];
       for (const request of requests) {
