@@ -311,8 +311,7 @@ export function selectRecoveryHistory(input: {
   // A pending request that cannot fit even alone is omitted behind an explicit
   // retrieval pointer instead of blocking every later turn.
   const oversized = input.messages.filter(
-    (message) =>
-      pending.has(message.itemId) && historyCost([message], baseContext) > input.budget,
+    (message) => pending.has(message.itemId) && historyCost([message], baseContext) > input.budget,
   );
   for (const message of oversized) pending.delete(message.itemId);
   const allContext = [

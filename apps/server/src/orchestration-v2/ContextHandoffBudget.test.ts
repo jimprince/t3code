@@ -841,32 +841,34 @@ describe("recovery compaction", () => {
     assert.deepEqual(selected.omittedItemIds, ["item:failed:large"]);
     assert.include(
       selected.context,
-      'Unanswered failed user request item=item:failed:large is too large to include here.',
+      "Unanswered failed user request item=item:failed:large is too large to include here.",
     );
     assert.include(selected.context, 'itemId:"item:failed:large"');
     assert.isAtMost(historyCost(selected.messages, selected.context), 16000);
   });
 
-  it.effect("reports recoverable state when pending requests that each fit cannot fit together", () =>
-    Effect.gen(function* () {
-      const pending = [1, 2, 3].map((index) => ({
-        ...message(`item:pending:${index}`, "user", "pending ".repeat(800)),
-        runStatus: "interrupted" as const,
-      }));
-      const result = yield* deliverContextHandoffs({
-        handoffs: [
-          { ...handoff, history: { messages: pending, coverage: "source", omittedItems: 0 } },
-        ],
-        providerThread,
-        budget: 16000,
-        alreadyDeliveredItemIds: new Set(),
-        persist: () => Effect.die("must not mark delivered"),
-        inject: () => Effect.die("must not start partial replay"),
-      }).pipe(Effect.result);
-      assert.equal(result._tag, "Failure");
-      if (result._tag === "Failure")
-        assert.equal(result.failure._tag, "ContextRecoveryRequiredError");
-    }),
+  it.effect(
+    "reports recoverable state when pending requests that each fit cannot fit together",
+    () =>
+      Effect.gen(function* () {
+        const pending = [1, 2, 3].map((index) => ({
+          ...message(`item:pending:${index}`, "user", "pending ".repeat(800)),
+          runStatus: "interrupted" as const,
+        }));
+        const result = yield* deliverContextHandoffs({
+          handoffs: [
+            { ...handoff, history: { messages: pending, coverage: "source", omittedItems: 0 } },
+          ],
+          providerThread,
+          budget: 16000,
+          alreadyDeliveredItemIds: new Set(),
+          persist: () => Effect.die("must not mark delivered"),
+          inject: () => Effect.die("must not start partial replay"),
+        }).pipe(Effect.result);
+        assert.equal(result._tag, "Failure");
+        if (result._tag === "Failure")
+          assert.equal(result.failure._tag, "ContextRecoveryRequiredError");
+      }),
   );
 
   it("admits a recovery prompt on a full native Claude session so native auto-compaction can run", () => {
