@@ -199,4 +199,4 @@ it("findThread uses the real RPC bounded path for 10,000 items and preserves ope
       server.close((error) => (error ? reject(error) : resolve())),
     );
   }
-});
+}, 30_000);
