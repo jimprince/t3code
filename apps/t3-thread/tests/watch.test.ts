@@ -918,7 +918,8 @@ describe("notification ownership and attention", () => {
 });
 
 describe("watch polling cost", () => {
-  it("re-reads a quiet source only when its shell changes, and a live one every pass", async () => {
+  it("re-reads a quiet source only when its shell changes, and a live one at most every 30 s", async () => {
+    let time = 0;
     const thread = makeThread({ id: "worker" });
     let shell = {
       ...thread,
@@ -930,53 +931,49 @@ describe("watch polling cost", () => {
       hasActionableProposedPlan: false,
     } as OrchestrationThreadShell;
     let reads = 0;
-    const poller = createWatchPoller(() => ({
-      listThreads: async () => [shell],
-      async findThread() {
-        reads += 1;
-        return thread;
-      },
-      async sendMessage() {},
-    }));
+    let lists = 0;
+    const poller = createWatchPoller(
+      () => ({
+        async listThreads() {
+          lists += 1;
+          return [shell];
+        },
+        async findThread() {
+          reads += 1;
+          return thread;
+        },
+        async sendMessage() {},
+      }),
+      () => time,
+    );
     const client = poller.clientFactory(makeEnvironment());
-    const pass = async () => {
+    const pass = async (advanceMs = 5_000) => {
+      time += advanceMs;
       poller.beginPoll();
+      await client.listThreads!();
       await client.listThreads!();
       await client.findThread("worker");
     };
     await pass();
     await pass();
     await pass();
+    // Quiet and unchanged: one full read, and one shell list per 15 s however often passes run.
     expect(reads).toBe(1);
-    shell = { ...shell, updatedAt: "2026-04-17T01:00:00.000Z" };
-    await pass();
-    expect(reads).toBe(2);
-    shell = { ...shell, activeRunId: "run-2", status: "running" };
-    await pass();
-    await pass();
-    expect(reads).toBe(4);
-  });
-
-  it("lists shells once per environment per pass", async () => {
-    let lists = 0;
-    const poller = createWatchPoller(() => ({
-      async listThreads() {
-        lists += 1;
-        return [];
-      },
-      async findThread() {
-        return makeThread();
-      },
-      async sendMessage() {},
-    }));
-    const client = poller.clientFactory(makeEnvironment());
-    poller.beginPoll();
-    await client.listThreads!();
-    await client.listThreads!();
     expect(lists).toBe(1);
-    poller.beginPoll();
-    await client.listThreads!();
-    expect(lists).toBe(2);
+    shell = { ...shell, updatedAt: "2026-04-17T01:00:00.000Z" };
+    await pass(15_000);
+    expect(reads).toBe(2);
+    // Live: read on starting, then at most every 30 s while nothing in its shell moves.
+    shell = { ...shell, activeRunId: "run-2", status: "running" };
+    await pass(15_000);
+    await pass(15_000);
+    expect(reads).toBe(3);
+    await pass(15_000);
+    expect(reads).toBe(4);
+    // A request on the live run shows in the shell and is read at once.
+    shell = { ...shell, hasPendingUserInput: true };
+    await pass(15_000);
+    expect(reads).toBe(5);
   });
 
   it("shares reads and parks missing, archived and settled sources", async () => {

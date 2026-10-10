@@ -152,57 +152,97 @@ function quietShellSignature(shell: OrchestrationThreadShell): string | undefine
   ]);
 }
 
+/** What makes a live source worth reading again before LIVE_SOURCE_REREAD_MS passes. */
+function liveShellSignature(shell: OrchestrationThreadShell): string {
+  return JSON.stringify([
+    shell.status ?? null,
+    shell.activeRunId ?? null,
+    shell.latestTurn?.turnId ?? null,
+    shell.hasPendingApprovals,
+    shell.hasPendingUserInput,
+    shell.hasActionableProposedPlan,
+  ]);
+}
+// Passes are seconds apart once settled and unchanged sources cost nothing. A live run's
+// inactivity thresholds are minutes, and its requests and completion show in the shell, so
+// its full read and the shell list itself are refreshed on these slower clocks.
+const LIVE_SOURCE_REREAD_MS = 30_000;
+const SHELL_LIST_TTL_MS = 15_000;
+
 /** Per-watcher cache: share reads within a pass, park terminal mappings for its lifetime.
- * Settled sources re-check each minute so remote unsettle remains observable. A quiet
- * source whose shell in this pass's list is unchanged since its last full read reuses that
- * read: each full read is a connection and a thread snapshot, every pass, per source.
+ * Settled sources re-check each minute so remote unsettle remains observable. A source
+ * whose shell is unchanged since its last full read reuses that read (a live one for at most
+ * LIVE_SOURCE_REREAD_MS): each full read is a connection and a thread snapshot.
  */
 export function createWatchPoller(factory: WatchClientFactory = createWatchClient, now = Date.now) {
   const reads = new Map<string, Promise<OrchestrationThread>>();
   // One shell list per environment per pass: the attention scan and the liveness check both
   // discover routes from it.
-  const lists = new Map<string, Promise<OrchestrationThreadShell[]>>();
+  const lists = new Map<string, { at: number; list: Promise<OrchestrationThreadShell[]> }>();
   // This pass's quiet-shell signatures, and the full read each source last had under one.
-  const signatures = new Map<string, string>();
-  const quietReads = new Map<string, { signature: string; read: Promise<OrchestrationThread> }>();
+  const signatures = new Map<string, { signature: string; live: boolean }>();
+  const signedReads = new Map<
+    string,
+    { signature: string; at: number; read: Promise<OrchestrationThread> }
+  >();
   const parked = new Map<
     string,
     { until: number; read: Promise<OrchestrationThread>; reason: string }
   >();
   const clientFactory: WatchClientFactory = (environment) => ({
     listThreads() {
-      let list = lists.get(environment.name);
-      if (!list) {
-        list = (factory(environment).listThreads?.() ?? Promise.resolve([])).then((shells) => {
-          for (const shell of shells) {
-            const signature = quietShellSignature(shell);
-            if (signature !== undefined)
-              signatures.set(`${environment.name}:${shell.id}`, signature);
-          }
-          return shells;
-        });
-        // A failed list is retried by the next caller rather than reused for the whole pass.
-        list.catch(() => lists.delete(environment.name));
-        lists.set(environment.name, list);
-      }
+      const cached = lists.get(environment.name);
+      if (cached && now() - cached.at < SHELL_LIST_TTL_MS) return cached.list;
+      const forget = () => {
+        for (const key of signatures.keys())
+          if (key.startsWith(`${environment.name}:`)) signatures.delete(key);
+      };
+      const list = (factory(environment).listThreads?.() ?? Promise.resolve([])).then((shells) => {
+        forget();
+        for (const shell of shells) {
+          const quiet = quietShellSignature(shell);
+          signatures.set(
+            `${environment.name}:${shell.id}`,
+            quiet === undefined
+              ? { signature: liveShellSignature(shell), live: true }
+              : { signature: quiet, live: false },
+          );
+        }
+        return shells;
+      });
+      // A failed list is retried by the next caller rather than reused.
+      list.catch(() => {
+        lists.delete(environment.name);
+        forget();
+      });
+      lists.set(environment.name, { at: now(), list });
       return list;
     },
     findThread(threadId) {
       const key = `${environment.name}:${threadId}`;
       const skipped = parked.get(key);
       if (skipped && now() < skipped.until) return skipped.read;
-      const signature = signatures.get(key);
-      const quiet = quietReads.get(key);
-      if (!reads.has(key) && signature !== undefined && quiet?.signature === signature) {
-        return quiet.read;
+      const signed = signatures.get(key);
+      const previous = signedReads.get(key);
+      if (
+        !reads.has(key) &&
+        signed !== undefined &&
+        previous?.signature === signed.signature &&
+        (!signed.live || now() - previous.at < LIVE_SOURCE_REREAD_MS)
+      ) {
+        return previous.read;
       }
       if (!reads.has(key)) {
         const read: Promise<OrchestrationThread> = factory(environment)
           .findThread(threadId)
           .then((thread) => {
-            if (signature !== undefined)
-              quietReads.set(key, { signature, read: Promise.resolve(thread) });
-            else quietReads.delete(key);
+            if (signed !== undefined)
+              signedReads.set(key, {
+                signature: signed.signature,
+                at: now(),
+                read: Promise.resolve(thread),
+              });
+            else signedReads.delete(key);
             const reason =
               thread.archivedAt || thread.deletedAt
                 ? "archived"
@@ -240,11 +280,7 @@ export function createWatchPoller(factory: WatchClientFactory = createWatchClien
   });
   return {
     clientFactory,
-    beginPoll: () => {
-      reads.clear();
-      lists.clear();
-      signatures.clear();
-    },
+    beginPoll: () => reads.clear(),
     skippedMappings: () =>
       [...parked].map(([mapping, value]) => ({ mapping, reason: value.reason })),
   };
