@@ -141,6 +141,45 @@ describe("send queue drain", () => {
     });
   });
 
+  it("re-reads a settled recipient once a minute, not on every pass, while its send is held", async () => {
+    await withTempState(async () => {
+      await queue("Please retry the operation");
+      const thread = makeThread({ settledOverride: "settled" });
+      let reads = 0;
+      const { clientFactory: base, sent } = createClientFactory({ thread: () => thread });
+      const clientFactory: QueueClientFactory = (environment) => ({
+        ...base(environment),
+        async findThread(threadId) {
+          reads += 1;
+          return base(environment).findThread(threadId);
+        },
+      });
+      const settledTargets = new Map<string, number>();
+      let time = Date.parse("2026-10-10T10:00:00.000Z");
+      const drain = () =>
+        drainQueuedSends({
+          clientFactory,
+          settledTargets,
+          now: () => new Date(time).toISOString(),
+        });
+
+      await drain();
+      time += 5_000;
+      await drain();
+      time += 5_000;
+      await drain();
+      expect(reads).toBe(1);
+      expect((await loadState()).queuedSends[0]?.status).toBe("queued");
+
+      // Unsettled meanwhile: seen on the next minute's read and delivered.
+      thread.settledOverride = null;
+      time += 60_000;
+      await drain();
+      expect(reads).toBe(2);
+      expect(sent.map((message) => message.text)).toEqual(["Please retry the operation"]);
+    });
+  });
+
   it("holds legacy queued notifications after quota failure while permitting explicit operator retry", async () => {
     for (const text of [
       "HomeNetwork orchestrator notification: Worker needs attention",
