@@ -38,7 +38,7 @@ export function taskProgressLabel(summary: OrchestratorSummary): string | null {
 }
 
 /** Every subproject beneath a project, at any depth: what folding its card hides. */
-export function subprojectCount(summary: OrchestratorSummary): number {
+function subprojectCount(summary: OrchestratorSummary): number {
   return summary.subprojects.reduce((total, sub) => total + 1 + subprojectCount(sub), 0);
 }
 
