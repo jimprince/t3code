@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { DateTime } from "effect";
 import { EnvironmentId, ThreadId, RunId, ProviderInstanceId, TurnId } from "@t3tools/contracts";
 
+import { sortActiveThreadsByOrderKey } from "./threadSort.ts";
 import type { EnvironmentProject } from "./models.ts";
 import { presentThreadShell } from "./models.ts";
 import { v2ThreadShell } from "./orchestrationV2TestFixtures.ts";
@@ -13,6 +14,7 @@ import {
   projectSidebarBucket,
   isThreadWorking,
   joinOrchestratorMetadata,
+  isUserOpenedThread,
   lastActivityAt,
   sortOrchestratorSummariesForSidebar,
   threadsVisibleInThreadsMode,
@@ -65,6 +67,8 @@ const thread = (
   const { session, latestTurn, agentPanelSummary, ...fields } = overrides;
   const base = presentThreadShell(EnvironmentId.make("env-1"), {
     ...v2ThreadShell,
+    createdBy: "agent",
+    creationSource: "mcp",
     id: ThreadId.make(id),
     title: id,
     projectId: "project-a" as EnvironmentThreadShell["projectId"],
@@ -313,29 +317,45 @@ describe("buildOrchestratorSummaries", () => {
     ]);
   });
 
-  it("makes a pinned top-level thread a project, listed first, and keeps its row in Threads", () => {
+  it("orders projects by pin without promoting a pinned thread that has no workers", () => {
     const chief = thread("chief", null, {
       pinnedAt: "2026-10-05T00:00:00.000Z",
       pinOrderKey: "a",
     });
+    const chiefWorker = thread("chief-worker", "chief");
     const busy = thread("busy", null, { hasPendingApprovals: true });
     const busyWorker = thread("busy-worker", "busy", { hasPendingApprovals: true });
-    const chiefWorker = thread("chief-worker", "chief");
+    const pinnedLoner = thread("pinned-loner", null, {
+      pinnedAt: "2026-10-05T00:00:00.000Z",
+      pinOrderKey: "b",
+    });
     const lone = thread("lone", null);
-    const summaries = buildOrchestratorSummaries([busy, busyWorker, chief, lone], []);
+    const all = [busy, busyWorker, chief, chiefWorker, pinnedLoner, lone];
+    const summaries = buildOrchestratorSummaries(all, []);
+    // Only the two roots that own workers are projects; the pin alone is not enough.
     expect(summaries.map((item) => item.root.id).toSorted()).toEqual(["busy", "chief"]);
+    // A pin still leads the list, ahead of a project that needs you.
     expect(sortOrchestratorSummariesForSidebar(summaries, 0).map((item) => item.root.id)).toEqual([
       "chief",
       "busy",
     ]);
-    expect(
-      threadsVisibleInThreadsMode([busy, busyWorker, chief, chiefWorker, lone], true).map(
-        (item) => item.id,
-      ),
-    ).toEqual(["chief", "lone"]);
+    // Projects own their whole tree in Threads mode, pinned root included.
+    expect(threadsVisibleInThreadsMode(all, true).map((item) => item.id)).toEqual([
+      "pinned-loner",
+      "lone",
+    ]);
   });
 
-  it("keeps project trees in Threads only when Projects is disabled, except a pinned root's row", () => {
+  it("keeps a marked standing orchestrator in Projects with no workers of its own", () => {
+    const standing = thread("standing", null, { subproject: "on" });
+    const plain = thread("plain", null);
+    const all = [standing, plain];
+    expect(buildOrchestratorSummaries(all, []).map((item) => item.root.id)).toEqual(["standing"]);
+    // Marked projects own their row in Projects, so they leave the Threads list too.
+    expect(threadsVisibleInThreadsMode(all, true).map((item) => item.id)).toEqual(["plain"]);
+  });
+
+  it("keeps project trees in Threads only when Projects is disabled", () => {
     const root = thread("root", null, { pinnedAt: "2026-10-01T00:00:00.000Z" });
     const child = thread("child", "root", { pinnedAt: "2026-10-01T00:00:00.000Z" });
     const standalone = thread("standalone", null);
@@ -349,7 +369,6 @@ describe("buildOrchestratorSummaries", () => {
     });
     const all = [root, child, standalone, archivedParent, orphan, finishedOnlyRoot, archivedChild];
     expect(threadsVisibleInThreadsMode(all, true).map((item) => item.id)).toEqual([
-      "root",
       "standalone",
       "archived-parent",
       "orphan",
@@ -452,6 +471,35 @@ describe("subprojects", () => {
     );
     expect(attention!.needsYou).toEqual([]);
     expect(projectSidebarBucket(attention!, 0)).toBe("needs-you");
+  });
+
+  it("folds a settled project into Quiet, unless it still needs you or is working", () => {
+    const settledRoot = thread("settled-root", null, { settledOverride: "settled" });
+    const settledWorker = thread("settled-worker", "settled-root");
+    const settled = buildOrchestratorSummaries([settledRoot, settledWorker], []).find(
+      (item) => item.root.id === "settled-root",
+    );
+    // Recent enough to be "idle" on activity alone; settling is the stronger statement.
+    expect(projectSidebarBucket(settled!, 0)).toBe("quiet");
+
+    const askingWorker = thread("asking-worker", "settled-root", { hasPendingUserInput: true });
+    const stillAsking = buildOrchestratorSummaries([settledRoot, askingWorker], []).find(
+      (item) => item.root.id === "settled-root",
+    );
+    expect(projectSidebarBucket(stillAsking!, 0)).toBe("needs-you");
+
+    const busyWorker = thread("busy-worker", "settled-root", { session: running("busy-worker") });
+    const stillWorking = buildOrchestratorSummaries([settledRoot, busyWorker], []).find(
+      (item) => item.root.id === "settled-root",
+    );
+    expect(projectSidebarBucket(stillWorking!, 0)).toBe("working");
+
+    const liveRoot = thread("live-root", null);
+    const liveWorker = thread("live-worker", "live-root");
+    const live = buildOrchestratorSummaries([liveRoot, liveWorker], []).find(
+      (item) => item.root.id === "live-root",
+    );
+    expect(projectSidebarBucket(live!, 0)).toBe("idle");
   });
 
   it("orders a project's subprojects by what needs you first", () => {
@@ -816,4 +864,167 @@ it("joins imported scope and remote parents from the sidecar, excluding executio
       ],
     ),
   ).toEqual([]);
+});
+
+describe("user-created roots in Threads", () => {
+  const userRoot = (id: string, fields: Overrides = {}) => {
+    const root = thread(id, null, fields);
+    return {
+      ...root,
+      source: { ...root.source, createdBy: "user" as const, creationSource: "web" as const },
+    };
+  };
+  const delegatedChild = (id: string, parent: string) => {
+    const child = thread(id, parent, {
+      settledOverride: "settled",
+      settledAt: "2026-10-13T12:00:00.000Z",
+    });
+    const lineage = {
+      rootThreadId: ThreadId.make(parent),
+      parentThreadId: ThreadId.make(parent),
+      relationshipToParent: "subagent" as const,
+    };
+    return { ...child, lineage, source: { ...child.source, lineage } };
+  };
+  const visibleIds = (all: EnvironmentThreadShell[]) =>
+    threadsVisibleInThreadsMode(all, true).map((item) => item.id);
+
+  it("keeps both Mac user roots with settled delegates in Threads and Projects, hiding their descendants", () => {
+    const creation = userRoot("creation", { title: "Agent Creation and Communication Options" });
+    const review = userRoot("review", { title: "Review Agent Creation and Communication" });
+    const all = [
+      creation,
+      delegatedChild("creation-child", "creation"),
+      review,
+      delegatedChild("review-child", "review"),
+      thread("grandchild", "review-child"),
+    ];
+    expect(visibleIds(all)).toEqual(["creation", "review"]);
+    expect(
+      buildOrchestratorSummaries(all, [project("project-a")]).map((item) => item.root.id),
+    ).toEqual(["creation", "review"]);
+  });
+
+  it.each(["web", "mobile"] as const)("keeps a user root created from %s", (creationSource) => {
+    const root = userRoot("root");
+    expect(
+      visibleIds([
+        { ...root, source: { ...root.source, creationSource } },
+        delegatedChild("child", "root"),
+      ]),
+    ).toEqual(["root"]);
+  });
+
+  it.each(["mcp", "provider", "server"] as const)(
+    "keeps non-UI roots from %s out of Threads",
+    (creationSource) => {
+      const root = userRoot("root");
+      expect(
+        visibleIds([
+          { ...root, source: { ...root.source, creationSource } },
+          delegatedChild("child", "root"),
+        ]),
+      ).toEqual([]);
+    },
+  );
+
+  it("falls back to the existing exclusion when origin metadata is absent", () => {
+    const root = userRoot("legacy");
+    const legacy = { ...root, source: { ...root.source } };
+    Reflect.deleteProperty(legacy.source, "createdBy");
+    Reflect.deleteProperty(legacy.source, "creationSource");
+    expect(visibleIds([legacy, delegatedChild("child", "legacy")])).toEqual([]);
+  });
+
+  it("keeps agent roots out even with a UI creation source", () => {
+    const root = userRoot("root");
+    expect(
+      visibleIds([
+        { ...root, source: { ...root.source, createdBy: "agent" } },
+        delegatedChild("child", "root"),
+      ]),
+    ).toEqual([]);
+  });
+
+  it.each([true, false])(
+    "keeps explicit user projects out of Threads (has children: %s)",
+    (hasChildren) => {
+      const root = userRoot("root", { subproject: "on" });
+      expect(visibleIds([root, ...(hasChildren ? [delegatedChild("child", "root")] : [])])).toEqual(
+        [],
+      );
+    },
+  );
+
+  it("keeps harness-purpose user roots and their inherited-purpose children out", () => {
+    const root = userRoot("root", { purpose: "harness" });
+    expect(visibleIds([root, delegatedChild("child", "root")])).toEqual([]);
+  });
+
+  describe("user-opened threads (Discuss)", () => {
+    const withSource = (
+      item: EnvironmentThreadShell,
+      source: Partial<EnvironmentThreadShell["source"]>,
+    ) => ({ ...item, source: { ...item.source, ...source } });
+    // Real shape: the Discuss thread is nested under a harness-purpose inbox that is a web user root.
+    const inbox = userRoot("inbox", { purpose: "harness" });
+    const siblingWorker = withSource(delegatedChild("worker", "inbox"), {
+      createdBy: "user",
+      creationSource: "web",
+    });
+    const discuss = withSource(thread("discuss", "inbox"), {
+      createdBy: "user",
+      creationSource: "server",
+    });
+
+    it("shows a Discuss thread under a harness-purpose root with children", () => {
+      expect(visibleIds([inbox, siblingWorker, discuss])).toEqual(["discuss"]);
+      expect(isUserOpenedThread(discuss)).toBe(true);
+    });
+
+    it("keeps its own children under the existing rules", () => {
+      expect(visibleIds([inbox, discuss, thread("discuss-child", "discuss")])).toEqual(["discuss"]);
+    });
+
+    it.each([
+      ["fork child", { ...discuss, lineage: { ...discuss.lineage, relationshipToParent: "fork" } }],
+      [
+        "subagent",
+        { ...discuss, lineage: { ...discuss.lineage, relationshipToParent: "subagent" } },
+      ],
+      ["CLI worker", withSource(discuss, { creationSource: "web" })],
+      ["system thread", withSource(discuss, { createdBy: "system" })],
+      ["agent thread", withSource(discuss, { createdBy: "agent" })],
+      ["archived thread", { ...discuss, archivedAt: "2026-10-13T13:00:00.000Z" }],
+    ] as const)("keeps a %s out of Threads", (_name, candidate) => {
+      expect(visibleIds([inbox, siblingWorker, candidate as EnvironmentThreadShell])).toEqual([]);
+    });
+  });
+
+  it("does not turn archived children into projects", () => {
+    const user = userRoot("user");
+    const agent = thread("agent", null);
+    const all = [
+      user,
+      agent,
+      { ...delegatedChild("user-child", "user"), archivedAt: "2026-10-13T13:00:00.000Z" },
+      { ...delegatedChild("agent-child", "agent"), archivedAt: "2026-10-13T13:00:00.000Z" },
+    ];
+    expect(visibleIds(all)).toEqual(all.map((item) => item.id));
+    expect(buildOrchestratorSummaries(all, [])).toEqual([]);
+  });
+
+  it("keeps childless user roots and sorts the newest user root above unkeyed active threads", () => {
+    const older = userRoot("older");
+    const newest = userRoot("newest", { createdAt: "2026-10-13T12:00:00.000Z" });
+    expect(visibleIds([older, newest])).toEqual(["older", "newest"]);
+    const visible = threadsVisibleInThreadsMode(
+      [older, newest, delegatedChild("child", "newest")],
+      true,
+    );
+    expect(sortActiveThreadsByOrderKey(visible).map((item) => item.id)).toEqual([
+      "newest",
+      "older",
+    ]);
+  });
 });
