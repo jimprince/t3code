@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "115d4616e7376770a712fa2891c03162f6e72230",
-  "head": "4383fed8a80d74f0e34eee8a84afe197634407d8",
+  "prev": "7bdcc906ce9312b9f9f99fbc5bcf387f9d25e1bf",
+  "head": "a3adc9b7430dea8a0f429ae285e888e7619e89ad",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -112,7 +112,9 @@
     "fork-decision-discuss",
     "fork-decision-context-media",
     "fork-subprojects-server",
-    "fork-reliable-handoffs",
+    "fork-reliable-handoffs"
+  ],
+  "unapplied": [
     "fork-starting-reconcile-causal-guard",
     "fork-notification-eligibility",
     "fork-gitea-token-setter",
@@ -147,7 +149,6 @@
     "fork-admin-thread-recovery",
     "fork-provider-context-recovery"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
