@@ -323,7 +323,6 @@ const runSweepFixture = (input: {
             ),
         }),
         Layer.mock(Orchestrator.OrchestratorV2)({ streamDomainEvents: events }),
-      Effect.provide(
         Layer.mock(Terminals.TerminalManager)({
           subscribeMetadata: () => Effect.succeed(() => {}),
         }),
