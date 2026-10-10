@@ -781,6 +781,7 @@ export class RemoteEnvironmentClient {
       if (item.kind !== "snapshot") {
         throw new Error(`Expected a thread snapshot for '${threadId}', received '${item.kind}'.`);
       }
+      if (options.nesting === false) return item.snapshot.thread;
       return (await this.applyThreadMetadata([item.snapshot.thread], rpc))[0]!;
     } finally {
       await rpc.dispose();
@@ -1362,7 +1363,7 @@ export class RemoteEnvironmentClient {
   }
 
   async pending(threadId: string) {
-    return pendingRequests(await this.findThread(threadId));
+    return pendingRequests(await this.findThread(threadId, { nesting: false }));
   }
 
   async respond(input: {
