@@ -37,6 +37,7 @@ export const threads = Layer.effect(
       getProjectThreadRecords: unused,
       getProjectThread: unused,
       getShellSnapshot: unused,
+      getThreadShells: (ids) => projections.getThreadShells(ids).pipe(Effect.orDie),
       getThreadShell: (id) => projections.getThreadShell(id).pipe(Effect.orDie),
       listProjectThreads: unused,
       sendToThread: unused,
