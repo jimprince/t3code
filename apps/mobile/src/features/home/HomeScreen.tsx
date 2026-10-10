@@ -8,8 +8,16 @@ import {
   projectSidebarBucket,
   type OrchestratorSummary,
 } from "@t3tools/client-runtime/state/orchestrators";
+import {
+  subprojectCountLabel,
+  subprojectWorkingLabel,
+  toggleProjectKey,
+  topLevelProjects,
+  projectKeyOf,
+} from "@t3tools/client-runtime/state/projectSubprojects";
 import { MobileDecisionFeed } from "./MobileDecisionFeed";
 import { MobileProjectRequests } from "./MobileProjectRequests";
+import { MobileSubprojectRows } from "./MobileSubprojectRows";
 import {
   type EnvironmentProject,
   type EnvironmentThreadShell,
@@ -280,7 +288,7 @@ function renderHomeScrollView(props: ScrollViewProps) {
 }
 
 function MobileOrchestratorList({
-  summaries,
+  summaries: allSummaries,
   onSelectThread,
   header,
 }: {
@@ -298,11 +306,15 @@ function MobileOrchestratorList({
   // Settled or long-quiet projects fold into one collapsed group, the same rule
   // as the web sidebar (projectSidebarBucket).
   const [quietExpanded, setQuietExpanded] = useState(false);
+  // Projects whose subprojects are folded away, until the screen is left; the rest show theirs.
+  const [foldedProjects, setFoldedProjects] = useState<ReadonlyArray<string>>([]);
   const [quietCutoff] = useState(() => Date.now() - PROJECT_QUIET_AFTER_MS);
-  const active = summaries.filter(
+  // Subprojects nest inside their project's card instead of listing as projects.
+  const projects = useMemo(() => topLevelProjects(allSummaries), [allSummaries]);
+  const active = projects.filter(
     (summary) => projectSidebarBucket(summary, quietCutoff) !== "quiet",
   );
-  const quiet = summaries.filter(
+  const quiet = projects.filter(
     (summary) => projectSidebarBucket(summary, quietCutoff) === "quiet",
   );
   const rowMargin = { marginHorizontal: primaryColumn ? 8 : 12 };
@@ -313,9 +325,12 @@ function MobileOrchestratorList({
           candidate.environmentId === summary.root.environmentId &&
           candidate.id === summary.root.projectId,
       ) ?? summary.projects[0];
+    const workingInSubprojects = subprojectWorkingLabel(summary);
+    const foldHint = subprojectCountLabel(summary);
+    const folded = foldedProjects.includes(projectKeyOf(summary));
     return (
       <Pressable
-        key={`${summary.root.environmentId}:${summary.root.id}`}
+        key={projectKeyOf(summary)}
         accessibilityRole="button"
         accessibilityLabel={`Open ${summary.root.title}`}
         className="border-b border-border px-2 py-3 active:bg-card"
@@ -336,9 +351,9 @@ function MobileOrchestratorList({
           <Text className="min-w-0 flex-1 text-sm font-t3-medium text-foreground" numberOfLines={2}>
             {summary.root.title}
           </Text>
-          {summary.needsYou.length > 0 ? (
+          {summary.rollup.needsYou > 0 ? (
             <Text className="text-xs text-warning-foreground">
-              {summary.needsYou.length} need you
+              {summary.rollup.needsYou} need you
             </Text>
           ) : null}
         </View>
@@ -363,15 +378,18 @@ function MobileOrchestratorList({
                     ? "Needs input"
                     : "Idle"}
           </Text>
-          {summary.activeWorkerCount > 0 ? (
-            <Text className="text-xs text-foreground-muted">
-              {summary.activeWorkerCount} working
-            </Text>
+          {summary.rollup.working > 0 ? (
+            <Text className="text-xs text-foreground-muted">{summary.rollup.working} working</Text>
           ) : null}
         </View>
         {summary.projects.length > 0 ? (
           <Text className="mt-1 text-xs text-foreground-muted" numberOfLines={1}>
             {summary.projects.map((project) => project.title).join(" · ")}
+          </Text>
+        ) : null}
+        {workingInSubprojects ? (
+          <Text className="mt-1 text-xs text-foreground-muted" numberOfLines={1}>
+            {workingInSubprojects}
           </Text>
         ) : null}
         <MobileProjectRequests summary={summary} />
@@ -381,6 +399,30 @@ function MobileOrchestratorList({
           // thread may not be in this list yet.
           onOpenThread={(threadId) => onSelectThread({ ...summary.root, id: threadId })}
         />
+        {foldHint !== null ? (
+          <View className="mt-2 border-t border-border">
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${folded ? "Show" : "Hide"} subprojects of ${summary.root.title}`}
+              accessibilityState={{ expanded: !folded }}
+              className="min-h-9 justify-center active:bg-card"
+              onPress={() =>
+                setFoldedProjects((keys) => toggleProjectKey(keys, projectKeyOf(summary)))
+              }
+            >
+              <Text className="text-xs text-foreground-muted">
+                {folded ? `Show ${foldHint}` : "Hide subprojects"}
+              </Text>
+            </Pressable>
+            {folded ? null : (
+              <MobileSubprojectRows
+                summary={summary}
+                quietCutoff={quietCutoff}
+                onSelectThread={onSelectThread}
+              />
+            )}
+          </View>
+        ) : null}
       </Pressable>
     );
   };
@@ -396,7 +438,7 @@ function MobileOrchestratorList({
       }}
     >
       {header}
-      {summaries.length === 0 ? (
+      {projects.length === 0 ? (
         <View className="flex-1 items-center justify-center px-8">
           <EmptyState
             title="No projects"
