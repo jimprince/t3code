@@ -107,8 +107,25 @@ describe("subproject menu items", () => {
     expect(items("grand", true)).toContain("subproject-on");
   });
 
-  it("offers neither on a top-level thread or a host without subprojects", () => {
-    for (const ids of [items("other", true), items("child", false)]) {
+  it("offers Projects membership to a top-level thread that owns no workers", () => {
+    const ids = items("other", true);
+    expect(ids).toContain("subproject-on");
+    expect(
+      withThreadNestingMenuItems(
+        [{ id: "rename", label: "Rename" }],
+        resolveThreadNestingMenuState({
+          thread: modeThreads.find((t) => t.id === "other")!,
+          forest: modeForest,
+          supported: true,
+          subprojectsSupported: true,
+        }),
+      ).find((item) => item.id === "subproject-on")?.label,
+    ).toBe("Show in Projects");
+  });
+
+  it("offers neither to a top-level thread with workers or a host without subprojects", () => {
+    // "root" supervises "child", so it is already a project; the item would do nothing.
+    for (const ids of [items("root", true), items("child", false)]) {
       expect(ids).not.toContain("subproject-on");
       expect(ids).not.toContain("subproject-off");
     }
