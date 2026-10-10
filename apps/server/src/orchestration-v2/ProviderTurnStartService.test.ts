@@ -387,7 +387,7 @@ function makeLocalCommandHarness(input: {
     ),
   );
   const freshThread = vi.fn(() => Effect.succeed(providerThread));
-  const resumedNativeIds: Array<string | undefined> = [];
+  const resumedNativeIds: Array<string | null | undefined> = [];
   const resumeFallbackSession = {
     driver: providerThread.driver,
     resumeThread: (resumeInput: {

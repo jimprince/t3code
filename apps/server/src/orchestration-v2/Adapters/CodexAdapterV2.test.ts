@@ -7053,12 +7053,13 @@ describe("CodexAdapterV2 post-settle continuation", () => {
       yield* Deferred.await(realOutput);
       yield* harness.firstTerminal;
       const bufferedTurns = new Set(
-        harness.events.flatMap((event) =>
-          event.type === "provider_turn.updated" &&
-          event.providerTurn.nativeTurnRef?.nativeId.startsWith("buffered-orphan-")
-            ? [event.providerTurn.nativeTurnRef.nativeId]
-            : [],
-        ),
+        harness.events.flatMap((event) => {
+          const nativeId =
+            event.type === "provider_turn.updated"
+              ? event.providerTurn.nativeTurnRef?.nativeId
+              : undefined;
+          return nativeId?.startsWith("buffered-orphan-") ? [nativeId] : [];
+        }),
       );
       assert.equal(
         bufferedTurns.size,
