@@ -207,6 +207,20 @@ const desktopEnvironmentLayer = DesktopEnvironment.layer(environmentInput).pipe(
   ),
 );
 
+// Same development environment, with the opt-in DevTools flag set.
+const devToolsEnvironmentLayer = DesktopEnvironment.layer(environmentInput).pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      NodeServices.layer,
+      DesktopConfig.layerTest({
+        T3CODE_PORT: "3773",
+        VITE_DEV_SERVER_URL: "http://127.0.0.1:5733",
+        T3CODE_DESKTOP_DEVTOOLS: "1",
+      }),
+    ),
+  ),
+);
+
 const desktopWindowBoundsEquivalence = Schema.toEquivalence(
   DesktopAppSettings.DesktopWindowBoundsSchema,
 );
@@ -227,6 +241,8 @@ function makeTestLayer(input: {
   readonly onPopupTemplate?: (input: ElectronMenu.ElectronMenuTemplateInput) => Effect.Effect<void>;
   readonly previewZoomReapplies?: number[];
   readonly onReveal?: (window: Electron.BrowserWindow) => void;
+  /** Defaults to the development environment without the opt-in DevTools flag. */
+  readonly environmentLayer?: typeof desktopEnvironmentLayer;
 }) {
   let desktopSettings = input.desktopSettings ?? DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS;
   const desktopAppSettingsLayer = Layer.succeed(DesktopAppSettings.DesktopAppSettings, {
@@ -292,7 +308,7 @@ function makeTestLayer(input: {
           recordMetrics: () => Effect.void,
           shutdown: Effect.void,
         }),
-        desktopEnvironmentLayer,
+        input.environmentLayer ?? desktopEnvironmentLayer,
         desktopAppSettingsLayer,
         desktopClientSettingsLayer,
         desktopServerExposureLayer,
@@ -661,7 +677,29 @@ describe("DesktopWindow", () => {
         assert.isFalse(createdWindowOptions[0]?.webPreferences?.backgroundThrottling);
         assert.deepEqual(fakeWindow.setAutoHideCursor.mock.calls, [[false]]);
         assert.deepEqual(fakeWindow.loadURL.mock.calls[0], ["t3code-dev://app/"]);
-        assert.equal(fakeWindow.openDevTools.mock.calls.length, 1);
+        // DevTools is opt-in; without T3CODE_DESKTOP_DEVTOOLS it stays shut.
+        assert.equal(fakeWindow.openDevTools.mock.calls.length, 0);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("opens DevTools with the development window when asked for", () =>
+    Effect.gen(function* () {
+      const fakeWindow = makeFakeBrowserWindow();
+      const createCount = yield* Ref.make(0);
+      const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+      const layer = makeTestLayer({
+        window: fakeWindow.window,
+        createCount,
+        mainWindow,
+        environmentLayer: devToolsEnvironmentLayer,
+      });
+
+      yield* Effect.gen(function* () {
+        const desktopWindow = yield* DesktopWindow.DesktopWindow;
+        yield* desktopWindow.activate;
+        yield* desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773"));
+        assert.deepEqual(fakeWindow.openDevTools.mock.calls, [[{ mode: "detach" }]]);
       }).pipe(Effect.provide(layer));
     }),
   );
