@@ -58,11 +58,13 @@ export const withWorkerSummaries = Effect.fn("WorkerSummary.withShellReads")(fun
 ) {
   const native = yield* service;
   const sql = yield* SqlClient.SqlClient;
+  const tables = yield* sql<{
+    name: string;
+  }>`SELECT name FROM sqlite_master WHERE type='table' AND name='fork_thread_metadata'`.pipe(
+    Effect.orDie,
+  );
   const enrich = (shells: ReadonlyArray<OrchestrationV2ThreadShell>) =>
     Effect.gen(function* () {
-      const tables = yield* sql<{
-        name: string;
-      }>`SELECT name FROM sqlite_master WHERE type='table' AND name='fork_thread_metadata'`;
       if (tables.length === 0 || shells.length === 0) return shells;
       const metadata = yield* sql<{
         thread_id: string;
@@ -118,6 +120,18 @@ export const withWorkerSummaries = Effect.fn("WorkerSummary.withShellReads")(fun
               threads: shells.filter((s) => s.archivedAt === null),
               archivedThreads: shells.filter((s) => s.archivedAt !== null),
             })),
+          ),
+        ),
+      ),
+    getThreadShells: (ids: ReadonlyArray<ThreadId>) =>
+      native.getThreadShells(ids).pipe(
+        Effect.flatMap((shells) =>
+          enrich(shells.filter((shell) => shell !== null)).pipe(
+            Effect.orDie,
+            Effect.map((enriched) => {
+              const byId = new Map(enriched.map((shell) => [shell.id, shell]));
+              return shells.map((shell) => (shell === null ? null : byId.get(shell.id)!));
+            }),
           ),
         ),
       ),

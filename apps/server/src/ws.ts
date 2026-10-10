@@ -1047,23 +1047,29 @@ export const subscribeOrchestrationV2Shell = Effect.fn("ws.orchestrationV2.subsc
       });
     });
 
-    // Coalescing makes each per-thread shell read represent every event
-    // for that thread in the current window; reading only the affected
-    // threads keeps the cost of a busy stream independent of how many
-    // threads exist overall.
+    // Read affected threads together within the existing coalescing window.
     const projectShellItems = Effect.fn("ws.orchestrationV2.projectShellItems")(function* (
       events: ReadonlyArray<ShellApplicationEvent>,
     ) {
+      const coalesced = coalesceShellApplicationEvents(events);
+      const threadEvents = coalesced.filter((stored) => !("aggregateKind" in stored));
+      const shells = yield* threadManagement.getThreadShells(
+        threadEvents.map((stored) => stored.event.threadId),
+      );
+      const byId = new Map(
+        threadEvents.map((stored, i) => [stored.event.threadId, shells[i] ?? null]),
+      );
       return yield* Effect.forEach(
-        coalesceShellApplicationEvents(events),
+        coalesced,
         (stored) =>
-          Effect.gen(function* () {
-            if ("aggregateKind" in stored) {
-              return yield* projectItem(stored);
-            }
-            const shell = yield* threadManagement.getThreadShell(stored.event.threadId);
-            return shellStreamItemFromThreadShell({ stored, shell });
-          }),
+          "aggregateKind" in stored
+            ? projectItem(stored)
+            : Effect.succeed(
+                shellStreamItemFromThreadShell({
+                  stored,
+                  shell: byId.get(stored.event.threadId) ?? null,
+                }),
+              ),
         { concurrency: 8 },
       );
     });
@@ -1827,18 +1833,15 @@ const makeWsRpcLayer = (
           .pipe(
             Stream.groupedWithin(512, Duration.millis(50)),
             Stream.mapEffect((events) =>
-              Effect.forEach(
-                coalesceStoredThreadEvents(Array.from(events)),
-                (stored) =>
-                  threadManagement
-                    .getThreadShell(stored.event.threadId)
-                    .pipe(
-                      Effect.map((shell) =>
-                        archivedShellStreamItemFromThreadShell({ stored, shell }),
-                      ),
-                    ),
-                { concurrency: 8 },
-              ),
+              Effect.gen(function* () {
+                const coalesced = coalesceStoredThreadEvents(Array.from(events));
+                const shells = yield* threadManagement.getThreadShells(
+                  coalesced.map((stored) => stored.event.threadId),
+                );
+                return coalesced.map((stored, i) =>
+                  archivedShellStreamItemFromThreadShell({ stored, shell: shells[i] ?? null }),
+                );
+              }),
             ),
             Stream.flatMap(Stream.fromIterable),
             Stream.filterMap((item) => (item === null ? Result.failVoid : Result.succeed(item))),
