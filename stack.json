@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "a539d695d88f9f5585411c3e31e4aa62a65577b9",
-  "head": "33e66485184e262f37775b697acd0c576ebcecc7",
+  "prev": "9c02622331e160b0fce661c151e5cb5dbf431f05",
+  "head": "11c21513fcd09f8fc8cef72813d153a6a11093bd",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -144,7 +144,8 @@
     "fork-timeline-end-restore-settles",
     "fork-mobile-manual-production",
     "fork-lifecycle-deadlines",
-    "fork-admin-thread-recovery"
+    "fork-admin-thread-recovery",
+    "fork-provider-context-recovery"
   ],
   "unapplied": [],
   "hidden": [],
@@ -433,6 +434,9 @@
     },
     "fork-projects-pinned": {
       "oid": "cf53a3505c948261cf745e701aae654ea5797592"
+    },
+    "fork-provider-context-recovery": {
+      "oid": "11c21513fcd09f8fc8cef72813d153a6a11093bd"
     },
     "fork-provider-turn-safety": {
       "oid": "e7b1cca7275e4c4274a6ac9b9fea1626a48d9993"
