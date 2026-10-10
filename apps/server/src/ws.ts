@@ -1017,7 +1017,10 @@ export const subscribeOrchestrationV2Shell = Effect.fn("ws.orchestrationV2.subsc
       events: ReadonlyArray<ShellApplicationEvent>,
     ) {
       const coalesced = coalesceShellApplicationEvents(events);
-      const threadEvents = coalesced.filter((stored) => !("aggregateKind" in stored));
+      const threadEvents = coalesced.filter(
+        (stored): stored is Extract<ShellApplicationEvent, { readonly event: unknown }> =>
+          !("aggregateKind" in stored),
+      );
       const shells = yield* threadManagement.getThreadShells(
         threadEvents.map((stored) => stored.event.threadId),
       );

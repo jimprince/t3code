@@ -15,11 +15,14 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Tracer from "effect/Tracer";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ThreadManagement from "./ThreadManagementService.ts";
 import { withWorkerSummaries } from "../forkThreads/WorkerSummaryService.ts";
+
+const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 
 const TestLayer = ProjectionStore.layer.pipe(Layer.provideMerge(SqlitePersistenceMemory));
 
@@ -168,39 +171,36 @@ it.effect(
       }
       const ordered = [ids[7]!, ids[1]!, ids[2]!, ...ids.slice(0, 7), ThreadId.make("missing")];
       const expected = yield* Effect.forEach(ordered, store.getThreadShell);
-      assert.strictEqual(
-        JSON.stringify(yield* store.getThreadShells(ordered)),
-        JSON.stringify(expected),
-      );
+      assert.strictEqual(encodeJson(yield* store.getThreadShells(ordered)), encodeJson(expected));
       assert.strictEqual((yield* store.getThreadShells([])).length, 0);
       const snapshot = yield* store.getShellSnapshot();
       const snapshotById = new Map(
         [...snapshot.threads, ...snapshot.archivedThreads].map((shell) => [shell.id, shell]),
       );
       assert.strictEqual(
-        JSON.stringify(expected),
-        JSON.stringify(ordered.map((id) => snapshotById.get(id) ?? null)),
+        encodeJson(expected),
+        encodeJson(ordered.map((id) => snapshotById.get(id) ?? null)),
       );
 
       // An ancestor outside the batch, a missing ancestor and a cycle all terminate.
-      yield* sql`UPDATE orchestration_v2_projection_threads SET payload_json=json_set(payload_json, '$.forkedFrom', json(${JSON.stringify({ type: "run", threadId: ids[0], runId: RunId.make("run:batch:0") })})) WHERE thread_id=${ids[7]}`;
+      yield* sql`UPDATE orchestration_v2_projection_threads SET payload_json=json_set(payload_json, '$.forkedFrom', json(${encodeJson({ type: "run", threadId: ids[0], runId: RunId.make("run:batch:0") })})) WHERE thread_id=${ids[7]}`;
       assert.strictEqual(
-        JSON.stringify(yield* store.getThreadShells([ids[7]!])),
-        JSON.stringify([yield* store.getThreadShell(ids[7]!)]),
+        encodeJson(yield* store.getThreadShells([ids[7]!])),
+        encodeJson([yield* store.getThreadShell(ids[7]!)]),
       );
       assert.isAbove(
         (yield* store.getThreadShells([ids[7]!]))[0]!.visibleItemCount,
         expected[0]!.visibleItemCount,
       );
-      yield* sql`UPDATE orchestration_v2_projection_threads SET payload_json=json_set(payload_json, '$.forkedFrom', json(${JSON.stringify({ type: "run", threadId: ids[7], runId: RunId.make("run:batch:7") })})) WHERE thread_id=${ids[0]}`;
+      yield* sql`UPDATE orchestration_v2_projection_threads SET payload_json=json_set(payload_json, '$.forkedFrom', json(${encodeJson({ type: "run", threadId: ids[7], runId: RunId.make("run:batch:7") })})) WHERE thread_id=${ids[0]}`;
       assert.strictEqual(
-        JSON.stringify(yield* store.getThreadShells([ids[7]!, ids[0]!])),
-        JSON.stringify(yield* Effect.forEach([ids[7]!, ids[0]!], store.getThreadShell)),
+        encodeJson(yield* store.getThreadShells([ids[7]!, ids[0]!])),
+        encodeJson(yield* Effect.forEach([ids[7]!, ids[0]!], store.getThreadShell)),
       );
       yield* sql`UPDATE orchestration_v2_projection_threads SET payload_json=json_set(payload_json, '$.forkedFrom.threadId', 'missing') WHERE thread_id=${ids[7]}`;
       assert.strictEqual(
-        JSON.stringify(yield* store.getThreadShells([ids[7]!])),
-        JSON.stringify([yield* store.getThreadShell(ids[7]!)]),
+        encodeJson(yield* store.getThreadShells([ids[7]!])),
+        encodeJson([yield* store.getThreadShell(ids[7]!)]),
       );
       yield* sql`UPDATE orchestration_v2_projection_threads SET deleted_at='deleted' WHERE thread_id=${ids[1]}`;
       assert.isNull((yield* store.getThreadShells([ids[1]!]))[0]);
@@ -259,13 +259,13 @@ it.effect("eight shells execute five native query families once per batch", () =
     yield* store.getThreadShells(ids).pipe(Effect.withTracer(tracer));
     assert.strictEqual(statements.length, 5);
     for (const id of ids.slice(1))
-      yield* sql`INSERT INTO fork_thread_metadata(thread_id,payload) VALUES(${id},${JSON.stringify({ parentThreadId: "parent" })})`;
+      yield* sql`INSERT INTO fork_thread_metadata(thread_id,payload) VALUES(${id},${encodeJson({ parentThreadId: "parent" })})`;
     statements.length = 0;
     const service = yield* withWorkerSummaries(ThreadManagement.ThreadManagementService).pipe(
       Effect.provide(
         Layer.mock(ThreadManagement.ThreadManagementService)({
-          getThreadShell: store.getThreadShell,
-          getThreadShells: store.getThreadShells,
+          getThreadShell: (id) => store.getThreadShell(id).pipe(Effect.orDie),
+          getThreadShells: (ids) => store.getThreadShells(ids).pipe(Effect.orDie),
         }),
       ),
       Effect.withTracer(tracer),
@@ -277,7 +277,7 @@ it.effect("eight shells execute five native query families once per batch", () =
     assert.strictEqual(statements.filter((query) => query.includes("sqlite_master")).length, 1);
     statements.length = 0;
     const batch = yield* service.getThreadShells(ids).pipe(Effect.withTracer(tracer));
-    assert.strictEqual(JSON.stringify(batch), JSON.stringify(perThread));
+    assert.strictEqual(encodeJson(batch), encodeJson(perThread));
     assert.strictEqual(statements.length, 7);
     assert.strictEqual(statements.filter((query) => query.includes("sqlite_master")).length, 0);
     // The schema is fixed at construction, but organizational metadata is fresh.
