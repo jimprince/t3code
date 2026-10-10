@@ -6,7 +6,7 @@ import * as Human from "./PendingHumanRequests.ts";
 import * as Effect from "effect/Effect";
 
 /** Authenticated transport context supplies administrative authority; payloads contain only targets. */
-export const handlers = () => ({
+const handlers = () => ({
   "thread.session.reset": (
     input: Parameters<SessionReset.SessionResetService["Service"]["reset"]>[0],
   ) => Effect.flatMap(SessionReset.SessionResetService, (s) => s.reset(input)),
