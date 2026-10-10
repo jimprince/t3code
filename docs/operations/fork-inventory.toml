@@ -1173,7 +1173,7 @@ purpose = "Plan and execute retirement of the per-worker git worktrees T3 create
 retire_when = "Upstream or the t3-thread CLI host binding provides equivalent guarded worktree reclamation, or the fork intentionally stops requiring this concern."
 depends_on = ["fork-worker-operations"]
 roles = []
-note = "Requires an explicit local state directory whose environment ID matches the selected server before local inspection. Execution rereads lifecycle and Git state before each non-forced removal; the dry run remains non-mutating."
+note = "Requires an explicit local state directory whose environment ID matches the selected server before local inspection. Execution rereads lifecycle and Git state before each non-forced removal; the dry run remains non-mutating. Server policy cleanup belongs to this concern: session and deletion events request coalesced deleted-only passes; hourly and settings-triggered full sweeps keep policy coverage. Age eligibility precedes Git, successful repository context is shared within a sweep, and deletion safety checks stay fresh."
 [[patch.decision]]
 id = "upstream-t3-thread-rpc-surface"
 date = "2026-09-16"
@@ -1184,9 +1184,3 @@ rationale = "Retain guarded local worktree retirement; the CLI adapter uses the 
 id = "v2-port-2689-m2"
 decision = "keep-on-top"
 note = "GC reads archived V2 shells and all live execution resources, preserving non-forced Git removal and environment identity validation."
-
-[[patch.decision]]
-id = "storage-cleanup-sweep-budget"
-date = "2026-10-10"
-decided = "narrow"
-rationale = "Own the server's guarded worktree reclamation alongside local retirement. Session and deletion events request coalesced deleted-only passes; hourly and settings-triggered full sweeps retain policy coverage. Check cheap age eligibility before Git and reuse successful repository default context within a sweep, preserving fresh deletion safety checks."
