@@ -1,6 +1,7 @@
 import { type ServerLifecycleWelcomePayload } from "@t3tools/contracts";
 import { scopedProjectKey, scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import { formatLocalIso } from "@t3tools/shared/localTime";
 import {
   Outlet,
   Link,
@@ -465,7 +466,7 @@ function errorReport(error: unknown, pathname: string): string {
   const lines = [
     `${APP_DISPLAY_NAME} ${APP_VERSION}`,
     `Path: ${pathname}`,
-    `Time: ${new Date().toISOString()}`,
+    `Time: ${formatLocalIso(Date.now())}`,
     "",
     errorDetails(error),
   ];

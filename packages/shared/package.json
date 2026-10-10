@@ -11,6 +11,10 @@
       "types": "./src/legacyCliLauncher.ts",
       "import": "./src/legacyCliLauncher.ts"
     },
+    "./localTime": {
+      "types": "./src/localTime.ts",
+      "import": "./src/localTime.ts"
+    },
     "./delimitedPreview": {
       "types": "./src/delimitedPreview.ts",
       "import": "./src/delimitedPreview.ts"
