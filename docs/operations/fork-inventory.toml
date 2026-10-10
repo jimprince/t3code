@@ -1,0 +1,8 @@
+# Fork Patch Inventory — schema version 3
+# Each applied patch owns docs/operations/fork-inventory/<patch-name>.toml.
+# stack.json.applied defines order; filenames identify concerns.
+# See ./fork-inventory/ for purposes, dependencies, roles and decisions.
+
+schema = 3
+fork = "jimprince/t3code"
+upstream = "pingdotgg/t3code"
