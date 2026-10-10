@@ -382,3 +382,104 @@ it.effect("keeps an explicitly unsettled worker active after a delivery complete
     ),
   ),
 );
+
+// Day Planner 4fdb3daf (2026-10-10): every delivery after an explicit unsettle
+// reset "active" to null, so the next completed run auto-settled it again.
+it.effect("keeps an explicitly unsettled worker active after a delivery completes", () =>
+  Effect.gen(function* () {
+    const threads = yield* ThreadManagement.ThreadManagementService;
+    const store = yield* ProjectionStore.ProjectionStoreV2;
+    const sink = yield* EventSink.EventSinkV2;
+    const sql = yield* SqlClient.SqlClient;
+    const lifecycle = yield* WorkerLifecycle.WorkerLifecycle;
+    yield* initializeMetadata(sql);
+    const threadId = ThreadId.make("unsettled-worker");
+    yield* threads.dispatch({
+      type: "thread.create",
+      commandId: CommandId.make("create-unsettled-worker"),
+      threadId,
+      projectId: ProjectId.make("project"),
+      title: "Unsettled worker",
+      modelSelection,
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      branch: null,
+      worktreePath: null,
+      createdBy: "user",
+      creationSource: "web",
+    });
+    yield* writeMetadata(sql, {
+      threadId,
+      parentThreadId: ThreadId.make("parent"),
+      settleOnComplete: true,
+    });
+    const complete = (id: string, ordinal: number, userMessageId: MessageId) =>
+      Effect.gen(function* () {
+        const now = yield* DateTime.now;
+        yield* sink.write({
+          events: [
+            {
+              id: EventId.make(`complete-${id}`),
+              type: "run.updated",
+              threadId,
+              occurredAt: now,
+              payload: {
+                id: RunId.make(id),
+                threadId,
+                ordinal,
+                providerInstanceId: instanceId,
+                modelSelection,
+                providerThreadId: null,
+                userMessageId,
+                rootNodeId: null,
+                activeAttemptId: null,
+                status: "completed",
+                requestedAt: now,
+                startedAt: now,
+                completedAt: now,
+                checkpointId: null,
+                contextHandoffId: null,
+              },
+            },
+          ],
+        });
+      });
+    yield* complete("first-run", 1, MessageId.make("first-message"));
+    yield* lifecycle.drain;
+    assert.equal((yield* store.getThread(threadId)).settledOverride, "settled");
+
+    yield* threads.dispatch({
+      type: "thread.unsettle",
+      reason: "user",
+      commandId: CommandId.make("user-unsettle"),
+      threadId,
+    });
+    assert.equal((yield* store.getThread(threadId)).settledOverride, "active");
+    yield* threads.dispatch({
+      type: "message.dispatch",
+      commandId: CommandId.make("delivery"),
+      threadId,
+      messageId: MessageId.make("delivery-message"),
+      text: "progress",
+      attachments: [],
+      createdBy: "agent",
+      creationSource: "server",
+      dispatchMode: { type: "start_immediately" },
+    });
+    const delivered = (yield* store.getThreadProjection(threadId)).runs.find(
+      (run) => run.userMessageId === MessageId.make("delivery-message"),
+    );
+    assert.ok(delivered);
+    yield* complete(delivered.id, delivered.ordinal, delivered.userMessageId);
+    yield* lifecycle.drain;
+    assert.equal((yield* store.getThread(threadId)).settledOverride, "active");
+  }).pipe(
+    Effect.provide(
+      WorkerLifecycle.layer.pipe(
+        Layer.provideMerge(ThreadManagement.layer),
+        Layer.provideMerge(testLayer),
+        Layer.provideMerge(ServerSettings.layerTest({})),
+      ),
+    ),
+  ),
+);
