@@ -2996,3 +2996,13 @@ depends_on = [
   "fork-admin-thread-recovery",
 ]
 roles = []
+
+[[patch]]
+name = "fork-projects-real-only"
+subject = "fix(web): keep the Projects sidebar to real, unfinished projects"
+class = "product"
+purpose = "Keep the Projects sidebar to real, unfinished projects: a pin only orders the list, a project root leaves the Threads list, settling a project folds it into Quiet, and project rows take the standard thread context menu (Brad, 2026-10-10)."
+retire_when = "Upstream provides project grouping with its own pin, settle and context-menu rules, or the fork stops listing orchestrators as projects."
+depends_on = ["fork-projects-pinned", "fork-subprojects-ui", "fork-subthread-lifecycle"]
+roles = []
+note = "Narrows fork-projects-pinned: buildOrchestratorSummaries and threadsVisibleInThreadsMode treat a top-level thread as a project only when it owns workers or carries subproject mode `on`; a pinned thread with neither stays a Threads row, and pinOrderKey still leads sortOrchestratorSummariesForSidebar. Project roots leave Threads whatever their pin state. projectSidebarBucket returns `quiet` for a settled project (settledOverride) after the needs-you and working checks, so attention and live work win. The thread menu's subproject item covers both directions of the mark (Show as subproject for a nested thread, Show in Projects for a standing orchestrator, nothing when workers already make it a project). ProjectRow reuses useThreadActionMenu with rename omitted. Web and desktop; mobile parity is fork-projects-quiet-mobile. Brad ran this on his dev app from origin/live before it joined the stack."
