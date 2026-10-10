@@ -9,6 +9,10 @@ import {
 } from "@t3tools/client-runtime/state/thread-settled";
 import type { SnoozePreset } from "@t3tools/client-runtime/state/thread-settled";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import {
+  threadsVisibleInThreadsMode,
+  type OrchestratorThreadShell,
+} from "@t3tools/client-runtime/state/orchestrators";
 import { resolveThreadProviderStack } from "@t3tools/client-runtime/state/models";
 import { threadSearchMatchKey } from "@t3tools/client-runtime/state/thread-search";
 import {
@@ -641,7 +645,7 @@ function sortSettledThreadsReusingLast(
  */
 export function buildThreadListV2Items(input: {
   readonly pendingOrder?: PendingThreadOrder | null;
-  readonly threads: ReadonlyArray<EnvironmentThreadShell>;
+  readonly threads: ReadonlyArray<OrchestratorThreadShell>;
   readonly environmentId: EnvironmentId | null;
   readonly projectRefs?: ReadonlyArray<{
     readonly environmentId: EnvironmentId;
@@ -707,7 +711,7 @@ export function buildThreadListV2Items(input: {
   let nextSnoozeWakeAt: string | null = null;
   // An empty set is treated as absent so `?.` skips building the key.
   const queuedThreadKeys = input.queuedThreadKeys?.size ? input.queuedThreadKeys : undefined;
-  for (const thread of input.threads) {
+  for (const thread of threadsVisibleInThreadsMode(input.threads, true)) {
     if (thread.archivedAt !== null || thread.lineage.relationshipToParent === "subagent") continue;
     // The server stamps settledOverride for the tail.
     if (input.environmentId !== null && thread.environmentId !== input.environmentId) continue;
