@@ -1,6 +1,6 @@
-Bottom: 0c53418cc26bee836011f8f975d1bfd64cb8a385
-Top:    ae8a3c00dad3698c529729707d9da2a0d92c6ced
+Bottom: 6d2b743bfaffc221892dea184362cef35ced9296
+Top:    f4dfa7320ba3c659d12426ef23249ab5d159fcb6
 Author: brad <bradprin@live.com>
-Date:   2026-10-10 08:42:56 +0000
+Date:   2026-10-10 12:02:33 +0000
 
 feat(threads): settle completed workers and archive settled subthreads
