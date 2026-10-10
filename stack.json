@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "4aa336aa37f5ac9d71c38cb29f6a569466d0b270",
-  "head": "0eb5da894d0ab54ec7cb6efa860cb97d0341e240",
+  "prev": "865564e4aee9a8a5f41511d55ad268ad7be7d9d8",
+  "head": "d5035299589c9992fd5b82d98eddf85846bf79db",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -127,7 +127,9 @@
     "fork-reliable-handoffs-retry",
     "fork-dash-178",
     "fork-dash-182",
-    "fork-subprojects-ui",
+    "fork-subprojects-ui"
+  ],
+  "unapplied": [
     "fork-chat-workspace-startup",
     "fork-message-forward",
     "fork-publish-task-plan",
@@ -151,7 +153,6 @@
     "fork-projects-quiet-mobile",
     "fork-t3-thread-poll-load"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
