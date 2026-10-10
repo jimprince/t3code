@@ -1,3 +1,4 @@
+import * as ServerIncarnation from "../threadRecovery/ServerIncarnation.ts";
 import * as RecoveryStore from "../threadRecovery/RecoveryStore.ts";
 import * as SessionReset from "../threadRecovery/SessionResetService.ts";
 import * as SessionResetHook from "../threadRecovery/ProviderSessionResetHook.ts";
@@ -357,6 +358,7 @@ const forkTransferProvided = ThreadTransfer.layer.pipe(
   ),
 );
 const recoveryDependencies = Layer.mergeAll(
+  ServerIncarnation.layer,
   ThreadCommandExecutor.layer,
   threadManagementProvided,
   storesLayer,

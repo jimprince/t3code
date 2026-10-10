@@ -1423,11 +1423,14 @@ export const OrchestrationV2TurnItem = Schema.Union([
   Schema.Struct({
     ...OrchestrationV2TurnItemBaseFields,
     type: Schema.Literal("run_interrupt_request"),
+    sessionGeneration: Schema.optional(NonNegativeInt),
+    stopOutcome: Schema.optional(Schema.Literal("ack")),
     message: Schema.String,
   }),
   Schema.Struct({
     ...OrchestrationV2TurnItemBaseFields,
     type: Schema.Literal("run_interrupt_result"),
+    stopOutcome: Schema.optional(Schema.Literals(["ack", "fallback"])),
     message: Schema.String,
   }),
   Schema.Struct({
@@ -2206,11 +2209,14 @@ export const OrchestrationV2TurnItemJson = Schema.Union([
   Schema.Struct({
     ...OrchestrationV2TurnItemJsonBaseFields,
     type: Schema.Literal("run_interrupt_request"),
+    sessionGeneration: Schema.optional(NonNegativeInt),
+    stopOutcome: Schema.optional(Schema.Literal("ack")),
     message: Schema.String,
   }),
   Schema.Struct({
     ...OrchestrationV2TurnItemJsonBaseFields,
     type: Schema.Literal("run_interrupt_result"),
+    stopOutcome: Schema.optional(Schema.Literals(["ack", "fallback"])),
     message: Schema.String,
   }),
   Schema.Struct({

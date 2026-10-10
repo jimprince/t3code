@@ -12,6 +12,7 @@ const fail = (cause: unknown) =>
 export class RecoveryStore extends Context.Service<
   RecoveryStore,
   {
+    readonly hasPendingReset: (threadId: ThreadId) => Effect.Effect<boolean, ThreadRecoveryError>;
     readonly generation: (threadId: ThreadId) => Effect.Effect<number, ThreadRecoveryError>;
     readonly advance: (
       threadId: ThreadId,
@@ -67,6 +68,11 @@ const make = Effect.gen(function* () {
   const decode = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
   return RecoveryStore.of({
     generation,
+    hasPendingReset: (threadId) =>
+      sql`SELECT operation_id FROM fork_recovery_operations WHERE operation_id LIKE 'reset:%' AND json_extract(payload,'$.threadId')=${threadId} AND json_extract(payload,'$.status')='fenced' LIMIT 1`.pipe(
+        Effect.map((rows) => rows.length > 0),
+        Effect.mapError(fail),
+      ),
     advance,
     get: (id) =>
       sql<{

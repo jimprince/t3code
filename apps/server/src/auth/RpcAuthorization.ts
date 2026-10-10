@@ -27,6 +27,10 @@ type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
  * runtime failure.
  */
 export const RPC_REQUIRED_SCOPES = {
+  "thread.session.generation": AuthAccessWriteScope,
+  "thread.resume": AuthAccessWriteScope,
+  "thread.stop.receipt": AuthAccessWriteScope,
+  "thread.human.pending.list": AuthAccessWriteScope,
   "thread.session.reset": AuthAccessWriteScope,
   "thread.handover.prepare": AuthAccessWriteScope,
   "thread.handover.commit": AuthAccessWriteScope,
@@ -40,6 +44,7 @@ export const RPC_REQUIRED_SCOPES = {
   "fork.message.forward.accept": AuthOrchestrationOperateScope,
   "fork.send.accept": AuthOrchestrationOperateScope,
   "fork.send.lookup": AuthOrchestrationReadScope,
+  "thread.send.binding": AuthOrchestrationReadScope,
   "fork.send.inbox": AuthOrchestrationReadScope,
   [WS_METHODS.automationsList]: AuthOrchestrationReadScope,
   [WS_METHODS.automationsRuns]: AuthOrchestrationReadScope,

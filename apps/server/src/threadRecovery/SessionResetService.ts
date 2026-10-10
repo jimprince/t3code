@@ -1,4 +1,13 @@
+import * as Incarnation from "./ServerIncarnation.ts";
+import { ResumeAdmission } from "./ResumeAdmission.ts";
 import {
+  ThreadGenerationInput,
+  ThreadGenerationResult,
+  ThreadResumeInput,
+  ThreadResumeReceipt,
+  ThreadStopInput,
+  ThreadStopReceipt,
+  MessageId,
   CommandId,
   EventId,
   SessionResetReceipt,
@@ -21,10 +30,22 @@ import { requireAdmin, RecoveryAuthority, assertWithinCeiling } from "./Recovery
 const fail = (cause: unknown) =>
   Schema.is(ThreadRecoveryError)(cause)
     ? cause
-    : new ThreadRecoveryError({ code: "storage", message: "Could not commit the session reset." });
+    : new ThreadRecoveryError({ code: "storage", message: "Could not complete thread recovery." });
+/** Authenticated authority belongs to each call, never to the shared runtime.
+ * @effect-expect-leaking RecoveryAuthority
+ */
 export class SessionResetService extends Context.Service<
   SessionResetService,
   {
+    readonly generation: (
+      input: ThreadGenerationInput,
+    ) => Effect.Effect<ThreadGenerationResult, ThreadRecoveryError, RecoveryAuthority>;
+    readonly resume: (
+      input: ThreadResumeInput,
+    ) => Effect.Effect<ThreadResumeReceipt, ThreadRecoveryError, RecoveryAuthority>;
+    readonly stopReceipt: (
+      input: ThreadStopInput,
+    ) => Effect.Effect<ThreadStopReceipt, ThreadRecoveryError, RecoveryAuthority>;
     readonly reset: (
       input: SessionResetInput,
     ) => Effect.Effect<SessionResetReceipt, ThreadRecoveryError, RecoveryAuthority>;
@@ -35,6 +56,199 @@ const make = Effect.gen(function* () {
   const locks = yield* ThreadCommandExecutor.ThreadCommandExecutor;
   const sink = yield* EventSink.EventSinkV2;
   const store = yield* RecoveryStore.RecoveryStore;
+  const incarnation = yield* Incarnation.ServerIncarnation;
+  const generation: SessionResetService["Service"]["generation"] = (input) =>
+    Effect.gen(function* () {
+      const authority = yield* requireAdmin;
+      const p = yield* threads.getThreadRecords(input.threadId, []);
+      yield* assertWithinCeiling(authority, p.thread.runtimeMode);
+      return {
+        threadId: input.threadId,
+        generation: yield* store.generation(input.threadId),
+        serverIncarnation: incarnation.id,
+        serverStartedAt: incarnation.startedAt,
+      };
+    }).pipe(Effect.mapError(fail));
+  const resume: SessionResetService["Service"]["resume"] = (raw) =>
+    Effect.gen(function* () {
+      const authority = yield* requireAdmin;
+      const input = yield* Schema.decodeUnknownEffect(ThreadResumeInput)(raw).pipe(
+        Effect.mapError(
+          () =>
+            new ThreadRecoveryError({ code: "conflict", message: "Invalid resume parameters." }),
+        ),
+      );
+      const id = `resume:${authority.principal}:${input.requestId}`;
+      const commandId = CommandId.make(id);
+      const fingerprint = yield* Schema.encodeEffect(Schema.fromJsonString(ThreadResumeInput))(
+        input,
+      );
+      let saved: ThreadResumeReceipt | undefined;
+      let refusal: ThreadRecoveryError | undefined;
+      const validate = Effect.gen(function* () {
+        const p = yield* threads.getThreadRecords(input.threadId, ["runs"]);
+        yield* assertWithinCeiling(authority, p.thread.runtimeMode);
+        const existing = yield* store.get(id);
+        if (existing) {
+          if (existing.fingerprint !== fingerprint)
+            return yield* new ThreadRecoveryError({
+              code: "conflict",
+              message: "Request ID already identifies a different resume.",
+            });
+          saved = yield* Schema.decodeUnknownEffect(ThreadResumeReceipt)(existing.payload);
+          return false;
+        }
+        if ((yield* store.generation(input.threadId)) !== input.expectedGeneration)
+          return yield* new ThreadRecoveryError({
+            code: "conflict",
+            message: "Thread generation changed.",
+          });
+        if (yield* store.hasPendingReset(input.threadId))
+          return yield* new ThreadRecoveryError({
+            code: "pending",
+            message: "Session teardown is incomplete.",
+          });
+        if (p.runs.some((r) => ["preparing", "starting", "running", "waiting"].includes(r.status)))
+          return yield* new ThreadRecoveryError({
+            code: "conflict",
+            message: "Thread already has active work.",
+          });
+        return true;
+      }).pipe(
+        Effect.mapError(fail),
+        Effect.tapError((error) =>
+          Effect.sync(() => {
+            refusal = error;
+          }),
+        ),
+      );
+      yield* threads
+        .dispatch({
+          type: "message.dispatch",
+          commandId,
+          threadId: input.threadId,
+          messageId: MessageId.make(`${id}:message`),
+          text: input.message ?? "Continue the interrupted work.",
+          attachments: [],
+          createdBy: "agent",
+          creationSource: "server",
+          dispatchMode: { type: "start_immediately" },
+        })
+        .pipe(
+          Effect.provideService(ResumeAdmission, {
+            commandId,
+            accept: validate,
+            persist: (events) =>
+              Effect.gen(function* () {
+                // Recheck under SQLite write ownership too; reset uses the same thread lock.
+                if ((yield* store.generation(input.threadId)) !== input.expectedGeneration)
+                  return yield* new ThreadRecoveryError({
+                    code: "conflict",
+                    message: "Thread generation changed.",
+                  });
+                const run = events.find((e) => e.type === "run.created");
+                if (!run || run.type !== "run.created" || run.payload.status === "queued")
+                  return yield* new ThreadRecoveryError({
+                    code: "conflict",
+                    message: "Resume did not start a new run.",
+                  });
+                saved = {
+                  threadId: input.threadId,
+                  requestId: input.requestId,
+                  runId: run.payload.id,
+                  generation: input.expectedGeneration,
+                  acceptedAt: DateTime.formatIso(run.occurredAt),
+                  serverIncarnation: incarnation.id,
+                };
+                yield* store.save(id, authority.principal, fingerprint, saved);
+              }).pipe(
+                Effect.mapError(fail),
+                Effect.tapError((error) =>
+                  Effect.sync(() => {
+                    refusal = error;
+                  }),
+                ),
+              ),
+          }),
+          Effect.mapError((cause) => refusal ?? fail(cause)),
+        );
+      if (!saved)
+        return yield* new ThreadRecoveryError({
+          code: "storage",
+          message: "Resume receipt was not committed.",
+        });
+      return saved;
+    }).pipe(Effect.mapError(fail));
+  const stopReceipt: SessionResetService["Service"]["stopReceipt"] = (input) =>
+    Effect.gen(function* () {
+      const authority = yield* requireAdmin;
+      return yield* locks.withLock(
+        input.threadId,
+        store.transaction(
+          Effect.gen(function* () {
+            const p = yield* threads.getThreadRecords(input.threadId, ["runs", "turnItems"], {
+              runIds: [input.runId],
+              turnItemTypes: ["run_interrupt_request", "run_interrupt_result"],
+            });
+            yield* assertWithinCeiling(authority, p.thread.runtimeMode);
+            const run = p.runs.find((r) => r.id === input.runId);
+            if (!run)
+              return yield* new ThreadRecoveryError({
+                code: "not_found",
+                message: "Exact run does not belong to this thread.",
+              });
+            const reset = yield* store.get(`stop-reset:${input.threadId}:${input.runId}`);
+            const request = p.turnItems.find(
+              (i) => i.runId === input.runId && i.type === "run_interrupt_request",
+            );
+            const result = p.turnItems.find(
+              (i) => i.runId === input.runId && i.type === "run_interrupt_result",
+            );
+            const terminal = [
+              "completed",
+              "failed",
+              "cancelled",
+              "interrupted",
+              "rolled_back",
+            ].includes(run.status);
+            if (reset)
+              return {
+                ...(yield* Schema.decodeUnknownEffect(ThreadStopReceipt)(reset.payload)),
+                status: run.status,
+                terminal,
+                completedAt: run.completedAt ? DateTime.formatIso(run.completedAt) : null,
+              };
+            const endedBy =
+              result?.type === "run_interrupt_result" && result.stopOutcome
+                ? result.stopOutcome
+                : request?.type === "run_interrupt_request" && request.stopOutcome === "ack"
+                  ? ("ack" as const)
+                  : null;
+            const stopped =
+              terminal && result?.type === "run_interrupt_result" && result.stopOutcome === "ack";
+            return {
+              threadId: input.threadId,
+              runId: input.runId,
+              status: run.status,
+              terminal,
+              providerStopped: stopped,
+              endedBy,
+              generation:
+                request?.type === "run_interrupt_request"
+                  ? (request.sessionGeneration ?? null)
+                  : null,
+              requestedAt: request?.startedAt ? DateTime.formatIso(request.startedAt) : null,
+              acknowledgedAt:
+                request?.type === "run_interrupt_request" && request.stopOutcome === "ack"
+                  ? DateTime.formatIso(request.updatedAt)
+                  : null,
+              completedAt: run.completedAt ? DateTime.formatIso(run.completedAt) : null,
+              stoppedAt: stopped && result ? DateTime.formatIso(result.updatedAt) : null,
+            };
+          }),
+        ),
+      );
+    }).pipe(Effect.mapError(fail));
   const reset: SessionResetService["Service"]["reset"] = (raw) =>
     Effect.gen(function* () {
       const input = yield* Schema.decodeUnknownEffect(SessionResetInput)(raw).pipe(
@@ -123,6 +337,24 @@ const make = Effect.gen(function* () {
               yield* store.save(id, authority.principal, fingerprint, receipt);
               yield* store.fence(session.id, input.threadId, id, run.ordinal);
               const now = yield* DateTime.now;
+              yield* store.save(
+                `stop-reset:${input.threadId}:${input.runId}`,
+                authority.principal,
+                fingerprint,
+                {
+                  threadId: input.threadId,
+                  runId: input.runId,
+                  status: "cancelled",
+                  terminal: true,
+                  providerStopped: false,
+                  endedBy: "reset",
+                  generation: newGeneration,
+                  requestedAt: DateTime.formatIso(now),
+                  acknowledgedAt: null,
+                  completedAt: null,
+                  stoppedAt: null,
+                } satisfies ThreadStopReceipt,
+              );
               const base = { threadId: input.threadId, occurredAt: now };
               const event = (suffix: string) => ({
                 ...base,
@@ -229,9 +461,42 @@ const make = Effect.gen(function* () {
         status: "completed",
         isolation: result.isolation,
       };
-      yield* store.save(id, authority.principal, fingerprint, completed);
+      yield* store.transaction(
+        Effect.gen(function* () {
+          const stop = yield* store.get(`stop-reset:${input.threadId}:${input.runId}`);
+          // A pre-readback server may have persisted the reset intent without a stop proof.
+          // Its retry can record the stop proved now; historical request time stays unknown.
+          const payload = stop
+            ? yield* Schema.decodeUnknownEffect(ThreadStopReceipt)(stop.payload)
+            : {
+                threadId: input.threadId,
+                runId: input.runId,
+                status: "cancelled",
+                terminal: true,
+                providerStopped: false,
+                endedBy: "reset" as const,
+                generation: receipt.newGeneration,
+                requestedAt: null,
+                acknowledgedAt: null,
+                completedAt: null,
+                stoppedAt: null,
+              };
+          const stoppedAt = payload.stoppedAt ?? DateTime.formatIso(yield* DateTime.now);
+          yield* store.save(
+            `stop-reset:${input.threadId}:${input.runId}`,
+            authority.principal,
+            fingerprint,
+            {
+              ...payload,
+              providerStopped: true,
+              stoppedAt,
+            },
+          );
+          yield* store.save(id, authority.principal, fingerprint, completed);
+        }),
+      );
       return completed;
     }).pipe(Effect.mapError(fail));
-  return SessionResetService.of({ reset });
+  return SessionResetService.of({ reset, generation, resume, stopReceipt });
 });
 export const layer = Layer.effect(SessionResetService, make);

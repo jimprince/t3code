@@ -255,6 +255,7 @@ import * as PullRequestService from "./pullRequest/PullRequestService.ts";
 import { listLinkedPullRequestThreads } from "./pullRequest/linkedThreads.ts";
 import { pullRequestSyncKey } from "./pullRequest/pullRequestSyncKey.ts";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
+import { makeSendBindingReader } from "./forkThreads/SendBindings.ts";
 import { makeHandoffService } from "./forkThreads/HandoffService.ts";
 import * as PullRequestSyncReactor from "./orchestration-v2/PullRequestSyncReactor.ts";
 import * as ProjectIssuesService from "./projectIssues/ProjectIssuesService.ts";
@@ -3986,6 +3987,7 @@ const makeWsRpcLayer = (
         "fork.plan.publish": (input) => planPublication.publish(input),
         "fork.send.accept": (input) => handoffs.accept(input),
         "fork.send.lookup": (input) => handoffs.lookup(input),
+        "thread.send.binding": (input) => makeSendBindingReader(sql).read(input),
         "fork.send.inbox": (input) => handoffs.inbox(input.threadId),
         [WS_METHODS.giteaSetToken]: makeGiteaTokenRpcHandler(serverSettings),
         "fork.session.reconcile": (input) =>

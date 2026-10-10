@@ -1,3 +1,5 @@
+import { SendBindingWrite } from "../forkThreads/SendBindings.ts";
+import { ResumeAdmission } from "../threadRecovery/ResumeAdmission.ts";
 import { ThreadRecoveryError } from "@t3tools/contracts";
 import { HumanIngress } from "../threadRecovery/HumanIngress.ts";
 import { seedDelegatedMetadata } from "../forkThreads/MetadataStore.ts";
@@ -706,8 +708,13 @@ const baseLayer: Layer.Layer<
             }
           }
 
+          const sendBinding = yield* SendBindingWrite;
+          if (sendBinding?.commandId === input.commandId) yield* sendBinding.persist;
           const admission = yield* MessageAdmission;
           if (admission?.commandId === input.commandId) yield* admission.persist;
+          const resumeAdmission = yield* ResumeAdmission;
+          if (resumeAdmission?.commandId === input.commandId)
+            yield* resumeAdmission.persist(input.events);
           const normalized = yield* normalizeEvents(input.events);
           const storedEvents = yield* eventStore.append({
             commandId: input.commandId,

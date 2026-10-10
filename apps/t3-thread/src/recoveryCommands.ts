@@ -1,4 +1,8 @@
 import {
+  SendBindingInput,
+  ThreadResumeInput,
+  ThreadGenerationInput,
+  ThreadStopInput,
   SessionResetInput,
   HandoverPrepareInput,
   HandoverRoutesInput,
@@ -22,6 +26,67 @@ export function registerRecoveryCommands(
   withEnvironment: (name: string) => Promise<RemoteEnvironmentClient>,
   print: (value: unknown) => void,
 ) {
+  agent
+    .command("send-binding")
+    .argument("<thread>")
+    .argument("<send-id>")
+    .action(async (reference, sendId) => {
+      const { agent: target, client } = await withAgent(reference);
+      print(
+        await client.recoveryRpc(
+          "thread.send.binding",
+          Schema.decodeUnknownSync(SendBindingInput)({ threadId: target.threadId, sendId }),
+        ),
+      );
+    });
+  session
+    .command("generation")
+    .argument("<thread>")
+    .action(async (reference) => {
+      const { agent: target, client } = await withAgent(reference);
+      print(
+        await client.recoveryRpc(
+          "thread.session.generation",
+          Schema.decodeUnknownSync(ThreadGenerationInput)({ threadId: target.threadId }),
+        ),
+      );
+    });
+  session
+    .command("stop-receipt")
+    .argument("<thread>")
+    .requiredOption("--run-id <id>")
+    .action(async (reference, options) => {
+      const { agent: target, client } = await withAgent(reference);
+      print(
+        await client.recoveryRpc(
+          "thread.stop.receipt",
+          Schema.decodeUnknownSync(ThreadStopInput)({
+            threadId: target.threadId,
+            runId: options.runId,
+          }),
+        ),
+      );
+    });
+  agent
+    .command("resume")
+    .argument("<thread>")
+    .requiredOption("--expected-generation <number>")
+    .requiredOption("--request-id <id>")
+    .option("--message <text>")
+    .action(async (reference, options) => {
+      const { agent: target, client } = await withAgent(reference);
+      print(
+        await client.recoveryRpc(
+          "thread.resume",
+          Schema.decodeUnknownSync(ThreadResumeInput)({
+            threadId: target.threadId,
+            expectedGeneration: Number(options.expectedGeneration),
+            requestId: options.requestId,
+            ...(options.message === undefined ? {} : { message: options.message }),
+          }),
+        ),
+      );
+    });
   session
     .command("reset")
     .argument("<thread>")
@@ -117,6 +182,18 @@ export function registerRecoveryCommands(
   const human = agent
     .command("human")
     .description("Inspect and explicitly address pending human requests");
+  human
+    .command("pending-list")
+    .argument("<thread>")
+    .action(async (reference) => {
+      const { agent: target, client } = await withAgent(reference);
+      print(
+        await client.recoveryRpc(
+          "thread.human.pending.list",
+          Schema.decodeUnknownSync(ThreadGenerationInput)({ threadId: target.threadId }),
+        ),
+      );
+    });
   human
     .command("pending")
     .argument("<thread>")

@@ -153,8 +153,68 @@ export const HumanPendingResult = Schema.Struct({
   requests: Schema.Array(HumanPendingRequest),
 });
 export type HumanPendingResult = typeof HumanPendingResult.Type;
+export const ThreadGenerationInput = Schema.Struct({ threadId: ThreadId });
+export type ThreadGenerationInput = typeof ThreadGenerationInput.Type;
+export const ThreadGenerationResult = Schema.Struct({
+  threadId: ThreadId,
+  generation: NonNegativeInt,
+  serverIncarnation: Schema.String,
+  serverStartedAt: Schema.String,
+});
+export type ThreadGenerationResult = typeof ThreadGenerationResult.Type;
+export const ThreadResumeInput = Schema.Struct({
+  threadId: ThreadId,
+  expectedGeneration: NonNegativeInt,
+  requestId: Schema.String.pipe(Schema.check(Schema.isMinLength(1))),
+  message: Schema.optionalKey(Schema.String.pipe(Schema.check(Schema.isMinLength(1)))),
+});
+export type ThreadResumeInput = typeof ThreadResumeInput.Type;
+export const ThreadResumeReceipt = Schema.Struct({
+  threadId: ThreadId,
+  requestId: Schema.String,
+  runId: RunId,
+  generation: NonNegativeInt,
+  acceptedAt: Schema.String,
+  serverIncarnation: Schema.String,
+});
+export type ThreadResumeReceipt = typeof ThreadResumeReceipt.Type;
+export const ThreadStopInput = Schema.Struct({ threadId: ThreadId, runId: RunId });
+export type ThreadStopInput = typeof ThreadStopInput.Type;
+export const ThreadStopReceipt = Schema.Struct({
+  threadId: ThreadId,
+  runId: RunId,
+  status: Schema.String,
+  terminal: Schema.Boolean,
+  providerStopped: Schema.Boolean,
+  endedBy: Schema.NullOr(Schema.Literals(["ack", "fallback", "reset"])),
+  generation: Schema.NullOr(NonNegativeInt),
+  requestedAt: Schema.NullOr(Schema.String),
+  acknowledgedAt: Schema.NullOr(Schema.String),
+  completedAt: Schema.NullOr(Schema.String),
+  stoppedAt: Schema.NullOr(Schema.String),
+});
+export type ThreadStopReceipt = typeof ThreadStopReceipt.Type;
+export const HumanPendingListResult = Schema.Array(
+  Schema.Struct({
+    turnItemId: TurnItemId,
+    sourceMessageId: MessageId,
+    reason: Schema.Literals(["unanswered", "failed", "interrupted", "queued"]),
+  }),
+);
 const error = Schema.Union([EnvironmentAuthorizationError, ThreadRecoveryError]);
 export const ThreadRecoveryRpcs = [
+  Rpc.make("thread.session.generation", {
+    payload: ThreadGenerationInput,
+    success: ThreadGenerationResult,
+    error,
+  }),
+  Rpc.make("thread.resume", { payload: ThreadResumeInput, success: ThreadResumeReceipt, error }),
+  Rpc.make("thread.stop.receipt", { payload: ThreadStopInput, success: ThreadStopReceipt, error }),
+  Rpc.make("thread.human.pending.list", {
+    payload: ThreadGenerationInput,
+    success: HumanPendingListResult,
+    error,
+  }),
   Rpc.make("thread.session.reset", {
     payload: SessionResetInput,
     success: SessionResetReceipt,

@@ -487,6 +487,11 @@ export class RemoteEnvironmentClient {
   /** Administrative recovery uses the same paired credential and websocket ticket as ordinary RPCs. */
   async recoveryRpc<T = unknown>(
     method:
+      | "thread.send.binding"
+      | "thread.session.generation"
+      | "thread.resume"
+      | "thread.stop.receipt"
+      | "thread.human.pending.list"
       | "thread.session.reset"
       | "thread.handover.prepare"
       | "thread.handover.commit"
@@ -1123,6 +1128,8 @@ export class RemoteEnvironmentClient {
           status: response.status,
           cause: response.cause,
           ownerThreadId: response.ownerThreadId,
+          ...(response.runId === undefined ? {} : { runId: response.runId }),
+          ...(response.run === undefined ? {} : { run: response.run }),
         };
         const forwardedMessage =
           "forwardedMessage" in response ? response.forwardedMessage : input.forwardedMessage;
