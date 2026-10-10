@@ -10,10 +10,11 @@ import {
 } from "@t3tools/client-runtime/state/orchestrators";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { ChevronDownIcon, ChevronRightIcon, CircleAlertIcon, UsersIcon } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
 import * as Schema from "effect/Schema";
 
 import { useLocalStorage } from "../../hooks/useLocalStorage";
+import { useThreadActionMenu } from "../../hooks/useThreadActionMenu";
 import { useProjects } from "../../state/entities";
 import { useEnvironments } from "../../state/environments";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
@@ -172,11 +173,27 @@ function ProjectRow({
         project.environmentId === summary.root.environmentId &&
         project.id === summary.root.projectId,
     ) ?? summary.projects[0];
+  // The project's own orchestrator thread owns the row, so it takes the same
+  // right-click menu every other thread row has: pin order, settle, nest,
+  // archive. Rename is left out; this row has no inline title editor.
+  const { openMenu } = useThreadActionMenu({
+    threadRef: rootRef,
+    projectCwd: rootProject?.workspaceRoot ?? null,
+    onStartRename: null,
+  });
+  const handleContextMenu = useCallback(
+    (event: ReactMouseEvent) => {
+      event.preventDefault();
+      openMenu({ x: event.clientX, y: event.clientY });
+    },
+    [openMenu],
+  );
   return (
     <li
       className={`relative rounded-md ${
         selected ? "bg-sidebar-row-active text-sidebar-foreground" : "hover:bg-sidebar-row-hover"
       }`}
+      onContextMenu={handleContextMenu}
     >
       <button
         type="button"
