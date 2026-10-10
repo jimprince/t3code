@@ -44,6 +44,7 @@ import {
   type ProviderSubagentStatus,
 } from "@t3tools/client-runtime/state/thread-execution";
 import { formatModelSlugName, resolveSelectableModel } from "@t3tools/shared/model";
+import { owningProjectRoot } from "@t3tools/client-runtime/state/projectSubprojects";
 import { isProviderNativeSubagentThread } from "@t3tools/contracts";
 import type { QueuedRunEdit } from "../../state/queued-run-edit";
 import type { FollowUpBehavior } from "../../lib/followUpBehavior";
@@ -123,6 +124,7 @@ import { ComposerErrorNotice } from "./ComposerErrorNotice";
 import { ComposerFeedback } from "./ComposerFeedback";
 import { ComposerUsageLimits } from "./ComposerUsageLimits";
 import { PendingUserInputCard } from "./PendingUserInputCard";
+import { useSupervisionMetadata } from "../../state/forkSupervision";
 import { ProviderSubagentBar } from "./ProviderSubagentBar";
 import { ThreadCreationFailedCard } from "./ThreadCreationFailedCard";
 import {
@@ -407,6 +409,25 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const composerEditorRef = useRef<ComposerEditorHandle>(null);
   // A provider-native subagent shows status instead of a composer.
   const isProviderSubagent = isProviderNativeSubagentThread(props.selectedThread.source);
+  // The project this subagent works for. When it is not simply the parent (a subagent of a
+  // worker), "Open parent" would land mid-tree, so the bar also offers the way back to the project.
+  const supervisionMetadata = useSupervisionMetadata();
+  const backToProjectThreadId = useMemo(() => {
+    if (!isProviderSubagent) return null;
+    const owner = owningProjectRoot(supervisionMetadata, {
+      environmentId: String(props.environmentId),
+      threadId: String(props.selectedThread.id),
+      lineageParentId:
+        props.selectedThread.lineage.parentThreadId === null
+          ? null
+          : String(props.selectedThread.lineage.parentThreadId),
+    });
+    return owner !== null &&
+      owner.environmentId === String(props.environmentId) &&
+      owner.threadId !== String(props.selectedThread.lineage.parentThreadId)
+      ? owner.threadId
+      : null;
+  }, [isProviderSubagent, props.environmentId, props.selectedThread, supervisionMetadata]);
   // Entering edit mode from the queue sheet should land in a ready composer,
   // not require a second tap on a composer already holding the message.
   const editingRunId = props.queuedRunEdit?.runId ?? null;
@@ -1378,6 +1399,15 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                           reportedModelSelection,
                         )}
                         status={props.providerSubagentStatus ?? null}
+                        onBackToProject={
+                          backToProjectThreadId === null
+                            ? null
+                            : () =>
+                                navigation.navigate("Thread", {
+                                  environmentId: String(props.environmentId),
+                                  threadId: backToProjectThreadId,
+                                })
+                        }
                         onOpenParent={
                           props.selectedThread.lineage.parentThreadId === null
                             ? null
