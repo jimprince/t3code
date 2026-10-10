@@ -159,6 +159,7 @@ The thread's **Auto-settle behavior: Disabled** overrides completion settlement 
 A direct follow-up resumes a settled worker automatically. Scheduled checks skip
 settled threads, without queuing missed runs. Un-settle the thread to resume checks
 at the next scheduled occurrence; skipped occurrences appear in Scheduled tasks.
+Running a task with Run now reopens its settled thread.
 
 Settled subthreads archive after seven days by default. **Archive settled subthreads**
 and its days setting can be changed per environment or project in **Thread behavior**.

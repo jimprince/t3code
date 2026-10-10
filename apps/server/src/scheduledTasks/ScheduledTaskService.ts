@@ -458,6 +458,28 @@ export const layer = Layer.effect(
         ),
       );
 
+    // Run now is an explicit action, so it reopens a settled bound thread the
+    // way a user's own message does; only scheduled occurrences skip it.
+    const reopenForManualRun = (
+      trigger: "scheduled" | "manual",
+      threadId: ThreadId,
+      commandId: CommandId,
+    ) =>
+      trigger === "scheduled"
+        ? Effect.void
+        : threadManagement.getThreadShell(threadId).pipe(
+            Effect.flatMap((shell) =>
+              shell?.settledOverride === "settled"
+                ? threadManagement.dispatch({
+                    type: "thread.unsettle",
+                    commandId: CommandId.make(`${commandId}:reopen`),
+                    threadId,
+                    reason: "user",
+                  })
+                : Effect.void,
+            ),
+          );
+
     const runTask = Effect.fn("ScheduledTaskService.runTask")(function* (
       task: ScheduledTask,
       trigger: "scheduled" | "manual",
@@ -541,29 +563,30 @@ export const layer = Layer.effect(
                   .pipe(Effect.as("succeeded" as const)),
               )
             : yield* Effect.exit(
-                threadManagement
-                  .sendToThread({
-                    projectId: active.projectId,
-                    commandId,
-                    threadId: ThreadId.make(active.threadId),
-                    messageId,
-                    scheduledTaskId: active.id,
-                    text: prompt,
-                    attachments: [],
-                    modelSelection: active.modelSelection,
-                    // Scheduled prompts must not interrupt tools in the bound thread.
-                    mode: "queue",
-                    createdBy: active.createdBy,
-                    creationSource: active.creationSource,
-                  })
-                  .pipe(
-                    Effect.as("succeeded" as const),
-                    Effect.catchIf(
-                      (error) =>
-                        isOrchestratorDispatchError(error) && error.reasonCode === "thread_settled",
-                      () => Effect.succeed("skipped" as const),
-                    ),
+                reopenForManualRun(trigger, ThreadId.make(active.threadId), commandId).pipe(
+                  Effect.andThen(
+                    threadManagement.sendToThread({
+                      projectId: active.projectId,
+                      commandId,
+                      threadId: ThreadId.make(active.threadId),
+                      messageId,
+                      scheduledTaskId: active.id,
+                      text: prompt,
+                      attachments: [],
+                      modelSelection: active.modelSelection,
+                      // Scheduled prompts must not interrupt tools in the bound thread.
+                      mode: "queue",
+                      createdBy: active.createdBy,
+                      creationSource: active.creationSource,
+                    }),
                   ),
+                  Effect.as("succeeded" as const),
+                  Effect.catchIf(
+                    (error) =>
+                      isOrchestratorDispatchError(error) && error.reasonCode === "thread_settled",
+                    () => Effect.succeed("skipped" as const),
+                  ),
+                ),
               );
 
         const completedAt = yield* localNow;

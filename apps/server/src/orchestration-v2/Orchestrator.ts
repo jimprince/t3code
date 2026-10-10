@@ -152,7 +152,7 @@ export class OrchestratorDispatchError extends Schema.TaggedError<OrchestratorDi
 ) {
   override get message(): string {
     if (this.reasonCode === "thread_settled") {
-      return "Scheduled checks skip settled threads. Un-settle the thread to resume them.";
+      return "Skipped because the thread is settled. Un-settle it to resume.";
     }
     return `Failed to dispatch orchestration command ${this.commandType} (${this.commandId}).`;
   }

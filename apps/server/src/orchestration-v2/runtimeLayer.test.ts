@@ -346,6 +346,64 @@ it.layer(ScheduledTaskTestLayer)("scheduled settlement admission", (it) => {
         assert.equal(active.messages[0]?.scheduledTaskId, task.id);
       }),
   );
+
+  // Run now is an explicit action: like a user send it reopens the thread.
+  it.effect("reopens a settled thread for a manual run", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const schedules = yield* ScheduledTaskService.ScheduledTaskService;
+      const projectId = ProjectId.make("scheduled-manual-project");
+      const threadId = ThreadId.make("scheduled-manual-thread");
+      yield* seedProject({
+        projectId,
+        title: "Manual checks",
+        workspaceRoot: "/tmp/scheduled-manual",
+        defaultModelSelection: null,
+        createdAt: "2026-10-10T00:00:00.000Z",
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        createdBy: "user",
+        creationSource: "web",
+        commandId: CommandId.make("scheduled-manual-create"),
+        threadId,
+        projectId,
+        title: "Check-in",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: "/tmp/scheduled-manual",
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.settle",
+        commandId: CommandId.make("scheduled-manual-settle"),
+        threadId,
+      });
+      const { task } = yield* schedules.upsert({
+        id: ScheduledTaskId.make("scheduled-manual-task"),
+        title: "Watchdog check-in",
+        prompt: "Check the build.",
+        enabled: true,
+        schedule: { type: "interval", everyMs: 1800000 },
+        projectId,
+        threadId,
+        workspaceStrategy: { type: "root" },
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        createdBy: "user",
+        creationSource: "web",
+      });
+
+      const ran = yield* schedules.runNow({ id: task.id });
+      assert.equal(ran.task.lastRunStatus, "succeeded");
+      const reopened = yield* orchestrator.getThreadProjection(threadId);
+      assert.notEqual(reopened.thread.settledOverride, "settled");
+      assert.lengthOf(reopened.runs, 1);
+      assert.equal(reopened.messages[0]?.scheduledTaskId, task.id);
+    }),
+  );
 });
 
 const LegacyImportTestLayer = OrchestrationV2LayerLive.pipe(
