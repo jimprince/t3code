@@ -14,7 +14,10 @@ export interface OrchestratorThreadShell extends EnvironmentThreadShell {
   readonly remoteParent?: ForkRemoteParent | null;
   readonly scope?: string | null;
   readonly supervisionParentKey?: string | null;
-  /** Only `on` makes a nested thread a subproject; the server writes `on` when it promotes one. */
+  /**
+   * `on` means "a project in its own right": a nested thread renders as a subproject
+   * of its parent, and a top-level thread stays in Projects even with no workers.
+   */
   readonly subproject?: ThreadSubprojectMode;
 }
 export type ThreadDisplayStatus =
@@ -207,6 +210,10 @@ export function projectSidebarBucket(
   ) {
     return "working";
   }
+  // Settling is the explicit "this project is finished" statement, so it folds the
+  // row away now instead of waiting out the quiet window. Attention and live work
+  // above still win: a settled project whose workers need you stays in the list.
+  if (summary.root.settledOverride === "settled") return "quiet";
   return Date.parse(rollup.latestActivityAt) >= quietCutoffMs ? "idle" : "quiet";
 }
 
@@ -255,8 +262,9 @@ export function sortOrchestratorSummariesForSidebar(
 }
 
 /**
- * Projects mode owns complete orchestrator trees; Threads keeps standalone roots,
- * plus each pinned project root's own row so a pin tops both lists in pin order.
+ * Projects mode owns complete orchestrator trees, root included, so a project and
+ * its orchestrator never also occupy the Threads list (Brad, 2026-10-10). Threads
+ * keeps standalone roots.
  */
 export function threadsVisibleInThreadsMode(
   threads: ReadonlyArray<OrchestratorThreadShell>,
@@ -277,11 +285,11 @@ export function threadsVisibleInThreadsMode(
     if (
       root.archivedAt !== null ||
       parentKey(root) != null ||
-      (!childrenByParent.has(rootKey) && root.pinnedAt == null)
+      !(childrenByParent.has(rootKey) || root.subproject === "on")
     ) {
       continue;
     }
-    if (root.pinnedAt == null) projectThreadKeys.add(rootKey);
+    projectThreadKeys.add(rootKey);
     for (const descendant of collectDescendants(root, childrenByParent)) {
       projectThreadKeys.add(threadActivityKey(descendant));
     }
@@ -409,11 +417,13 @@ export function buildOrchestratorSummaries(
         thread.archivedAt == null &&
         (isSubproject(thread)
           ? true
-          : // An orchestrator: it has workers, or it is pinned (the chief of staff
-            // reports to Brad without workers nested under it).
+          : // A project: a top-level thread that owns workers, or one marked as a
+            // project in its own right (a standing orchestrator between jobs).
+            // Pinning only orders the sidebar (Brad, 2026-10-10); it never
+            // promotes a thread into Projects.
             parentKey(thread) == null &&
             ((childrenByParent.get(threadActivityKey(thread))?.length ?? 0) > 0 ||
-              thread.pinnedAt != null)),
+              thread.subproject === "on")),
     )
     .map((root) => {
       const descendants = collectOwnDescendants(root, childrenByParent);
