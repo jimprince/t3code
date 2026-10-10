@@ -3036,3 +3036,19 @@ retire_when = "Upstream's CLI watcher reads settled threads only when their stat
 depends_on = ["fork-worker-operations", "fork-reliable-handoffs"]
 roles = []
 note = "Load hotfix 2026-10-10 (dev-vm main thread saturated). Measured in the server trace: three settled threads were re-subscribed every 7-15 s from the VM credential. Causes: a settle-after-turn helper that polled an already-settled thread every 5 s for up to 24 h; the queue drain reading every held send's settled target on each 5 s pass; and the watcher fully reading settled sources it had already parked or could judge from the shell list. Settle-after-turn now returns once the thread is settled. The drain re-reads a settled target once a minute, the same cadence the watcher already used for settled sources, so an unsettle still delivers held sends. The watcher skips the full read when the shell it already fetched shows a settled source with no active run or pending request and no completion inside the reporting window (60 min for notices, 2 min for liveness). A completion that lands right before a self-settle is therefore still read and delivered. The watch poller also shares one shell list per environment per pass between the attention scan and the liveness check, and reuses a source's last full read while its shell in that list is unchanged and shows no live run (quietShellSignature). The loop is sequential, so its read rate is bounded by read latency: skipping only settled sources would just cycle the unsettled ones faster. Live runs are re-read at most every 30 s (LIVE_SOURCE_REREAD_MS), or at once when their status, run or pending-request flags change in the shell; the shell list itself lives 15 s across passes (SHELL_LIST_TTL_MS). Without those two bounds, fast passes would re-read live sources and re-list every shell each 5 s. findThread enriches nesting by reading the whole fork_thread_metadata table (1000+ rows) after a one-thread snapshot; it takes nesting: false where nothing reads parent, scope or subproject (pending, queue drain, deferred settlement), and the watch poller takes those fields from the pass's already-enriched shell. status and listings keep the enrichment because their output shows nesting."
+
+[[patch]]
+name = "fork-projects-dnd"
+subject = "feat(web): arrange projects by dragging them in the Projects sidebar"
+class = "product"
+purpose = "Let Brad arrange the Projects sidebar by dragging a project row, or with Alt+Up/Down on it (Brad, 2026-10-10)."
+retire_when = "Upstream offers its own way to arrange projects, or fork-projects-real-only stops ordering projects by pin."
+depends_on = ["fork-projects-real-only", "fork-projects-pinned"]
+roles = []
+note = "No new store: a move writes the existing thread pin order keys (thread.pin with orderKey, thread.pin.reorder) through useThreadActions. Pinned projects lead in pin order and the rest sort by bucket, so planProjectMove pins the moved project and every project shown above it in the dropped order, keeping pinned projects below; the list then reads as dropped. Quiet pinned keys are reserved. The list holds the dropped order until the assigned keys land, a membership change, or a failed write. Reverse: Unpin thread in the row menu returns a project to automatic order. Drag into or out of a parent stays on the menu (Show as subproject / worker). Web and desktop; mobile does not arrange projects."
+
+[[patch.decision]]
+id = "projects-dnd-pin-keys"
+date = "2026-10-10"
+decided = "reconcile-smaller"
+rationale = "The project-layout service stores a project page's widgets, not the sidebar's project order, so arranging reuses pin order keys, which already order Projects and sync to every client, instead of adding an order store. Brad ran it from feature/projects-dnd-live (8dc73699) on origin/live first."
