@@ -19,7 +19,9 @@ export type ThreadNestingMenuId =
 export interface ThreadNestingMenuState {
   readonly canStartNestedThread: boolean;
   readonly isNested: boolean;
-  /** Whether a nested thread is a subproject now; null when it is not nested or the host cannot say. */
+  /** Whether the thread owns workers, which already makes a top-level thread a project. */
+  readonly ownsWorkers: boolean;
+  /** Whether the thread is marked a project in its own right; null when the host cannot say. */
   readonly subproject: "on" | "off" | null;
   readonly parentCandidates: ReadonlyArray<{ readonly id: ThreadId; readonly title: string }>;
 }
@@ -43,8 +45,9 @@ export function resolveThreadNestingMenuState(input: {
   return {
     canStartNestedThread: true,
     isNested: currentParent !== undefined,
+    ownsWorkers: (forest.children.get(key) ?? []).length > 0,
     subproject:
-      currentParent === undefined || input.subprojectsSupported !== true
+      input.subprojectsSupported !== true
         ? null
         : forest.byKey.get(key)?.subproject === "on"
           ? "on"
@@ -83,6 +86,25 @@ export function nestUnderMenuTarget(
 }
 
 /**
+ * The one item that moves a thread in or out of Projects. Nested, it reads as a
+ * subproject of its parent. Top-level, it keeps a standing orchestrator in Projects
+ * between jobs; a thread that already owns workers is a project either way, so the
+ * item would claim to do nothing and is left out.
+ */
+function subprojectItems(
+  state: ThreadNestingMenuState,
+): ReadonlyArray<ContextMenuItem<ThreadNestingMenuId>> {
+  if (state.subproject === null) return [];
+  if (state.isNested) {
+    return state.subproject === "on"
+      ? [{ id: "subproject-off", label: "Show as worker" }]
+      : [{ id: "subproject-on", label: "Show as subproject" }];
+  }
+  if (state.subproject === "on") return [{ id: "subproject-off", label: "Remove from Projects" }];
+  return state.ownsWorkers ? [] : [{ id: "subproject-on", label: "Show in Projects" }];
+}
+
+/**
  * Splices nesting actions into the shared thread action menu: "New thread
  * under this one" joins the new-thread item at the top, and "Nest under…" /
  * "Move to sidebar" / "Show as subproject" join the lifecycle group before Rename.
@@ -109,11 +131,7 @@ export function withThreadNestingMenuItems<T extends string>(
         ]
       : []),
     ...(state.isNested ? [{ id: "move-to-sidebar" as const, label: "Move to sidebar" }] : []),
-    ...(state.subproject === "on"
-      ? [{ id: "subproject-off" as const, label: "Show as worker" }]
-      : state.subproject === "off"
-        ? [{ id: "subproject-on" as const, label: "Show as subproject" }]
-        : []),
+    ...subprojectItems(state),
   ];
   const result: ContextMenuItem<T | ThreadNestingMenuId>[] = [...items];
   const branchIndex = result.findIndex((item) => item.id === "new-thread-on-branch");
