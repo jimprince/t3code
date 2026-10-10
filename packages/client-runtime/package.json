@@ -79,6 +79,10 @@
       "types": "./src/decisionComment.ts",
       "default": "./src/decisionComment.ts"
     },
+    "./automation-schedule": {
+      "types": "./src/automationSchedule.ts",
+      "default": "./src/automationSchedule.ts"
+    },
     "./decision-deferral": {
       "types": "./src/decisionDeferral.ts",
       "default": "./src/decisionDeferral.ts"
