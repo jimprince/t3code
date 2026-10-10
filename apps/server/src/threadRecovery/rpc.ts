@@ -7,6 +7,20 @@ import * as Effect from "effect/Effect";
 
 /** Authenticated transport context supplies administrative authority; payloads contain only targets. */
 const handlers = () => ({
+  "thread.session.generation": (
+    input: Parameters<SessionReset.SessionResetService["Service"]["generation"]>[0],
+  ) => Effect.flatMap(SessionReset.SessionResetService, (s) => s.generation(input)),
+  "thread.resume": (input: Parameters<SessionReset.SessionResetService["Service"]["resume"]>[0]) =>
+    Effect.flatMap(SessionReset.SessionResetService, (s) => s.resume(input)),
+  "thread.stop.receipt": (
+    input: Parameters<SessionReset.SessionResetService["Service"]["stopReceipt"]>[0],
+  ) => Effect.flatMap(SessionReset.SessionResetService, (s) => s.stopReceipt(input)),
+  "thread.human.pending.list": (input: {
+    readonly threadId: import("@t3tools/contracts").ThreadId;
+  }) =>
+    requireAdmin.pipe(
+      Effect.andThen(Effect.flatMap(Human.PendingHumanRequests, (s) => s.listPending(input))),
+    ),
   "thread.session.reset": (
     input: Parameters<SessionReset.SessionResetService["Service"]["reset"]>[0],
   ) => Effect.flatMap(SessionReset.SessionResetService, (s) => s.reset(input)),
@@ -33,6 +47,18 @@ const handlers = () => ({
 export const authenticatedHandlers = (authority: RecoveryAuthority["Service"]) => {
   const h = handlers();
   return {
+    "thread.session.generation": (input: Parameters<(typeof h)["thread.session.generation"]>[0]) =>
+      h["thread.session.generation"](input).pipe(
+        Effect.provideService(RecoveryAuthority, authority),
+      ),
+    "thread.resume": (input: Parameters<(typeof h)["thread.resume"]>[0]) =>
+      h["thread.resume"](input).pipe(Effect.provideService(RecoveryAuthority, authority)),
+    "thread.stop.receipt": (input: Parameters<(typeof h)["thread.stop.receipt"]>[0]) =>
+      h["thread.stop.receipt"](input).pipe(Effect.provideService(RecoveryAuthority, authority)),
+    "thread.human.pending.list": (input: Parameters<(typeof h)["thread.human.pending.list"]>[0]) =>
+      h["thread.human.pending.list"](input).pipe(
+        Effect.provideService(RecoveryAuthority, authority),
+      ),
     "thread.session.reset": (input: Parameters<(typeof h)["thread.session.reset"]>[0]) =>
       h["thread.session.reset"](input).pipe(Effect.provideService(RecoveryAuthority, authority)),
     "thread.handover.prepare": (input: Parameters<(typeof h)["thread.handover.prepare"]>[0]) =>

@@ -1,3 +1,4 @@
+import * as ServerIncarnation from "./ServerIncarnation.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -59,6 +60,7 @@ export const config = Layer.effect(
   Effect.map(ServerConfig.ServerConfig, (c) => ({ ...c, devUrl: new URL("http://127.0.0.1:1") })),
 ).pipe(Layer.provide(baseConfig));
 const dependencies = Layer.mergeAll(
+  ServerIncarnation.layer,
   stores,
   sink,
   management,
@@ -140,7 +142,7 @@ const message = (id = messageId): OrchestrationV2ConversationMessage => ({
   createdBy: "user",
   creationSource: "web",
 });
-const item: OrchestrationV2TurnItem = {
+const item = {
   id: itemId,
   threadId: old,
   runId,
@@ -162,7 +164,7 @@ const item: OrchestrationV2TurnItem = {
   attachments: [],
   createdBy: "user",
   creationSource: "web",
-};
+} satisfies OrchestrationV2TurnItem;
 const providerThread: OrchestrationV2ProviderThread = {
   id: ptId,
   driver: ProviderDriverKind.make("codex"),
@@ -301,6 +303,7 @@ export {
   stores,
   layer,
   admin,
+  now,
   old,
   successor,
   sibling,
@@ -310,6 +313,7 @@ export {
   thread,
   run,
   message,
+  item,
   write,
   event,
   seed,

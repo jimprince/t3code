@@ -10,6 +10,8 @@ import {
   MessageId,
   RunId,
   AuthOrchestrationOperateScope,
+  TurnItemId,
+  ThreadStopReceipt,
   type HandoverHostReceipt,
 } from "@t3tools/contracts";
 import * as IdAllocator from "../orchestration-v2/IdAllocator.ts";
@@ -36,6 +38,8 @@ import {
   message,
   messageId,
   itemId,
+  item,
+  now,
   input,
   sessionId,
   admin,
@@ -72,6 +76,17 @@ it.live(
           Effect.flip,
           Effect.tap((e) => Effect.sync(() => expect(e.code).toBe("teardown"))),
         );
+        expect(yield* resets.generation({ threadId: old })).toMatchObject({
+          threadId: old,
+          generation: 1,
+        });
+        expect(yield* resets.stopReceipt({ threadId: old, runId: input.runId })).toMatchObject({
+          endedBy: "reset",
+          terminal: true,
+          providerStopped: false,
+          generation: 1,
+          stoppedAt: null,
+        });
         const blocked = yield* write([
           event({ type: "run.updated", threadId: old, payload: run("running") }),
         ]).pipe(Effect.flip);
@@ -82,6 +97,17 @@ it.live(
           .pipe(Effect.provideService(Hook.ProviderSessionResetHook, hook));
         expect(receipt.status).toBe("completed");
         expect(receipt.newGeneration).toBe(1);
+        const stop = yield* resets.stopReceipt({ threadId: old, runId: input.runId });
+        expect(stop).toMatchObject({
+          endedBy: "reset",
+          terminal: true,
+          status: "cancelled",
+          providerStopped: true,
+          generation: 1,
+        });
+        expect(stop.stoppedAt).not.toBeNull();
+        expect(stop.requestedAt).not.toBeNull();
+        expect(yield* Schema.decodeUnknownEffect(ThreadStopReceipt)(stop)).toEqual(stop);
         expect(yield* resets.reset(input)).toEqual(receipt);
         expect(hookCalls).toBe(2);
         expect(yield* pending.listPending({ threadId: old })).toEqual([
@@ -594,6 +620,138 @@ it.live(
         expect(
           (yield* pending.listPending({ threadId: old })).map((r) => r.sourceMessageId),
         ).toEqual(["human-5", "human-12", "human-20", "human-30"]);
+      }),
+    ),
+);
+
+it.live("exact stop receipt distinguishes unknown history, ACK, fallback and wrong-run reads", () =>
+  execute(
+    Effect.gen(function* () {
+      yield* seed("interrupted");
+      const service = yield* Reset.SessionResetService;
+      const exact = { threadId: old, runId: input.runId };
+      const legacy = yield* service.stopReceipt(exact);
+      expect(legacy).toMatchObject({
+        terminal: true,
+        endedBy: null,
+        providerStopped: false,
+        generation: null,
+      });
+      expect(
+        (yield* service.stopReceipt({ ...exact, runId: RunId.make("wrong") }).pipe(Effect.flip))
+          .code,
+      ).toBe("not_found");
+      const request = {
+        ...item,
+        id: TurnItemId.make("stop-request"),
+        type: "run_interrupt_request" as const,
+        sessionGeneration: 4,
+        stopOutcome: "ack" as const,
+        message: "Stop",
+        updatedAt: now,
+      };
+      yield* write([event({ type: "turn-item.updated", threadId: old, payload: request })]);
+      const acknowledgementOnly = yield* service.stopReceipt(exact);
+      expect(acknowledgementOnly).toMatchObject({
+        endedBy: "ack",
+        providerStopped: false,
+        stoppedAt: null,
+      });
+      yield* write([
+        event({
+          type: "turn-item.updated",
+          threadId: old,
+          payload: {
+            ...item,
+            id: TurnItemId.make("stop-result"),
+            type: "run_interrupt_result",
+            stopOutcome: "ack",
+            message: "Native terminal acknowledgement",
+          },
+        }),
+      ]);
+      const ack = yield* service.stopReceipt(exact);
+      expect(ack).toMatchObject({
+        endedBy: "ack",
+        providerStopped: true,
+        generation: 4,
+        acknowledgedAt: "2026-10-10T00:00:00.000Z",
+      });
+      yield* write([
+        event({
+          type: "turn-item.updated",
+          threadId: old,
+          payload: {
+            ...item,
+            id: TurnItemId.make("stop-result"),
+            type: "run_interrupt_result",
+            stopOutcome: "fallback",
+            message: "Fallback",
+          },
+        }),
+      ]);
+      const fallback = yield* service.stopReceipt(exact);
+      expect(fallback).toMatchObject({
+        endedBy: "fallback",
+        providerStopped: false,
+        generation: 4,
+        stoppedAt: null,
+      });
+      expect(yield* Schema.decodeUnknownEffect(ThreadStopReceipt)(fallback)).toEqual(fallback);
+      const denied = yield* Effect.result(
+        service.generation({ threadId: old }).pipe(
+          Effect.provideService(RecoveryAuthority, {
+            principal: "standard",
+            scopes: [AuthOrchestrationOperateScope],
+          }),
+        ),
+      );
+      expect(denied._tag).toBe("Failure");
+      if (denied._tag === "Failure") expect(denied.failure.code).toBe("forbidden");
+      const stopDenied = yield* service.stopReceipt(exact).pipe(
+        Effect.provideService(RecoveryAuthority, {
+          principal: "standard",
+          scopes: [AuthOrchestrationOperateScope],
+        }),
+        Effect.flip,
+      );
+      expect(stopDenied.code).toBe("forbidden");
+    }),
+  ),
+);
+
+it.live(
+  "retry completes a legacy fenced reset without inventing its missing request timestamp",
+  () =>
+    execute(
+      Effect.gen(function* () {
+        yield* seed();
+        const service = yield* Reset.SessionResetService;
+        const sql = yield* SqlClient.SqlClient;
+        let stopped = false;
+        const hook = { reset: () => Effect.succeed({ isolation: "thread" as const, stopped }) };
+        expect(
+          (yield* service
+            .reset(input)
+            .pipe(Effect.provideService(Hook.ProviderSessionResetHook, hook), Effect.flip)).code,
+        ).toBe("teardown");
+        // Simulate the pre-readback server's durable intent, which had no stop receipt.
+        yield* sql`DELETE FROM fork_recovery_operations WHERE operation_id=${`stop-reset:${old}:${input.runId}`}`;
+        stopped = true;
+        expect(
+          (yield* service
+            .reset(input)
+            .pipe(Effect.provideService(Hook.ProviderSessionResetHook, hook))).status,
+        ).toBe("completed");
+        const receipt = yield* service.stopReceipt({ threadId: old, runId: input.runId });
+        expect(receipt).toMatchObject({
+          endedBy: "reset",
+          providerStopped: true,
+          generation: 1,
+          requestedAt: null,
+        });
+        expect(receipt.stoppedAt).toBeTruthy();
+        expect(yield* Schema.decodeUnknownEffect(ThreadStopReceipt)(receipt)).toEqual(receipt);
       }),
     ),
 );
