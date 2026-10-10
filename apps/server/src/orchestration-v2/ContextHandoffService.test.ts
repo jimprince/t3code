@@ -199,7 +199,8 @@ it.layer(TestLayer)("ContextHandoffService legacy import", (it) => {
           id: `recovery:${index}`,
           text:
             index < 8
-              ? `Unaddressed request ${index}.\n  retain whitespace 🧪 ${oversized ? "human text ".repeat(3000) : ""}`
+              ? // Oversized requests each fit the delivery budget alone, but not together.
+                `Unaddressed request ${index}.\n  retain whitespace 🧪 ${oversized ? "human text ".repeat(200) : ""}`
               : "completed history ".repeat(100),
           ordinal: index + 1,
         });
