@@ -33,6 +33,7 @@ import type {
   ProviderApprovalDecision,
   ThreadId,
 } from "@t3tools/contracts";
+import { formatDeadline } from "@t3tools/shared/localTime";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, TextInput, View } from "react-native";
 
@@ -544,7 +545,7 @@ function FeedCard({
       : `For ${owner?.name ?? "the project orchestrator"}${owner?.project ? ` in ${owner.project}` : ""}`,
     age(card.since, now),
     !card.blocked && card.issue.decision?.deadline
-      ? `deadline ${card.issue.decision.deadline.slice(0, 10)}`
+      ? formatDeadline(card.issue.decision.deadline, now)
       : "",
   ]
     .filter(Boolean)
