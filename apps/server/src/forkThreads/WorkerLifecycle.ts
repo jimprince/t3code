@@ -44,9 +44,9 @@ const make = Effect.gen(function* () {
         timer = undefined;
       }
       const active = yield* threads.getShellSnapshot();
-      const archived = yield* threads.getShellSnapshot({ location: "archive" });
-      const all = [...active.threads, ...archived.threads];
+      const all = [...active.threads, ...active.archivedThreads];
       const metadata = new Map((yield* listMetadata(sql)).map((row) => [row.threadId, row]));
+      const children = Map.groupBy(all, (child) => metadata.get(child.id)?.parentThreadId ?? null);
       const settings = yield* settingsService.getSettings;
       const now = DateTime.toEpochMillis(yield* DateTime.now);
       let nearest = Infinity;
@@ -88,7 +88,7 @@ const make = Effect.gen(function* () {
           }
         }
         const days = policy.settledSubthreadArchiveAfterDays;
-        if (days == null || !archiveEligible(thread, all, now, metadata.get(thread.id), metadata))
+        if (days == null || !archiveEligible(thread, children, now, metadata.get(thread.id), metadata))
           continue;
         const deadline = archiveDeadline(thread, days);
         if (deadline == null) continue;

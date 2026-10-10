@@ -2376,13 +2376,6 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
           ),
         );
-      const archived = yield* projectionStore
-        .getShellSnapshot({ location: "archive" })
-        .pipe(
-          Effect.mapError(
-            (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
-          ),
-        );
       const metadata = yield* readWorkerMetadata(sql, command.threadId).pipe(
         Effect.mapError(
           (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
@@ -2396,7 +2389,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         !current ||
         !archiveEligible(
           current,
-          [...active.threads, ...archived.threads],
+          [...active.threads, ...active.archivedThreads],
           DateTime.toEpochMillis(command.autoArchiveSettledBefore),
           metadata,
           organization,

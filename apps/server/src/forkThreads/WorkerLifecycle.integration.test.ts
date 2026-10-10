@@ -13,6 +13,7 @@ import {
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Tracer from "effect/Tracer";
 import * as TestClock from "effect/testing/TestClock";
 import * as Stream from "effect/Stream";
 import * as Fiber from "effect/Fiber";
@@ -381,4 +382,227 @@ it.effect("keeps an explicitly unsettled worker active after a delivery complete
       ),
     ),
   ),
+);
+
+// Trace real SQL rather than counting calls to a mocked projection store.
+function shellReadCounter() {
+  const queries: string[] = [];
+  const tracer = Tracer.make({
+    span(options) {
+      const span = new Tracer.NativeSpan(options);
+      const end = span.end.bind(span);
+      span.end = (endTime, exit) => {
+        end(endTime, exit);
+        const query = span.attributes.get("db.query.text");
+        if (typeof query === "string") queries.push(query);
+      };
+      return span;
+    },
+  });
+  return {
+    tracer,
+    queries,
+    shellReads: () =>
+      queries.filter((query) => query.includes("AS forked_from_run_source_thread_id")),
+  };
+}
+
+const archiveFixture = Effect.gen(function* () {
+  const threads = yield* ThreadManagement.ThreadManagementService;
+  const store = yield* ProjectionStore.ProjectionStoreV2;
+  const sql = yield* SqlClient.SqlClient;
+  const now = yield* DateTime.now;
+  const ids = [
+    "archive-root",
+    "archive-worker",
+    "archive-child",
+    "archive-nested",
+    "archive-leaf",
+  ].map((id) => ThreadId.make(id));
+  for (const [index, threadId] of ids.entries()) {
+    yield* threads.dispatch({
+      type: "thread.create",
+      commandId: CommandId.make(`create-${threadId}`),
+      threadId,
+      projectId: ProjectId.make("archive-project"),
+      title: threadId,
+      modelSelection,
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      branch: null,
+      worktreePath: null,
+      createdBy: "user",
+      creationSource: "web",
+    });
+    if (index === 0) continue;
+    yield* writeMetadata(sql, { threadId, parentThreadId: ids[index - 1]! });
+    const thread = yield* store.getThread(threadId);
+    yield* store.apply({
+      id: EventId.make(`settled-${threadId}`),
+      type: "thread.settled",
+      threadId,
+      occurredAt: now,
+      payload: { ...thread, settledOverride: "settled", settledAt: now },
+    });
+  }
+  for (const threadId of ids.slice(2, 4)) {
+    yield* threads.dispatch({
+      type: "thread.archive",
+      commandId: CommandId.make(`archive-${threadId}`),
+      threadId,
+    });
+  }
+  return { ids, threads, store, now };
+});
+
+const archiveTestLayer = ThreadManagement.layer.pipe(
+  Layer.provideMerge(testLayer),
+  Layer.provideMerge(ServerSettings.layerTest({ settledSubthreadArchiveAfterDays: 1 })),
+);
+
+it.effect("reads archived shells once per lifecycle update, including nested archives", () =>
+  Effect.gen(function* () {
+    const { ids, threads, store } = yield* archiveFixture;
+    const snapshot = yield* threads.getShellSnapshot();
+    const archive = yield* threads.getShellSnapshot({ location: "archive" });
+    assert.deepEqual(snapshot.archivedThreads, archive.archivedThreads);
+    assert.deepEqual(
+      snapshot.archivedThreads.map((thread) => thread.id).toSorted(),
+      ids.slice(2, 4).toSorted(),
+    );
+    const counter = shellReadCounter();
+    yield* Effect.scoped(
+      Effect.gen(function* () {
+        const lifecycle = yield* WorkerLifecycle.WorkerLifecycle;
+        counter.queries.length = 0;
+        yield* lifecycle.drain;
+      }).pipe(Effect.provide(WorkerLifecycle.layer), Effect.withTracer(counter.tracer)),
+    );
+    assert.equal(
+      counter.shellReads().length,
+      1,
+      `SQL statements: ${counter.queries.length}; shell reads: ${counter.shellReads().length}`,
+    );
+    assert.equal(
+      counter
+        .shellReads()
+        .filter((query) =>
+          query.includes("json_extract(t.payload_json, '$.archivedAt') IS NOT NULL"),
+        ).length,
+      0,
+    );
+    assert.deepEqual((yield* threads.getShellSnapshot()).threads, snapshot.threads);
+    assert.deepEqual((yield* threads.getShellSnapshot()).archivedThreads, snapshot.archivedThreads);
+    assert.equal((yield* store.getThread(ids[1]!)).archivedAt, null);
+  }).pipe(Effect.provide(archiveTestLayer)),
+);
+
+it.effect(
+  "archives eligible parents through nested archives and rechecks concurrent descendant updates",
+  () =>
+    Effect.gen(function* () {
+      const { ids, threads, store, now } = yield* archiveFixture;
+      const workerId = ids[1]!;
+      const leafId = ids[4]!;
+      yield* TestClock.adjust("1 day");
+      const leaf = yield* store.getThread(leafId);
+      yield* store.apply({
+        id: EventId.make("leaf-retention-update"),
+        type: "thread.metadata-updated",
+        threadId: leafId,
+        occurredAt: yield* DateTime.now,
+        payload: { ...leaf, updatedAt: yield* DateTime.now },
+      });
+      const before = yield* threads.getShellSnapshot();
+      // A descendant changes after the sweep's read, before its command reaches the lock.
+      let raced = false;
+      const racingThreads = ThreadManagement.ThreadManagementService.of({
+        ...threads,
+        dispatch: (command) =>
+          Effect.gen(function* () {
+            if (command.type === "thread.archive" && command.threadId === workerId && !raced) {
+              raced = true;
+              yield* threads.dispatch({
+                type: "thread.unsettle",
+                commandId: CommandId.make("concurrent-unsettle"),
+                threadId: leafId,
+                reason: "user",
+              });
+            }
+            return yield* threads.dispatch(command);
+          }),
+      });
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const lifecycle = yield* WorkerLifecycle.WorkerLifecycle;
+          yield* lifecycle.drain;
+        }).pipe(
+          Effect.provide(WorkerLifecycle.layer),
+          Effect.provideService(ThreadManagement.ThreadManagementService, racingThreads),
+        ),
+      );
+      assert.equal(raced, true);
+      assert.equal((yield* store.getThread(workerId)).archivedAt, null);
+      assert.equal((yield* store.getThread(leafId)).settledOverride, "active");
+      assert.deepEqual((yield* threads.getShellSnapshot()).archivedThreads, before.archivedThreads);
+
+      // A subsequent sweep must see the active grandchild through both archived ancestors.
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const lifecycle = yield* WorkerLifecycle.WorkerLifecycle;
+          yield* lifecycle.drain;
+        }).pipe(Effect.provide(WorkerLifecycle.layer)),
+      );
+      assert.equal((yield* store.getThread(workerId)).archivedAt, null);
+      yield* threads.dispatch({
+        type: "thread.settle",
+        commandId: CommandId.make("settle-leaf-again"),
+        threadId: leafId,
+      });
+      const counter = shellReadCounter();
+      yield* threads
+        .dispatch({
+          type: "thread.archive",
+          commandId: CommandId.make("eligible-archive"),
+          threadId: workerId,
+          autoArchiveSettledBefore: now,
+        })
+        .pipe(Effect.withTracer(counter.tracer));
+      assert.equal(
+        counter.shellReads().length,
+        1,
+        `SQL statements: ${counter.queries.length}; shell reads: ${counter.shellReads().length}`,
+      );
+      assert.isNotNull((yield* store.getThread(workerId)).archivedAt);
+      const after = yield* threads.getShellSnapshot();
+      assert.deepEqual(
+        after.threads.map((thread) => thread.id).toSorted(),
+        [ids[0]!, leafId].toSorted(),
+      );
+      assert.deepEqual(
+        after.archivedThreads.map((thread) => thread.id).toSorted(),
+        ids.slice(1, 4).toSorted(),
+      );
+    }).pipe(Effect.provide(archiveTestLayer)),
+);
+
+it.effect("reads archived shells once in the fresh archive command-lock check", () =>
+  Effect.gen(function* () {
+    const { ids, threads, store, now } = yield* archiveFixture;
+    const counter = shellReadCounter();
+    yield* threads
+      .dispatch({
+        type: "thread.archive",
+        commandId: CommandId.make("archive-counted"),
+        threadId: ids[1]!,
+        autoArchiveSettledBefore: now,
+      })
+      .pipe(Effect.withTracer(counter.tracer));
+    assert.isNotNull((yield* store.getThread(ids[1]!)).archivedAt);
+    assert.equal(
+      counter.shellReads().length,
+      1,
+      `SQL statements: ${counter.queries.length}; shell reads: ${counter.shellReads().length}`,
+    );
+  }).pipe(Effect.provide(archiveTestLayer)),
 );
