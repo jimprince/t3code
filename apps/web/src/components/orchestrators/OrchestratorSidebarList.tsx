@@ -28,6 +28,7 @@ import {
   openTaskCount,
   ownTreeContains,
   projectKeyOf,
+  subprojectCountLabel,
   subprojectIsActive,
   subprojectWorkingLabel,
   toggleProjectKey,
@@ -163,6 +164,7 @@ function ProjectRow({
   const { rollup } = summary;
   const hasSubprojects = summary.subprojects.length > 0;
   const workingInSubprojects = subprojectWorkingLabel(summary);
+  const foldedHint = subprojectCountLabel(summary);
   const rootRef = scopeThreadRef(summary.root.environmentId, summary.root.id);
   const rootProject =
     summary.projects.find(
@@ -250,7 +252,11 @@ function ProjectRow({
           </span>
         </span>
         <span className="truncate text-3xs text-sidebar-muted-foreground">
-          {summary.projects.map((project) => project.title).join(" · ")}
+          {[
+            ...summary.projects.map((project) => project.title),
+            // A folded card keeps a count of the rows it hides.
+            ...(collapsed && foldedHint !== null ? [foldedHint] : []),
+          ].join(" · ")}
         </span>
         {workingInSubprojects ? (
           <span className="truncate text-3xs text-sidebar-muted-foreground">
