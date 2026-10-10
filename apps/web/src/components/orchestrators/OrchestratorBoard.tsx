@@ -89,6 +89,7 @@ import {
   subprojectBlocked,
   subprojectIsActive,
   subprojectNeedsYou,
+  taskProgressLabel,
 } from "./projectSubprojects.logic";
 
 /**
@@ -283,7 +284,7 @@ function SubprojectHealth({ summary }: { readonly summary: OrchestratorSummary }
   return (
     <>
       <span
-        className={`rounded-sm px-1.5 py-0.5 text-xs font-medium ${HEALTH_TONE[health.status]}`}
+        className={`shrink-0 rounded-sm px-1.5 py-0.5 text-xs font-medium ${HEALTH_TONE[health.status]}`}
       >
         {HEALTH_LABEL[health.status]}
       </span>
@@ -292,51 +293,91 @@ function SubprojectHealth({ summary }: { readonly summary: OrchestratorSummary }
   );
 }
 
+/** Column widths of the subprojects table; the header row and every row share them. */
+const SUBPROJECT_COLUMN = {
+  name: "sm:w-48 sm:flex-none",
+  progress: "hidden w-16 shrink-0 text-right sm:block",
+  working: "hidden w-16 shrink-0 text-right sm:block",
+  needsYou: "hidden w-24 shrink-0 text-right sm:block",
+  activity: "w-20 shrink-0 text-right",
+} as const;
+
 /**
- * One row per direct subproject: its health, what waits on you inside it, who is
- * working and when it last moved. A row opens the subproject's own page.
+ * One table row per direct subproject: its health, task progress, who is working, what waits
+ * on you inside it and when it last moved. A row opens the subproject's own page. Below `sm`
+ * the columns collapse into one meta line under the name.
  */
 function ProjectSubprojects({ summary }: { readonly summary: OrchestratorSummary }) {
   const navigate = useNavigate();
   if (summary.subprojects.length === 0) return null;
   return (
     <ProjectSection title="Subprojects" count={summary.subprojects.length}>
+      <div aria-hidden className="hidden gap-3 pb-1 text-xs text-muted-foreground sm:flex">
+        <span className={SUBPROJECT_COLUMN.name}>Name</span>
+        <span className="min-w-0 flex-1">Health</span>
+        <span className={SUBPROJECT_COLUMN.progress}>Progress</span>
+        <span className={SUBPROJECT_COLUMN.working}>Working</span>
+        <span className={SUBPROJECT_COLUMN.needsYou}>Needs you</span>
+        <span className={SUBPROJECT_COLUMN.activity}>Last active</span>
+      </div>
       <ul className="divide-y divide-border">
-        {summary.subprojects.map((sub) => (
-          <ClickableRow
-            key={`${sub.root.environmentId}:${sub.root.id}`}
-            label={`Open ${sub.root.title} subproject`}
-            onOpen={() =>
-              void navigate({
-                to: "/orchestrators/$environmentId/$threadId",
-                params: { environmentId: sub.root.environmentId, threadId: sub.root.id },
-              })
-            }
-            className="items-baseline gap-x-3 py-1.5 text-sm"
-          >
-            <span className="shrink-0 font-medium">
-              <span className="text-muted-foreground">/ </span>
-              {sub.root.title}
-            </span>
-            <span className="flex min-w-0 flex-1 items-baseline gap-2">
-              <SubprojectHealth summary={sub} />
-            </span>
-            {sub.rollup.blocked > 0 ? <span className="shrink-0 text-error">Blocked</span> : null}
-            {sub.rollup.needsYou > 0 ? (
-              <span className="shrink-0 text-warning-foreground">
-                {sub.rollup.needsYou} need you
+        {summary.subprojects.map((sub) => {
+          const progress = taskProgressLabel(sub);
+          const working =
+            sub.rollup.working > 0
+              ? String(sub.rollup.working)
+              : subprojectIsActive(sub)
+                ? "Working"
+                : null;
+          const needsYou = sub.rollup.needsYou > 0 ? `${sub.rollup.needsYou} need you` : null;
+          const blocked = sub.rollup.blocked > 0;
+          return (
+            <ClickableRow
+              key={`${sub.root.environmentId}:${sub.root.id}`}
+              label={`Open ${sub.root.title} subproject`}
+              onOpen={() =>
+                void navigate({
+                  to: "/orchestrators/$environmentId/$threadId",
+                  params: { environmentId: sub.root.environmentId, threadId: sub.root.id },
+                })
+              }
+              className="flex-wrap items-baseline gap-x-3 gap-y-0.5 py-1.5 text-sm sm:flex-nowrap"
+            >
+              <span className={`min-w-0 flex-1 truncate font-medium ${SUBPROJECT_COLUMN.name}`}>
+                <span className="text-muted-foreground">/ </span>
+                {sub.root.title}
               </span>
-            ) : null}
-            {sub.rollup.working > 0 ? (
-              <span className="shrink-0 text-muted-foreground">{sub.rollup.working} working</span>
-            ) : subprojectIsActive(sub) ? (
-              <span className="shrink-0 text-muted-foreground">Working</span>
-            ) : null}
-            <span className="shrink-0 text-xs text-muted-foreground">
-              {formatRelativeTimeLabel(sub.rollup.latestActivityAt)}
-            </span>
-          </ClickableRow>
-        ))}
+              <span className="order-last flex min-w-0 basis-full items-baseline gap-2 sm:order-none sm:basis-auto sm:flex-1">
+                <SubprojectHealth summary={sub} />
+              </span>
+              <span className={SUBPROJECT_COLUMN.progress}>
+                {progress === null ? null : <span className="tabular-nums">{progress}</span>}
+              </span>
+              <span className={`${SUBPROJECT_COLUMN.working} text-muted-foreground`}>
+                {working}
+              </span>
+              <span className={SUBPROJECT_COLUMN.needsYou}>
+                {blocked ? <span className="text-error">Blocked </span> : null}
+                {needsYou === null ? null : (
+                  <span className="text-warning-foreground">{needsYou}</span>
+                )}
+              </span>
+              <span className={`${SUBPROJECT_COLUMN.activity} text-xs text-muted-foreground`}>
+                {formatRelativeTimeLabel(sub.rollup.latestActivityAt)}
+              </span>
+              <span className="order-last basis-full text-xs text-muted-foreground sm:hidden empty:hidden">
+                {[
+                  blocked ? "Blocked" : null,
+                  needsYou,
+                  working === null ? null : working === "Working" ? working : `${working} working`,
+                  progress === null ? null : `${progress} tasks`,
+                ]
+                  .filter((part) => part !== null)
+                  .join(" · ")}
+              </span>
+            </ClickableRow>
+          );
+        })}
       </ul>
     </ProjectSection>
   );
@@ -792,10 +833,13 @@ export function OrchestratorBoard({
             {rootProject ? <ProjectFavicon project={rootProject} className="size-5" /> : null}
             <WorkspaceBreadcrumb ariaLabel="Project breadcrumb">
               {trail.map((ancestor) => (
-                <WorkspaceBreadcrumbItem key={`${ancestor.root.environmentId}:${ancestor.root.id}`}>
+                <WorkspaceBreadcrumbItem
+                  key={`${ancestor.root.environmentId}:${ancestor.root.id}`}
+                  className="shrink"
+                >
                   <button
                     type="button"
-                    className="max-w-48 cursor-pointer truncate hover:text-foreground hover:underline"
+                    className="max-w-24 cursor-pointer truncate hover:text-foreground hover:underline sm:max-w-48"
                     onClick={() =>
                       void navigate({
                         to: "/orchestrators/$environmentId/$threadId",
@@ -815,7 +859,7 @@ export function OrchestratorBoard({
               ))}
               <WorkspaceBreadcrumbItem current>
                 <span className="flex min-w-0 flex-col">
-                  <h1>{summary.root.title}</h1>
+                  <h1 className="truncate">{summary.root.title}</h1>
                   {summary.root.scope ? (
                     <span className="truncate text-xs font-normal text-muted-foreground">
                       {summary.root.scope}
@@ -825,17 +869,19 @@ export function OrchestratorBoard({
               </WorkspaceBreadcrumbItem>
             </WorkspaceBreadcrumb>
             <div className="flex-1" />
-            <Button size="sm" variant="ghost" onClick={openEditor}>
+            {/* Icon-only below `sm`: the labels would leave the breadcrumb about 100px. */}
+            <Button size="sm" variant="ghost" aria-label="Edit" onClick={openEditor}>
               <PencilIcon />
-              Edit
+              <span className="hidden sm:inline">Edit</span>
             </Button>
             <Button
               size="sm"
               variant={chatOpen ? "secondary" : "outline"}
+              aria-label={chatOpen ? "Hide chat" : "Chat"}
               onClick={() => setChatOpen((open) => !open)}
             >
               <MessageSquareIcon />
-              {chatOpen ? "Hide chat" : "Chat"}
+              <span className="hidden sm:inline">{chatOpen ? "Hide chat" : "Chat"}</span>
             </Button>
           </WorkspacePageHeader>
           <div className="flex min-h-0 flex-1 border-t border-border">
