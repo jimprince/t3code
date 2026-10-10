@@ -23,7 +23,7 @@ export function hasActiveWork(thread: Thread): boolean {
 /** Re-evaluated under the orchestrator command lock, including every descendant. */
 export function archiveEligible(
   thread: Thread,
-  threads: ReadonlyArray<Thread>,
+  threads: ReadonlyArray<Thread> | ReadonlyMap<ThreadId | null, ReadonlyArray<Thread>>,
   before: number,
   metadata?: ForkThreadMetadata,
   organization: ReadonlyMap<ThreadId, ForkThreadMetadata> = new Map(),
@@ -42,10 +42,10 @@ export function archiveEligible(
     Math.max(epoch(thread.settledAt), epoch(thread.updatedAt)) > before
   )
     return false;
-  const children = Map.groupBy(
-    threads,
-    (child) => organization.get(child.id)?.parentThreadId ?? null,
-  );
+  const children =
+    "get" in threads
+      ? threads
+      : Map.groupBy(threads, (child) => organization.get(child.id)?.parentThreadId ?? null);
   const pending = [...(children.get(thread.id) ?? [])];
   const visited = new Set([thread.id]);
   while (pending.length) {
