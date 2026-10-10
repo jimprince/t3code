@@ -1,6 +1,6 @@
-Bottom: c31db4ba177631c72360cae488a08155888ccabe
-Top:    185c4c9f0b0733210680d40a704e55c542d5c347
+Bottom: 192d043fc708065bb382cafd2b1042529daefe65
+Top:    133180ffd9b3dddf38be09a31ff687d558b1af24
 Author: brad <bradprin@live.com>
-Date:   2026-10-10 12:56:52 +0000
+Date:   2026-10-10 12:57:03 +0000
 
 feat(web): one-click desktop update with progress, a server restart banner, and sends held while the server is down
