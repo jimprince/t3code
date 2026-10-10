@@ -1,0 +1,130 @@
+# Upstream1286 Knip: declare shell/Expo entries and CLI workspace dependencies.
+# Remove the obsolete Electron installer and redundant plugin-local Effect TSGo dependency.
+name = "fork-build-ci-compat"
+subject = "build(fork): support fork workspace, runners, and CI budgets"
+class = "product"
+purpose = "Configure the fork workspace, dependency graph, lockfile, available CI runners, and the targeted test budgets its additive applications need."
+retire_when = "Upstream or maintained shared tooling provides equivalent workspace, runner, and test-budget support, or the fork intentionally stops requiring this concern."
+depends_on = []
+roles = ["lockfile-owner"]
+note = "Operator status and threads JSON smokes enforce a 512 MiB heap cap and hard timeouts where CLI tests run. Keep upstream and fork script entry points in one Knip workspace stanza. Removed the unrelated wall-clock assertion from activity-reuse coverage; the observable identity-reuse test and justified compression-test headroom remain. The replay driver removes the old generated lockfile delta before rebase and regenerates at the complete tip, then refreshes this owner. Published main retains a consistent frozen-install lockfile; mid-stack generation omits later workspaces. Pin dependencies with exact-version patches to that version; expo-audio 57.0.5 satisfies ~57.0.4 but still lacks the recorder failure-state fix in the 57.0.4 patch."
+
+[[decision]]
+id = "v2-port-2689"
+date = "2026-10-05"
+decided = "narrow+adapt"
+rationale = "V2 port onto v0.0.46-nightly.20261005.2689: dropped the test budgets and lint ceilings for V1 test files V2 deletes, took upstream for the remaining conflicted test files, moved git-fixture.test.ts to its helper's owner (fork-release-publication), and regenerated the lockfile at the M1 tip. Re-add per-file headroom only if V2 CI shows a timeout."
+
+[[decision]]
+id = "upstream14025-ci-job-split"
+date = "2026-10-01"
+decided = "narrow+adapt"
+rationale = "Upstream 6f8e2534f split the Check job into Lint, Typecheck and Build, split Test Web out of Test, resharded the server tests from three 8-vCPU runners to six 4-vCPU ones, and added an aggregate Check job for branch protection. Carry only the hosted-runner swap and the slower-runner budget onto every new job; drop the duplicate oxlint-plugin build step and the vp run typecheck substitution, which fork-maintenance-automation already replaces with the shared verify-source call."
+
+[[decision]]
+id = "upstream14290-codex-driver-realpath"
+date = "2026-09-30"
+decided = "retire"
+rationale = "Upstream commit 27bdf1aa1 canonicalizes every temporary directory in CodexDriver.test.ts at creation and canonicalizes the npm prefix inside the mise-shim update assertion, so this patch's canonicalInstallPath and canonicalNpmPrefix locals are superseded. Take upstream's file verbatim; macos-worktree-realpath-exclusion keeps canonicalizing only the files where upstream still compares uncanonicalized paths."
+
+[[decision]]
+id = "upstream13767-shell-snapshot-sample-budget"
+date = "2026-09-27"
+decided = "adapt"
+rationale = "Upstream13767 added a client-runtime cache-encoding test that generates 2,000 schema samples, about 2 seconds of the 5-second default. It timed out in the fork's local test-other and in candidate CI while passing in isolation; a pure-upstream checkout of the same target takes the same 2 seconds, so the cost is upstream's and only the fork's larger parallel verification exposes it. Give that one case 60 seconds and keep its sample count and assertions unchanged."
+
+[[decision]]
+id = "upstream10409-usage-transcript-realpath"
+date = "2026-09-26"
+decided = "narrow"
+rationale = "Upstream commit e5a46d6c5 canonicalizes the configured, environment, and Claude transcript homes inside UsageService.test.ts itself, so this patch's realpath edits to that file are superseded. Take upstream's file verbatim and keep the macos-worktree-realpath-exclusion canonicalization only where upstream still compares uncanonicalized paths."
+
+[[decision]]
+id = "web-typecheck-annotation-workarounds"
+date = "2026-09-24"
+decided = "retire"
+rationale = "The explicit LegendList render-item annotations in ModelPickerContent and the AtomRegistry cast in PreviewAutomationHosts were typecheck workarounds this patch carried in two upstream files that change often. Upstream's current types infer both, so verify-source check passes without them; drop the edits and take upstream's files verbatim."
+
+[[decision]]
+id = "desktop-artifact-client-asset-extraction"
+date = "2026-09-24"
+decided = "retire"
+rationale = "Moving upstream's validateBundledClientAssets into scripts/lib/client-assets.ts gave the fork no behavior; build-desktop-artifact.ts was its only consumer, and the in-place extraction conflicted in six sync attempts. Take upstream's build-desktop-artifact.ts verbatim and delete the fork module."
+
+[[decision]]
+id = "desktop-entry-name-unexport"
+date = "2026-09-24"
+decided = "relocate"
+rationale = "resolveLinuxDesktopEntryName loses its only importer in fork-desktop-delivery, so its Knip-driven un-export belongs to that patch rather than to build tooling. This patch no longer edits upstream desktop source."
+
+[[decision]]
+id = "knip-upstream-comment-verbatim"
+date = "2026-09-24"
+decided = "narrow"
+rationale = "Keep upstream's scripts-workspace Knip comment verbatim so the fork changes only the entry array; upstream rewrote that comment alongside its own entry additions in previous conflicts."
+
+[[decision]]
+id = "upstream12414-test-skill-browser-panel"
+date = "2026-09-20"
+decided = "relocate"
+rationale = "Upstream replaced the broad web-testing skill with Browser-panel guidance and moved direct SQLite instructions into a focused reference. Keep the fork's fresh-worktree dependency-linking recovery, but relocate it into that SQLite reference instead of restoring the obsolete troubleshooting section."
+
+[[decision]]
+id = "upstream-device-stream-knip-entries"
+date = "2026-09-20"
+decided = "narrow+adapt"
+rationale = "Keep upstream's new PR-measurement and mobile device-stream Knip entries, retain only the fork's CI helper, Expo fingerprint, and oxlint-plugin declarations, and combine them in the upstream workspace stanzas."
+
+[[decision]]
+id = "stashimagecompression-timeout"
+date = "2026-07-29"
+decided = "adapt"
+rationale = "The too-large boundary test repeatedly exceeded the default timeout under parallel hosted CI while passing in isolation. Accept the one-line upstream-file edit until the test becomes reliably faster."
+
+[[decision]]
+id = "editor-worker-test-animation-cleanup"
+date = "2026-09-09"
+decided = "adapt"
+rationale = "Upstream1439 language-readiness tests can leave a worker state broadcast queued after animation globals are removed. Track and cancel remaining callbacks after worker/highlighter teardown; retire this edit when upstream owns equivalent cleanup."
+
+[[decision]]
+id = "upstream11349-worker-broadcast-drain"
+date = "2026-09-16"
+decided = "retire"
+rationale = "Upstream commit 8a2d5f545 drains the pool's final state broadcast before removing animation globals, satisfying this patch's cleanup requirement. Retire the fork's callback tracking and keep upstream's smaller teardown."
+
+[[decision]]
+id = "upstream-windows-probe-env-inheritance"
+date = "2026-09-16"
+decided = "narrow"
+rationale = "Upstream's cross-architecture Windows probe test inspected every child environment, so a T3 worker's ambient ELECTRON_RUN_AS_NODE value made the unrelated Node self-containment probe look like the skipped packaged-app probe. Scope the assertion to the packaged Windows executable while retaining the independent self-containment assertion."
+
+[[decision]]
+id = "macos-worktree-realpath-exclusion"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Canonicalize the configured data and worktree roots before comparing them with transcript cwd realpaths, and canonicalize auto-generated ServerConfig test roots before deriving guarded cleanup paths. macOS can spell the same temporary directory through /var and /private/var, which otherwise lets a symlinked managed worktree appear as an importable project or makes cleanup fixtures stop at the production symlink guard under the Node 24 CI runtime; symlink-boundary tests likewise compare canonical workspace paths."
+
+[[decision]]
+id = "git-racy-clean-large-diff-fixture"
+date = "2026-09-17"
+decided = "adapt"
+rationale = "Make upstream's large-diff fixture rewrite change byte length so Git must report the tracked edit even when the commit and rewrite share one filesystem timestamp; keep the complete branch and working-tree statistics assertions unchanged."
+
+[[decision]]
+id = "upstream4029-highlighter-test-time-limit"
+date = "2026-09-17"
+decided = "adapt"
+rationale = "Disable Shiki's wall-clock tokenization cutoff only in the native review and source/snippet highlighter test wrappers so grammar-isolation and cold-initialization assertions cannot return partial tokens when parallel repository verification saturates the host; production tokenization keeps its safety cutoff."
+
+[[decision]]
+id = "upstream9902-file-highlight-test-budget"
+date = "2026-09-17"
+decided = "adapt"
+rationale = "Keep upstream's 7,000-line real-worker stale-highlight regression intact, but give its two CPU-bound edit cases 30 seconds so they do not fail at the 15-second default while the complete repository gate saturates the host."
+
+[[decision]]
+id = "catchup-2908-obsolete-editor-budget"
+date = "2026-10-10"
+decided = "narrow"
+rationale = "Upstream #16644 removes the old fileEditorHighlight implementation/test after upgrading @pierre/diffs. Omit only the obsolete thirty-second timeout hunk on that removed test; retain image-compression and OpenVSX budgets. No product behavior is removed. Build catalog keeps upstream stable Effect 4.0.2/new dependencies and fork tsdown (#16138, #17571); lockfile resolution belongs to the composed source graph. Deleted-path/pending-diff review passed; composed CI remains required."
