@@ -1,4 +1,9 @@
-import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
+import type { OrchestratorSummary } from "./orchestrators.ts";
+
+/**
+ * Subproject rules shared by every client: the web sidebar and project page and the mobile
+ * Home list render these, so what counts as top level, a rollup line or a fold hint is decided once.
+ */
 
 export const projectKeyOf = (summary: OrchestratorSummary) =>
   `${summary.root.environmentId}:${summary.root.id}`;
@@ -100,3 +105,7 @@ export function subprojectWorkingLabel(summary: OrchestratorSummary): string | n
     ? `${total} working in subprojects`
     : `${inSubprojects} of ${total} working in subprojects`;
 }
+
+/** The projects a client lists on their own; subprojects appear nested inside these. */
+export const topLevelProjects = (summaries: ReadonlyArray<OrchestratorSummary>) =>
+  summaries.filter((summary) => summary.parentProjectKey === null);

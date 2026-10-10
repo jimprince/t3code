@@ -93,7 +93,7 @@ import {
   subprojectIsActive,
   subprojectNeedsYou,
   taskProgressLabel,
-} from "./projectSubprojects.logic";
+} from "@t3tools/client-runtime/state/projectSubprojects";
 
 /**
  * The layout's tabs, with the page's actions (Edit layout) at the right. In edit

@@ -1,4 +1,4 @@
-import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
+import type { OrchestratorSummary } from "./orchestrators.ts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -11,7 +11,8 @@ import {
   subprojectWorkingLabel,
   taskProgressLabel,
   toggleProjectKey,
-} from "./projectSubprojects.logic";
+  topLevelProjects,
+} from "./projectSubprojects.ts";
 
 const issue = (number: number, state: "open" | "closed") =>
   ({
@@ -127,5 +128,11 @@ describe("project subprojects", () => {
     expect(subprojectCountLabel(summary("root", { subprojects: [sub] }))).toBe("2 subs");
     expect(subprojectCountLabel(sub)).toBe("1 sub");
     expect(subprojectCountLabel(nested)).toBeNull();
+  });
+
+  it("lists only top-level projects, leaving subprojects to nest inside them", () => {
+    const root = summary("root");
+    const sub = summary("sub", { parent: "root" });
+    expect(topLevelProjects([sub, root])).toEqual([root]);
   });
 });

@@ -11,6 +11,10 @@
       "types": "./src/state/orchestrators.ts",
       "default": "./src/state/orchestrators.ts"
     },
+    "./state/projectSubprojects": {
+      "types": "./src/state/projectSubprojects.ts",
+      "default": "./src/state/projectSubprojects.ts"
+    },
     "./fork/desktop-work-state": {
       "types": "./src/fork/desktopWorkState.ts",
       "default": "./src/fork/desktopWorkState.ts"

@@ -31,7 +31,8 @@ import {
   subprojectIsActive,
   subprojectWorkingLabel,
   toggleProjectKey,
-} from "./projectSubprojects.logic";
+  topLevelProjects,
+} from "@t3tools/client-runtime/state/projectSubprojects";
 import { useOrchestratorThreadShells } from "./useOrchestratorThreads";
 
 const QUIET_AFTER_MS = 7 * 24 * 60 * 60 * 1_000;
@@ -285,10 +286,7 @@ export function OrchestratorSidebarList() {
     () => buildOrchestratorSummaries(threads, projects),
     [projects, threads],
   );
-  const summaries = useMemo(
-    () => allSummaries.filter((summary) => summary.parentProjectKey === null),
-    [allSummaries],
-  );
+  const summaries = useMemo(() => topLevelProjects(allSummaries), [allSummaries]);
   const standaloneGroups = useMemo(
     () => buildStandaloneThreadGroups(threads, projects, lastVisitedAtByThreadKey),
     [lastVisitedAtByThreadKey, projects, threads],
