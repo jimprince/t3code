@@ -46,6 +46,7 @@ export function HomeRouteScreen() {
     environmentThreadShells.navigationThreadShellsAtom,
     visible,
   );
+  const forestThreads = useAtomValueWhileVisible(environmentThreadShells.threadShellsAtom, visible);
   const { environments: workspaceEnvironments, state: catalogState } = useWorkspaceState();
   const { savedConnectionsById } = useSavedRemoteConnections();
   const navigation = useNavigation();
@@ -276,6 +277,7 @@ export function HomeRouteScreen() {
           selectedEnvironmentId={selectedEnvironmentId}
           selectedProjectKey={selectedProjectKey}
           threads={threads}
+          forestThreads={forestThreads}
         />
       </>
     </AndroidHomeFabLayout>
