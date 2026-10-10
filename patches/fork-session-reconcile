@@ -1,0 +1,7 @@
+Bottom: e402182e672f0fadeda191ee0c936fa5eb90af24
+Top:    b07ce53d64f85b61ebcf304750e6d8841899a47b
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 08:09:35 +0000
+
+fix(server): clear a session left running by an interrupted turn
+
