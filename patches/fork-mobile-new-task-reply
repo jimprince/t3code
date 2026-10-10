@@ -1,0 +1,7 @@
+Bottom: 7bcba36427bd0064ce19e8418c00a464b0fae64e
+Top:    de03b70a9979bc0483fc13d883336b08efca1621
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 10:59:10 +0000
+
+fix(mobile): a new task shows its reply without reopening the thread
+

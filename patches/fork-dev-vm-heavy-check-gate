@@ -1,0 +1,8 @@
+Bottom: 35de6de99bab27e8b38d731c68b14a83b1793b30
+Top:    7fa7171b96aaa44a44ead724bde79725b0e40b87
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 10:58:50 +0000
+
+build(fork): serialize heavyweight checks on the dev VM
+
+
