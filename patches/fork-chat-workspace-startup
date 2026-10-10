@@ -1,0 +1,7 @@
+Bottom: 3efd344521dde562542726b37dde3018b509c0ab
+Top:    998d4531ed848786171b6430be88932c0cf9fdf1
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 09:59:33 +0000
+
+fix(server): preserve chat workspaces across temporary directory changes
+

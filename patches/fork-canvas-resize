@@ -1,0 +1,7 @@
+Bottom: 3a1de70e12ca0b11d646870b2caf475144e68ed0
+Top:    9ebc4b923f4e104f933c5ba54a1175ed52a9d8a5
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 09:59:23 +0000
+
+feat(projects): a canvas can set its own height
+

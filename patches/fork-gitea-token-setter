@@ -1,0 +1,7 @@
+Bottom: 26715ec9364bb9c63bf009b1ff126e190253042d
+Top:    7c809c3ffd4b005e7190c0c1cb8703e3a0090074
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 09:59:30 +0000
+
+feat(source-control): rotate existing Gitea tokens through stdin
+

@@ -1,0 +1,7 @@
+Bottom: 4a29433d2733625134993cf7d04f88193f1dfa64
+Top:    984371b15a383b8496c941d02caf7e709785345f
+Author: User <user@example.com>
+Date:   2026-10-10 09:59:04 +0000
+
+feat(web): upload files into workspace via drag-and-drop
+
