@@ -87,7 +87,8 @@ export function useThreadActionMenu(input: {
   readonly threadRef: ScopedThreadRef | null;
   /** Fallback for "Copy path" when the thread has no worktree. */
   readonly projectCwd: string | null;
-  readonly onStartRename: () => void;
+  /** Null on a surface with no inline title editor; Rename is then left out. */
+  readonly onStartRename: (() => void) | null;
 }) {
   const resetOrder = useOrchestrationCommand(resetForkThreadOrder);
   const { runNestingMenuAction } = useThreadNestingActions();
@@ -186,6 +187,7 @@ export function useThreadActionMenu(input: {
           canSnoozeNow: canSnooze(thread, { now: now.toISOString() }),
           isRegeneratingTitle,
           isRunning: !threadRuntimeCanArchive(thread.runtime),
+          canRename: onStartRename !== null,
           supports,
           snoozePresets,
         });
@@ -290,7 +292,7 @@ export function useThreadActionMenu(input: {
             );
             return;
           case "rename":
-            onStartRename();
+            onStartRename?.();
             return;
           case "regenerate-title":
             if (isRegeneratingTitle) return;
