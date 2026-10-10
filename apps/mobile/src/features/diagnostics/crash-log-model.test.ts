@@ -1,6 +1,13 @@
-import { describe, expect, it } from "vite-plus/test";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
 import { formatStartupCrashReport, parseStartupCrashRecords } from "./crash-log-model";
+
+beforeAll(() => {
+  vi.stubEnv("TZ", "America/Edmonton");
+});
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
 
 // Verbatim shape of the entry expo-updates wrote for the build 56 launch crash.
 const BUNDLE =
@@ -62,7 +69,7 @@ describe("formatStartupCrashReport", () => {
       build: "56",
     });
     expect(report.startsWith("T3 Code 1.1.1 (56)\n")).toBe(true);
-    expect(report).toContain("2026-09-13T05:35:52.000Z");
+    expect(report).toContain("--- 2026-09-12T23:35:52-06:00 ---");
     expect(report).toContain("at NewTaskFlowProvider");
   });
 
