@@ -8,21 +8,44 @@ import {
   type ProjectSidebarBucket,
   type StandaloneThreadStatus,
 } from "@t3tools/client-runtime/state/orchestrators";
+import {
+  closestCenter,
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { ChevronDownIcon, ChevronRightIcon, CircleAlertIcon, UsersIcon } from "lucide-react";
-import { useCallback, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import * as Schema from "effect/Schema";
 
 import { useLocalStorage } from "../../hooks/useLocalStorage";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { useThreadActionMenu } from "../../hooks/useThreadActionMenu";
-import { useProjects } from "../../state/entities";
+import { useThreadActions } from "../../hooks/useThreadActions";
+import { readEnvironmentSupportsPinReorder, useProjects } from "../../state/entities";
 import { useEnvironments } from "../../state/environments";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { useUiStateStore } from "../../uiStateStore";
 import { ProjectFavicon } from "../ProjectFavicon";
+import { toastManager } from "../ui/toast";
 import { OrchestratorStatus } from "./OrchestratorStatus";
 import { useDeferredProjectSidebarBuckets } from "./projectSidebarOrder";
+import { planProjectMove } from "./projectSidebarMove.logic";
 import {
   COLLAPSED_SUBPROJECTS_KEY,
   openTaskCount,
@@ -145,18 +168,29 @@ function SubprojectRows({
   });
 }
 
+/** What a draggable row needs from dnd-kit, plus Alt+Up/Down for the keyboard. */
+interface ProjectRowArrange {
+  readonly setNodeRef: (node: HTMLElement | null) => void;
+  readonly listeners: ReturnType<typeof useSortable>["listeners"];
+  readonly style: CSSProperties;
+  readonly isDragging: boolean;
+  readonly onMove: (direction: -1 | 1) => void;
+}
+
 function ProjectRow({
   summary,
   selectedRoute,
   sortSubprojects,
   collapsed,
   onToggleSubprojects,
+  arrange,
 }: {
   readonly summary: OrchestratorSummary;
   readonly selectedRoute: string | null;
   readonly sortSubprojects: SortSubprojects;
   readonly collapsed: boolean;
   readonly onToggleSubprojects: (projectKey: string) => void;
+  readonly arrange?: ProjectRowArrange | undefined;
 }) {
   const navigate = useNavigate();
   const selected = ownTreeContains(summary, selectedRoute);
@@ -187,10 +221,27 @@ function ProjectRow({
     },
     [openMenu],
   );
+  const onMove = arrange?.onMove;
+  const handleKeyDown = useCallback(
+    (event: ReactKeyboardEvent) => {
+      if (!onMove || !event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+      event.preventDefault();
+      onMove(event.key === "ArrowUp" ? -1 : 1);
+    },
+    [onMove],
+  );
   return (
     <li
+      ref={arrange?.setNodeRef}
+      style={arrange?.style}
+      {...arrange?.listeners}
       className={`relative rounded-md ${
-        selected ? "bg-sidebar-row-active text-sidebar-foreground" : "hover:bg-sidebar-row-hover"
+        arrange?.isDragging
+          ? "z-20 bg-sidebar-row-hover shadow-md"
+          : selected
+            ? "bg-sidebar-row-active text-sidebar-foreground"
+            : "hover:bg-sidebar-row-hover"
       }`}
       onContextMenu={handleContextMenu}
     >
@@ -198,7 +249,9 @@ function ProjectRow({
         type="button"
         aria-label={`Open ${summary.root.title} project`}
         aria-current={selected ? "page" : undefined}
+        aria-keyshortcuts={arrange ? "Alt+ArrowUp Alt+ArrowDown" : undefined}
         className="absolute inset-0 z-0 cursor-pointer rounded-md focus-visible:outline-2 focus-visible:outline-ring"
+        onKeyDown={handleKeyDown}
         onClick={() =>
           void navigate({
             to: "/orchestrators/$environmentId/$threadId",
@@ -277,6 +330,40 @@ function ProjectRow({
   );
 }
 
+/** A Projects row that can be dragged, or moved with Alt+Up/Down, to rearrange the list. */
+function SortableProjectRow({
+  id,
+  disabled,
+  reducedMotion,
+  onMove,
+  ...row
+}: Omit<Parameters<typeof ProjectRow>[0], "arrange"> & {
+  readonly id: string;
+  readonly disabled: boolean;
+  readonly reducedMotion: boolean;
+  readonly onMove: (key: string, direction: -1 | 1) => void;
+}) {
+  const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+    disabled,
+  });
+  const arrange = useMemo(
+    (): ProjectRowArrange => ({
+      setNodeRef,
+      listeners,
+      style: {
+        transform: CSS.Translate.toString(transform),
+        // Neighbours slide aside while dragging; with reduced motion they jump.
+        transition: reducedMotion ? undefined : transition,
+      },
+      isDragging,
+      onMove: (direction) => onMove(id, direction),
+    }),
+    [id, isDragging, listeners, onMove, reducedMotion, setNodeRef, transform, transition],
+  );
+  return <ProjectRow {...row} arrange={disabled ? undefined : arrange} />;
+}
+
 export function OrchestratorSidebarList() {
   const projects = useProjects();
   const threads = useOrchestratorThreadShells();
@@ -339,6 +426,93 @@ export function OrchestratorSidebarList() {
   const quiet = orderedSummaries.filter(
     (summary) => displayedBuckets.get(threadKey(summary.root)) === "quiet",
   );
+  // A move shows its order at once and holds it until the server's pins land,
+  // or the list's membership changes under it (a failed move drops it too).
+  const [pendingMove, setPendingMove] = useState<{
+    readonly order: ReadonlyArray<string>;
+    readonly assigned: ReadonlyMap<string, string>;
+  } | null>(null);
+  const pinKeyByThread = new Map(
+    active.map((summary) => [
+      threadKey(summary.root),
+      summary.root.pinnedAt != null ? (summary.root.pinOrderKey ?? null) : null,
+    ]),
+  );
+  const holdingMove =
+    pendingMove !== null &&
+    pinKeyByThread.size === pendingMove.order.length &&
+    pendingMove.order.every((key) => pinKeyByThread.has(key)) &&
+    ![...pendingMove.assigned].every(([key, orderKey]) => pinKeyByThread.get(key) === orderKey);
+  if (pendingMove !== null && !holdingMove) setPendingMove(null);
+  const arranged = holdingMove
+    ? [...active].sort(
+        (left, right) =>
+          pendingMove.order.indexOf(threadKey(left.root)) -
+          pendingMove.order.indexOf(threadKey(right.root)),
+      )
+    : active;
+  const { pinThread, reorderPinnedThread } = useThreadActions();
+  const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+  /** Moves a project to `toIndex` of the shown list by pinning it, and any project above it, in order. */
+  const moveProject = (movedKey: string, toIndex: number) => {
+    const byKey = new Map(arranged.map((summary) => [threadKey(summary.root), summary]));
+    const plan = planProjectMove({
+      rows: arranged.map((summary) => ({
+        key: threadKey(summary.root),
+        pinned: summary.root.pinnedAt != null,
+        pinOrderKey: summary.root.pinOrderKey ?? null,
+      })),
+      movedKey,
+      toIndex,
+      reservedKeys: quiet.flatMap((summary) =>
+        summary.root.pinnedAt != null && summary.root.pinOrderKey != null
+          ? [summary.root.pinOrderKey]
+          : [],
+      ),
+    });
+    if (plan.writes.length === 0) return;
+    const writes = plan.writes.map((write) => {
+      const root = byKey.get(write.key)!.root;
+      return { ...write, ref: scopeThreadRef(root.environmentId, root.id) };
+    });
+    if (writes.some((write) => !readEnvironmentSupportsPinReorder(write.ref.environmentId))) {
+      toastManager.add({ type: "error", title: "Update this server to arrange projects" });
+      return;
+    }
+    setPendingMove({
+      order: plan.order,
+      assigned: new Map(writes.map((write) => [write.key, write.orderKey])),
+    });
+    void Promise.all(
+      writes.map((write) =>
+        write.kind === "pin"
+          ? pinThread(write.ref, { orderKey: write.orderKey })
+          : reorderPinnedThread(write.ref, write.orderKey),
+      ),
+    ).then((results) => {
+      if (results.every((result) => result._tag === "Success")) return;
+      setPendingMove(null);
+      toastManager.add({ type: "error", title: "Could not move the project" });
+    });
+  };
+  const moveProjectBy = (key: string, direction: -1 | 1) => {
+    const index = arranged.findIndex((summary) => threadKey(summary.root) === key);
+    if (index !== -1) moveProject(key, index + direction);
+  };
+  const dragSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+  );
+  // The pointer is released over the row it dragged, so swallow that one click.
+  const justDragged = useRef(false);
+  const handleDragEnd = ({ active: dragged, over }: DragEndEvent) => {
+    justDragged.current = true;
+    setTimeout(() => {
+      justDragged.current = false;
+    }, 0);
+    if (!over) return;
+    const toIndex = arranged.findIndex((summary) => threadKey(summary.root) === over.id);
+    if (toIndex !== -1) moveProject(String(dragged.id), toIndex);
+  };
   const orderedStandaloneGroups = useMemo(
     () =>
       standaloneGroups
@@ -366,18 +540,42 @@ export function OrchestratorSidebarList() {
         </p>
       ) : (
         <>
-          <ul aria-label="Projects" className="flex flex-col gap-px">
-            {active.map((summary) => (
-              <ProjectRow
-                key={`${summary.root.environmentId}:${summary.root.id}`}
-                summary={summary}
-                selectedRoute={selectedRoute}
-                sortSubprojects={sortSubprojects}
-                collapsed={collapsedProjects.includes(projectKeyOf(summary))}
-                onToggleSubprojects={toggleSubprojects}
-              />
-            ))}
-          </ul>
+          <DndContext
+            sensors={dragSensors}
+            collisionDetection={closestCenter}
+            modifiers={[restrictToVerticalAxis, restrictToFirstScrollableAncestor]}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={arranged.map((summary) => threadKey(summary.root))}
+              strategy={verticalListSortingStrategy}
+            >
+              <ul
+                aria-label="Projects"
+                className="flex flex-col gap-px"
+                onClickCapture={(event) => {
+                  if (!justDragged.current) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+              >
+                {arranged.map((summary) => (
+                  <SortableProjectRow
+                    key={threadKey(summary.root)}
+                    id={threadKey(summary.root)}
+                    disabled={!readEnvironmentSupportsPinReorder(summary.root.environmentId)}
+                    reducedMotion={reducedMotion}
+                    onMove={moveProjectBy}
+                    summary={summary}
+                    selectedRoute={selectedRoute}
+                    sortSubprojects={sortSubprojects}
+                    collapsed={collapsedProjects.includes(projectKeyOf(summary))}
+                    onToggleSubprojects={toggleSubprojects}
+                  />
+                ))}
+              </ul>
+            </SortableContext>
+          </DndContext>
           {quiet.length > 0 ? (
             <div>
               <button
