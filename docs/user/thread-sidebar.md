@@ -293,6 +293,14 @@ to answer its workers itself and ask you only when it cannot. Nesting is not
 available in the mobile app yet; mobile lists every thread and uses the same
 **Supervising** status for an idle parent with active descendants.
 
+### Arrange projects
+
+On web and desktop, drag a project in **Projects** to where you want it, or focus it and press
+`Alt+Up` or `Alt+Down`. Arranged projects stay in that order above the rest, which keep sorting by
+what needs you, so the moved project and every project above it keep their places. Choose **Unpin
+thread** from a project's menu to return it to automatic order. The mobile app does not arrange
+projects yet.
+
 ### Subprojects
 
 A nested thread that runs workers of its own can be a **subproject** of its
