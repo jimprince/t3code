@@ -146,10 +146,14 @@ export class OrchestratorDispatchError extends Schema.TaggedError<OrchestratorDi
   {
     commandId: CommandId,
     commandType: Schema.String,
+    reasonCode: Schema.optional(Schema.Literal("thread_settled")),
     cause: Schema.optional(Schema.Defect()),
   },
 ) {
   override get message(): string {
+    if (this.reasonCode === "thread_settled") {
+      return "Scheduled checks skip settled threads. Un-settle the thread to resume them.";
+    }
     return `Failed to dispatch orchestration command ${this.commandType} (${this.commandId}).`;
   }
 }
@@ -4659,16 +4663,25 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         }
       }
 
-      if (projection.thread.settledOverride !== null) {
+      // Recheck inside serialized admission: settlement may have changed since
+      // the scheduler loaded the task. Skipped occurrences create no queued run.
+      if (
+        command.scheduledTaskId !== undefined &&
+        projection.thread.settledOverride === "settled"
+      ) {
+        return yield* new OrchestratorDispatchError({
+          commandId: command.commandId,
+          commandType: command.type,
+          reasonCode: "thread_settled",
+        });
+      }
+      if (projection.thread.settledOverride === "settled") {
         const now = yield* DateTime.now;
         const thread: OrchestrationV2AppThread = {
           ...projection.thread,
           settledOverride: null,
           settledAt: null,
-          unsettledAt:
-            projection.thread.settledOverride === "active"
-              ? (projection.thread.unsettledAt ?? null)
-              : now,
+          unsettledAt: now,
           updatedAt: now,
         };
         yield* emit(

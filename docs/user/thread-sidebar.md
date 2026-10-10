@@ -142,7 +142,7 @@ another operator machine must be changed there.
 
 Choose **Settle thread** from its menu to move finished work out of the active list
 without deleting the conversation. **Un-settle thread** restores it to active work
-and prevents automatic settlement until new activity resumes the usual rules.
+and prevents automatic settlement, including after follow-up messages.
 Manually settling an idle thread dismisses unanswered async questions without
 sending an answer or restarting the agent. Settling also closes the thread's
 terminals that wait at an idle prompt, and keeps their output. A terminal that
@@ -156,7 +156,9 @@ Agent-created workers settle when a turn completes without pending input or appr
 UI-created top-level threads keep their usual settlement rules. Change the project default
 with **Settle completed workers** in **Thread behavior**; a worker can override it at creation.
 The thread's **Auto-settle behavior: Disabled** overrides completion settlement too.
-A follow-up resumes a settled worker automatically.
+A direct follow-up resumes a settled worker automatically. Scheduled checks skip
+settled threads, without queuing missed runs. Un-settle the thread to resume checks
+at the next scheduled occurrence; skipped occurrences appear in Scheduled tasks.
 
 Settled subthreads archive after seven days by default. **Archive settled subthreads**
 and its days setting can be changed per environment or project in **Thread behavior**.
