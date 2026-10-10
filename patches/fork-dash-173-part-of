@@ -1,0 +1,7 @@
+Bottom: db422846a4e7d9314cf22ca2220679cc6cd80380
+Top:    d86870ae8ab8127731a9a9eeb54d78402f872ca2
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 11:07:53 +0000
+
+feat(server): name the epic each project issue is part of
+

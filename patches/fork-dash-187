@@ -1,0 +1,7 @@
+Bottom: 61d61c5fa643c1e44634db5394e5e40ddf0cf994
+Top:    db422846a4e7d9314cf22ca2220679cc6cd80380
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 11:07:52 +0000
+
+feat(web): show a running thread's to-do progress on its task card
+
