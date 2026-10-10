@@ -4,3 +4,11 @@ Author: brad <bradprin@live.com>
 Date:   2026-10-10 17:52:18 +0000
 
 fix(web,mobile): show dates and times in the device time zone
+
+Decision deadlines, the Later return time, automation schedules and the
+timestamps in copied error and crash reports rendered in UTC. A date-only
+deadline now starts at local midnight, days count by the local calendar,
+schedules convert to the device zone (adding their own zone when it
+differs), and copied reports carry the device offset.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
