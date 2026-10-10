@@ -330,6 +330,24 @@ A project page lists everything that needs you in one **Decisions** list: questi
 
 Context is Markdown: a lead sentence, bullets, small tables, links and pictures that open full size. Long context shows its first blocks, with **More** for the rest.
 
+### Plan
+
+Add the **Plan** widget to a project page (**Edit layout**) to see its tasks grouped by
+workstream, each with a progress bar: how far it has come, what finished in the window
+you pick (**Last hour**, **4 hours**, **Today**) in a brighter segment, and a hatched
+segment for where that pace takes it one window ahead. A task counts done when closed,
+nine tenths while it waits for your review, and by its agent's to-do list while under
+way. Work that did not move in the window shows amber. **waiting on you** opens that
+project's Decisions in a popup. The widget ends with what finished since your last
+visit.
+
+Turn on **All projects** to show every project instead of this one and its
+subprojects, for example on the Chief of Staff page. List project titles under
+**Utility projects**, one per line, to group them last under **Utilities**. With a Plan
+widget on the page, the separate Subprojects and Workstreams blocks are hidden. The
+New request box comes first on the page; on the Dashboard tab its chips start common
+requests such as a bug report or "Have an agent…". Mobile does not show the Plan yet.
+
 ### Named agents
 
 Some resources must have exactly one owner: a 3D printer, a production
