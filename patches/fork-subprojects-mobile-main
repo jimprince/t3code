@@ -1,0 +1,8 @@
+Bottom: 1ad45a44a7c8a2420ff566df4e2869541c8a91eb
+Top:    1ad45a44a7c8a2420ff566df4e2869541c8a91eb
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 22:24:34 +0000
+
+feat(mobile): nest subprojects inside their project card on the Projects list
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
