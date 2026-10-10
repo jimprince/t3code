@@ -1,0 +1,7 @@
+Bottom: b5e6be326c64f31e147701f9cbb433a40ad4fd53
+Top:    ba5e8d12647e4c40868df992b1441a88fea4df22
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 10:43:49 +0000
+
+fix(server): bound provider lifecycle and shutdown waits
+
