@@ -1,0 +1,7 @@
+Bottom: c8caf602ad78e04e5db0581f5a0f6909e0e7cf00
+Top:    1edcb6566be465dab4d5b8b3252e803573eb02ea
+Author: User <user@example.com>
+Date:   2026-10-10 10:48:31 +0000
+
+feat(projects): decisions show their links, pictures and full context
+

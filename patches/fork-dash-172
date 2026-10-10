@@ -1,0 +1,7 @@
+Bottom: bd0c00fb08d833a93e4496acacc7d3bd14ababe2
+Top:    17fe96fb0d2408d314a919d1fe3f5432e799ff5f
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 10:48:33 +0000
+
+feat(web): collapse Release widget groups by default
+
