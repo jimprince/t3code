@@ -1,6 +1,6 @@
-Bottom: 5dc3b9496aba4fa04859d83196c85b895dc9734e
-Top:    3af9fdc38caa42432c3212949359a26a26b2e427
+Bottom: 82182845b6f009b401de03fa1ea68a9a9d6357cc
+Top:    a30bef9a7de9273db6783e293ea34eea788a1570
 Author: brad <bradprin@live.com>
-Date:   2026-10-10 11:37:22 +0000
+Date:   2026-10-10 11:37:48 +0000
 
 feat(agents): publish approved plans as idempotent workstreams

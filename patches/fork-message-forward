@@ -1,6 +1,6 @@
-Bottom: 811e1f1e198cfe1b257b361a671bc71ee6c3a144
-Top:    5dc3b9496aba4fa04859d83196c85b895dc9734e
+Bottom: 3a6787eae7b4bf635541a496569580c0f2ce7fd5
+Top:    82182845b6f009b401de03fa1ea68a9a9d6357cc
 Author: brad <bradprin@live.com>
-Date:   2026-10-10 11:37:22 +0000
+Date:   2026-10-10 11:37:48 +0000
 
 feat(threads): forward exact messages with portable attachments
