@@ -1,6 +1,6 @@
-Bottom: ea9ae24c52672d23d28a541e3df5260cd1c3e8f7
-Top:    db6cfb33e1ebac9f195fadb83dbc52b73d9ed8b0
+Bottom: 1fa77609a4bbd285c08175411a0a246cd4bb3c24
+Top:    d9c946a97ee6f49147e2db8d3340c3d90f92c68b
 Author: brad <bradprin@live.com>
-Date:   2026-10-10 11:13:34 +0000
+Date:   2026-10-10 11:20:38 +0000
 
 feat(sidebar): fold quiet nested threads
