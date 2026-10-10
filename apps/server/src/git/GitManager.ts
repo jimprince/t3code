@@ -158,6 +158,7 @@ const STATUS_RESULT_CACHE_CAPACITY = 2_048;
 // exponentially via prLookupFailureTtl, so throttling pressure still drops
 // under 429s instead of amplifying it.
 const encodeRoutingKey = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
+const BRANCH_PREFLIGHT_CACHE_TTL = Duration.seconds(30);
 const PR_LOOKUP_CACHE_TTL = Duration.seconds(60);
 // Answers without an open PR ("no PR yet", merged, closed) only change when
 // someone opens a PR, and the paths that do that in-app (turn end, push,
@@ -1382,9 +1383,31 @@ export const make = Effect.gen(function* () {
       Effect.flatMap((cacheKey) => Cache.invalidate(remoteStatusResultCache, cacheKey)),
     );
 
-  const readConfigValueNullable = (cwd: string, key: string) =>
-    gitCore.readConfigValue(cwd, key).pipe(Effect.orElseSucceed(() => null));
-
+  // Cache only lookup preparation; verification below bypasses this cache so
+  // external remote set-url (including included/global Git config) stays visible.
+  const prConfigEpochByCwd = new Map<string, number>();
+  const prConfigReadCache = yield* Cache.makeWith(
+    (cacheKey: string) => {
+      const [cwd = "", key = ""] = cacheKey.split("\u0000");
+      return gitCore.readConfigValue(cwd, key);
+    },
+    {
+      capacity: PR_LOOKUP_CACHE_CAPACITY,
+      timeToLive: (exit) => (Exit.isSuccess(exit) ? BRANCH_PREFLIGHT_CACHE_TTL : Duration.zero),
+    },
+  );
+  const invalidatePrConfigReads = (cwd: string) =>
+    Effect.sync(() => {
+      prConfigEpochByCwd.set(cwd, (prConfigEpochByCwd.get(cwd) ?? 0) + 1);
+    });
+  const readConfigValueNullable = (cwd: string, key: string, cached = false) =>
+    (cached
+      ? Cache.get(
+          prConfigReadCache,
+          `${cwd}\u0000${key}\u0000${prLookupEpoch(cwd)}\u0000${prConfigEpochByCwd.get(cwd) ?? 0}`,
+        )
+      : gitCore.readConfigValue(cwd, key)
+    ).pipe(Effect.orElseSucceed(() => null));
   const resolveHostingProvider = Effect.fn("resolveHostingProvider")(function* (
     cwd: string,
     branch: string | null,
@@ -1413,6 +1436,7 @@ export const make = Effect.gen(function* () {
   const resolveRemoteRepositoryContext = Effect.fn("resolveRemoteRepositoryContext")(function* (
     cwd: string,
     remoteName: string | null,
+    fresh = false,
   ) {
     if (!remoteName) {
       return {
@@ -1422,7 +1446,7 @@ export const make = Effect.gen(function* () {
       };
     }
 
-    const remoteUrl = yield* readConfigValueNullable(cwd, `remote.${remoteName}.url`);
+    const remoteUrl = yield* readConfigValueNullable(cwd, `remote.${remoteName}.url`, !fresh);
     const gitea = remoteUrl ? resolveGiteaRemote(remoteUrl, yield* giteaInstances) : null;
     let repositoryNameWithOwner =
       gitea?.repository ?? parseRepositoryNameWithOwnerFromRemoteUrl(remoteUrl);
@@ -1453,7 +1477,10 @@ export const make = Effect.gen(function* () {
     };
   });
 
-  const resolvePrTargetRepository = Effect.fn("resolvePrTargetRepository")(function* (cwd: string) {
+  const resolvePrTargetRepository = Effect.fn("resolvePrTargetRepository")(function* (
+    cwd: string,
+    fresh = false,
+  ) {
     const { provider, context } = yield* sourceControlProviders.resolveHandle({ cwd });
     // Gitea requests target the registry-selected remote; GitHub retains its CLI fork semantics.
     const remoteName =
@@ -1461,17 +1488,18 @@ export const make = Effect.gen(function* () {
         ? (context?.remoteName ??
           (yield* gitCore.resolvePrimaryRemoteName(cwd).pipe(Effect.orElseSucceed(() => null))))
         : "origin";
-    return { ...(yield* resolveRemoteRepositoryContext(cwd, remoteName)), remoteName };
+    return { ...(yield* resolveRemoteRepositoryContext(cwd, remoteName, fresh)), remoteName };
   });
 
   const resolvePrLookupRepositoryIdentity = Effect.fn("resolvePrLookupRepositoryIdentity")(
     function* (cwd: string, branch: string, remoteNameOverride?: string) {
       const remoteName =
         remoteNameOverride ?? (yield* readConfigValueNullable(cwd, `branch.${branch}.remote`));
-      const [headRemote, targetRemote] = yield* Effect.all(
-        [resolveRemoteRepositoryContext(cwd, remoteName), resolvePrTargetRepository(cwd)],
-        { concurrency: "unbounded" },
-      );
+      const targetRemote = yield* resolvePrTargetRepository(cwd, true);
+      const headRemote =
+        remoteName === targetRemote.remoteName
+          ? targetRemote
+          : yield* resolveRemoteRepositoryContext(cwd, remoteName, true);
       return {
         remoteName,
         headRemoteUrlKey:
@@ -1487,7 +1515,7 @@ export const make = Effect.gen(function* () {
   ) {
     const remoteName =
       details.remoteName ??
-      (yield* readConfigValueNullable(cwd, `branch.${details.branch}.remote`));
+      (yield* readConfigValueNullable(cwd, `branch.${details.branch}.remote`, true));
     const headBranchFromUpstream = details.upstreamRef
       ? extractBranchNameFromRemoteRef(details.upstreamRef, { remoteName })
       : "";
@@ -2239,10 +2267,10 @@ export const make = Effect.gen(function* () {
     });
     return mergeGitStatusParts(local, remote);
   });
-  const lookupBranchPullRequest: GitManager["Service"]["branchPullRequest"] = Effect.fn(
-    "branchPullRequest",
-  )(function* ({ cwd, branch }, options) {
-    const cacheCwd = yield* normalizeStatusCacheKey(cwd);
+  const readBranchPreflight = Effect.fn("readBranchPreflight")(function* (
+    cacheCwd: string,
+    branch: string,
+  ) {
     const remotes = yield* gitCore.execute({
       operation: "GitManager.branchPullRequest.remotes",
       cwd: cacheCwd,
@@ -2314,6 +2342,36 @@ export const make = Effect.gen(function* () {
     const defaultBranch = yield* gitCore
       .resolveDefaultBranchName(cacheCwd, defaultRemoteName)
       .pipe(Effect.orElseSucceed(() => null));
+    return { upstreamRef, remoteName, defaultBranch, localBranchExists };
+  });
+  // Successful preflight/config reads stay warm for 30 seconds, keyed by the
+  // normalized cwd, saved branch and PR epoch. Full status invalidation after
+  // git actions (switch/checkout/commit) or user refresh changes the epoch;
+  // refresh:true at turn-end bypasses preflight/config entries immediately.
+  // Periodic partial status invalidation keeps them warm. Failures retain the
+  // existing outer backoff; repository identity is always verified with fresh config.
+  const branchPreflightCache = yield* Cache.makeWith(
+    (key: string) => {
+      const [cwd = "", branch = ""] = key.split("\u0000");
+      return readBranchPreflight(cwd, branch);
+    },
+    {
+      capacity: PR_LOOKUP_CACHE_CAPACITY,
+      timeToLive: (exit) => (Exit.isSuccess(exit) ? BRANCH_PREFLIGHT_CACHE_TTL : Duration.zero),
+    },
+  );
+  const lookupBranchPullRequest: GitManager["Service"]["branchPullRequest"] = Effect.fn(
+    "branchPullRequest",
+  )(function* ({ cwd, branch }, options) {
+    const cacheCwd = yield* normalizeStatusCacheKey(cwd);
+    const preflightKey = `${cacheCwd}\u0000${branch}\u0000${prLookupEpoch(cacheCwd)}`;
+    if (options?.refresh) {
+      yield* Cache.invalidate(branchPreflightCache, preflightKey);
+      yield* invalidatePrConfigReads(cacheCwd);
+    }
+    const preflight = yield* Cache.get(branchPreflightCache, preflightKey);
+    if (preflight === null) return null;
+    const { upstreamRef, remoteName, defaultBranch, localBranchExists } = preflight;
     const cacheKey = yield* prLookupCacheKey(cacheCwd, {
       branch,
       upstreamRef,
@@ -2356,6 +2414,7 @@ export const make = Effect.gen(function* () {
       });
     }
     if (!hasSameIdentity(cached.headContext, currentIdentity)) {
+      yield* invalidatePrConfigReads(cacheCwd);
       yield* Cache.invalidate(prLookupCache, cacheKey);
       cached = yield* getPrLookup(cacheKey);
       const refreshedIdentity = yield* resolvePrLookupRepositoryIdentity(
