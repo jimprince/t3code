@@ -280,10 +280,8 @@ const runSweepFixture = (input: {
     let eventPhase = false;
     const cleanup = yield* make.pipe(
       Effect.provideService(Git.GitVcsDriver, driver),
-      Effect.provide(
+      Effect.provide([
         Layer.mock(Projects.ProjectStoreV2)({ listShells: () => Effect.succeed(projects) }),
-      ),
-      Effect.provide(
         Layer.mock(Projections.ProjectionStoreV2)({
           getShellSnapshot: (options) =>
             Effect.gen(function* () {
@@ -306,8 +304,6 @@ const runSweepFixture = (input: {
               };
             }),
         }),
-      ),
-      Effect.provide(
         Layer.mock(GitManager.GitManager)({
           invalidateStatus: () => Effect.void,
           branchPullRequest: ({ branch }) =>
@@ -326,14 +322,11 @@ const runSweepFixture = (input: {
                 : null,
             ),
         }),
-      ),
-      Effect.provide(Layer.mock(Orchestrator.OrchestratorV2)({ streamDomainEvents: events })),
+        Layer.mock(Orchestrator.OrchestratorV2)({ streamDomainEvents: events }),
       Effect.provide(
         Layer.mock(Terminals.TerminalManager)({
           subscribeMetadata: () => Effect.succeed(() => {}),
         }),
-      ),
-      Effect.provide(
         Settings.layerTest({
           worktreeCleanup: {
             mode: "custom",
@@ -347,7 +340,7 @@ const runSweepFixture = (input: {
           },
           storageCleanup: { browserArtifactsAfterDays: null, logsAfterDays: null },
         }),
-      ),
+      ]),
     );
     const counts: number[] = [];
     const contexts: (typeof contextProbes)[] = [];
