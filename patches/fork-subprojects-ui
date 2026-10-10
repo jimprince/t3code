@@ -1,0 +1,7 @@
+Bottom: 4b63de1d828276117f27bbe74cf81cef763d8d23
+Top:    2707aec41f14244f394ea8bbda957f59e6ecae70
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 19:35:39 +0000
+
+feat(projects): show nested orchestrators as subprojects in the sidebar and project page
+

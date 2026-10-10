@@ -1,0 +1,8 @@
+Bottom: adcb58c0ff3a751fb5cf6d4ce73a232eb0a25e5b
+Top:    4d646aa0eb592a2328ec5f2e8b65bca05287aad7
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 19:35:18 +0000
+
+feat(web): show detailed nested thread activity in Agents panel
+
+

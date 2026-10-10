@@ -1,0 +1,7 @@
+Bottom: be49aa105c90eff886540b8e6c75f607128753c5
+Top:    8569da2fee5d9fa7bf0e1c193e580d1b24538637
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 19:35:30 +0000
+
+fix(t3-thread): layout commands that know every widget type
+

@@ -1,0 +1,15 @@
+Bottom: c4299c881dedb947b796e56f5cb2429961553bac
+Top:    06940b01bfad8def549431dc803a9bf85218d44d
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 19:35:44 +0000
+
+fix(mobile): fold finished projects into Quiet
+
+The mobile Projects list showed every project flat, so a settled project
+stayed in the list while the web sidebar had folded it away.
+
+Settled and long-quiet projects now fold into a collapsed Quiet group
+using the same projectSidebarBucket rule as web. The seven-day quiet
+window moves into client-runtime as PROJECT_QUIET_AFTER_MS so both
+clients share it.
+
