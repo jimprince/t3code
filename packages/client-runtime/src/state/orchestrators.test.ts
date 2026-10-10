@@ -313,29 +313,45 @@ describe("buildOrchestratorSummaries", () => {
     ]);
   });
 
-  it("makes a pinned top-level thread a project, listed first, and keeps its row in Threads", () => {
+  it("orders projects by pin without promoting a pinned thread that has no workers", () => {
     const chief = thread("chief", null, {
       pinnedAt: "2026-10-05T00:00:00.000Z",
       pinOrderKey: "a",
     });
+    const chiefWorker = thread("chief-worker", "chief");
     const busy = thread("busy", null, { hasPendingApprovals: true });
     const busyWorker = thread("busy-worker", "busy", { hasPendingApprovals: true });
-    const chiefWorker = thread("chief-worker", "chief");
+    const pinnedLoner = thread("pinned-loner", null, {
+      pinnedAt: "2026-10-05T00:00:00.000Z",
+      pinOrderKey: "b",
+    });
     const lone = thread("lone", null);
-    const summaries = buildOrchestratorSummaries([busy, busyWorker, chief, lone], []);
+    const all = [busy, busyWorker, chief, chiefWorker, pinnedLoner, lone];
+    const summaries = buildOrchestratorSummaries(all, []);
+    // Only the two roots that own workers are projects; the pin alone is not enough.
     expect(summaries.map((item) => item.root.id).toSorted()).toEqual(["busy", "chief"]);
+    // A pin still leads the list, ahead of a project that needs you.
     expect(sortOrchestratorSummariesForSidebar(summaries, 0).map((item) => item.root.id)).toEqual([
       "chief",
       "busy",
     ]);
-    expect(
-      threadsVisibleInThreadsMode([busy, busyWorker, chief, chiefWorker, lone], true).map(
-        (item) => item.id,
-      ),
-    ).toEqual(["chief", "lone"]);
+    // Projects own their whole tree in Threads mode, pinned root included.
+    expect(threadsVisibleInThreadsMode(all, true).map((item) => item.id)).toEqual([
+      "pinned-loner",
+      "lone",
+    ]);
   });
 
-  it("keeps project trees in Threads only when Projects is disabled, except a pinned root's row", () => {
+  it("keeps a marked standing orchestrator in Projects with no workers of its own", () => {
+    const standing = thread("standing", null, { subproject: "on" });
+    const plain = thread("plain", null);
+    const all = [standing, plain];
+    expect(buildOrchestratorSummaries(all, []).map((item) => item.root.id)).toEqual(["standing"]);
+    // Marked projects own their row in Projects, so they leave the Threads list too.
+    expect(threadsVisibleInThreadsMode(all, true).map((item) => item.id)).toEqual(["plain"]);
+  });
+
+  it("keeps project trees in Threads only when Projects is disabled", () => {
     const root = thread("root", null, { pinnedAt: "2026-10-01T00:00:00.000Z" });
     const child = thread("child", "root", { pinnedAt: "2026-10-01T00:00:00.000Z" });
     const standalone = thread("standalone", null);
@@ -349,7 +365,6 @@ describe("buildOrchestratorSummaries", () => {
     });
     const all = [root, child, standalone, archivedParent, orphan, finishedOnlyRoot, archivedChild];
     expect(threadsVisibleInThreadsMode(all, true).map((item) => item.id)).toEqual([
-      "root",
       "standalone",
       "archived-parent",
       "orphan",
@@ -452,6 +467,35 @@ describe("subprojects", () => {
     );
     expect(attention!.needsYou).toEqual([]);
     expect(projectSidebarBucket(attention!, 0)).toBe("needs-you");
+  });
+
+  it("folds a settled project into Quiet, unless it still needs you or is working", () => {
+    const settledRoot = thread("settled-root", null, { settledOverride: "settled" });
+    const settledWorker = thread("settled-worker", "settled-root");
+    const settled = buildOrchestratorSummaries([settledRoot, settledWorker], []).find(
+      (item) => item.root.id === "settled-root",
+    );
+    // Recent enough to be "idle" on activity alone; settling is the stronger statement.
+    expect(projectSidebarBucket(settled!, 0)).toBe("quiet");
+
+    const askingWorker = thread("asking-worker", "settled-root", { hasPendingUserInput: true });
+    const stillAsking = buildOrchestratorSummaries([settledRoot, askingWorker], []).find(
+      (item) => item.root.id === "settled-root",
+    );
+    expect(projectSidebarBucket(stillAsking!, 0)).toBe("needs-you");
+
+    const busyWorker = thread("busy-worker", "settled-root", { session: running("busy-worker") });
+    const stillWorking = buildOrchestratorSummaries([settledRoot, busyWorker], []).find(
+      (item) => item.root.id === "settled-root",
+    );
+    expect(projectSidebarBucket(stillWorking!, 0)).toBe("working");
+
+    const liveRoot = thread("live-root", null);
+    const liveWorker = thread("live-worker", "live-root");
+    const live = buildOrchestratorSummaries([liveRoot, liveWorker], []).find(
+      (item) => item.root.id === "live-root",
+    );
+    expect(projectSidebarBucket(live!, 0)).toBe("idle");
   });
 
   it("orders a project's subprojects by what needs you first", () => {
