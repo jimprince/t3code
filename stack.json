@@ -1,9 +1,12 @@
 {
   "version": 5,
-  "prev": "d02afc622a2153ff65024ff9b69a00e28242d27b",
-  "head": "2dadd2ca1584fd312403148d56e1fd95b75df1c8",
+  "prev": "bae58cd302a84795c52edbbd50658521e1b21e25",
+  "head": "c92f096237ee109b145ea33ba6bf60d9a0626af5",
   "applied": [
     "fork-build-ci-compat",
+    "refresh-temp"
+  ],
+  "unapplied": [
     "fork-worker-operations",
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
@@ -145,10 +148,8 @@
     "fork-mobile-manual-production",
     "fork-lifecycle-deadlines",
     "fork-admin-thread-recovery",
-    "fork-provider-context-recovery",
-    "refresh-temp"
+    "fork-provider-context-recovery"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
@@ -581,7 +582,7 @@
       "oid": "2316154985a0da19a0c3ee5352a10c2fe87d5cb0"
     },
     "refresh-temp": {
-      "oid": "2dadd2ca1584fd312403148d56e1fd95b75df1c8"
+      "oid": "c92f096237ee109b145ea33ba6bf60d9a0626af5"
     }
   }
 }
