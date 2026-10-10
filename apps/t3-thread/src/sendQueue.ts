@@ -37,6 +37,9 @@ import type { OrchestrationThread, SavedEnvironment, SavedQueuedSend, StateFile 
 
 /** How many dispatch attempts a queued send gets before it is marked undeliverable. */
 export const MAX_DISPATCH_ATTEMPTS = 5;
+// Sends to a settled thread are held until it unsettles. The watcher's own reads re-check
+// settled sources each minute; held targets get the same cadence instead of a read every pass.
+const SETTLED_TARGET_RECHECK_MS = 60_000;
 
 /** A claim older than this is assumed to belong to a watcher that died mid-dispatch. */
 const DISPATCH_CLAIM_TIMEOUT_MS = 120_000;
@@ -429,6 +432,8 @@ export async function drainQueuedSends(options: {
   now?: () => string;
   maxAttempts?: number;
   readTimeoutMs?: number;
+  /** Target -> when to read it again, for targets last seen settled. Kept across passes. */
+  settledTargets?: Map<string, number>;
 }): Promise<SavedQueuedSend[]> {
   const now = options.now ?? nowIso;
   const maxAttempts = options.maxAttempts ?? MAX_DISPATCH_ATTEMPTS;
@@ -454,6 +459,8 @@ export async function drainQueuedSends(options: {
     }
 
     const client = options.clientFactory(environment);
+    const targetKey = `${head.environment}:${head.threadId}`;
+    if ((options.settledTargets?.get(targetKey) ?? 0) > Date.parse(attemptedAt)) return;
 
     let thread: OrchestrationThread;
     try {
@@ -484,6 +491,12 @@ export async function drainQueuedSends(options: {
         })),
       );
       return;
+    }
+
+    if (thread.settledOverride === "settled") {
+      options.settledTargets?.set(targetKey, Date.parse(attemptedAt) + SETTLED_TARGET_RECHECK_MS);
+    } else {
+      options.settledTargets?.delete(targetKey);
     }
 
     const quota = threadQuotaBlock(thread);
@@ -637,10 +650,11 @@ export function startQueueDrainLoop(options: {
 }): { stop: () => Promise<void> } {
   let stopped = false;
   let wake: () => void = () => {};
+  const settledTargets = new Map<string, number>();
   const loop = (async () => {
     while (!stopped) {
       try {
-        const results = await drainQueuedSends(options);
+        const results = await drainQueuedSends({ ...options, settledTargets });
         if (results.length > 0) options.report?.({ queuedSendResults: results });
       } catch (error) {
         // One failed pass must not end the loop; the next tick retries.

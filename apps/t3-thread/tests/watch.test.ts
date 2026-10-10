@@ -11,6 +11,7 @@ import { sendDirectResult } from "../src/directResult.js";
 import { parseNotificationLevel } from "../src/notifications.js";
 import type {
   OrchestrationThread,
+  OrchestrationThreadShell,
   SavedAgent,
   SavedEnvironment,
   SavedSubscription,
@@ -245,6 +246,54 @@ describe("watch flows", () => {
           now: () => "2026-04-17T03:00:00.000Z",
         }),
       ).toEqual([]);
+    });
+  });
+
+  it("reads a settled source only while its completion can still be reported", async () => {
+    await withTempState(async () => {
+      const completedAt = "2026-04-17T00:00:04.000Z";
+      const source = makeThread({
+        settledOverride: "settled",
+        settledAt: completedAt,
+        latestTurn: { ...makeThread().latestTurn!, completedAt },
+      });
+      const shell = {
+        ...source,
+        activeRunId: null,
+        latestUserMessageAt: null,
+        hasPendingApprovals: false,
+        hasPendingUserInput: false,
+        hasActionableProposedPlan: false,
+      } as OrchestrationThreadShell;
+      const base = createClientFactory({ sourceThread: source });
+      let sourceReads = 0;
+      const clientFactory: WatchClientFactory = (environment) => ({
+        ...base.clientFactory(environment),
+        listThreads: async () => [shell],
+        async findThread(threadId) {
+          if (threadId === source.id) sourceReads += 1;
+          return base.clientFactory(environment).findThread(threadId);
+        },
+      });
+
+      // Just settled: the completion notice is still read and reported.
+      expect(
+        await scanAttentionNotifications(await loadState(), {
+          clientFactory,
+          now: () => "2026-04-17T00:00:30.000Z",
+        }),
+      ).toMatchObject([{ sourceState: "completed", latestTurnId: "turn-1" }]);
+      expect(sourceReads).toBe(1);
+
+      // Hours later the shell already says nothing can be reported: no full read.
+      expect(
+        await scanAttentionNotifications(await loadState(), {
+          clientFactory,
+          now: () => "2026-04-17T03:00:00.000Z",
+        }),
+      ).toEqual([]);
+      expect(await hasActiveWork({ clientFactory })).toBe(false);
+      expect(sourceReads).toBe(1);
     });
   });
 
@@ -869,6 +918,28 @@ describe("notification ownership and attention", () => {
 });
 
 describe("watch polling cost", () => {
+  it("lists shells once per environment per pass", async () => {
+    let lists = 0;
+    const poller = createWatchPoller(() => ({
+      async listThreads() {
+        lists += 1;
+        return [];
+      },
+      async findThread() {
+        return makeThread();
+      },
+      async sendMessage() {},
+    }));
+    const client = poller.clientFactory(makeEnvironment());
+    poller.beginPoll();
+    await client.listThreads!();
+    await client.listThreads!();
+    expect(lists).toBe(1);
+    poller.beginPoll();
+    await client.listThreads!();
+    expect(lists).toBe(2);
+  });
+
   it("shares reads and parks missing, archived and settled sources", async () => {
     let time = 0;
     const calls: string[] = [];
