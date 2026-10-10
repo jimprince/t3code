@@ -2590,7 +2590,7 @@ depends_on = [
   "fork-queue-idle-dispatch",
 ]
 roles = []
-note = "Adds only WsForkRpcGroup RPCs and reuses fork_thread_metadata_receipts; no migration ID. V2 admission and binding commit with native events/outbox under existing ownership and thread lifecycle locks. Normal Claude handoffs use SDK next priority; explicit control retains now. Unknown transport outcomes stop automatic delivery/retry. Exact/coalesce lookup is sender-private; the own inbox uses existing environment read authorization and an exact-key bounded metadata index. Production fixtures require T3_LIFECYCLE_FIXTURES. Install/deployment remain separately gated per machine."
+note = "Adds only WsForkRpcGroup RPCs and reuses fork_thread_metadata_receipts; no migration ID. V2 admission and binding commit with native events/outbox under existing ownership and thread lifecycle locks. Normal Claude handoffs use SDK next priority; explicit control retains now. Unknown transport outcomes stop automatic delivery/retry. Exact/coalesce lookup is sender-private; the own inbox uses existing environment read authorization and an exact-key bounded metadata index. Production fixtures require T3_LIFECYCLE_FIXTURES. Install/deployment remain separately gated per machine. #243: HeldHandoffRelease replays a recipient's held sends (bounded inbox index, oldest first, original subject and send ID) on every thread.unsettled, so a UI or MCP unsettle no longer strands them; it reads the event sink from its construction sequence, so an unsettle before the subscriber pulls is not missed. Unsettles while the server is down are not replayed at startup."
 
 [[patch.decision]]
 id = "receipt-version-error-215"
