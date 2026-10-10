@@ -1,0 +1,7 @@
+Bottom: 3f601a34a21423508a131a4171727b67c38eff32
+Top:    fa0643c8d3ec05659981027603a1ab6ffbd6e564
+Author: ci-repair-bot <ci-repair-bot@example.invalid>
+Date:   2026-10-10 07:46:14 +0000
+
+build(fork): support fork workspace, runners, and CI budgets
+
