@@ -1,0 +1,7 @@
+Bottom: 2096624f082bef8466b12d143014c616a4883ee7
+Top:    560e7eff9ab722718b64a406ee63a215017637a5
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 08:27:37 +0000
+
+fix(web): a long thread you switch back to opens at the newest message, not blank at the top
+

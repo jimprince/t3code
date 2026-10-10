@@ -1,0 +1,7 @@
+Bottom: d4198bd839dcc6e651c2750a88b90f2050db71c2
+Top:    214b924b241de66185e6a97a62b880e011e8983b
+Author: brad <bradprin@live.com>
+Date:   2026-10-10 08:27:31 +0000
+
+feat(server): report a thread's to-do progress on its shell
+
