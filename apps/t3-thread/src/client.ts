@@ -737,7 +737,14 @@ export class RemoteEnvironmentClient {
     };
   }
 
-  async findThread(threadId: string): Promise<OrchestrationThread> {
+  /**
+   * One thread's snapshot. Nesting fields come from the full fork metadata table, read after
+   * the snapshot; callers that never look at parent, scope or subproject pass `nesting: false`.
+   */
+  async findThread(
+    threadId: string,
+    options: { readonly nesting?: boolean } = {},
+  ): Promise<OrchestrationThread> {
     const rpc = await this.openRpc();
     try {
       const item = await rpc.subscribeThreadSnapshot<{
@@ -750,6 +757,7 @@ export class RemoteEnvironmentClient {
       if (item.kind !== "snapshot") {
         throw new Error(`Expected a thread snapshot for '${threadId}', received '${item.kind}'.`);
       }
+      if (options.nesting === false) return item.snapshot.thread;
       return (await this.applyThreadMetadata([item.snapshot.thread], rpc))[0]!;
     } finally {
       await rpc.dispose();
@@ -1332,7 +1340,7 @@ export class RemoteEnvironmentClient {
   }
 
   async pending(threadId: string) {
-    return pendingRequests(await this.findThread(threadId));
+    return pendingRequests(await this.findThread(threadId, { nesting: false }));
   }
 
   async respond(input: {

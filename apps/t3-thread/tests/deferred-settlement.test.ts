@@ -60,6 +60,18 @@ function harness(snapshots: Array<OrchestrationThread | Error>) {
 }
 
 describe("deferred self settlement", () => {
+  it("stops at once when the thread is already settled", async () => {
+    const h = harness([thread({ settledOverride: "settled" })]);
+    await expect(settleAfterTurn(request, h.client, h.options)).resolves.toMatchObject({
+      settled: true,
+      alreadySettled: true,
+    });
+    expect(h.client.findThread).toHaveBeenCalledTimes(1);
+    expect(h.client.findThread).toHaveBeenCalledWith(request.threadId, { nesting: false });
+    expect(h.client.settleThread).not.toHaveBeenCalled();
+    expect(h.options.wait).not.toHaveBeenCalled();
+  });
+
   it("waits for the same turn's persisted final response and a quiet session", async () => {
     const done = thread();
     const h = harness([
