@@ -7,7 +7,23 @@ import type * as SqlClient from "effect/unstable/sql/SqlClient";
 import { readForkThreadMetadata } from "../orchestration-v2/legacy/ForkThreadMetadataRead.ts";
 
 export const metadataJson = Schema.fromJsonString(ForkThreadMetadata);
-const decodeMetadata = Schema.decodeUnknownEffect(metadataJson);
+const decodeMetadataPayload = Schema.decodeUnknownEffect(metadataJson);
+// Full listings run on every thread list and decode the whole table, though rows rarely change.
+// Keyed by payload text, so an edited row decodes afresh and writes need no invalidation.
+const decodedPayloads = new Map<string, ForkThreadMetadata>();
+const DECODED_PAYLOADS_CAPACITY = 8_192;
+const decodeMetadata = (payload: string) => {
+  const decoded = decodedPayloads.get(payload);
+  if (decoded !== undefined) return Effect.succeed(decoded);
+  return decodeMetadataPayload(payload).pipe(
+    Effect.tap((metadata) =>
+      Effect.sync(() => {
+        if (decodedPayloads.size >= DECODED_PAYLOADS_CAPACITY) decodedPayloads.clear();
+        decodedPayloads.set(payload, metadata);
+      }),
+    ),
+  );
+};
 const encodeMetadata = Schema.encodeEffect(metadataJson);
 const decodeRemoteParent = Schema.decodeUnknownEffect(Schema.fromJsonString(ForkRemoteParent));
 /** Import once, including null/missing parents. Existing V2 edits win on every restart. */
