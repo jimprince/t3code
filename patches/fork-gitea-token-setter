@@ -1,6 +1,6 @@
-Bottom: 818f2c9c1889b5630ecd51bd46314f0243136250
-Top:    944bbb6f88d15d257f5501fafebceb9fbfc1b930
+Bottom: 7927cabc4221fdd1e79c5240825eadc639cb3d9c
+Top:    0e252d97abbe84738d282df49a4c124a3f3f0021
 Author: brad <bradprin@live.com>
-Date:   2026-10-10 11:25:04 +0000
+Date:   2026-10-10 11:26:11 +0000
 
 feat(source-control): rotate existing Gitea tokens through stdin
