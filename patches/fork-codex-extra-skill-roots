@@ -1,6 +1,6 @@
-Bottom: 840e5f15bbd3b8ad4b3710f9062e8a92c65f0bd9
-Top:    175f5ff44d768e7655db0d4355811d81ff776c38
+Bottom: 87c8d99a471648d407aae7a4d6368b01c207ffa5
+Top:    b233e5222d6c0c7cee9973c5ba680ca44073656f
 Author: brad <bradprin@live.com>
-Date:   2026-10-10 08:43:31 +0000
+Date:   2026-10-10 11:50:52 +0000
 
 feat(codex): configure extra skill roots for runtime and picker
