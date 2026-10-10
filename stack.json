@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "7fe27d53b3884de23b016a08a62b9c10697e78a3",
+  "prev": "aacd9a50c3b518d7a18fbaebba8de77cd4d15049",
   "head": "aa0c8d1aa95167e2442858d8173c8bfe53200d86",
   "applied": [
     "fork-build-ci-compat",
@@ -145,9 +145,7 @@
     "fork-mobile-manual-production",
     "fork-lifecycle-deadlines"
   ],
-  "unapplied": [
-    "fork-provider-context-recovery"
-  ],
+  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
@@ -431,9 +429,6 @@
     },
     "fork-projects-pinned": {
       "oid": "cf53a3505c948261cf745e701aae654ea5797592"
-    },
-    "fork-provider-context-recovery": {
-      "oid": "cc80b2c404af7c829f512511b44dbf9cc0cf8752"
     },
     "fork-provider-turn-safety": {
       "oid": "e7b1cca7275e4c4274a6ac9b9fea1626a48d9993"
