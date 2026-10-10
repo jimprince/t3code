@@ -65,7 +65,9 @@ html[data-mobile-composer-route-transition="true"]::view-transition-new(t3-mobil
   }
 }
 
-html[data-mobile-composer-route-transition="true"]::view-transition-group(t3-mobile-draft-headline) {
+html[data-mobile-composer-route-transition="true"]::view-transition-group(
+    t3-mobile-draft-headline
+  ) {
   animation-duration: var(--mobile-composer-transition-duration);
 }
 
@@ -2364,4 +2366,17 @@ code {
       );
     }
   }
+}
+
+/* Temporary end-to-end automatic DEV update probe. */
+body::after {
+  content: "Dev live-follow probe 20261010";
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 2147483647;
+  padding: 8px 12px;
+  background: #31453a;
+  color: white;
+  pointer-events: none;
 }
