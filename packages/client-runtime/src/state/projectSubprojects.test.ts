@@ -134,6 +134,11 @@ describe("project subprojects", () => {
         subprojects: [sub],
       });
       expect(taskProgress(root)).toEqual({ done: 1, total: 2, unknown: 0 });
+      const closedFirst = summary("closed-first", {
+        issues: [issue(1, "closed"), issue(2, "closed")],
+        subprojects: [summary("open-later", { issues: [issue(1, "open")] })],
+      });
+      expect(taskProgress(closedFirst)).toEqual({ done: 1, total: 2, unknown: 0 });
     });
 
     it("leaves an issue with no snapshot out of both numbers", () => {
