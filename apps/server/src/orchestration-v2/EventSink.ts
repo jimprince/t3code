@@ -432,7 +432,7 @@ const baseLayer: Layer.Layer<
             yield* seedCreationMetadata(sql, {
               threadId: event.threadId,
               parentThreadId: parent,
-              ...(parent === null
+              ...(parent === null && event.purposeSeed !== undefined
                 ? { purpose: event.purposeSeed }
                 : { remoteParent: null, subproject: "off", settleOnComplete: true }),
             });
