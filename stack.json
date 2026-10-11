@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "28358c84274ff6d44973fd56d3455b042c611a4f",
-  "head": "a468ac2f0d2d5e75a8bc8f699119301fd0d7d277",
+  "prev": "5dca35682822f98e573d17679cce3b815bb9232d",
+  "head": "f97893a3dede9c964e99f3a9acf4a77b4ef0b7cc",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -156,10 +156,11 @@
     "fork-project-plan",
     "fork-sidebar-settled-ui",
     "fork-sidebar-hygiene-seed",
-    "fork-harness-purpose",
+    "fork-harness-purpose"
+  ],
+  "unapplied": [
     "fork-harness-read-service"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
