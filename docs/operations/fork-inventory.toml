@@ -3231,5 +3231,5 @@ note = "Approved by Brad on 2026-10-11. One droppable concern on product/native-
 [[patch.decision]]
 id = "native-hygiene-approved-20261012"
 date = "2026-10-11"
-decided = "Auto-nest Claude Task children under their execution parent and settle explicit successful native completion; reopen on message and preserve per-thread opt-outs."
-rationale = "Brad approved the native rule on 2026-10-11 via the desk. Keep the concern separately droppable; create_threads and t3_thread_launch remain top-level, failed/cancelled children stay unsettled, and canaries remain unchanged."
+decided = "Auto-nest Claude Task children under their execution parent and settle explicit successful native completion; reopen when the parent resumes the provider task and preserve per-thread opt-outs."
+rationale = "Brad approved the native rule on 2026-10-11 via the desk. Keep the concern separately droppable; create_threads and t3_thread_launch remain top-level, failed/cancelled children stay unsettled, and canaries remain unchanged. Native child conversations remain provider-owned and read-only: messaging goes through the parent, with reopening on a new task_started generation, as confirmed by the product orchestrator on 2026-10-11."

@@ -98,6 +98,8 @@ it.effect(
         "app-failed",
         "app-completed",
         "background",
+        "message",
+        "live-child",
       ]) {
         const childId = ThreadId.make(`native-${name}`);
         yield* sink.write({
@@ -231,6 +233,24 @@ it.effect(
               },
             ],
           });
+        if (name === "live-child") {
+          const descendant = ThreadId.make("native-live-descendant");
+          yield* orchestrator.dispatch({
+            type: "thread.create",
+            commandId: CommandId.make("create-live-descendant"),
+            threadId: descendant,
+            projectId: parent.projectId,
+            title: "Live descendant",
+            modelSelection: parent.modelSelection,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            branch: null,
+            worktreePath: null,
+            createdBy: "user",
+            creationSource: "web",
+          });
+          yield* writeMetadata(sql, { threadId: descendant, parentThreadId: childId });
+        }
         children.set(name, task);
         yield* persist(task);
         assert.equal((yield* readMetadata(sql, childId))?.parentThreadId, parentId);
@@ -292,6 +312,7 @@ it.effect(
         "pending",
         "app-failed",
         "background",
+        "live-child",
       ])
         assert.equal(
           (yield* store.getThread(children.get(name)!.childThreadId!)).settledOverride,
@@ -305,6 +326,30 @@ it.effect(
       assert.equal(
         (yield* store.getThread(children.get("app-completed")!.childThreadId!)).settledOverride,
         "settled",
+      );
+      const messagedChild = children.get("message")!.childThreadId!;
+      assert.equal((yield* store.getThread(messagedChild)).settledOverride, "settled");
+      const deliveryError = yield* orchestrator
+        .dispatch({
+          type: "message.dispatch",
+          commandId: CommandId.make("message-native-child"),
+          threadId: messagedChild,
+          messageId: MessageId.make("native-child-follow-up"),
+          text: "Continue the work.",
+          attachments: [],
+          createdBy: "user",
+          creationSource: "web",
+          dispatchMode: { type: "start_immediately" },
+        })
+        .pipe(Effect.flip);
+      // Native conversations are provider-owned; message the parent to resume its task.
+      assert.equal(deliveryError._tag, "OrchestratorSubagentThreadReadOnlyError");
+      const delivered = yield* store.getThreadProjection(messagedChild);
+      assert.equal(delivered.thread.settledOverride, "settled");
+      assert.equal(delivered.runs.length, 0);
+      assert.equal(
+        (yield* readMetadata(sql, messagedChild))?.nativeCompletion?.taskId,
+        children.get("message")!.id,
       );
       const success = children.get("success")!;
       const childId = success.childThreadId!;
