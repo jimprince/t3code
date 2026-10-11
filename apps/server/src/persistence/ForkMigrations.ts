@@ -23,6 +23,8 @@ import Migration0016 from "./ForkMigrations/016_ProjectionThreadsSubproject.ts";
 
 import Migration0017 from "./ForkMigrations/017_ThreadRecovery.ts";
 
+import Migration0018 from "./ForkMigrations/018_HarnessScheduledTaskHistoryIndex.ts";
+
 export const FORK_MIGRATIONS_TABLE = "effect_sql_fork_migrations";
 
 export const forkMigrationEntries = [
@@ -44,6 +46,7 @@ export const forkMigrationEntries = [
   [15, "AutomationSourceState", Migration0015],
   [16, "ProjectionThreadsSubproject", Migration0016],
   [17, "ThreadRecovery", Migration0017],
+  [18, "HarnessScheduledTaskHistoryIndex", Migration0018],
 ] as const;
 
 const makeForkMigrationLoader = (throughId?: number) =>
