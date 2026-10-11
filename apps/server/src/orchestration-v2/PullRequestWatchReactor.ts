@@ -36,6 +36,8 @@ import { evaluatePullRequestWatch, pullRequestWatchMessage } from "./pullRequest
 
 /** Consecutive failed reads before telling the owner that monitoring is degraded. */
 const READ_FAILURE_LIMIT = 15;
+const isPullRequestOperationError = Schema.is(PullRequestOperationError);
+const isPullRequestUnavailableError = Schema.is(PullRequestUnavailableError);
 
 const logFailure =
   (message: string, fields: Record<string, unknown>) =>
@@ -137,10 +139,8 @@ export const make = Effect.gen(function* () {
     const error = Option.getOrUndefined(Cause.findErrorOption(cause));
     // Only a missing PR detail proves deletion; a missing comments endpoint does not.
     const terminal =
-      (Schema.is(PullRequestOperationError)(error) &&
-        error.reason === "not-found" &&
-        read === "detail") ||
-      (Schema.is(PullRequestUnavailableError)(error) && error.reason === "cli-unauthenticated");
+      (isPullRequestOperationError(error) && error.reason === "not-found" && read === "detail") ||
+      (isPullRequestUnavailableError(error) && error.reason === "cli-unauthenticated");
     const key = failureKey(target);
     const previous = readFailures.get(key);
     const count = (previous?.count ?? 0) + 1;
@@ -164,7 +164,7 @@ export const make = Effect.gen(function* () {
     });
     if (terminal) {
       yield* record(target, null, {
-        text: `T3 Code stopped watching pull request #${target.link.number} (${target.link.url}) because ${Schema.is(PullRequestOperationError)(error) ? "the pull request no longer exists" : "the host credentials no longer work"}.`,
+        text: `T3 Code stopped watching pull request #${target.link.number} (${target.link.url}) because ${isPullRequestOperationError(error) ? "the pull request no longer exists" : "the host credentials no longer work"}.`,
         notification: {
           source: { kind: "monitor" },
           outcome: "failed",
