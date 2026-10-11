@@ -3203,3 +3203,18 @@ id = "harness-no-startup-index-20261012"
 date = "2026-10-11"
 decided = "No migration 18 on the Oct 12 candidate; optional index is a separate proposal."
 rationale = "Release owner requires real-size DB-copy startup timing before admitting the expression index. Existing project/thread/time/message/run indexes supply bounded exact joins; incomplete catalogs or windows cannot prove inactive or complete history."
+
+[[patch]]
+name = "fork-harness-task-history-index"
+subject = "perf(server): add optional Harness task history index"
+class = "product"
+purpose = "Optionally accelerate exact per-thread scheduled-task history joins without changing snapshot results or coverage."
+retire_when = "Upstream supplies equivalent indexes or real-size startup measurements reject this optional optimization."
+depends_on = ["fork-harness-read-service"]
+roles = []
+note = "Optional proposal, excluded from the Oct 12 stack. Owns migration 18, registry and ledger expectations, packaged history smoke, migration equivalence test, release note and operations admission guidance. The thread/task/time partial expression index scans existing messages at startup; the read service uses existing indexes and identical SQL when this patch is absent. No real-size startup cost has been measured."
+[[patch.decision]]
+id = "harness-optional-index-held-20261012"
+date = "2026-10-11"
+decided = "Keep migration 18 in a separately droppable proposal, outside the product candidate."
+rationale = "Release owner requires real-size DB-copy migration timing before shipping. The backend must retain exact results, bounded reads and honest partial coverage with or without this acceleration."

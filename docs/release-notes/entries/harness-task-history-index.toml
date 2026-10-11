@@ -1,0 +1,4 @@
+id = "harness-task-history-index"
+category = "performance"
+functionality = "Harness visibility"
+text = "An optional task-history index can accelerate Harness history reads; it is excluded from the default stack until startup timing on a real-size database copy establishes its cost."
