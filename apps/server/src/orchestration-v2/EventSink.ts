@@ -424,17 +424,17 @@ const baseLayer: Layer.Layer<
         for (const { event } of storedEvents) {
           if (event.type !== "thread.created") continue;
           const { lineage, creationSource } = event.payload;
-          if (
-            creationSource === "mcp" &&
-            lineage.relationshipToParent === "subagent" &&
-            lineage.parentThreadId !== null
-          ) {
+          const parent =
+            creationSource === "mcp" && lineage.relationshipToParent === "subagent"
+              ? lineage.parentThreadId
+              : null;
+          if (parent !== null || event.purposeSeed !== undefined) {
             yield* seedCreationMetadata(sql, {
               threadId: event.threadId,
-              parentThreadId: lineage.parentThreadId,
-              remoteParent: null,
-              subproject: "off",
-              settleOnComplete: true,
+              parentThreadId: parent,
+              ...(parent === null && event.purposeSeed !== undefined
+                ? { purpose: event.purposeSeed }
+                : { remoteParent: null, subproject: "off", settleOnComplete: true }),
             });
           }
         }
