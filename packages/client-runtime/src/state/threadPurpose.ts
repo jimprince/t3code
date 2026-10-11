@@ -82,8 +82,11 @@ export type PurposeMoveId = "move-to-harness" | "move-to-projects" | "move-to-th
 export interface PurposeMove {
   readonly id: PurposeMoveId;
   readonly label: string;
-  /** Written as the thread's explicit purpose; nesting, pin and settle are untouched. */
-  readonly purpose: ThreadPurpose;
+  /**
+   * Written as the thread's own override; nesting, pin and settle are untouched. Null clears the
+   * override, so the thread follows its supervisor again.
+   */
+  readonly purpose: ThreadPurpose | null;
 }
 
 /**
@@ -108,9 +111,30 @@ export function purposeMoveFor(
   const projectShaped =
     thread.subproject === "on" ||
     threads.some((other) => other.archivedAt === null && purposeParentKey(other) === key);
+  // Clear the override when its supervisor (or the root default) already says project, so the
+  // thread follows a later supervisor. Pin "project" only where it must stay out of a Harness
+  // parent, or when the parent's purpose is not known yet.
+  const parentKey = purposeParentKey(thread);
+  const inherited =
+    parentKey === null ? "project" : (threadPurposes(threads).get(parentKey) ?? null);
+  const purpose = inherited === "project" ? null : "project";
   return projectShaped
-    ? { id: "move-to-projects", label: "Move back to Projects", purpose: "project" }
-    : { id: "move-to-threads", label: "Move back to Threads", purpose: "project" };
+    ? { id: "move-to-projects", label: "Move back to Projects", purpose }
+    : { id: "move-to-threads", label: "Move back to Threads", purpose };
+}
+
+/**
+ * A project's subprojects that belong in its own card: those of the same purpose. One of the
+ * other purpose is a root of its own tab, so web and native both leave it out of this card.
+ */
+export function samePurposeSubprojects(
+  summary: OrchestratorSummary,
+  purposes: ReadonlyMap<string, ThreadPurpose | null>,
+): ReadonlyArray<OrchestratorSummary> {
+  const purpose = purposes.get(supervisionThreadKey(summary.root));
+  return summary.subprojects.filter(
+    (sub) => purposes.get(supervisionThreadKey(sub.root)) === purpose,
+  );
 }
 
 /** Partition after resolving all ancestry, preserving complete summaries for attention rollups. */

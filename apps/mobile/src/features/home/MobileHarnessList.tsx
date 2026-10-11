@@ -5,7 +5,9 @@ import {
   buildHarnessRunRows,
   describeHarnessAgent,
   describeHarnessFreshness,
-  staleHarnessSources,
+  describeHarnessSources,
+  spokenHarnessAgent,
+  splitHarnessChecks,
   type HarnessAgentBucket,
   type HarnessAgentView,
   type HarnessCheckView,
@@ -64,7 +66,7 @@ function AgentRow({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Open ${agent.thread.title}`}
+      accessibilityLabel={spokenHarnessAgent(agent)}
       className="min-h-11 flex-row items-center gap-2 border-b border-border px-2 active:bg-card"
       onPress={() => onOpen(agent.thread)}
     >
@@ -94,22 +96,12 @@ function CheckRow({
   readonly onOpen: OpenThread;
 }) {
   const { errors } = check;
-  const classification = [check.lifecycleLabel, check.contextLabel, check.schedule]
-    .filter((part) => part !== null && part !== "")
-    .join(" · ");
-  const timing = [
-    check.lastRunLabel ? `last ${check.lastRunLabel}` : "no run yet",
-    check.nextLabel ? `next ${check.nextLabel}` : null,
-    check.livenessLabel,
-  ]
-    .filter((part) => part !== null)
-    .join(" · ");
   const runs = expanded ? buildHarnessRunRows(check.routine, now) : [];
   return (
     <View className="border-b border-border">
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${check.name}, ${check.stateLabel}`}
+        accessibilityLabel={check.spokenLabel}
         accessibilityState={{ expanded }}
         className="min-h-11 gap-0.5 px-2 py-2 active:bg-card"
         onPress={onToggle}
@@ -124,11 +116,11 @@ function CheckRow({
           </Text>
         </View>
         <Text className="pl-4 text-xs text-foreground-muted" numberOfLines={1}>
-          {classification}
+          {check.classification}
         </Text>
         <View className="flex-row gap-2 pl-4">
           <Text className="min-w-0 flex-1 text-xs text-foreground-muted" numberOfLines={1}>
-            {timing}
+            {check.timing}
           </Text>
           <Text
             className={cn(
@@ -136,7 +128,7 @@ function CheckRow({
               errors.everyRun ? "text-warning-foreground" : "text-foreground-muted",
             )}
           >
-            {`errors ${errors.label}${errors.known && errors.trend ? ` (${errors.trend})` : ""}`}
+            {check.errorsText}
           </Text>
         </View>
       </Pressable>
@@ -219,17 +211,43 @@ export function MobileHarnessList({
     const timer = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(timer);
   }, []);
-  const checks = useMemo(() => buildHarnessChecks(snapshots, now), [now, snapshots]);
+  // A host whose last refresh failed can no longer confirm its rows, however recent they are.
+  const unreachable = useMemo(
+    () =>
+      new Set<string>(
+        environments
+          .filter((environment) => environment.error !== null)
+          .map((environment) => environment.environmentId),
+      ),
+    [environments],
+  );
+  const checks = useMemo(
+    () => buildHarnessChecks(snapshots, now, { unreachable }),
+    [now, snapshots, unreachable],
+  );
+  const { harness: harnessChecks, unclassified } = useMemo(
+    () => splitHarnessChecks(checks),
+    [checks],
+  );
   const oldest = snapshots.map((snapshot) => snapshot.generatedAt).sort()[0];
   const freshness = describeHarnessFreshness(oldest ?? null, now);
-  const staleSources = staleHarnessSources(snapshots);
   const count = (state: HarnessCheckView["state"]) =>
-    checks.filter((check) => check.state === state).length;
+    harnessChecks.filter((check) => check.state === state).length;
   const summary = [
     count("failing") > 0 ? `${count("failing")} failing` : null,
     count("overdue") > 0 ? `${count("overdue")} overdue` : null,
-    staleSources > 0 ? `${staleSources} source${staleSources === 1 ? "" : "s"} stale` : null,
+    ...describeHarnessSources(snapshots),
   ].filter((part) => part !== null);
+  const renderCheck = (check: HarnessCheckView) => (
+    <CheckRow
+      key={check.key}
+      check={check}
+      now={now}
+      expanded={expandedCheck === check.key}
+      onToggle={() => setExpandedCheck((key) => (key === check.key ? null : check.key))}
+      onOpen={onSelectThread}
+    />
+  );
   const failedEnvironments = environments.filter((environment) => environment.error !== null);
 
   if (agents.length === 0 && environments.length === 0) {
@@ -308,16 +326,15 @@ export function MobileHarnessList({
           No automated checks are registered.
         </Text>
       ) : null}
-      {checks.map((check) => (
-        <CheckRow
-          key={check.key}
-          check={check}
-          now={now}
-          expanded={expandedCheck === check.key}
-          onToggle={() => setExpandedCheck((key) => (key === check.key ? null : check.key))}
-          onOpen={onSelectThread}
-        />
-      ))}
+      {harnessChecks.map(renderCheck)}
+      {unclassified.length > 0 ? (
+        <>
+          <Text className="px-2 pt-3 pb-1 text-xs font-t3-medium text-foreground-muted">
+            UNCLASSIFIED no owner, not Harness
+          </Text>
+          {unclassified.map(renderCheck)}
+        </>
+      ) : null}
     </ScrollView>
   );
 }

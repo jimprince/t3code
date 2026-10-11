@@ -9,7 +9,10 @@ import {
   type ProjectSidebarBucket,
   type StandaloneThreadStatus,
 } from "@t3tools/client-runtime/state/orchestrators";
-import { partitionThreadPurposes } from "@t3tools/client-runtime/state/thread-purpose";
+import {
+  partitionThreadPurposes,
+  samePurposeSubprojects,
+} from "@t3tools/client-runtime/state/thread-purpose";
 import {
   closestCenter,
   DndContext,
@@ -252,7 +255,7 @@ function ProjectRow({
   const navigate = useNavigate();
   const selected = ownTreeContains(summary, selectedRoute);
   const { rollup } = summary;
-  const hasSubprojects = summary.subprojects.length > 0;
+  const hasSubprojects = sortSubprojects(summary).length > 0;
   const workingInSubprojects = subprojectWorkingLabel(summary);
   const foldedHint = subprojectCountLabel(summary);
   const rootRef = scopeThreadRef(summary.root.environmentId, summary.root.id);
@@ -484,9 +487,7 @@ export function OrchestratorSidebarList() {
     (summary: OrchestratorSummary) =>
       sortOrchestratorSummariesForSidebar(
         // A subproject of the other purpose is a root of its own tab, not a row in this card.
-        summary.subprojects.filter(
-          (sub) => purposes.get(threadKey(sub.root)) === purposes.get(threadKey(summary.root)),
-        ),
+        samePurposeSubprojects(summary, purposes),
         quietCutoff,
         displayedBuckets,
       ),

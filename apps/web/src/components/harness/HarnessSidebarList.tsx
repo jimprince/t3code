@@ -4,7 +4,9 @@ import {
   buildHarnessChecks,
   describeHarnessAgent,
   describeHarnessFreshness,
-  staleHarnessSources,
+  describeHarnessSources,
+  spokenHarnessAgent,
+  splitHarnessChecks,
   type HarnessAgentBucket,
   type HarnessAgentView,
   type HarnessCheckView,
@@ -122,7 +124,7 @@ function HarnessAgentRow({
     <li onContextMenu={handleContextMenu}>
       <button
         type="button"
-        aria-label={`Open ${thread.title}`}
+        aria-label={spokenHarnessAgent(agent)}
         aria-current={selected ? "page" : undefined}
         className={cn(
           "flex w-full cursor-pointer items-center gap-2 rounded-md px-2.5 text-left text-sm hover:bg-sidebar-row-hover",
@@ -159,23 +161,12 @@ function HarnessCheckRow({
   readonly touch: boolean;
   readonly onToggle: () => void;
 }) {
-  const { errors } = check;
-  const classification = [check.lifecycleLabel, check.contextLabel, check.schedule]
-    .filter((part) => part !== null && part !== "")
-    .join(" · ");
-  const timing = [
-    check.lastRunLabel ? `last ${check.lastRunLabel}` : "no run yet",
-    check.nextLabel ? `next ${check.nextLabel}` : null,
-    check.livenessLabel,
-  ]
-    .filter((part) => part !== null)
-    .join(" · ");
   return (
     <li>
       <button
         type="button"
         aria-expanded={expanded}
-        aria-label={`${check.name}, ${check.stateLabel}`}
+        aria-label={check.spokenLabel}
         className={cn(
           "flex w-full cursor-pointer flex-col gap-0.5 rounded-md px-2.5 py-1.5 text-left hover:bg-sidebar-row-hover",
           touch && "min-h-11",
@@ -204,19 +195,17 @@ function HarnessCheckRow({
           )}
         </span>
         <span className="truncate pl-3.5 text-3xs text-sidebar-muted-foreground">
-          {[classification, environmentLabel].filter((part) => part).join(" · ")}
+          {[check.classification, environmentLabel].filter((part) => part).join(" · ")}
         </span>
         <span className="flex min-w-0 gap-2 pl-3.5 text-3xs text-sidebar-muted-foreground">
-          <span className="min-w-0 flex-1 truncate">{timing}</span>
+          <span className="min-w-0 flex-1 truncate">{check.timing}</span>
           <span
             className={cn(
               "shrink-0 tabular-nums",
-              errors.everyRun ? "text-warning-foreground" : undefined,
+              check.errors.everyRun ? "text-warning-foreground" : undefined,
             )}
-            aria-label={`Findings per run, oldest to newest: ${errors.label}`}
           >
-            errors {errors.label}
-            {errors.known && errors.trend ? ` (${errors.trend})` : ""}
+            {check.errorsText}
           </span>
         </span>
       </button>
@@ -253,22 +242,53 @@ export function HarnessSidebarList() {
   // The minute clock keeps "late" and "stale" current even when polling has stopped.
   const nowMinute = useNowMinute();
   const now = useMemo(() => Date.parse(`${nowMinute}:00Z`), [nowMinute]);
-  const checks = useMemo(() => buildHarnessChecks(snapshots, now), [now, snapshots]);
+  // A host whose last refresh failed can no longer confirm its rows, however recent they are.
+  const unreachable = useMemo(
+    () =>
+      new Set<string>(
+        environments
+          .filter((environment) => environment.error !== null)
+          .map((environment) => environment.environmentId),
+      ),
+    [environments],
+  );
+  const checks = useMemo(
+    () => buildHarnessChecks(snapshots, now, { unreachable }),
+    [now, snapshots, unreachable],
+  );
+  const { harness: harnessChecks, unclassified } = useMemo(
+    () => splitHarnessChecks(checks),
+    [checks],
+  );
   const labelByEnvironment = useMemo(
     () => new Map(environments.map(({ environmentId, label }) => [environmentId, label])),
     [environments],
   );
   const oldest = snapshots.map((snapshot) => snapshot.generatedAt).sort()[0];
   const freshness = describeHarnessFreshness(oldest ?? null, now);
-  const staleSources = staleHarnessSources(snapshots);
   const problemCount = (state: HarnessCheckView["state"]) =>
-    checks.filter((check) => check.state === state).length;
+    harnessChecks.filter((check) => check.state === state).length;
   const summaryParts = [
     problemCount("failing") > 0 ? `${problemCount("failing")} failing` : null,
     problemCount("overdue") > 0 ? `${problemCount("overdue")} overdue` : null,
-    staleSources > 0 ? `${staleSources} source${staleSources === 1 ? "" : "s"} stale` : null,
+    ...describeHarnessSources(snapshots),
   ].filter((part) => part !== null);
   const expanded = checks.find((check) => check.key === expandedCheck) ?? null;
+  const renderCheck = (check: HarnessCheckView) => (
+    <HarnessCheckRow
+      key={check.key}
+      check={check}
+      environmentLabel={
+        environments.length > 1
+          ? (labelByEnvironment.get(check.routine.environmentId) ?? null)
+          : null
+      }
+      now={now}
+      touch={isMobile}
+      expanded={expandedCheck === check.key}
+      onToggle={() => setExpandedCheck((key) => (key === check.key ? null : check.key))}
+    />
+  );
 
   return (
     <div className="flex flex-col gap-1">
@@ -373,23 +393,13 @@ export function HarnessSidebarList() {
             No automated checks are registered.
           </p>
         ) : null}
-        <ul className="flex flex-col gap-px">
-          {checks.map((check) => (
-            <HarnessCheckRow
-              key={check.key}
-              check={check}
-              environmentLabel={
-                environments.length > 1
-                  ? (labelByEnvironment.get(check.routine.environmentId) ?? null)
-                  : null
-              }
-              now={now}
-              touch={isMobile}
-              expanded={expandedCheck === check.key}
-              onToggle={() => setExpandedCheck((key) => (key === check.key ? null : check.key))}
-            />
-          ))}
-        </ul>
+        <ul className="flex flex-col gap-px">{harnessChecks.map(renderCheck)}</ul>
+        {unclassified.length > 0 ? (
+          <>
+            <SectionHeading title="Unclassified" detail="no owner, not Harness" />
+            <ul className="flex flex-col gap-px">{unclassified.map(renderCheck)}</ul>
+          </>
+        ) : null}
       </section>
 
       {isMobile ? (

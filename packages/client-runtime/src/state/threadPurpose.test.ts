@@ -2,7 +2,12 @@ import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { presentThreadShell } from "./models.ts";
 import { v2ThreadShell } from "./orchestrationV2TestFixtures.ts";
 import { buildOrchestratorSummaries, joinOrchestratorMetadata } from "./orchestrators.ts";
-import { partitionThreadPurposes, purposeMoveFor, threadPurposes } from "./threadPurpose.ts";
+import {
+  partitionThreadPurposes,
+  purposeMoveFor,
+  samePurposeSubprojects,
+  threadPurposes,
+} from "./threadPurpose.ts";
 
 import { describe, expect, it } from "vite-plus/test";
 import { effectivePurpose } from "./threadPurpose.ts";
@@ -190,17 +195,53 @@ describe("purposeMoveFor", () => {
       { id: "marked", purpose: "harness", subproject: "on" },
       { id: "alone", purpose: "harness" },
     ]);
+    // A top-level thread's default is already project, so moving back clears its override.
     expect(move("head")).toEqual({
       id: "move-to-projects",
       label: "Move back to Projects",
-      purpose: "project",
+      purpose: null,
     });
     expect(move("marked")?.id).toBe("move-to-projects");
     expect(move("alone")).toEqual({
       id: "move-to-threads",
       label: "Move back to Threads",
-      purpose: "project",
+      purpose: null,
     });
+  });
+
+  it("clears the override when the supervisor says project, pins project only under a Harness parent", () => {
+    const move = rows([
+      { id: "project-root" },
+      { id: "under-project", parent: "project-root", purpose: "harness" },
+      { id: "harness-root", purpose: "harness" },
+      { id: "under-harness", parent: "harness-root", purpose: "harness" },
+    ]);
+    // Cleared: it follows its supervisor later, so a re-nest under Harness moves it with the parent.
+    expect(move("under-project")?.purpose).toBeNull();
+    // Explicit project: the supervisor is Harness and the thread must stay in Projects.
+    expect(move("under-harness")?.purpose).toBe("project");
+    expect(move("harness-root")?.purpose).toBeNull();
+  });
+
+  it("pins project when the supervisor's purpose is not known yet, rather than guessing", () => {
+    const threads = joinOrchestratorMetadata(
+      [
+        presentThreadShell(EnvironmentId.make("env"), {
+          ...v2ThreadShell,
+          id: ThreadId.make("remote-child"),
+          archivedAt: null,
+        }),
+      ],
+      [
+        {
+          environmentId: "env",
+          threadId: ThreadId.make("remote-child"),
+          parentThreadId: ThreadId.make("gone"),
+          purpose: "harness",
+        },
+      ],
+    );
+    expect(purposeMoveFor(threads, "env:remote-child")?.purpose).toBe("project");
   });
 
   it("leaves a worker with its root, but lets an explicit override move on its own", () => {
@@ -262,4 +303,51 @@ it("keeps a project whose purpose is unknown in Projects, never hiding it", () =
   expect(result.purposes.get("env:orphan")).toBeNull();
   expect(result.projects.map((summary) => summary.root.id)).toEqual(["orphan"]);
   expect(result.harness).toEqual([]);
+});
+
+it("leaves a subproject of the other purpose out of its parent's card, for web and native alike", () => {
+  const threads = joinOrchestratorMetadata(
+    ["head", "worker", "same", "other"].map((id) =>
+      presentThreadShell(EnvironmentId.make("env"), {
+        ...v2ThreadShell,
+        id: ThreadId.make(id),
+        archivedAt: null,
+      }),
+    ),
+    [
+      {
+        environmentId: "env",
+        threadId: ThreadId.make("head"),
+        parentThreadId: null,
+        purpose: "harness" as const,
+      },
+      {
+        environmentId: "env",
+        threadId: ThreadId.make("worker"),
+        parentThreadId: ThreadId.make("head"),
+      },
+      {
+        environmentId: "env",
+        threadId: ThreadId.make("same"),
+        parentThreadId: ThreadId.make("head"),
+        subproject: "on" as const,
+      },
+      {
+        environmentId: "env",
+        threadId: ThreadId.make("other"),
+        parentThreadId: ThreadId.make("head"),
+        subproject: "on" as const,
+        purpose: "project" as const,
+      },
+    ],
+  );
+  const summaries = buildOrchestratorSummaries(threads, []);
+  const head = summaries.find((summary) => summary.root.id === "head")!;
+  const purposes = threadPurposes(threads);
+  expect(head.subprojects.map((sub) => sub.root.id).toSorted()).toEqual(["other", "same"]);
+  expect(samePurposeSubprojects(head, purposes).map((sub) => sub.root.id)).toEqual(["same"]);
+  // The other one is a root of its own tab instead.
+  expect(partitionThreadPurposes(threads, summaries).projects.map((sub) => sub.root.id)).toEqual([
+    "other",
+  ]);
 });

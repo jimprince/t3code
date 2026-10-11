@@ -16,7 +16,11 @@ import {
   toggleProjectKey,
   projectKeyOf,
 } from "@t3tools/client-runtime/state/projectSubprojects";
-import { partitionThreadPurposes } from "@t3tools/client-runtime/state/thread-purpose";
+import {
+  partitionThreadPurposes,
+  samePurposeSubprojects,
+} from "@t3tools/client-runtime/state/thread-purpose";
+import type { ThreadPurpose } from "@t3tools/contracts";
 import { MobileDecisionFeed } from "./MobileDecisionFeed";
 import { MobileHarnessList } from "./MobileHarnessList";
 import { MobileProjectRequests } from "./MobileProjectRequests";
@@ -248,9 +252,11 @@ function HomeTopContentSpacer() {
 
 function MobileOrchestratorList({
   summaries: allSummaries,
+  purposes,
   onSelectThread,
 }: {
   readonly summaries: readonly OrchestratorSummary[];
+  readonly purposes: ReadonlyMap<string, ThreadPurpose | null>;
   readonly onSelectThread: (thread: EnvironmentThreadShell) => void;
 }) {
   // Settled or long-quiet projects fold into one collapsed group, the same rule
@@ -360,7 +366,7 @@ function MobileOrchestratorList({
           // thread may not be in this list yet.
           onOpenThread={(threadId) => onSelectThread({ ...summary.root, id: threadId })}
         />
-        {summary.subprojects.length > 0 ? (
+        {samePurposeSubprojects(summary, purposes).length > 0 ? (
           <View className="mt-2 border-t border-border">
             <Pressable
               accessibilityRole="button"
@@ -378,6 +384,7 @@ function MobileOrchestratorList({
             {folded ? null : (
               <MobileSubprojectRows
                 summary={summary}
+                purposes={purposes}
                 quietCutoff={quietCutoff}
                 onSelectThread={onSelectThread}
               />
@@ -420,7 +427,11 @@ export function HomeScreen(props: HomeScreenProps) {
     () => joinOrchestratorMetadata(props.threads, supervisionMetadata),
     [props.threads, supervisionMetadata],
   );
-  const { projects: orchestrators, harness: harnessRoots } = useMemo(
+  const {
+    projects: orchestrators,
+    harness: harnessRoots,
+    purposes,
+  } = useMemo(
     () =>
       partitionThreadPurposes(
         joinedThreads,
@@ -1193,7 +1204,11 @@ export function HomeScreen(props: HomeScreenProps) {
             rebuilds and `itemsAreEqual` keeps a minute tick (or an unrelated
             shell update) from re-rendering untouched rows. */}
         {homeMode === "orchestrators" ? (
-          <MobileOrchestratorList summaries={orchestrators} onSelectThread={props.onSelectThread} />
+          <MobileOrchestratorList
+            summaries={orchestrators}
+            purposes={purposes}
+            onSelectThread={props.onSelectThread}
+          />
         ) : homeMode === "harness" ? (
           <MobileHarnessList harnessRoots={harnessRoots} onSelectThread={props.onSelectThread} />
         ) : (

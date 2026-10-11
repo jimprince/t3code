@@ -9,7 +9,9 @@ import {
   classifyHarnessCheck,
   describeHarnessAgent,
   describeHarnessFreshness,
-  staleHarnessSources,
+  describeHarnessSources,
+  spokenHarnessAgent,
+  splitHarnessChecks,
 } from "./harnessView.ts";
 import { presentThreadShell } from "./models.ts";
 import { v2ThreadShell } from "./orchestrationV2TestFixtures.ts";
@@ -107,8 +109,10 @@ const snapshot = (
   ...overrides,
 });
 
-const stateOf = (overrides: Partial<HarnessRoutine>) =>
-  classifyHarnessCheck(routine(overrides)).state;
+const GENERATED_AT = "2026-10-10T19:41:00.000Z";
+const FRESH = { now: NOW, generatedAt: GENERATED_AT, unreachable: false };
+const stateOf = (overrides: Partial<HarnessRoutine>, context = FRESH) =>
+  classifyHarnessCheck(routine(overrides), context).state;
 
 describe("classifyHarnessCheck", () => {
   it("earns healthy from a finished execution that completed on schedule", () => {
@@ -134,7 +138,7 @@ describe("classifyHarnessCheck", () => {
     const late = routine({
       lateness: { ...routine().lateness, state: "overdue", overdue: true, latenessMs: 1_500_000 },
     });
-    expect(classifyHarnessCheck(late).state).toBe("overdue");
+    expect(classifyHarnessCheck(late, FRESH).state).toBe("overdue");
   });
 
   it("calls a failed latest run failing, ahead of overdue", () => {
@@ -157,6 +161,68 @@ describe("classifyHarnessCheck", () => {
       "unknown",
     );
     expect(stateOf({ history: [run({ outcome: "interrupted" })] })).toBe("unknown");
+  });
+
+  it("never lets an older completed run vouch for a newer dispatch-only, unknown or skipped one", () => {
+    const completed = run({ key: "r1", outcome: "completed" });
+    for (const newest of [
+      run({ key: "r2", outcomeKind: "dispatch", outcome: "unknown", finishedAt: null }),
+      run({ key: "r2", outcomeKind: "dispatch", outcome: "completed" }),
+      run({ key: "r2", outcome: "skipped" }),
+      run({ key: "r2", outcome: "unknown" }),
+    ]) {
+      expect(stateOf({ history: [newest, completed] })).toBe("unknown");
+    }
+    // The same older run does earn it when nothing newer has settled.
+    expect(
+      stateOf({ history: [run({ key: "r2", outcome: "running", finishedAt: null }), completed] }),
+    ).toBe("healthy");
+  });
+
+  describe("a snapshot that can no longer be refreshed", () => {
+    const hours = (count: number) => NOW + count * 3_600_000;
+    const eventDriven = {
+      lateness: { ...routine().lateness, state: "event-driven" as const, overdue: null },
+      nextExpectedRun: null,
+    };
+
+    it("stops reading healthy once the read is older than a few refreshes", () => {
+      expect(stateOf(eventDriven, { ...FRESH, now: NOW + 120_000 })).toBe("healthy");
+      expect(stateOf(eventDriven, { ...FRESH, now: hours(4) })).toBe("source-stale");
+      expect(
+        classifyHarnessCheck(routine(eventDriven), { ...FRESH, now: hours(4) }).evidence,
+      ).toContain("Last read 13:41");
+    });
+
+    it("stops reading healthy when the host is not answering, however recent the read", () => {
+      expect(stateOf(eventDriven, { ...FRESH, unreachable: true })).toBe("source-stale");
+    });
+
+    it("derives overdue from the next expected slot and the clock, once a refresh has had time to land", () => {
+      const scheduled = { generatedAt: "2026-10-10T20:09:30.000Z", unreachable: false };
+      // Next slot 20:10Z. Within one refresh after it, the new read may simply not have arrived.
+      expect(stateOf({}, { now: at("2026-10-10T20:10:30Z"), ...scheduled })).toBe("healthy");
+      const late = classifyHarnessCheck(routine({}), {
+        now: at("2026-10-10T20:12:00Z"),
+        ...scheduled,
+      });
+      expect(late.state).toBe("overdue");
+      expect(late.lateSinceMs).toBe(120_000);
+    });
+
+    it("shows a down host's schedule as overdue and never green hours later", () => {
+      const rows = buildHarnessChecks([snapshot([routine({})])], hours(4));
+      expect(rows[0]?.state).toBe("overdue");
+      expect(rows[0]?.latenessLabel).toBe("Late 4h");
+      expect(rows[0]?.tone).toBe("error");
+    });
+
+    it("tells the builder which environments are unreachable", () => {
+      const rows = buildHarnessChecks([snapshot([routine(eventDriven)])], NOW, {
+        unreachable: new Set([environmentId]),
+      });
+      expect(rows[0]?.state).toBe("source-stale");
+    });
   });
 
   it("judges by the latest finished run while a newer one is still running", () => {
@@ -259,6 +325,61 @@ describe("buildHarnessChecks", () => {
     );
   });
 
+  it("says On time, not a green Healthy, while no run reports a findings count", () => {
+    const withCount = routine({
+      errorsPerRun: { sampleSize: 1, knownSamples: 1, missingSamples: 0, average: 0, recent: [0] },
+    });
+    const [plain] = buildHarnessChecks([snapshot([routine()])], NOW);
+    const [counted] = buildHarnessChecks([snapshot([withCount])], NOW);
+    expect([plain?.state, plain?.stateLabel, plain?.tone]).toEqual(["healthy", "On time", "muted"]);
+    expect([counted?.stateLabel, counted?.tone]).toEqual(["Healthy", "ok"]);
+  });
+
+  it("lists routines no owner classified apart from the Harness checks", () => {
+    const checks = buildHarnessChecks(
+      [
+        snapshot([
+          routine({ key: "a", name: "Staff check" }),
+          routine({ key: "b", name: "Day planner run", purpose: "unclassified" }),
+        ]),
+      ],
+      NOW,
+    );
+    const { harness, unclassified } = splitHarnessChecks(checks);
+    expect(harness.map((check) => check.key)).toEqual(["a"]);
+    expect(unclassified.map((check) => check.key)).toEqual(["b"]);
+    expect(unclassified[0]?.spokenLabel).toContain("Unclassified");
+  });
+
+  it("speaks lateness, errors and timing for a screen reader, not just the state", () => {
+    const [row] = buildHarnessChecks(
+      [
+        snapshot([
+          routine({
+            lateness: {
+              ...routine().lateness,
+              state: "overdue",
+              overdue: true,
+              latenessMs: 1_500_000,
+              missedSlots: 2,
+            },
+            errorsPerRun: {
+              sampleSize: 2,
+              knownSamples: 2,
+              missingSamples: 0,
+              average: 2,
+              recent: [2, 2],
+            },
+          }),
+        ]),
+      ],
+      NOW,
+    );
+    expect(row?.spokenLabel).toBe(
+      "Staff check, Overdue, Late 25m, 2 missed, Conditional · New instance per run · every 30 min, last 13:40 · next 14:10 · Not currently live, errors 2 / run (2 2)",
+    );
+  });
+
   it("labels a per-run agent between runs and never a persistent one", () => {
     const [perRun, persistent, running] = buildHarnessChecks(
       [
@@ -339,8 +460,8 @@ describe("snapshot freshness", () => {
     expect(describeHarnessFreshness(null, NOW)).toEqual({ label: "not loaded", stale: true });
   });
 
-  it("counts sources that are not available", () => {
-    const source = (status: "available" | "stale" | "refused") => ({
+  it("counts stale sources apart from ones never configured", () => {
+    const source = (status: "available" | "stale" | "refused" | "not-configured") => ({
       key: status,
       readAt: "2026-10-10T19:41:00.000Z",
       observedAt: null,
@@ -348,10 +469,20 @@ describe("snapshot freshness", () => {
       evidence: "",
     });
     expect(
-      staleHarnessSources([
-        snapshot([], { sources: [source("available"), source("stale"), source("refused")] }),
+      describeHarnessSources([
+        snapshot([], {
+          sources: [
+            source("available"),
+            source("stale"),
+            source("refused"),
+            source("not-configured"),
+          ],
+        }),
       ]),
-    ).toBe(2);
+    ).toEqual(["2 sources stale", "1 not configured"]);
+    expect(describeHarnessSources([snapshot([], { sources: [source("not-configured")] })])).toEqual(
+      ["1 not configured"],
+    );
   });
 });
 
@@ -428,6 +559,13 @@ describe("the three sidebar modes", () => {
       ["harness-idle", "idle"],
     ]);
     expect(agents[2]?.needsYou).toBe(1);
+    expect(agents.map(spokenHarnessAgent)).toEqual([
+      "Open harness-blocked, 1 blocked",
+      "Open harness-failed, failed",
+      "Open harness-root, 1 needs you",
+      "Open harness-working, working",
+      "Open harness-idle",
+    ]);
     expect(agents.map((agent) => describeHarnessAgent(agent)?.text ?? null)).toEqual([
       "1 blocked",
       "failed",
