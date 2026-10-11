@@ -21,6 +21,7 @@ import {
   type PullRequestDetail,
   type PullRequestComment,
   PullRequestOperationError,
+  PullRequestUnavailableError,
   ProviderDriverKind,
   ProviderInstanceId,
   ProviderThreadId,
@@ -2653,67 +2654,114 @@ it.layer(TestLayer)("OrchestrationV2LayerLive lifecycle", (it) => {
     }),
   );
 
-  it.effect("ends a watch it cannot read, and tells the agent", () =>
-    Effect.gen(function* () {
-      const orchestrator = yield* Orchestrator.OrchestratorV2;
-      const threadId = ThreadId.make("runtime-pull-request-watch-unreadable");
-      const projectId = ProjectId.make("pr-watch-unreadable-project");
-      yield* seedProject({
-        projectId,
-        title: "Watch unreadable",
-        workspaceRoot: "/workspace/watch-unreadable",
-        defaultModelSelection: null,
-        createdAt: "2026-10-01T00:00:00.000Z",
-      });
-      yield* orchestrator.dispatch({
-        type: "thread.create",
-        createdBy: "user",
-        creationSource: "web",
-        commandId: CommandId.make("pr-watch-unreadable-create"),
-        threadId,
-        projectId,
-        title: "Watch unreadable",
-        modelSelection,
-        runtimeMode: "full-access",
-        interactionMode: "default",
-        branch: null,
-        worktreePath: null,
-      });
-      yield* orchestrator.dispatch({
-        type: "thread.pull-request.watch",
-        commandId: CommandId.make("pr-watch-unreadable-start"),
-        threadId,
-        host: "github.com",
-        repository: "pingdotgg/t3code",
-        number: 8,
-        watching: true,
-        link: { url: "https://github.com/pingdotgg/t3code/pull/8", source: "agent" },
-      });
-      const reactor = yield* PullRequestWatchReactor.make.pipe(
-        Effect.provide(
-          Layer.mergeAll(
-            NodeServices.layer,
-            Layer.mock(PullRequestService.PullRequestService)({
-              detail: () => Effect.die("host unreachable"),
-              activity: () => Effect.die("host unreachable"),
-            }),
+  it.effect.each(["timeout", "500", "429", "403", "unsupported", "not-found", "unauthenticated"])(
+    "classifies unreadable pull request watches: %s",
+    (failure) =>
+      Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const threadId = ThreadId.make(`runtime-pull-request-watch-unreadable-${failure}`);
+        const projectId = ProjectId.make(`pr-watch-unreadable-project-${failure}`);
+        yield* seedProject({
+          projectId,
+          title: "Watch unreadable",
+          workspaceRoot: "/workspace/watch-unreadable",
+          defaultModelSelection: null,
+          createdAt: "2026-10-01T00:00:00.000Z",
+        });
+        yield* orchestrator.dispatch({
+          type: "thread.create",
+          createdBy: "user",
+          creationSource: "web",
+          commandId: CommandId.make(`pr-watch-unreadable-create-${failure}`),
+          threadId,
+          projectId,
+          title: "Watch unreadable",
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: null,
+        });
+        yield* orchestrator.dispatch({
+          type: "thread.pull-request.watch",
+          commandId: CommandId.make(`pr-watch-unreadable-start-${failure}`),
+          threadId,
+          host: "github.com",
+          repository: "pingdotgg/t3code",
+          number: 8,
+          watching: true,
+          link: { url: "https://github.com/pingdotgg/t3code/pull/8", source: "agent" },
+        });
+        let reads = 0;
+        const terminal = failure === "not-found" || failure === "unauthenticated";
+        const error =
+          failure === "unauthenticated" || failure === "unsupported"
+            ? new PullRequestUnavailableError({
+                reason:
+                  failure === "unauthenticated" ? "cli-unauthenticated" : "provider-unsupported",
+              })
+            : new PullRequestOperationError({
+                operation: "detail",
+                detail:
+                  failure === "timeout"
+                    ? "Could not reach the configured Gitea API."
+                    : `Gitea API returned HTTP ${failure}.`,
+                ...(failure === "not-found" ? { reason: "not-found" as const } : {}),
+              });
+        const reactor = yield* PullRequestWatchReactor.make.pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              NodeServices.layer,
+              Layer.mock(PullRequestService.PullRequestService)({
+                detail: (input) =>
+                  Effect.sync(() => {
+                    if (input.projectId === projectId) reads++;
+                  }).pipe(Effect.andThen(Effect.fail(error))),
+                activity: () => Effect.fail(error),
+              }),
+            ),
           ),
-        ),
-      );
-      for (let pass = 0; pass < 15; pass += 1) yield* reactor.sweep;
-
-      const thread = yield* orchestrator.getThreadShell(threadId);
-      assert.isUndefined(thread?.pullRequests?.[0]?.watch);
-      const { messages } = yield* orchestrator.getThreadRecords(threadId, ["messages"]);
-      assert.deepEqual(
-        messages.flatMap((message) => message.notification?.summary ?? []),
-        ["#8: stopped watching, could not read it"],
-      );
-    }),
+        );
+        yield* reactor.sweep;
+        if (!terminal) {
+          // A second sweep at the same clock cannot spend another host read.
+          yield* reactor.sweep;
+          assert.equal(reads, 1);
+          for (let pass = 1; pass < 17; pass += 1) {
+            yield* TestClock.adjust("5 minutes");
+            yield* reactor.sweep;
+          }
+        }
+        const thread = yield* orchestrator.getThreadShell(threadId);
+        if (terminal) assert.isUndefined(thread?.pullRequests?.[0]?.watch);
+        else assert.isDefined(thread?.pullRequests?.[0]?.watch);
+        const { messages } = yield* orchestrator.getThreadRecords(threadId, ["messages"]);
+        if (!terminal)
+          yield* orchestrator.dispatch({
+            type: "thread.pull-request.watch",
+            commandId: CommandId.make(`pr-watch-unreadable-cleanup-${failure}`),
+            threadId,
+            host: "github.com",
+            repository: "pingdotgg/t3code",
+            number: 8,
+            watching: false,
+          });
+        assert.deepEqual(
+          messages.flatMap((message) => message.notification?.summary ?? []),
+          [
+            terminal
+              ? "#8: stopped watching, pull request unavailable"
+              : "#8: watching, host reads are failing",
+          ],
+        );
+      }),
   );
 
   it.effect.each([
     "single page",
+    "read recovery",
+    "closed",
+    "merged",
     "paginated",
     "page failure",
     "repeated cursor",
@@ -2839,7 +2887,14 @@ it.layer(TestLayer)("OrchestrationV2LayerLive lifecycle", (it) => {
         body: "Twelfth reply.",
         createdAt: "2999-01-01T00:00:02.000Z",
       };
-      const incomplete = mode !== "single page" && mode !== "paginated";
+      const singlePage = ["single page", "read recovery", "closed", "merged"].includes(mode);
+      const terminal = mode === "closed" || mode === "merged";
+      const incomplete = !singlePage && mode !== "paginated";
+      let readFailing = mode === "read recovery";
+      const unavailable = new PullRequestOperationError({
+        operation: "activity",
+        detail: "Gitea API returned HTTP 503.",
+      });
       let recovering = false;
       let pagesRead = 0;
       const reactor = yield* PullRequestWatchReactor.make.pipe(
@@ -2847,34 +2902,39 @@ it.layer(TestLayer)("OrchestrationV2LayerLive lifecycle", (it) => {
           Layer.mergeAll(
             NodeServices.layer,
             Layer.mock(PullRequestService.PullRequestService)({
-              detail: () => Effect.succeed(detail),
+              detail: () =>
+                readFailing
+                  ? Effect.fail(unavailable)
+                  : Effect.succeed(
+                      terminal ? { ...detail, state: mode as "closed" | "merged" } : detail,
+                    ),
               activity: () =>
-                Effect.succeed({
-                  comments:
-                    mode === "single page"
-                      ? [remark]
-                      : [...firstTen, { ...remark, kind: "issue-comment" }],
-                  commentCount: mode === "single page" ? 1 : 13,
-                  commentsTruncated: mode !== "single page",
-                  reviewThreadsTruncated: mode === "thread list truncated" && !recovering,
-                  reviewThreads:
-                    mode === "single page"
-                      ? []
-                      : [
-                          {
-                            id: "review-thread",
-                            path: "src/index.ts",
-                            line: 1,
-                            side: "right",
-                            isResolved: false,
-                            isOutdated: false,
-                            comments: firstTen,
-                            commentCount: 12,
-                            nextCommentsCursor: "after-10",
-                          },
-                        ],
-                  commits: [],
-                }),
+                readFailing || terminal
+                  ? Effect.fail(unavailable)
+                  : Effect.succeed({
+                      comments: singlePage
+                        ? [remark]
+                        : [...firstTen, { ...remark, kind: "issue-comment" }],
+                      commentCount: singlePage ? 1 : 13,
+                      commentsTruncated: !singlePage,
+                      reviewThreadsTruncated: mode === "thread list truncated" && !recovering,
+                      reviewThreads: singlePage
+                        ? []
+                        : [
+                            {
+                              id: "review-thread",
+                              path: "src/index.ts",
+                              line: 1,
+                              side: "right",
+                              isResolved: false,
+                              isOutdated: false,
+                              comments: firstTen,
+                              commentCount: 12,
+                              nextCommentsCursor: "after-10",
+                            },
+                          ],
+                      commits: [],
+                    }),
               threadComments: (input) => {
                 pagesRead += 1;
                 assert.equal(input.threadId, "review-thread");
@@ -2903,6 +2963,25 @@ it.layer(TestLayer)("OrchestrationV2LayerLive lifecycle", (it) => {
           ),
         ),
       );
+      if (terminal) {
+        yield* reactor.sweep;
+        assert.isUndefined(
+          (yield* orchestrator.getThreadShell(threadId))?.pullRequests?.[0]?.watch,
+        );
+        assert.deepEqual(
+          (yield* orchestrator.getThreadRecords(threadId, ["messages"])).messages,
+          [],
+        );
+        return;
+      }
+      if (mode === "read recovery") {
+        for (let pass = 0; pass < 16; pass++) {
+          yield* reactor.sweep;
+          yield* TestClock.adjust("5 minutes");
+        }
+        assert.isDefined((yield* orchestrator.getThreadShell(threadId))?.pullRequests?.[0]?.watch);
+        readFailing = false;
+      }
       if (incomplete) {
         yield* reactor.sweep;
         const held = (yield* orchestrator.getThreadShell(threadId))?.pullRequests?.[0]?.watch;
@@ -2929,11 +3008,13 @@ it.layer(TestLayer)("OrchestrationV2LayerLive lifecycle", (it) => {
         messages.flatMap((message) =>
           message.notification === undefined ? [] : [message.notification.summary],
         ),
-        incomplete
-          ? ["#7: checks failed", "#7: new comments"]
-          : ["#7: checks failed, new comments"],
+        mode === "read recovery"
+          ? ["#7: watching, host reads are failing", "#7: checks failed, new comments"]
+          : incomplete
+            ? ["#7: checks failed", "#7: new comments"]
+            : ["#7: checks failed, new comments"],
       );
-      if (mode !== "single page") {
+      if (!singlePage) {
         const wake = messages.at(-1);
         assert.include(wake?.text ?? "", "3 new comments");
         assert.include(wake?.text ?? "", "Eleventh reply.");
@@ -2946,6 +3027,22 @@ it.layer(TestLayer)("OrchestrationV2LayerLive lifecycle", (it) => {
         { headSha: watch?.headSha, failedChecks: watch?.failedChecks, wakes: watch?.wakes },
         { headSha: "abc1234def", failedChecks: ["lint"], wakes: incomplete ? 1 : 0 },
       );
+      if (mode === "read recovery") {
+        readFailing = true;
+        yield* reactor.sweep;
+        assert.equal(
+          (yield* orchestrator.getThreadRecords(threadId, ["messages"])).messages.length,
+          2,
+        );
+        for (let pass = 1; pass < 15; pass++) {
+          yield* TestClock.adjust("5 minutes");
+          yield* reactor.sweep;
+        }
+        assert.equal(
+          (yield* orchestrator.getThreadRecords(threadId, ["messages"])).messages.length,
+          3,
+        );
+      }
     }),
   );
 
