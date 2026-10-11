@@ -109,14 +109,16 @@ const strip = (
 
 describe("buildHarnessStrip", () => {
   it("uses complete environment queue data once, including automations and ordinary sends", () => {
-    const read = snapshot([routine({ activeRuns: [queued("automation", 9)] })]);
-    read.queueSummary = {
-      queuedSendCount: 3,
-      oldestQueuedRequestedAt: minutesAgo(12),
-      coverage: "complete",
-      readAt: iso(NOW),
-      sampleSize: 3,
-      evidence: "All environment threads including automation execution.",
+    const read: HarnessSnapshot = {
+      ...snapshot([routine({ activeRuns: [queued("automation", 9)] })]),
+      queueSummary: {
+        queuedSendCount: 3,
+        oldestQueuedRequestedAt: minutesAgo(12),
+        coverage: "complete",
+        readAt: iso(NOW),
+        sampleSize: 3,
+        evidence: "All environment threads including automation execution.",
+      },
     };
     expect(
       buildHarnessStrip({
@@ -126,17 +128,20 @@ describe("buildHarnessStrip", () => {
       }).text,
     ).toBe("Queue 3 · Oldest wait 12m · Failed 24h 0");
     // Separately read routine rows may still show a queue that has already drained.
-    read.queueSummary = {
-      ...read.queueSummary,
-      queuedSendCount: 0,
-      oldestQueuedRequestedAt: null,
-      sampleSize: 0,
+    const drained: HarnessSnapshot = {
+      ...read,
+      queueSummary: {
+        ...read.queueSummary!,
+        queuedSendCount: 0,
+        oldestQueuedRequestedAt: null,
+        sampleSize: 0,
+      },
     };
     expect(
       buildHarnessStrip({
-        snapshots: [read],
+        snapshots: [drained],
         now: NOW,
-        queuedSends: selectHarnessQueuedSends([read]),
+        queuedSends: selectHarnessQueuedSends([drained]),
       }).text,
     ).toBe("Queue 0 · Oldest wait none · Failed 24h 0");
   });
@@ -144,23 +149,25 @@ describe("buildHarnessStrip", () => {
   it("keeps sends unknown for partial reads and hosts without the queue field", () => {
     const read = snapshot([routine({ activeRuns: [queued("automation", 9)] })]);
     for (const coverage of ["partial", "unknown"] as const) {
-      read.queueSummary = {
-        queuedSendCount: null,
-        oldestQueuedRequestedAt: null,
-        coverage,
-        readAt: iso(NOW),
-        sampleSize: 0,
-        evidence: "Cannot prove the total.",
+      const incomplete: HarnessSnapshot = {
+        ...read,
+        queueSummary: {
+          queuedSendCount: null,
+          oldestQueuedRequestedAt: null,
+          coverage,
+          readAt: iso(NOW),
+          sampleSize: 0,
+          evidence: "Cannot prove the total.",
+        },
       };
       expect(
         buildHarnessStrip({
-          snapshots: [read],
+          snapshots: [incomplete],
           now: NOW,
-          queuedSends: selectHarnessQueuedSends([read]),
+          queuedSends: selectHarnessQueuedSends([incomplete]),
         }).parts.map((part) => part.value),
       ).toEqual(["1 run, sends unknown", "9m+", "0"]);
     }
-    delete read.queueSummary;
     expect(
       buildHarnessStrip({
         snapshots: [read],
