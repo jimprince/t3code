@@ -7,6 +7,7 @@ import {
   type ScopedSupervisionMetadata,
 } from "./forkNesting.ts";
 import type { ForkRemoteParent, ThreadId, ThreadSubprojectMode } from "@t3tools/contracts";
+import { threadPurposes } from "./threadPurpose.ts";
 
 /** Organizational fields come from the nesting sidecar, never execution lineage. */
 export interface OrchestratorThreadShell extends EnvironmentThreadShell {
@@ -81,7 +82,7 @@ export function lastActivityAt(
   );
 }
 
-function resolveThreadDisplayStatus(
+export function resolveThreadDisplayStatus(
   thread: OrchestratorThreadShell & { hasActiveDescendants?: boolean; settled?: boolean },
 ): ThreadDisplayStatus {
   if (thread.hasPendingApprovals) return "approval";
@@ -271,8 +272,9 @@ export function sortOrchestratorSummariesForSidebar(
 
 /**
  * Projects mode owns complete orchestrator trees, root included, so a project and
- * its orchestrator never also occupy the Threads list (Brad, 2026-10-10). Threads
- * keeps standalone roots.
+ * its orchestrator never also occupy the Threads list (Brad, 2026-10-10). Harness
+ * mode owns every thread whose effective purpose is harness, including a root with
+ * no workers. Threads keeps the standalone rest.
  */
 export function threadsVisibleInThreadsMode(
   threads: ReadonlyArray<OrchestratorThreadShell>,
@@ -302,7 +304,11 @@ export function threadsVisibleInThreadsMode(
       projectThreadKeys.add(threadActivityKey(descendant));
     }
   }
-  return threads.filter((thread) => !projectThreadKeys.has(threadActivityKey(thread)));
+  const purposes = threadPurposes(threads);
+  return threads.filter((thread) => {
+    const key = threadActivityKey(thread);
+    return !projectThreadKeys.has(key) && purposes.get(key) !== "harness";
+  });
 }
 
 function hasPlanReady(thread: OrchestratorThreadShell): boolean {

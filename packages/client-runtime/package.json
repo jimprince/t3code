@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./state/harness-view": {
+      "types": "./src/state/harnessView.ts",
+      "default": "./src/state/harnessView.ts"
+    },
     "./state/harness-query": {
       "types": "./src/state/harnessQuery.ts",
       "default": "./src/state/harnessQuery.ts"
