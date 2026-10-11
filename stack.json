@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "509461cb1e90d07f671149f4e659e3ce85f59edb",
-  "head": "6b04dfd19e41abbd3fd734fb6fa4b100815b8781",
+  "prev": "b3ee09cf57f923181d69b0719d5d257638bc6b87",
+  "head": "0988d01587d4d541dac0c4e5ddf918af1ac679d9",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -154,12 +154,13 @@
     "fork-projects-dnd",
     "fork-local-time",
     "fork-project-plan",
-    "fork-sidebar-settled-ui",
+    "fork-sidebar-settled-ui"
+  ],
+  "unapplied": [
     "fork-sidebar-hygiene-seed",
     "fork-harness-purpose",
     "fork-harness-read-service"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
