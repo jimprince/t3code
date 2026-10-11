@@ -59,6 +59,9 @@ import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { OrchestratorStatus } from "./OrchestratorStatus";
 import { useOrchestratorThreadShells } from "./useOrchestratorThreads";
 import { readOrchestratorLastVisit, recordOrchestratorVisit } from "./orchestratorVisit";
+import { VariantSwitcher } from "../dashboard-v3/chrome";
+import { DashboardView } from "../dashboard-v3/DashboardView";
+import { useDashboardVariant } from "../dashboard-v3/prefs";
 import { ProjectAutomationsSlot } from "../projects/ProjectAutomationsSlot";
 import { ProjectDecisionFeed, useDecisionFeedCount } from "./ProjectDecisionFeed";
 import { ProjectIssuesBoard } from "./ProjectIssuesBoard";
@@ -92,6 +95,18 @@ import {
   subprojectNeedsYou,
   taskProgressLabel,
 } from "./projectSubprojects.logic";
+
+/** Layout widgets whose content the new Dashboard shows in its own rows. */
+const DASHBOARD_SUPERSEDED_WIDGETS: ReadonlySet<string> = new Set([
+  "requests",
+  "release",
+  "decisions",
+  "needs-you",
+  "plan",
+  "composer",
+  "roadmap-summary",
+  "issues-summary",
+]);
 
 /**
  * The layout's tabs, with the page's actions (Edit layout) at the right. In edit
@@ -638,6 +653,10 @@ export function OrchestratorBoard({
     rememberedTab,
     layoutTabs.map((item) => item.id),
   );
+  // The new Dashboard is the default; "Previous" keeps the one that shipped before it reachable.
+  const [dashboardVariant] = useDashboardVariant();
+  // Editing the layout shows the layout itself, so widgets can still be moved and removed.
+  const newDashboard = tab === "dashboard" && dashboardVariant !== "previous" && !editingLayout;
   const changeLayout = (ops: ProjectLayoutOp[]) => {
     if (!layoutState.live) {
       toastManager.add({
@@ -830,6 +849,10 @@ export function OrchestratorBoard({
   const tasksTab = tabWith("issues-board");
   // A Plan widget shows the subprojects and workstreams itself.
   const planInLayout = tabWith("plan") !== null;
+  // What the new Dashboard shows itself; the layout's other widgets (PRs, canvases) follow it.
+  const slotWidgets = (activeTab?.widgets ?? []).filter(
+    (widget) => !DASHBOARD_SUPERSEDED_WIDGETS.has(widget.type),
+  );
   const page: BoardPage = {
     summary,
     summaries,
@@ -906,39 +929,44 @@ export function OrchestratorBoard({
           <div className="flex min-h-0 flex-1 border-t border-border">
             <div className="topbar-scroll-fade min-h-0 min-w-0 flex-1 overflow-y-auto">
               <WorkspacePageContainer width="wide" className="gap-5">
-                {/* On every tab, first: one line until it is used. */}
-                <ProjectRequestBox
-                  summary={summary}
-                  quickActions={tab === "dashboard" ? REQUEST_QUICK_ACTIONS : undefined}
-                />
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-                  <OrchestratorStatus status={summary.status} />
-                  {summary.rollup.working > 0 ? (
-                    <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                      <UsersIcon className="size-4" />
-                      {summary.rollup.working} working
-                    </span>
-                  ) : null}
-                  <NeedsYouCount summary={summary} />
-                  <BlockedCount summary={summary} />
-                  <span className="text-xs text-muted-foreground">
-                    {summary.projects.map((project) => project.title).join(" · ")}
-                  </span>
-                </div>
+                {newDashboard ? null : (
+                  <>
+                    {/* On every tab, first: one line until it is used. */}
+                    <ProjectRequestBox
+                      summary={summary}
+                      quickActions={tab === "dashboard" ? REQUEST_QUICK_ACTIONS : undefined}
+                    />
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+                      <OrchestratorStatus status={summary.status} />
+                      {summary.rollup.working > 0 ? (
+                        <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                          <UsersIcon className="size-4" />
+                          {summary.rollup.working} working
+                        </span>
+                      ) : null}
+                      <NeedsYouCount summary={summary} />
+                      <BlockedCount summary={summary} />
+                      <span className="text-xs text-muted-foreground">
+                        {summary.projects.map((project) => project.title).join(" · ")}
+                      </span>
+                    </div>
 
-                <ProjectHealthLine summary={summary} />
-                {tab === "dashboard" && !planInLayout ? (
-                  <ProjectSubprojects summary={summary} />
-                ) : null}
-                {tab === "dashboard" && !planInLayout ? (
-                  <ProjectWorkstreams summary={summary} since={previousVisit} />
-                ) : null}
-                <ProjectReleaseLine
-                  summary={summary}
-                  runningVersion={
-                    serverConfigs.get(summary.root.environmentId)?.environment.serverVersion ?? null
-                  }
-                />
+                    <ProjectHealthLine summary={summary} />
+                    {tab === "dashboard" && !planInLayout ? (
+                      <ProjectSubprojects summary={summary} />
+                    ) : null}
+                    {tab === "dashboard" && !planInLayout ? (
+                      <ProjectWorkstreams summary={summary} since={previousVisit} />
+                    ) : null}
+                    <ProjectReleaseLine
+                      summary={summary}
+                      runningVersion={
+                        serverConfigs.get(summary.root.environmentId)?.environment.serverVersion ??
+                        null
+                      }
+                    />
+                  </>
+                )}
                 <ProjectTabBar
                   tabs={layoutTabs}
                   tab={tab}
@@ -958,7 +986,32 @@ export function OrchestratorBoard({
                     ) : null
                   }
                 />
-                {activeTab ? (
+                {tab === "dashboard" && dashboardVariant === "previous" ? (
+                  <div className="flex justify-end">
+                    <VariantSwitcher />
+                  </div>
+                ) : null}
+                {newDashboard ? (
+                  <DashboardView scope={{ kind: "project", environmentId, threadId }} />
+                ) : null}
+                {newDashboard && activeTab && slotWidgets.length > 0 ? (
+                  <ProjectLayoutTabView
+                    summary={summary}
+                    tabs={layoutTabs}
+                    tab={{ ...activeTab, widgets: slotWidgets }}
+                    editing={false}
+                    builtins={
+                      new Map(
+                        slotWidgets.map((widget) => [
+                          widget.id,
+                          <BuiltinWidget key={widget.id} widget={widget} page={page} />,
+                        ]),
+                      )
+                    }
+                    onApply={changeLayout}
+                  />
+                ) : null}
+                {newDashboard ? null : activeTab ? (
                   <ProjectLayoutTabView
                     summary={summary}
                     tabs={layoutTabs}
