@@ -3,7 +3,7 @@ import type { Atom } from "effect/unstable/reactivity";
 import type * as EnvironmentRegistry from "../connection/registry.ts";
 import { createEnvironmentRpcQueryAtomFamily } from "./runtime.ts";
 
-/** Environment routing is shared by web, desktop and mobile; callers own mounted refreshes. */
+/** @public Shared Harness query for the client UI; callers own mounted refreshes. */
 export function createHarnessQuery<R, E>(
   runtime: Atom.AtomRuntime<EnvironmentRegistry.EnvironmentRegistry | R, E>,
 ) {
@@ -12,6 +12,7 @@ export function createHarnessQuery<R, E>(
     tag: "harness.snapshot",
   });
 }
+/** @public Joins the snapshot rows consumed by the client Harness view. */
 export function selectHarnessAgents(snapshot: HarnessSnapshot) {
   const routines = new Map(snapshot.routines.map((routine) => [routine.key, routine]));
   return snapshot.agents.map((agent) => ({

@@ -23,7 +23,7 @@ export function threadLink(
     href: `/${encodeURIComponent(environmentId)}/${encodeURIComponent(threadId)}`,
   };
 }
-export function trend(
+function trend(
   runs: readonly HarnessRun[],
   metric: "errorCount" | "runtimeErrorCount",
 ): HarnessTrend {
