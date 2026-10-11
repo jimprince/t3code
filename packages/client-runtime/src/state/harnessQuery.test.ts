@@ -47,17 +47,26 @@ describe("environment queue selection", () => {
     });
   });
   it("does not turn missing or incomplete reads into a known zero", () => {
-    const oldHost = snapshot("old");
-    delete oldHost.queueSummary;
+    const oldHost: HarnessSnapshot = {
+      schemaVersion: 1,
+      environmentId: EnvironmentId.make("old"),
+      generatedAt: "2026-10-11T06:00:00.000Z",
+      sources: [],
+      agents: [],
+      routines: [],
+    };
     expect(selectHarnessQueuedSends([])).toBeNull();
     expect(selectHarnessQueuedSends([snapshot("good"), oldHost])).toBeNull();
     for (const coverage of ["partial", "unknown"] as const) {
-      const incomplete = snapshot("incomplete");
-      incomplete.queueSummary = {
-        ...incomplete.queueSummary!,
-        coverage,
-        queuedSendCount: null,
-        oldestQueuedRequestedAt: null,
+      const base = snapshot("incomplete");
+      const incomplete: HarnessSnapshot = {
+        ...base,
+        queueSummary: {
+          ...base.queueSummary!,
+          coverage,
+          queuedSendCount: null,
+          oldestQueuedRequestedAt: null,
+        },
       };
       expect(selectHarnessQueuedSends([snapshot("good"), incomplete])).toBeNull();
     }
