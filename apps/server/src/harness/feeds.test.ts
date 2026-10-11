@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off -- Exercises real temporary files and symlink refusal.
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
-import { tmpdir } from "node:os";
+import * as NodeFSP from "node:fs/promises";
+import * as NodePath from "node:path";
+import * as NodeOS from "node:os";
 import { EnvironmentId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 import {
@@ -17,15 +17,18 @@ const NOW = "2026-10-11T06:00:00.000Z";
 const ENV = EnvironmentId.make("host-environment");
 describe("allowlisted owner feeds", () => {
   it("refuses arbitrary filenames and symlinks outside the configured directory", async () => {
-    const root = await fs.mkdtemp(path.join(tmpdir(), "harness-feeds-"));
+    const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "harness-feeds-"));
     try {
-      const directory = path.join(root, "allowed");
-      await fs.mkdir(directory);
-      await fs.writeFile(
-        path.join(root, "outside.json"),
+      const directory = NodePath.join(root, "allowed");
+      await NodeFSP.mkdir(directory);
+      await NodeFSP.writeFile(
+        NodePath.join(root, "outside.json"),
         JSON.stringify({ generated_at: NOW, secret: "outside" }),
       );
-      await fs.symlink(path.join(root, "outside.json"), path.join(directory, "health.json"));
+      await NodeFSP.symlink(
+        NodePath.join(root, "outside.json"),
+        NodePath.join(directory, "health.json"),
+      );
       expect(await readFeed(directory, "../outside.json", NOW, 300_000)).toMatchObject({
         source: { status: "refused" },
         value: null,
@@ -35,14 +38,14 @@ describe("allowlisted owner feeds", () => {
         value: null,
       });
     } finally {
-      await fs.rm(root, { recursive: true, force: true });
+      await NodeFSP.rm(root, { recursive: true, force: true });
     }
   });
   it("validates timestamps, marks stale sources and bounds file reads", async () => {
-    const directory = await fs.mkdtemp(path.join(tmpdir(), "harness-feeds-"));
+    const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "harness-feeds-"));
     try {
-      await fs.writeFile(
-        path.join(directory, "health.json"),
+      await NodeFSP.writeFile(
+        NodePath.join(directory, "health.json"),
         JSON.stringify({ generated_at: "2026-10-11T00:00:00.000Z" }),
       );
       expect((await readFeed(directory, "health.json", NOW, 300_000)).source).toMatchObject({
@@ -50,21 +53,24 @@ describe("allowlisted owner feeds", () => {
         observedAt: "2026-10-11T00:00:00.000Z",
         readAt: NOW,
       });
-      await fs.writeFile(
-        path.join(directory, "health.json"),
+      await NodeFSP.writeFile(
+        NodePath.join(directory, "health.json"),
         JSON.stringify({ generated_at: "yesterday" }),
       );
       expect(await readFeed(directory, "health.json", NOW, 300_000)).toMatchObject({
         source: { status: "unavailable" },
         value: null,
       });
-      await fs.writeFile(path.join(directory, "health.json"), "x".repeat(2 * 1024 * 1024 + 1));
+      await NodeFSP.writeFile(
+        NodePath.join(directory, "health.json"),
+        "x".repeat(2 * 1024 * 1024 + 1),
+      );
       expect(await readFeed(directory, "health.json", NOW, 300_000)).toMatchObject({
         source: { status: "refused" },
         value: null,
       });
     } finally {
-      await fs.rm(directory, { recursive: true, force: true });
+      await NodeFSP.rm(directory, { recursive: true, force: true });
     }
   });
   it("keeps missing feeds unknown with explicit disabled and not-shown checks", async () => {
@@ -85,10 +91,10 @@ describe("allowlisted owner feeds", () => {
     });
   });
   it("joins canaries by exact route/thread, requires scoped links and does not invent missed probes", async () => {
-    const directory = await fs.mkdtemp(path.join(tmpdir(), "harness-feeds-"));
+    const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "harness-feeds-"));
     try {
-      await fs.writeFile(
-        path.join(directory, "canary-policy.json"),
+      await NodeFSP.writeFile(
+        NodePath.join(directory, "canary-policy.json"),
         JSON.stringify({
           schemaVersion: 1,
           accepted_at: NOW,
@@ -96,8 +102,8 @@ describe("allowlisted owner feeds", () => {
           routes: [{ host: "remote", account: "codex", threadId: "probe" }],
         }),
       );
-      await fs.writeFile(
-        path.join(directory, "canary-state.json"),
+      await NodeFSP.writeFile(
+        NodePath.join(directory, "canary-state.json"),
         JSON.stringify({
           routes: {
             "remote:codex": {
@@ -112,8 +118,25 @@ describe("allowlisted owner feeds", () => {
                 checked_at: NOW,
                 activeRunId: null,
                 runs: [
+                  ...Array.from({ length: 110 }, (_, index) => ({
+                    id: `old-${index}`,
+                    providerInstanceId: "codex",
+                    requestedAt: "2026-10-10T05:00:00.000Z",
+                    startedAt: "2026-10-10T05:00:00.000Z",
+                    completedAt: "2026-10-10T05:01:00.000Z",
+                    status: "completed",
+                  })),
+                  {
+                    id: "foreign-account",
+                    providerInstanceId: "other-account",
+                    requestedAt: NOW,
+                    startedAt: NOW,
+                    completedAt: NOW,
+                    status: "completed",
+                  },
                   {
                     id: "probe-run",
+                    providerInstanceId: "codex",
                     requestedAt: NOW,
                     startedAt: NOW,
                     completedAt: NOW,
@@ -126,8 +149,8 @@ describe("allowlisted owner feeds", () => {
           },
         }),
       );
-      await fs.writeFile(
-        path.join(directory, "canary-tick-readback.json"),
+      await NodeFSP.writeFile(
+        NodePath.join(directory, "canary-tick-readback.json"),
         JSON.stringify({
           checked_at: NOW,
           enabled: true,
@@ -172,7 +195,7 @@ describe("allowlisted owner feeds", () => {
         threadId: "probe",
       });
     } finally {
-      await fs.rm(directory, { recursive: true, force: true });
+      await NodeFSP.rm(directory, { recursive: true, force: true });
     }
   });
   it("admits findings only with exact keys and complete fresh receipts", () => {

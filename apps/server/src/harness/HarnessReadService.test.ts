@@ -388,6 +388,34 @@ it.layer(NodeServices.layer)("Harness production read model", (it) => {
             id: "project-rule",
             ownerThreadId: ThreadId.make("project-owner"),
           });
+          yield* store.saveAutomation({
+            ...definition,
+            id: "repeated-target",
+            actions: [
+              {
+                type: "agent",
+                prompt: "First check",
+                target: { kind: "existing-thread", threadId: ThreadId.make("harness-owner") },
+              },
+              {
+                type: "agent",
+                prompt: "Second check",
+                target: { kind: "existing-thread", threadId: ThreadId.make("harness-owner") },
+              },
+            ],
+          });
+          yield* store.saveAutomation({
+            ...definition,
+            id: "mixed-targets",
+            actions: [
+              {
+                type: "agent",
+                prompt: "Persistent check",
+                target: { kind: "existing-thread", threadId: ThreadId.make("harness-owner") },
+              },
+              { type: "agent", prompt: "Fresh check", target: { kind: "new-thread" } },
+            ],
+          });
           const run: AutomationRun = {
             id: "dispatch-only",
             automationId: "rule",
@@ -453,6 +481,19 @@ it.layer(NodeServices.layer)("Harness production read model", (it) => {
               runtimeErrorCount: 0,
             },
             lastDispatch: { outcome: "failed", outcomeKind: "dispatch" },
+          });
+          expect(
+            snapshot.routines.find((row) => row.key.endsWith(":automations:repeated-target")),
+          ).toMatchObject({
+            agentKey: `${ENV}:thread:harness-owner`,
+            lifecycle: "standing",
+            context: "persistent",
+          });
+          expect(
+            snapshot.routines.find((row) => row.key.endsWith(":automations:mixed-targets")),
+          ).toMatchObject({
+            lifecycle: null,
+            context: null,
           });
           expect(snapshot.sources.every((source) => source.readAt.length > 0)).toBe(true);
           expect(

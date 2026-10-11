@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off -- Bounded descriptor reads and O_NOFOLLOW enforce the owner-feed boundary.
-import { constants } from "node:fs";
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
+import * as NodeFS from "node:fs";
+import * as NodeFSP from "node:fs/promises";
+import * as NodePath from "node:path";
 import {
   EnvironmentId,
   IsoDateTime,
@@ -67,10 +67,10 @@ export async function readFeed(
     };
   if (directory === null) return { source, value: null };
   try {
-    const root = await fs.realpath(directory);
-    const candidate = path.join(root, filename);
-    const real = await fs.realpath(candidate);
-    if (real !== candidate || path.dirname(real) !== root)
+    const root = await NodeFSP.realpath(directory);
+    const candidate = NodePath.join(root, filename);
+    const real = await NodeFSP.realpath(candidate);
+    if (real !== candidate || NodePath.dirname(real) !== root)
       return {
         source: {
           ...source,
@@ -79,7 +79,10 @@ export async function readFeed(
         },
         value: null,
       };
-    const file = await fs.open(candidate, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const file = await NodeFSP.open(
+      candidate,
+      NodeFS.constants.O_RDONLY | NodeFS.constants.O_NOFOLLOW,
+    );
     try {
       const stat = await file.stat();
       if (!stat.isFile() || stat.size > MAX_BYTES)
@@ -154,11 +157,12 @@ export const FindingsReceipt = Schema.Struct({
   findingsCount: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   coverage: Schema.Literal("complete"),
 });
+const decodeFindingsReceipt = Schema.decodeUnknownOption(FindingsReceipt);
 export function findingsReceipts(feed: FeedRead | undefined): ReadonlyMap<string, number> {
   const receipts = new Map<string, number>();
   if (feed?.source.status !== "available") return receipts;
   for (const entry of array(feed.value?.receipts).slice(0, 2000)) {
-    const decoded = Schema.decodeUnknownOption(FindingsReceipt)(entry);
+    const decoded = decodeFindingsReceipt(entry);
     if (
       decoded._tag === "Some" &&
       Date.parse(decoded.value.observedAt) <= Date.parse(feed.source.readAt)
@@ -173,12 +177,14 @@ export function findingsReceipts(feed: FeedRead | undefined): ReadonlyMap<string
 
 const ProbeRun = Schema.Struct({
   id: Schema.String,
+  providerInstanceId: Schema.String,
   requestedAt: IsoDateTime,
   startedAt: Schema.optionalKey(Schema.NullOr(IsoDateTime)),
   completedAt: Schema.optionalKey(Schema.NullOr(IsoDateTime)),
   status: Schema.String,
   user_message_id: Schema.optionalKey(Schema.String),
 });
+const decodeProbeRun = Schema.decodeUnknownOption(ProbeRun);
 export function feedRoutines(
   feeds: ReadonlyMap<FeedFile, FeedRead>,
   environmentId: EnvironmentId,
@@ -301,9 +307,9 @@ export function feedRoutines(
     const scopedEnvironment = Object.hasOwn(hosts, host) ? hosts[host] : undefined;
     const history: HarnessRun[] = [];
     if (linked)
-      for (const probe of array(readback.runs).slice(0, 100)) {
-        const parsed = Schema.decodeUnknownOption(ProbeRun)(probe);
-        if (parsed._tag === "None") continue;
+      for (const probe of array(readback.runs)) {
+        const parsed = decodeProbeRun(probe);
+        if (parsed._tag === "None" || parsed.value.providerInstanceId !== account) continue;
         const run = parsed.value;
         const outcome: HarnessRun["outcome"] = [
           "completed",

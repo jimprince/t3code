@@ -3,7 +3,6 @@ import {
   EnvironmentId,
   HarnessReadError,
   HarnessSnapshotInput,
-  ProjectAutomation,
   ProjectId,
   ScheduledTaskSchedule,
   type Automation,
@@ -40,7 +39,12 @@ import {
 import { groupAgents, lateness, routine, threadLink } from "./model.ts";
 
 const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
-const ACTIVE = ["preparing", "queued", "starting", "running", "waiting"];
+const ACTIVE = new Set(["preparing", "queued", "starting", "running", "waiting"]);
+const decodeHosts = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(Schema.Record(Schema.String, EnvironmentId)),
+);
+const decodeSchedule = Schema.decodeUnknownEffect(Schema.fromJsonString(ScheduledTaskSchedule));
+const decodeInput = Schema.decodeUnknownEffect(HarnessSnapshotInput);
 const iso = () => Effect.map(DateTime.now, DateTime.formatIso);
 interface MessageRow {
   readonly message_id: string;
@@ -162,7 +166,7 @@ export function executionEvidence(sql: SqlClient.SqlClient, links: readonly Harn
 }
 
 function outcome(status: string): HarnessRun["outcome"] {
-  if (ACTIVE.includes(status))
+  if (ACTIVE.has(status))
     return status === "queued" || status === "preparing" ? "queued" : "running";
   return ["completed", "failed", "interrupted", "cancelled", "skipped"].includes(status)
     ? (status as HarnessRun["outcome"])
@@ -213,9 +217,7 @@ export const make = Effect.gen(function* () {
   const hostJson = yield* Config.String("T3CODE_HARNESS_FEED_ENVIRONMENTS").pipe(
     Config.withDefault("{}"),
   );
-  const hosts = yield* Schema.decodeUnknownEffect(
-    Schema.fromJsonString(Schema.Record(Schema.String, EnvironmentId)),
-  )(hostJson);
+  const hosts = yield* decodeHosts(hostJson);
   if (graceMs < 0 || staleMs < 0)
     return yield* new HarnessReadError({
       message: "Harness grace/freshness allowances must be nonnegative.",
@@ -459,7 +461,10 @@ export const make = Effect.gen(function* () {
         const targets = definition.actions.map((action) =>
           action.target.kind === "existing-thread" ? String(action.target.threadId) : null,
         );
-        const target = targets.length === 1 ? (targets[0] ?? null) : null;
+        const target = targets.every((target) => target === targets[0])
+          ? (targets[0] ?? null)
+          : null;
+        const allNew = targets.every((target) => target === null);
         const purpose = membership(target) ?? membership(definition.ownerThreadId);
         if (purpose === "project") return;
         const next = (after: string) => nextScheduledRun(definition.triggers, after);
@@ -510,8 +515,10 @@ export const make = Effect.gen(function* () {
                   ? "conditional"
                   : "standing"
                 : null
-              : "conditional",
-            context: target ? "persistent" : "new-instance-per-run",
+              : allNew
+                ? "conditional"
+                : null,
+            context: target ? "persistent" : allNew ? "new-instance-per-run" : null,
             scheduleOrTrigger: encodeJson(definition.triggers),
             nextExpectedRun: definition.enabled
               ? (definition.nextRunAt ?? next(generatedAt))
@@ -553,7 +560,7 @@ export const make = Effect.gen(function* () {
           "automations",
         );
       for (const { definition, projectId, createdAt } of legacy) {
-        const normalized = yield* Schema.decodeUnknownEffect(ProjectAutomation)(definition);
+        const normalized = definition;
         const history = normalized.runs
           .map((run): HarnessRun => {
             const message = {
@@ -616,9 +623,7 @@ export const make = Effect.gen(function* () {
             evidence.get(`${message.thread_id}\0${message.message_id}`),
           ),
         );
-        const schedule = yield* Schema.decodeUnknownEffect(
-          Schema.fromJsonString(ScheduledTaskSchedule),
-        )(task.schedule_json);
+        const schedule = yield* decodeSchedule(task.schedule_json);
         const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
         const next = (after: string) => {
           const at = nextScheduledRunAt(
@@ -829,7 +834,7 @@ export const make = Effect.gen(function* () {
   return HarnessReadService.of({
     snapshot: (input) =>
       Effect.gen(function* () {
-        const validated = yield* Schema.decodeUnknownEffect(HarnessSnapshotInput)(input);
+        const validated = yield* decodeInput(input);
         const now = yield* DateTime.now;
         const key = encodeJson([Math.floor(DateTime.toEpochMillis(now) / 1000), validated]);
         const previous = cached;
