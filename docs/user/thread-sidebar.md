@@ -440,3 +440,5 @@ Delegated workers keep their parent relationship when task details arrive separa
 Agents can move a thread to Harness or back to Projects without changing its supervisor, workspace, or running work. Workers follow their supervisor’s purpose unless explicitly moved.
 
 Agents can use `harness_snapshot` to read Harness routines, schedule lateness and recent execution histories. Missing findings counts and unavailable owner feeds are reported as unknown.
+
+Provider-native workers follow their creator's organization. Successful native tasks settle automatically and resume when the provider sends new work to the same task. Manual settlement, explicit unnesting, pins and per-thread completion opt-outs take priority. Ordinary thread launch tools still create top-level conversations.
