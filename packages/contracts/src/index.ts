@@ -99,3 +99,4 @@ export * from "./messageForward.ts";
 export * from "./planPublication.ts";
 
 export * from "./threadRecovery.ts";
+export * from "./dashboard.ts";

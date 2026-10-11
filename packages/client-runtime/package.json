@@ -479,6 +479,10 @@
     "./decision-answer": {
       "types": "./src/decisionAnswer.ts",
       "default": "./src/decisionAnswer.ts"
+    },
+    "./dashboard": {
+      "types": "./src/dashboard/store.ts",
+      "default": "./src/dashboard/store.ts"
     }
   },
   "scripts": {
