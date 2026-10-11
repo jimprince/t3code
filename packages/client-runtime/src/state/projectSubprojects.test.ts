@@ -3,7 +3,9 @@ import { describe, expect, it } from "vite-plus/test";
 import type { OrchestratorSummary } from "./orchestrators.ts";
 import {
   isSettledProject,
+  labelWithTaskProgress,
   projectKeyOf,
+  settledGroupSummary,
   splitSettledSubprojects,
   subprojectCountLabel,
   subprojectIsActive,
@@ -30,11 +32,14 @@ const summary = (
     subprojects?: OrchestratorSummary[];
     issues?: OrchestratorSummary["issues"];
     settled?: boolean;
+    needsYou?: number;
+    blocked?: number;
   } = {},
 ): OrchestratorSummary =>
   ({
     root: { environmentId: "env", id, settledOverride: options.settled ? "settled" : null },
     issues: options.issues ?? [],
+    rollup: { needsYou: options.needsYou ?? 0, blocked: options.blocked ?? 0 },
     subprojects: options.subprojects ?? [],
     parentProjectKey: options.parent === undefined ? null : `env:${options.parent}`,
   }) as unknown as OrchestratorSummary;
@@ -53,6 +58,14 @@ describe("project subprojects", () => {
     expect(subprojectCountLabel(summary("root", { subprojects: [sub] }))).toBe("2 subs");
     expect(subprojectCountLabel(sub)).toBe("1 sub");
     expect(subprojectCountLabel(nested)).toBeNull();
+  });
+
+  it("leaves settled subprojects, and what is beneath them, out of the fold hint", () => {
+    const beneath = summary("beneath");
+    const retired = summary("retired", { settled: true, subprojects: [beneath] });
+    const live = summary("live");
+    expect(subprojectCountLabel(summary("root", { subprojects: [retired, live] }))).toBe("1 sub");
+    expect(subprojectCountLabel(summary("only-settled", { subprojects: [retired] }))).toBeNull();
   });
 
   it("says how much of the working count is inside subprojects", () => {
@@ -151,5 +164,36 @@ describe("project subprojects", () => {
       expect(taskProgressFraction(done)).toBe("1/1");
       expect(taskProgressComplete(done)).toBe(true);
     });
+  });
+
+  describe("settled group", () => {
+    it("counts the settled subprojects with no warning when nothing waits", () => {
+      const group = settledGroupSummary([summary("a"), summary("b")]);
+      expect(group).toEqual({
+        label: "Settled (2)",
+        attention: false,
+        description: "2 settled subprojects",
+      });
+      expect(settledGroupSummary([summary("a")]).description).toBe("1 settled subproject");
+    });
+
+    it("surfaces what needs you or is blocked inside the settled subprojects", () => {
+      const waiting = settledGroupSummary([
+        summary("a", { needsYou: 1 }),
+        summary("b", { needsYou: 2, blocked: 1 }),
+        summary("c"),
+      ]);
+      expect(waiting.label).toBe("Settled (3) · 3 need you · 1 blocked");
+      expect(waiting.attention).toBe(true);
+      expect(waiting.description).toBe("3 settled subprojects, 3 need you, 1 blocked");
+    });
+  });
+
+  it("appends the task progress to a row's accessible label", () => {
+    const tasks = summary("p", { issues: [issue(1, "closed"), issue(2, "open")] });
+    expect(labelWithTaskProgress("Open P subproject", tasks)).toBe(
+      "Open P subproject, 1 of 2 tasks done",
+    );
+    expect(labelWithTaskProgress("Open P subproject", summary("none"))).toBe("Open P subproject");
   });
 });

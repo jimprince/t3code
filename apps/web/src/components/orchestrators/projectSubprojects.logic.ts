@@ -10,17 +10,6 @@ export const ownTreeContains = (summary: OrchestratorSummary, threadKey: string 
     (thread) => `${thread.environmentId}:${thread.id}` === threadKey,
   );
 
-/** Every subproject beneath a project, at any depth: what folding its card hides. */
-function subprojectCount(summary: OrchestratorSummary): number {
-  return summary.subprojects.reduce((total, sub) => total + 1 + subprojectCount(sub), 0);
-}
-
-/** "1 sub", "3 subs": the hint a folded project card keeps, null without subprojects. */
-export function subprojectCountLabel(summary: OrchestratorSummary): string | null {
-  const count = subprojectCount(summary);
-  return count === 0 ? null : `${count} ${count === 1 ? "sub" : "subs"}`;
-}
-
 /** Busy now: its workers or its own orchestrator are active, or it is supervising them. */
 export const subprojectIsActive = (summary: OrchestratorSummary) =>
   summary.rollup.working > 0 ||

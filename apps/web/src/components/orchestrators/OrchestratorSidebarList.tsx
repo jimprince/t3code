@@ -20,7 +20,11 @@ import {
 import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { splitSettledSubprojects } from "@t3tools/client-runtime/state/projectSubprojects";
+import {
+  labelWithTaskProgress,
+  splitSettledSubprojects,
+  subprojectCountLabel,
+} from "@t3tools/client-runtime/state/projectSubprojects";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { ChevronDownIcon, ChevronRightIcon, CircleAlertIcon, UsersIcon } from "lucide-react";
 import {
@@ -53,7 +57,6 @@ import {
   COLLAPSED_SUBPROJECTS_KEY,
   ownTreeContains,
   projectKeyOf,
-  subprojectCountLabel,
   subprojectIsActive,
   subprojectWorkingLabel,
   toggleProjectKey,
@@ -139,7 +142,7 @@ function SubprojectRows({
       {settled.length > 0 ? (
         <>
           <SettledSubprojectsToggle
-            count={settled.length}
+            settled={settled}
             expanded={settledOpen}
             onToggle={() => settledExpansion.toggle(projectKeyOf(summary))}
             className="h-6 w-full rounded pr-1.5 text-3xs text-sidebar-muted-foreground"
@@ -172,7 +175,7 @@ function SubprojectRow({
     <div>
       <button
         type="button"
-        aria-label={`Open ${sub.root.title} subproject`}
+        aria-label={labelWithTaskProgress(`Open ${sub.root.title} subproject`, sub)}
         aria-current={selected ? "page" : undefined}
         style={{ paddingLeft: `${0.625 + depth * 0.75}rem` }}
         className={`pointer-events-auto flex h-6 w-full cursor-pointer items-center gap-1.5 rounded pr-1.5 text-left text-3xs hover:bg-sidebar-row-hover ${
@@ -273,6 +276,11 @@ function ProjectRow({
     },
     [openMenu],
   );
+  const openProject = () =>
+    void navigate({
+      to: "/orchestrators/$environmentId/$threadId",
+      params: { environmentId: rootRef.environmentId, threadId: rootRef.threadId },
+    });
   const onMove = arrange?.onMove;
   const handleKeyDown = useCallback(
     (event: ReactKeyboardEvent) => {
@@ -304,12 +312,7 @@ function ProjectRow({
         aria-keyshortcuts={arrange ? "Alt+ArrowUp Alt+ArrowDown" : undefined}
         className="absolute inset-0 z-0 cursor-pointer rounded-md focus-visible:outline-2 focus-visible:outline-ring"
         onKeyDown={handleKeyDown}
-        onClick={() =>
-          void navigate({
-            to: "/orchestrators/$environmentId/$threadId",
-            params: { environmentId: rootRef.environmentId, threadId: rootRef.threadId },
-          })
-        }
+        onClick={openProject}
       />
       <div className="pointer-events-none relative z-10 flex w-full flex-col gap-1.5 px-2.5 py-2 text-left">
         <span className="flex min-w-0 w-full items-center gap-2">
@@ -317,7 +320,11 @@ function ProjectRow({
           <span className="min-w-0 flex-1 truncate text-sm font-medium text-sidebar-foreground">
             {summary.root.title}
           </span>
-          <TaskFraction summary={summary} className="text-xs text-sidebar-muted-foreground" />
+          <TaskFraction
+            summary={summary}
+            className="text-xs text-sidebar-muted-foreground"
+            onActivate={openProject}
+          />
           {hasSubprojects ? (
             <button
               type="button"

@@ -4,6 +4,7 @@ import {
 } from "@t3tools/client-runtime/state/orchestrators";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
+  labelWithTaskProgress,
   splitSettledSubprojects,
   taskProgress,
   taskProgressFraction,
@@ -338,7 +339,7 @@ function ProjectSubprojects({ summary }: { readonly summary: OrchestratorSummary
         {settled.length > 0 ? (
           <li>
             <SettledSubprojectsToggle
-              count={settled.length}
+              settled={settled}
               expanded={settledOpen}
               onToggle={() => settledExpansion.toggle(projectKeyOf(summary))}
               className="py-1.5 text-xs text-muted-foreground"
@@ -365,15 +366,15 @@ function SubprojectTableRow({ sub }: { readonly sub: OrchestratorSummary }) {
         : null;
   const needsYou = sub.rollup.needsYou > 0 ? `${sub.rollup.needsYou} need you` : null;
   const blocked = sub.rollup.blocked > 0;
+  const openSubproject = () =>
+    void navigate({
+      to: "/orchestrators/$environmentId/$threadId",
+      params: { environmentId: sub.root.environmentId, threadId: sub.root.id },
+    });
   return (
     <ClickableRow
-      label={`Open ${sub.root.title} subproject`}
-      onOpen={() =>
-        void navigate({
-          to: "/orchestrators/$environmentId/$threadId",
-          params: { environmentId: sub.root.environmentId, threadId: sub.root.id },
-        })
-      }
+      label={labelWithTaskProgress(`Open ${sub.root.title} subproject`, sub)}
+      onOpen={openSubproject}
       className="flex-wrap items-baseline gap-x-3 gap-y-0.5 py-1.5 text-sm sm:flex-nowrap"
     >
       <span className={`min-w-0 flex-1 truncate font-medium ${SUBPROJECT_COLUMN.name}`}>
@@ -384,7 +385,7 @@ function SubprojectTableRow({ sub }: { readonly sub: OrchestratorSummary }) {
         <SubprojectHealth summary={sub} />
       </span>
       <span className={SUBPROJECT_COLUMN.progress}>
-        <TaskFraction summary={sub} />
+        <TaskFraction summary={sub} onActivate={openSubproject} />
       </span>
       <span className={`${SUBPROJECT_COLUMN.working} text-muted-foreground`}>{working}</span>
       <span className={SUBPROJECT_COLUMN.needsYou}>

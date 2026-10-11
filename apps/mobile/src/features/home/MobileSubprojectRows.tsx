@@ -4,7 +4,9 @@ import {
   type OrchestratorThreadShell,
 } from "@t3tools/client-runtime/state/orchestrators";
 import {
+  labelWithTaskProgress,
   projectKeyOf,
+  settledGroupSummary,
   splitSettledSubprojects,
   subprojectIsActive,
 } from "@t3tools/client-runtime/state/projectSubprojects";
@@ -39,11 +41,12 @@ export function MobileSubprojectRows({
   const { active, settled } = splitSettledSubprojects(
     sortOrchestratorSummariesForSidebar(summary.subprojects, quietCutoff),
   );
+  const settledGroup = settledGroupSummary(settled);
   const renderRow = (sub: OrchestratorSummary) => (
     <View key={projectKeyOf(sub)}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Open ${sub.root.title} subproject`}
+        accessibilityLabel={labelWithTaskProgress(`Open ${sub.root.title} subproject`, sub)}
         className="min-h-9 flex-row items-center gap-1.5 pr-1 active:bg-card"
         style={{ paddingLeft: 8 + depth * 12 }}
         onPress={() => onSelectThread(sub.root)}
@@ -96,15 +99,20 @@ export function MobileSubprojectRows({
       {settled.length > 0 ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${settledOpen ? "Hide" : "Show"} ${settled.length} settled ${
-            settled.length === 1 ? "subproject" : "subprojects"
-          }`}
+          accessibilityLabel={`${settledOpen ? "Hide" : "Show"} ${settledGroup.description}`}
           accessibilityState={{ expanded: settledOpen }}
           className="min-h-9 flex-row items-center justify-between pr-1 active:bg-card"
           style={{ paddingLeft: 8 + depth * 12 }}
           onPress={() => setSettledOpen((open) => !open)}
         >
-          <Text className="text-xs text-foreground-muted">Settled ({settled.length})</Text>
+          <Text
+            className={cn(
+              "text-xs",
+              settledGroup.attention ? "text-warning-foreground" : "text-foreground-muted",
+            )}
+          >
+            {settledGroup.label}
+          </Text>
           <Text className="text-xs text-foreground-muted">{settledOpen ? "Hide" : "Show"}</Text>
         </Pressable>
       ) : null}

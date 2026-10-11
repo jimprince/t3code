@@ -4,7 +4,6 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   ownTreeContains,
   projectTrail,
-  subprojectCountLabel,
   subprojectIsActive,
   subprojectNeedsYou,
   subprojectWorkingLabel,
@@ -80,13 +79,5 @@ describe("project subprojects", () => {
     expect(subprojectWorkingLabel(project(3, 0))).toBe("3 working in subprojects");
     expect(subprojectWorkingLabel(project(2, 2))).toBeNull();
     expect(subprojectWorkingLabel(project(0, 0))).toBeNull();
-  });
-
-  it("hints how many subprojects a folded card hides, at any depth", () => {
-    const nested = summary("nested");
-    const sub = summary("sub", { subprojects: [nested] });
-    expect(subprojectCountLabel(summary("root", { subprojects: [sub] }))).toBe("2 subs");
-    expect(subprojectCountLabel(sub)).toBe("1 sub");
-    expect(subprojectCountLabel(nested)).toBeNull();
   });
 });
