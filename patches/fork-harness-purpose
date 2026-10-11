@@ -1,6 +1,6 @@
 Bottom: 25b82e29dae9b6ff1660d7ed6aa9267fb7c16b3f
-Top:    25b82e29dae9b6ff1660d7ed6aa9267fb7c16b3f
+Top:    83893c354d493f9784bc7ed0d01f6488386ddbad
 Author: brad <bradprin@live.com>
-Date:   2026-10-11 08:19:36 +0000
+Date:   2026-10-11 08:20:30 +0000
 
-feat(threads): distinguish Harness agents from Projects
+feat(threads): persist and inherit Harness purpose
