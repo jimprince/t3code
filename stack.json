@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "acc5a3dfd246a7309dba67b92f239a3ce203c8c2",
-  "head": "3952272af4154c6c83cdc4bc51fdcb1d9e9858f9",
+  "prev": "23ff993ca6050ff5cd2437edc3f998039f9a4c04",
+  "head": "d3c29d39a152c753ccbf8d3e0287e575af3879cf",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -157,12 +157,13 @@
     "fork-sidebar-settled-ui",
     "fork-sidebar-hygiene-seed",
     "fork-harness-purpose",
-    "fork-harness-read-service",
+    "fork-harness-read-service"
+  ],
+  "unapplied": [
     "fork-harness-tab-ui",
     "fork-sidebar-hygiene-native",
     "fork-mobile-identities"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
