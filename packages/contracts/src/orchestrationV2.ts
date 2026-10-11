@@ -3,7 +3,11 @@ import { NotificationOrigin } from "./notification.ts";
 import { ThreadIssueLink, ThreadIssueKey, ThreadIssueSnapshot } from "./threadIssue.ts";
 import { CodexNativeGoalSummary } from "./codexNativeGoal.ts";
 import { ForkWorkerSummary } from "./forkWorkerSummary.ts";
-import { workerArchiveFields, workerCompletionFields } from "./forkWorkerLifecycle.ts";
+import {
+  NativeCompletion,
+  workerArchiveFields,
+  workerCompletionFields,
+} from "./forkWorkerLifecycle.ts";
 import { OrchestrationMessageContext } from "./composerContext.ts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -1619,6 +1623,7 @@ export const OrchestrationV2DomainEvent = Schema.Union([
       "thread.model-selection-updated",
       "thread.provider-switched",
     ]),
+    nativeCompletion: Schema.optional(NativeCompletion),
     payload: OrchestrationV2AppThread,
   }),
   Schema.Struct({
@@ -2447,6 +2452,7 @@ export const OrchestrationV2DomainEventJson = Schema.Union([
       "thread.model-selection-updated",
       "thread.provider-switched",
     ]),
+    nativeCompletion: Schema.optional(NativeCompletion),
     payload: OrchestrationV2AppThreadJson,
   }),
   Schema.Struct({
