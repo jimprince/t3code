@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "c7cd22eff35ea1a78f67d0f48b93204e3446e0e5",
-  "head": "ded53c3394cb8e7852a2a927554ea6b70174c865",
+  "prev": "a3706f403e3f2064c8c159439c96080876780b22",
+  "head": "7df7fab9d1ef8ab28ad8629f36d3a61fd321edf3",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -155,9 +155,7 @@
     "fork-local-time",
     "fork-project-plan",
     "fork-sidebar-settled-ui",
-    "fork-sidebar-hygiene-seed",
-    "fork-harness-purpose",
-    "fork-harness-read-service"
+    "fork-sidebar-hygiene-seed"
   ],
   "unapplied": [],
   "hidden": [],
@@ -320,12 +318,6 @@
     },
     "fork-gitea-token-setter": {
       "oid": "844d7cde73c58bfbac239e0d67e42cba1fbe9794"
-    },
-    "fork-harness-purpose": {
-      "oid": "7feb30f118ca660233fac0b75a980563728217a9"
-    },
-    "fork-harness-read-service": {
-      "oid": "ded53c3394cb8e7852a2a927554ea6b70174c865"
     },
     "fork-headless-delivery": {
       "oid": "e83fb8c0a1e7a515234a73242cbeb07084b6521e"
