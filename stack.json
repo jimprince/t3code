@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "6b3bcbce79ddc4941a4efbdd7682d8e428313b6e",
-  "head": "d4937ebeeace2fd36b83aa16a773bfb547f3991d",
+  "prev": "bee5929089a59b02da9e4b3fb67cbfb79b11c72e",
+  "head": "e6df7929d70613dc57d12adc3b84219eded2dd7d",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -153,10 +153,11 @@
     "fork-subprojects-mobile-main",
     "fork-projects-dnd",
     "fork-local-time",
-    "fork-project-plan",
+    "fork-project-plan"
+  ],
+  "unapplied": [
     "fork-pr-watch-recovery"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
