@@ -1,0 +1,6 @@
+Bottom: 25b82e29dae9b6ff1660d7ed6aa9267fb7c16b3f
+Top:    25b82e29dae9b6ff1660d7ed6aa9267fb7c16b3f
+Author: brad <bradprin@live.com>
+Date:   2026-10-11 08:19:36 +0000
+
+feat(threads): distinguish Harness agents from Projects
