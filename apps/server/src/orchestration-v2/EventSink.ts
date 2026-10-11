@@ -2,7 +2,7 @@ import { SendBindingWrite } from "../forkThreads/SendBindings.ts";
 import { ResumeAdmission } from "../threadRecovery/ResumeAdmission.ts";
 import { ThreadRecoveryError } from "@t3tools/contracts";
 import { HumanIngress } from "../threadRecovery/HumanIngress.ts";
-import { seedDelegatedMetadata } from "../forkThreads/MetadataStore.ts";
+import { seedCreationMetadata } from "../forkThreads/MetadataStore.ts";
 import { MessageAdmission } from "../forkThreads/MessageAdmission.ts";
 import {
   CommandId,
@@ -421,19 +421,21 @@ const baseLayer: Layer.Layer<
         yield* Effect.forEach(storedEvents, (stored) => projectionStore.apply(stored.event), {
           concurrency: 1,
         });
-        const created = new Set(
-          storedEvents
-            .filter((stored) => stored.event.type === "thread.created")
-            .map((stored) => stored.event.threadId),
-        );
         for (const { event } of storedEvents) {
+          if (event.type !== "thread.created") continue;
+          const { lineage, creationSource } = event.payload;
           if (
-            event.type === "subagent.updated" &&
-            event.payload.origin === "app_owned" &&
-            event.payload.childThreadId !== null &&
-            created.has(event.payload.childThreadId)
+            creationSource === "mcp" &&
+            lineage.relationshipToParent === "subagent" &&
+            lineage.parentThreadId !== null
           ) {
-            yield* seedDelegatedMetadata(sql, event.payload.childThreadId, event.payload.threadId);
+            yield* seedCreationMetadata(sql, {
+              threadId: event.threadId,
+              parentThreadId: lineage.parentThreadId,
+              remoteParent: null,
+              subproject: "off",
+              settleOnComplete: true,
+            });
           }
         }
         const sequence = storedEvents.at(-1)?.sequence;
