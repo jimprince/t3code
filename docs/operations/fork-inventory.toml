@@ -2791,3 +2791,9 @@ id = "delegated-worker-summary-226"
 date = "2026-10-09"
 decided = "repair-existing-concern"
 rationale = "Projects summary coverage verifies that a delegator with five organizationally nested worker delegates produces only its root summary, even for a pinned worker. Only an explicit subproject on mark adds a separate summary; server creation supplies the organizational relationship."
+
+[[patch.decision]]
+id = "subproject-page-table-20261012"
+date = "2026-10-11"
+decided = "refresh-existing-concern"
+rationale = "The approved subproject table, folded count and phone header fit extend the existing subprojects UI concern. Keep them in this patch rather than adding a second page layout concern; settled grouping remains independently droppable above it."
