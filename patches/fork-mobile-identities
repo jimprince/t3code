@@ -1,0 +1,6 @@
+Bottom: d1a27464ea2093c657551eca77f2b04dc077f6bc
+Top:    d1a27464ea2093c657551eca77f2b04dc077f6bc
+Author: brad <bradprin@live.com>
+Date:   2026-10-11 18:52:59 +0000
+
+fix(mobile): give the fork's share extension and keychain their own identities
