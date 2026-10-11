@@ -2032,6 +2032,10 @@ const makeWsRpcLayer = (
             startup
               .enqueueCommand(
                 ThreadMessageIntake.launchThread({
+                  ...(input.creatorThreadId === undefined
+                    ? {}
+                    : { creatorThreadId: input.creatorThreadId }),
+                  ...(input.purposeSeed === undefined ? {} : { purposeSeed: input.purposeSeed }),
                   commandId: input.commandId,
                   ...(input.threadId === undefined ? {} : { threadId: input.threadId }),
                   ...(input.reuseExistingThread === undefined
