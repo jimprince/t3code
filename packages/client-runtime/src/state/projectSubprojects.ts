@@ -49,3 +49,79 @@ export function subprojectWorkingLabel(summary: OrchestratorSummary): string | n
 /** The projects a client lists on their own; subprojects appear nested inside these. */
 export const topLevelProjects = (summaries: ReadonlyArray<OrchestratorSummary>) =>
   summaries.filter((summary) => summary.parentProjectKey === null);
+
+/** A settled (or retired) subproject: done with, so lists fold it away and tallies skip it. */
+export const isSettledProject = (summary: OrchestratorSummary) =>
+  summary.root.settledOverride === "settled";
+
+/** A project's direct subprojects split into the ones listed inline and the settled ones, order kept. */
+export function splitSettledSubprojects(subprojects: ReadonlyArray<OrchestratorSummary>): {
+  readonly active: ReadonlyArray<OrchestratorSummary>;
+  readonly settled: ReadonlyArray<OrchestratorSummary>;
+} {
+  return {
+    active: subprojects.filter((sub) => !isSettledProject(sub)),
+    settled: subprojects.filter(isSettledProject),
+  };
+}
+
+/**
+ * Tasks done of tasks known, for a project and its non-settled subprojects. `unknown` counts
+ * the linked issues with no synced snapshot: they are in neither number, since nothing says
+ * whether they are open or done.
+ */
+export interface TaskProgress {
+  readonly done: number;
+  readonly total: number;
+  readonly unknown: number;
+}
+
+type TaskState = "open" | "closed" | "unknown";
+
+/** Each task linked in the project and its non-settled subprojects once; open wins over closed. */
+function scopedTasks(summary: OrchestratorSummary): ReadonlyMap<string, TaskState> {
+  const tasks = new Map<string, TaskState>();
+  const visit = (project: OrchestratorSummary) => {
+    for (const issue of project.issues) {
+      const key = `${issue.host}/${issue.repository}#${issue.number}`;
+      // The snapshot is required by the contract, but a link can still arrive before its first sync.
+      const state: TaskState = issue.snapshot?.state ?? "unknown";
+      const known = tasks.get(key);
+      // A task linked twice is open when any link says so, else closed when any link says so.
+      if (known === undefined || state === "open" || (state === "closed" && known === "unknown")) {
+        tasks.set(key, state);
+      }
+    }
+    // A settled subproject drops out whole, nested subprojects included.
+    project.subprojects.filter((sub) => !isSettledProject(sub)).forEach(visit);
+  };
+  visit(summary);
+  return tasks;
+}
+
+/** The done/total tally every surface shows for a project or subproject row. */
+export function taskProgress(summary: OrchestratorSummary): TaskProgress {
+  let done = 0;
+  let total = 0;
+  let unknown = 0;
+  for (const state of scopedTasks(summary).values()) {
+    if (state === "unknown") unknown += 1;
+    else {
+      total += 1;
+      if (state === "closed") done += 1;
+    }
+  }
+  return { done, total, unknown };
+}
+
+/** "24/36": the compact fraction, null when no task is known. */
+export const taskProgressFraction = (progress: TaskProgress): string | null =>
+  progress.total === 0 ? null : `${progress.done}/${progress.total}`;
+
+/** "24 of 36 tasks done": the tooltip and accessible label of the fraction. */
+export const taskProgressDescription = (progress: TaskProgress): string | null =>
+  progress.total === 0 ? null : `${progress.done} of ${progress.total} tasks done`;
+
+/** Every known task is done: surfaces dim the fraction. */
+export const taskProgressComplete = (progress: TaskProgress): boolean =>
+  progress.total > 0 && progress.done === progress.total;

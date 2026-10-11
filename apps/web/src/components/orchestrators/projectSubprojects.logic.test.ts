@@ -2,29 +2,19 @@ import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestr
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  openTaskCount,
   ownTreeContains,
   projectTrail,
   subprojectCountLabel,
   subprojectIsActive,
   subprojectNeedsYou,
   subprojectWorkingLabel,
-  taskProgressLabel,
   toggleProjectKey,
 } from "./projectSubprojects.logic";
 
-const issue = (number: number, state: "open" | "closed") =>
-  ({
-    host: "gitea.test",
-    repository: "owner/repo",
-    snapshot: { state },
-    number,
-  }) as OrchestratorSummary["issues"][number];
 const summary = (
   id: string,
   options: {
     parent?: string | null;
-    issues?: OrchestratorSummary["issues"];
     subprojects?: OrchestratorSummary[];
     workers?: string[];
     needsYou?: number;
@@ -36,28 +26,10 @@ const summary = (
     subprojects: options.subprojects ?? [],
     parentProjectKey:
       options.parent === undefined || options.parent === null ? null : `env:${options.parent}`,
-    issues: options.issues ?? [],
     rollup: { needsYou: options.needsYou ?? 0, working: 0, blocked: 0, latestActivityAt: "" },
   }) as unknown as OrchestratorSummary;
 
 describe("project subprojects", () => {
-  it("counts open tasks across the project and its subprojects", () => {
-    const nested = summary("nested", { issues: [issue(3, "open")] });
-    const sub = summary("sub", {
-      issues: [issue(2, "open"), issue(4, "closed")],
-      subprojects: [nested],
-    });
-    const root = summary("root", { issues: [issue(1, "open")], subprojects: [sub] });
-    expect(openTaskCount(root)).toBe(3);
-    expect(openTaskCount(sub)).toBe(2);
-  });
-
-  it("counts an issue linked in both a project and its subproject once", () => {
-    const sub = summary("sub", { issues: [issue(1, "open")] });
-    const root = summary("root", { issues: [issue(1, "open")], subprojects: [sub] });
-    expect(openTaskCount(root)).toBe(1);
-  });
-
   it("treats a subproject as active when only its own orchestrator is busy", () => {
     const idle = { ...summary("idle"), status: "ready" } as OrchestratorSummary;
     const supervising = { ...summary("sup"), status: "supervising" } as OrchestratorSummary;
@@ -108,17 +80,6 @@ describe("project subprojects", () => {
     expect(subprojectWorkingLabel(project(3, 0))).toBe("3 working in subprojects");
     expect(subprojectWorkingLabel(project(2, 2))).toBeNull();
     expect(subprojectWorkingLabel(project(0, 0))).toBeNull();
-  });
-
-  it("shows progress as closed of linked tasks, each linked issue once, subprojects included", () => {
-    const sub = summary("sub", { issues: [issue(1, "closed"), issue(2, "open")] });
-    const root = summary("root", {
-      issues: [issue(2, "open"), issue(3, "open")],
-      subprojects: [sub],
-    });
-    expect(taskProgressLabel(root)).toBe("1 of 3");
-    expect(taskProgressLabel(sub)).toBe("1 of 2");
-    expect(taskProgressLabel(summary("none"))).toBeNull();
   });
 
   it("hints how many subprojects a folded card hides, at any depth", () => {

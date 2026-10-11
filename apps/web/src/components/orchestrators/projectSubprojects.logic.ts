@@ -10,33 +10,6 @@ export const ownTreeContains = (summary: OrchestratorSummary, threadKey: string 
     (thread) => `${thread.environmentId}:${thread.id}` === threadKey,
   );
 
-/** Each task linked in the project and every subproject beneath it once, with whether it is closed. */
-function linkedTasks(summary: OrchestratorSummary): ReadonlyMap<string, boolean> {
-  const tasks = new Map<string, boolean>();
-  const visit = (project: OrchestratorSummary) => {
-    for (const issue of project.issues) {
-      const key = `${issue.host}/${issue.repository}#${issue.number}`;
-      // A task is open when any link to it says so, as openTaskCount always counted it.
-      tasks.set(key, (tasks.get(key) ?? true) && issue.snapshot?.state === "closed");
-    }
-    project.subprojects.forEach(visit);
-  };
-  visit(summary);
-  return tasks;
-}
-
-/** Open tasks across the project and every subproject beneath it, each linked issue once. */
-export function openTaskCount(summary: OrchestratorSummary): number {
-  return [...linkedTasks(summary).values()].filter((closed) => !closed).length;
-}
-
-/** The Progress column of the subprojects table: tasks closed of tasks linked, null with none. */
-export function taskProgressLabel(summary: OrchestratorSummary): string | null {
-  const tasks = [...linkedTasks(summary).values()];
-  if (tasks.length === 0) return null;
-  return `${tasks.filter(Boolean).length} of ${tasks.length}`;
-}
-
 /** Every subproject beneath a project, at any depth: what folding its card hides. */
 function subprojectCount(summary: OrchestratorSummary): number {
   return summary.subprojects.reduce((total, sub) => total + 1 + subprojectCount(sub), 0);
@@ -80,6 +53,9 @@ export const subprojectBlocked = (summary: OrchestratorSummary) =>
 
 /** Subproject cards this device has collapsed in the Projects sidebar; expanded is the default. */
 export const COLLAPSED_SUBPROJECTS_KEY = "t3code:projects:collapsed-subprojects";
+
+/** Projects whose Settled row this device has expanded; collapsed is the default. */
+export const EXPANDED_SETTLED_KEY = "t3code:projects:expanded-settled";
 
 /** The keys with `key` added if it was missing, removed if it was there. */
 export const toggleProjectKey = (

@@ -18,6 +18,7 @@ import {
 import { MobileDecisionFeed } from "./MobileDecisionFeed";
 import { MobileProjectRequests } from "./MobileProjectRequests";
 import { MobileSubprojectRows } from "./MobileSubprojectRows";
+import { MobileTaskFraction } from "./MobileTaskFraction";
 import {
   type EnvironmentProject,
   type EnvironmentThreadShell,
@@ -306,6 +307,7 @@ function MobileOrchestratorList({
           <Text className="min-w-0 flex-1 text-sm font-t3-medium text-foreground" numberOfLines={2}>
             {summary.root.title}
           </Text>
+          <MobileTaskFraction summary={summary} />
           {summary.rollup.needsYou > 0 ? (
             <Text className="text-xs text-warning-foreground">
               {summary.rollup.needsYou} need you

@@ -3,7 +3,12 @@ import {
   type OrchestratorSummary,
   type OrchestratorThreadShell,
 } from "@t3tools/client-runtime/state/orchestrators";
-import { projectKeyOf, subprojectIsActive } from "@t3tools/client-runtime/state/projectSubprojects";
+import {
+  projectKeyOf,
+  splitSettledSubprojects,
+  subprojectIsActive,
+} from "@t3tools/client-runtime/state/projectSubprojects";
+import { useState } from "react";
 import { Pressable, View } from "react-native";
 
 import { AppText as Text } from "../../components/AppText";
@@ -11,11 +16,13 @@ import { cn } from "../../lib/cn";
 import { relativeTime } from "../../lib/time";
 import { MobileDecisionFeed } from "./MobileDecisionFeed";
 import { MobileProjectRequests } from "./MobileProjectRequests";
+import { MobileTaskFraction } from "./MobileTaskFraction";
 
 /**
  * A project's subprojects as compact "/ Name" rows inside its card, the web sidebar's
  * layout (#156, mock B). A subproject's own requests and decisions render under its row,
- * so nesting it does not hide them; both render nothing when there is none.
+ * so nesting it does not hide them; both render nothing when there is none. Settled
+ * subprojects are not listed inline: one collapsed "Settled (N)" row ends the list.
  */
 export function MobileSubprojectRows({
   summary,
@@ -28,7 +35,11 @@ export function MobileSubprojectRows({
   readonly onSelectThread: (thread: OrchestratorThreadShell) => void;
   readonly depth?: number;
 }) {
-  return sortOrchestratorSummariesForSidebar(summary.subprojects, quietCutoff).map((sub) => (
+  const [settledOpen, setSettledOpen] = useState(false);
+  const { active, settled } = splitSettledSubprojects(
+    sortOrchestratorSummariesForSidebar(summary.subprojects, quietCutoff),
+  );
+  const renderRow = (sub: OrchestratorSummary) => (
     <View key={projectKeyOf(sub)}>
       <Pressable
         accessibilityRole="button"
@@ -57,6 +68,7 @@ export function MobileSubprojectRows({
         {sub.rollup.needsYou > 0 ? (
           <Text className="text-xs text-warning-foreground">{sub.rollup.needsYou}</Text>
         ) : null}
+        <MobileTaskFraction summary={sub} />
         <Text className="text-xs text-foreground-muted">
           {relativeTime(sub.rollup.latestActivityAt)}
         </Text>
@@ -77,5 +89,26 @@ export function MobileSubprojectRows({
         depth={depth + 1}
       />
     </View>
-  ));
+  );
+  return (
+    <>
+      {active.map(renderRow)}
+      {settled.length > 0 ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${settledOpen ? "Hide" : "Show"} ${settled.length} settled ${
+            settled.length === 1 ? "subproject" : "subprojects"
+          }`}
+          accessibilityState={{ expanded: settledOpen }}
+          className="min-h-9 flex-row items-center justify-between pr-1 active:bg-card"
+          style={{ paddingLeft: 8 + depth * 12 }}
+          onPress={() => setSettledOpen((open) => !open)}
+        >
+          <Text className="text-xs text-foreground-muted">Settled ({settled.length})</Text>
+          <Text className="text-xs text-foreground-muted">{settledOpen ? "Hide" : "Show"}</Text>
+        </Pressable>
+      ) : null}
+      {settledOpen ? settled.map(renderRow) : null}
+    </>
+  );
 }
