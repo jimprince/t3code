@@ -2,6 +2,7 @@ import { SendBindingWrite } from "../forkThreads/SendBindings.ts";
 import { ResumeAdmission } from "../threadRecovery/ResumeAdmission.ts";
 import { ThreadRecoveryError } from "@t3tools/contracts";
 import { HumanIngress } from "../threadRecovery/HumanIngress.ts";
+import { seedPurposeMetadata } from "../forkThreads/ThreadPurpose.ts";
 import { seedDelegatedMetadata } from "../forkThreads/MetadataStore.ts";
 import { MessageAdmission } from "../forkThreads/MessageAdmission.ts";
 import {
@@ -427,6 +428,8 @@ const baseLayer: Layer.Layer<
             .map((stored) => stored.event.threadId),
         );
         for (const { event } of storedEvents) {
+          if (event.type === "thread.created" && event.purposeSeed !== undefined)
+            yield* seedPurposeMetadata(sql, event.threadId, event.purposeSeed);
           if (
             event.type === "subagent.updated" &&
             event.payload.origin === "app_owned" &&

@@ -397,3 +397,5 @@ Use `rename <thread> --title <text>` to change a title without starting a turn.
 `--scope <text>` sets a shared scope and `--clear-scope` clears it. Explicit
 creation titles survive automatic generation. Return to automatic order clears
 only the row's current pinned or active order key.
+
+Agents can move a thread to Harness or back to Projects without changing its supervisor, workspace, or running work. Workers follow their supervisor’s purpose unless explicitly moved.

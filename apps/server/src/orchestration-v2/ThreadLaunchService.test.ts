@@ -1,3 +1,5 @@
+import { readMetadata, writeMetadata } from "../forkThreads/MetadataStore.ts";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as WorktreeSetupTracker from "../project/WorktreeSetupTracker.ts";
 import * as ProjectCloneTracker from "../project/ProjectCloneTracker.ts";
@@ -2375,3 +2377,46 @@ it.effect(
     }).pipe(Effect.provide(harness.layer));
   },
 );
+
+it.effect("message-less creator launch inherits once and replay preserves a later override", () => {
+  const harness = makeHarness();
+  return Effect.gen(function* () {
+    const launches = yield* ThreadLaunch.ThreadLaunchService;
+    const sql = yield* SqlClient.SqlClient;
+    const creator = ThreadId.make("purpose-creator");
+    yield* launches.launch(launchInput({ command: "creator-launch", thread: creator }));
+    yield* writeMetadata(sql, {
+      threadId: creator,
+      parentThreadId: ThreadId.make("purpose-owner"),
+    });
+    yield* writeMetadata(sql, {
+      threadId: ThreadId.make("purpose-owner"),
+      parentThreadId: null,
+      purpose: "harness",
+    });
+    const input = {
+      ...launchInput({ command: "purpose-launch", thread: "purpose-child" }),
+      creatorThreadId: creator,
+    };
+    yield* launches.launch(input);
+    const child = ThreadId.make("purpose-child");
+    assert.equal((yield* readMetadata(sql, child))?.purpose, "harness");
+    assert.isNull((yield* readMetadata(sql, child))?.parentThreadId);
+    yield* writeMetadata(sql, { threadId: child, parentThreadId: null, purpose: "project" });
+    yield* launches.launch(input);
+    assert.equal((yield* readMetadata(sql, child))?.purpose, "project");
+    const remote = {
+      ...launchInput({ command: "remote-purpose", thread: "remote-purpose-child" }),
+      purposeSeed: "harness" as const,
+    };
+    yield* launches.launch(remote);
+    assert.equal((yield* readMetadata(sql, remote.threadId))?.purpose, "harness");
+    yield* writeMetadata(sql, {
+      threadId: remote.threadId,
+      parentThreadId: null,
+      purpose: "project",
+    });
+    yield* launches.launch(remote);
+    assert.equal((yield* readMetadata(sql, remote.threadId))?.purpose, "project");
+  }).pipe(Effect.provide(harness.layer));
+});

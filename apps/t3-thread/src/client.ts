@@ -26,6 +26,7 @@ import {
   type HandoffLookupResult,
 } from "@t3tools/contracts";
 import { persistSendIntent, sendTransportCause, sendWasNeverSubmitted } from "./sendIntents.js";
+import { effectivePurpose } from "@t3tools/client-runtime/state/thread-purpose";
 import { withThreadMetadata, type ThreadMetadata } from "./v2/nesting.js";
 import { projectionHasWork } from "./v2/workState.js";
 import type { WorktreeGcThread } from "./worktreeGc.js";
@@ -439,6 +440,29 @@ export class RemoteEnvironmentClient {
     return (await this.describe()).capabilities.threadNesting === true;
   }
 
+  async effectiveThreadPurpose(threadId: string): Promise<"project" | "harness" | null> {
+    const rpc = await this.openRpc();
+    try {
+      const rows = await rpc.request<ThreadMetadata[]>("threadMetadataList", {});
+      return (
+        effectivePurpose([
+          ...rows.map((row) => ({
+            key: row.threadId,
+            parentKey: row.remoteParent
+              ? `remote:${row.remoteParent.environmentId}:${row.remoteParent.threadId}`
+              : row.parentThreadId,
+            purpose: row.purpose,
+          })),
+          ...(rows.some((row) => row.threadId === threadId)
+            ? []
+            : [{ key: threadId, parentKey: null }]),
+        ]).get(threadId) ?? null
+      );
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
   private async applyThreadMetadata<T extends { id: string; parentThreadId?: string | null }>(
     threads: T[],
     rpc: RemoteRpcClient,
@@ -814,6 +838,7 @@ export class RemoteEnvironmentClient {
     workerContext?: WorkerContext;
     parentThreadId?: string | null;
     settleOnComplete?: boolean;
+    purposeSeed?: "project" | "harness";
     pin?: boolean;
     remoteParent?: { environmentId: string; threadId: string };
   }): Promise<{ threadId: string; projectId: string; title: string; pinned: boolean }> {
@@ -906,6 +931,7 @@ export class RemoteEnvironmentClient {
         projectId: project.id,
         title,
         generateTitle: false,
+        ...(input.purposeSeed === undefined ? {} : { purposeSeed: input.purposeSeed }),
         modelSelection: wireModel(modelSelection),
         runtimeMode,
         interactionMode,
