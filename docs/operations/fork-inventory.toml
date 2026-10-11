@@ -3155,6 +3155,7 @@ date = "2026-10-11"
 decided = "preserve-existing-semantics"
 rationale = "App-owned delegates already imply organizational ownership. Use their persisted creation lineage and one insert-once writer to remove dependence on event batching while preserving all explicit edits on replay. Provider-native organization/completion is a separate approval-gated concern."
 
+[[patch]]
 name = "fork-harness-purpose"
 subject = "feat(threads): persist and inherit Harness purpose"
 class = "product"
