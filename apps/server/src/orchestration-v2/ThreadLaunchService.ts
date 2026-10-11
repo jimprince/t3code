@@ -17,6 +17,7 @@ import {
   ProjectId,
   type RunId,
   type RuntimeMode,
+  type ThreadPurpose,
   type ScheduledTaskId,
   ThreadId,
 } from "@t3tools/contracts";
@@ -70,6 +71,8 @@ export interface ThreadLaunchInitialMessage {
 }
 
 export interface ThreadLaunchInput {
+  readonly creatorThreadId?: ThreadId;
+  readonly purposeSeed?: ThreadPurpose;
   readonly commandId: CommandId;
   readonly threadId?: ThreadId;
   readonly reuseExistingThread?: boolean;
@@ -738,6 +741,10 @@ const make = Effect.gen(function* () {
               })
             : threads.dispatch({
                 type: "thread.create",
+                ...(input.creatorThreadId === undefined
+                  ? {}
+                  : { creatorThreadId: input.creatorThreadId }),
+                ...(input.purposeSeed === undefined ? {} : { purposeSeed: input.purposeSeed }),
                 commandId: input.commandId,
                 threadId: candidateThreadId,
                 projectId: input.projectId,
