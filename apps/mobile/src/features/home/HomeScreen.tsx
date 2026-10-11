@@ -9,6 +9,7 @@ import {
   type OrchestratorSummary,
 } from "@t3tools/client-runtime/state/orchestrators";
 import {
+  labelWithTaskProgress,
   subprojectCountLabel,
   subprojectWorkingLabel,
   toggleProjectKey,
@@ -18,6 +19,7 @@ import {
 import { MobileDecisionFeed } from "./MobileDecisionFeed";
 import { MobileProjectRequests } from "./MobileProjectRequests";
 import { MobileSubprojectRows } from "./MobileSubprojectRows";
+import { MobileTaskFraction } from "./MobileTaskFraction";
 import {
   type EnvironmentProject,
   type EnvironmentThreadShell,
@@ -288,7 +290,7 @@ function MobileOrchestratorList({
       <Pressable
         key={projectKeyOf(summary)}
         accessibilityRole="button"
-        accessibilityLabel={`Open ${summary.root.title}`}
+        accessibilityLabel={labelWithTaskProgress(`Open ${summary.root.title}`, summary)}
         className="border-b border-border px-2 py-3 active:bg-card"
         onPress={() => onSelectThread(summary.root)}
       >
@@ -306,6 +308,7 @@ function MobileOrchestratorList({
           <Text className="min-w-0 flex-1 text-sm font-t3-medium text-foreground" numberOfLines={2}>
             {summary.root.title}
           </Text>
+          <MobileTaskFraction summary={summary} />
           {summary.rollup.needsYou > 0 ? (
             <Text className="text-xs text-warning-foreground">
               {summary.rollup.needsYou} need you
@@ -354,7 +357,7 @@ function MobileOrchestratorList({
           // thread may not be in this list yet.
           onOpenThread={(threadId) => onSelectThread({ ...summary.root, id: threadId })}
         />
-        {foldHint !== null ? (
+        {summary.subprojects.length > 0 ? (
           <View className="mt-2 border-t border-border">
             <Pressable
               accessibilityRole="button"
@@ -366,7 +369,7 @@ function MobileOrchestratorList({
               }
             >
               <Text className="text-xs text-foreground-muted">
-                {folded ? `Show ${foldHint}` : "Hide subprojects"}
+                {folded ? `Show ${foldHint ?? "subprojects"}` : "Hide subprojects"}
               </Text>
             </Pressable>
             {folded ? null : (
