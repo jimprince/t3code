@@ -483,6 +483,22 @@
     "./dashboard": {
       "types": "./src/dashboard/store.ts",
       "default": "./src/dashboard/store.ts"
+    },
+    "./dashboard/aggregation": {
+      "types": "./src/dashboard/aggregation.ts",
+      "default": "./src/dashboard/aggregation.ts"
+    },
+    "./dashboard/progress": {
+      "types": "./src/dashboard/progress.ts",
+      "default": "./src/dashboard/progress.ts"
+    },
+    "./dashboard/fallback": {
+      "types": "./src/dashboard/fallback.ts",
+      "default": "./src/dashboard/fallback.ts"
+    },
+    "./dashboard/merge": {
+      "types": "./src/dashboard/merge.ts",
+      "default": "./src/dashboard/merge.ts"
     }
   },
   "scripts": {
