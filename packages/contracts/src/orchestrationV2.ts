@@ -1,3 +1,4 @@
+import { ThreadPurpose } from "./forkThreadMetadata.ts";
 import { NotificationOrigin } from "./notification.ts";
 import { ThreadIssueLink, ThreadIssueKey, ThreadIssueSnapshot } from "./threadIssue.ts";
 import { CodexNativeGoalSummary } from "./codexNativeGoal.ts";
@@ -1591,6 +1592,7 @@ export const OrchestrationV2DomainEvent = Schema.Union([
   Schema.Struct({
     ...OrchestrationV2EventBase.fields,
     type: Schema.Literal("thread.created"),
+    purposeSeed: Schema.optional(ThreadPurpose),
     payload: OrchestrationV2AppThread,
   }),
   Schema.Struct({
@@ -2418,6 +2420,7 @@ export const OrchestrationV2DomainEventJson = Schema.Union([
   Schema.Struct({
     ...OrchestrationV2JsonEventBaseFields,
     type: Schema.Literal("thread.created"),
+    purposeSeed: Schema.optional(ThreadPurpose),
     payload: OrchestrationV2AppThreadJson,
   }),
   Schema.Struct({
@@ -2565,6 +2568,8 @@ export const OrchestrationV2Command = Schema.Union([
   Schema.Struct({
     type: Schema.Literal("thread.create"),
     handoverFromThreadId: Schema.optional(ThreadId),
+    creatorThreadId: Schema.optional(ThreadId),
+    purposeSeed: Schema.optional(ThreadPurpose),
     ...OrchestrationV2CreationFields,
     commandId: CommandId,
     threadId: ThreadId,
@@ -3140,6 +3145,8 @@ export type OrchestrationV2ArchivedShellStreamItem =
   typeof OrchestrationV2ArchivedShellStreamItem.Type;
 
 export const OrchestrationV2ThreadLaunchInput = Schema.Struct({
+  creatorThreadId: Schema.optional(ThreadId),
+  purposeSeed: Schema.optional(ThreadPurpose),
   issue: Schema.optional(TrimmedNonEmptyString),
   commandId: CommandId,
   creationSource: Schema.optional(OrchestrationV2CreationSource),
