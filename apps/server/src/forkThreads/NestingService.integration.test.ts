@@ -1,3 +1,5 @@
+import { resolveCreatorPurpose } from "./ThreadPurpose.ts";
+import { writeMetadata } from "./MetadataStore.ts";
 import * as DateTime from "effect/DateTime";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -255,5 +257,31 @@ it.effect(
         purpose: null,
       });
       assert.isNull((yield* service.list()).find((row) => row.threadId === id("child"))?.purpose);
+    }).pipe(Effect.provide(SqlitePersistenceMemory)),
+);
+
+it.effect(
+  "native execution fallback resolves an organizational child without persisting native edges",
+  () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* writeMetadata(sql, {
+        threadId: id("parent"),
+        parentThreadId: null,
+        purpose: "harness",
+      });
+      yield* writeMetadata(sql, { threadId: id("child"), parentThreadId: id("native") });
+      const nativeShell = () =>
+        Effect.succeed({
+          lineage: {
+            parentThreadId: id("parent"),
+            rootThreadId: id("parent"),
+            relationshipToParent: "subagent" as const,
+          },
+        });
+      assert.equal(yield* resolveCreatorPurpose(sql, id("child"), nativeShell), "harness");
+      assert.isUndefined((yield* listMetadata(sql)).find((row) => row.threadId === id("native")));
+      yield* writeMetadata(sql, { threadId: id("native"), parentThreadId: null });
+      assert.equal(yield* resolveCreatorPurpose(sql, id("child"), nativeShell), "project");
     }).pipe(Effect.provide(SqlitePersistenceMemory)),
 );

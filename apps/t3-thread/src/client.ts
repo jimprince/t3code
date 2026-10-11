@@ -444,6 +444,12 @@ export class RemoteEnvironmentClient {
     const rpc = await this.openRpc();
     try {
       const rows = await rpc.request<ThreadMetadata[]>("threadMetadataList", {});
+      const item = await rpc.subscribeShellSnapshot<{
+        kind: "snapshot";
+        snapshot: OrchestrationShellSnapshot;
+      }>();
+      if (item.kind !== "snapshot") throw new Error("Expected an orchestration shell snapshot.");
+      const metadataIds = new Set<string>(rows.map((row) => row.threadId));
       return (
         effectivePurpose([
           ...rows.map((row) => ({
@@ -453,9 +459,15 @@ export class RemoteEnvironmentClient {
               : row.parentThreadId,
             purpose: row.purpose,
           })),
-          ...(rows.some((row) => row.threadId === threadId)
-            ? []
-            : [{ key: threadId, parentKey: null }]),
+          ...item.snapshot.threads
+            .filter((thread) => !metadataIds.has(thread.id))
+            .map((thread) => ({
+              key: thread.id,
+              parentKey:
+                thread.lineage?.relationshipToParent === "subagent"
+                  ? thread.lineage.parentThreadId
+                  : null,
+            })),
         ]).get(threadId) ?? null
       );
     } finally {

@@ -28,12 +28,19 @@ export const resolveCreatorPurpose = <E = never, R = never>(
       purpose: row.purpose,
       unavailable: false,
     }));
-    const known = new Set(nodes.map((node) => node.key));
+    const metadata = new Map(rows.map((row) => [row.threadId, row]));
+    const seen = new Set<ThreadId>();
     let cursor: ThreadId | null = creator;
-    while (cursor !== null && !known.has(cursor)) {
-      known.add(cursor);
+    while (cursor !== null && !seen.has(cursor)) {
+      seen.add(cursor);
+      const row = metadata.get(cursor);
+      if (row !== undefined) {
+        if (row.purpose != null || row.remoteParent != null) break;
+        cursor = row.parentThreadId;
+        continue;
+      }
       const shell = getShell === undefined ? null : yield* getShell(cursor);
-      const parent =
+      const parent: ThreadId | null =
         shell?.lineage.relationshipToParent === "subagent" ? shell.lineage.parentThreadId : null;
       nodes.push({
         key: cursor,
