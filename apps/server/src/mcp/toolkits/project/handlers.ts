@@ -105,6 +105,7 @@ export const ProjectHandlersLive = ProjectToolkit.toLayer({
             "Pass modelSelection: the project has no default model. orchestrator_capabilities lists providers and models.",
         });
       const result = yield* ThreadMessageIntake.launchThread({
+        ...(caller === undefined ? {} : { creatorThreadId: caller.id }),
         commandId,
         threadId,
         projectId,

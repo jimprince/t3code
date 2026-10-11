@@ -21,7 +21,7 @@ import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.t
 import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterRegistry.ts";
 import { makeOrchestratorV2ReplayLayerWithRegistry } from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
 import { makeNestingService } from "./NestingService.ts";
-import { writeMetadata } from "./MetadataStore.ts";
+import { readMetadata, writeMetadata } from "./MetadataStore.ts";
 import { CodexProviderCapabilitiesV2 } from "../orchestration-v2/Adapters/CodexAdapterV2.ts";
 import { liveRoots, validateNaming } from "./NamedAgentPolicy.ts";
 
@@ -106,7 +106,16 @@ it.effect(
         runId: run.id,
         commandId: CommandId.make("stop-root"),
       });
+      yield* writeMetadata(sql, { threadId: first, parentThreadId: null, purpose: "harness" });
       yield* management.dispatch(create("replacement", first));
+      assert.equal((yield* readMetadata(sql, ThreadId.make("replacement")))?.purpose, "harness");
+      yield* writeMetadata(sql, {
+        threadId: ThreadId.make("replacement"),
+        parentThreadId: null,
+        purpose: "project",
+      });
+      yield* management.dispatch(create("replacement", first));
+      assert.equal((yield* readMetadata(sql, ThreadId.make("replacement")))?.purpose, "project");
       const replacement = ThreadId.make("replacement");
       assert.isNotNull((yield* management.getThreadShell(first))?.archivedAt);
       assert.deepEqual(
