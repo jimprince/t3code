@@ -64,6 +64,8 @@ const RPC_AGGREGATES = {
   "projectRoadmap.get": "project-roadmap",
   "projectRoadmap.move": "project-roadmap",
   "projectRoadmap.saveVersion": "project-roadmap",
+  "dashboard.getSnapshot": "dashboard",
+  "dashboard.subscribe": "dashboard",
   "projectDashboard.get": "project-dashboard",
   "projectDashboard.setTracker": "project-dashboard",
   "projectDashboard.setWidgets": "project-dashboard",

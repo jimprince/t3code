@@ -223,6 +223,7 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
       live (`projectLayout.subscribe`). Absent on older servers, where clients
       show the default layout. */
   projectLayout: Schema.optionalKey(Schema.Boolean),
+  dashboardSnapshot: Schema.optionalKey(Schema.Boolean),
   /** Server detects `platform.machine` and persists the `environmentIcon`
       setting. Older servers drop the key on write, so clients show the
       picker inert rather than offering a choice that would never stick. */
