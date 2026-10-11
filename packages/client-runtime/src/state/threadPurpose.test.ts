@@ -2,7 +2,7 @@ import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { presentThreadShell } from "./models.ts";
 import { v2ThreadShell } from "./orchestrationV2TestFixtures.ts";
 import { buildOrchestratorSummaries, joinOrchestratorMetadata } from "./orchestrators.ts";
-import { partitionThreadPurposes, threadPurposes } from "./threadPurpose.ts";
+import { partitionThreadPurposes, purposeMoveFor, threadPurposes } from "./threadPurpose.ts";
 
 import { describe, expect, it } from "vite-plus/test";
 import { effectivePurpose } from "./threadPurpose.ts";
@@ -142,4 +142,124 @@ it("uses native subagent lineage only while organization has no explicit row", (
       ),
     ).get("env:native-child"),
   ).toBe("project");
+});
+
+describe("purposeMoveFor", () => {
+  const rows = (
+    metadata: ReadonlyArray<{
+      id: string;
+      parent?: string;
+      purpose?: "harness" | "project";
+      subproject?: "on";
+    }>,
+  ) => {
+    const threads = joinOrchestratorMetadata(
+      metadata.map(({ id }) =>
+        presentThreadShell(EnvironmentId.make("env"), {
+          ...v2ThreadShell,
+          id: ThreadId.make(id),
+          archivedAt: null,
+        }),
+      ),
+      metadata.map((row) => ({
+        environmentId: "env",
+        threadId: ThreadId.make(row.id),
+        parentThreadId: row.parent === undefined ? null : ThreadId.make(row.parent),
+        ...(row.purpose === undefined ? {} : { purpose: row.purpose }),
+        ...(row.subproject === undefined ? {} : { subproject: row.subproject }),
+      })),
+    );
+    return (id: string) => purposeMoveFor(threads, `env:${id}`);
+  };
+
+  it("offers Move to Harness on a top-level project or plain thread, writing an explicit harness purpose", () => {
+    const move = rows([{ id: "root" }, { id: "worker", parent: "root" }, { id: "plain" }]);
+    for (const id of ["root", "plain"]) {
+      expect(move(id)).toEqual({
+        id: "move-to-harness",
+        label: "Move to Harness",
+        purpose: "harness",
+      });
+    }
+  });
+
+  it("says where a move back returns to: Projects for a project-shaped root, Threads for a plain one", () => {
+    const move = rows([
+      { id: "head", purpose: "harness" },
+      { id: "worker", parent: "head" },
+      { id: "marked", purpose: "harness", subproject: "on" },
+      { id: "alone", purpose: "harness" },
+    ]);
+    expect(move("head")).toEqual({
+      id: "move-to-projects",
+      label: "Move back to Projects",
+      purpose: "project",
+    });
+    expect(move("marked")?.id).toBe("move-to-projects");
+    expect(move("alone")).toEqual({
+      id: "move-to-threads",
+      label: "Move back to Threads",
+      purpose: "project",
+    });
+  });
+
+  it("leaves a worker with its root, but lets an explicit override move on its own", () => {
+    const move = rows([
+      { id: "head", purpose: "harness" },
+      { id: "worker", parent: "head" },
+      { id: "override", parent: "head", purpose: "project" },
+    ]);
+    expect(move("worker")).toBeNull();
+    expect(move("override")?.id).toBe("move-to-harness");
+  });
+
+  it("offers nothing when the purpose is unknown or the thread is archived", () => {
+    const threads = joinOrchestratorMetadata(
+      [
+        presentThreadShell(EnvironmentId.make("env"), {
+          ...v2ThreadShell,
+          id: ThreadId.make("orphan"),
+          archivedAt: null,
+        }),
+      ],
+      [
+        {
+          environmentId: "env",
+          threadId: ThreadId.make("orphan"),
+          parentThreadId: ThreadId.make("gone"),
+        },
+      ],
+    );
+    expect(purposeMoveFor(threads, "env:orphan")).toBeNull();
+    expect(purposeMoveFor([], "env:missing")).toBeNull();
+  });
+});
+
+it("keeps a project whose purpose is unknown in Projects, never hiding it", () => {
+  const threads = joinOrchestratorMetadata(
+    ["orphan", "orphan-worker"].map((id) =>
+      presentThreadShell(EnvironmentId.make("env"), {
+        ...v2ThreadShell,
+        id: ThreadId.make(id),
+        archivedAt: null,
+      }),
+    ),
+    [
+      {
+        environmentId: "env",
+        threadId: ThreadId.make("orphan"),
+        parentThreadId: null,
+        remoteParent: { environmentId: "other", threadId: ThreadId.make("away") },
+      },
+      {
+        environmentId: "env",
+        threadId: ThreadId.make("orphan-worker"),
+        parentThreadId: ThreadId.make("orphan"),
+      },
+    ],
+  );
+  const result = partitionThreadPurposes(threads, buildOrchestratorSummaries(threads, []));
+  expect(result.purposes.get("env:orphan")).toBeNull();
+  expect(result.projects.map((summary) => summary.root.id)).toEqual(["orphan"]);
+  expect(result.harness).toEqual([]);
 });

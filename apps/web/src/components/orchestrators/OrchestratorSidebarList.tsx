@@ -9,6 +9,7 @@ import {
   type ProjectSidebarBucket,
   type StandaloneThreadStatus,
 } from "@t3tools/client-runtime/state/orchestrators";
+import { partitionThreadPurposes } from "@t3tools/client-runtime/state/thread-purpose";
 import {
   closestCenter,
   DndContext,
@@ -96,7 +97,7 @@ const threadKey = (thread: { readonly environmentId: string; readonly id: string
  * The project whose page or thread is open: its orchestrator, or any thread in
  * its tree, matches the route's environment and thread.
  */
-function useSelectedRoute() {
+export function useSelectedRoute() {
   return useParams({
     strict: false,
     select: (params: { environmentId?: string; threadId?: string }) =>
@@ -446,13 +447,20 @@ export function OrchestratorSidebarList() {
     () => buildOrchestratorSummaries(threads, projects),
     [projects, threads],
   );
-  const summaries = useMemo(
-    () => allSummaries.filter((summary) => summary.parentProjectKey === null),
-    [allSummaries],
+  // Harness roots live in the Harness tab. A project nested under one, or the reverse, lists in
+  // the tab of its own purpose; a row whose purpose is unknown stays here, where it always was.
+  const { projects: summaries, purposes } = useMemo(
+    () => partitionThreadPurposes(threads, allSummaries),
+    [allSummaries, threads],
   );
   const standaloneGroups = useMemo(
-    () => buildStandaloneThreadGroups(threads, projects, lastVisitedAtByThreadKey),
-    [lastVisitedAtByThreadKey, projects, threads],
+    () =>
+      buildStandaloneThreadGroups(
+        threads.filter((thread) => purposes.get(threadKey(thread)) !== "harness"),
+        projects,
+        lastVisitedAtByThreadKey,
+      ),
+    [lastVisitedAtByThreadKey, projects, purposes, threads],
   );
   const desiredBuckets = useMemo(
     () => [
@@ -474,8 +482,15 @@ export function OrchestratorSidebarList() {
   );
   const sortSubprojects = useCallback(
     (summary: OrchestratorSummary) =>
-      sortOrchestratorSummariesForSidebar(summary.subprojects, quietCutoff, displayedBuckets),
-    [displayedBuckets, quietCutoff],
+      sortOrchestratorSummariesForSidebar(
+        // A subproject of the other purpose is a root of its own tab, not a row in this card.
+        summary.subprojects.filter(
+          (sub) => purposes.get(threadKey(sub.root)) === purposes.get(threadKey(summary.root)),
+        ),
+        quietCutoff,
+        displayedBuckets,
+      ),
+    [displayedBuckets, purposes, quietCutoff],
   );
   const active = orderedSummaries.filter(
     (summary) => displayedBuckets.get(threadKey(summary.root)) !== "quiet",
