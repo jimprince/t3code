@@ -1,3 +1,4 @@
+import * as ProjectIssuesService from "./projectIssues/ProjectIssuesService.ts";
 import * as DashboardService from "./dashboard/DashboardService.ts";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
 import * as AgentGateway from "./automations/AgentGateway.ts";
@@ -764,6 +765,7 @@ const layerMakeRoutes = Layer.mergeAll(
   // Server browser tabs and HTML render previews install and run the same headless browser.
   Layer.provide(PreviewBrowser.layer),
   Layer.provide(DashboardService.layer),
+  Layer.provide(ProjectIssuesService.layer),
   Layer.provide(ProjectLayoutService.layer),
   Layer.provide(PreviewAutomationBroker.layer),
   Layer.provide(ServerSelfUpdate.layer.pipe(Layer.provide(layerDesktopAppUpdate))),
