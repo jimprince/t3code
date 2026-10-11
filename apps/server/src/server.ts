@@ -1,3 +1,4 @@
+import * as HarnessRead from "./harness/HarnessReadService.ts";
 import * as AgentGateway from "./automations/AgentGateway.ts";
 import * as AutomationEngine from "./automations/AutomationEngine.ts";
 import * as AutomationStore from "./automations/AutomationStore.ts";
@@ -538,6 +539,7 @@ const AutomationWorkerLive = Layer.effectDiscard(
 
 const RuntimeCoreDependenciesBaseLive = Layer.mergeAll(
   AutomationWorkerLive,
+  HarnessRead.layer,
   AgentAwarenessRelay.layer,
   ThreadSettlementWorkerLive,
   WorkerLifecycle.live,

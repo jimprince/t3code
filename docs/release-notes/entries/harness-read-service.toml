@@ -1,0 +1,4 @@
+id = "harness-read-service"
+category = "feature"
+functionality = "Harness visibility"
+text = "Agents can read Harness routines and bounded run histories, including missed schedule slots, execution failures and findings counts when reported. Missing findings and unavailable sources remain unknown."
