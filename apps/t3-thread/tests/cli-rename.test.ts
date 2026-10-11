@@ -229,6 +229,9 @@ describe("worker creation supervision", () => {
       vi.resetModules();
       const { RemoteEnvironmentClient } = await import("../src/client.js");
       vi.spyOn(RemoteEnvironmentClient.prototype, "supportsThreadNesting").mockResolvedValue(true);
+      const purpose = vi
+        .spyOn(RemoteEnvironmentClient.prototype, "effectiveThreadPurpose")
+        .mockResolvedValue("harness");
       const create = vi
         .spyOn(RemoteEnvironmentClient.prototype, "createAgentThread")
         .mockResolvedValue({
@@ -265,6 +268,12 @@ describe("worker creation supervision", () => {
       ];
       await import("../src/cli.js");
       await printed;
+      if (parentThreadId !== null) expect(purpose).not.toHaveBeenCalled();
+      else {
+        expect(purpose).toHaveBeenCalledWith(threadId);
+        expect(purpose.mock.instances[0]?.environment.name).toBe("local");
+        expect(create.mock.calls[0]?.[0].purposeSeed).toBe("harness");
+      }
       expect(create).toHaveBeenCalledWith(
         expect.objectContaining({
           projectId: "child-project",

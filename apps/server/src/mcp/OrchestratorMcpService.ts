@@ -1807,6 +1807,7 @@ const make = Effect.gen(function* () {
                   }),
                   threadId,
                   projectId: parent.thread.projectId,
+                  creatorThreadId: parent.thread.id,
                   title,
                   modelSelection: target.modelSelection,
                   runtimeMode,
