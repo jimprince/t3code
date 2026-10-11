@@ -21,8 +21,13 @@ import {
   registerDashboardDecisions,
   type DashboardAnswer,
 } from "./answers.ts";
-import { readOlderDashboard } from "./fallback.ts";
-export { mergeDashboardSnapshots, compareDashboardVersions, overlayAnswered } from "./merge.ts";
+import { OLDER_DASHBOARD_REFRESH_MS, readOlderDashboard } from "./fallback.ts";
+export {
+  createDashboardSnapshotMerger,
+  mergeDashboardSnapshots,
+  compareDashboardVersions,
+  overlayAnswered,
+} from "./merge.ts";
 
 /** Cache lifetime is independent of the subscription lifetime; unmount closes all network reads. */
 export function createDashboardAtoms<R, ER>(
@@ -46,11 +51,10 @@ export function createDashboardAtoms<R, ER>(
   const initialized = new Set<EnvironmentId>();
   const configs = new Map<EnvironmentId, ServerConfig>();
   const shells = new Map<EnvironmentId, OrchestrationV2ShellSnapshot>();
-  const fallback = createEnvironmentQueryAtomFamily(runtime, {
+  const fallbackQuery = createEnvironmentQueryAtomFamily(runtime, {
     label: "dashboard:older-server",
     idleTtlMs: 0,
-    staleTimeMs: 60_000,
-    refreshIntervalMs: 60_000,
+    staleTimeMs: OLDER_DASHBOARD_REFRESH_MS,
     execute: (
       input: { environmentId: EnvironmentId },
       emit: (value: DashboardSnapshot) => Effect.Effect<void>,
@@ -69,6 +73,16 @@ export function createDashboardAtoms<R, ER>(
         : Effect.never;
     },
   });
+  // Arm the next refresh only after a pass settles; slow hosts must finish their queue.
+  const fallback = Atom.family((environmentId: EnvironmentId) => {
+    const query = fallbackQuery({ environmentId, input: { environmentId } });
+    const scheduled = query.pipe(Atom.withRefresh(OLDER_DASHBOARD_REFRESH_MS), Atom.setIdleTTL(0));
+    return Atom.make((get) => {
+      const result = get(query);
+      if (!result.waiting) get(scheduled);
+      return result;
+    }).pipe(Atom.setIdleTTL(0));
+  });
   const snapshot = Atom.family((environmentId: EnvironmentId) =>
     Atom.make((get) => {
       if (!initialized.has(environmentId)) {
@@ -79,13 +93,13 @@ export function createDashboardAtoms<R, ER>(
       const config = get(options.config(environmentId));
       if (config) configs.set(environmentId, config);
       const capable = config?.environment.capabilities.dashboardSnapshot === true;
-      const shell = get(options.shell(environmentId));
+      const shell = capable ? null : get(options.shell(environmentId));
       if (shell) shells.set(environmentId, shell);
       // Config absence is still connecting, never permission to try an unsupported RPC.
       const result = capable
         ? get(subscription({ environmentId, input: {} }))
         : config && shell
-          ? get(fallback({ environmentId, input: { environmentId } }))
+          ? get(fallback(environmentId))
           : null;
       const value = result ? Option.getOrNull(AsyncResult.value(result)) : null;
       if (value) cache.set(environmentId, value);
@@ -108,14 +122,11 @@ export function createDashboardAtoms<R, ER>(
             confirmedAnswers.add(answer);
         }
       const pendingAnswers = answers.filter((answer) => !confirmedAnswers.has(answer));
+      const now =
+        pendingAnswers.length > 0 ? Option.getOrElse(AsyncResult.value(get(clock)), () => 0) : 0;
       return {
         snapshot: cached
-          ? overlayDashboardAnswers(
-              cached,
-              environmentId,
-              pendingAnswers,
-              Option.getOrElse(AsyncResult.value(get(clock)), () => 0),
-            )
+          ? overlayDashboardAnswers(cached, environmentId, pendingAnswers, now)
           : null,
         refreshing: result?.waiting ?? false,
         failed: result ? AsyncResult.isFailure(result) : false,
@@ -132,7 +143,7 @@ export function createDashboardAtoms<R, ER>(
     registry.refresh(
       capable
         ? subscription({ environmentId, input: {} })
-        : fallback({ environmentId, input: { environmentId } }),
+        : fallbackQuery({ environmentId, input: { environmentId } }),
     );
   };
   return { snapshot, retry };
