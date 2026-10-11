@@ -3139,3 +3139,18 @@ id = "settled-subprojects-ui-20261012"
 date = "2026-10-11"
 decided = "separate-droppable-concern"
 rationale = "Settled grouping and shared progress are independently removable from the page-table layout. Keep both UI implementation and its review repairs together; attention remains visible on the settled toggle without changing the approved collapsed-row requirement."
+
+[[patch]]
+name = "fork-sidebar-hygiene-seed"
+subject = "fix(server): seed delegated ownership from creation lineage"
+class = "product"
+purpose = "Seed app-owned delegation metadata from durable creation lineage even when its parent task arrives in a later event batch."
+retire_when = "Upstream persists organizational ownership atomically from creation lineage without losing explicit user overrides."
+depends_on = ["fork-nested-threads"]
+roles = []
+note = "Replaces the created-ID/subagent.updated same-batch pairing with the thread.created payload. One complete creation metadata writer is shared with Harness purpose. Existing metadata including explicit null parent, remote reparenting and completion opt-out always wins; native provider semantics stay outside this bug fix. No historical backfill or recurring canary change."
+[[patch.decision]]
+id = "creation-lineage-seed-20261012"
+date = "2026-10-11"
+decided = "preserve-existing-semantics"
+rationale = "App-owned delegates already imply organizational ownership. Use their persisted creation lineage and one insert-once writer to remove dependence on event batching while preserving all explicit edits on replay. Provider-native organization/completion is a separate approval-gated concern."
