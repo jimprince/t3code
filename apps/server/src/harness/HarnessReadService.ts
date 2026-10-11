@@ -8,6 +8,7 @@ import {
   type Automation,
   type AutomationRun,
   type HarnessAgent,
+  type HarnessQueueSummary,
   type HarnessRoutine,
   type HarnessRun,
   type HarnessSnapshot,
@@ -280,6 +281,34 @@ function executionRun(
   };
 }
 
+/** At most cap+1 queued rows, using migration 055's status-leading recovery index.
+ * Includes every environment thread, independent of Harness/project filters. */
+export const queuedSendSummary = Effect.fn("HarnessReadService.queuedSendSummary")(function* (
+  sql: SqlClient.SqlClient,
+  cap = 10_000,
+) {
+  const readAt = yield* iso();
+  const [row] = yield* sql<{ sampled_count: number; oldest_at: string | null }>`
+      SELECT COUNT(*) AS sampled_count, MIN(requested_at) AS oldest_at FROM (
+        SELECT requested_at FROM orchestration_v2_projection_runs
+        WHERE status IN ('queued', 'preparing', 'starting', 'running', 'waiting')
+          AND status = 'queued'
+        LIMIT ${cap + 1}
+      )`;
+  if (!row) return yield* new HarnessReadError({ message: "Queue read returned no aggregate." });
+  const complete = row.sampled_count <= cap;
+  return {
+    queuedSendCount: complete ? row.sampled_count : null,
+    oldestQueuedRequestedAt: complete ? row.oldest_at : null,
+    coverage: complete ? "complete" : "partial",
+    readAt,
+    sampleSize: row.sampled_count,
+    evidence: complete
+      ? "All queued runs across this environment; includes automation executions. Non-atomic snapshot read."
+      : `Queued subset exceeds ${cap} rows; ${row.sampled_count} sampled. Total and oldest are unknown.`,
+  } satisfies HarnessQueueSummary;
+});
+
 /** Sources are stamped separately: this is deliberately an honest non-atomic read model. */
 export const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -332,6 +361,18 @@ export const make = Effect.gen(function* () {
             }),
           );
         });
+      const queueSummary = yield* source<HarnessQueueSummary, unknown>(
+        "queued-runs",
+        queuedSendSummary(sql),
+        {
+          queuedSendCount: null,
+          oldestQueuedRequestedAt: null,
+          coverage: "unknown",
+          readAt: yield* iso(),
+          sampleSize: 0,
+          evidence: "Queue read unavailable; depth and oldest wait are unknown.",
+        },
+      );
       const threads = yield* source(
         "threads",
         sql<ThreadRow>`SELECT t.thread_id, t.project_id, t.title,
@@ -910,6 +951,7 @@ export const make = Effect.gen(function* () {
         environmentId,
         generatedAt,
         sources,
+        queueSummary,
         agents: groupAgents(
           filtered,
           standing,

@@ -24,3 +24,35 @@ export function selectHarnessAgents(snapshot: HarnessSnapshot) {
   }));
 }
 export type HarnessAgentRow = ReturnType<typeof selectHarnessAgents>[number];
+
+/** Environment totals already include automated executions; never add routine runs again. */
+export interface HarnessQueueSelection {
+  readonly count: number;
+  readonly oldestRequestedAt: string | null;
+}
+
+/** @public Older hosts and incomplete source reads cannot establish an exact queue. */
+export function selectHarnessQueuedSends(
+  snapshots: ReadonlyArray<HarnessSnapshot>,
+): HarnessQueueSelection | null {
+  const latest = new Map<string, HarnessSnapshot>();
+  for (const snapshot of snapshots) {
+    const previous = latest.get(snapshot.environmentId);
+    if (!previous || snapshot.generatedAt >= previous.generatedAt)
+      latest.set(snapshot.environmentId, snapshot);
+  }
+  if (latest.size === 0) return null;
+  let count = 0;
+  let oldestRequestedAt: string | null = null;
+  for (const snapshot of latest.values()) {
+    const queue = snapshot.queueSummary;
+    if (!queue || queue.coverage !== "complete" || queue.queuedSendCount === null) return null;
+    count += queue.queuedSendCount;
+    if (
+      queue.oldestQueuedRequestedAt !== null &&
+      (oldestRequestedAt === null || queue.oldestQueuedRequestedAt < oldestRequestedAt)
+    )
+      oldestRequestedAt = queue.oldestQueuedRequestedAt;
+  }
+  return { count, oldestRequestedAt };
+}

@@ -130,11 +130,22 @@ export const HarnessAgent = Schema.Struct({
   liveness: Schema.Literals(["active", "not currently live", "unknown"]),
 });
 export type HarnessAgent = typeof HarnessAgent.Type;
+export const HarnessQueueSummary = Schema.Struct({
+  queuedSendCount: Schema.NullOr(Count),
+  oldestQueuedRequestedAt: Schema.NullOr(IsoDateTime),
+  coverage: Schema.Literals(["complete", "partial", "unknown"]),
+  readAt: IsoDateTime,
+  sampleSize: Count,
+  evidence: Schema.String,
+});
+export type HarnessQueueSummary = typeof HarnessQueueSummary.Type;
 export const HarnessSnapshot = Schema.Struct({
   schemaVersion: Schema.Literal(1),
   environmentId: EnvironmentId,
   generatedAt: IsoDateTime,
   sources: Schema.Array(HarnessSource),
+  // Optional for clients reading an older environment.
+  queueSummary: Schema.optionalKey(HarnessQueueSummary),
   agents: Schema.Array(HarnessAgent),
   routines: Schema.Array(HarnessRoutine),
 });

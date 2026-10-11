@@ -24,6 +24,7 @@ import { ServerEnvironmentIdentity } from "../environment/ServerEnvironment.ts";
 import { nextScheduledRun } from "../automations/schedule.ts";
 import {
   executionEvidence,
+  queuedSendSummary,
   make,
   taskMessages,
   taskQuery,
@@ -56,6 +57,81 @@ const db = Layer.mergeAll(
 ).pipe(Layer.provideMerge(SqlitePersistenceMemory));
 const withDb = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   Effect.scoped(effect.pipe(Effect.provide(db)));
+it.effect(
+  "queue summary includes all environment threads despite Harness filters and excludes other statuses",
+  () =>
+    withDb(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* insertThread(sql, "outside", ProjectId.make("other-project"));
+        yield* insertThread(sql, "inside");
+        yield* insertRun(sql, "oldest", "outside", "a", "queued");
+        yield* sql`UPDATE orchestration_v2_projection_runs SET requested_at = '2026-10-11T05:00:00.000Z' WHERE run_id = 'oldest'`;
+        yield* insertRun(sql, "next", "inside", "b", "queued");
+        yield* insertRun(sql, "preparing", "inside", "c", "preparing", 2);
+        yield* insertRun(sql, "running", "inside", "d", "running", 3);
+        yield* insertRun(sql, "completed", "inside", "e", "completed", 4);
+        const service = yield* make;
+        const snapshot = yield* service.snapshot({
+          projectIds: [PROJECT],
+          routineKeys: ["no-matching-routine"],
+        });
+        expect(snapshot.queueSummary).toMatchObject({
+          queuedSendCount: 2,
+          oldestQueuedRequestedAt: "2026-10-11T05:00:00.000Z",
+          coverage: "complete",
+          sampleSize: 2,
+        });
+        expect(snapshot.sources.find((s) => s.key === "queued-runs")).toMatchObject({
+          status: "available",
+        });
+      }),
+    ),
+);
+it.effect("empty queue is proven zero; a failed queue read stays unknown", () =>
+  withDb(
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      const empty = yield* make;
+      expect((yield* empty.snapshot({})).queueSummary).toMatchObject({
+        queuedSendCount: 0,
+        oldestQueuedRequestedAt: null,
+        coverage: "complete",
+        sampleSize: 0,
+      });
+      yield* sql`ALTER TABLE orchestration_v2_projection_runs RENAME TO queue_unavailable`;
+      const broken = yield* make;
+      const snapshot = yield* broken.snapshot({});
+      expect(snapshot.queueSummary).toMatchObject({
+        queuedSendCount: null,
+        oldestQueuedRequestedAt: null,
+        coverage: "unknown",
+        sampleSize: 0,
+      });
+      expect(snapshot.sources.find((s) => s.key === "queued-runs")).toMatchObject({
+        status: "unavailable",
+      });
+    }),
+  ),
+);
+it.effect(
+  "queue cap refuses a complete depth and oldest while the real status index bounds the read",
+  () =>
+    withDb(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* insertThread(sql, "cap");
+        yield* insertRun(sql, "q1", "cap", "a", "queued");
+        yield* insertRun(sql, "q2", "cap", "b", "queued", 2);
+        expect(yield* queuedSendSummary(sql, 1)).toMatchObject({
+          coverage: "partial",
+          queuedSendCount: null,
+          oldestQueuedRequestedAt: null,
+          sampleSize: 2,
+        });
+      }),
+    ),
+);
 const hourly = [
   { type: "schedule" as const, schedule: { kind: "hourly" as const, timeZone: "UTC" } },
 ];

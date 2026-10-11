@@ -3190,7 +3190,7 @@ depends_on = [
   "fork-nested-threads",
 ]
 roles = []
-note = "No UI, scheduler, management controls or monitor. Existing automation stores and scheduled-task tags are the execution sources; fixed allowlisted owner feeds are opt-in. Missing findings remain unknown. No migration is required: enumerate retained project threads as the fresh-task catalog superset, join exact task tags inside indexed per-thread windows, and mark any catalog/message/active cap as partial or unknown. Reliability owns future thresholds and routing."
+note = "Environment-level queue summary uses the existing status recovery index, caps at 10001 sampled queued rows and reports partial/unknown coverage without a false zero. Files include packages/client-runtime/src/state/harnessQuery.test.ts and docs/release-notes/entries/harness-queue-summary.toml. No UI, scheduler, management controls or monitor. Existing automation stores and scheduled-task tags are the execution sources; fixed allowlisted owner feeds are opt-in. Missing findings remain unknown. No migration is required: enumerate retained project threads as the fresh-task catalog superset, join exact task tags inside indexed per-thread windows, and mark any catalog/message/active cap as partial or unknown. Reliability owns future thresholds and routing."
 
 [[patch.decision]]
 id = "harness-exact-read-model"
@@ -3203,3 +3203,9 @@ id = "harness-no-startup-index-20261012"
 date = "2026-10-11"
 decided = "No migration 18 on the Oct 12 candidate; optional index is a separate proposal."
 rationale = "Release owner requires real-size DB-copy startup timing before admitting the expression index. Existing project/thread/time/message/run indexes supply bounded exact joins; incomplete catalogs or windows cannot prove inactive or complete history."
+
+[[patch.decision]]
+id = "harness-environment-queue-coverage"
+date = "2026-10-11"
+decided = "Count the entire environment queued-run subset through the existing recovery index, sampling at most 10001 rows; partial/error reads expose unknown totals and oldest request."
+rationale = "Harness filters must not hide queued user sends, and automation runs are already included in the environment total. No new migration or message-table scan is needed."
