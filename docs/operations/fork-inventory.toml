@@ -3259,3 +3259,13 @@ id = "fork-ios-all-target-identities-20261011"
 date = "2026-10-11"
 decided = "Derive share, widget, app-group and keychain identities from the variant's fork app bundle identifier in the export overlay."
 rationale = "Upstream derives sharing and keychain identities before the overlay. All production targets must be provisionable by Brad's team, and development/preview identities must remain separate. Preserve upstream plugins, entitlements unrelated to identity and native behavior."
+
+[[patch]]
+name = "fork-pr-watch-recovery"
+subject = "fix(pull-requests): retain watches across retryable read failures"
+class = "upstream-bound"
+purpose = "Keep native PR watches useful through configured Gitea alias routing and retryable read failures, with bounded backoff and honest persistent-failure notifications."
+retire_when = "Upstream preserves retryable watches, reports degraded monitoring, and configured Gitea aliases match canonical web hosts including ports."
+depends_on = ["fork-gitea-pr-browser"]
+roles = []
+note = "PR170/171 on fork.13 failed locally because aliases returned git.home while configured identities use git.home:3000. Auth revocation and PR detail deletion remain terminal; auxiliary 404s and unresolved routing retry. Recovery never requires re-registration."
