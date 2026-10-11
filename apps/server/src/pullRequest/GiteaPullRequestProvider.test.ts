@@ -37,7 +37,11 @@ const pr = {
   labels: [{ name: "fix", color: "ff0000" }],
   changed_files: 1,
 };
-function harness(respond: (url: URL) => unknown, status = 200, instances = [instance]) {
+function harness(
+  respond: (url: URL) => unknown,
+  status: number | ((url: URL) => number) = 200,
+  instances = [instance],
+) {
   const requests: Array<{ url: string; authorization: string | undefined; method: string }> = [];
   const run = <A, E>(f: (provider: Effect.Success<typeof make>) => Effect.Effect<A, E>) =>
     make.pipe(
@@ -54,7 +58,9 @@ function harness(respond: (url: URL) => unknown, status = 200, instances = [inst
           return Effect.succeed(
             HttpClientResponse.fromWeb(
               request,
-              new Response(typeof body === "string" ? body : JSON.stringify(body), { status }),
+              new Response(typeof body === "string" ? body : JSON.stringify(body), {
+                status: typeof status === "number" ? status : status(new URL(request.url)),
+              }),
             ),
           );
         }),
@@ -308,6 +314,25 @@ describe("Gitea pull request browser", () => {
       );
       expect(encodeJson(error)).not.toContain("secret-one");
     }),
+  );
+  it.effect.each(["pull", "comments", "reviews", "commits"])(
+    "only a missing PR proves deletion, not an auxiliary 404: %s",
+    (endpoint) =>
+      Effect.gen(function* () {
+        const suffix =
+          endpoint === "pull"
+            ? "/pulls/42"
+            : endpoint === "comments"
+              ? "/issues/42/comments"
+              : `/pulls/42/${endpoint}`;
+        const h = harness(
+          (url) => (url.pathname.endsWith("/pulls/42") ? pr : []),
+          (url) => (url.pathname.endsWith(suffix) ? 404 : 200),
+        );
+        const error = yield* h.run((p) => Effect.flip(p.getChangeRequestActivity(input)));
+        expect(error.reason).toBe(endpoint === "pull" ? "not-found" : "failed");
+        expect(error.detail).toBe("Gitea API returned HTTP 404.");
+      }),
   );
   it.effect("serves links made from the public address the instance reports for itself", () =>
     Effect.gen(function* () {

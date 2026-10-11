@@ -196,8 +196,10 @@ Ask the agent to watch, monitor, or babysit a pull request and it calls `watch_p
 the thread is active, the server checks the pull request every minute and wakes the agent when a check
 fails, the required checks pass, someone else comments or reviews, or the branch starts to conflict.
 Comments from your own account do not wake it. Watching ends when the pull request merges or closes,
-after 10 wakes in a row that bring only comments, or when the server cannot read the pull request for
-15 minutes. Settling a thread also ends all its watches. Unsettle the thread before starting a new
+after 10 wakes in a row that bring only comments, when the pull request is deleted, or when host
+authentication is revoked. Temporary read failures keep the watch registered and slow retries to at
+most five minutes apart. After 15 consecutive failures, the agent gets one notice that monitoring is
+degraded; a successful read restores normal monitoring. Settling a thread also ends all its watches. Unsettle the thread before starting a new
 watch. To start or stop it yourself, use the row menu in the **Linked pull requests** panel.
 
 Cross-repository links use a project on the same host. Azure DevOps reviews require a project checked
