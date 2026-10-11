@@ -88,6 +88,7 @@ layer("001_ProviderSessionRuntimeBootGeneration", (it) => {
           { migration_id: 15, name: "AutomationSourceState" },
           { migration_id: 16, name: "ProjectionThreadsSubproject" },
           { migration_id: 17, name: "ThreadRecovery" },
+          { migration_id: 18, name: "HarnessScheduledTaskHistoryIndex" },
         ]);
 
         const upstreamCollision = yield* sql<{ readonly name: string }>`
