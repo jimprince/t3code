@@ -1,3 +1,5 @@
+import { readMetadata, writeMetadata } from "../forkThreads/MetadataStore.ts";
+import { resolveCreatorPurpose } from "../forkThreads/ThreadPurpose.ts";
 import { assert, it } from "@effect/vitest";
 import {
   CommandId,
@@ -588,6 +590,12 @@ it.effect("keeps delegated child pull-request links independent of the parent", 
     });
     const parent = yield* projections.getThreadProjection(parentThreadId);
     const parentRun = parent.runs[0]!;
+    const sql = yield* SqlClient.SqlClient;
+    yield* writeMetadata(sql, {
+      threadId: parentThreadId,
+      parentThreadId: null,
+      purpose: "harness",
+    });
     yield* orchestrator.dispatch({
       type: "delegated_task.request",
       commandId: CommandId.make("delegate-parent-pr"),
@@ -604,6 +612,8 @@ it.effect("keeps delegated child pull-request links independent of the parent", 
     const updatedParent = yield* projections.getThreadProjection(parentThreadId);
     const childThreadId = updatedParent.subagents[0]!.childThreadId!;
     const child = yield* projections.getThreadProjection(childThreadId);
+    assert.isUndefined((yield* readMetadata(sql, childThreadId))?.purpose);
+    assert.equal(yield* resolveCreatorPurpose(sql, childThreadId), "harness");
     assert.isNull(child.thread.linkedPullRequest);
     assert.deepEqual(child.thread.pullRequests, []);
     assert.equal(child.thread.branch, parent.thread.branch);
