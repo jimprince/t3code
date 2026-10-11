@@ -1,3 +1,5 @@
+import { HarnessToolkit } from "./toolkits/harness/tools.ts";
+import { HarnessHandlersLive } from "./toolkits/harness/handlers.ts";
 import { RecoveryToolkit, RecoveryHandlersLive } from "./toolkits/recovery/tools.ts";
 import { PlansToolkitHandlersLive } from "./toolkits/plans/handlers.ts";
 import { PlansToolkit } from "./toolkits/plans/tools.ts";
@@ -747,6 +749,7 @@ export const layer = Layer.mergeAll(
   OrchestratorToolkitRegistrationLive,
   ThreadToolkitRegistrationLive,
   McpServer.toolkit(RecoveryToolkit).pipe(Layer.provide(RecoveryHandlersLive)),
+  McpServer.toolkit(HarnessToolkit).pipe(Layer.provide(HarnessHandlersLive)),
   AttachmentRegistrationLive,
   ProjectRegistrationLive,
   EnvironmentRegistrationLive,
