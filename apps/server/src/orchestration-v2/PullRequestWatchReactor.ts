@@ -1,5 +1,7 @@
 import {
   CommandId,
+  PullRequestOperationError,
+  PullRequestUnavailableError,
   MessageId,
   type OrchestrationV2Notification,
   type PullRequestActivity,
@@ -15,11 +17,14 @@ import {
   visibleThreadPullRequests,
 } from "@t3tools/shared/threadPullRequests";
 import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Option from "effect/Option";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import * as Schedule from "effect/Schedule";
 import type * as Scope from "effect/Scope";
 
@@ -29,7 +34,7 @@ import * as Orchestrator from "./Orchestrator.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import { evaluatePullRequestWatch, pullRequestWatchMessage } from "./pullRequestWatch.ts";
 
-/** Passes in a row that could not read a pull request before its watch ends (one a minute). */
+/** Consecutive failed reads before telling the owner that monitoring is degraded. */
 const READ_FAILURE_LIMIT = 15;
 
 const logFailure =
@@ -83,8 +88,8 @@ export const make = Effect.gen(function* () {
   const pullRequests = yield* PullRequestService.PullRequestService;
   const crypto = yield* Crypto.Crypto;
 
-  // Passes in a row that failed, per watch. Kept in memory: a restart only delays the stop.
-  const readFailures = new Map<string, number>();
+  // Retry state is per watch; a restart retries immediately without losing persisted watches.
+  const readFailures = new Map<string, { count: number; retryAt: number; notified: boolean }>();
   // Replies past each long thread's first page, per watch, so a pass pages a thread again only
   // when the host's count of it moves. Kept in memory: a restart pages each thread once more.
   const threadTails = new Map<
@@ -123,17 +128,62 @@ export const make = Effect.gen(function* () {
       });
     });
 
-  // A watch that cannot read its pull request ends with a wake saying so, rather than showing
-  // "Watching" while it learns nothing.
-  const giveUp = (target: WatchTarget) =>
-    record(target, null, {
-      text: `T3 Code stopped watching pull request #${target.link.number} (${target.link.url}) because it could not read it from the host for ${READ_FAILURE_LIMIT} minutes. Check it yourself, and call watch_pull_request to watch it again.`,
-      notification: {
-        source: { kind: "monitor" },
-        outcome: "failed",
-        summary: `#${target.link.number}: stopped watching, could not read it`,
-      },
-    }).pipe(Effect.catch(() => record(target, null)));
+  const readFailed = Effect.fn("PullRequestWatchReactor.readFailed")(function* (
+    target: WatchTarget,
+    cause: Cause.Cause<PullRequestService.PullRequestError>,
+    read: "detail" | "activity",
+  ) {
+    if (Cause.hasInterruptsOnly(cause)) return yield* Effect.failCause(cause);
+    const error = Option.getOrUndefined(Cause.findErrorOption(cause));
+    // Only a missing PR detail proves deletion; a missing comments endpoint does not.
+    const terminal =
+      (Schema.is(PullRequestOperationError)(error) &&
+        error.reason === "not-found" &&
+        read === "detail") ||
+      (Schema.is(PullRequestUnavailableError)(error) && error.reason === "cli-unauthenticated");
+    const key = failureKey(target);
+    const previous = readFailures.get(key);
+    const count = (previous?.count ?? 0) + 1;
+    const now = yield* Clock.currentTimeMillis;
+    const failure = {
+      count,
+      retryAt: now + Math.min(2 ** Math.min(count - 1, 3), 5) * 60_000,
+      notified: previous?.notified ?? false,
+    };
+    readFailures.set(key, failure);
+    // Tags and reasons identify local routing/auth failures without logging provider bodies.
+    yield* Effect.logWarning("pull request watch read failed", {
+      threadId: target.thread.id,
+      pullRequest: threadPullRequestKeyOf(target.link),
+      read,
+      failureType: error?._tag ?? "unknown",
+      reason: error?.reason,
+      consecutiveFailures: count,
+      terminal,
+      retryAt: failure.retryAt,
+    });
+    if (terminal) {
+      yield* record(target, null, {
+        text: `T3 Code stopped watching pull request #${target.link.number} (${target.link.url}) because ${Schema.is(PullRequestOperationError)(error) ? "the pull request no longer exists" : "the host credentials no longer work"}.`,
+        notification: {
+          source: { kind: "monitor" },
+          outcome: "failed",
+          summary: `#${target.link.number}: stopped watching, pull request unavailable`,
+        },
+      });
+      readFailures.delete(key);
+    } else if (count >= READ_FAILURE_LIMIT && !failure.notified) {
+      yield* record(target, target.watch, {
+        text: `T3 Code has failed to read pull request #${target.link.number} (${target.link.url}) ${count} times in a row. Monitoring is degraded; T3 Code keeps the watch registered and retries with up to five minutes between reads. Check the host connection and credentials. You do not need to register the watch again.`,
+        notification: {
+          source: { kind: "monitor" },
+          outcome: "failed",
+          summary: `#${target.link.number}: watching, host reads are failing`,
+        },
+      });
+      failure.notified = true;
+    }
+  });
 
   const readRemarks = Effect.fn("PullRequestWatchReactor.readRemarks")(
     function* (target: WatchTarget, reference: PullRequestRef, activity: PullRequestActivity) {
@@ -197,32 +247,29 @@ export const make = Effect.gen(function* () {
     if (link.snapshot?.state === "merged") return yield* record(target, null);
     if (thread.settledOverride === "settled" || thread.settledAt !== null) return;
 
-    const reference = { projectId: thread.projectId, ...pullRequest };
-    const read = yield* Effect.exit(
-      Effect.all(
-        [
-          pullRequests.detail({ ...reference, allowStale: false }),
-          pullRequests.activity(reference),
-        ],
-        { concurrency: 2 },
-      ),
-    );
-    // Only host reads count towards giving up; a refused wake is not the host's fault.
     const key = failureKey(target);
-    if (Exit.isFailure(read)) {
-      if (Cause.hasInterruptsOnly(read.cause)) return yield* Effect.failCause(read.cause);
-      const failures = (readFailures.get(key) ?? 0) + 1;
-      readFailures.set(key, failures);
-      // The count stays until the stop lands, so a failed stop is tried again next pass.
-      if (failures >= READ_FAILURE_LIMIT) {
-        yield* giveUp(target);
-        readFailures.delete(key);
-      }
-      return yield* Effect.failCause(read.cause);
+    const now = yield* Clock.currentTimeMillis;
+    if ((readFailures.get(key)?.retryAt ?? 0) > now) return;
+    const reference = { projectId: thread.projectId, ...pullRequest };
+    // Capture both outcomes so terminal detail still wins when activity cannot be read.
+    const [detailRead, activityRead] = yield* Effect.all(
+      [
+        Effect.exit(pullRequests.detail({ ...reference, allowStale: false })),
+        Effect.exit(pullRequests.activity(reference)),
+      ],
+      { concurrency: 2 },
+    );
+    if (Exit.isFailure(detailRead)) return yield* readFailed(target, detailRead.cause, "detail");
+    const detail = detailRead.value;
+    if (detail.state !== "open") {
+      yield* record(target, null);
+      readFailures.delete(key);
+      return;
     }
+    if (Exit.isFailure(activityRead))
+      return yield* readFailed(target, activityRead.cause, "activity");
+    const activity = activityRead.value;
     readFailures.delete(key);
-    const [detail, activity] = read.value;
-    if (detail.state !== "open") return yield* record(target, null);
 
     // Never advance the remark watermark past comments an incomplete read could have missed.
     const remarks = yield* readRemarks(target, reference, activity);

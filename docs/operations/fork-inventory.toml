@@ -3118,3 +3118,13 @@ id = "plan-from-research-interaction-taxonomy"
 date = "2026-10-10"
 decided = "new-concern"
 rationale = "Brad chose dashboard design A from the interaction-taxonomy research (status asks are 10% of his 7,312 messages to agents) and asked for task-level progress per workstream instead of thread rows. Shipped first on live as 69b7da56 (cherry-pick of 92d72ea4); folded here as its own droppable patch rather than into fork-project-workstreams because it can be removed without removing the Workstreams block."
+
+[[patch]]
+name = "fork-pr-watch-recovery"
+subject = "fix(pull-requests): retain watches across retryable read failures"
+class = "upstream-bound"
+purpose = "Keep native PR watches useful through configured Gitea alias routing and retryable read failures, with bounded backoff and honest persistent-failure notifications."
+retire_when = "Upstream preserves retryable watches, reports degraded monitoring, and configured Gitea aliases match canonical web hosts including ports."
+depends_on = ["fork-gitea-pr-browser"]
+roles = []
+note = "PR170/171 on fork.13 failed locally because aliases returned git.home while configured identities use git.home:3000. Auth revocation and PR detail deletion remain terminal; auxiliary 404s and unresolved routing retry. Recovery never requires re-registration."
