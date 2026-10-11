@@ -22,7 +22,13 @@ import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import { writeMetadata } from "../forkThreads/MetadataStore.ts";
 import { ServerEnvironmentIdentity } from "../environment/ServerEnvironment.ts";
 import { nextScheduledRun } from "../automations/schedule.ts";
-import { executionEvidence, make, taskMessages } from "./HarnessReadService.ts";
+import {
+  executionEvidence,
+  make,
+  taskMessages,
+  taskQuery,
+  executionQuery,
+} from "./HarnessReadService.ts";
 import { groupAgents, lateness, routine, threadLink } from "./model.ts";
 
 const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
@@ -81,8 +87,9 @@ const insertRun = (
   thread: string,
   message: string,
   status = "completed",
+  ordinal = 1,
 ) =>
-  sql`INSERT INTO orchestration_v2_projection_runs (run_id, thread_id, ordinal, provider, status, requested_at, completed_at, payload_json) VALUES (${id}, ${thread}, 1, 'codex', ${status}, ${NOW}, ${status === "running" ? null : NOW}, ${encodeJson({ userMessageId: message, startedAt: NOW })})`;
+  sql`INSERT INTO orchestration_v2_projection_runs (run_id, thread_id, ordinal, provider, status, requested_at, completed_at, payload_json) VALUES (${id}, ${thread}, ${ordinal}, 'codex', ${status}, ${NOW}, ${status === "running" ? null : NOW}, ${encodeJson({ userMessageId: message, startedAt: NOW })})`;
 const insertItem = (
   sql: SqlClient.SqlClient,
   id: string,
@@ -253,13 +260,50 @@ it.layer(NodeServices.layer)("Harness production read model", (it) => {
             { task_id: "task", project_id: PROJECT, thread_id: null },
             10,
           );
-          expect(rows.map((row) => row.message_id)).toEqual(["wanted"]);
-          const plan = yield* sql<{
-            detail: string;
-          }>`EXPLAIN QUERY PLAN SELECT message_id FROM orchestration_v2_projection_messages WHERE role = 'user' AND CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.scheduledTaskId') END = 'task' ORDER BY created_at DESC, message_id DESC LIMIT 10`;
-          expect(
-            plan.some((entry) => entry.detail.includes("fork_harness_task_messages_idx")),
-          ).toBe(true);
+          expect(rows.messages.map((row) => row.message_id)).toEqual(["wanted"]);
+          expect(rows.complete).toBe(true);
+          const queries = [
+            [
+              "catalog",
+              taskQuery.catalog(sql, { task_id: "task", project_id: PROJECT, thread_id: null }),
+            ],
+            ["message-horizon", taskQuery.horizon(sql, "old")],
+            ["history", taskQuery.history(sql, "task", "old", 10)],
+            [
+              "bounded-history",
+              taskQuery.history(sql, "task", "noise", 10, {
+                message_id: "noise-0",
+                thread_id: "noise",
+                run_id: null,
+                created_at: NOW,
+              }),
+            ],
+            ["active-horizon", taskQuery.activeHorizon(sql, "old")],
+            ["active", taskQuery.active(sql, "task", "old")],
+            ["exact-messages", executionQuery.messages(sql, ["wanted"])],
+            ["exact-runs", executionQuery.runs(sql, ["run-old"])],
+            ["run-items", executionQuery.items(sql, ["run-old"])],
+          ] as const;
+          for (const [name, query] of queries) {
+            const [text, params] = query.compile();
+            const start = performance.now();
+            yield* query;
+            const elapsedMs = performance.now() - start;
+            const plan = yield* sql.unsafe<{ detail: string }>(
+              "EXPLAIN QUERY PLAN " + text,
+              params,
+            );
+            yield* Effect.log(
+              "HARNESS_QUERY_PLAN",
+              encodeJson({ name, elapsedMs, sql: text, params, plan }),
+            );
+            expect(
+              plan.some((entry) =>
+                /SCAN (?:m|orchestration_v2_projection_messages)(?:$| )/.test(entry.detail),
+              ),
+            ).toBe(false);
+            expect(plan.some((entry) => entry.detail.includes("INDEX"))).toBe(true);
+          }
         }),
       ),
   );
@@ -284,7 +328,7 @@ it.layer(NodeServices.layer)("Harness production read model", (it) => {
             sql,
             { task_id: "task", project_id: PROJECT, thread_id: null },
             1,
-          )).map((row) => row.message_id),
+          )).messages.map((row) => row.message_id),
         ).toEqual(["latest-msg"]);
         expect(
           (yield* taskMessages(
@@ -292,8 +336,68 @@ it.layer(NodeServices.layer)("Harness production read model", (it) => {
             { task_id: "task", project_id: PROJECT, thread_id: null },
             1,
             true,
-          )).map((row) => row.message_id),
+          )).messages.map((row) => row.message_id),
         ).toEqual(["active-msg"]);
+      }),
+    ),
+  );
+  it.effect(
+    "message and active-run windows stay partial; older active runs use exact run joins",
+    () =>
+      withDb(
+        Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          yield* insertThread(sql, "window");
+          yield* insertMessage(
+            sql,
+            "old-task",
+            "window",
+            "a-active",
+            "window-task",
+            "2026-10-01T00:00:00.000Z",
+          );
+          yield* insertRun(sql, "a-active", "window", "old-task", "running");
+          for (let i = 0; i < 1025; i++)
+            yield* insertMessage(sql, `noise-${i}`, "window", `noise-run-${i}`, "other");
+          const task = { task_id: "window-task", project_id: PROJECT, thread_id: null };
+          const history = yield* taskMessages(sql, task, 10);
+          expect(history.messages).toEqual([]);
+          expect(history).toMatchObject({ complete: false, truncated: true });
+          expect(history.evidence).toContain("Partial/unknown");
+          expect(
+            (yield* taskMessages(sql, task, 10, true)).messages.map((m) => m.message_id),
+          ).toEqual(["old-task"]);
+          for (let i = 0; i < 100; i++) {
+            yield* insertMessage(sql, `active-noise-${i}`, "window", `z-active-${i}`, "other");
+            yield* insertRun(sql, `z-active-${i}`, "window", `active-noise-${i}`, "running", i + 2);
+          }
+          const active = yield* taskMessages(sql, task, 10, true);
+          expect(active).toMatchObject({ complete: false, messages: [] });
+          yield* sql`INSERT INTO scheduled_tasks (task_id, title, prompt, enabled, schedule_json, project_id, thread_id, workspace_strategy_json, model_selection_json, runtime_mode, interaction_mode, created_by, creation_source, created_at, updated_at, next_run_at, last_run_status, run_count) VALUES ('window-task', 'Check', 'Check', 1, '{"type":"interval","everyMs":3600000}', ${PROJECT}, NULL, '{"type":"root"}', '{"instanceId":"codex","model":"gpt-6.1-sol"}', 'full-access', 'default', 'agent', 'mcp', ${NOW}, ${NOW}, '2026-10-11T07:00:00.000Z', 'pending', 0)`;
+          const service = yield* make;
+          const row = (yield* service.snapshot({})).routines.find((r) =>
+            r.key.endsWith(":scheduled-task:window-task"),
+          );
+          expect(row).toMatchObject({ liveness: "unknown", historyCoverage: { truncated: true } });
+          expect(row?.historyCoverage.evidence).toContain("Partial/unknown");
+        }),
+      ),
+  );
+  it.effect("catalog retains deleted task threads and refuses complete claims after its cap", () =>
+    withDb(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* insertThread(sql, "deleted");
+        yield* sql`UPDATE orchestration_v2_projection_threads SET deleted_at = ${NOW} WHERE thread_id = 'deleted'`;
+        yield* insertMessage(sql, "retained", "deleted", "old-run", "retained-task");
+        const task = { task_id: "retained-task", project_id: PROJECT, thread_id: null };
+        const retained = yield* taskMessages(sql, task, 10);
+        expect(retained.complete).toBe(true);
+        expect(retained.messages.map((m) => m.message_id)).toEqual(["retained"]);
+        for (let i = 0; i < 512; i++) yield* insertThread(sql, `catalog-${i}`);
+        const partial = yield* taskMessages(sql, task, 10);
+        expect(partial).toMatchObject({ complete: false, truncated: true });
+        expect(partial.evidence).toContain("catalog capped at 512");
       }),
     ),
   );

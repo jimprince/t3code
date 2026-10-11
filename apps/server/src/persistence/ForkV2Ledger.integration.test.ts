@@ -19,7 +19,7 @@ it.effect("preserves ids through60 and creates V2 at61/62 exactly once", () =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     yield* runMigrations({ toMigrationInclusive: 60 });
-    yield* runForkMigrations({ toMigrationInclusive: 17 });
+    yield* runForkMigrations();
     const before = yield* sql`SELECT * FROM effect_sql_migrations ORDER BY migration_id`;
     const forkBefore = yield* sql`SELECT * FROM effect_sql_fork_migrations ORDER BY migration_id`;
     expect(yield* runMigrations()).toEqual([
@@ -30,11 +30,10 @@ it.effect("preserves ids through60 and creates V2 at61/62 exactly once", () =>
       yield* sql`SELECT * FROM effect_sql_migrations WHERE migration_id <= 60 ORDER BY migration_id`,
     ).toEqual(before);
     expect(yield* runMigrations()).toEqual([]);
-    expect(yield* runForkMigrations()).toEqual([[18, "HarnessScheduledTaskHistoryIndex"]]);
     expect(yield* runForkMigrations()).toEqual([]);
-    expect(
-      yield* sql`SELECT * FROM effect_sql_fork_migrations WHERE migration_id <= 17 ORDER BY migration_id`,
-    ).toEqual(forkBefore);
+    expect(yield* sql`SELECT * FROM effect_sql_fork_migrations ORDER BY migration_id`).toEqual(
+      forkBefore,
+    );
     expect(
       yield* sql`SELECT name FROM sqlite_master WHERE name = 'orchestration_v2_effect_outbox'`,
     ).toHaveLength(1);

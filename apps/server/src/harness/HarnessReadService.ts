@@ -91,26 +91,113 @@ export class HarnessReadService extends Context.Service<
   }
 >()("t3/harness/HarnessReadService") {}
 
-/** No global newest-N window: the task tag index retrieves history independently per ID. */
+/** Retained project threads form a complete superset of a fresh task's threads.
+ * Windows are per thread, never a global transcript window; a cap hit stays partial.
+ */
+export const taskQuery = {
+  catalog: (
+    sql: SqlClient.SqlClient,
+    task: Pick<TaskRow, "task_id" | "project_id" | "thread_id">,
+  ) =>
+    sql<{ thread_id: string }>`SELECT thread_id FROM orchestration_v2_projection_threads
+      WHERE project_id = ${task.project_id} ${task.thread_id === null ? sql`` : sql`AND thread_id = ${task.thread_id}`}
+      ORDER BY updated_at DESC LIMIT 513`,
+  horizon: (sql: SqlClient.SqlClient, thread: string) =>
+    sql<MessageRow>`SELECT message_id, thread_id, run_id, created_at FROM orchestration_v2_projection_messages
+      WHERE thread_id = ${thread} ORDER BY created_at DESC, message_id DESC LIMIT 1 OFFSET 1024`,
+  history: (
+    sql: SqlClient.SqlClient,
+    task: string,
+    thread: string,
+    limit: number,
+    floor?: MessageRow,
+  ) =>
+    sql<MessageRow>`SELECT message_id, thread_id, run_id, created_at FROM orchestration_v2_projection_messages
+      WHERE thread_id = ${thread} AND role = 'user'
+      AND CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.scheduledTaskId') END = ${task}
+      ${floor ? sql`AND (created_at, message_id) > (${floor.created_at}, ${floor.message_id})` : sql``}
+      ORDER BY created_at DESC, message_id DESC LIMIT ${limit}`,
+  activeHorizon: (sql: SqlClient.SqlClient, thread: string) =>
+    sql<{ run_id: string }>`SELECT run_id FROM orchestration_v2_projection_runs
+      WHERE thread_id = ${thread} AND status IN ('preparing', 'queued', 'starting', 'running', 'waiting')
+      LIMIT 1 OFFSET 100`,
+  active: (sql: SqlClient.SqlClient, task: string, thread: string) =>
+    sql<MessageRow>`WITH active AS (
+      SELECT run_id, thread_id, payload_json FROM orchestration_v2_projection_runs
+      WHERE thread_id = ${thread} AND status IN ('preparing', 'queued', 'starting', 'running', 'waiting')
+      ORDER BY requested_at DESC, run_id DESC LIMIT 100
+    ) SELECT m.message_id, m.thread_id, m.run_id, m.created_at FROM active r
+      JOIN orchestration_v2_projection_messages m ON m.message_id = CASE WHEN json_valid(r.payload_json) THEN json_extract(r.payload_json, '$.userMessageId') END
+      AND m.thread_id = r.thread_id AND m.run_id = r.run_id
+      WHERE m.role = 'user' AND CASE WHEN json_valid(m.payload_json) THEN json_extract(m.payload_json, '$.scheduledTaskId') END = ${task}`,
+};
+interface TaskRead {
+  readonly messages: readonly MessageRow[];
+  readonly complete: boolean;
+  readonly truncated: boolean;
+  readonly evidence: string;
+}
+const unavailableTaskRead: TaskRead = {
+  messages: [],
+  complete: false,
+  truncated: true,
+  evidence: "Unknown: task catalog/history read unavailable.",
+};
 export function taskMessages(
   sql: SqlClient.SqlClient,
   task: Pick<TaskRow, "task_id" | "project_id" | "thread_id">,
   limit: number,
   active = false,
 ) {
-  return sql<MessageRow>`
-    SELECT m.message_id, m.thread_id, m.run_id, m.created_at
-    FROM orchestration_v2_projection_messages m
-    JOIN orchestration_v2_projection_threads t ON t.thread_id = m.thread_id
-    LEFT JOIN orchestration_v2_projection_runs r ON r.run_id = m.run_id AND r.thread_id = m.thread_id
-    WHERE m.role = 'user'
-      AND CASE WHEN json_valid(m.payload_json) THEN json_extract(m.payload_json, '$.scheduledTaskId') END = ${task.task_id}
-      AND t.project_id = ${task.project_id}
-      AND (${task.thread_id} IS NULL OR m.thread_id = ${task.thread_id})
-      AND (${active ? 1 : 0} = 0 OR r.status IN ('preparing', 'queued', 'starting', 'running', 'waiting'))
-    ORDER BY m.created_at DESC, m.message_id DESC ${active ? sql`` : sql`LIMIT ${limit}`}
-  `;
+  return Effect.gen(function* () {
+    // Includes archived and soft-deleted projections; historical task threads still matter.
+    const catalog = yield* taskQuery.catalog(sql, task);
+    const catalogComplete =
+      catalog.length <= 512 && (task.thread_id === null || catalog.length === 1);
+    const candidates: MessageRow[] = [];
+    let cappedThreads = 0;
+    let more = false;
+    for (const { thread_id } of catalog.slice(0, 512)) {
+      if (active) {
+        if ((yield* taskQuery.activeHorizon(sql, thread_id)).length) cappedThreads++;
+        candidates.push(...(yield* taskQuery.active(sql, task.task_id, thread_id)));
+      } else {
+        const floor = (yield* taskQuery.horizon(sql, thread_id))[0];
+        if (floor) cappedThreads++;
+        const rows = yield* taskQuery.history(sql, task.task_id, thread_id, limit + 1, floor);
+        more ||= rows.length > limit;
+        candidates.push(...rows.slice(0, limit));
+      }
+    }
+    candidates.sort((a, b) => {
+      const left = `${a.created_at}\0${a.message_id}`,
+        right = `${b.created_at}\0${b.message_id}`;
+      return left === right ? 0 : left > right ? -1 : 1;
+    });
+    const bound = active ? 100 : limit;
+    const complete = catalogComplete && cappedThreads === 0;
+    return {
+      messages: candidates.slice(0, bound),
+      complete,
+      truncated: !complete || more || candidates.length > bound,
+      evidence: `${complete ? "Complete retained catalog" : "Partial/unknown coverage"}: ${Math.min(catalog.length, 512)} retained ${task.thread_id === null ? "project threads (task-thread superset)" : "bound threads"}; catalog ${catalogComplete ? "complete" : "capped at 512 or bound thread missing"}; ${cappedThreads} threads exceed the ${active ? "100 active-run" : "1024-message"} window. Exact task tag and message/root-run identities only; history is bounded, not lifetime or dispatch-count coverage.`,
+    } satisfies TaskRead;
+  });
 }
+
+export const executionQuery = {
+  messages: (sql: SqlClient.SqlClient, ids: readonly string[]) =>
+    sql<MessageRow>`SELECT message_id, thread_id, run_id, created_at FROM orchestration_v2_projection_messages WHERE role = 'user' AND message_id IN ${sql.in(ids)}`,
+  runs: (sql: SqlClient.SqlClient, ids: readonly string[]) =>
+    sql<ExecutionRow>`SELECT run_id, thread_id, status, requested_at, completed_at, json_extract(payload_json, '$.startedAt') AS started_at, json_extract(payload_json, '$.userMessageId') AS user_message_id FROM orchestration_v2_projection_runs WHERE run_id IN ${sql.in(ids)}`,
+  items: (sql: SqlClient.SqlClient, ids: readonly string[]) =>
+    sql<{
+      run_id: string;
+      thread_id: string;
+      items: number;
+      errors: number;
+    }>`SELECT run_id, thread_id, COUNT(*) AS items, COUNT(DISTINCT CASE WHEN type = 'error' THEN turn_item_id END) AS errors FROM orchestration_v2_projection_turn_items WHERE run_id IN ${sql.in(ids)} GROUP BY run_id, thread_id`,
+};
 
 /** Exact user message -> root run, then distinct items in that same thread/run only. */
 export function executionEvidence(sql: SqlClient.SqlClient, links: readonly HarnessThreadLink[]) {
@@ -123,24 +210,14 @@ export function executionEvidence(sql: SqlClient.SqlClient, links: readonly Harn
       { link: HarnessThreadLink; execution: ExecutionRow | null; errors: number | null }
     >();
     if (!ids.length) return evidence;
-    const messages =
-      yield* sql<MessageRow>`SELECT message_id, thread_id, run_id, created_at FROM orchestration_v2_projection_messages WHERE role = 'user' AND message_id IN ${sql.in(ids)}`;
+    const messages = yield* executionQuery.messages(sql, ids);
     const runIds = [
       ...new Set(
         messages.map((message) => message.run_id).filter((id): id is string => id !== null),
       ),
     ];
-    const runs = runIds.length
-      ? yield* sql<ExecutionRow>`SELECT run_id, thread_id, status, requested_at, completed_at, json_extract(payload_json, '$.startedAt') AS started_at, json_extract(payload_json, '$.userMessageId') AS user_message_id FROM orchestration_v2_projection_runs WHERE run_id IN ${sql.in(runIds)}`
-      : [];
-    const counts = runIds.length
-      ? yield* sql<{
-          run_id: string;
-          thread_id: string;
-          items: number;
-          errors: number;
-        }>`SELECT run_id, thread_id, COUNT(*) AS items, COUNT(DISTINCT CASE WHEN type = 'error' THEN turn_item_id END) AS errors FROM orchestration_v2_projection_turn_items WHERE run_id IN ${sql.in(runIds)} GROUP BY run_id, thread_id`
-      : [];
+    const runs = runIds.length ? yield* executionQuery.runs(sql, runIds) : [];
+    const counts = runIds.length ? yield* executionQuery.items(sql, runIds) : [];
     for (const link of links) {
       const message = messages.find(
         (message) => message.message_id === link.messageId && message.thread_id === link.threadId,
@@ -315,8 +392,8 @@ export const make = Effect.gen(function* () {
         sql<TaskRow>`SELECT * FROM scheduled_tasks`,
         [],
       );
-      const taskHistories = new Map<string, readonly MessageRow[]>();
-      const taskActive = new Map<string, readonly MessageRow[]>();
+      const taskHistories = new Map<string, TaskRead>();
+      const taskActive = new Map<string, TaskRead>();
       const automationHistories = new Map<string, readonly AutomationRun[]>();
       for (const definition of definitions.filter((definition) => include(definition.projectId)))
         automationHistories.set(
@@ -334,11 +411,19 @@ export const make = Effect.gen(function* () {
       for (const task of tasks.filter((task) => include(ProjectId.make(task.project_id)))) {
         taskHistories.set(
           task.task_id,
-          yield* source(`task-runs:${task.task_id}`, taskMessages(sql, task, limit + 1), []),
+          yield* source(
+            `task-runs:${task.task_id}`,
+            taskMessages(sql, task, limit + 1),
+            unavailableTaskRead,
+          ),
         );
         taskActive.set(
           task.task_id,
-          yield* source(`task-active:${task.task_id}`, taskMessages(sql, task, limit, true), []),
+          yield* source(
+            `task-active:${task.task_id}`,
+            taskMessages(sql, task, limit, true),
+            unavailableTaskRead,
+          ),
         );
       }
       const legacy = projectRows.flatMap((project) =>
@@ -364,7 +449,9 @@ export const make = Effect.gen(function* () {
         for (const run of definition.runs)
           if (run.threadId && run.messageId)
             links.push(threadLink(environmentId, run.threadId, null, run.messageId));
-      for (const message of [...taskHistories.values(), ...taskActive.values()].flat())
+      for (const message of [...taskHistories.values(), ...taskActive.values()].flatMap(
+        (read) => read.messages,
+      ))
         links.push(
           threadLink(environmentId, message.thread_id, message.run_id, message.message_id),
         );
@@ -609,14 +696,14 @@ export const make = Effect.gen(function* () {
       for (const task of tasks.filter((task) => include(ProjectId.make(task.project_id)))) {
         const purpose = membership(task.thread_id);
         if (purpose === "project") continue;
-        const history = (taskHistories.get(task.task_id) ?? []).map((message) =>
+        const history = (taskHistories.get(task.task_id)?.messages ?? []).map((message) =>
           executionRun(
             environmentId,
             message,
             evidence.get(`${message.thread_id}\0${message.message_id}`),
           ),
         );
-        const activeRuns = (taskActive.get(task.task_id) ?? []).map((message) =>
+        const activeRuns = (taskActive.get(task.task_id)?.messages ?? []).map((message) =>
           executionRun(
             environmentId,
             message,
@@ -712,9 +799,15 @@ export const make = Effect.gen(function* () {
               task.thread_id,
               activeRuns,
               sources.find((source) => source.key === `task-active:${task.task_id}`)?.status ===
-                "available",
+                "available" && taskActive.get(task.task_id)?.complete === true,
             ),
             history: history.slice(0, limit),
+            historyCoverage: {
+              retainedFrom: history.at(-1)?.requestedAt ?? null,
+              truncated:
+                taskHistories.get(task.task_id)?.truncated !== false || history.length > limit,
+              evidence: `${taskHistories.get(task.task_id)?.evidence ?? unavailableTaskRead.evidence} Active runs: ${taskActive.get(task.task_id)?.evidence ?? unavailableTaskRead.evidence}`,
+            },
             activeRuns,
           }),
         );

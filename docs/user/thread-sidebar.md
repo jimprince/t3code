@@ -440,3 +440,5 @@ Delegated workers keep their parent relationship when task details arrive separa
 Agents can move a thread to Harness or back to Projects without changing its supervisor, workspace, or running work. Workers follow their supervisor’s purpose unless explicitly moved.
 
 Agents can use `harness_snapshot` to read Harness routines, schedule lateness and recent execution histories. Missing findings counts and unavailable owner feeds are reported as unknown.
+
+Incomplete histories are marked as partial. Missing runs and whether an agent is idle remain unknown when the available data cannot establish them.
