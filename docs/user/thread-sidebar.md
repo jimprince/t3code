@@ -438,3 +438,5 @@ only the row's current pinned or active order key.
 Delegated workers keep their parent relationship when task details arrive separately; later moves and completion choices remain authoritative.
 
 Agents can move a thread to Harness or back to Projects without changing its supervisor, workspace, or running work. Workers follow their supervisor’s purpose unless explicitly moved.
+
+Agents can use `harness_snapshot` to read Harness routines, schedule lateness and recent execution histories. Missing findings counts and unavailable owner feeds are reported as unknown.
