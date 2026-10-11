@@ -1,0 +1,4 @@
+id = "sidebar-hygiene-native"
+category = "feature"
+functionality = "threads"
+text = "Provider-native workers appear under their creator and settle after successful completion. Resuming a task reopens automatically settled work; completion opt-outs and manual choices remain in control."

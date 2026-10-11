@@ -3197,3 +3197,18 @@ id = "harness-exact-read-model"
 date = "2026-10-11"
 decided = "One snapshot method, per-ID histories and exact user-message/root-run joins; persistent target IDs group schedules, per-run automation/task IDs group instances."
 rationale = "Titles, dispatch success, detector streaks and global newest-N windows cannot establish agent identity, successful execution or per-run findings."
+
+[[patch]]
+name = "fork-sidebar-hygiene-native"
+subject = "feat(server): nest and settle completed native subagents"
+class = "product"
+purpose = "Nest actual provider-native conversation children and settle successful runless tasks with command-lock completion evidence and native resume reopening."
+retire_when = "Upstream persists native child organization and supports successful native task completion with resume and manual-override guards."
+depends_on = ["fork-sidebar-hygiene-seed", "fork-harness-purpose", "fork-subthread-lifecycle"]
+roles = []
+note = "Prepared separately on product/native-hygiene-20261012 pending Brad approval; excluded from product/stack-20261012 and its candidate CI. Uses the existing shared creation writer and lifecycle; no scheduler, historical backfill, ordinary launch nesting, canary changes or failed/cancelled settlement. A durable automatic-native receipt permits a later task_started generation to reopen only automatic settlement; deliberate manual settlement clears it."
+[[patch.decision]]
+id = "native-hygiene-separate-pending-approval-20261012"
+date = "2026-10-11"
+decided = "prepare-on-separate-topic-only"
+rationale = "The product orchestrator explicitly authorized implementation and tests on a separate topic while Brad's semantic approval remains unanswered. Keep the entire native organization/completion concern droppable and outside the integrated candidate."
