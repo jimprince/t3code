@@ -3154,3 +3154,78 @@ id = "creation-lineage-seed-20261012"
 date = "2026-10-11"
 decided = "preserve-existing-semantics"
 rationale = "App-owned delegates already imply organizational ownership. Use their persisted creation lineage and one insert-once writer to remove dependence on event batching while preserving all explicit edits on replay. Provider-native organization/completion is a separate approval-gated concern."
+
+[[patch]]
+name = "fork-harness-purpose"
+subject = "feat(threads): persist and inherit Harness purpose"
+class = "product"
+purpose = "Separate Harness work from project work with a nullable organizational purpose override and creator seeding, without changing nesting or workspace ownership."
+retire_when = "Upstream supports equivalent thread-purpose inheritance and reversible organization across clients and agent creation paths."
+depends_on = [
+  "fork-sidebar-hygiene-seed",
+  "fork-nested-threads",
+  "fork-cross-environment-nesting",
+  "fork-named-agents",
+  "fork-orchestrators-view",
+]
+roles = []
+note = "No backfill or sidebar UI. Root threads default to project; absent remote ancestry is unknown. Creation seeds are committed with thread.created and never overwrite metadata on replay. Delegates and automation workers inherit via their existing organizational parent. Fresh ownerless schedules retain no recorded seed. The operator CLI ships per machine and does not require a desktop release."
+
+[[patch.decision]]
+id = "harness-root-purpose"
+date = "2026-10-11"
+decided = "One optional nullable purpose on ForkThreadMetadata; top-level creator launches and named-agent handovers copy effective purpose once."
+rationale = "A workspace contains both product and Harness work. Organizational inheritance provides moves without reclassifying unrelated threads or duplicating a hierarchy."
+
+[[patch]]
+name = "fork-harness-read-service"
+subject = "feat(server): expose read-only Harness snapshots"
+class = "product"
+purpose = "Expose environment-scoped Harness agents and routine histories through one read-only service shared by RPC and MCP, with honest lateness, failure and findings coverage."
+retire_when = "Upstream exposes equivalent Harness inventory and bounded exact routine-to-execution histories, or Harness purpose is retired."
+depends_on = [
+  "fork-harness-purpose",
+  "fork-scripts-automations",
+  "fork-project-automations",
+  "fork-nested-threads",
+]
+roles = []
+note = "Environment-level queue summary uses the existing status recovery index, caps at 10001 sampled queued rows and reports partial/unknown coverage without a false zero. Files include packages/client-runtime/src/state/harnessQuery.test.ts and docs/release-notes/entries/harness-queue-summary.toml. No UI, scheduler, management controls or monitor. Existing automation stores and scheduled-task tags are the execution sources; fixed allowlisted owner feeds are opt-in. Missing findings remain unknown. No migration is required: enumerate retained project threads as the fresh-task catalog superset, join exact task tags inside indexed per-thread windows, and mark any catalog/message/active cap as partial or unknown. Reliability owns future thresholds and routing."
+
+[[patch.decision]]
+id = "harness-exact-read-model"
+date = "2026-10-11"
+decided = "One snapshot method, per-ID histories and exact user-message/root-run joins; persistent target IDs group schedules, per-run automation/task IDs group instances."
+rationale = "Titles, dispatch success, detector streaks and global newest-N windows cannot establish agent identity, successful execution or per-run findings."
+
+[[patch.decision]]
+id = "harness-no-startup-index-20261012"
+date = "2026-10-11"
+decided = "No migration 18 on the Oct 12 candidate; optional index is a separate proposal."
+rationale = "Release owner requires real-size DB-copy startup timing before admitting the expression index. Existing project/thread/time/message/run indexes supply bounded exact joins; incomplete catalogs or windows cannot prove inactive or complete history."
+
+[[patch.decision]]
+id = "harness-environment-queue-coverage"
+date = "2026-10-11"
+decided = "Count the entire environment queued-run subset through the existing recovery index, sampling at most 10001 rows; partial/error reads expose unknown totals and oldest request."
+rationale = "Harness filters must not hide queued user sends, and automation runs are already included in the environment total. No new migration or message-table scan is needed."
+[[patch]]
+name = "fork-harness-tab-ui"
+subject = "feat(web): add Harness tab beside Threads and Projects"
+class = "product"
+purpose = "Show Harness agents and automated checks beside Threads and Projects with shared purpose partitions, honest run signals and reversible web purpose moves."
+retire_when = "Upstream provides equivalent multi-client Harness navigation and purpose-aware organization or Harness is retired."
+depends_on = ["fork-harness-read-service", "fork-sidebar-settled-ui"]
+roles = []
+note = "Combines reviewed UI commits 220fd641, 6bd75c18 and health strip 187daca4. The shared strip consumes complete environment queue totals once, including automation executions; incomplete or older hosts retain unknown sends. Files also include packages/client-runtime/src/state/harnessStrip.ts and packages/client-runtime/src/state/harnessStrip.test.ts. Web, desktop and phone expose reversible purpose moves; native mobile reads the same data without Move actions. Includes the optional harness capability and shared purpose partition; no startup index or Reliability monitor. Files: apps/mobile/src/features/home/HomeScreen.tsx, apps/mobile/src/features/home/MobileHarnessList.tsx, apps/mobile/src/features/home/MobileSubprojectRows.tsx, apps/mobile/src/state/harness.ts, apps/server/src/environment/ServerEnvironment.ts, apps/web/src/components/Sidebar.tsx, apps/web/src/components/chat/forkThreadCommands.ts, apps/web/src/components/harness/HarnessCheckDetails.tsx, apps/web/src/components/harness/HarnessSidebarList.tsx, apps/web/src/components/orchestrators/OrchestratorSidebarList.tsx, apps/web/src/components/settings/SettingsPanels.tsx, apps/web/src/components/threadNestingMenu.logic.test.ts, apps/web/src/components/threadNestingMenu.logic.ts, apps/web/src/hooks/useThreadActionMenu.ts, apps/web/src/hooks/useThreadNesting.tsx, apps/web/src/state/forkPurpose.ts, apps/web/src/state/harness.ts, docs/release-notes/entries/harness-tab.toml, docs/user/thread-sidebar.md, packages/client-runtime/package.json, packages/client-runtime/src/state/harnessQuery.ts, packages/client-runtime/src/state/harnessView.test.ts, packages/client-runtime/src/state/harnessView.ts, packages/client-runtime/src/state/orchestrators.ts, packages/client-runtime/src/state/threadPurpose.test.ts, packages/client-runtime/src/state/threadPurpose.ts, packages/contracts/src/environment.ts, packages/shared/src/localTime.test.ts, packages/shared/src/localTime.ts"
+[[patch.decision]]
+id = "harness-tab-reviewed-ui-20261012"
+date = "2026-10-11"
+decided = "One separately droppable tab concern containing both implementation and Opus review repairs."
+rationale = "Brad chose a third tab beside Threads and Projects. Shared selectors preserve organization across clients; unknown findings, stale reads, dispatch-only results and missing owner classifications never default to healthy. Native mobile remains read-only."
+
+[[patch.decision]]
+id = "harness-design-b-health-strip"
+date = "2026-10-11"
+decided = "Brad approved design B with Queue N, Oldest wait Xm and Failed 24h N on web, desktop, phone and native mobile."
+rationale = "Use the snapshot environment total for queue depth and oldest wait without adding automation rows again; retain unknown or lower-bound signals for incomplete coverage and older environments."

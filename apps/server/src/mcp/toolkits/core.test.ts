@@ -1,3 +1,5 @@
+import * as SqlClient from "effect/unstable/sql/SqlClient";
+import { readMetadata, writeMetadata } from "../../forkThreads/MetadataStore.ts";
 import { SqlitePersistenceMemory } from "../../persistence/Layers/Sqlite.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { expect, it } from "@effect/vitest";
@@ -265,6 +267,30 @@ it.effect("a client caller targets any thread within its ceiling and cannot act 
       code: "runtime_mode_escalation_denied",
     });
 
+    const sql = yield* SqlClient.SqlClient;
+    const target = ThreadId.make("other-project-thread");
+    yield* writeMetadata(sql, {
+      threadId: target,
+      parentThreadId: ThreadId.make("supervisor"),
+      settleOnComplete: true,
+    });
+    for (const [action, purpose] of [
+      ["move_to_harness", "harness"],
+      ["move_to_projects", "project"],
+    ]) {
+      const moved = yield* call(
+        "t3_thread_organize",
+        { action, threadId: target },
+        clientScope("auto"),
+      );
+      expect(moved.isError).toBe(false);
+      expect(moved.structuredContent).toMatchObject({
+        effectivePurpose: purpose,
+        metadata: { purpose, parentThreadId: "supervisor", settleOnComplete: true },
+      });
+      expect((yield* readMetadata(sql, target))?.purpose).toBe(purpose);
+    }
+
     const forked = yield* call(
       "t3_thread_fork",
       { sourcePoint: { type: "latest_stable" } },
@@ -283,6 +309,7 @@ it.effect("a client caller targets any thread within its ceiling and cannot act 
               Effect.succeed({
                 id: ThreadId.make("other-project-thread"),
                 projectId: "other-project",
+                archivedAt: null,
                 deletedAt: null,
               } as never),
             getProjectThreadRecords: () =>

@@ -4,6 +4,7 @@ import { computeThreadMoveAvailability } from "../threads/threadOrder";
 import { LegendList, type LegendListRef } from "@legendapp/list/react-native";
 import {
   buildOrchestratorSummaries,
+  joinOrchestratorMetadata,
   PROJECT_QUIET_AFTER_MS,
   projectSidebarBucket,
   type OrchestratorSummary,
@@ -13,10 +14,15 @@ import {
   subprojectCountLabel,
   subprojectWorkingLabel,
   toggleProjectKey,
-  topLevelProjects,
   projectKeyOf,
 } from "@t3tools/client-runtime/state/projectSubprojects";
+import {
+  partitionThreadPurposes,
+  samePurposeSubprojects,
+} from "@t3tools/client-runtime/state/thread-purpose";
+import type { ThreadPurpose } from "@t3tools/contracts";
 import { MobileDecisionFeed } from "./MobileDecisionFeed";
+import { MobileHarnessList } from "./MobileHarnessList";
 import { MobileProjectRequests } from "./MobileProjectRequests";
 import { MobileSubprojectRows } from "./MobileSubprojectRows";
 import { MobileTaskFraction } from "./MobileTaskFraction";
@@ -115,7 +121,7 @@ interface HomeScreenProps {
   readonly onAddConnection: () => void;
   readonly onOpenSettings: () => void;
   readonly onStartNewTask: () => void;
-  readonly onSelectThread: (thread: EnvironmentThreadShell) => void;
+  readonly onSelectThread: (thread: Pick<EnvironmentThreadShell, "environmentId" | "id">) => void;
   readonly onArchiveThread: (thread: EnvironmentThreadShell) => void;
   readonly onDeleteThread: (thread: EnvironmentThreadShell) => void;
   /** Resolves true iff the settle was dispatched and succeeded. */
@@ -246,9 +252,11 @@ function HomeTopContentSpacer() {
 
 function MobileOrchestratorList({
   summaries: allSummaries,
+  purposes,
   onSelectThread,
 }: {
   readonly summaries: readonly OrchestratorSummary[];
+  readonly purposes: ReadonlyMap<string, ThreadPurpose | null>;
   readonly onSelectThread: (thread: EnvironmentThreadShell) => void;
 }) {
   // Settled or long-quiet projects fold into one collapsed group, the same rule
@@ -257,8 +265,9 @@ function MobileOrchestratorList({
   // Projects whose subprojects are folded away, until the screen is left; the rest show theirs.
   const [foldedProjects, setFoldedProjects] = useState<ReadonlyArray<string>>([]);
   const [quietCutoff] = useState(() => Date.now() - PROJECT_QUIET_AFTER_MS);
-  // Subprojects nest inside their project's card instead of listing as projects.
-  const projects = useMemo(() => topLevelProjects(allSummaries), [allSummaries]);
+  // The partition already lists top-level projects (and a project nested under Harness) as roots;
+  // same-purpose subprojects nest inside their project's card.
+  const projects = allSummaries;
   if (projects.length === 0) {
     return (
       <View className="flex-1 items-center justify-center px-8">
@@ -357,7 +366,7 @@ function MobileOrchestratorList({
           // thread may not be in this list yet.
           onOpenThread={(threadId) => onSelectThread({ ...summary.root, id: threadId })}
         />
-        {summary.subprojects.length > 0 ? (
+        {samePurposeSubprojects(summary, purposes).length > 0 ? (
           <View className="mt-2 border-t border-border">
             <Pressable
               accessibilityRole="button"
@@ -375,6 +384,7 @@ function MobileOrchestratorList({
             {folded ? null : (
               <MobileSubprojectRows
                 summary={summary}
+                purposes={purposes}
                 quietCutoff={quietCutoff}
                 onSelectThread={onSelectThread}
               />
@@ -410,11 +420,24 @@ function MobileOrchestratorList({
 /* ─── Main screen ────────────────────────────────────────────────────── */
 
 export function HomeScreen(props: HomeScreenProps) {
-  const [homeMode, setHomeMode] = useState<"threads" | "orchestrators">("threads");
+  const [homeMode, setHomeMode] = useState<"threads" | "orchestrators" | "harness">("threads");
   const supervisionMetadata = useSupervisionMetadata();
-  const orchestrators = useMemo(
-    () => buildOrchestratorSummaries(props.threads, props.projects, supervisionMetadata),
-    [props.projects, props.threads, supervisionMetadata],
+  // Join the sidecar once: Projects and Harness partition the same forest by purpose.
+  const joinedThreads = useMemo(
+    () => joinOrchestratorMetadata(props.threads, supervisionMetadata),
+    [props.threads, supervisionMetadata],
+  );
+  const {
+    projects: orchestrators,
+    harness: harnessRoots,
+    purposes,
+  } = useMemo(
+    () =>
+      partitionThreadPurposes(
+        joinedThreads,
+        buildOrchestratorSummaries(joinedThreads, props.projects),
+      ),
+    [joinedThreads, props.projects],
   );
   const queuedThreadKeys = useQueuedThreadKeys();
   const openSwipeableRef = useRef<SwipeableMethods | null>(null);
@@ -1169,6 +1192,7 @@ export function HomeScreen(props: HomeScreenProps) {
             options={[
               { value: "threads", label: "Threads" },
               { value: "orchestrators", label: "Projects" },
+              { value: "harness", label: "Harness" },
             ]}
             selected={homeMode}
             onSelect={setHomeMode}
@@ -1180,7 +1204,13 @@ export function HomeScreen(props: HomeScreenProps) {
             rebuilds and `itemsAreEqual` keeps a minute tick (or an unrelated
             shell update) from re-rendering untouched rows. */}
         {homeMode === "orchestrators" ? (
-          <MobileOrchestratorList summaries={orchestrators} onSelectThread={props.onSelectThread} />
+          <MobileOrchestratorList
+            summaries={orchestrators}
+            purposes={purposes}
+            onSelectThread={props.onSelectThread}
+          />
+        ) : homeMode === "harness" ? (
+          <MobileHarnessList harnessRoots={harnessRoots} onSelectThread={props.onSelectThread} />
         ) : (
           <SwipeableScrollGateProvider enabled={swipeEnabled} activation={swipeRowActivation}>
             <LegendList

@@ -7,12 +7,16 @@ import {
   type ScopedSupervisionMetadata,
 } from "./forkNesting.ts";
 import type { ForkRemoteParent, ThreadId, ThreadSubprojectMode } from "@t3tools/contracts";
+import { threadPurposes } from "./threadPurpose.ts";
 
 /** Organizational fields come from the nesting sidecar, never execution lineage. */
 export interface OrchestratorThreadShell extends EnvironmentThreadShell {
   readonly parentThreadId?: ThreadId | null;
   readonly remoteParent?: ForkRemoteParent | null;
   readonly scope?: string | null;
+  readonly forkMetadataAvailable?: boolean;
+  readonly supervisionMetadataPresent?: boolean;
+  readonly purpose?: import("@t3tools/contracts").ThreadPurpose | null;
   readonly supervisionParentKey?: string | null;
   /**
    * `on` means "a project in its own right": a nested thread renders as a subproject
@@ -78,7 +82,7 @@ export function lastActivityAt(
   );
 }
 
-function resolveThreadDisplayStatus(
+export function resolveThreadDisplayStatus(
   thread: OrchestratorThreadShell & { hasActiveDescendants?: boolean; settled?: boolean },
 ): ThreadDisplayStatus {
   if (thread.hasPendingApprovals) return "approval";
@@ -115,6 +119,8 @@ export function joinOrchestratorMetadata(
       parentThreadId: row?.parentThreadId ?? null,
       remoteParent: row?.remoteParent ?? null,
       scope: row?.scope ?? null,
+      purpose: row?.purpose ?? null,
+      supervisionMetadataPresent: row !== undefined,
       subproject: row?.subproject ?? thread.subproject ?? "auto",
       supervisionParentKey: parents.get(threadActivityKey(thread)) ?? null,
     };
@@ -266,8 +272,9 @@ export function sortOrchestratorSummariesForSidebar(
 
 /**
  * Projects mode owns complete orchestrator trees, root included, so a project and
- * its orchestrator never also occupy the Threads list (Brad, 2026-10-10). Threads
- * keeps standalone roots.
+ * its orchestrator never also occupy the Threads list (Brad, 2026-10-10). Harness
+ * mode owns every thread whose effective purpose is harness, including a root with
+ * no workers. Threads keeps the standalone rest.
  */
 export function threadsVisibleInThreadsMode(
   threads: ReadonlyArray<OrchestratorThreadShell>,
@@ -297,7 +304,11 @@ export function threadsVisibleInThreadsMode(
       projectThreadKeys.add(threadActivityKey(descendant));
     }
   }
-  return threads.filter((thread) => !projectThreadKeys.has(threadActivityKey(thread)));
+  const purposes = threadPurposes(threads);
+  return threads.filter((thread) => {
+    const key = threadActivityKey(thread);
+    return !projectThreadKeys.has(key) && purposes.get(key) !== "harness";
+  });
 }
 
 function hasPlanReady(thread: OrchestratorThreadShell): boolean {
