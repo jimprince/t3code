@@ -18,7 +18,8 @@ import { supervisionThreadKey } from "./forkNesting.ts";
 export const HARNESS_REFRESH_INTERVAL_MS = 60_000;
 /** A snapshot older than this many refreshes is shown as stale rather than current. */
 const STALE_AFTER_REFRESHES = 3;
-const SNAPSHOT_STALE_AFTER_MS = HARNESS_REFRESH_INTERVAL_MS * STALE_AFTER_REFRESHES;
+/** Older than this, a read is shown as stale and its rows can no longer say healthy. */
+export const SNAPSHOT_STALE_AFTER_MS = HARNESS_REFRESH_INTERVAL_MS * STALE_AFTER_REFRESHES;
 
 /**
  * What a check's row claims. `healthy` is earned, never defaulted: it needs a finished,
@@ -102,7 +103,7 @@ export interface HarnessCheckView {
 }
 
 /** "25m", "3h", "2d": the coarsest unit that is at least one. */
-function formatSpan(ms: number): string {
+export function formatSpan(ms: number): string {
   const minutes = Math.max(1, Math.round(ms / 60_000));
   if (minutes < 60) return `${minutes}m`;
   const hours = Math.round(minutes / 60);

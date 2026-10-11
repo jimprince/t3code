@@ -12,6 +12,7 @@ import {
   type HarnessCheckView,
   type HarnessTone,
 } from "@t3tools/client-runtime/state/harness-view";
+import { buildHarnessStrip } from "@t3tools/client-runtime/state/harness-strip";
 import { buildOrchestratorSummaries } from "@t3tools/client-runtime/state/orchestrators";
 import { partitionThreadPurposes } from "@t3tools/client-runtime/state/thread-purpose";
 import { formatLocalWhen } from "@t3tools/shared/localTime";
@@ -256,6 +257,17 @@ export function HarnessSidebarList() {
     () => buildHarnessChecks(snapshots, now, { unreachable }),
     [now, snapshots, unreachable],
   );
+  const strip = useMemo(
+    () =>
+      buildHarnessStrip({
+        snapshots,
+        now,
+        unreachable,
+        missingEnvironments: environments.filter((environment) => environment.snapshot === null)
+          .length,
+      }),
+    [environments, now, snapshots, unreachable],
+  );
   const { harness: harnessChecks, unclassified } = useMemo(
     () => splitHarnessChecks(checks),
     [checks],
@@ -292,6 +304,25 @@ export function HarnessSidebarList() {
 
   return (
     <div className="flex flex-col gap-1">
+      <p
+        className={cn(
+          "flex flex-wrap gap-x-2 border-b border-sidebar-border px-2.5 pb-1.5 text-xs text-sidebar-muted-foreground",
+          strip.stale && "opacity-60",
+        )}
+      >
+        {strip.parts.map((part, index) => (
+          <span key={part.label}>
+            {index > 0 ? <span aria-hidden>· </span> : null}
+            {part.label}{" "}
+            <span
+              className={part.tone === "muted" ? "text-sidebar-foreground" : TONE_TEXT[part.tone]}
+            >
+              {part.value}
+            </span>
+          </span>
+        ))}
+        {strip.stale ? <span className="text-warning-foreground">· stale</span> : null}
+      </p>
       <section aria-label="Harness agents">
         <SectionHeading
           title="Agents"

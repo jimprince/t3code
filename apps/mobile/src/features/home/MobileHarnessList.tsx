@@ -1,4 +1,5 @@
 import { useFocusEffect } from "@react-navigation/native";
+import { buildHarnessStrip } from "@t3tools/client-runtime/state/harness-strip";
 import {
   buildHarnessAgents,
   buildHarnessChecks,
@@ -40,6 +41,12 @@ const AGENT_TONE = {
   warning: "text-warning-foreground",
   info: "text-adaptive-sky-600-400",
 } as const;
+const STRIP_TONE: Record<HarnessTone, string> = {
+  error: "text-destructive",
+  warning: "text-warning-foreground",
+  muted: "text-foreground",
+  ok: "text-foreground",
+};
 const TONE_TEXT: Record<HarnessTone, string> = {
   error: "text-destructive",
   warning: "text-warning-foreground",
@@ -225,6 +232,17 @@ export function MobileHarnessList({
     () => buildHarnessChecks(snapshots, now, { unreachable }),
     [now, snapshots, unreachable],
   );
+  const strip = useMemo(
+    () =>
+      buildHarnessStrip({
+        snapshots,
+        now,
+        unreachable,
+        missingEnvironments: environments.filter((environment) => environment.snapshot === null)
+          .length,
+      }),
+    [environments, now, snapshots, unreachable],
+  );
   const { harness: harnessChecks, unclassified } = useMemo(
     () => splitHarnessChecks(checks),
     [checks],
@@ -262,6 +280,20 @@ export function MobileHarnessList({
   }
   return (
     <ScrollView className="flex-1" contentContainerClassName="px-3 pb-24">
+      <Text
+        className={cn(
+          "border-b border-border px-2 pt-3 pb-2 text-xs text-foreground-muted",
+          strip.stale && "opacity-60",
+        )}
+      >
+        {strip.parts.map((part, index) => (
+          <Text key={part.label}>
+            {index > 0 ? " · " : ""}
+            {part.label} <Text className={cn("text-xs", STRIP_TONE[part.tone])}>{part.value}</Text>
+          </Text>
+        ))}
+        {strip.stale ? <Text className="text-xs text-warning-foreground"> · stale</Text> : null}
+      </Text>
       <Text className="px-2 pt-3 pb-1 text-xs font-t3-medium text-foreground-muted">
         {agents.length === 0 ? "AGENTS" : `AGENTS  ${attention.length} of ${agents.length} active`}
       </Text>
