@@ -6,6 +6,7 @@ import {
   useSupervisionMetadata,
 } from "../state/forkSupervision";
 import { useSupervisionForest } from "../state/forkSupervision";
+import { readThreadPurposeMove } from "../state/forkPurpose";
 import { supervisionIsActive, supervisionRoots } from "@t3tools/client-runtime/state/fork-nesting";
 import { useSupervisionDrag } from "./sidebar/useSupervisionDrag";
 import { useSupervisionSidebar } from "./sidebar/SupervisionThreadRows";
@@ -124,6 +125,7 @@ import {
   TerminalIcon,
   Undo2Icon,
   UsersIcon,
+  WorkflowIcon,
   XIcon,
 } from "lucide-react";
 import {
@@ -210,6 +212,7 @@ import { cn } from "~/lib/utils";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { ProjectEnvironmentBadge } from "./ProjectEnvironmentBadge";
 import { ThreadIssueBadges } from "./ThreadIssueBadges";
+import { HarnessSidebarList } from "./harness/HarnessSidebarList";
 import { OrchestratorSidebarList } from "./orchestrators/OrchestratorSidebarList";
 import { useThreadsVisibleInThreadsMode } from "./orchestrators/useOrchestratorThreads";
 import { buildDraftActionMenuItems, buildThreadActionMenuItems } from "./threadActionMenu.logic";
@@ -323,7 +326,7 @@ const SETTLED_TAIL_PAGE_COUNT = 25;
 const SETTLED_SHELF_EXPANDED_KEY = "t3code:sidebar:settled-expanded";
 const SNOOZED_SHELF_EXPANDED_KEY = "t3code:sidebar:snoozed-expanded";
 const WORKING_SHELF_EXPANDED_KEY = "t3code:sidebar:working-expanded";
-const SIDEBAR_MODE_SCHEMA = Schema.Literals(["threads", "orchestrators"]);
+const SIDEBAR_MODE_SCHEMA = Schema.Literals(["threads", "orchestrators", "harness"]);
 
 // Working beta: when this client saw each thread leave the Working shelf.
 // Module scope keeps the inbox order across routes that unmount the sidebar.
@@ -2495,7 +2498,11 @@ export default function Sidebar() {
     "threads" as const,
     SIDEBAR_MODE_SCHEMA,
   );
-  const showOrchestrators = orchestratorsEnabled && sidebarMode === "orchestrators";
+  // Explicit per-mode flags: the Threads chrome (search, new thread, thread lists) must never
+  // render under Projects or Harness, so no branch reads "not Projects" as "Threads".
+  const showProjects = orchestratorsEnabled && sidebarMode === "orchestrators";
+  const showHarness = orchestratorsEnabled && sidebarMode === "harness";
+  const showThreads = !showProjects && !showHarness;
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const {
     settleThread,
@@ -4633,6 +4640,7 @@ export default function Sidebar() {
           forest: appAtomRegistry.get(forkSupervision.forest),
           supported: readForkNestingSupported(thread.environmentId),
           subprojectsSupported: readForkSubprojectsSupported(thread.environmentId),
+          purposeMove: readThreadPurposeMove(thread),
         });
         const clicked = await settlePromise(() =>
           api.contextMenu.show(
@@ -5194,13 +5202,13 @@ export default function Sidebar() {
           // header and would otherwise paint across the search row's outline.
           <SidebarGroup className="z-[1]">
             {orchestratorsEnabled ? (
-              <div className="mx-2 mb-1 grid grid-cols-2 rounded-md bg-accent p-0.5 text-xs font-medium">
+              <div className="mx-2 mb-1 grid grid-cols-3 rounded-md bg-accent p-0.5 text-xs font-medium">
                 <button
                   type="button"
-                  aria-pressed={!showOrchestrators}
+                  aria-pressed={showThreads}
                   className={cn(
                     "flex h-7 cursor-pointer items-center justify-center gap-1.5 rounded-sm text-sidebar-muted-foreground",
-                    !showOrchestrators && "bg-sidebar text-sidebar-foreground",
+                    showThreads && "bg-sidebar text-sidebar-foreground",
                   )}
                   onClick={() => setSidebarMode("threads")}
                 >
@@ -5209,20 +5217,32 @@ export default function Sidebar() {
                 </button>
                 <button
                   type="button"
-                  aria-pressed={showOrchestrators}
+                  aria-pressed={showProjects}
                   className={cn(
                     "flex h-7 cursor-pointer items-center justify-center gap-1.5 rounded-sm text-sidebar-muted-foreground",
-                    showOrchestrators && "bg-sidebar text-sidebar-foreground",
+                    showProjects && "bg-sidebar text-sidebar-foreground",
                   )}
                   onClick={() => setSidebarMode("orchestrators")}
                 >
                   <UsersIcon className="size-3.5" />
                   Projects
                 </button>
+                <button
+                  type="button"
+                  aria-pressed={showHarness}
+                  className={cn(
+                    "flex h-7 cursor-pointer items-center justify-center gap-1.5 rounded-sm text-sidebar-muted-foreground",
+                    showHarness && "bg-sidebar text-sidebar-foreground",
+                  )}
+                  onClick={() => setSidebarMode("harness")}
+                >
+                  <WorkflowIcon className="size-3.5" />
+                  Harness
+                </button>
               </div>
             ) : null}
             <SidebarThreadHeader
-              hidden={showOrchestrators}
+              hidden={!showThreads}
               searchFieldRef={headerSearchRef}
               hasProjects={projectGroups.length > 0}
               projectScope={
@@ -5258,8 +5278,9 @@ export default function Sidebar() {
         }
       >
         <SidebarGroup className="flex-1" role="presentation">
-          {showOrchestrators ? <OrchestratorSidebarList /> : null}
-          {!showOrchestrators && isSearchingThreads ? (
+          {showProjects ? <OrchestratorSidebarList /> : null}
+          {showHarness ? <HarnessSidebarList /> : null}
+          {showThreads && isSearchingThreads ? (
             threadSearchResults.length > 0 ? (
               <TooltipProvider
                 key="sidebar-thread-search-tooltips-150"
@@ -5326,7 +5347,7 @@ export default function Sidebar() {
               </p>
             )
           ) : null}
-          {!showOrchestrators && !isSearchingThreads ? (
+          {showThreads && !isSearchingThreads ? (
             <TooltipProvider
               key="sidebar-thread-tooltips-150"
               delay={150}
@@ -5739,7 +5760,7 @@ export default function Sidebar() {
               </DndContext>
             </TooltipProvider>
           ) : null}
-          {!showOrchestrators &&
+          {showThreads &&
           !isSearchingThreads &&
           visibleDraftSessionCount === 0 &&
           pinnedThreads.length +
