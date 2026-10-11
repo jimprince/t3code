@@ -13,6 +13,7 @@ import {
 import { conversationBaselineAllowed } from "../fork/recovery/ConversationRewind.ts";
 import { legacyNoticeCanStart } from "../fork/recovery/LegacyBackgroundWorkPolicy.ts";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
+import { resolveCreatorPurpose } from "../forkThreads/ThreadPurpose.ts";
 import { listMetadata } from "../forkThreads/MetadataStore.ts";
 import { hasLiveChildren, readWorkerMetadata } from "../forkThreads/WorkerLifecycleMetadata.ts";
 import { archiveEligible } from "../forkThreads/ArchiveDeadlines.ts";
@@ -2225,6 +2226,15 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         payload: { ...previous.thread, archivedAt: now, updatedAt: now },
       });
     }
+    const purposeSeed =
+      command.purposeSeed ??
+      (command.handoverFromThreadId !== undefined || command.creatorThreadId !== undefined
+        ? yield* resolveCreatorPurpose(
+            sql,
+            (command.handoverFromThreadId ?? command.creatorThreadId)!,
+            projectionStore.getThreadShell,
+          ).pipe(mapDispatchError(command))
+        : null);
     const thread: OrchestrationV2AppThread = {
       ...(agentName === null ? {} : { autoSettleDisabledAt: now }),
       createdBy: command.createdBy,
@@ -2261,6 +2271,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       threadId: command.threadId,
       providerInstanceId: command.modelSelection.instanceId,
       occurredAt: now,
+      ...(purposeSeed === null ? {} : { purposeSeed }),
       payload: thread,
     });
     if (command.importedNativeThread !== undefined) {
