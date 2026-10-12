@@ -1400,7 +1400,7 @@ describe("MessagesTimeline", () => {
   it("renders an agent message as a ruled row without the You heading", async () => {
     const { MessagesTimeline } = await import("./MessagesTimeline");
     const header =
-      'T3 thread message: thread_id: "t-1"; saved_name: "build-worker"; environment: "dev-vm"; reply: "t3-thread send build-worker ..."';
+      'T3 thread message: thread_id: "t-1"; saved_name: "build-worker"; environment: "dev-vm"; reply: "t3-thread send other-target ..."';
     const entry = buildUserTimelineEntry(`${header}\nReview this area`);
     const agentMarkup = renderToStaticMarkup(
       <MessagesTimeline
@@ -1423,8 +1423,13 @@ describe("MessagesTimeline", () => {
     );
 
     expect(agentMarkup).toContain('data-user-message-attribution="agent"');
-    expect(agentMarkup).toContain("build-worker");
+    // The Details text also holds the saved name, so read the name from the attribution element.
+    const attribution = /data-user-message-attribution="agent"[^>]*>((?:(?!<\/p>).)*)<\/p>/.exec(
+      agentMarkup,
+    );
+    expect(attribution?.[1]).toContain("build-worker");
     expect(agentMarkup).toContain("Review this area");
+    expect(agentMarkup).not.toContain("T3 thread message");
     expect(agentMarkup).toContain("data-agent-message-details");
     expect(agentMarkup).not.toContain(">You<");
     expect(agentMarkup).not.toContain("rounded-2xl bg-message");

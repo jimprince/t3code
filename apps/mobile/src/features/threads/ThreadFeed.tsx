@@ -1481,10 +1481,13 @@ function AgentMessageSender(props: {
   readonly header?: AgentMessageHeader;
 }) {
   const navigation = useNavigation();
-  const senderThreadId = props.isAutomation ? undefined : props.senderThreadId;
   const sender = useThreadShell(
-    senderThreadId ? scopeThreadRef(props.environmentId, senderThreadId) : null,
+    props.senderThreadId && !props.isAutomation
+      ? scopeThreadRef(props.environmentId, props.senderThreadId)
+      : null,
   );
+  // Only link a sender this environment knows; a remote sender's id would open nothing.
+  const senderThreadId = sender ? props.senderThreadId : undefined;
   const name = props.isAutomation
     ? "Automation"
     : (sender?.title ?? props.header?.savedName ?? "another agent");
@@ -1823,7 +1826,7 @@ function renderFeedEntry(
                 })}
               </View>
             ) : null}
-            {message.text.trim().length > 0 ? (
+            {presentation.text.trim().length > 0 ? (
               <MarkdownImageAvailableWidthContext
                 value={props.userBubbleMaxWidth - USER_BUBBLE_HORIZONTAL_PADDING * 2}
               >

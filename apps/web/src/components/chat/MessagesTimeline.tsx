@@ -2276,7 +2276,10 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
         {isAgentRow ? (
           <AgentMessageSender
             authorName={authorName}
-            senderThreadId={userMessage.isAutomation ? undefined : senderThreadId}
+            senderThreadId={
+              // Only link a sender this environment knows; a remote sender's id would open nothing.
+              userMessage.isAutomation || !senderThread ? undefined : senderThreadId
+            }
             scheduledTaskId={userMessage.scheduledTaskId}
             isAutomation={userMessage.isAutomation}
             environment={userMessage.agentHeader?.environment ?? null}
