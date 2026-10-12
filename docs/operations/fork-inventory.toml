@@ -3118,3 +3118,13 @@ id = "plan-from-research-interaction-taxonomy"
 date = "2026-10-10"
 decided = "new-concern"
 rationale = "Brad chose dashboard design A from the interaction-taxonomy research (status asks are 10% of his 7,312 messages to agents) and asked for task-level progress per workstream instead of thread rows. Shipped first on live as 69b7da56 (cherry-pick of 92d72ea4); folded here as its own droppable patch rather than into fork-project-workstreams because it can be removed without removing the Workstreams block."
+
+[[patch]]
+name = "fork-shell-snapshot-cache"
+subject = "perf(server): cache shell snapshots with transactional invalidation"
+class = "upstream-bound"
+purpose = "Serve shell snapshots from a bounded in-memory projection cache, refreshing only changed threads while preserving the uncached result."
+retire_when = "Upstream caches shell snapshots with equivalent transactional, fork-source and external-writer invalidation and an uncached fallback."
+depends_on = []
+roles = []
+note = "Use connection-local TEMP triggers at the projection write boundary because EventSink transactions, maintenance rebuilds and separate CLI writers all change these inputs. Journals roll back with writes, shared provider-session bindings dirty every affected thread, fork descendants recalculate inherited counts, and SQLite data_version detects other connections. Transactional callers bypass the cache; six filtered snapshots share immutable shell objects. T3CODE_SHELL_SNAPSHOT_CACHE=0 installs no journal and uses the original builder. A failed cache rebuild falls back to the original filtered read, preserving behavior for unrelated unreadable projections. Warm lifecycle sweeps assert zero shell-table reads; command-lock reads still use the original transactional path. No persistent schema or wire changes."

@@ -592,7 +592,7 @@ const archiveTestLayer = ThreadManagement.layer.pipe(
   Layer.provideMerge(ServerSettings.layerTest({ settledSubthreadArchiveAfterDays: 1 })),
 );
 
-it.effect("reads archived shells once per lifecycle update, including nested archives", () =>
+it.effect("reuses cached archived shells per lifecycle update, including nested archives", () =>
   Effect.gen(function* () {
     const { ids, threads, store } = yield* archiveFixture;
     const snapshot = yield* threads.getShellSnapshot();
@@ -612,7 +612,7 @@ it.effect("reads archived shells once per lifecycle update, including nested arc
     );
     assert.equal(
       counter.shellReads().length,
-      1,
+      0,
       `SQL statements: ${counter.queries.length}; shell reads: ${counter.shellReads().length}`,
     );
     assert.equal(
