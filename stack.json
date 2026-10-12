@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "38c85b761604e16bcf463bf45349d13d6d2f6dd3",
-  "head": "a157e5dccbad090927e51781525ef765e0099bc2",
+  "prev": "f633501fa29bd0358c74c8450380f6179fc27f31",
+  "head": "1510df0c9866112f6c9b3c85876d6b4c6a9336cb",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -162,7 +162,8 @@
     "fork-sidebar-hygiene-native",
     "fork-mobile-identities",
     "fork-pr-watch-recovery",
-    "fork-shell-snapshot-cache"
+    "fork-shell-snapshot-cache",
+    "fork-sqlite-worker-connections"
   ],
   "unapplied": [],
   "hidden": [],
@@ -577,6 +578,9 @@
     },
     "fork-spawn-budget": {
       "oid": "9ea5c1dabe44d8465e925f8fa583c93219671829"
+    },
+    "fork-sqlite-worker-connections": {
+      "oid": "1510df0c9866112f6c9b3c85876d6b4c6a9336cb"
     },
     "fork-standing-agent-autosettle": {
       "oid": "454b4d853f064a6799ac710120c7092d0e05f411"
