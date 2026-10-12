@@ -3279,3 +3279,16 @@ retire_when = "Upstream caches shell snapshots with equivalent transactional, fo
 depends_on = []
 roles = []
 note = "Use connection-local TEMP triggers at the projection write boundary because EventSink transactions, maintenance rebuilds and separate CLI writers all change these inputs. Journals roll back with writes, shared provider-session bindings dirty every affected thread, fork descendants recalculate inherited counts, and SQLite data_version detects other connections. Transactional callers bypass the cache; six filtered snapshots share immutable shell objects. T3CODE_SHELL_SNAPSHOT_CACHE=0 installs no journal and uses the original builder. A failed cache rebuild falls back to the original filtered read, preserving behavior for unrelated unreadable projections. Warm lifecycle sweeps assert zero shell-table reads; command-lock reads still use the original transactional path. No persistent schema or wire changes."
+[[patch]]
+name = "fork-sqlite-worker-connections"
+subject = "perf(server): run SQLite on worker threads with read connections"
+class = "product"
+purpose = "Keep the server main thread responsive by running SQLite on worker threads, serving read-only snapshot loads from separate WAL reader connections, and keeping websocket connect bookkeeping off the upgrade path."
+retire_when = "Upstream moves server SQLite off the main thread with concurrent read connections, or the fork drops node:sqlite persistence."
+depends_on = [
+  "fork-admin-thread-recovery",
+  "fork-agent-panel-thread-details",
+  "fork-page-agent-tray",
+  "fork-shell-snapshot-cache",
+]
+roles = []

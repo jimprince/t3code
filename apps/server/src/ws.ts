@@ -256,6 +256,7 @@ import * as PullRequestService from "./pullRequest/PullRequestService.ts";
 import { listLinkedPullRequestThreads } from "./pullRequest/linkedThreads.ts";
 import { pullRequestSyncKey } from "./pullRequest/pullRequestSyncKey.ts";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
+import { withReadTransaction } from "@t3tools/shared/nodeSqliteClient";
 import { makeSendBindingReader } from "./forkThreads/SendBindings.ts";
 import { makeHandoffService } from "./forkThreads/HandoffService.ts";
 import * as PullRequestSyncReactor from "./orchestration-v2/PullRequestSyncReactor.ts";
@@ -1008,7 +1009,7 @@ export const subscribeOrchestrationV2Shell = Effect.fn("ws.orchestrationV2.subsc
       },
     );
     const loadSnapshot = Effect.fn("ws.orchestrationV2.loadShellSnapshot")(function* () {
-      const base = yield* sql.withTransaction(
+      const base = yield* withReadTransaction(sql)(
         Effect.gen(function* () {
           const threads = yield* threadManagement.getShellSnapshot({ location: "active" });
           return buildActiveShellSnapshot({
@@ -1802,32 +1803,30 @@ const makeWsRpcLayer = (
           .refreshStatus(cwd)
           .pipe(Effect.ignoreCause({ log: true }), Effect.forkDetach, Effect.asVoid);
 
-      const getOrchestrationV2ArchivedShellSnapshot = sql
-        .withTransaction(
-          Effect.gen(function* () {
-            const threads = yield* threadManagement.getShellSnapshot({ location: "archive" });
-            return {
-              schemaVersion: threads.schemaVersion,
-              snapshotSequence: yield* applicationEvents.latestApplicationSequence,
-              projects: yield* projectStore.listShells(),
-              threads: withoutPageAgentThreads(threads).archivedThreads,
-            } as const;
-          }),
-        )
-        .pipe(
-          Effect.flatMap((snapshot) =>
-            enrichProjectShells(snapshot.projects).pipe(
-              Effect.map(({ projects }) => ({ ...snapshot, projects })),
-            ),
+      const getOrchestrationV2ArchivedShellSnapshot = withReadTransaction(sql)(
+        Effect.gen(function* () {
+          const threads = yield* threadManagement.getShellSnapshot({ location: "archive" });
+          return {
+            schemaVersion: threads.schemaVersion,
+            snapshotSequence: yield* applicationEvents.latestApplicationSequence,
+            projects: yield* projectStore.listShells(),
+            threads: withoutPageAgentThreads(threads).archivedThreads,
+          } as const;
+        }),
+      ).pipe(
+        Effect.flatMap((snapshot) =>
+          enrichProjectShells(snapshot.projects).pipe(
+            Effect.map(({ projects }) => ({ ...snapshot, projects })),
           ),
-          Effect.mapError(
-            (cause) =>
-              new OrchestrationV2GetShellSnapshotError({
-                message: "Failed to load archived thread snapshot",
-                cause,
-              }),
-          ),
-        );
+        ),
+        Effect.mapError(
+          (cause) =>
+            new OrchestrationV2GetShellSnapshotError({
+              message: "Failed to load archived thread snapshot",
+              cause,
+            }),
+        ),
+      );
 
       const subscribeOrchestrationV2ArchivedShell = Effect.fn(
         "ws.orchestrationV2.subscribeArchivedShell",
@@ -4146,7 +4145,9 @@ export const websocketRpcRouteLayer = Layer.unwrap(
         );
         const clientOrigin = readClientConnectionOrigin(request);
         const clientAnalyticsProps = readClientAnalyticsProps(request);
-        yield* sessions.recordClientConnection(session.sessionId, clientOrigin);
+        // Session bookkeeping writes wait for the database writer, which can be
+        // busy for seconds. They must never hold up the websocket upgrade.
+        yield* Effect.forkDetach(sessions.recordClientConnection(session.sessionId, clientOrigin));
         yield* analytics.record("client.connected", clientAnalyticsProps);
         const rpcWebSocketHttpEffect = yield* Effect.gen(function* () {
           const { protocol, httpEffect } = yield* RpcServer.makeProtocolWithHttpEffectWebsocket;
@@ -4201,9 +4202,15 @@ export const websocketRpcRouteLayer = Layer.unwrap(
           ),
         );
         return yield* Effect.acquireUseRelease(
-          sessions.markConnected(session.sessionId),
+          Effect.forkDetach(sessions.markConnected(session.sessionId)),
           () => rpcWebSocketHttpEffect,
-          () => sessions.markDisconnected(session.sessionId),
+          // Disconnect only after connect is recorded, so the two stay in order.
+          (connected) =>
+            Effect.forkDetach(
+              Fiber.await(connected).pipe(
+                Effect.andThen(sessions.markDisconnected(session.sessionId)),
+              ),
+            ),
         );
       }).pipe(
         Effect.catchTags({
