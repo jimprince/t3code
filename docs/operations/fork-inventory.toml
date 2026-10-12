@@ -3292,3 +3292,19 @@ depends_on = [
   "fork-shell-snapshot-cache",
 ]
 roles = []
+
+[[patch]]
+name = "fork-agent-message-style"
+subject = "feat(ui): distinguish agent-sent messages with left-rule rows"
+class = "product"
+purpose = "Distinguish agent and automation messages from human messages across web, desktop and native mobile."
+retire_when = "Upstream presents agent-origin user-role messages with distinct attribution and shared sender parsing across clients."
+depends_on = ["fork-worker-operations"]
+roles = []
+note = "Brad selected option A. Folds e017e4f3 and Opus-reviewed f583d479 into one concern: left rule without user-bubble fill, known sender thread links, header details and stripped visible body. Steer/interrupt sends retain human styling. Files: apps/mobile/src/features/threads/ThreadFeed.tsx, apps/web/src/components/chat/MessagesTimeline.test.tsx, apps/web/src/components/chat/MessagesTimeline.tsx, docs/release-notes/entries/agent-message-style.toml, docs/user/agent-messages.md, packages/client-runtime/src/userMessage.test.ts, packages/client-runtime/src/userMessage.ts"
+
+[[patch.decision]]
+id = "agent-message-option-a-20261013"
+date = "2026-10-12"
+decided = "One droppable concern for the approved left-rule agent-message presentation and its review fixes."
+rationale = "Shared client-runtime parsing preserves actor attribution across web, desktop, phone and native mobile; remote or absent senders are text rather than invalid navigation links."
