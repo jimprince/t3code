@@ -98,7 +98,7 @@ function TrayBody({ cos, expandable }: { readonly cos: Cos; readonly expandable:
         routeKind="server"
         environmentId={cos.ref.environmentId}
         threadId={cos.ref.threadId}
-        presentation="project-panel"
+        presentation="tray"
       />
     </>
   );
@@ -136,7 +136,8 @@ function DesktopTray({ cos }: { readonly cos: Cos }) {
       style={{ width, maxWidth: "100vw" }}
       className={cn(
         "flex min-h-0 shrink-0 flex-col border-l border-border bg-background",
-        overlay && "fixed inset-y-0 right-0 z-40 shadow-lg",
+        overlay &&
+          "fixed inset-y-0 top-(--server-restart-banner-height,0px) right-0 z-40 shadow-lg",
       )}
     >
       <TrayBody cos={cos} expandable />
@@ -202,6 +203,8 @@ function PhoneTray({ cos }: { readonly cos: Cos }) {
 export function ChiefOfStaffTray() {
   const cos = useChiefOfStaff();
   const isMobile = useIsMobile();
+  const setPhone = useCosTrayStore((state) => state.setPhone);
+  useEffect(() => setPhone(isMobile), [isMobile, setPhone]);
   if (!cos) return null;
   return isMobile ? <PhoneTray cos={cos} /> : <DesktopTray cos={cos} />;
 }
