@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "ff2ec68900493df0e670345b1a0871b4ad9c9b00",
-  "head": "ee8d62c7051ecb277a2aa5f64881650392a25814",
+  "prev": "03ae4418c22ad8d513c6b5788db501c350370f84",
+  "head": "1e59b3c49c52639e1e5e2d2d5e29b5eb6b535252",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -154,8 +154,7 @@
     "fork-projects-dnd",
     "fork-local-time",
     "fork-project-plan",
-    "fork-sqlite-worker-connections",
-    "refresh-temp"
+    "fork-sqlite-worker-connections"
   ],
   "unapplied": [],
   "hidden": [],
@@ -545,7 +544,7 @@
       "oid": "9ea5c1dabe44d8465e925f8fa583c93219671829"
     },
     "fork-sqlite-worker-connections": {
-      "oid": "60dae4d5bde71b3aa9c0bb6c6bf0a8c8dabea80e"
+      "oid": "1e59b3c49c52639e1e5e2d2d5e29b5eb6b535252"
     },
     "fork-standing-agent-autosettle": {
       "oid": "454b4d853f064a6799ac710120c7092d0e05f411"
@@ -615,9 +614,6 @@
     },
     "fork-worktree-cleanup": {
       "oid": "269b561678ab2d44626e8b38fa28a57415641776"
-    },
-    "refresh-temp": {
-      "oid": "ee8d62c7051ecb277a2aa5f64881650392a25814"
     }
   }
 }
