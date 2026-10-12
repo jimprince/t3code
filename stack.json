@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "f215f8474907eed15aa56be331ef553bb5c89d87",
-  "head": "e6df7929d70613dc57d12adc3b84219eded2dd7d",
+  "prev": "c9470629ae3cae918150b094baea28fd8e855f9d",
+  "head": "60dae4d5bde71b3aa9c0bb6c6bf0a8c8dabea80e",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -153,7 +153,8 @@
     "fork-subprojects-mobile-main",
     "fork-projects-dnd",
     "fork-local-time",
-    "fork-project-plan"
+    "fork-project-plan",
+    "fork-sqlite-worker-connections"
   ],
   "unapplied": [],
   "hidden": [],
@@ -541,6 +542,9 @@
     },
     "fork-spawn-budget": {
       "oid": "9ea5c1dabe44d8465e925f8fa583c93219671829"
+    },
+    "fork-sqlite-worker-connections": {
+      "oid": "60dae4d5bde71b3aa9c0bb6c6bf0a8c8dabea80e"
     },
     "fork-standing-agent-autosettle": {
       "oid": "454b4d853f064a6799ac710120c7092d0e05f411"
