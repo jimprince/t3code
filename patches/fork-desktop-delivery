@@ -1,6 +1,6 @@
-Bottom: 93ece8a88b7804c1e25587343a53d373106652f8
-Top:    b8116c8ce8832d1aaa7a865d68c73a124093df5e
+Bottom: 1cbb0fa4c9ecc47b5f89f77e717048bd7a8e664e
+Top:    c966552980e1dfbd6a4d44e30df1b38f07c0a4cf
 Author: brad <bradprin@live.com>
-Date:   2026-10-12 07:24:27 +0000
+Date:   2026-10-12 07:27:37 +0000
 
 feat(desktop): deliver the fork desktop app with its own identity and updates
