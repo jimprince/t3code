@@ -11,7 +11,10 @@ import * as Haptics from "expo-haptics";
 import { KeyboardAwareLegendList } from "@legendapp/list/keyboard";
 import { useViewabilityAmount, type LegendListRef } from "@legendapp/list/react-native";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { resolveUserMessagePresentation } from "@t3tools/client-runtime/user-message";
+import {
+  type AgentMessageHeader,
+  resolveUserMessagePresentation,
+} from "@t3tools/client-runtime/user-message";
 import { canForkProjectedAssistantItem } from "@t3tools/client-runtime/state/thread-workflows";
 import {
   type OrchestrationMessageContext,
@@ -198,6 +201,7 @@ import { useThreadSelection } from "../../state/use-thread-selection";
 import { composerDocumentAttachmentRecord } from "../../lib/composerContext";
 import * as Option from "effect/Option";
 import { appAtomRegistry } from "../../state/atom-registry";
+import { useThreadShell } from "../../state/entities";
 import { environmentThreadShells, threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useV2ItemSupport } from "../../state/v2-item-support";
@@ -1469,33 +1473,71 @@ function useMarkdownStyles(
   ]);
 }
 
-function AgentMessageAttribution(props: {
+/** Sender line of a ruled agent or automation row; the name opens the sending thread when known. */
+function AgentMessageSender(props: {
   readonly environmentId: EnvironmentId;
   readonly senderThreadId?: ThreadId;
+  readonly isAutomation: boolean;
+  readonly header?: AgentMessageHeader;
 }) {
   const navigation = useNavigation();
-  const senderThreadId = props.senderThreadId;
-  const label = (
-    <Text className="mb-1 pr-1 font-t3-medium text-2xs text-foreground-muted opacity-60">
-      Sent by another agent
-    </Text>
+  const sender = useThreadShell(
+    props.senderThreadId && !props.isAutomation
+      ? scopeThreadRef(props.environmentId, props.senderThreadId)
+      : null,
   );
-  return senderThreadId ? (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Open sending thread"
-      hitSlop={4}
-      onPress={() =>
-        navigation.navigate("Thread", {
-          environmentId: String(props.environmentId),
-          threadId: String(senderThreadId),
-        })
-      }
-    >
-      {label}
-    </Pressable>
-  ) : (
-    label
+  // Only link a sender this environment knows; a remote sender's id would open nothing.
+  const senderThreadId = sender ? props.senderThreadId : undefined;
+  const name = props.isAutomation
+    ? "Automation"
+    : (sender?.title ?? props.header?.savedName ?? "another agent");
+  const environment = props.header?.environment;
+  const label = <Text className="font-t3-medium text-xs text-foreground">{name}</Text>;
+  return (
+    <View className="flex-row flex-wrap items-baseline gap-x-2">
+      {senderThreadId ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open sending thread"
+          hitSlop={4}
+          onPress={() =>
+            navigation.navigate("Thread", {
+              environmentId: String(props.environmentId),
+              threadId: String(senderThreadId),
+            })
+          }
+        >
+          {label}
+        </Pressable>
+      ) : (
+        label
+      )}
+      <Text className="text-xs text-foreground-muted">
+        {environment ? `${environment} · sent a message` : "sent a message"}
+      </Text>
+    </View>
+  );
+}
+
+/** The CLI sender header (thread id, reply command) kept out of sight until asked for. */
+function AgentMessageDetails(props: { readonly header: AgentMessageHeader }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        hitSlop={6}
+        onPress={() => setOpen((value) => !value)}
+      >
+        <Text className="text-xs text-foreground-muted">Details</Text>
+      </Pressable>
+      {open ? (
+        <Text selectable className="mt-1 font-mono text-2xs leading-normal text-foreground-muted">
+          {props.header.text}
+        </Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -1660,7 +1702,9 @@ function renderFeedEntry(
     const isUser = message.role === "user";
     const presentation = resolveUserMessagePresentation(message);
     const renderedText = renderAssistantCitationsAsText(presentation.text);
-    const styles = isUser ? markdownStyles.user : markdownStyles.assistant;
+    // Scheduled and agent-sent messages are not the user's: a ruled row, not a bubble.
+    const isAgentRow = isUser && (presentation.isAutomation || message.createdBy === "agent");
+    const styles = isUser && !isAgentRow ? markdownStyles.user : markdownStyles.assistant;
     const timestampLabel = formatMessageTime(isUser ? message.createdAt : message.updatedAt);
     const attachments = message.attachments ?? [];
     const hasReviewCommentContext = presentation.text.includes("<review_comment");
@@ -1698,31 +1742,36 @@ function renderFeedEntry(
       );
       return (
         <Animated.View
-          className="mb-5 items-end"
+          className={cn("mb-5", isAgentRow ? "items-start" : "items-end")}
           {...(enterAnimated ? { entering: FadeInUp.duration(220) } : {})}
         >
-          {presentation.isAutomation ? (
-            <Text className="mb-1 pr-1 font-t3-medium text-2xs text-foreground-muted opacity-60">
-              Sent by automation
-            </Text>
-          ) : message.createdBy === "agent" ? (
-            <AgentMessageAttribution
-              environmentId={props.environmentId}
-              senderThreadId={message.senderThreadId}
-            />
-          ) : null}
           <View
-            className="min-w-0 gap-2 rounded-[20px] px-3.5 py-2.5"
-            style={{
-              backgroundColor: userBubbleColor,
-              maxWidth: props.userBubbleMaxWidth,
-              ...(hasReviewCommentContext
-                ? { width: props.reviewCommentBubbleWidth }
-                : hasWideBlock
-                  ? { width: props.userBubbleMaxWidth }
-                  : null),
-            }}
+            className={cn(
+              "min-w-0 gap-2",
+              isAgentRow ? "w-full border-l-2 border-border pl-3" : "rounded-[20px] px-3.5 py-2.5",
+            )}
+            style={
+              isAgentRow
+                ? null
+                : {
+                    backgroundColor: userBubbleColor,
+                    maxWidth: props.userBubbleMaxWidth,
+                    ...(hasReviewCommentContext
+                      ? { width: props.reviewCommentBubbleWidth }
+                      : hasWideBlock
+                        ? { width: props.userBubbleMaxWidth }
+                        : null),
+                  }
+            }
           >
+            {isAgentRow ? (
+              <AgentMessageSender
+                environmentId={props.environmentId}
+                isAutomation={presentation.isAutomation}
+                {...(message.senderThreadId ? { senderThreadId: message.senderThreadId } : {})}
+                {...(presentation.agentHeader ? { header: presentation.agentHeader } : {})}
+              />
+            ) : null}
             {entry.pendingMessage?.attachments.map((attachment) =>
               attachment.type === "image" && attachment.uploadedAttachmentId ? (
                 <MessageAttachmentImage
@@ -1756,11 +1805,11 @@ function renderFeedEntry(
                       attachmentId={attachment.id}
                       name={attachment.name}
                       mimeType={attachment.mimeType}
-                      className={
-                        inlineAttachmentIds.size
-                          ? "h-24 w-24 rounded-[14px] bg-user-bubble-foreground/15"
-                          : "aspect-[1.3] w-full rounded-[14px] bg-user-bubble-foreground/15"
-                      }
+                      className={cn(
+                        "rounded-[14px]",
+                        isAgentRow ? "bg-subtle-strong" : "bg-user-bubble-foreground/15",
+                        inlineAttachmentIds.size ? "h-24 w-24" : "aspect-[1.3] w-full",
+                      )}
                       onPressPreview={props.onPressPreview}
                     />
                   ) : isFileAttachment(attachment) ? (
@@ -1777,7 +1826,7 @@ function renderFeedEntry(
                 })}
               </View>
             ) : null}
-            {message.text.trim().length > 0 ? (
+            {presentation.text.trim().length > 0 ? (
               <MarkdownImageAvailableWidthContext
                 value={props.userBubbleMaxWidth - USER_BUBBLE_HORIZONTAL_PADDING * 2}
               >
@@ -1793,8 +1842,16 @@ function renderFeedEntry(
                 />
               </MarkdownImageAvailableWidthContext>
             ) : null}
+            {presentation.agentHeader ? (
+              <AgentMessageDetails header={presentation.agentHeader} />
+            ) : null}
           </View>
-          <View className="mt-1 flex-row items-center justify-end gap-1 pr-0.5">
+          <View
+            className={cn(
+              "mt-1 flex-row items-center gap-1",
+              isAgentRow ? "justify-start pl-3" : "justify-end pr-0.5",
+            )}
+          >
             {intentBadge ? (
               <View
                 accessible
@@ -1848,7 +1905,7 @@ function renderFeedEntry(
                 onCopy={
                   message.context
                     ? () =>
-                        writeComposerContextClipboard(message.text, {
+                        writeComposerContextClipboard(presentation.text, {
                           version: 1,
                           source: { environmentId: props.environmentId, messageId: message.id },
                           records: message.context!.records,

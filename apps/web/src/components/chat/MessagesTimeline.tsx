@@ -29,6 +29,7 @@ import {
   type ServerProvider,
   type ServerProviderSkill,
   type RunId,
+  type ScheduledTaskId,
   type ThreadId,
   type ToolActivityIcon,
 } from "@t3tools/contracts";
@@ -2125,7 +2126,18 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
     (attachment) => !isImageAttachment(attachment) && !isFileAttachment(attachment),
   );
   const userMessage = resolveUserMessagePresentation(row.message);
-  const resolvedContext = useMemo(() => resolveUserMessageContext(row.message), [row.message]);
+  // Scheduled and agent-sent messages are not Brad's: they render as a ruled row, not a "You" bubble.
+  const isAgentRow = userMessage.isAutomation || row.message.createdBy === "agent";
+  const senderThread = useThreadShell(
+    senderThreadId ? scopeThreadRef(ctx.activeThreadEnvironmentId, senderThreadId) : null,
+  );
+  const authorName = userMessage.isAutomation
+    ? "Automation"
+    : (senderThread?.title ?? userMessage.agentHeader?.savedName ?? "another agent");
+  const resolvedContext = useMemo(
+    () => resolveUserMessageContext({ ...row.message, text: userMessage.text }),
+    [row.message, userMessage.text],
+  );
   const previewImages = useMemo(
     () => userImages.filter((image) => image.name.startsWith("preview-annotation-")),
     [userImages],
@@ -2249,47 +2261,30 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
   );
 
   return (
-    <div className="group flex flex-col items-end gap-1">
-      {userMessage.isAutomation ? (
-        <p
-          className="me-1 text-2xs text-muted-foreground/70"
-          data-user-message-attribution="automation"
-        >
-          {userMessage.scheduledTaskId ? (
-            <Link
-              to="/settings/scheduled-tasks"
-              search={{
-                environmentId: ctx.activeThreadEnvironmentId,
-                taskId: userMessage.scheduledTaskId,
-              }}
-              className="rounded-sm hover:text-muted-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring"
-            >
-              Sent by automation
-            </Link>
-          ) : (
-            "Sent by automation"
-          )}
-        </p>
-      ) : row.message.createdBy === "agent" ? (
-        <p className="me-1 text-2xs text-muted-foreground/70" data-user-message-attribution="agent">
-          {senderThreadId ? (
-            <InlineButton
-              onClick={() => ctx.onOpenThread(senderThreadId)}
-              tone="muted"
-              aria-label="Open sending thread"
-            >
-              Sent by another agent
-            </InlineButton>
-          ) : (
-            "Sent by another agent"
-          )}
-        </p>
-      ) : null}
+    <div className={cn("group flex flex-col gap-1", isAgentRow ? "items-start" : "items-end")}>
       {row.message.inputIntent && row.message.inputIntent !== "turn_start" ? (
         <UserMessageIntentMarker intent={row.message.inputIntent} />
       ) : null}
-      <div className="relative max-w-[80%] rounded-2xl bg-message p-3 text-message-foreground">
-        <MessageAuthorHeading>You</MessageAuthorHeading>
+      <div
+        className={
+          isAgentRow
+            ? "relative w-full border-l-2 border-border ps-3"
+            : "relative max-w-[80%] rounded-2xl bg-message p-3 text-message-foreground"
+        }
+      >
+        <MessageAuthorHeading>{isAgentRow ? authorName : "You"}</MessageAuthorHeading>
+        {isAgentRow ? (
+          <AgentMessageSender
+            authorName={authorName}
+            senderThreadId={
+              // Only link a sender this environment knows; a remote sender's id would open nothing.
+              userMessage.isAutomation || !senderThread ? undefined : senderThreadId
+            }
+            scheduledTaskId={userMessage.scheduledTaskId}
+            isAutomation={userMessage.isAutomation}
+            environment={userMessage.agentHeader?.environment ?? null}
+          />
+        ) : null}
         {(regularImages.length > 0 || userVideos.length > 0) && (
           <div className="mb-2 grid max-w-[210px] grid-cols-2 gap-2">
             {regularImages.map((image) => (
@@ -2405,6 +2400,16 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
             markdownCwd={ctx.markdownCwd}
           />
         </div>
+        {userMessage.agentHeader ? (
+          <details className="mt-1 text-xs text-muted-foreground" data-agent-message-details>
+            <summary className="w-fit cursor-pointer select-none hover:text-foreground">
+              Details
+            </summary>
+            <pre className="mt-1 whitespace-pre-wrap break-all rounded-md bg-muted/40 p-2 font-mono text-2xs">
+              {userMessage.agentHeader.text}
+            </pre>
+          </details>
+        ) : null}
       </div>
       {row.projectedItem &&
       row.projectedItem.item.status !== "completed" &&
@@ -2416,7 +2421,12 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
           </span>
         </div>
       ) : null}
-      <div className="flex w-full max-w-[80%] items-center justify-end pe-1 text-xs tabular-nums opacity-0 transition-opacity duration-200 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover:opacity-100">
+      <div
+        className={cn(
+          "flex w-full items-center pe-1 text-xs tabular-nums opacity-0 transition-opacity duration-200 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover:opacity-100",
+          isAgentRow ? "justify-start ps-3" : "max-w-[80%] justify-end",
+        )}
+      >
         <div className="flex shrink-0 items-center gap-2">
           <Tooltip>
             <TooltipTrigger render={<p className="text-muted-foreground text-xs tabular-nums" />}>
@@ -2453,6 +2463,49 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
         </div>
       </div>
     </div>
+  );
+}
+
+/** First line of a ruled agent or automation message: who sent it, where from, as a link when it can be opened. */
+function AgentMessageSender({
+  authorName,
+  senderThreadId,
+  scheduledTaskId,
+  isAutomation,
+  environment,
+}: {
+  readonly authorName: string;
+  readonly senderThreadId: ThreadId | undefined;
+  readonly scheduledTaskId: ScheduledTaskId | undefined;
+  readonly isAutomation: boolean;
+  readonly environment: string | null;
+}) {
+  const ctx = use(TimelineRowCtx);
+  return (
+    <p
+      className="mb-1 flex flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground"
+      data-user-message-attribution={isAutomation ? "automation" : "agent"}
+    >
+      {isAutomation && scheduledTaskId ? (
+        <Link
+          to="/settings/scheduled-tasks"
+          search={{ environmentId: ctx.activeThreadEnvironmentId, taskId: scheduledTaskId }}
+          className="rounded-sm font-medium text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          {authorName}
+        </Link>
+      ) : senderThreadId ? (
+        <InlineButton
+          onClick={() => ctx.onOpenThread(senderThreadId)}
+          aria-label="Open sending thread"
+        >
+          {authorName}
+        </InlineButton>
+      ) : (
+        <span className="font-medium">{authorName}</span>
+      )}
+      <span>{environment ? `${environment} · sent a message` : "sent a message"}</span>
+    </p>
   );
 }
 
