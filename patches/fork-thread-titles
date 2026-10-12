@@ -1,6 +1,6 @@
-Bottom: 72faacc563052e7a84f19aed4277ccd10fd28ac3
-Top:    9c4f3c4386fef7978f90f9b0ed8fdb7b9ecca73f
+Bottom: 988092727a279506be3bb4f63bb11d293fd8e148
+Top:    6752f7f39a57f346def2ab4496384ba272f7cc52
 Author: brad <bradprin@live.com>
-Date:   2026-10-12 07:17:16 +0000
+Date:   2026-10-12 07:24:27 +0000
 
 feat(t3-thread): rename threads and preserve explicit titles

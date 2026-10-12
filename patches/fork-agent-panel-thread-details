@@ -1,7 +1,7 @@
-Bottom: 617967f954a3d2b500860352f69bac4cf3491b34
-Top:    6dfdc11665dafcae643eb4264887ba8531a18441
+Bottom: 7835319a715ff4c7519f1af9b582000eea25d7e7
+Top:    e0810c12a8efb239d720b14edab876c25a5ca8e0
 Author: brad <bradprin@live.com>
-Date:   2026-10-12 07:17:16 +0000
+Date:   2026-10-12 07:24:27 +0000
 
 feat(web): show detailed nested thread activity in Agents panel
 

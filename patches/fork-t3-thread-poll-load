@@ -1,6 +1,6 @@
-Bottom: 41f200a77d3f20e5ccaa0e91beadd1ca2bdbbd3a
-Top:    4ffd151eb3bc80da8840ce3d4bef3e7ff359d6b1
+Bottom: 687ce5e7abeaf260eeaefd5b19321bb897bdabe2
+Top:    8e4fd7c0053bd30efb7fd75b09fd4d4baf257e6a
 Author: brad <bradprin@live.com>
-Date:   2026-10-12 07:18:00 +0000
+Date:   2026-10-12 07:24:27 +0000
 
 fix(t3-thread): stop polling settled threads every few seconds
