@@ -1,10 +1,13 @@
 {
   "version": 5,
-  "prev": "14009e07389d2d75006fb9fff5e4d043a068d61b",
-  "head": "0b2c787eca27a0d4c5f85e805fc0d6da2b82fee6",
+  "prev": "43cfc33182b23abfdd316bd6b3a363f0d5d19c18",
+  "head": "5bb365f31a61aa72606d52455df143ba2bed3243",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
+    "refresh-temp"
+  ],
+  "unapplied": [
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
     "fork-general-chat",
@@ -155,10 +158,8 @@
     "fork-local-time",
     "fork-project-plan",
     "fork-shell-snapshot-cache",
-    "fork-sqlite-worker-connections",
-    "refresh-temp"
+    "fork-sqlite-worker-connections"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
@@ -621,7 +622,7 @@
       "oid": "269b561678ab2d44626e8b38fa28a57415641776"
     },
     "refresh-temp": {
-      "oid": "0b2c787eca27a0d4c5f85e805fc0d6da2b82fee6"
+      "oid": "5bb365f31a61aa72606d52455df143ba2bed3243"
     }
   }
 }
