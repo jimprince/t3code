@@ -463,6 +463,8 @@ export interface MessagesTimelineHistoryControls {
 
 interface MessagesTimelineProps {
   showMinimap?: boolean;
+  /** Leaves out the collapsed "Worked for ..." rows; what they fold stays hidden. */
+  hideTurnFolds?: boolean;
   citationRequest?: AssistantCitationRequest | null;
   citationHistoryLoading?: boolean;
   onCiteAssistantText?: (
@@ -584,6 +586,7 @@ export function MessagesTimeline(props: MessagesTimelineProps) {
 
 const ConversationTimeline = memo(function ConversationTimeline({
   showMinimap = true,
+  hideTurnFolds = false,
 
   citationRequest = null,
   citationHistoryLoading = false,
@@ -941,10 +944,14 @@ const ConversationTimeline = memo(function ConversationTimeline({
     supportsConversationRollback,
     worktreeSetup,
   ]);
+  const shownRows = useMemo(
+    () => (hideTurnFolds ? rawRows.filter((row) => row.kind !== "turn-fold") : rawRows),
+    [hideTurnFolds, rawRows],
+  );
   const focus = useOrchestratorFocus({
     threadKey: routeThreadKey,
     entries: timelineEntries,
-    rows: rawRows,
+    rows: shownRows,
     liveRunId: runningRunId,
   });
   const rows = useStableRows(focus.rows, listIdentityKey);

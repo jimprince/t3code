@@ -10,9 +10,17 @@ export const COS_TRAY_PEEK_HEIGHT = 56;
 /** Under this window width the open tray overlays the page instead of taking a column. */
 export const COS_TRAY_OVERLAY_BELOW = 1024;
 
-/** The row, key and palette all use this: a closed or minimized tray opens, an open one closes. */
-export function toggleCosTray(mode: CosTrayMode): CosTrayMode {
-  return mode === "open" ? "closed" : "open";
+/**
+ * The row, key and palette all use this: a tray that is not showing opens, a showing one closes.
+ * On a phone the sheet is what shows, and it never persists open, so a stored `open` mode after
+ * a reload with the sheet closed (only the peek bar on screen) must open the sheet, not close.
+ */
+export function toggleCosTray(
+  mode: CosTrayMode,
+  phone?: { readonly sheetOpen: boolean },
+): CosTrayMode {
+  const showing = phone ? phone.sheetOpen : mode === "open";
+  return showing ? "closed" : "open";
 }
 
 export function waitingLabel(count: number): string {

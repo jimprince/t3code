@@ -17,6 +17,11 @@ describe("toggleCosTray", () => {
     expect(toggleCosTray("minimized")).toBe("open");
     expect(toggleCosTray("open")).toBe("closed");
   });
+  it("on a phone follows the sheet: a stored open mode with the sheet closed opens it", () => {
+    expect(toggleCosTray("open", { sheetOpen: false })).toBe("open");
+    expect(toggleCosTray("minimized", { sheetOpen: false })).toBe("open");
+    expect(toggleCosTray("open", { sheetOpen: true })).toBe("closed");
+  });
 });
 
 describe("formatLastReply", () => {
