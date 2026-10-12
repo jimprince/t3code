@@ -1,0 +1,4 @@
+id = "sqlite-worker-connections"
+category = "performance"
+functionality = "server persistence"
+text = "Busy servers stay responsive: database work runs off the main thread, thread and sidebar loads no longer block writes, and clients connect without waiting on the database."

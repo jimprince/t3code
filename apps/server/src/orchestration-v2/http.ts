@@ -12,6 +12,7 @@ import * as Effect from "effect/Effect";
 import * as Predicate from "effect/Predicate";
 import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
+import { withReadTransaction } from "@t3tools/shared/nodeSqliteClient";
 
 import {
   annotateEnvironmentRequest,
@@ -118,7 +119,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
     );
 
     const loadShellSnapshot = Effect.fn("http.orchestration.loadShellSnapshot")(function* () {
-      const base = yield* sql.withTransaction(
+      const base = yield* withReadTransaction(sql)(
         Effect.gen(function* () {
           const threads = yield* threadManagement.getShellSnapshot({ location: "active" });
           return buildActiveShellSnapshot({
