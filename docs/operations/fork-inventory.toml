@@ -3134,5 +3134,10 @@ subject = "perf(server): run SQLite on worker threads with read connections"
 class = "product"
 purpose = "Keep the server main thread responsive by running SQLite on worker threads, serving read-only snapshot loads from separate WAL reader connections, and keeping websocket connect bookkeeping off the upgrade path."
 retire_when = "Upstream moves server SQLite off the main thread with concurrent read connections, or the fork drops node:sqlite persistence."
-depends_on = ["fork-admin-thread-recovery", "fork-agent-panel-thread-details", "fork-page-agent-tray", "fork-shell-snapshot-cache"]
+depends_on = [
+  "fork-admin-thread-recovery",
+  "fork-agent-panel-thread-details",
+  "fork-page-agent-tray",
+  "fork-shell-snapshot-cache",
+]
 roles = []
