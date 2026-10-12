@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
-  DEFAULT_SERVER_SETTINGS,
   EnvironmentId,
   MessageId,
   ThreadId,
@@ -8,10 +7,9 @@ import {
   type DashboardSnapshot,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
-import { Atom, AtomRegistry } from "effect/reactivity";
 import { v2Projection, v2ThreadShell } from "./state/orchestrationV2TestFixtures.ts";
 import {
-  createChiefOfStaffSummaryAtoms,
+  selectScopedChiefOfStaffThread,
   selectChiefOfStaffSummary,
   selectChiefOfStaffThread,
 } from "./chiefOfStaff.ts";
@@ -89,7 +87,7 @@ describe("Chief of Staff summary", () => {
     expect(selectChiefOfStaffThread([{ ...desk, archivedAt: replyAt }], null)).toBeNull();
     expect(selectChiefOfStaffThread([{ ...desk, deletedAt: replyAt }], null)).toBeNull();
   });
-  it("counts only distinct open decisions across the environment dashboard", () => {
+  it("counts every attention row, matching the pinned decision cards", () => {
     expect(
       selectChiefOfStaffSummary({
         thread: desk,
@@ -100,9 +98,10 @@ describe("Chief of Staff summary", () => {
           attention("two"),
           attention("review", "review"),
           attention("test", "test"),
+          attention("question", "question"),
         ]),
       }).openDecisionCount,
-    ).toBe(2);
+    ).toBe(6);
     expect(
       selectChiefOfStaffSummary({ thread: desk, projection: null, dashboard: snapshot([]) })
         .openDecisionCount,
@@ -164,6 +163,32 @@ describe("Chief of Staff summary", () => {
       }).isBusy,
     ).toBe(true);
   });
+  it("uses the newest assistant message regardless of message order", () => {
+    const messages = [
+      { ...projection.messages[0]!, id: MessageId.make("new-reply"), updatedAt: userAt },
+      projection.messages[0]!,
+      {
+        ...projection.messages[0]!,
+        id: MessageId.make("later-user"),
+        role: "user" as const,
+        updatedAt: DateTime.makeUnsafe("2026-10-12T05:00:00Z"),
+      },
+    ];
+    expect(
+      selectChiefOfStaffSummary({
+        thread: desk,
+        projection: { ...projection, messages },
+        dashboard: null,
+      }).lastReplyAt,
+    ).toBe("2026-10-12T04:40:00.000Z");
+  });
+  it.each(["Front Desk", "chief-of-staff", " Chief of Staff "])(
+    "discovers the exact title %s",
+    (title) => {
+      const thread = { ...desk, title };
+      expect(selectChiefOfStaffThread([operations, thread], null)).toBe(thread);
+    },
+  );
   it.each(["preparing", "queued", "starting", "running", "waiting"] as const)(
     "reports %s as busy",
     (status) => {
@@ -188,37 +213,44 @@ describe("Chief of Staff summary", () => {
       ).toBe(false);
     },
   );
-  it("reacts to preference and decision-feed updates without reading another environment", () => {
-    const environmentId = EnvironmentId.make("desk-host");
-    const settings = Atom.make(DEFAULT_SERVER_SETTINGS);
-    const dashboard = Atom.make({ snapshot: snapshot([attention("one")]) });
-    const summaries = createChiefOfStaffSummaryAtoms({
-      settings: (id) => {
-        expect(id).toBe(environmentId);
-        return settings;
-      },
-      threads: () => Atom.make([operations, desk]),
-      dashboard: () => dashboard,
-      projection: (ref) => {
-        expect(ref.environmentId).toBe(environmentId);
-        return Atom.make(ref.threadId === desk.id ? projection : null);
-      },
-    });
-    const registry = AtomRegistry.make();
-    const unmount = registry.mount(summaries(environmentId));
-    expect(registry.get(summaries(environmentId))).toMatchObject({
-      thread: desk,
-      openDecisionCount: 1,
-      lastReplyAt: "2026-10-12T04:30:00.000Z",
-    });
-    registry.set(settings, { ...DEFAULT_SERVER_SETTINGS, chiefOfStaffThreadId: operations.id });
-    registry.set(dashboard, { snapshot: snapshot([]) });
-    expect(registry.get(summaries(environmentId))).toMatchObject({
-      thread: operations,
-      openDecisionCount: 0,
-      lastReplyAt: null,
-    });
-    unmount();
-    registry.dispose();
+  it("resolves titles in the primary environment and preferences in their own environment", () => {
+    const primary = EnvironmentId.make("primary");
+    const remote = EnvironmentId.make("remote");
+    const threads = [
+      { ...desk, environmentId: remote },
+      { ...operations, environmentId: primary },
+    ];
+    expect(
+      selectScopedChiefOfStaffThread({ threads, preferred: null, primaryEnvironmentId: primary }),
+    ).toBeNull();
+    expect(
+      selectScopedChiefOfStaffThread({
+        threads,
+        preferred: { environmentId: remote, threadId: desk.id },
+        primaryEnvironmentId: primary,
+      }),
+    ).toEqual({ environmentId: remote, threadId: desk.id });
   });
+  it.each(["running", "failed", "interrupted"] as const)(
+    "does not count a %s run with no assistant message as a reply",
+    (status) => {
+      const thread = {
+        ...desk,
+        status,
+        latestRunCompletedAt: userAt,
+        latestVisibleMessage: {
+          id: MessageId.make("user"),
+          role: "user" as const,
+          text: "Next?",
+          updatedAt: userAt,
+        },
+      };
+      expect(selectChiefOfStaffSummary({ thread, projection, dashboard: null }).lastReplyAt).toBe(
+        "2026-10-12T04:30:00.000Z",
+      );
+      expect(
+        selectChiefOfStaffSummary({ thread, projection: null, dashboard: null }).lastReplyAt,
+      ).toBeNull();
+    },
+  );
 });

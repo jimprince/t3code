@@ -25,6 +25,14 @@ import {
 import { OLDER_DASHBOARD_REFRESH_MS, readOlderDashboard } from "./fallback.ts";
 export { createDashboardSnapshotMerger } from "./merge.ts";
 
+/** Passive observers never mount dashboard RPCs. Null once the last dashboard view closes. */
+export const mountedDashboardSnapshotAtom = Atom.family((environmentId: EnvironmentId) =>
+  Atom.make<DashboardSnapshot | null>(null).pipe(
+    Atom.keepAlive,
+    Atom.withLabel(`dashboard:mounted:${environmentId}`),
+  ),
+);
+
 /** Cache lifetime is independent of the subscription lifetime; unmount closes all network reads. */
 export function createDashboardAtoms<R, ER>(
   runtime: Atom.AtomRuntime<EnvironmentRegistry.EnvironmentRegistry | R, ER>,
@@ -133,10 +141,17 @@ export function createDashboardAtoms<R, ER>(
       const pendingAnswers = answers.filter((answer) => !confirmedAnswers.has(answer));
       const now =
         pendingAnswers.length > 0 ? Option.getOrElse(AsyncResult.value(get(clock)), () => 0) : 0;
+      const visibleSnapshot = cached
+        ? overlayDashboardAnswers(cached, environmentId, pendingAnswers, now)
+        : null;
+      const observed = mountedDashboardSnapshotAtom(environmentId);
+      get.set(observed, visibleSnapshot);
+      get.addFinalizer(() => {
+        // Registry reset removes all nodes before running finalizers.
+        if (get.registry.getNodes().has(observed)) get.registry.set(observed, null);
+      });
       return {
-        snapshot: cached
-          ? overlayDashboardAnswers(cached, environmentId, pendingAnswers, now)
-          : null,
+        snapshot: visibleSnapshot,
         refreshing: result?.waiting ?? false,
         failed: result ? AsyncResult.isFailure(result) : false,
         olderServer: !!config && !capable,

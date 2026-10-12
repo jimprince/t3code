@@ -1,13 +1,18 @@
 import { useAtomValue } from "@effect/atom-react";
 import { parseScopedThreadKey, scopedThreadKey } from "@t3tools/client-runtime/environment";
-import { threadRuntimeIsActive } from "@t3tools/client-runtime/state/models";
-import type { ScopedThreadRef } from "@t3tools/contracts";
+import {
+  selectChiefOfStaffSummary,
+  selectScopedChiefOfStaffThread,
+} from "@t3tools/client-runtime/chief-of-staff";
+import { mountedDashboardSnapshotAtom } from "@t3tools/client-runtime/dashboard";
+import type { DashboardSnapshot, ScopedThreadRef } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
 import { useMemo } from "react";
 
-import { selectChiefOfStaffThread } from "../components/cos-tray/cosTray.logic";
+import { useCosTrayStore } from "../components/cos-tray/cosTrayStore";
+import { useIsMobile } from "../hooks/useMediaQuery";
 import { useEnvironmentDashboardSnapshot } from "./dashboard";
-import { useThreadShell } from "./entities";
+import { useThreadProjection, useThreadShell } from "./entities";
 import { primaryEnvironmentIdAtom } from "./primaryEnvironment";
 import { environmentServerConfigsAtom } from "./server";
 import { environmentThreadShells } from "./threads";
@@ -25,7 +30,7 @@ const chiefOfStaffKeyAtom = Atom.make((get) => {
       break;
     }
   }
-  const found = selectChiefOfStaffThread({
+  const found = selectScopedChiefOfStaffThread({
     threads: get(environmentThreadShells.threadShellsAtom),
     preferred,
     primaryEnvironmentId: get(primaryEnvironmentIdAtom),
@@ -38,25 +43,43 @@ export function useChiefOfStaffRef(): ScopedThreadRef | null {
   return useMemo(() => (key === null ? null : parseScopedThreadKey(key)), [key]);
 }
 
+const NO_SNAPSHOT = Atom.make<DashboardSnapshot | null>(null);
+
 /**
  * What the pinned row, tray and sheet show: the front desk thread, how many decisions wait on
- * Brad in its environment, when it last replied (its latest finished run), and whether it is
+ * Brad in its environment, when its newest assistant message arrived, and whether it is
  * replying now. Null when no thread is configured or found.
  */
 export function useChiefOfStaff() {
   const ref = useChiefOfStaffRef();
   const shell = useThreadShell(ref);
-  const snapshot = useEnvironmentDashboardSnapshot(ref?.environmentId ?? null);
+  const projection = useThreadProjection(ref);
+  const isMobile = useIsMobile();
+  const trayOpen = useCosTrayStore((state) =>
+    isMobile ? state.phoneSheetOpen : state.mode === "open",
+  );
+  // Only the visible tray's decision view owns a dashboard subscription. The sidebar observes
+  // a mounted dashboard passively; it hides the count when neither view is open.
+  const traySnapshot = useEnvironmentDashboardSnapshot(
+    trayOpen ? (ref?.environmentId ?? null) : null,
+  );
+  const mountedSnapshot = useAtomValue(
+    ref ? mountedDashboardSnapshotAtom(ref.environmentId) : NO_SNAPSHOT,
+  );
+  const snapshot = traySnapshot ?? mountedSnapshot;
   return useMemo(() => {
     if (!ref || !shell) return null;
-    const waiting =
-      snapshot?.projects.reduce((sum, project) => sum + project.attention.length, 0) ?? 0;
+    const summary = selectChiefOfStaffSummary({
+      thread: shell.source,
+      dashboard: snapshot,
+      projection: projection?.projection ?? null,
+    });
     return {
       ref,
       title: shell.title,
-      waiting,
-      lastReplyAt: shell.latestRun?.completedAt ?? null,
-      replying: threadRuntimeIsActive(shell.runtime),
+      waiting: summary.openDecisionCount,
+      lastReplyAt: summary.lastReplyAt,
+      replying: summary.isBusy,
     };
-  }, [ref, shell, snapshot]);
+  }, [ref, shell, projection, snapshot]);
 }
