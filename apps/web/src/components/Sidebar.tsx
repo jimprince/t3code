@@ -226,6 +226,7 @@ import {
 import { ThreadIssueBadges } from "./ThreadIssueBadges";
 import { HarnessSidebarList } from "./harness/HarnessSidebarList";
 import { OrchestratorSidebarList } from "./orchestrators/OrchestratorSidebarList";
+import { ChiefOfStaffRow } from "./cos-tray/ChiefOfStaffRow";
 import { useThreadsVisibleInThreadsMode } from "./orchestrators/useOrchestratorThreads";
 
 import {
@@ -5408,6 +5409,7 @@ export default function Sidebar() {
                 </button>
               </div>
             ) : null}
+            <ChiefOfStaffRow />
             <SidebarThreadHeader
               hidden={!showThreads}
               searchFieldRef={headerSearchRef}
