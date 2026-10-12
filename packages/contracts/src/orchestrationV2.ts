@@ -1789,6 +1789,8 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
   notificationOrigin: Schema.optional(NotificationOrigin),
   notificationSuperseded: Schema.optional(Schema.Boolean),
   notificationDisposition: Schema.optional(Schema.NullOr(Schema.Literals(["quiet", "attention"]))),
+  /** Exact no-change final output; preserves the timeline while suppressing completion surfaces. */
+  completionSuppressed: Schema.optional(Schema.Boolean),
   notificationRequestId: Schema.optional(Schema.NullOr(Schema.String)),
   codexNativeGoal: Schema.optional(Schema.NullOr(CodexNativeGoalSummary)),
   workerSummary: Schema.optional(ForkWorkerSummary),

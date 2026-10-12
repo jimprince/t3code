@@ -1,3 +1,4 @@
+import { isNoChangeReply } from "@t3tools/shared/completionOutput";
 import { ResumeAdmission } from "../threadRecovery/ResumeAdmission.ts";
 import { interruptedSessionEvents } from "../forkThreads/InterruptedSession.ts";
 import { MessageAdmission } from "../forkThreads/MessageAdmission.ts";
@@ -9142,6 +9143,19 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     readonly updatedTask: OrchestrationV2Subagent;
     readonly now: DateTime.Utc;
   }) {
+    // Keep the child timeline and internal handoff, without publishing a result or waking its parent.
+    if (input.updatedTask.status === "completed" && isNoChangeReply(input.updatedTask.result)) {
+      return {
+        task: {
+          ...input.updatedTask,
+          result: null,
+          completionDelivery: { state: "disposed" as const, observedByRunId: null },
+        },
+        parentRun: undefined,
+        message: undefined,
+        offer: false,
+      };
+    }
     const taskDelivery = input.updatedTask.completionDelivery;
     // delivered ownership has already settled through a completed wake run.
     // A later wake-policy upgrade must not re-claim the task or offer again.
@@ -9595,7 +9609,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                 payload: {
                   ...parentTurnItem,
                   status: terminalStatus,
-                  result: result.text,
+                  result: completionPlan.task.result,
                   completedAt: now,
                   updatedAt: now,
                 },

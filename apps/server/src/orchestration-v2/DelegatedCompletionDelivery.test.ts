@@ -906,6 +906,101 @@ const seedRestartCancelledChild = (input: {
   });
 
 it.layer(TestLayer)("delegated tasks across a server restart", (it) => {
+  it.effect.each(
+    [
+      ["No change.", true],
+      ["Nothing new for you.", true],
+      [" \nNo change.\r\n ", true],
+      ["\tNothing new for you.\n", true],
+      ["No change. More text.", false],
+      ["No change.\n\nAnother paragraph.", false],
+      ["Nothing new for you. T3_NOTIFY: quiet", false],
+      ["No change. T3_NOTIFY: quiet", false],
+      ["no change", false],
+      ["**No change.**", false],
+      ["Found No change. in the log.", false],
+    ].map(([text, silent], key) => ({ text: text as string, silent: silent as boolean, key })),
+  )("publishes child reply %j only when meaningful", ({ text, silent, key }) =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const eventSink = yield* EventSink.EventSinkV2;
+      const now = yield* DateTime.now;
+      const threadId = ThreadId.make(`thread:no-change-parent:${key}`);
+      const projectId = ProjectId.make(`project:no-change-parent:${key}`);
+      const runId = RunId.make(`run:no-change-parent:${key}`);
+      const rootNodeId = NodeId.make(`node:no-change-parent:${key}`);
+      yield* seedParentWithTerminalTask({
+        threadId,
+        projectId,
+        runId,
+        rootNodeId,
+        taskId: NodeId.make(`node:previously-delivered:${key}`),
+        deliveryState: "delivered",
+        now,
+      });
+      const child = yield* seedRestartCancelledChild({
+        parentThreadId: threadId,
+        projectId,
+        parentRunId: runId,
+        rootNodeId,
+        name: `no-change-child:${key}`,
+        completionWake: "always",
+        continuationPending: false,
+        runStatus: "completed",
+        now,
+      });
+      const messageId = MessageId.make(`message:no-change-child:${key}`);
+      yield* eventSink.write({
+        commandId: reconcileCommandId(`no-change-child-reply:${key}`),
+        events: [
+          {
+            id: EventId.make(`event:no-change-child-reply:${key}`),
+            type: "message.updated",
+            threadId: child.childThreadId,
+            runId: child.childRunId,
+            occurredAt: now,
+            payload: {
+              id: messageId,
+              threadId: child.childThreadId,
+              runId: child.childRunId,
+              nodeId: null,
+              role: "assistant",
+              text,
+              attachments: [],
+              streaming: false,
+              createdBy: "agent",
+              creationSource: "provider",
+              createdAt: now,
+              updatedAt: now,
+            },
+          },
+        ],
+      });
+      yield* orchestrator.recoverDelegatedTask(child.childThreadId, child.childRunId);
+      const parent = yield* orchestrator.getThreadProjection(threadId);
+      const task = parent.subagents.find((row) => row.id === child.taskId);
+      assert.equal(task?.status, "completed");
+      assert.equal(task?.result, silent ? null : text);
+      assert.equal(task?.completionDelivery?.state, silent ? "disposed" : "claimed");
+      assert.equal(
+        parent.runs.some((run) =>
+          run.delegatedCompletion?.delivery?.taskIds.includes(child.taskId),
+        ),
+        !silent,
+      );
+      const timeline = yield* orchestrator.getThreadProjection(child.childThreadId);
+      assert.equal(timeline.messages.find((message) => message.id === messageId)?.text, text);
+      // Recovery is idempotent and never re-offers a silent completion.
+      yield* orchestrator.recoverDelegatedTask(child.childThreadId, child.childRunId);
+      const replay = yield* orchestrator.getThreadProjection(threadId);
+      assert.equal(replay.messages.length, parent.messages.length);
+      assert.equal(
+        replay.subagents.find((row) => row.id === child.taskId)?.result,
+        silent ? null : text,
+      );
+    }),
+  );
+
   it.effect("holds a restart-cancelled child for its continuation's result", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;

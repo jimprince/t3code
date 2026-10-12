@@ -3275,3 +3275,19 @@ id = "agent-message-option-a-20261013"
 date = "2026-10-12"
 decided = "One droppable concern for the approved left-rule agent-message presentation and its review fixes."
 rationale = "Shared client-runtime parsing preserves actor attribution across web, desktop, phone and native mobile; remote or absent senders are text rather than invalid navigation links."
+
+[[patch]]
+name = "fork-no-change-suppress"
+subject = "feat(server): suppress exact no-change completion results"
+class = "product"
+purpose = "Suppress automatic standalone completion surfaces for exact no-change replies while preserving timeline messages and intentional work."
+retire_when = "Upstream consistently suppresses exact no-change results across request answers, notifications, delegate delivery and worker previews."
+depends_on = ["fork-request-answers", "fork-notification-eligibility", "fork-worker-operations"]
+roles = []
+note = "Six automatic creation paths: request answer publication, completion disposition, mobile finished activity, CLI completion notices, app-owned delegate result/parent wake and worker latest-output previews. Human requests, explicit MCP requests/sends, failed/cancelled outputs, required escalations and provider transcripts remain intact. Case-sensitive whole-reply matching with surrounding whitespace trimming only; any extra text remains meaningful. Files: apps/server/src/forkThreads/WorkerSummaryService.ts, apps/server/src/orchestration-v2/DelegatedCompletionDelivery.test.ts, apps/server/src/orchestration-v2/NoChangeReply.integration.test.ts, apps/server/src/orchestration-v2/Orchestrator.ts, apps/server/src/orchestration-v2/ProjectionStore.ts, apps/server/src/projectIssues/RequestLedger.test.ts, apps/server/src/projectIssues/requestLedger.logic.ts, apps/server/src/relay/AgentAwarenessRelay.test.ts, apps/server/src/relay/AgentAwarenessRelay.ts, apps/t3-thread/docs/THREAD_COMMUNICATION.md, apps/t3-thread/src/notifications.ts, apps/t3-thread/tests/watch.test.ts, docs/user/mobile-notifications.md, docs/user/no-change-replies.md, packages/client-runtime/src/notificationEligibility.ts, packages/contracts/src/orchestrationV2.ts, packages/shared/package.json, packages/shared/src/agentAwareness.ts, packages/shared/src/completionOutput.ts, docs/release-notes/entries/no-change-suppress.toml"
+
+[[patch.decision]]
+id = "no-change-exact-output-20261013"
+date = "2026-10-12"
+decided = "Suppress only entire No change. and Nothing new for you. successful completion replies, retaining their timeline message."
+rationale = "Automatic no-change notices create unnecessary visible results and parent wakes. One shared predicate covers all six automatic paths without removing human asks, explicit sends, errors or substantive replies containing the phrase. External desk consumers of explicit messages are outside this concern."
