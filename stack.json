@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "f633501fa29bd0358c74c8450380f6179fc27f31",
-  "head": "1510df0c9866112f6c9b3c85876d6b4c6a9336cb",
+  "prev": "4214932f66ade37cccea6e9b0272108000ab60c1",
+  "head": "411e9e3e0a0158399b6cf8707e330a4e71dfaecd",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -580,7 +580,7 @@
       "oid": "9ea5c1dabe44d8465e925f8fa583c93219671829"
     },
     "fork-sqlite-worker-connections": {
-      "oid": "1510df0c9866112f6c9b3c85876d6b4c6a9336cb"
+      "oid": "411e9e3e0a0158399b6cf8707e330a4e71dfaecd"
     },
     "fork-standing-agent-autosettle": {
       "oid": "454b4d853f064a6799ac710120c7092d0e05f411"
