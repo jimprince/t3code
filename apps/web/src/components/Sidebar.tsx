@@ -223,6 +223,7 @@ import {
 } from "./threadActionMenu.logic";
 import { ThreadIssueBadges } from "./ThreadIssueBadges";
 import { OrchestratorSidebarList } from "./orchestrators/OrchestratorSidebarList";
+import { ChiefOfStaffRow } from "./cos-tray/ChiefOfStaffRow";
 import { useThreadsVisibleInThreadsMode } from "./orchestrators/useOrchestratorThreads";
 
 import {
@@ -5388,6 +5389,7 @@ export default function Sidebar() {
                 </button>
               </div>
             ) : null}
+            <ChiefOfStaffRow />
             <SidebarThreadHeader
               hidden={showOrchestrators}
               searchFieldRef={headerSearchRef}
