@@ -500,6 +500,10 @@
       "types": "./src/decisionAnswer.ts",
       "default": "./src/decisionAnswer.ts"
     },
+    "./chief-of-staff": {
+      "types": "./src/chiefOfStaff.ts",
+      "default": "./src/chiefOfStaff.ts"
+    },
     "./dashboard": {
       "types": "./src/dashboard/store.ts",
       "default": "./src/dashboard/store.ts"

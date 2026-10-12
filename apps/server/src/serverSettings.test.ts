@@ -5,6 +5,7 @@ import {
   DEFAULT_SERVER_SETTINGS,
   ModelSelection,
   ProjectId,
+  ThreadId,
   ProjectScript,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -99,6 +100,34 @@ const recordProviderUsage = (provider: string, instanceId: string | null = provi
   });
 
 it.layer(NodeServices.layer)("server settings", (it) => {
+  it.effect(
+    "persists and clears the Chief of Staff preference without resetting sibling preferences",
+    () =>
+      Effect.gen(function* () {
+        const config = yield* ServerConfig.ServerConfig;
+        const fs = yield* FileSystem.FileSystem;
+        const service = yield* ServerSettingsModule.ServerSettingsService;
+        const id = ThreadId.make("e942f826-445e-4cee-a045-0091707e67c7");
+        assert.isNull((yield* service.getSettings).chiefOfStaffThreadId);
+        const changes = yield* service.subscribeChanges;
+        const observed = yield* changes.pipe(Stream.take(1), Stream.runCollect, Effect.forkChild);
+        const saved = yield* service.updateSettings({ chiefOfStaffThreadId: id });
+        assert.equal(saved.chiefOfStaffThreadId, id);
+        assert.equal((yield* Fiber.join(observed))[0]?.chiefOfStaffThreadId, id);
+        assert.equal(
+          (yield* decodeServerSettingsJson(yield* fs.readFileString(config.settingsPath)))
+            .chiefOfStaffThreadId,
+          id,
+        );
+        yield* service.updateSettings({ enableProviderUpdateChecks: false });
+        assert.equal((yield* service.getSettings).chiefOfStaffThreadId, id);
+        yield* service.updateSettings({ chiefOfStaffThreadId: null });
+        const disk = yield* decodeServerSettingsJson(yield* fs.readFileString(config.settingsPath));
+        assert.isNull(disk.chiefOfStaffThreadId);
+        assert.isFalse(disk.enableProviderUpdateChecks);
+      }).pipe(Effect.provide(layerServerSettings())),
+  );
+
   it.effect("migrates saved token delivery to paragraph buffering without resetting settings", () =>
     Effect.gen(function* () {
       const config = yield* ServerConfig.ServerConfig;
