@@ -42,6 +42,8 @@ t3-thread settle 22222222-2222-4222-8222-222222222222
 t3-thread unsettle 22222222-2222-4222-8222-222222222222
 t3-thread status 22222222-2222-4222-8222-222222222222
 t3-thread result 22222222-2222-4222-8222-222222222222 --final-message
+t3-thread result 22222222-2222-4222-8222-222222222222 --tail 10
+t3-thread result 22222222-2222-4222-8222-222222222222 --tail 10 --human-only
 t3-thread implement 22222222-2222-4222-8222-222222222222
 t3-thread send 22222222-2222-4222-8222-222222222222 "Continue from the last checkpoint."
 ```
@@ -136,6 +138,12 @@ t3-thread archive worker-a
 t3-thread archive 22222222-2222-4222-8222-222222222222
 t3-thread forget worker-a
 ```
+
+`result --tail N` reads the last N timeline items in canonical position order,
+newest last. `--human-only` selects direct human messages using the server's
+human-origin rule, scanning at most 1,000 recent items. The JSON result reports
+`scanBudgetExhausted` if fewer than N human messages were found before that
+budget ended. This read requires a server with the bounded result-page API.
 
 Supported direct-ID lifecycle commands: `settle`, `unsettle`, `status`, `result`, `worklog`, `implement`, `send`,
 `clarify`, `revise`, `complete`, `wait`, `archive`, and `subscribe --watch`.

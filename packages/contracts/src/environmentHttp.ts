@@ -35,6 +35,8 @@ import {
   DpopFailureReason,
   AuthSessionId,
   ThreadId,
+  MessageId,
+  NonNegativeInt,
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
 import {
@@ -42,6 +44,7 @@ import {
   OrchestrationV2ThreadBoundedSnapshot,
   OrchestrationV2ThreadDetailSnapshot,
   OrchestrationV2ThreadHistoryPage,
+  OrchestrationV2ProjectedTurnItem,
 } from "./orchestrationV2.ts";
 import { Project, ProjectMutation, ProjectSnapshot } from "./project.ts";
 import {
@@ -533,6 +536,17 @@ const EnvironmentOrchestrationThreadHistoryQuery = Schema.Struct({
   cursor: TrimmedNonEmptyString,
 });
 
+const EnvironmentOrchestrationResultPageQuery = Schema.Struct({
+  afterPosition: Schema.optionalKey(Schema.String),
+  limit: Schema.String,
+});
+
+const EnvironmentOrchestrationResultPage = Schema.Struct({
+  totalItems: NonNegativeInt,
+  items: Schema.Array(OrchestrationV2ProjectedTurnItem),
+  humanMessageIds: Schema.Array(MessageId),
+});
+
 const EnvironmentOrchestrationThreadHistoryErrors = [
   EnvironmentRequestInvalidError,
   EnvironmentScopeRequiredError,
@@ -570,6 +584,15 @@ class EnvironmentOrchestrationHttpApi extends HttpApiGroup.make("orchestration")
       params: EnvironmentOrchestrationThreadSnapshotParams,
       query: EnvironmentOrchestrationThreadHistoryQuery,
       success: OrchestrationV2ThreadHistoryPage,
+      error: EnvironmentOrchestrationThreadHistoryErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.get("threadResultPage", "/api/orchestration/threads/:threadId/result-page", {
+      headers: OrchestrationProtocolHeaders,
+      params: EnvironmentOrchestrationThreadSnapshotParams,
+      query: EnvironmentOrchestrationResultPageQuery,
+      success: EnvironmentOrchestrationResultPage,
       error: EnvironmentOrchestrationThreadHistoryErrors,
     }).middleware(EnvironmentAuthenticatedAuth),
   ) {}
