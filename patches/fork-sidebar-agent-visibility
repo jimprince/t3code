@@ -1,6 +1,6 @@
-Bottom: 3743bb80a457039631550f50bb2c7f818acf2e9d
-Top:    ebe88b73629881bcff8c828af4184665fe889c07
+Bottom: 178069fb057a348d207ae45f91943dab2ff65ca8
+Top:    5594c084bc6919b41269203d2b7385a899de87d5
 Author: User <user@example.com>
-Date:   2026-10-12 07:27:37 +0000
+Date:   2026-10-12 07:54:27 +0000
 
 feat(web): show active sub-agents in the sidebar

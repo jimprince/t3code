@@ -1,6 +1,6 @@
-Bottom: 5b01f2606f424f9b0476405c188df94ce5555f99
-Top:    d5fe21f8972341e311ef6db6024d494bbe30bdf6
+Bottom: dd959e7d2d28c2fa1b05d94d271fca2881e586db
+Top:    5666390ea4d2402d83da70510f4a63f43b8cfe17
 Author: User <user@example.com>
-Date:   2026-10-12 07:27:37 +0000
+Date:   2026-10-12 07:54:27 +0000
 
 fix(chat): preserve legacy attachment history and older clients
