@@ -263,3 +263,9 @@ passed as `--wsl-runtime`; see the
 Add `--signed` after configuring the platform credentials in the
 [release runbook](./release.md). macOS passkeys need a signed, provisioned app; follow the
 [Connect setup](./connect-setup.md#desktop-passkeys) for local signing and renderer HMR.
+
+### Shell snapshot diagnostics
+
+Set `T3CODE_SHELL_SNAPSHOT_CACHE=0` before starting an isolated server to compare
+thread-list behavior with the original uncached SQLite reads. The default cache
+refreshes changed threads after projection writes; disabling it needs a restart.
