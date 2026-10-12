@@ -48,6 +48,7 @@ export interface ProjectThreadAwarenessV2Input {
     | "modelSelection"
     | "pendingBackgroundTasks"
     | "pendingRuntimeRequest"
+    | "completionSuppressed"
     | "status"
     | "title"
     | "updatedAt"
@@ -61,7 +62,7 @@ export function projectThreadAwarenessV2(
   const { environmentId, project, thread } = input;
   if (thread.lineage.relationshipToParent === "subagent") return null;
   const phase = resolveThreadAwarenessPhaseV2(thread);
-  if (phase === null) {
+  if (phase === null || (phase === "completed" && thread.completionSuppressed === true)) {
     return null;
   }
   const detail =
