@@ -16,6 +16,9 @@ interface CosTrayState {
   readonly expanded: boolean;
   /** Phone only, never persisted: a reload must not pop the sheet open. */
   readonly phoneSheetOpen: boolean;
+  /** Set by the mounted tray: whether it is rendering as the phone sheet. */
+  readonly phone: boolean;
+  readonly setPhone: (phone: boolean) => void;
   readonly setPhoneSheetOpen: (open: boolean) => void;
   readonly setMode: (mode: CosTrayMode) => void;
   readonly toggle: () => void;
@@ -28,10 +31,13 @@ export const useCosTrayStore = create<CosTrayState>()(
       mode: "minimized",
       expanded: false,
       phoneSheetOpen: false,
+      phone: false,
+      setPhone: (phone) => set({ phone }),
       setPhoneSheetOpen: (phoneSheetOpen) => set({ phoneSheetOpen }),
       setMode: (mode) => set({ mode, phoneSheetOpen: mode === "open" }),
       toggle: () => {
-        const mode = toggleCosTray(get().mode);
+        const { mode: current, phone, phoneSheetOpen } = get();
+        const mode = toggleCosTray(current, phone ? { sheetOpen: phoneSheetOpen } : undefined);
         set({ mode, phoneSheetOpen: mode === "open" });
       },
       toggleExpanded: () => set((state) => ({ expanded: !state.expanded })),

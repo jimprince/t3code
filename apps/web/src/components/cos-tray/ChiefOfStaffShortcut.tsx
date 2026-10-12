@@ -3,13 +3,17 @@ import { useEffect } from "react";
 
 import { resolveShortcutCommand } from "../../keybindings";
 import { isTerminalFocused } from "../../lib/terminalFocus";
+import { useChiefOfStaffRef } from "../../state/chiefOfStaff";
 import { primaryServerKeybindingsAtom } from "../../state/server";
 import { useCosTrayStore } from "./cosTrayStore";
 
 /** "Chief of Staff: toggle tray": the same key opens a closed or minimized tray and closes an open one. */
 export function ChiefOfStaffShortcut() {
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+  const hasChiefOfStaff = useChiefOfStaffRef() !== null;
   useEffect(() => {
+    // With no Chief of Staff thread there is no tray, so the key must not flip hidden state.
+    if (!hasChiefOfStaff) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
       if (
@@ -28,6 +32,6 @@ export function ChiefOfStaffShortcut() {
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [keybindings]);
+  }, [hasChiefOfStaff, keybindings]);
   return null;
 }
