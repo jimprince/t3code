@@ -4,6 +4,10 @@ import type {
   AuthWebSocketTicketResult,
   ExecutionEnvironmentDescriptor,
 } from "./types.js";
+import {
+  ORCHESTRATION_PROTOCOL_HEADER,
+  ORCHESTRATION_PROTOCOL_VERSION_TEXT,
+} from "@t3tools/contracts";
 
 const PAIRING_TOKEN_PARAM = "token";
 
@@ -132,6 +136,7 @@ async function fetchRemoteJson<T>(input: {
   bearerToken?: string;
   body?: unknown;
   signal?: AbortSignal;
+  headers?: Record<string, string>;
 }): Promise<T> {
   const requestUrl = new URL(input.pathname, input.httpBaseUrl).toString();
   let response: Response;
@@ -141,6 +146,7 @@ async function fetchRemoteJson<T>(input: {
       method: input.method ?? "GET",
       signal: input.signal,
       headers: {
+        ...input.headers,
         ...(input.body !== undefined ? { "content-type": "application/json" } : {}),
         ...(input.bearerToken ? { authorization: `Bearer ${input.bearerToken}` } : {}),
       },
@@ -160,6 +166,18 @@ async function fetchRemoteJson<T>(input: {
   }
 
   return (await response.json()) as T;
+}
+
+/** Authenticated, bounded orchestration history pages. */
+export function fetchOrchestrationJson<T>(input: {
+  httpBaseUrl: string;
+  pathname: string;
+  bearerToken: string;
+}): Promise<T> {
+  return fetchRemoteJson<T>({
+    ...input,
+    headers: { [ORCHESTRATION_PROTOCOL_HEADER]: ORCHESTRATION_PROTOCOL_VERSION_TEXT },
+  });
 }
 
 export async function fetchEnvironmentDescriptor(
