@@ -4,25 +4,50 @@ import type {
   OrchestrationV2ThreadProjection,
   OrchestrationV2ThreadShell,
   ScopedThreadRef,
-  ServerSettings,
   ThreadId,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
-import { Atom } from "effect/reactivity";
 
 /** Exact front desk titles keep the fallback from choosing Chief of Staff Operations. */
-export function selectChiefOfStaffThread(
-  threads: readonly OrchestrationV2ThreadShell[],
-  preferredId: ThreadId | null,
-) {
+export function selectChiefOfStaffThread<
+  T extends {
+    readonly id: ThreadId;
+    readonly title: string;
+    readonly archivedAt: unknown;
+    readonly deletedAt?: unknown;
+  },
+>(threads: readonly T[], preferredId: ThreadId | null) {
   const available = threads.filter(
-    (thread) => thread.archivedAt === null && thread.deletedAt === null,
+    (thread) =>
+      thread.archivedAt === null && (thread.deletedAt === undefined || thread.deletedAt === null),
   );
   if (preferredId !== null) return available.find((thread) => thread.id === preferredId) ?? null;
   return (
     available.find((thread) => /^(chief[ -]of[ -]staff|front desk)$/i.test(thread.title.trim())) ??
     null
   );
+}
+
+/** Resolve a configured environment first; title discovery belongs to the primary environment. */
+export function selectScopedChiefOfStaffThread<
+  T extends {
+    readonly environmentId: EnvironmentId;
+    readonly id: ThreadId;
+    readonly title: string;
+    readonly archivedAt: unknown;
+    readonly deletedAt?: unknown;
+  },
+>(input: {
+  readonly threads: readonly T[];
+  readonly preferred: ScopedThreadRef | null;
+  readonly primaryEnvironmentId: EnvironmentId | null;
+}): ScopedThreadRef | null {
+  const environmentId = input.preferred?.environmentId ?? input.primaryEnvironmentId;
+  const thread = selectChiefOfStaffThread(
+    input.threads.filter((candidate) => candidate.environmentId === environmentId),
+    input.preferred?.threadId ?? null,
+  );
+  return thread ? { environmentId: thread.environmentId, threadId: thread.id } : null;
 }
 
 /** Environment-local dashboard attention already excludes closed and answered decisions. */
@@ -32,16 +57,12 @@ export function selectChiefOfStaffSummary(input: {
   readonly projection: OrchestrationV2ThreadProjection | null;
 }) {
   const { thread, dashboard, projection } = input;
-  const openDecisions = new Set(
-    dashboard?.projects.flatMap((project) =>
-      project.attention
-        .filter((attention) => attention.kind === "decision")
-        .map((attention) => attention.id),
-    ) ?? [],
-  );
+  const waiting =
+    dashboard?.projects.reduce((sum, project) => sum + project.attention.length, 0) ?? 0;
   // A newer user message must never replace the last assistant reply timestamp.
   let lastReplyAt =
-    thread?.latestVisibleMessage?.role === "assistant"
+    thread?.latestVisibleMessage?.role === "assistant" &&
+    thread.latestVisibleMessage.text.trim().length > 0
       ? thread.latestVisibleMessage.updatedAt
       : null;
   if (thread && projection?.thread.id === thread.id) {
@@ -63,8 +84,8 @@ export function selectChiefOfStaffSummary(input: {
   const status = thread?.activityRunStatus ?? thread?.status;
   return {
     thread,
-    openDecisionCount: openDecisions.size,
-    /** ISO instant; the UI formats HH:MM in the device's local time. */
+    openDecisionCount: waiting,
+    /** ISO instant, formatted in the device's local time by each client. */
     lastReplyAt: lastReplyAt === null ? null : DateTime.formatIso(lastReplyAt),
     isBusy:
       status === "preparing" ||
@@ -76,38 +97,3 @@ export function selectChiefOfStaffSummary(input: {
 }
 
 export type ChiefOfStaffSummary = ReturnType<typeof selectChiefOfStaffSummary>;
-
-/** Bind to existing app atoms so the tray shares settings, shell, dashboard and thread streams. */
-export function createChiefOfStaffSummaryAtoms(options: {
-  readonly settings: (id: EnvironmentId) => Atom.Atom<ServerSettings | null>;
-  readonly threads: (id: EnvironmentId) => Atom.Atom<readonly OrchestrationV2ThreadShell[]>;
-  readonly dashboard: (
-    id: EnvironmentId,
-  ) => Atom.Atom<{ readonly snapshot: DashboardSnapshot | null }>;
-  readonly projection: (ref: ScopedThreadRef) => Atom.Atom<OrchestrationV2ThreadProjection | null>;
-}) {
-  return Atom.family((environmentId: EnvironmentId) =>
-    Atom.make((get) => {
-      const thread = selectChiefOfStaffThread(
-        get(options.threads(environmentId)),
-        get(options.settings(environmentId))?.chiefOfStaffThreadId ?? null,
-      );
-      return selectChiefOfStaffSummary({
-        thread,
-        dashboard: get(options.dashboard(environmentId)).snapshot,
-        projection: thread ? get(options.projection({ environmentId, threadId: thread.id })) : null,
-      });
-    }).pipe(Atom.setIdleTTL(0), Atom.withLabel(`chief-of-staff:${environmentId}`)),
-  );
-}
-
-/** Each React client binds its existing useAtomValue without adding React to client-runtime. */
-export function createChiefOfStaffHooks(
-  summary: ReturnType<typeof createChiefOfStaffSummaryAtoms>,
-  useAtomValue: (atom: Atom.Atom<ChiefOfStaffSummary>) => ChiefOfStaffSummary,
-) {
-  function useChiefOfStaffSummary(environmentId: EnvironmentId) {
-    return useAtomValue(summary(environmentId));
-  }
-  return { useChiefOfStaffSummary };
-}
