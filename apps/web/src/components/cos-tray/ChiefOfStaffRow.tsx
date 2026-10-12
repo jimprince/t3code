@@ -20,7 +20,7 @@ export function ChiefOfStaffRow() {
     <button
       type="button"
       data-testid="cos-row"
-      className="mx-2 mb-1 flex w-[calc(100%-1rem)] cursor-pointer flex-col gap-0.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 focus-visible:outline-none"
+      className="mb-1 flex w-full cursor-pointer flex-col gap-0.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 focus-visible:outline-none"
       onClick={() => {
         toggle();
         // The phone drawer covers the page the sheet opens over.
