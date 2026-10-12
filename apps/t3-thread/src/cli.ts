@@ -2847,6 +2847,11 @@ agent
           humanOnly: options.humanOnly,
           assistantOnly: options.assistantOnly,
         });
+    let tailAssistantMessageId: string | null = null;
+    for (const row of timeline?.items ?? []) {
+      if (row.item.type === "assistant_message")
+        tailAssistantMessageId = row.item.messageId ?? null;
+    }
     const latestAssistantId =
       latestAssistant?.id ??
       (options.markSeen
@@ -2857,8 +2862,7 @@ agent
               assistantOnly: true,
             })
           ).items[0]?.item.messageId
-        : timeline?.items.filter((row) => row.item.type === "assistant_message").at(-1)?.item
-            .messageId) ??
+        : tailAssistantMessageId) ??
       null;
     const messages = options.finalMessage
       ? latestAssistant
