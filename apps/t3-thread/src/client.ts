@@ -26,8 +26,10 @@ import type { ProviderModelInventory } from "./projects.js";
 import {
   exchangePairingCredential,
   fetchEnvironmentDescriptor,
+  fetchOrchestrationJson,
   fetchSessionState,
 } from "./http.js";
+import { readResultTimeline, type ResultTimelinePage } from "./resultTimeline.js";
 import { T3RpcClient } from "./rpc.js";
 import { enqueueSend } from "./sendQueue.js";
 import { classifyThread } from "./status.js";
@@ -349,6 +351,27 @@ export class RemoteEnvironmentClient {
 
   async getThreadDetail(threadId: string): Promise<OrchestrationThread> {
     return this.findThread(threadId);
+  }
+
+  async getThreadResultTimeline(input: {
+    threadId: string;
+    count: number;
+    humanOnly?: boolean;
+    assistantOnly?: boolean;
+  }) {
+    await this.refreshEnvironment();
+    const path = `/api/orchestration/threads/${encodeURIComponent(input.threadId)}`;
+    return readResultTimeline({
+      count: input.count,
+      humanOnly: input.humanOnly,
+      assistantOnly: input.assistantOnly,
+      readPage: (afterPosition, limit) =>
+        fetchOrchestrationJson<ResultTimelinePage>({
+          httpBaseUrl: this.environment.httpBaseUrl,
+          bearerToken: this.environment.bearerToken,
+          pathname: `${path}/result-page?afterPosition=${afterPosition}&limit=${limit}`,
+        }),
+    });
   }
 
   async listThreads(): Promise<OrchestrationThreadShell[]> {
