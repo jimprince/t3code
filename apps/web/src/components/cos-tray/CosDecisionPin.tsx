@@ -1,5 +1,4 @@
 import type { EnvironmentId } from "@t3tools/contracts";
-import { useNavigate } from "@tanstack/react-router";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -21,7 +20,6 @@ import { Button } from "../ui/button";
 export function CosDecisionPin({ environmentId }: { readonly environmentId: EnvironmentId }) {
   const { data } = useDashboardData();
   const now = useMinuteClock();
-  const navigate = useNavigate();
   const answers = useDecisionAnswers();
 
   const rows = useMemo<ReadonlyArray<DecisionRow>>(() => {
