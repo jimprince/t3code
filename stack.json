@@ -1,10 +1,12 @@
 {
   "version": 5,
-  "prev": "93edd4b8286cfbe1c75ce624f133260547e3c2d4",
-  "head": "eb64c703d6e120ed663e5ee865f5829b60341626",
+  "prev": "a9431f80c4bbcf25dceb65b62170be259520c2e7",
+  "head": "635c169fdcff4851b6270a3096acc3a815b5776f",
   "applied": [
     "fork-build-ci-compat",
-    "fork-worker-operations",
+    "fork-worker-operations"
+  ],
+  "unapplied": [
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
     "fork-general-chat",
@@ -157,7 +159,6 @@
     "fork-shell-snapshot-cache",
     "fork-sqlite-worker-connections"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
