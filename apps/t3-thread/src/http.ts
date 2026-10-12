@@ -178,6 +178,13 @@ export function fetchOrchestrationJson<T>(input: {
   return fetchRemoteJson<T>({
     ...input,
     headers: { [ORCHESTRATION_PROTOCOL_HEADER]: ORCHESTRATION_PROTOCOL_VERSION_TEXT },
+  }).catch((cause: unknown) => {
+    if (cause instanceof SyntaxError) {
+      throw new Error("The paired server does not expose the bounded result-page API yet.", {
+        cause,
+      });
+    }
+    throw cause;
   });
 }
 
