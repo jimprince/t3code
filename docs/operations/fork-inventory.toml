@@ -3118,3 +3118,15 @@ id = "plan-from-research-interaction-taxonomy"
 date = "2026-10-10"
 decided = "new-concern"
 rationale = "Brad chose dashboard design A from the interaction-taxonomy research (status asks are 10% of his 7,312 messages to agents) and asked for task-level progress per workstream instead of thread rows. Shipped first on live as 69b7da56 (cherry-pick of 92d72ea4); folded here as its own droppable patch rather than into fork-project-workstreams because it can be removed without removing the Workstreams block."
+[[patch]]
+name = "fork-sqlite-worker-connections"
+subject = "perf(server): run SQLite on worker threads with read connections"
+class = "product"
+purpose = "Keep the server main thread responsive by running SQLite on worker threads, serving read-only snapshot loads from separate WAL reader connections, and keeping websocket connect bookkeeping off the upgrade path."
+retire_when = "Upstream moves server SQLite off the main thread with concurrent read connections, or the fork drops node:sqlite persistence."
+depends_on = [
+  "fork-admin-thread-recovery",
+  "fork-agent-panel-thread-details",
+  "fork-page-agent-tray",
+]
+roles = []

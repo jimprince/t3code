@@ -2,9 +2,15 @@
  * Port of `@effect/sql-sqlite-node` that uses the native `node:sqlite`
  * bindings instead of `better-sqlite3`.
  *
+ * By default one in-process connection serves every statement. With `workers`
+ * set, a file database instead runs on worker threads: one writer plus a pool
+ * of read-only connections, so queries never block the main thread and reads
+ * never queue behind writes.
+ *
  * @module SqliteClient
  */
 import * as NodeSqlite from "node:sqlite";
+import * as NodeWorkerThreads from "node:worker_threads";
 
 import * as Cache from "effect/Cache";
 import * as Duration from "effect/Duration";
@@ -14,6 +20,7 @@ import * as Fiber from "effect/Fiber";
 import { identity } from "effect/Function";
 import * as Layer from "effect/Layer";
 import * as Predicate from "effect/Predicate";
+import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
@@ -36,6 +43,17 @@ export interface SqliteClientConfig {
   readonly spanAttributes?: Record<string, unknown> | undefined;
   readonly transformResultNames?: ((str: string) => string) | undefined;
   readonly transformQueryNames?: ((str: string) => string) | undefined;
+  /**
+   * Run a file database on worker threads: one writer and `readers` read-only
+   * connections. The writer switches the database to WAL so readers see
+   * committed data without waiting for it.
+   */
+  readonly workers?:
+    | {
+        readonly readers: number;
+        readonly busyTimeoutMs?: number | undefined;
+      }
+    | undefined;
 }
 
 export class UnsupportedNodeSqliteVersionError extends Schema.TaggedError<UnsupportedNodeSqliteVersionError>()(
@@ -98,6 +116,321 @@ const classifyError = (cause: unknown, message: string, operation: string) => {
   }
   return classifySqliteError(cause, { message, operation });
 };
+
+type WorkerPhase = "open" | "prepare" | "execute";
+type WorkerResultMode = "rows" | "raw" | "values";
+
+interface WorkerRequest {
+  readonly id: number;
+  readonly type: "run" | "close";
+  readonly sql?: string;
+  readonly params?: ReadonlyArray<unknown>;
+  readonly mode?: WorkerResultMode;
+  readonly cached?: boolean;
+  readonly safeIntegers?: boolean;
+}
+
+interface WorkerFailure {
+  readonly phase: WorkerPhase;
+  readonly message: string;
+  readonly code?: string;
+  readonly errcode?: number;
+  readonly errstr?: string;
+}
+
+type WorkerReply =
+  | { readonly id: number; readonly ok: true; readonly result: unknown }
+  | { readonly id: number; readonly ok: false; readonly error: WorkerFailure };
+
+// Runs inside each worker thread. It is a plain CommonJS string because the
+// server ships as a single executable, where a separate worker file would not
+// exist on disk. Reply 0 reports whether the database opened.
+const WORKER_SOURCE = `
+"use strict";
+const { parentPort, workerData } = require("node:worker_threads");
+const { DatabaseSync } = require("node:sqlite");
+
+const failure = (phase, cause) => ({
+  phase,
+  message: String(cause && cause.message !== undefined ? cause.message : cause),
+  code: cause ? cause.code : undefined,
+  errcode: cause ? cause.errcode : undefined,
+  errstr: cause ? cause.errstr : undefined,
+});
+
+const serve = (db) => {
+  const cache = new Map();
+  const prepare = (sql, cached) => {
+    if (!cached) {
+      const statement = db.prepare(sql);
+      return { statement, hasRows: statement.columns().length > 0 };
+    }
+    let entry = cache.get(sql);
+    if (entry !== undefined) {
+      cache.delete(sql);
+      cache.set(sql, entry);
+      return entry;
+    }
+    const statement = db.prepare(sql);
+    entry = { statement, hasRows: statement.columns().length > 0 };
+    cache.set(sql, entry);
+    if (cache.size > workerData.prepareCacheSize) cache.delete(cache.keys().next().value);
+    return entry;
+  };
+
+  parentPort.on("message", (request) => {
+    if (request.type === "close") {
+      db.close();
+      parentPort.postMessage({ id: request.id, ok: true, result: null });
+      return;
+    }
+    let entry;
+    try {
+      entry = prepare(request.sql, request.cached);
+    } catch (cause) {
+      parentPort.postMessage({ id: request.id, ok: false, error: failure("prepare", cause) });
+      return;
+    }
+    try {
+      const statement = entry.statement;
+      statement.setReadBigInts(request.safeIntegers);
+      let result;
+      if (entry.hasRows) {
+        statement.setReturnArrays(request.mode === "values");
+        result = statement.all(...request.params);
+      } else {
+        const info = statement.run(...request.params);
+        result = request.mode === "raw" ? info : [];
+      }
+      parentPort.postMessage({ id: request.id, ok: true, result });
+    } catch (cause) {
+      parentPort.postMessage({ id: request.id, ok: false, error: failure("execute", cause) });
+    }
+  });
+};
+
+let db;
+try {
+  db = new DatabaseSync(workerData.filename, {
+    readOnly: workerData.readonly,
+    allowExtension: workerData.allowExtension,
+  });
+  for (const pragma of workerData.pragmas) db.exec(pragma);
+} catch (cause) {
+  if (db !== undefined) db.close();
+  db = undefined;
+  parentPort.postMessage({ id: 0, ok: false, error: failure("open", cause) });
+}
+if (db !== undefined) {
+  serve(db);
+  parentPort.postMessage({ id: 0, ok: true, result: null });
+}
+`;
+
+const PHASE_MESSAGES: Record<WorkerPhase, string> = {
+  open: "Failed to open database",
+  prepare: "Failed to prepare statement",
+  execute: "Failed to execute statement",
+};
+
+const toSqlError = (failure: WorkerFailure) =>
+  new SqlError({
+    reason: classifyError(
+      Object.assign(new Error(failure.message), {
+        code: failure.code,
+        errcode: failure.errcode,
+        errstr: failure.errstr,
+      }),
+      PHASE_MESSAGES[failure.phase],
+      failure.phase,
+    ),
+  });
+
+const SQLITE_READONLY = 8;
+
+// A read-only connection rejects a write before it changes anything.
+const isReadonlyRejection = (error: SqlError) => {
+  const cause: unknown = error.reason.cause;
+  return (
+    Predicate.hasProperty(cause, "errcode") &&
+    typeof cause.errcode === "number" &&
+    (cause.errcode & 0xff) === SQLITE_READONLY
+  );
+};
+
+// Statements that can run on a reader. A write that slips through (for
+// example a WITH ... INSERT) is rejected there and retried on the writer.
+const READ_STATEMENT = /^(?:\s|--[^\n]*\n|\/\*[\s\S]*?\*\/)*(?:SELECT|WITH|VALUES)\b/i;
+
+/**
+ * One `node:sqlite` connection on its own worker thread. Statements run in the
+ * order they are sent. The worker only keeps the process alive while a
+ * statement is in flight.
+ */
+const makeWorkerConnection = Effect.fnUntraced(function* (
+  options: SqliteClientConfig,
+  role: { readonly readonly: boolean; readonly pragmas: ReadonlyArray<string> },
+) {
+  const worker = yield* Effect.acquireRelease(
+    Effect.callback<NodeWorkerThreads.Worker, SqlError>((resume) => {
+      const worker = new NodeWorkerThreads.Worker(WORKER_SOURCE, {
+        eval: true,
+        workerData: {
+          filename: options.filename,
+          readonly: role.readonly,
+          allowExtension: options.allowExtension ?? false,
+          pragmas: role.pragmas,
+          prepareCacheSize: options.prepareCacheSize ?? 200,
+        },
+      });
+      const cleanup = () => {
+        worker.off("message", onReady);
+        worker.off("error", onError);
+      };
+      const onReady = (reply: WorkerReply) => {
+        cleanup();
+        if (reply.ok) {
+          resume(Effect.succeed(worker));
+          return;
+        }
+        void worker.terminate();
+        resume(Effect.fail(toSqlError(reply.error)));
+      };
+      const onError = (cause: unknown) => {
+        cleanup();
+        resume(
+          Effect.fail(new SqlError({ reason: classifyError(cause, PHASE_MESSAGES.open, "open") })),
+        );
+      };
+      worker.on("message", onReady);
+      worker.on("error", onError);
+      return Effect.sync(() => {
+        cleanup();
+        void worker.terminate();
+      });
+    }),
+    (worker) =>
+      Effect.ignore(request({ type: "close" })).pipe(
+        Effect.andThen(Effect.promise(() => worker.terminate())),
+      ),
+  );
+
+  const pending = new Map<number, (reply: WorkerReply) => void>();
+  let nextId = 1;
+  let stopped: SqlError | undefined;
+  const settle = (id: number) => {
+    pending.delete(id);
+    if (pending.size === 0) worker.unref();
+  };
+  worker.unref();
+  worker.on("message", (reply: WorkerReply) => {
+    const resolve = pending.get(reply.id);
+    if (resolve === undefined) return;
+    settle(reply.id);
+    resolve(reply);
+  });
+  const stop = (cause: unknown) => {
+    stopped ??= new SqlError({
+      reason: classifyError(cause, "SQLite worker stopped", "execute"),
+    });
+    const waiting = Array.from(pending.entries());
+    pending.clear();
+    for (const [id, resolve] of waiting) {
+      resolve({ id, ok: false, error: { phase: "execute", message: "SQLite worker stopped" } });
+    }
+  };
+  worker.on("error", stop);
+  worker.on("exit", (code) => stop(new Error(`SQLite worker exited with code ${code}`)));
+
+  function request(message: Omit<WorkerRequest, "id">) {
+    return Effect.callback<unknown, SqlError>((resume) => {
+      if (stopped !== undefined) {
+        resume(Effect.fail(stopped));
+        return;
+      }
+      const id = nextId++;
+      pending.set(id, (reply) =>
+        resume(reply.ok ? Effect.succeed(reply.result) : Effect.fail(toSqlError(reply.error))),
+      );
+      if (pending.size === 1) worker.ref();
+      worker.postMessage({ ...message, id } satisfies WorkerRequest);
+      // The worker still finishes an interrupted statement; its reply is dropped.
+      return Effect.sync(() => settle(id));
+    });
+  }
+
+  const run = (
+    sql: string,
+    params: ReadonlyArray<unknown>,
+    mode: WorkerResultMode,
+    cached: boolean,
+  ): Effect.Effect<ReadonlyArray<any>, SqlError> =>
+    Effect.withFiber((fiber) =>
+      request({
+        type: "run",
+        sql,
+        params,
+        mode,
+        cached,
+        safeIntegers: Boolean(Context.get(fiber.context, Client.SafeIntegers)),
+      }),
+    ) as Effect.Effect<ReadonlyArray<any>, SqlError>;
+
+  return identity<Connection>({
+    execute(sql, params, rowTransform) {
+      const rows = run(sql, params, "rows", true);
+      return rowTransform ? Effect.map(rows, rowTransform) : rows;
+    },
+    executeRaw(sql, params) {
+      return run(sql, params, "raw", true);
+    },
+    executeValues(sql, params) {
+      return run(sql, params, "values", true) as Effect.Effect<
+        ReadonlyArray<ReadonlyArray<unknown>>,
+        SqlError
+      >;
+    },
+    executeValuesUnprepared(sql, params) {
+      return run(sql, params ?? [], "values", false) as Effect.Effect<
+        ReadonlyArray<ReadonlyArray<unknown>>,
+        SqlError
+      >;
+    },
+    executeUnprepared(sql, params, rowTransform) {
+      const rows = run(sql, params ?? [], "rows", false);
+      return rowTransform ? Effect.map(rows, rowTransform) : rows;
+    },
+    executeStream(_sql, _params) {
+      return Stream.die(new UnsupportedNodeSqliteOperationError());
+    },
+  });
+});
+
+// Set only while `withReadTransaction` acquires its connection.
+const ReadSnapshot = Context.Reference<boolean>("t3/sqlite/ReadSnapshot", {
+  defaultValue: () => false,
+});
+
+/**
+ * Run `effect` as one consistent, read-only snapshot. On a worker-backed
+ * client it uses a reader connection, so it neither waits for nor blocks the
+ * writer. Inside an open transaction it joins that transaction, and nested
+ * transactions join the snapshot. A write inside the snapshot fails.
+ */
+export const withReadTransaction =
+  (sql: Client.SqlClient) =>
+  <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E | SqlError, R> =>
+    sql
+      .withTransaction(Effect.provideService(effect, ReadSnapshot, false))
+      .pipe(Effect.provideService(ReadSnapshot, true));
+
+// The client begins every transaction with BEGIN IMMEDIATE to claim the write
+// lock. A snapshot never writes, so it begins deferred and takes no lock.
+const deferBegin = (connection: Connection): Connection => ({
+  ...connection,
+  executeUnprepared: (sql, params, rowTransform) =>
+    connection.executeUnprepared(sql === "BEGIN IMMEDIATE" ? "BEGIN" : sql, params, rowTransform),
+});
 
 const make = Effect.fn("makeWithDatabase")(function* (
   options: SqliteClientConfig,
@@ -260,17 +593,84 @@ const make = Effect.fn("makeWithDatabase")(function* (
   });
 
   const semaphore = yield* Semaphore.make(1);
-  const connection = yield* makeConnection;
+  // Keeps `connection` to the caller until the caller's scope closes.
+  const holdConnection = (connection: Connection) =>
+    Effect.uninterruptibleMask((restore) => {
+      const fiber = Fiber.getCurrent()!;
+      const scope = Context.getUnsafe(fiber.context, Scope.Scope);
+      return Effect.as(
+        Effect.tap(restore(semaphore.take(1)), () =>
+          Scope.addFinalizer(scope, semaphore.release(1)),
+        ),
+        connection,
+      );
+    });
+  const control = (connection: Connection, sql: string) =>
+    Effect.asVoid(connection.executeUnprepared(sql, [], undefined));
 
-  const acquirer = semaphore.withPermits(1)(Effect.succeed(connection));
-  const transactionAcquirer = Effect.uninterruptibleMask((restore) => {
-    const fiber = Fiber.getCurrent()!;
-    const scope = Context.getUnsafe(fiber.context, Scope.Scope);
-    return Effect.as(
-      Effect.tap(restore(semaphore.take(1)), () => Scope.addFinalizer(scope, semaphore.release(1))),
-      connection,
+  let acquirer: Effect.Effect<Connection, SqlError, Scope.Scope>;
+  let writeAcquirer: Effect.Effect<Connection, SqlError, Scope.Scope>;
+  let acquireReader: Effect.Effect<Connection, SqlError, Scope.Scope>;
+
+  if (options.workers === undefined) {
+    const connection = yield* makeConnection;
+    acquirer = semaphore.withPermits(1)(Effect.succeed(connection));
+    writeAcquirer = holdConnection(connection);
+    // The only connection is also the writer, so a read snapshot holds it like
+    // any transaction and query_only makes it read-only, as a reader would be.
+    acquireReader = Effect.tap(writeAcquirer, (connection) =>
+      Effect.acquireRelease(control(connection, "PRAGMA query_only = ON"), () =>
+        Effect.orDie(control(connection, "PRAGMA query_only = OFF")),
+      ),
     );
-  });
+  } else {
+    const busyTimeout = `PRAGMA busy_timeout = ${options.workers.busyTimeoutMs ?? 5000}`;
+    // WAL before any reader opens, so readers never block the writer.
+    const writer = yield* makeWorkerConnection(options, {
+      readonly: false,
+      pragmas: [busyTimeout, "PRAGMA journal_mode = WAL"],
+    });
+    const readers = yield* Effect.forEach(
+      Array.from({ length: Math.max(1, options.workers.readers) }),
+      () => makeWorkerConnection(options, { readonly: true, pragmas: [busyTimeout] }),
+      { concurrency: "unbounded" },
+    );
+    const idleReaders = yield* Queue.unbounded<Connection>();
+    yield* Queue.offerAll(idleReaders, readers);
+    acquireReader = Effect.acquireRelease(Queue.take(idleReaders), (reader) =>
+      Queue.offer(idleReaders, reader),
+    );
+
+    // Outside a transaction a statement holds the writer until it finishes, so
+    // it can never land inside another fiber's open transaction.
+    const route = <A>(sql: string, run: (connection: Connection) => Effect.Effect<A, SqlError>) => {
+      const onWriter = semaphore.withPermits(1)(run(writer));
+      return READ_STATEMENT.test(sql)
+        ? Effect.scoped(Effect.flatMap(acquireReader, run)).pipe(
+            Effect.catchIf(isReadonlyRejection, () => onWriter),
+          )
+        : onWriter;
+    };
+    const router = identity<Connection>({
+      execute: (sql, params, rowTransform) =>
+        route(sql, (connection) => connection.execute(sql, params, rowTransform)),
+      executeRaw: (sql, params) => route(sql, (connection) => connection.executeRaw(sql, params)),
+      executeValues: (sql, params) =>
+        route(sql, (connection) => connection.executeValues(sql, params)),
+      executeValuesUnprepared: (sql, params) =>
+        route(sql, (connection) => connection.executeValuesUnprepared(sql, params)),
+      executeUnprepared: (sql, params, rowTransform) =>
+        route(sql, (connection) => connection.executeUnprepared(sql, params, rowTransform)),
+      executeStream: (_sql, _params) => Stream.die(new UnsupportedNodeSqliteOperationError()),
+    });
+    acquirer = Effect.succeed(router);
+    writeAcquirer = holdConnection(writer);
+  }
+  const transactionAcquirer = Effect.withFiber((fiber) =>
+    Context.get(fiber.context, ReadSnapshot)
+      ? Effect.map(acquireReader, deferBegin)
+      : writeAcquirer,
+  );
 
   return yield* Client.make({
     acquirer,
