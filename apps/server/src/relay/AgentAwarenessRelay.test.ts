@@ -11,6 +11,7 @@ import {
   ProjectId,
   ProviderInstanceId,
   RunId,
+  RuntimeRequestId,
   ThreadId,
   TurnItemId,
 } from "@t3tools/contracts";
@@ -967,6 +968,26 @@ describe("shared notification eligibility on relay", () => {
       assert.equal(snapshot({ ...ended, activeRunId: RunId.make("newer") })?.notification, null);
       assert.equal(snapshot({ ...ended, notificationSuperseded: true })?.notification, null);
       assert.equal(snapshot({ ...ended, notificationDisposition: "quiet" })?.notification, null);
+      assert.isNull(
+        snapshot({ ...ended, notificationDisposition: "quiet", completionSuppressed: true }),
+      );
+      assert.equal(
+        snapshot({
+          ...ended,
+          completionSuppressed: true,
+          pendingRuntimeRequest: {
+            id: RuntimeRequestId.make("question"),
+            kind: "user_input",
+            createdAt: DateTime.makeUnsafe(NOW),
+          },
+        })?.notification?.kind,
+        "question",
+      );
+      assert.equal(
+        snapshot({ ...ended, completionSuppressed: true, hasActionableProposedPlan: true })
+          ?.notification?.kind,
+        "decision",
+      );
       const decision = snapshot({
         ...ended,
         notificationOrigin: "worker",
@@ -992,4 +1013,25 @@ describe("shared notification eligibility on relay", () => {
       );
     }
   });
+});
+
+it("publishes only finished assistant messages so late final output can suppress activity", () => {
+  assert.isTrue(
+    AgentAwarenessRelay.shouldPublishAgentAwarenessEvent({
+      type: "message.updated",
+      payload: { role: "assistant", streaming: false },
+    }),
+  );
+  assert.isFalse(
+    AgentAwarenessRelay.shouldPublishAgentAwarenessEvent({
+      type: "message.updated",
+      payload: { role: "assistant", streaming: true },
+    }),
+  );
+  assert.isFalse(
+    AgentAwarenessRelay.shouldPublishAgentAwarenessEvent({
+      type: "message.updated",
+      payload: { role: "user", streaming: false },
+    }),
+  );
 });

@@ -95,8 +95,8 @@ export function shouldPublishAgentAwarenessEvent(
   }
   // projectThreadAwarenessV2 reads thread metadata, run status, pending requests,
   // and pending background work (a finished subagent, a cleared roster, or an
-  // ended background item can release a held completion). Message bodies and
-  // tool progress cannot change the published activity.
+  // ended background item can release a held completion). A finished assistant
+  // reply can suppress completion activity; streaming bodies and tool progress cannot.
   switch (event.type) {
     case "thread.created":
     case "thread.archived":
@@ -138,6 +138,14 @@ export function shouldPublishAgentAwarenessEvent(
     case "plan.updated":
       return true;
     case "message.updated":
+      return (
+        typeof event.payload === "object" &&
+        event.payload !== null &&
+        "role" in event.payload &&
+        event.payload.role === "assistant" &&
+        "streaming" in event.payload &&
+        event.payload.streaming === false
+      );
     case "checkpoint-scope.created":
     case "checkpoint.captured":
     case "checkpoint.rollback-requested":
@@ -339,7 +347,11 @@ export function resolveAgentAwarenessRelayPublishSnapshot(input: {
     environmentId: input.environmentId,
     project: input.project.value,
     thread: eligible
-      ? { ...thread, lineage: { ...thread.lineage, relationshipToParent: null } }
+      ? {
+          ...thread,
+          completionSuppressed: false,
+          lineage: { ...thread.lineage, relationshipToParent: null },
+        }
       : thread,
   });
   const alertPhase =
