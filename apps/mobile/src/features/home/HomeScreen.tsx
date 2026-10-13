@@ -4,6 +4,7 @@ import { computeThreadMoveAvailability } from "../threads/threadOrder";
 import { LegendList, type LegendListRef } from "@legendapp/list/react-native";
 import {
   buildOrchestratorSummaries,
+  joinOrchestratorMetadata,
   PROJECT_QUIET_AFTER_MS,
   projectSidebarBucket,
   type OrchestratorSummary,
@@ -15,10 +16,12 @@ import {
   subprojectCountLabel,
   subprojectWorkingLabel,
   toggleProjectKey,
-  topLevelProjects,
   projectKeyOf,
 } from "@t3tools/client-runtime/state/projectSubprojects";
+import { partitionThreadPurposes } from "@t3tools/client-runtime/state/thread-purpose";
+import type { ThreadPurpose } from "@t3tools/contracts";
 import { MobileDecisionFeed } from "./MobileDecisionFeed";
+import { MobileHarnessList } from "./MobileHarnessList";
 import { MobileProjectRequests } from "./MobileProjectRequests";
 import { MobileSubprojectRows } from "./MobileSubprojectRows";
 import { MobileTaskFraction } from "./MobileTaskFraction";
@@ -131,7 +134,7 @@ interface HomeScreenProps {
   readonly onAddConnection: () => void;
   readonly onOpenSettings: () => void;
   readonly onStartNewTask: () => void;
-  readonly onSelectThread: (thread: EnvironmentThreadShell) => void;
+  readonly onSelectThread: (thread: Pick<EnvironmentThreadShell, "environmentId" | "id">) => void;
   readonly onArchiveThread: (thread: EnvironmentThreadShell) => void;
   readonly onDeleteThread: (thread: EnvironmentThreadShell) => void;
   /** Resolves true iff the settle was dispatched and succeeded. */
@@ -298,11 +301,13 @@ function renderHomeScrollView(props: ScrollViewProps) {
 
 function MobileOrchestratorList({
   summaries: allSummaries,
+  purposes,
   onSelectThread,
   header,
 }: {
   readonly header: ComponentProps<typeof View>["children"];
   readonly summaries: readonly OrchestratorSummary[];
+  readonly purposes: ReadonlyMap<string, ThreadPurpose | null>;
   readonly onSelectThread: (thread: EnvironmentThreadShell) => void;
 }) {
   const insets = useSafeAreaInsets();
@@ -318,8 +323,9 @@ function MobileOrchestratorList({
   // Projects whose subprojects are folded away, until the screen is left; the rest show theirs.
   const [foldedProjects, setFoldedProjects] = useState<ReadonlyArray<string>>([]);
   const [quietCutoff] = useState(() => Date.now() - PROJECT_QUIET_AFTER_MS);
-  // Subprojects nest inside their project's card instead of listing as projects.
-  const projects = useMemo(() => topLevelProjects(allSummaries), [allSummaries]);
+  // The partition already lists top-level projects (and a project nested under Harness) as roots;
+  // every active subproject nests inside its project's card, a Harness one tagged as such.
+  const projects = allSummaries;
   const active = projects.filter(
     (summary) => projectSidebarBucket(summary, quietCutoff) !== "quiet",
   );
@@ -434,6 +440,7 @@ function MobileOrchestratorList({
             {folded ? null : (
               <MobileSubprojectRows
                 summary={summary}
+                purposes={purposes}
                 quietCutoff={quietCutoff}
                 onSelectThread={onSelectThread}
               />
@@ -500,7 +507,7 @@ export function HomeScreen(props: HomeScreenProps) {
   const selectedThreadKey = primaryColumn?.selectedThreadKey ?? null;
   const fullSwipeWidth = primaryColumn && columnMetrics ? columnMetrics.width - 20 : undefined;
 
-  const [homeMode, setHomeMode] = useState<"threads" | "orchestrators">("threads");
+  const [homeMode, setHomeMode] = useState<"threads" | "orchestrators" | "harness">("threads");
   const supervisionMetadata = useSupervisionMetadata();
   // Join the sidecar once: Projects and Harness partition the same forest by purpose.
   const joinedThreads = useMemo(
@@ -1207,6 +1214,7 @@ export function HomeScreen(props: HomeScreenProps) {
         options={[
           { value: "threads", label: "Threads" },
           { value: "orchestrators", label: "Projects" },
+          { value: "harness", label: "Harness" },
         ]}
         selected={homeMode}
         onSelect={setHomeMode}
@@ -1285,9 +1293,19 @@ export function HomeScreen(props: HomeScreenProps) {
         {homeMode === "orchestrators" ? (
           <MobileOrchestratorList
             summaries={orchestrators}
+            purposes={purposes}
             onSelectThread={props.onSelectThread}
             header={homeModeSelector}
           />
+        ) : homeMode === "harness" ? (
+          <View className="flex-1">
+            {homeModeSelector}
+            <MobileHarnessList
+              harnessRoots={harnessRoots}
+              threads={props.threads}
+              onSelectThread={props.onSelectThread}
+            />
+          </View>
         ) : (
           <SwipeableScrollGateProvider enabled={swipeEnabled} activation={swipeRowActivation}>
             <LegendList
