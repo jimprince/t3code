@@ -175,11 +175,12 @@ export function ProgressFigure({
   readonly extra?: ReactNode;
 }) {
   const { data, now } = useDashboardUi();
-  const by = formatClock(
-    new Date(Date.parse(data.asOf ?? new Date(now).toISOString()) + HOUR_MS).toISOString(),
-    now,
-  );
   const steps = roll.steps;
+  const forecastBy = () =>
+    formatClock(
+      new Date(Date.parse(data.asOf ?? new Date(now).toISOString()) + HOUR_MS).toISOString(),
+      now,
+    );
   return (
     <span className="tabular-nums whitespace-nowrap">
       {steps ? (
@@ -196,12 +197,16 @@ export function ProgressFigure({
       ) : roll.projectedDone !== null && steps && roll.paceBasis ? (
         <span className="text-muted-foreground">
           {" "}
-          · ~{roll.projectedDone}/{steps.total} by {by}
+          · ~{roll.projectedDone}/{steps.total} by {forecastBy()}
         </span>
       ) : null}
       {roll.replanned ? <span className="text-muted-foreground"> · replanned</span> : null}
       {roll.unplanned > 0 ? (
-        <span className="text-muted-foreground/70"> +{roll.unplanned} unplanned</span>
+        <span className="text-muted-foreground/70">
+          {steps ? " · " : ""}
+          {roll.unplanned} {steps ? "more " : "open "}
+          {roll.unplanned === 1 ? "task" : "tasks"}
+        </span>
       ) : null}
       {extra}
       {keys.length > 0 ? (
