@@ -8,7 +8,8 @@ import {
   type ServerLifecycleStreamEvent,
   WS_METHODS,
 } from "@t3tools/contracts";
-import { describe, expect, it } from "@effect/vitest";
+import { describe, expect } from "vite-plus/test";
+import { it } from "@effect/vitest";
 import { AtomRegistry } from "effect/reactivity";
 import { dashboardAnswersAtom } from "../dashboard/answers.ts";
 import * as Cause from "effect/Cause";
@@ -158,6 +159,52 @@ describe("environment RPC", () => {
         `finish:${TARGET.environmentId}:${WS_METHODS.cloudGetRelayClientStatus}`,
       ]);
     }),
+  );
+
+  it.effect(
+    "background reads bypass latency observation without suppressing foreground reads",
+    () =>
+      Effect.gen(function* () {
+        let observed = 0;
+        let completed = 0;
+        let calls = 0;
+        const client = {
+          [WS_METHODS.projectRequestsPendingAsks]: () =>
+            Effect.sync(() => {
+              calls++;
+              return { asks: [] };
+            }),
+        } as unknown as WsRpcProtocolClient;
+        const { activeSession, supervisor } = yield* makeHarness();
+        yield* SubscriptionRef.set(activeSession, Option.some(session(client)));
+        yield* Effect.gen(function* () {
+          expect(
+            yield* request(
+              WS_METHODS.projectRequestsPendingAsks,
+              { threadId: ThreadId.make("root") },
+              { background: true },
+            ),
+          ).toEqual({ asks: [] });
+          expect(observed).toBe(0);
+          yield* request(WS_METHODS.projectRequestsPendingAsks, {
+            threadId: ThreadId.make("root"),
+          });
+        }).pipe(
+          Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+          Effect.provideService(EnvironmentRpcRequestObserver, {
+            observe: () =>
+              Effect.sync(() => {
+                observed++;
+                return Effect.sync(() => {
+                  completed++;
+                });
+              }),
+          }),
+        );
+        expect(calls).toBe(2);
+        expect(observed).toBe(1);
+        expect(completed).toBe(1);
+      }),
   );
 
   it.effect("binds finite streaming commands to one active session", () =>
