@@ -23,12 +23,7 @@ import {
   type DashboardAnswer,
 } from "./answers.ts";
 import { OLDER_DASHBOARD_REFRESH_MS, readOlderDashboard } from "./fallback.ts";
-export {
-  createDashboardSnapshotMerger,
-  mergeDashboardSnapshots,
-  compareDashboardVersions,
-  overlayAnswered,
-} from "./merge.ts";
+export { createDashboardSnapshotMerger } from "./merge.ts";
 
 /** Cache lifetime is independent of the subscription lifetime; unmount closes all network reads. */
 export function createDashboardAtoms<R, ER>(
