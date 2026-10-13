@@ -18,6 +18,7 @@ import type {
   ProjectPendingAsk,
   ProviderApprovalDecision,
 } from "@t3tools/contracts";
+import { formatDeadline } from "@t3tools/shared/localTime";
 import { CheckIcon, RotateCcwIcon, SendIcon } from "lucide-react";
 import { Fragment, useRef, useState, type ReactNode } from "react";
 
@@ -25,7 +26,6 @@ import { Button, InlineButton } from "../ui/button";
 import { Input } from "../ui/input";
 import { DecisionMarkdown } from "./DecisionMarkdown";
 import {
-  deadlineNote,
   kindLabel,
   LATER_CHOICES,
   laterUntil,
@@ -94,7 +94,7 @@ const AgeAndWho = ({ card, now }: { readonly card: DecisionFeedCard; readonly no
   }
   parts.push(formatIssueAge(card.since, now));
   if (!card.blocked && card.issue.decision?.deadline) {
-    const note = deadlineNote(card.issue.decision.deadline, now);
+    const note = formatDeadline(card.issue.decision.deadline, now);
     if (note) parts.push(note);
   }
   if (!card.blocked && card.issue.milestone && card.kind === "test") {
