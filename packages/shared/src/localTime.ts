@@ -74,3 +74,22 @@ export function formatInDeviceZone(instant: number, scheduleZone?: string): stri
   const schedule = zoneClock(instant, scheduleZone);
   return schedule === device ? device : `${device} (${schedule})`;
 }
+
+/**
+ * A moment for dense lists, in the device zone: the clock on the same calendar day ("13:40"),
+ * weekday and clock inside the surrounding week ("Fri 18:02"), otherwise date and clock ("Oct 4 18:02").
+ */
+export function formatLocalWhen(instant: number, now: number): string {
+  const clock = new Intl.DateTimeFormat("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(instant);
+  const days = localCalendarDay(instant) - localCalendarDay(now);
+  if (days === 0) return clock;
+  const date = new Date(instant);
+  if (Math.abs(days) < 7) {
+    return `${date.toLocaleDateString("en-US", { weekday: "short" })} ${clock}`;
+  }
+  return `${date.toLocaleDateString("en-US", { month: "short", day: "numeric" })} ${clock}`;
+}
