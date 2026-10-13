@@ -642,11 +642,14 @@ const make = Effect.gen(function* () {
           return yield* fail("A project can have at most 100 automations.");
         const automation: Automation = {
           ...definition,
+          routineKind:
+            definition.routineKind ??
+            (Option.isSome(existing) ? existing.value.routineKind : undefined),
           nextRunAt: nextScheduledRun(definition.triggers, now),
           createdAt: Option.isSome(existing) ? existing.value.createdAt : now,
           updatedAt: now,
         };
-        yield* store.saveAutomation(automation);
+        yield* store.saveAutomation(automation, definition.routineKind !== undefined);
         return automation;
       }),
     ).pipe(Effect.tap(enqueue));
