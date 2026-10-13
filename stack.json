@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "4214932f66ade37cccea6e9b0272108000ab60c1",
+  "prev": "22e58a79bd21c803af6d4c665596294926e65296",
   "head": "411e9e3e0a0158399b6cf8707e330a4e71dfaecd",
   "applied": [
     "fork-build-ci-compat",
@@ -165,7 +165,9 @@
     "fork-shell-snapshot-cache",
     "fork-sqlite-worker-connections"
   ],
-  "unapplied": [],
+  "unapplied": [
+    "fork-agent-message-style"
+  ],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
@@ -173,6 +175,9 @@
     },
     "fork-admin-thread-recovery": {
       "oid": "bdb0ea16cdccbc34443717bd22524bb635f33dbc"
+    },
+    "fork-agent-message-style": {
+      "oid": "bc45fd4119ec8917ae683b018b1b5e9eb2ba92a2"
     },
     "fork-agent-panel-thread-details": {
       "oid": "0b7648f6c2276dbb8789b4366759b1d88d258658"
