@@ -29,7 +29,7 @@ export interface DashboardData {
   readonly sources: ReadonlyArray<DashboardSource>;
 }
 
-export const EMPTY_DASHBOARD: DashboardData = {
+const EMPTY_DASHBOARD: DashboardData = {
   asOf: null,
   projects: [],
   releases: [],
@@ -91,7 +91,7 @@ export interface SourceNames {
  * "Voice tasks", "gitea:host/owner/repo" is "Gitea repo", and a read of an older server's project
  * is "<project title> tracker issues". Merged ids carry the environment id first; it names the server.
  */
-export function describeSource(
+function describeSource(
   source: Pick<DashboardSource, "id" | "kind">,
   names: SourceNames,
 ): { readonly server: string | null; readonly what: string } {
@@ -536,7 +536,7 @@ export function topLevelProjects(projects: ReadonlyArray<ScopedProject>): {
 }
 
 /** The tasks of a workstream, in the order the snapshot lists them. */
-export function workstreamTasks(
+function workstreamTasks(
   project: DashboardProject,
   workstream: DashboardProject["workstreams"][number],
 ): DashboardTask[] {
