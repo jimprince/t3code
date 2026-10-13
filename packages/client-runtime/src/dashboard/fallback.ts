@@ -80,6 +80,7 @@ export function composeOlderDashboard(input: {
 // projectIssues.list. The first revision is published before these reads, so a
 // generous deadline only delays enrichment instead of dropping the data.
 const TRACKER_READ_DEADLINE = "60 seconds";
+export const OLDER_DASHBOARD_REFRESH_MS = 5 * 60_000;
 
 export const readOlderDashboard = (
   shell: OrchestrationV2ShellSnapshot,
@@ -89,25 +90,55 @@ export const readOlderDashboard = (
 ) =>
   Effect.gen(function* () {
     // Even metadata must settle: an older/slow host must not leave the environment at revision 0.
-    const metadataResult = yield* request("fork.threads.metadata.list", {}).pipe(
-      Effect.timeout("15 seconds"),
-      Effect.option,
-    );
+    const metadataResult = yield* request(
+      "fork.threads.metadata.list",
+      {},
+      { background: true },
+    ).pipe(Effect.timeout("15 seconds"), Effect.option);
     const metadata = Option.getOrElse(metadataResult, () => []);
-    const { roots } = dashboardRoots(shell.threads, metadata);
-    // A single semaphore covers every RPC across roots, rather than four calls per root.
+    const { roots, threads } = dashboardRoots(shell.threads, metadata);
+    const skipped = new Set<number>();
+    const cached = new Set<number>();
+    const attemptedAt = DateTime.formatIso(yield* DateTime.now);
+    const fresh = (root: ThreadId, kind: string) => {
+      const source = previous?.sources.find((s) => s.id === `older:${root}:${kind}`);
+      return (
+        source &&
+        source.detail !== "Read pending" &&
+        Date.parse(attemptedAt) - Date.parse(source.observedAt) < OLDER_DASHBOARD_REFRESH_MS
+      );
+    };
+    const treeHasAsks = (root: ThreadId) => {
+      const ids = new Set([root]);
+      for (let changed = true; changed;) {
+        changed = false;
+        for (const t of threads)
+          if (t.parentThreadId && ids.has(t.parentThreadId) && !ids.has(t.id)) {
+            ids.add(t.id);
+            changed = true;
+          }
+      }
+      return shell.threads.some(
+        (t) => ids.has(t.id) && t.archivedAt === null && t.pendingRuntimeRequest !== null,
+      );
+    };
+    // The concurrency limit is outside each deadline: queued reads get the full request budget.
     const jobs = roots.flatMap((root) => [
-      request(WS_METHODS.projectIssuesList, { rootThreadId: root.id }).pipe(
+      request(WS_METHODS.projectIssuesList, { rootThreadId: root.id }, { background: true }).pipe(
         Effect.map((value) => ({ kind: "issues" as const, root: root.id, value })),
         Effect.timeout(TRACKER_READ_DEADLINE),
         Effect.option,
       ),
-      request(WS_METHODS.projectRoadmapGet, { threadId: root.id }).pipe(
+      request(WS_METHODS.projectRoadmapGet, { threadId: root.id }, { background: true }).pipe(
         Effect.map((value) => ({ kind: "roadmap" as const, root: root.id, value })),
         Effect.timeout(TRACKER_READ_DEADLINE),
         Effect.option,
       ),
-      request(WS_METHODS.projectRequestsPendingAsks, { threadId: root.id }).pipe(
+      request(
+        WS_METHODS.projectRequestsPendingAsks,
+        { threadId: root.id },
+        { background: true },
+      ).pipe(
         Effect.map((value) => ({ kind: "asks" as const, root: root.id, value })),
         Effect.timeout(TRACKER_READ_DEADLINE),
         Effect.option,
@@ -130,7 +161,7 @@ export const readOlderDashboard = (
         lastSuccessAt: Option.isSome(metadataResult)
           ? now
           : (previous?.sources.find((s) => s.id === "older:metadata")?.lastSuccessAt ?? null),
-        staleAfterMs: 120_000,
+        staleAfterMs: OLDER_DASHBOARD_REFRESH_MS + 60_000,
         coverage: Option.isSome(metadataResult) ? "complete" : "unavailable",
         failed: Option.isNone(metadataResult),
         detail: Option.isNone(metadataResult) ? "Metadata read failed or timed out" : null,
@@ -147,23 +178,46 @@ export const readOlderDashboard = (
       });
       for (let i = 0; i < results.length; i++) {
         const result = results[i]!;
-        const settled = i < completed;
+        const settled = i < completed || skipped.has(i);
         const root = roots[Math.floor(i / 3)]!;
         const sourceId = `older:${root.id}:${["issues", "roadmap", "asks"][i % 3]}`;
         const prior = previous?.sources.find((s) => s.id === sourceId);
         sources.set(sourceId, {
           id: sourceId,
           kind: i % 3 === 0 ? "gitea" : "local",
-          observedAt: now,
-          lastSuccessAt: result._tag === "Some" ? now : (prior?.lastSuccessAt ?? null),
-          staleAfterMs: 120_000,
-          coverage: result._tag === "Some" ? "bounded" : "unavailable",
-          failed: settled && result._tag === "None",
-          detail:
-            result._tag === "None" ? (settled ? "Read failed or timed out" : "Read pending") : null,
+          observedAt: cached.has(i)
+            ? (prior?.observedAt ?? now)
+            : settled
+              ? now
+              : (prior?.observedAt ?? now),
+          lastSuccessAt: skipped.has(i)
+            ? now
+            : result._tag === "Some"
+              ? now
+              : (prior?.lastSuccessAt ?? null),
+          staleAfterMs: OLDER_DASHBOARD_REFRESH_MS + 60_000,
+          coverage: skipped.has(i)
+            ? "complete"
+            : cached.has(i)
+              ? (prior?.coverage ?? "unavailable")
+              : result._tag === "Some"
+                ? "bounded"
+                : "unavailable",
+          failed: cached.has(i)
+            ? (prior?.failed ?? false)
+            : settled && !skipped.has(i) && result._tag === "None",
+          detail: skipped.has(i)
+            ? "No linked tracker or pending requests"
+            : cached.has(i)
+              ? (prior?.detail ?? null)
+              : result._tag === "None"
+                ? settled
+                  ? "Read failed or timed out"
+                  : "Read pending"
+                : null,
         });
         if (result._tag === "None") {
-          if (i % 3 === 0)
+          if (i % 3 === 0 && !skipped.has(i))
             for (const id of previous?.projects.find((p) => p.rootThreadId === root.id)
               ?.sourceIds ?? []) {
               const prior = previous?.sources.find((s) => s.id === id);
@@ -171,8 +225,8 @@ export const readOlderDashboard = (
                 sources.set(id, {
                   ...prior,
                   observedAt: now,
-                  failed: settled,
-                  coverage: "unavailable",
+                  failed: cached.has(i) ? prior.failed : settled,
+                  coverage: cached.has(i) ? prior.coverage : "unavailable",
                 });
             }
           continue;
@@ -194,7 +248,7 @@ export const readOlderDashboard = (
               lastSuccessAt: repo.error
                 ? (previous?.sources.find((s) => s.id === id)?.lastSuccessAt ?? null)
                 : item.value.fetchedAt,
-              staleAfterMs: 120_000,
+              staleAfterMs: OLDER_DASHBOARD_REFRESH_MS + 60_000,
               coverage: repo.error ? "unavailable" : "bounded",
               failed: !!repo.error,
             });
@@ -216,10 +270,9 @@ export const readOlderDashboard = (
       for (const project of snapshot.projects) {
         if (!project.rootThreadId) continue;
         const prior = previous?.projects.find((p) => p.id === project.id);
-        const issueFailure =
-          sources.get(`older:${project.rootThreadId}:issues`)?.coverage === "unavailable";
-        const askFailure =
-          sources.get(`older:${project.rootThreadId}:asks`)?.coverage === "unavailable";
+        const rootIndex = roots.findIndex((r) => r.id === project.rootThreadId) * 3;
+        const issueFailure = !skipped.has(rootIndex) && Option.isNone(results[rootIndex]!);
+        const askFailure = !skipped.has(rootIndex + 2) && Option.isNone(results[rootIndex + 2]!);
         const failedRepos = new Set(
           [...sources.values()]
             .filter((s) => s.kind === "gitea" && s.coverage === "unavailable")
@@ -316,14 +369,64 @@ export const readOlderDashboard = (
     };
     // Shell + metadata identify the heads without waiting for remote trackers. Every emitted value
     // is a complete snapshot, so Plan, Decisions and Releases always swap together.
+    for (let i = 0; i < jobs.length; i++) {
+      const root = roots[Math.floor(i / 3)]!;
+      const kind = ["issues", "roadmap", "asks"][i % 3]!;
+      if (kind === "asks" && Option.isSome(metadataResult) && !treeHasAsks(root.id)) skipped.add(i);
+      else if (
+        fresh(root.id, kind) &&
+        !(
+          kind === "asks" &&
+          previous?.sources.find((s) => s.id === `older:${root.id}:asks`)?.detail ===
+            "No linked tracker or pending requests"
+        )
+      )
+        cached.add(i);
+    }
     const core = build(pending, 0);
     if (jobs.length === 0) return core;
     yield* emit(core);
-    // Publish bounded enrichment batches too: the minute refresh can interrupt a large pass,
-    // and completed/expired sources must become visible before that happens.
+    // Project metadata is cheap and carries explicit tracker overrides that the git remote
+    // alone cannot reveal. An unavailable metadata RPC leaves tracker coverage unknown.
+    const repositories = rootRepositories(shell);
+    yield* Effect.forEach(
+      roots,
+      (root, index) => {
+        if (repositories.has(root.id) || (cached.has(index * 3) && cached.has(index * 3 + 1)))
+          return Effect.void;
+        return request(
+          WS_METHODS.projectDashboardGet,
+          { threadId: root.id },
+          { background: true },
+        ).pipe(
+          Effect.timeout("15 seconds"),
+          Effect.option,
+          Effect.tap((result) =>
+            Effect.sync(() => {
+              if (Option.isSome(result) && !result.value.tracker && !repositories.has(root.id)) {
+                skipped.add(index * 3);
+                skipped.add(index * 3 + 1);
+              }
+            }),
+          ),
+          Effect.asVoid,
+        );
+      },
+      { concurrency: 4 },
+    );
+    // Publish bounded batches so completed/expired sources become visible during a long pass.
     const results = [...pending];
     for (let start = 0; start < jobs.length; start += 12) {
-      const batch = yield* Effect.all(jobs.slice(start, start + 12), { concurrency: 4 });
+      const batch = yield* Effect.all(
+        jobs
+          .slice(start, start + 12)
+          .map((job, offset) =>
+            skipped.has(start + offset) || cached.has(start + offset)
+              ? Effect.succeed(Option.none())
+              : job,
+          ),
+        { concurrency: 4 },
+      );
       results.splice(start, batch.length, ...batch);
       const snapshot = build(results, start + batch.length);
       if (start + batch.length === jobs.length) return snapshot;
