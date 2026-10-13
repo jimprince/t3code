@@ -1,0 +1,8 @@
+name = "fork-dashboard-v3-06-review-one"
+subject = "fix(web): Dashboard review round 1 (blocked wording, project Ask target, markers, Home entry points)"
+class = "product"
+purpose = "Dashboard review round 1 (blocked wording, project Ask target, markers, Home entry points)"
+retire_when = "The dashboard-v3 series is intentionally dropped or replaced by equivalent upstream behavior."
+depends_on = ["fork-dashboard-v3-05-views"]
+roles = []
+note = "Replayed independently from live source da0a6bf568a481e8242a9f710abd00fe8dc15e71; excludes the Chief of Staff tray series."
