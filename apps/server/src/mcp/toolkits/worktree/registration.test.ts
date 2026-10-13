@@ -1,4 +1,5 @@
 import { HarnessPinService } from "../../../harness/HarnessPinService.ts";
+import { RoutineKindService } from "../../../harness/RoutineKindService.ts";
 import { HarnessReadService } from "../../../harness/HarnessReadService.ts";
 import * as Orchestrator from "../../../orchestration-v2/Orchestrator.ts";
 import * as ProjectionStore from "../../../orchestration-v2/ProjectionStore.ts";
@@ -41,6 +42,7 @@ import * as PreviewBrowser from "../../../preview/PreviewBrowser.ts";
 const layerStubServices = Layer.mergeAll(
   Layer.mock(HarnessReadService)({}),
   Layer.mock(HarnessPinService)({}),
+  Layer.mock(RoutineKindService)({ environmentId: "environment-scratch" }),
   SqlitePersistence.layerMemory,
   Layer.mock(Orchestrator.OrchestratorV2)({}),
   Layer.mock(ProjectionStore.ProjectionStoreV2)({}),
@@ -150,6 +152,8 @@ it.effect("production mcp layer lists worktree tools over http", () =>
       // than replacing them.
       expect(toolNames).toContain("preview_status");
       expect(toolNames).toContain("delegate_task");
+      expect(toolNames.filter((name) => name === "harness_check_pin")).toHaveLength(1);
+      expect(toolNames.filter((name) => name === "harness_routine_kind_set")).toHaveLength(1);
 
       // The handoff tool mutates thread state, reaches the network (origin
       // fetch), and runs project setup scripts, so its MCP hints must not
