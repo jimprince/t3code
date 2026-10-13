@@ -73,6 +73,68 @@ export function threadPurposes(threads: readonly OrchestratorThreadShell[]) {
   return result;
 }
 
+export type PurposeMoveId = "move-to-harness" | "move-to-projects" | "move-to-threads";
+export interface PurposeMove {
+  readonly id: PurposeMoveId;
+  readonly label: string;
+  /**
+   * Written as the thread's own override; nesting, pin and settle are untouched. Null clears the
+   * override, so the thread follows its supervisor again.
+   */
+  readonly purpose: ThreadPurpose | null;
+}
+
+/**
+ * The one reversible move a thread offers between Harness and the rest, or null when it has none.
+ * Only a top-level thread (or one that already carries its own override) moves; a worker follows
+ * its root. Moving back says where the thread returns: Projects when it is project-shaped
+ * (owns workers or is marked a project), Threads when it is a plain standalone thread. An
+ * unknown purpose (remote ancestry not connected) offers nothing rather than a guess.
+ */
+export function purposeMoveFor(
+  threads: readonly OrchestratorThreadShell[],
+  key: string,
+): PurposeMove | null {
+  const thread = threads.find((candidate) => supervisionThreadKey(candidate) === key);
+  if (!thread || thread.archivedAt !== null) return null;
+  const effective = threadPurposes(threads).get(key) ?? null;
+  if (effective === null) return null;
+  if (purposeParentKey(thread) !== null && thread.purpose == null) return null;
+  if (effective === "project") {
+    return { id: "move-to-harness", label: "Move to Harness", purpose: "harness" };
+  }
+  const projectShaped =
+    thread.subproject === "on" ||
+    threads.some((other) => other.archivedAt === null && purposeParentKey(other) === key);
+  // Clear the override when its supervisor (or the root default) already says project, so the
+  // thread follows a later supervisor. Pin "project" only where it must stay out of a Harness
+  // parent, or when the parent's purpose is not known yet.
+  const parentKey = purposeParentKey(thread);
+  const inherited =
+    parentKey === null ? "project" : (threadPurposes(threads).get(parentKey) ?? null);
+  const purpose = inherited === "project" ? null : "project";
+  return projectShaped
+    ? { id: "move-to-projects", label: "Move back to Projects", purpose }
+    : { id: "move-to-threads", label: "Move back to Threads", purpose };
+}
+
+/**
+ * The plain tag a subproject row carries when its purpose differs from its project's: "Harness"
+ * for a Harness subproject listed in a project's card, null otherwise. Projects lists every active
+ * subproject (organizational nesting is the truth); a Harness subproject is also a root of the
+ * Harness tab, so the tag says why it sits in both places.
+ */
+export function subprojectPurposeTag(
+  parent: OrchestratorSummary,
+  sub: OrchestratorSummary,
+  purposes: ReadonlyMap<string, ThreadPurpose | null>,
+): "Harness" | null {
+  return purposes.get(supervisionThreadKey(sub.root)) === "harness" &&
+    purposes.get(supervisionThreadKey(parent.root)) !== "harness"
+    ? "Harness"
+    : null;
+}
+
 /** Partition after resolving all ancestry, preserving complete summaries for attention rollups. */
 export function partitionThreadPurposes(
   threads: readonly OrchestratorThreadShell[],
