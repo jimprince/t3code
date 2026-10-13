@@ -6,6 +6,9 @@ import {
 } from "./threadSnapshot.js";
 import { openRpcConnection } from "./openRpc.js";
 import { withThreadMetadata, type ThreadMetadata } from "./v2/nesting.js";
+import { projectionHasWork } from "./v2/workState.js";
+import type { WorktreeGcThread } from "./worktreeGc.js";
+import type { OrchestrationV2ShellSnapshot } from "@t3tools/contracts";
 import { refreshSavedEnvironmentSession } from "./sessionRefresh.js";
 import { pendingRequests, requirePendingRequest } from "./v2/requests.js";
 import { wrapWithPreamble, type WorkerContext } from "./thread-preamble.js";
