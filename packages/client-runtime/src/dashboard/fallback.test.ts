@@ -9,6 +9,7 @@ import {
   ProjectDashboardError,
   type OrchestrationV2ShellSnapshot,
   type ProjectIssuesListResult,
+  type ProjectIssue,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Deferred from "effect/Deferred";
@@ -486,5 +487,165 @@ it.effect(
           .filter((s) => s.id.startsWith("older:root:"))
           .every((s) => !s.failed && s.coverage === "complete"),
       ).toBe(true);
+    }),
+);
+
+it.effect(
+  "reads tracker decisions for a head with only remote workers even without a local tracker",
+  () =>
+    Effect.gen(function* () {
+      const calls: ThreadId[] = [];
+      const now = "2026-10-11T10:00:00Z";
+      const issue: ProjectIssue = {
+        host: "git.test",
+        repository: "brad/cos",
+        number: 462,
+        title: "Choose an owner",
+        url: "https://git.test/brad/cos/issues/462",
+        status: "pending",
+        labels: ["needs-brad"],
+        isRequest: false,
+        requestSource: null,
+        assignees: [],
+        comments: 0,
+        createdAt: now,
+        updatedAt: now,
+        closedAt: null,
+        linkedThreadIds: [],
+        milestone: null,
+        owner: { threadId: root, title: "Chief of Staff", projectTitle: "VM" },
+        decision: { context: "Proceed?", waiting: root, options: [] },
+      };
+      const client = {
+        "fork.threads.metadata.list": () =>
+          Effect.succeed(
+            roots.map((threadId) => ({
+              threadId,
+              parentThreadId: null,
+            })),
+          ),
+        [WS_METHODS.projectDashboardGet]: () => Effect.succeed({ tracker: null }),
+        [WS_METHODS.projectIssuesList]: ({ rootThreadId }: { rootThreadId: ThreadId }) =>
+          Effect.sync(() => {
+            calls.push(rootThreadId);
+            return { issues: [issue], repositories: [], fetchedAt: now };
+          }),
+        [WS_METHODS.projectRoadmapGet]: () =>
+          Effect.succeed({ tracker: null, versions: [], items: [] }),
+        [WS_METHODS.projectRequestsPendingAsks]: () => Effect.succeed({ asks: [] }),
+      } as unknown as WsRpcProtocolClient;
+      const noAsks = {
+        ...shell,
+        threads: shell.threads.map((t) => ({ ...t, pendingRuntimeRequest: null })),
+      };
+      const snapshot = yield* provideOlderClient(
+        readOlderDashboard(noAsks, undefined, undefined, undefined, [root]),
+        client,
+      );
+      expect(calls).toEqual([root]);
+      expect(snapshot.projects.map((p) => p.rootThreadId)).toEqual([root]);
+      expect(snapshot.projects[0]?.attention).toContainEqual(
+        expect.objectContaining({
+          title: "Choose an owner",
+          question: "Proceed?",
+          threadId: root,
+        }),
+      );
+    }),
+);
+
+it.effect("does not retain retired or archived cached heads when metadata is unavailable", () =>
+  Effect.gen(function* () {
+    const baseline = yield* provideOlderClient(readOlderDashboard(shell), {
+      ...metadataClient,
+      [WS_METHODS.projectIssuesList]: () =>
+        Effect.succeed({ issues: [], repositories: [], fetchedAt: "2026-10-11T10:00:00Z" }),
+      [WS_METHODS.projectRoadmapGet]: () =>
+        Effect.succeed({ tracker: null, versions: [], items: [] }),
+      [WS_METHODS.projectRequestsPendingAsks]: () => Effect.succeed({ asks: [] }),
+    } as unknown as WsRpcProtocolClient);
+    expect(baseline.projects).toHaveLength(2);
+    const retiredShell = {
+      ...shell,
+      threads: [{ ...shell.threads[0]!, title: "Head (retired 2026-10-10)" }],
+      archivedThreads: [{ ...shell.threads[1]!, archivedAt: shell.threads[1]!.updatedAt }],
+    };
+    const snapshot = yield* provideOlderClient(
+      readOlderDashboard(retiredShell, {
+        ...baseline,
+        projects: [
+          ...baseline.projects.map((p) => ({ ...p, omittedTaskCount: 198 })),
+          {
+            ...baseline.projects[0]!,
+            id: "project:remote-child",
+            rootThreadId: ThreadId.make("remote-child"),
+            parentId: baseline.projects[0]!.id,
+          },
+        ],
+      }),
+      {
+        "fork.threads.metadata.list": () =>
+          Effect.fail(new ProjectDashboardError({ message: "Unavailable" })),
+      } as unknown as WsRpcProtocolClient,
+    );
+    expect(snapshot.projects).toEqual([]);
+    expect(snapshot.sources.find((s) => s.id === "older:metadata")?.failed).toBe(true);
+  }),
+);
+
+it.effect(
+  "drops a cached shared-repository decision when its head retires during tracker failure",
+  () =>
+    Effect.gen(function* () {
+      const client = {
+        ...metadataClient,
+        [WS_METHODS.projectIssuesList]: ({ rootThreadId }: { rootThreadId: ThreadId }) =>
+          Effect.succeed({
+            fetchedAt: "2026-10-11T10:00:00Z",
+            repositories: [],
+            issues:
+              rootThreadId === root
+                ? [
+                    {
+                      host: "git.test",
+                      repository: "brad/repo",
+                      number: 1,
+                      title: "Retired decision",
+                      url: "https://git.test/brad/repo/issues/1",
+                      status: "pending",
+                      labels: ["needs-brad"],
+                      isRequest: false,
+                      requestSource: null,
+                      assignees: [],
+                      comments: 0,
+                      createdAt: "2026-10-11T10:00:00Z",
+                      updatedAt: "2026-10-11T10:00:00Z",
+                      closedAt: null,
+                      linkedThreadIds: [roots[1]!],
+                      decision: { context: "Which?", waiting: roots[1]!, options: [] },
+                    },
+                  ]
+                : [],
+          }),
+        [WS_METHODS.projectRoadmapGet]: () =>
+          Effect.succeed({ tracker: null, versions: [], items: [] }),
+        [WS_METHODS.projectRequestsPendingAsks]: () => Effect.succeed({ asks: [] }),
+      } as unknown as WsRpcProtocolClient;
+      const baseline = yield* provideOlderClient(readOlderDashboard(shell), client);
+      expect(baseline.projects.flatMap((p) => p.attention)).toHaveLength(1);
+      const retiredShell = {
+        ...shell,
+        threads: shell.threads.map((t) =>
+          t.id === roots[1] ? { ...t, title: "Head (retired 2026-10-10)" } : t,
+        ),
+      };
+      const snapshot = yield* provideOlderClient(readOlderDashboard(retiredShell, baseline), {
+        ...client,
+        [WS_METHODS.projectIssuesList]: () =>
+          Effect.fail(new ProjectDashboardError({ message: "Tracker failed" })),
+      } as unknown as WsRpcProtocolClient);
+      expect(snapshot.projects.map((p) => p.rootThreadId)).toEqual([root]);
+      expect(snapshot.projects.flatMap((p) => p.attention)).toEqual([]);
+      expect(snapshot.projects.flatMap((p) => p.tasks)).toEqual([]);
     }),
 );
