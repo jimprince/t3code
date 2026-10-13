@@ -1,0 +1,4 @@
+id = "dashboard-next-active-heads"
+category = "fix"
+functionality = "dashboard"
+text = "Show the What’s next canvas first and expanded on project dashboards, and remove retired or settled heads from plans, decisions and omitted-task counts."
