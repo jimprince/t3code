@@ -1,5 +1,5 @@
 import { HarnessSnapshot, HarnessSnapshotInput, OrchestratorMcpFailure } from "@t3tools/contracts";
-import { Tool, Toolkit } from "effect/unstable/ai";
+import { Tool, Toolkit } from "effect/ai";
 import { HarnessReadService } from "../../../harness/HarnessReadService.ts";
 import { ThreadManagementService } from "../../../orchestration-v2/ThreadManagementService.ts";
 import { McpInvocationContext } from "../../McpInvocationContext.ts";
