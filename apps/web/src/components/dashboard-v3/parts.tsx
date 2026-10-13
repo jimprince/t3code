@@ -267,7 +267,7 @@ export function TaskRow({
     </span>
   );
   return (
-    <div className="grid grid-cols-[14px_minmax(0,1fr)_auto] items-center gap-x-2.5 py-0.5 pl-3.5 text-xs sm:grid-cols-[14px_minmax(150px,1.25fr)_minmax(100px,1.6fr)_minmax(170px,auto)]">
+    <div className="grid grid-cols-[14px_minmax(0,1fr)_auto] items-center gap-x-2.5 py-0.5 pl-3.5 text-xs @xl/dash:grid-cols-[14px_minmax(150px,1.25fr)_minmax(100px,1.6fr)_minmax(170px,auto)]">
       <span className="text-center">{mark}</span>
       <button
         type="button"
@@ -280,7 +280,7 @@ export function TaskRow({
         {task.title}
         {ref ? <span className="ml-1 text-muted-foreground/70">#{ref}</span> : null}
       </button>
-      <span className="order-last col-span-3 pl-6 sm:order-none sm:col-span-1 sm:pl-0">
+      <span className="order-last col-span-3 pl-6 @xl/dash:order-none @xl/dash:col-span-1 @xl/dash:pl-0">
         {task.progress && !stale ? (
           <ProgressBar
             small
@@ -293,7 +293,7 @@ export function TaskRow({
           <ProgressBar small steps={null} gained={null} projectedDone={null} unknown />
         ) : null}
       </span>
-      <span className="text-right sm:col-auto">
+      <span className="text-right @xl/dash:col-auto">
         <TaskFigure scoped={scoped} task={task} roll={roll} keys={keys} stale={stale} idle={idle} />
       </span>
     </div>
