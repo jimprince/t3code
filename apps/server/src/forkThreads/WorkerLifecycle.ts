@@ -19,6 +19,7 @@ import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.t
 import { archiveDeadline, archiveEligible, hasActiveWork } from "./ArchiveDeadlines.ts";
 import { hasLiveChildren } from "./WorkerLifecycleMetadata.ts";
 import { completionEligible } from "./WorkerLifecyclePolicy.ts";
+import { nativeEvidence, nativeCompletionEligible, readNativeTask } from "./NativeCompletion.ts";
 
 export class WorkerLifecycle extends Context.Service<
   WorkerLifecycle,
@@ -83,17 +84,30 @@ const make = Effect.gen(function* () {
           !thread.pinnedAt &&
           !isPermanentRoot(thread.id, permanentRoots) &&
           !hasActiveWork(thread) &&
-          thread.status === "completed" &&
-          thread.latestRunId
+          ((thread.status === "completed" && thread.latestRunId) ||
+            (thread.creationSource === "provider" &&
+              thread.lineage.relationshipToParent === "subagent"))
         ) {
           const projection = yield* threads.getThreadProjection(thread.id);
+          const task =
+            projection.runs.length === 0 ? yield* readNativeTask(sql, thread.id) : undefined;
+          const nativeCompletion = task ? nativeEvidence(task) : undefined;
           if (
-            completionEligible(
-              projection,
-              thread.latestRunId,
-              metadata.get(thread.id),
-              permanentRoots,
-            ) &&
+            (thread.latestRunId
+              ? completionEligible(
+                  projection,
+                  thread.latestRunId,
+                  metadata.get(thread.id),
+                  permanentRoots,
+                )
+              : nativeCompletion !== undefined &&
+                nativeCompletionEligible(
+                  projection,
+                  task,
+                  nativeCompletion,
+                  metadata.get(thread.id),
+                  permanentRoots,
+                )) &&
             !(yield* hasLiveChildren(sql, thread.id, threads.getThreadShell))
           ) {
             yield* threads
@@ -101,10 +115,12 @@ const make = Effect.gen(function* () {
                 type: "thread.auto-settle",
                 threadId: thread.id,
                 commandId: CommandId.make(
-                  `fork:complete:${thread.id}:${thread.latestRunId}:${DateTime.toEpochMillis(thread.updatedAt)}`,
+                  `fork:complete:${thread.id}:${thread.latestRunId ?? nativeCompletion?.updatedAt}:${DateTime.toEpochMillis(thread.updatedAt)}`,
                 ),
                 snapshotAt: thread.updatedAt,
-                completionRunId: thread.latestRunId,
+                ...(thread.latestRunId
+                  ? { completionRunId: thread.latestRunId }
+                  : { nativeCompletion }),
               })
               .pipe(
                 Effect.andThen(Effect.suspend(enqueue)),
