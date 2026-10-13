@@ -35,6 +35,7 @@ import {
 } from "../components/threadNestingMenu.logic";
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
 import { appAtomRegistry } from "../rpc/atomRegistry";
+import { readThreadPurposeMove } from "../state/forkPurpose";
 import { supervision } from "../state/forkSupervision";
 import { useThreadNestingActions } from "./useThreadNesting";
 import { threadEnvironment } from "../state/threads";
@@ -172,6 +173,7 @@ export function useThreadActionMenu(input: {
           forest: appAtomRegistry.get(supervision.forest),
           supported: readForkNestingSupported(threadRef.environmentId),
           subprojectsSupported: readForkSubprojectsSupported(threadRef.environmentId),
+          purposeMove: readThreadPurposeMove(thread),
         });
         const baseItems = buildThreadActionMenuItems({
           canOperate: readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope),
