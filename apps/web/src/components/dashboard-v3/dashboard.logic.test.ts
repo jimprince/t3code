@@ -11,6 +11,7 @@ import {
   ageLabel,
   barSegments,
   diffAgainst,
+  firstVisitChanges,
   outcomesSince,
   freshnessSuffix,
   mergeSnapshots,
@@ -245,6 +246,24 @@ describe("since you looked", () => {
       ["decision-new", "steady"],
     ]);
     expect(outcomes.map((c) => c.taskId)).toEqual(["finished"]);
+  });
+
+  it("on a first visit lists open decisions, then work closed in the last day", () => {
+    const first = firstVisitChanges(
+      data(
+        [
+          task({ id: "recent", status: "done", closedAt: "2026-10-11T12:00:00.000Z" }),
+          task({ id: "older", status: "done", closedAt: "2026-10-09T12:00:00.000Z" }),
+          task({ id: "open" }),
+        ],
+        [{ id: "pick", title: "Pick", taskId: "open" } as DashboardAttention],
+      ),
+      "2026-10-10T13:42:00.000Z",
+    );
+    expect(first.map((change) => [change.kind, change.taskId])).toEqual([
+      ["decision-new", "open"],
+      ["done", "recent"],
+    ]);
   });
 });
 
