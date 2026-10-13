@@ -5,7 +5,6 @@ import {
   openTaskCount,
   ownTreeContains,
   projectTrail,
-  subprojectCountLabel,
   subprojectIsActive,
   subprojectNeedsYou,
   subprojectCountLabel,
@@ -112,8 +111,6 @@ describe("project subprojects", () => {
     expect(subprojectWorkingLabel(project(0, 0))).toBeNull();
   });
 
-<<<<<<< packages/client-runtime/src/state/projectSubprojects.test.ts
-=======
   it("shows progress as closed of linked tasks, each linked issue once, subprojects included", () => {
     const sub = summary("sub", { issues: [issue(1, "closed"), issue(2, "open")] });
     const root = summary("root", {
@@ -125,7 +122,6 @@ describe("project subprojects", () => {
     expect(taskProgressLabel(summary("none"))).toBeNull();
   });
 
->>>>>>> /tmp/tmp4ofxcxzh/t
   it("hints how many subprojects a folded card hides, at any depth", () => {
     const nested = summary("nested");
     const sub = summary("sub", { subprojects: [nested] });
@@ -133,13 +129,10 @@ describe("project subprojects", () => {
     expect(subprojectCountLabel(sub)).toBe("1 sub");
     expect(subprojectCountLabel(nested)).toBeNull();
   });
-<<<<<<< packages/client-runtime/src/state/projectSubprojects.test.ts
 
   it("lists only top-level projects, leaving subprojects to nest inside them", () => {
     const root = summary("root");
     const sub = summary("sub", { parent: "root" });
     expect(topLevelProjects([sub, root])).toEqual([root]);
   });
-=======
->>>>>>> /tmp/tmp4ofxcxzh/t
 });
