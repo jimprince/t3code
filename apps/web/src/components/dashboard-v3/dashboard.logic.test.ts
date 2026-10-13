@@ -16,15 +16,19 @@ import {
   diffAgainst,
   firstVisitChanges,
   outcomesSince,
-  freshnessSuffix,
+  freshnessSummary,
   mergeSnapshots,
+  orderProducts,
   parseIssueTaskId,
+  planWorkstreams,
   rankDecisions,
   rollup,
   sourceHealth,
+  sourceLabel,
   takeBaseline,
   taskForecast,
   versionState,
+  type ScopedProject,
 } from "./dashboard.logic";
 
 const NOW = Date.parse("2026-10-11T13:42:00.000Z");
@@ -185,11 +189,92 @@ describe("sources", () => {
     expect(sourceHealth(source({ coverage: "bounded" }), NOW)).toBe("partial");
   });
 
-  it("names the first stale source in the header suffix", () => {
-    expect(freshnessSuffix([source()], NOW)).toBeNull();
+  const names = {
+    environments: new Map([["env-1", "brad-linux-dev"]]),
+    projectTitle: (root: string) => (root === "root-1" ? "Chief of Staff" : undefined),
+  };
+
+  it("names a single late source in words, without an alarm", () => {
+    expect(freshnessSummary([source()], NOW, names)).toBeNull();
     expect(
-      freshnessSuffix([source({ lastSuccessAt: "2026-10-11T05:02:00.000Z" })], NOW)?.text,
-    ).toBe("Voice tasks stale");
+      freshnessSummary([source({ lastSuccessAt: "2026-10-11T05:02:00.000Z" })], NOW, names),
+    ).toEqual({ text: "Voice tasks slow, showing last known", failed: false });
+  });
+
+  it("sums many late reads per server and never shows an id", () => {
+    const late = (id: string) =>
+      source({ id, kind: "gitea", failed: true, lastSuccessAt: "2026-10-11T12:00:00.000Z" });
+    const summary = freshnessSummary(
+      [
+        late("env-1:older:root-1:issues"),
+        late("env-1:older:root-2:issues"),
+        late("env-2:gitea:git/o/r"),
+        source({ id: "env-1:plan:voice" }),
+      ],
+      NOW,
+      names,
+    );
+    expect(summary?.text).toBe(
+      "brad-linux-dev: 2 reads slow, Dashboard: 1 read slow, showing last known",
+    );
+    expect(summary?.failed).toBe(false);
+  });
+
+  it("is an alarm only when no source has ever returned data", () => {
+    const dead = source({
+      id: "env-1:gitea:git/o/r",
+      kind: "gitea",
+      failed: true,
+      lastSuccessAt: null,
+    });
+    expect(freshnessSummary([dead], NOW, names)?.failed).toBe(true);
+    expect(freshnessSummary([dead, source()], NOW, names)?.failed).toBe(false);
+  });
+
+  it("titles a source with its server and project", () => {
+    expect(sourceLabel({ id: "env-1:older:root-1:issues", kind: "gitea" }, names)).toBe(
+      "brad-linux-dev · Chief of Staff tracker issues",
+    );
+    expect(sourceLabel({ id: "env-1:plan:voice", kind: "plan" }, names)).toBe(
+      "brad-linux-dev · Voice tasks",
+    );
+    expect(sourceLabel({ id: "gitea:git/o/repo", kind: "gitea" }, names)).toBe("Gitea repo");
+  });
+});
+
+describe("orderProducts", () => {
+  const scoped = (id: string, tasks: DashboardTask[], attention = 0): ScopedProject =>
+    ({
+      key: `${ENV}:${id}`,
+      environmentId: ENV,
+      project: {
+        id,
+        parentId: null,
+        omittedTaskCount: 0,
+        tasks,
+        attention: Array.from({ length: attention }, () => ({})),
+      },
+    }) as unknown as ScopedProject;
+  const moving = task({ id: "m", status: "working" });
+  const queued = task({
+    id: "q",
+    status: "pending",
+    movement: { ...task().movement, state: "unknown", doneDelta: null },
+  });
+  const finished = task({ id: "d", status: "done" });
+
+  it("puts decisions first, then moving, queued and finished work, and sets idle apart", () => {
+    const idle = scoped("idle", []);
+    const done = scoped("done", [finished]);
+    const waiting = scoped("waiting", [queued], 1);
+    const busy = scoped("busy", [moving]);
+    const later = scoped("later", [queued]);
+    const { ordered, idle: apart } = orderProducts(
+      [idle, done, later, busy, waiting],
+      [idle, done, later, busy, waiting],
+    );
+    expect(ordered.map((entry) => entry.project.id)).toEqual(["waiting", "busy", "later", "done"]);
+    expect(apart.map((entry) => entry.project.id)).toEqual(["idle"]);
   });
 });
 
@@ -359,5 +444,44 @@ describe("versionState", () => {
   it("treats the tag's v prefix and an installed build ahead of latest as current", () => {
     expect(versionState("0.0.46-fork.12", "v0.0.46-fork.12")).toBe("current");
     expect(versionState("0.0.46-fork.12", "v0.0.46-fork.11")).toBe("current");
+  });
+});
+
+describe("planWorkstreams", () => {
+  const project = (workstreams: DashboardProject["workstreams"], tasks: DashboardTask[]) =>
+    ({ id: "project:p", workstreams, tasks }) as unknown as DashboardProject;
+
+  it("lists an epic as its own workstream, not again as a task inside the one it sits in", () => {
+    const epic = task({ id: "issue:git/o/r#9", workstreamId: "project:p:work" });
+    const child = task({ id: "issue:git/o/r#10", workstreamId: epic.id });
+    const loose = task({ id: "issue:git/o/r#11", workstreamId: "project:p:work" });
+    const plan = planWorkstreams(
+      project(
+        [
+          { id: "project:p:work", title: "Work", taskIds: [epic.id, loose.id] },
+          { id: epic.id, title: "Epic", taskIds: [child.id] },
+        ],
+        [epic, child, loose],
+      ),
+    );
+    expect(plan.map((entry) => [entry.workstream.title, entry.tasks.map((t) => t.id)])).toEqual([
+      ["Work", [loose.id]],
+      ["Epic", [child.id]],
+    ]);
+  });
+
+  it("drops a workstream that only held its epic", () => {
+    const epic = task({ id: "issue:git/o/r#9", workstreamId: "project:p:work" });
+    const child = task({ id: "issue:git/o/r#10", workstreamId: epic.id });
+    const plan = planWorkstreams(
+      project(
+        [
+          { id: "project:p:work", title: "Work", taskIds: [epic.id] },
+          { id: epic.id, title: "Epic", taskIds: [child.id] },
+        ],
+        [epic, child],
+      ),
+    );
+    expect(plan.map((entry) => entry.workstream.title)).toEqual(["Epic"]);
   });
 });
