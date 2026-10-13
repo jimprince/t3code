@@ -185,3 +185,9 @@ id = "catchup-r29-stream-dedupe"
 date = "2026-10-13"
 decided = "adapt"
 rationale = "Port main's streamed-node deduplication while retaining r28's final-only message snapshots, goal continuation, session initialization regressions and provider-core/SQLite module moves."
+
+[[decision]]
+id = "catchup-r29-approval-publication-order"
+date = "2026-10-13"
+decided = "repair"
+rationale = "Publish Codex approval and user-input timeline items before their runtime request becomes actionable. The faster r28 snapshot read exposed a request-response race: the nested approval replay resolved the request and node before its waiting timeline item existed. Existing deterministic replay assertions retain completed approval-item requirements."
