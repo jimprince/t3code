@@ -45,3 +45,9 @@ export const readForkSubprojectsSupported = (environmentId: EnvironmentId) =>
   appAtomRegistry.get(supervision.readyHosts).has(environmentId) &&
   appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
     .threadSubprojects === true;
+
+/** Thread purpose and the Harness snapshot ship together; the sidecar must be loaded to move a thread. */
+export const readForkHarnessSupported = (environmentId: EnvironmentId) =>
+  appAtomRegistry.get(supervision.readyHosts).has(environmentId) &&
+  appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
+    .harness === true;

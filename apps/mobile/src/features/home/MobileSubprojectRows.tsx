@@ -35,11 +35,14 @@ import { MobileTaskFraction } from "./MobileTaskFraction";
  */
 export function MobileSubprojectRows({
   summary,
+  purposes,
   quietCutoff,
   onSelectThread,
   depth = 0,
 }: {
   readonly summary: OrchestratorSummary;
+  /** Resolved purposes: a Harness subproject is listed here too, with a "Harness" tag. */
+  readonly purposes: ReadonlyMap<string, ThreadPurpose | null>;
   readonly quietCutoff: number;
   readonly onSelectThread: (thread: OrchestratorThreadShell) => void;
   readonly depth?: number;
@@ -133,9 +136,10 @@ export function MobileSubprojectRows({
         </View>
         <MobileSubprojectRows
           summary={sub}
-          // Selection reads only the environment and id; a new discussion thread may not
-          // be in this list yet.
-          onOpenThread={(threadId) => onSelectThread({ ...sub.root, id: threadId })}
+          purposes={purposes}
+          quietCutoff={quietCutoff}
+          onSelectThread={onSelectThread}
+          depth={depth + 1}
         />
       </View>
     );
