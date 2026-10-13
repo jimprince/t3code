@@ -7,7 +7,7 @@ import {
   type OrchestrationV2ShellSnapshot,
 } from "@t3tools/contracts";
 import { v2ThreadShell } from "../state/orchestrationV2TestFixtures.ts";
-import { aggregate } from "./aggregation.ts";
+import { aggregate, dashboardRoots } from "./aggregation.ts";
 import { composeOlderDashboard } from "./fallback.ts";
 import { compactSnapshot, sampleProgress } from "./progress.ts";
 import {
@@ -82,6 +82,95 @@ describe("older-server dashboard", () => {
     expect(tasks[0]?.movement.state).toBe("unknown");
     expect(snapshot.projects.flatMap((p) => p.attention)).toHaveLength(1);
   });
+  it("keeps a head with only remote workers and routes a cross-project decision to its waiting thread", () => {
+    const remote = ThreadId.make("a6aac268-fd81-462c-ab1d-4b2d92609ba0");
+    const scenario = {
+      ...input,
+      shell: {
+        ...shell,
+        threads: shell.threads.map((t) => (t.id === root ? { ...t, id: remote } : t)),
+      },
+      metadata: metadata.map((row) =>
+        row.threadId === root ? { threadId: remote, parentThreadId: null } : row,
+      ),
+      remoteParentThreadIds: [remote],
+      issues: new Map([
+        [
+          other,
+          [
+            {
+              ...issue,
+              linkedThreadIds: [],
+              decision: { ...issue.decision!, waiting: "clinic-scheduler-orchestrator (a6aac268)" },
+              owner: { threadId: other, title: "Other", projectTitle: "VM" },
+            },
+          ],
+        ],
+      ]),
+      ownRepositories: new Map([[other, "git.test/brad/repo"]]),
+    };
+    const snapshot = composeOlderDashboard(scenario);
+    expect(snapshot.projects.find((p) => p.rootThreadId === remote)?.attention).toHaveLength(1);
+    expect(snapshot.projects.find((p) => p.rootThreadId === other)?.attention).toHaveLength(0);
+    expect(snapshot.projects.find((p) => p.rootThreadId === remote)?.tasks[0]?.threadId).toBe(
+      remote,
+    );
+    const ambiguous = composeOlderDashboard({
+      ...scenario,
+      shell: {
+        ...scenario.shell,
+        threads: [
+          ...scenario.shell.threads,
+          {
+            ...scenario.shell.threads[0]!,
+            id: ThreadId.make("a6aac268-1111-1111-1111-111111111111"),
+          },
+        ],
+      },
+    });
+    expect(ambiguous.projects.find((p) => p.rootThreadId === remote)?.attention).toHaveLength(0);
+    expect(composeOlderDashboard({ ...input, metadata: [] }).projects).toHaveLength(0);
+  });
+
+  it("attributes a duplicated tracker decision to its owning host regardless of host order", () => {
+    const snapshot = composeOlderDashboard(input);
+    const project = snapshot.projects.find((p) => p.attention.length)!;
+    const attention = { ...project.attention[0]!, threadId: root };
+    const mac = {
+      ...snapshot,
+      projects: [
+        {
+          ...project,
+          rootThreadId: other,
+          attention: [attention],
+          tasks: project.tasks.map((task) => ({ ...task, threadId: null })),
+        },
+      ],
+    };
+    const vm = {
+      ...snapshot,
+      projects: [
+        {
+          ...project,
+          rootThreadId: root,
+          attention: [attention],
+          tasks: project.tasks.map((task) => ({ ...task, threadId: root })),
+        },
+      ],
+    };
+    const parts = [
+      { environmentId: EnvironmentId.make("mac"), snapshot: mac },
+      { environmentId: EnvironmentId.make("vm"), snapshot: vm },
+    ];
+    for (const entries of [parts, parts.toReversed()]) {
+      const decisions = mergeDashboardSnapshots(entries).projects.filter(
+        (p) => p.project.attention.length,
+      );
+      expect(decisions.map((p) => p.environmentId)).toEqual(["vm"]);
+      expect(decisions[0]?.project.attention[0]?.sourceId).toBe("vm:gitea:git.test/brad/repo");
+    }
+  });
+
   it("assigns unlinked repository work to its own root before a cross-repository root", () => {
     const snapshot = aggregate({
       ...input,
@@ -391,5 +480,94 @@ describe("answers duplicated on connected hosts", () => {
         Date.parse(now) + 7000,
       ).projects.flatMap((p) => p.attention),
     ).toHaveLength(1);
+  });
+});
+
+describe("retired dashboard heads", () => {
+  it("removes archived descendants and their linked decisions from an active head", () => {
+    const archived = {
+      ...shell.threads.find((t) => t.id === child)!,
+      archivedAt: DateTime.makeUnsafe(now),
+    };
+    const snapshot = composeOlderDashboard({
+      ...input,
+      shell: {
+        ...shell,
+        threads: shell.threads.filter((t) => t.id !== child),
+        archivedThreads: [archived],
+      },
+    });
+    expect(snapshot.projects.map((p) => p.rootThreadId)).toEqual([root, other]);
+    expect(snapshot.projects.flatMap((p) => p.tasks).some((t) => t.threadId === child)).toBe(false);
+    expect(snapshot.projects.flatMap((p) => p.attention)).toEqual([]);
+  });
+
+  it.each([
+    { title: "Operations (retired 2026-10-10)" },
+    { title: "Deployment (RETIRED)" },
+    { archivedAt: DateTime.makeUnsafe(now) },
+    { settledOverride: "settled" as const },
+  ])("excludes inactive roots and their tasks, decisions and omitted counts: %j", (inactive) => {
+    const scenario = {
+      ...input,
+      shell: {
+        ...shell,
+        threads: shell.threads.map((t) => (t.id === other ? { ...t, ...inactive } : t)),
+      },
+      issues: new Map([
+        [root, [{ ...issue, number: 999, linkedThreadIds: [root] }]],
+        [other, Array.from({ length: 220 }, (_, i) => ({ ...issue, number: i + 1 }))],
+      ]),
+    };
+    const baseline = composeOlderDashboard({ ...scenario, shell });
+    expect(baseline.projects.some((p) => p.omittedTaskCount > 0)).toBe(true);
+    const snapshot = composeOlderDashboard(scenario);
+    expect(snapshot.projects.map((p) => p.rootThreadId)).toEqual([root]);
+    expect(snapshot.projects[0]?.tasks.map((t) => t.url)).toEqual([issue.url]);
+    expect(snapshot.projects.flatMap((p) => p.attention).map((a) => a.taskId)).toEqual([
+      "issue:git.test/brad/repo#999",
+    ]);
+    expect(snapshot.projects.reduce((n, p) => n + p.omittedTaskCount, 0)).toBe(0);
+    expect(dashboardRoots(scenario.shell.threads, metadata).threads.map((t) => t.id)).toEqual([
+      root,
+    ]);
+    // The server re-exports this same aggregation path.
+    const serverSnapshot = aggregate({
+      shells: scenario.shell.threads,
+      metadata,
+      issues: scenario.issues,
+      sources: [],
+      plans: [],
+      samples: [],
+      now,
+    });
+    expect(serverSnapshot.projects.map((p) => p.rootThreadId)).toEqual([root]);
+    expect(serverSnapshot.projects.flatMap((p) => p.attention)).toHaveLength(1);
+  });
+
+  it("does not reassign a retired head's shared-repository decision to an active head", () => {
+    const snapshot = composeOlderDashboard({
+      ...input,
+      shell: {
+        ...shell,
+        threads: shell.threads.map((t) =>
+          t.id === other ? { ...t, settledOverride: "settled" as const } : t,
+        ),
+      },
+    });
+    expect(snapshot.projects.map((p) => p.rootThreadId)).toEqual([root]);
+    expect(snapshot.projects[0]?.tasks).toHaveLength(1);
+    expect(snapshot.projects[0]?.tasks[0]?.id).toBe(`thread-plan:${root}`);
+    expect(snapshot.projects.flatMap((p) => p.attention)).toEqual([]);
+  });
+
+  it("keeps active overrides and titles mentioning retirement without the marker", () => {
+    const threads = shell.threads.map((t) => ({
+      ...t,
+      title: "Retired equipment cleanup",
+      settledOverride: "active" as const,
+      settledAt: DateTime.makeUnsafe(now),
+    }));
+    expect(dashboardRoots(threads, metadata).roots.map((t) => t.id)).toEqual([root, other]);
   });
 });
