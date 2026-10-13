@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "d2005ebb0e5ca57a268d7b538a8aa532f604d041",
-  "head": "6b320dc3081a5c482b9b295df0fbf07ca0f358e5",
+  "prev": "5b1662d5723b27482aa77f9c5a8af7056c8bcf8e",
+  "head": "059c2693323d22d7babb0051db241e22fc7e3f7c",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -163,7 +163,8 @@
     "fork-mobile-identities",
     "fork-pr-watch-recovery",
     "fork-shell-snapshot-cache",
-    "fork-sqlite-worker-connections"
+    "fork-sqlite-worker-connections",
+    "fork-dashboard-v3-01-plan-widget"
   ],
   "unapplied": [],
   "hidden": [],
@@ -260,6 +261,9 @@
     },
     "fork-dashboard-polish": {
       "oid": "14d5f24f7866188f5b2317ed5f3e2f76e4abf922"
+    },
+    "fork-dashboard-v3-01-plan-widget": {
+      "oid": "059c2693323d22d7babb0051db241e22fc7e3f7c"
     },
     "fork-decision-context-media": {
       "oid": "1e6afd754fb0eea09ab4b6730a0eeea6f7599825"
