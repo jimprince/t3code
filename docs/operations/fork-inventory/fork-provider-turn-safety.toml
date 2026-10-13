@@ -173,3 +173,15 @@ id = "catchup-2908-migration-ledger"
 date = "2026-10-10"
 decided = "relocate+adapt"
 rationale = "Upstream adds webhook, relay delivery, MCP model-context and snapshot-window migrations (#15085, #15487, #16236, #17029). Preserve the existing >=55 +6 remap: main 61/62 keep V2/index cleanup and upstream 57–60 become immutable main 63–66. Keep the separate fork ledger and all shipped identities. Move startup registration to persistence/Sqlite.ts following upstream service conventions (#16295); historical upgrade and packaged startup CI must verify the new append-only ledger."
+
+[[decision]]
+id = "codex-stream-node-dedupe"
+date = "2026-10-10"
+decided = "repair-existing-concern"
+rationale = "Streaming Codex text re-emitted an unchanged running node.updated before every coalesced message or reasoning flush, one extra projection write per flush. makeStreamedNodeDedupe emits a running text node only when its encoded payload changes; terminal snapshots always emit and the turn terminal clears its entries, which can only add an emit, never lose one. Droppable: revert the three CodexAdapterV2.ts hunks (helper, emitTextNode at the reasoning and agent-message flushes, clearTurn in finalizeCodexTurn), the dedupe tests in CodexAdapterV2.test.ts, and docs/release-notes/entries/codex-stream-node-dedupe.toml."
+
+[[decision]]
+id = "catchup-r29-stream-dedupe"
+date = "2026-10-13"
+decided = "adapt"
+rationale = "Port main's streamed-node deduplication while retaining r28's final-only message snapshots, goal continuation, session initialization regressions and provider-core/SQLite module moves."
