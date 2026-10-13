@@ -10,6 +10,15 @@ For Brad's single-app setup, prefer the `production` variant
 record is **T3 Code - Fork**. Avoid installing the side-by-side `development`
 and `preview` variants unless they are specifically needed for debugging.
 
+Production signing needs three explicit App IDs: `com.brad.t3code`,
+`com.brad.t3code.widgets`, and `com.brad.t3code.sharing`, all sharing
+`group.com.brad.t3code`. The app uses the keychain access group
+`$(AppIdentifierPrefix)com.brad.t3code`; Apple supplies the prefix during signing.
+Each target needs its own provisioning profile under Brad's team. Development
+and preview use `.dev` and `.preview` on the app identifier and app group, with
+`.widgets` and `.sharing` appended to each variant's app identifier. These
+native identity changes require a new binary, rather than an OTA update.
+
 ## Choose a path
 
 | Path                            | Apple/TestFlight upload | Installs remotely                          | Expiration                               | Best use                                                    |
