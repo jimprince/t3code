@@ -2,6 +2,7 @@ import { buildOrchestratorSummaries } from "@t3tools/client-runtime/state/orches
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { useMemo, useState } from "react";
 
+import { useEnvironments } from "../../state/environments";
 import { useProjects } from "../../state/entities";
 import { InlineButton } from "../ui/button";
 import { Dialog, DialogHeader, DialogPopup, DialogTitle } from "../ui/dialog";
@@ -12,10 +13,11 @@ import { useOrchestratorThreadShells } from "../orchestrators/useOrchestratorThr
 import { useDashboardUi } from "./context";
 import {
   formatClock,
-  freshnessSuffix,
+  freshnessSummary,
   sourceHealth,
   sourceLabel,
   type SourceHealth,
+  type SourceNames,
 } from "./dashboard.logic";
 import {
   DASHBOARD_VARIANTS,
@@ -30,15 +32,32 @@ const COS_TITLE = /chief of staff/i;
 const HEALTH_WORD: Record<SourceHealth, string> = {
   fresh: "fresh",
   stale: "stale",
-  failed: "refresh failed, last good shown",
+  failed: "slow, last good shown",
   partial: "partial coverage",
 };
+// Late is routine, so it is never red; a source that has never returned anything is the exception.
 const HEALTH_CLASS: Record<SourceHealth, string> = {
   fresh: "text-success",
-  stale: "text-warning-foreground",
-  failed: "text-destructive-foreground",
-  partial: "text-warning-foreground",
+  stale: "text-muted-foreground",
+  failed: "text-muted-foreground",
+  partial: "text-muted-foreground",
 };
+
+/** Server labels and project titles, so a source reads as words and not as an id. */
+function useSourceNames(): SourceNames {
+  const { data } = useDashboardUi();
+  const { environments } = useEnvironments();
+  return useMemo(
+    () => ({
+      environments: new Map(
+        environments.map((environment) => [environment.environmentId as string, environment.label]),
+      ),
+      projectTitle: (rootThreadId) =>
+        data.projects.find((entry) => entry.project.rootThreadId === rootThreadId)?.project.title,
+    }),
+    [data.projects, environments],
+  );
+}
 
 /**
  * "as of 7:42 am" in local time, with an amber suffix naming a stale source and a red one when a
@@ -54,8 +73,9 @@ export function FreshnessStamp({
 }) {
   const { data, now } = useDashboardUi();
   const [open, setOpen] = useState(false);
+  const names = useSourceNames();
   if (data.asOf === null) return null;
-  const suffix = freshnessSuffix(data.sources, now);
+  const suffix = freshnessSummary(data.sources, now, names);
   return (
     <>
       <button
@@ -65,13 +85,11 @@ export function FreshnessStamp({
       >
         as of {formatClock(data.asOf, now)}
         {suffix ? (
-          <span
-            className={suffix.failed ? "text-destructive-foreground" : "text-warning-foreground"}
-          >
+          <span className={suffix.failed ? "text-destructive-foreground" : undefined}>
             · {suffix.text}
           </span>
         ) : null}
-        {failed ? <span className="text-destructive-foreground">· refresh failed</span> : null}
+        {failed ? <span>· refresh failed</span> : null}
       </button>
       {failed && onRetry ? (
         <InlineButton tone="muted" onClick={onRetry}>
@@ -93,11 +111,17 @@ export function FreshnessStamp({
                     const health = sourceHealth(source, now);
                     return (
                       <tr key={source.id} className="border-b border-border last:border-0">
-                        <td className="py-1 pr-3">{sourceLabel(source)}</td>
+                        <td className="py-1 pr-3">{sourceLabel(source, names)}</td>
                         <td className="py-1 pr-3 text-muted-foreground tabular-nums">
                           {source.lastSuccessAt ? formatClock(source.lastSuccessAt, now) : "never"}
                         </td>
-                        <td className={`py-1 ${HEALTH_CLASS[health]}`}>
+                        <td
+                          className={`py-1 ${
+                            health === "failed" && !source.lastSuccessAt
+                              ? "text-destructive-foreground"
+                              : HEALTH_CLASS[health]
+                          }`}
+                        >
                           {HEALTH_WORD[health]}
                           {health === "stale" && source.lastSuccessAt
                             ? ` since ${formatClock(
