@@ -442,3 +442,5 @@ Use `rename <thread> --title <text>` to change a title without starting a turn.
 `--scope <text>` sets a shared scope and `--clear-scope` clears it. Explicit
 creation titles survive automatic generation. Return to automatic order clears
 only the row's current pinned or active order key.
+
+Delegated workers keep their parent relationship when task details arrive separately; later moves and completion choices remain authoritative.
