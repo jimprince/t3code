@@ -66,6 +66,27 @@ export function mergeDashboardSnapshots(
   };
 }
 
+/** Reuse a merge while each environment still supplies the same immutable snapshot. */
+export function createDashboardSnapshotMerger() {
+  type Parts = Parameters<typeof mergeDashboardSnapshots>[0];
+  let previousParts: Parts = [];
+  let previous: ReturnType<typeof mergeDashboardSnapshots> | undefined;
+  return (parts: Parts) => {
+    if (
+      previous &&
+      previousParts.length === parts.length &&
+      parts.every(
+        (part, i) =>
+          part.environmentId === previousParts[i]!.environmentId &&
+          part.snapshot === previousParts[i]!.snapshot,
+      )
+    )
+      return previous;
+    previousParts = parts;
+    return (previous = mergeDashboardSnapshots(parts));
+  };
+}
+
 /** A successful local answer remains hidden until the source confirms removal (bounded recovery). */
 export function overlayAnswered(
   snapshot: DashboardSnapshot,
@@ -73,6 +94,13 @@ export function overlayAnswered(
   now: number,
 ): DashboardSnapshot {
   const hidden = new Set([...answered].filter(([, at]) => now - at < 5 * 60_000).map(([id]) => id));
+  // Nothing in the snapshot to hide: keep its identity so downstream memoization and renders hold.
+  const touched = snapshot.projects.some(
+    (p) =>
+      p.attention.some((a) => hidden.has(a.id)) ||
+      p.tasks.some((t) => t.attentionIds.some((id) => hidden.has(id))),
+  );
+  if (!touched) return snapshot;
   return {
     ...snapshot,
     projects: snapshot.projects.map((p) => ({

@@ -1,5 +1,8 @@
 import { useAtomValue } from "@effect/atom-react";
-import { createDashboardAtoms, mergeDashboardSnapshots } from "@t3tools/client-runtime/dashboard";
+import {
+  createDashboardAtoms,
+  createDashboardSnapshotMerger,
+} from "@t3tools/client-runtime/dashboard";
 import { DashboardSnapshot, type EnvironmentId } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { Atom } from "effect/reactivity";
@@ -17,6 +20,8 @@ const dashboard = createDashboardAtoms(connectionAtomRuntime, {
   shell: environmentSnapshotAtom,
   readCached: readStored,
 });
+
+const mergeStable = createDashboardSnapshotMerger();
 
 /** One entry per connected environment; the key is the sorted ids so the atom is stable. */
 const environmentsDashboard = Atom.family((key: string) =>
@@ -96,7 +101,7 @@ export function useDashboardData(): DashboardState {
       snapshot: state.snapshot ?? readStored(environmentId),
     }));
     return {
-      data: mergeDashboardSnapshots(parts),
+      data: mergeStable(parts),
       revision: parts.map((p) => `${p.environmentId}:${p.snapshot?.revision ?? 0}`).join(","),
       snapshotSource: parts.some((p) => p.snapshot)
         ? entries.some((e) => e.state.source === "live")
