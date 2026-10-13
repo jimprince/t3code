@@ -1,0 +1,14 @@
+name = "fork-projects-dnd"
+subject = "feat(web): arrange projects by dragging them in the Projects sidebar"
+class = "product"
+purpose = "Let Brad arrange the Projects sidebar by dragging a project row, or with Alt+Up/Down on it (Brad, 2026-10-10)."
+retire_when = "Upstream offers its own way to arrange projects, or fork-projects-real-only stops ordering projects by pin."
+depends_on = ["fork-projects-real-only", "fork-projects-pinned"]
+roles = []
+note = "No new store: a move writes the existing thread pin order keys (thread.pin with orderKey, thread.pin.reorder) through useThreadActions. Pinned projects lead in pin order and the rest sort by bucket, so planProjectMove pins the moved project and every project shown above it in the dropped order, keeping pinned projects below; the list then reads as dropped. Quiet pinned keys are reserved. The list holds the dropped order until the assigned keys land, a membership change, or a failed write. Reverse: Unpin thread in the row menu returns a project to automatic order. Drag into or out of a parent stays on the menu (Show as subproject / worker). Web and desktop; mobile does not arrange projects."
+
+[[decision]]
+id = "projects-dnd-pin-keys"
+date = "2026-10-10"
+decided = "reconcile-smaller"
+rationale = "The project-layout service stores a project page's widgets, not the sidebar's project order, so arranging reuses pin order keys, which already order Projects and sync to every client, instead of adding an order store. Brad ran it from feature/projects-dnd-live (8dc73699) on origin/live first."
