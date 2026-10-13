@@ -1,0 +1,8 @@
+name = "fork-dashboard-v3-05-views"
+subject = "feat(web): Home and project Dashboard with Plan board, Since you looked and Executive grid variants"
+class = "product"
+purpose = "Home and project Dashboard with Plan board, Since you looked and Executive grid variants"
+retire_when = "The dashboard-v3 series is intentionally dropped or replaced by equivalent upstream behavior."
+depends_on = ["fork-dashboard-v3-04-snapshot-service"]
+roles = []
+note = "Replayed independently from live source 7148e1948b2eaab4aed8455bd08688476e5896fa; excludes the Chief of Staff tray series."
