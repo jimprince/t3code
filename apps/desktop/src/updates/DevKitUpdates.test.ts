@@ -1,5 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
-import * as NodePath from "node:path";
+import * as Effect from "effect/Effect";
+import * as Path from "effect/Path";
 
 import {
   decideVerdict,
@@ -12,18 +13,21 @@ import {
 import { createInitialDesktopUpdateState } from "./updateMachine.ts";
 
 describe("managed dev kit checkouts", () => {
-  it("recognizes both kit slots and rejects unrelated checkouts", () => {
-    const home = "/Users/brad";
-    assert.isTrue(isManagedDevKitCheckout(`${home}/Developer/t3code-dev`, home, NodePath));
-    assert.isTrue(
-      isManagedDevKitCheckout(`${home}/Developer/.t3-code-dev-prepared/t3code-dev`, home, NodePath),
-    );
-    assert.isFalse(isManagedDevKitCheckout(`${home}/Programming/t3code-dev`, home, NodePath));
-    assert.isFalse(
-      isManagedDevKitCheckout(`${home}/Developer/.t3-code-dev-prepared/other`, home, NodePath),
-    );
-    assert.isFalse(isManagedDevKitCheckout("/Users/other/Developer/t3code-dev", home, NodePath));
-  });
+  it.effect("recognizes both kit slots and rejects unrelated checkouts", () =>
+    Effect.gen(function* () {
+      const path = yield* Path.Path;
+      const home = "/Users/brad";
+      assert.isTrue(isManagedDevKitCheckout(`${home}/Developer/t3code-dev`, home, path));
+      assert.isTrue(
+        isManagedDevKitCheckout(`${home}/Developer/.t3-code-dev-prepared/t3code-dev`, home, path),
+      );
+      assert.isFalse(isManagedDevKitCheckout(`${home}/Programming/t3code-dev`, home, path));
+      assert.isFalse(
+        isManagedDevKitCheckout(`${home}/Developer/.t3-code-dev-prepared/other`, home, path),
+      );
+      assert.isFalse(isManagedDevKitCheckout("/Users/other/Developer/t3code-dev", home, path));
+    }).pipe(Effect.provide(Path.layer)),
+  );
 });
 
 const status = (fetched: string, tip: string) => `branch followed: live   fetched: ${fetched}
