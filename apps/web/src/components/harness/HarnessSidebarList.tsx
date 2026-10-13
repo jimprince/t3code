@@ -23,7 +23,7 @@ import { buildOrchestratorSummaries } from "@t3tools/client-runtime/state/orches
 import { partitionThreadPurposes } from "@t3tools/client-runtime/state/thread-purpose";
 import { formatLocalWhen } from "@t3tools/shared/localTime";
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { ChevronDownIcon, ChevronRightIcon, XIcon } from "lucide-react";
+import { ChevronDownIcon, ChevronRightIcon, PinIcon, XIcon } from "lucide-react";
 import { useCallback, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
 
 import { useNowMinute } from "../../hooks/useNowMinute";
@@ -39,6 +39,7 @@ import { ProjectQueryState } from "../orchestrators/ProjectQueryState";
 import { useOrchestratorThreadShells } from "../orchestrators/useOrchestratorThreads";
 import { useSelectedRoute } from "../orchestrators/OrchestratorSidebarList";
 import { TONE_DOT } from "./harnessTone";
+import { useHarnessCheckPin } from "./useHarnessCheckPin";
 
 const DOT: Record<HarnessAgentBucket, string> = {
   failed: "bg-error",
@@ -166,15 +167,24 @@ function HarnessCheckRow({
   selected,
   touch,
   onOpen,
+  onMenu,
 }: {
   readonly check: HarnessCheckView;
   readonly environmentLabel: string | null;
   readonly selected: boolean;
   readonly touch: boolean;
   readonly onOpen: (check: HarnessCheckView) => void;
+  readonly onMenu: (check: HarnessCheckView, position: { x: number; y: number }) => void;
 }) {
   return (
-    <li>
+    <li
+      onContextMenu={(event) => {
+        // Hidden entirely on a server that cannot pin: there is nothing else to offer.
+        if (!check.pinSupported) return;
+        event.preventDefault();
+        onMenu(check, { x: event.clientX, y: event.clientY });
+      }}
+    >
       <button
         type="button"
         aria-label={check.spokenLabel}
@@ -192,6 +202,9 @@ function HarnessCheckRow({
             className={cn("size-1.5 shrink-0 rounded-full", TONE_DOT[check.tone])}
           />
           <span className="min-w-0 flex-1 truncate text-sidebar-foreground">{check.name}</span>
+          {check.pinned ? (
+            <PinIcon aria-hidden className="size-3 shrink-0 text-sidebar-muted-foreground" />
+          ) : null}
           <span className={cn("shrink-0 text-xs", TONE_TEXT[check.tone])}>
             {check.latenessLabel ?? check.stateLabel}
           </span>
@@ -296,6 +309,7 @@ export function HarnessSidebarList() {
     ...describeHarnessSources(snapshots),
   ].filter((part) => part !== null);
   // A phone's drawer closes so the check's page shows.
+  const { openMenu: openPinMenu } = useHarnessCheckPin();
   const openCheck = useCallback(
     (check: HarnessCheckView) => {
       void navigate({
@@ -321,6 +335,7 @@ export function HarnessSidebarList() {
       }
       touch={isMobile}
       onOpen={openCheck}
+      onMenu={openPinMenu}
     />
   );
 
