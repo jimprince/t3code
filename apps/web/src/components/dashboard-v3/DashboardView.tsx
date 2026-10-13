@@ -212,15 +212,15 @@ export function DashboardView({ scope }: { readonly scope: DashboardScope }) {
         className="flex flex-col gap-2"
       >
         <div {...sectionMarker("freshness", { ready, revision: state.revision })}>
+          {/* The switcher leads the row: toasts stack at the top right and must not cover it. */}
           <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1">
+            <VariantSwitcher withPrevious={scope.kind === "project"} />
             {scope.kind === "project" ? (
               <Link to="/dashboard" className="text-xs text-muted-foreground hover:text-foreground">
                 Home
               </Link>
             ) : null}
             <FreshnessStamp failed={state.failed} onRetry={state.retry} />
-            <span className="flex-1" />
-            <VariantSwitcher withPrevious={scope.kind === "project"} />
           </div>
           <OlderServerLines names={state.olderEnvironments} />
         </div>
