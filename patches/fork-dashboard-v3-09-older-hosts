@@ -1,0 +1,6 @@
+Bottom: 38d194a3a446e4382762cd4a96c59562e1c2aaa5
+Top:    38d194a3a446e4382762cd4a96c59562e1c2aaa5
+Author: brad <bradprin@live.com>
+Date:   2026-10-13 04:34:12 +0000
+
+fix(dashboard): compose older hosts and correct live data snapshots
