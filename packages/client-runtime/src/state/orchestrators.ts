@@ -7,6 +7,7 @@ import {
   type ScopedSupervisionMetadata,
 } from "./forkNesting.ts";
 import type { ForkRemoteParent, ThreadId, ThreadSubprojectMode } from "@t3tools/contracts";
+import { threadPurposes } from "./threadPurpose.ts";
 
 /** Organizational fields come from the nesting sidecar, never execution lineage. */
 export interface OrchestratorThreadShell extends EnvironmentThreadShell {
@@ -80,7 +81,7 @@ export function lastActivityAt(
   );
 }
 
-function resolveThreadDisplayStatus(
+export function resolveThreadDisplayStatus(
   thread: OrchestratorThreadShell & { hasActiveDescendants?: boolean; settled?: boolean },
 ): ThreadDisplayStatus {
   if (thread.hasPendingApprovals) return "approval";
@@ -307,7 +308,11 @@ export function threadsVisibleInThreadsMode(
       projectThreadKeys.add(threadActivityKey(descendant));
     }
   }
-  return threads.filter((thread) => !projectThreadKeys.has(threadActivityKey(thread)));
+  const purposes = threadPurposes(threads);
+  return threads.filter((thread) => {
+    const key = threadActivityKey(thread);
+    return !projectThreadKeys.has(key) && purposes.get(key) !== "harness";
+  });
 }
 
 function hasPlanReady(thread: OrchestratorThreadShell): boolean {

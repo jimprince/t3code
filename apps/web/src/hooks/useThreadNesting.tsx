@@ -11,13 +11,14 @@ import {
   type ScopedThreadRef,
   type ThreadId,
 } from "@t3tools/contracts";
-import { CornerDownRightIcon, PanelLeftIcon, SquarePenIcon } from "lucide-react";
+import { CornerDownRightIcon, PanelLeftIcon, SquarePenIcon, WorkflowIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo } from "react";
 import { create } from "zustand";
 
 import type { ComposerBannerStackItem } from "../components/chat/ComposerBannerStack";
 import { readForkNestingSupported } from "../components/chat/forkThreadCommands";
 import { setThreadSubprojectCommand } from "../state/forkSubproject";
+import { readThreadPurposeMove, setThreadPurposeCommand } from "../state/forkPurpose";
 import { type CommandPaletteActionItem, ITEM_ICON_CLASS } from "../components/CommandPalette.logic";
 import { Button } from "../components/ui/button";
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
@@ -31,6 +32,7 @@ import {
   useComposerDraftStore,
   type DraftId,
 } from "../composerDraftStore";
+import type { PurposeMove } from "@t3tools/client-runtime/state/thread-purpose";
 import { randomUUID } from "../lib/utils";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
@@ -136,6 +138,7 @@ export function useThreadNestingActions() {
     reportFailure: false,
   });
 
+  const setPurpose = useOrchestrationCommand(setThreadPurposeCommand, { reportFailure: false });
   const handleNewThread = useNewThreadHandler();
 
   /** Nests `threadRef` under `parentThreadId`, or with null returns it to the sidebar. */
@@ -220,6 +223,26 @@ export function useThreadNestingActions() {
     [handleNewThread],
   );
 
+  /** Writes the purpose override and nothing else: nesting, pin and settle stay as they are. */
+  const moveThreadPurpose = useCallback(
+    async (threadRef: ScopedThreadRef, move: PurposeMove | null): Promise<boolean> => {
+      if (move === null) return false;
+      const result = await setPurpose({
+        environmentId: threadRef.environmentId,
+        input: {
+          commandId: CommandId.make(randomUUID()),
+          threadId: threadRef.threadId,
+          purpose: move.purpose,
+        },
+      });
+      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+        failureToast(`Failed: ${move.label}`, squashAtomCommandFailure(result));
+      }
+      return result._tag === "Success";
+    },
+    [setPurpose],
+  );
+
   /** Runs a nesting item picked from the thread action menu built with `state`. */
   const runNestingMenuAction = useCallback(
     async (
@@ -246,10 +269,14 @@ export function useThreadNestingActions() {
         }
         return;
       }
+      if (id === "move-to-harness" || id === "move-to-projects" || id === "move-to-threads") {
+        await moveThreadPurpose(threadRef, state?.purposeMove ?? null);
+        return;
+      }
       const parentThreadId = nestUnderMenuTarget(id, state);
       if (parentThreadId !== null) await setThreadParent(threadRef, parentThreadId);
     },
-    [setSubproject, setThreadParent, startNestedThread],
+    [moveThreadPurpose, setSubproject, setThreadParent, startNestedThread],
   );
 
   /** After a nested draft's first send creates its thread, files the new thread under the draft's parent. */
@@ -263,8 +290,20 @@ export function useThreadNestingActions() {
   );
 
   return useMemo(
-    () => ({ setThreadParent, startNestedThread, runNestingMenuAction, attachNestedDraft }),
-    [attachNestedDraft, runNestingMenuAction, setThreadParent, startNestedThread],
+    () => ({
+      setThreadParent,
+      startNestedThread,
+      runNestingMenuAction,
+      attachNestedDraft,
+      moveThreadPurpose,
+    }),
+    [
+      attachNestedDraft,
+      moveThreadPurpose,
+      runNestingMenuAction,
+      setThreadParent,
+      startNestedThread,
+    ],
   );
 }
 
@@ -275,8 +314,10 @@ export function useThreadNestingActions() {
 export function useThreadNestingPaletteItems(
   thread: Pick<EnvironmentThreadShell, "id" | "environmentId"> | null,
 ): ReadonlyArray<CommandPaletteActionItem> {
-  const { setThreadParent, startNestedThread } = useThreadNestingActions();
+  const { setThreadParent, startNestedThread, moveThreadPurpose } = useThreadNestingActions();
   const forest = useSupervisionForest();
+  // The forest rebuilds on every shell or sidecar change, so the move follows what the thread is now.
+  const purposeMove = thread === null ? null : readThreadPurposeMove(thread);
   if (thread === null || !readForkNestingSupported(thread.environmentId)) return [];
   const key = supervisionThreadKey(thread);
   if (!forest.byKey.has(key)) return [];
@@ -291,6 +332,18 @@ export function useThreadNestingPaletteItems(
       run: () => startNestedThread(threadRef),
     },
   ];
+  if (purposeMove !== null) {
+    items.push({
+      kind: "action",
+      value: `action:${purposeMove.id}`,
+      searchTerms: ["harness", "projects", "threads", "move", "purpose"],
+      title: purposeMove.label,
+      icon: <WorkflowIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        await moveThreadPurpose(threadRef, purposeMove);
+      },
+    });
+  }
   if (forest.parentByKey.has(key)) {
     items.push({
       kind: "action",
