@@ -67,6 +67,7 @@ import { useOrchestratorThreadShells } from "./useOrchestratorThreads";
 import { readOrchestratorLastVisit, recordOrchestratorVisit } from "./orchestratorVisit";
 import { VariantSwitcher } from "../dashboard-v3/chrome";
 import { DashboardView } from "../dashboard-v3/DashboardView";
+import { NEXT_CANVAS_ID, NextCanvas } from "../dashboard-v3/nextCanvas";
 import { useDashboardVariant } from "../dashboard-v3/prefs";
 import { ProjectAutomationsSlot } from "../projects/ProjectAutomationsSlot";
 import { ProjectDecisionFeed, useDecisionFeedCount } from "./ProjectDecisionFeed";
@@ -878,6 +879,11 @@ export function OrchestratorBoard({
   const slotWidgets = (activeTab?.widgets ?? []).filter(
     (widget) => !DASHBOARD_SUPERSEDED_WIDGETS.has(widget.type),
   );
+  // The layout's "next" canvas widget renders first, above the Dashboard's own sections.
+  const nextWidget = slotWidgets.find(
+    (widget) => widget.type === "canvas" && widget.config.canvasId === NEXT_CANVAS_ID,
+  );
+  const restWidgets = slotWidgets.filter((widget) => widget !== nextWidget);
   const page: BoardPage = {
     summary,
     summaries,
@@ -1017,17 +1023,20 @@ export function OrchestratorBoard({
                   </div>
                 ) : null}
                 {newDashboard ? (
-                  <DashboardView scope={{ kind: "project", environmentId, threadId }} />
+                  <DashboardView
+                    scope={{ kind: "project", environmentId, threadId }}
+                    leading={nextWidget ? <NextCanvas summary={summary} /> : null}
+                  />
                 ) : null}
-                {newDashboard && activeTab && slotWidgets.length > 0 ? (
+                {newDashboard && activeTab && restWidgets.length > 0 ? (
                   <ProjectLayoutTabView
                     summary={summary}
                     tabs={layoutTabs}
-                    tab={{ ...activeTab, widgets: slotWidgets }}
+                    tab={{ ...activeTab, widgets: restWidgets }}
                     editing={false}
                     builtins={
                       new Map(
-                        slotWidgets.map((widget) => [
+                        restWidgets.map((widget) => [
                           widget.id,
                           <BuiltinWidget key={widget.id} widget={widget} page={page} />,
                         ]),
