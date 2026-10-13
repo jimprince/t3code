@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "9f9c1bba56fa23b53117e4af115c9ae6a82f4217",
-  "head": "b22a8e96ad5580c9768aa6587a27fcc2e4405f97",
+  "prev": "f13331e9ae284505ac1a628f694d8b5dbb56180b",
+  "head": "15c1e22271a811e569bede6cf6f14cf2eeaf8e5f",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -160,7 +160,8 @@
     "fork-harness-read-service",
     "fork-harness-tab-ui",
     "fork-sidebar-hygiene-native",
-    "fork-mobile-identities"
+    "fork-mobile-identities",
+    "fork-pr-watch-recovery"
   ],
   "unapplied": [],
   "hidden": [],
@@ -413,6 +414,9 @@
     },
     "fork-pr-project-exclusions": {
       "oid": "08a871522df6138ef2afc6c90d1194c6aceb2ad9"
+    },
+    "fork-pr-watch-recovery": {
+      "oid": "15c1e22271a811e569bede6cf6f14cf2eeaf8e5f"
     },
     "fork-pr-widget-refresh": {
       "oid": "ba859f9d0f3e9293ccf2f777feee01aa323dace3"
