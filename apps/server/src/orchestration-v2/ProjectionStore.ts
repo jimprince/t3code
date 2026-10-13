@@ -7,6 +7,7 @@ import type {
   OrchestrationV2SearchThreadResult,
   OrchestrationV2ThreadHistoryPage,
 } from "@t3tools/contracts";
+import { isNoChangeReply } from "@t3tools/shared/completionOutput";
 import {
   notificationOriginForMessage,
   notificationDispositionForReply,
@@ -969,7 +970,7 @@ type ShellThreadRow = {
   readonly latest_run_completed_at: string | null;
   readonly notification_superseded: number;
   readonly notification_message_json: string | null;
-  readonly notification_reply_tail: string | null;
+  readonly notification_reply_text: string | null;
   readonly notification_request_id: string | null;
   readonly active_run_id: string | null;
   readonly activity_run_status: string | null;
@@ -1494,6 +1495,14 @@ export function threadShellFromProjection(
         DateTime.toEpochMillis(right.updatedAt) - DateTime.toEpochMillis(left.updatedAt),
     );
   const latestUserMessage = userMessages[0] ?? null;
+  const latestReply = projection.messages
+    .filter(
+      (message) =>
+        message.runId === latestRun?.id && message.role === "assistant" && !message.streaming,
+    )
+    .toSorted(
+      (a, b) => DateTime.toEpochMillis(b.updatedAt) - DateTime.toEpochMillis(a.updatedAt),
+    )[0]?.text;
   const pendingBackgroundTasks = derivePendingBackgroundWork({
     latestRun,
     providerThreads: projection.providerThreads,
@@ -1539,16 +1548,8 @@ export function threadShellFromProjection(
     notificationOrigin: notificationOriginForMessage(
       projection.messages.find((message) => message.id === latestRun?.userMessageId),
     ),
-    notificationDisposition: notificationDispositionForReply(
-      projection.messages
-        .filter(
-          (message) =>
-            message.runId === latestRun?.id && message.role === "assistant" && !message.streaming,
-        )
-        .toSorted(
-          (a, b) => DateTime.toEpochMillis(b.updatedAt) - DateTime.toEpochMillis(a.updatedAt),
-        )[0]?.text,
-    ),
+    notificationDisposition: notificationDispositionForReply(latestReply),
+    completionSuppressed: isNoChangeReply(latestReply),
     notificationRequestId:
       projection.plans.find((plan) => plan.kind === "proposed_plan" && plan.status === "active")
         ?.id ?? null,
@@ -1666,6 +1667,7 @@ type ShellThreadState = {
   readonly notificationSuperseded: boolean;
   readonly notificationOrigin: OrchestrationV2ThreadShell["notificationOrigin"];
   readonly notificationDisposition: OrchestrationV2ThreadShell["notificationDisposition"];
+  readonly completionSuppressed: boolean;
   readonly notificationRequestId: string | null;
   readonly latestRunId: RunId | null;
   readonly latestRunStatus: OrchestrationV2ShellThreadStatus;
@@ -1833,6 +1835,7 @@ function shellFromState(input: {
     notificationSuperseded: input.state.notificationSuperseded,
     notificationOrigin: input.state.notificationOrigin,
     notificationDisposition: input.state.notificationDisposition,
+    completionSuppressed: input.state.completionSuppressed,
     notificationRequestId: input.state.notificationRequestId,
     latestRunId: input.state.latestRunId,
     latestRunRequestedAt: input.state.latestRunRequestedAt,
@@ -5340,12 +5343,12 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 LIMIT 1
               ) AS notification_message_json,
               (
-                SELECT substr(json_extract(message.payload_json, '$.text'), -64)
+                SELECT json_extract(message.payload_json, '$.text')
                 FROM orchestration_v2_projection_messages message
                 WHERE message.thread_id = t.thread_id AND message.run_id = presented.run_id
                   AND message.role = 'assistant' AND message.streaming = 0
                 ORDER BY message.updated_at DESC, message.message_id DESC LIMIT 1
-              ) AS notification_reply_tail,
+              ) AS notification_reply_text,
               (
                 SELECT plan.plan_id FROM orchestration_v2_projection_plans plan
                 WHERE plan.thread_id = t.thread_id AND plan.kind = 'proposed_plan' AND plan.status = 'active'
@@ -5904,7 +5907,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
           ),
           notificationSuperseded: row.notification_superseded === 1,
           notificationRequestId: row.notification_request_id,
-          notificationDisposition: notificationDispositionForReply(row.notification_reply_tail),
+          notificationDisposition: notificationDispositionForReply(row.notification_reply_text),
+          completionSuppressed: isNoChangeReply(row.notification_reply_text),
           latestRunId,
           latestRunStatus,
           latestRunRequestedAt,
