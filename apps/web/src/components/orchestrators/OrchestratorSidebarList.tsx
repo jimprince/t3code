@@ -107,7 +107,7 @@ const threadKey = (thread: { readonly environmentId: string; readonly id: string
  * The project whose page or thread is open: its orchestrator, or any thread in
  * its tree, matches the route's environment and thread.
  */
-function useSelectedRoute() {
+export function useSelectedRoute() {
   return useParams({
     strict: false,
     select: (params: { environmentId?: string; threadId?: string }) =>
@@ -127,12 +127,14 @@ function SubprojectRows({
   summary,
   selectedRoute,
   sortSubprojects,
+  purposes,
   settledExpansion,
   depth = 0,
 }: {
   readonly summary: OrchestratorSummary;
   readonly selectedRoute: string | null;
   readonly sortSubprojects: SortSubprojects;
+  readonly purposes: ReadonlyMap<string, ThreadPurpose | null>;
   readonly settledExpansion: SettledExpansion;
   readonly depth?: number;
 }) {
@@ -290,6 +292,7 @@ function SubprojectRow({
           }`}
         />
         <span className="min-w-0 flex-1 truncate">{sub.root.title}</span>
+        {purposeTag !== null ? <span className="shrink-0">{purposeTag}</span> : null}
         {rollup.blocked > 0 ? <span className="shrink-0 text-error">Blocked</span> : null}
         {rollup.needsYou > 0 ? (
           <span className="shrink-0 tabular-nums text-warning-foreground">{rollup.needsYou}</span>
@@ -303,6 +306,7 @@ function SubprojectRow({
         summary={sub}
         selectedRoute={selectedRoute}
         sortSubprojects={sortSubprojects}
+        purposes={purposes}
         settledExpansion={settledExpansion}
         depth={depth + 1}
       />
@@ -323,6 +327,7 @@ function ProjectRow({
   summary,
   selectedRoute,
   sortSubprojects,
+  purposes,
   collapsed,
   onToggleSubprojects,
   settledExpansion,
@@ -331,6 +336,7 @@ function ProjectRow({
   readonly summary: OrchestratorSummary;
   readonly selectedRoute: string | null;
   readonly sortSubprojects: SortSubprojects;
+  readonly purposes: ReadonlyMap<string, ThreadPurpose | null>;
   readonly collapsed: boolean;
   readonly onToggleSubprojects: (projectKey: string) => void;
   readonly settledExpansion: SettledExpansion;
@@ -470,6 +476,7 @@ function ProjectRow({
               summary={summary}
               selectedRoute={selectedRoute}
               sortSubprojects={sortSubprojects}
+              purposes={purposes}
               settledExpansion={settledExpansion}
             />
           </div>
@@ -539,10 +546,20 @@ export function OrchestratorSidebarList() {
     () => buildOrchestratorSummaries(threads, projects),
     [projects, threads],
   );
-  const summaries = useMemo(() => topLevelProjects(allSummaries), [allSummaries]);
+  // Harness roots live in the Harness tab. A project nested under one, or the reverse, lists in
+  // the tab of its own purpose; a row whose purpose is unknown stays here, where it always was.
+  const { projects: summaries, purposes } = useMemo(
+    () => partitionThreadPurposes(threads, allSummaries),
+    [allSummaries, threads],
+  );
   const standaloneGroups = useMemo(
-    () => buildStandaloneThreadGroups(threads, projects, lastVisitedAtByThreadKey),
-    [lastVisitedAtByThreadKey, projects, threads],
+    () =>
+      buildStandaloneThreadGroups(
+        threads.filter((thread) => purposes.get(threadKey(thread)) !== "harness"),
+        projects,
+        lastVisitedAtByThreadKey,
+      ),
+    [lastVisitedAtByThreadKey, projects, purposes, threads],
   );
   const desiredBuckets = useMemo(
     () => [
@@ -716,6 +733,7 @@ export function OrchestratorSidebarList() {
                     summary={summary}
                     selectedRoute={selectedRoute}
                     sortSubprojects={sortSubprojects}
+                    purposes={purposes}
                     collapsed={collapsedProjects.includes(projectKeyOf(summary))}
                     onToggleSubprojects={toggleSubprojects}
                     settledExpansion={settledExpansion}
@@ -747,6 +765,7 @@ export function OrchestratorSidebarList() {
                       summary={summary}
                       selectedRoute={selectedRoute}
                       sortSubprojects={sortSubprojects}
+                      purposes={purposes}
                       collapsed={collapsedProjects.includes(projectKeyOf(summary))}
                       onToggleSubprojects={toggleSubprojects}
                       settledExpansion={settledExpansion}
