@@ -4,6 +4,7 @@ import type { EnvironmentId, HarnessSnapshot } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/reactivity";
+import { useEffect, useState } from "react";
 
 import { connectionAtomRuntime } from "../connection/runtime";
 import { appAtomRegistry } from "./atom-registry";
@@ -57,4 +58,14 @@ function refreshHarness() {
 
 export function useHarnessEnvironments() {
   return { environments: useAtomValue(harnessEnvironmentsAtom), refresh: refreshHarness };
+}
+
+/** A minute clock: keeps "late" and "stale" labels current even when polling has stopped. */
+export function useHarnessNow() {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  return now;
 }
