@@ -1,0 +1,8 @@
+name = "fork-dashboard-v3-15-request-read-budget"
+subject = "fix(web): the request box reads the issue list only after a send"
+class = "product"
+purpose = "the request box reads the issue list only after a send"
+retire_when = "The dashboard-v3 series is intentionally dropped or replaced by equivalent upstream behavior."
+depends_on = ["fork-dashboard-v3-14-connected-decisions"]
+roles = []
+note = "Replayed independently from live source 1850b4c2bef40d21b3cbcbbc915779e7590520a8; excludes the Chief of Staff tray series."
