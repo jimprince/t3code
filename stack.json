@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "34e9174e31db2316d37da3c72e6037a326a0bdfd",
-  "head": "c009912276e49bdb3c537c2130d7575b64bc33fe",
+  "prev": "0c46a22d0625e3965ba99fcfd00912810cd8e0a8",
+  "head": "ffc27d84b54349c2e9f2618dca22f95a71616ffc",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -166,6 +166,7 @@
     "fork-pr-watch-recovery",
     "fork-shell-snapshot-cache",
     "fork-sqlite-worker-connections",
+    "fork-agent-message-style",
     "fork-dashboard-v3-01-plan-widget",
     "fork-dashboard-v3-02-subprojects-table",
     "fork-dashboard-v3-03-projects-dnd",
@@ -182,8 +183,7 @@
     "fork-dashboard-v3-14-connected-decisions",
     "fork-dashboard-v3-15-request-read-budget",
     "fork-dashboard-v3-16-container-width",
-    "fork-dashboard-v3-17-home-breakpoint",
-    "fork-agent-message-style"
+    "fork-dashboard-v3-17-home-breakpoint"
   ],
   "unapplied": [],
   "hidden": [],
@@ -195,7 +195,7 @@
       "oid": "2d3dee3cf4bdc3efca67bcdcb9e33920b931e5fe"
     },
     "fork-agent-message-style": {
-      "oid": "c009912276e49bdb3c537c2130d7575b64bc33fe"
+      "oid": "be27b4a1b4ce021893b2eb6794d49d3546ba9eb4"
     },
     "fork-agent-panel-thread-details": {
       "oid": "350b40fab7142c5ef9b9be7570d6a11a2fcd272d"
@@ -285,55 +285,55 @@
       "oid": "a872d4f02ec2dd46182936448ef5443af9e4727e"
     },
     "fork-dashboard-v3-01-plan-widget": {
-      "oid": "1d7938db472c4ea82258f9dddb3cd58fd3125d93"
+      "oid": "094e2473ec92590029ef93c73fe58cdcd19e43f4"
     },
     "fork-dashboard-v3-02-subprojects-table": {
-      "oid": "d16ff9cf87ff42f652a821add9f7de7af963901b"
+      "oid": "d622c49c40c3322fa021ba40155242bb31a570c2"
     },
     "fork-dashboard-v3-03-projects-dnd": {
-      "oid": "a42702d6715079eb082f6696b053b0ef900f144e"
+      "oid": "7ba7951579c52d8b5b319a4899e1660e7e672116"
     },
     "fork-dashboard-v3-04-snapshot-service": {
-      "oid": "3402921f8f54557d211fa7c12f566940937a48fb"
+      "oid": "e14d2967616661641b11b4d0a2ac61198d7a25c4"
     },
     "fork-dashboard-v3-05-views": {
-      "oid": "5130ccb51e0bdf4ca80015179720a0daebddf5e1"
+      "oid": "723ccae185cc0e7878ab9311cd3c7bf0ecbb66da"
     },
     "fork-dashboard-v3-06-review-one": {
-      "oid": "3321bf1335d614ca02530dd5d673c9642daa2685"
+      "oid": "de261253d10d081df9af374136b9314f98663bda"
     },
     "fork-dashboard-v3-07-design-toggle": {
-      "oid": "95e5ace9510c90b1510f358ca9e114fba4284368"
+      "oid": "ae83f18659111bd9344c4dd6c03f388f90f709ba"
     },
     "fork-dashboard-v3-08-decision-release-facts": {
-      "oid": "4ef8ae729b6dd8b50045de853eef57f43de3d5d5"
+      "oid": "e5f0654809ad204208fe27e22742fe64b3c2c8ce"
     },
     "fork-dashboard-v3-09-older-hosts": {
-      "oid": "1f031f22c2d5d2d5fe64d04713edcf9133d94452"
+      "oid": "8ea168e569e090efe71d337c8b3ab0a13874aacc"
     },
     "fork-dashboard-v3-10-older-host-publication": {
-      "oid": "393b756300c8bb108436d8252acfc1e2a3cbd96c"
+      "oid": "38e1457f160cebdf4457de04d68f47c6c177bc30"
     },
     "fork-dashboard-v3-11-tracker-read-timeout": {
-      "oid": "93a63161b6083d18da46b2a87636667e4824d60d"
+      "oid": "5c29022b522028863d685545e055a7ba74a97064"
     },
     "fork-dashboard-v3-12-home-polish": {
-      "oid": "204f0a56c307ec89589c5dedcc2732d120962d03"
+      "oid": "fddd59845e835858738cec39fbad847a98d172c8"
     },
     "fork-dashboard-v3-13-older-host-cache": {
-      "oid": "56006f65ebf0e456af7fcdabcab432da6e7b1f17"
+      "oid": "fb1d3aead46fdc22367afa191a40fa9ac49eab82"
     },
     "fork-dashboard-v3-14-connected-decisions": {
-      "oid": "189ed9d9559172a44932435491823563999f3dfd"
+      "oid": "c8c0dc807c9eac57ef62b66ab132777d72b0f6c9"
     },
     "fork-dashboard-v3-15-request-read-budget": {
-      "oid": "98bf9c85ab63652b945724f9aa62b3b558984e37"
+      "oid": "4544b357db14df12eb95404c648f3e6ad1243582"
     },
     "fork-dashboard-v3-16-container-width": {
-      "oid": "62e83255d8063488c97a6e7c9f44d11011cfb9ff"
+      "oid": "7975c2f49403d40ad7be2fd2a54a55a98cf5f2eb"
     },
     "fork-dashboard-v3-17-home-breakpoint": {
-      "oid": "da8c59613ca3b4479007384df1ba59c745cafa49"
+      "oid": "ffc27d84b54349c2e9f2618dca22f95a71616ffc"
     },
     "fork-decision-context-media": {
       "oid": "510e18b37519ad394ba06d457f54f47096ecf5ca"
