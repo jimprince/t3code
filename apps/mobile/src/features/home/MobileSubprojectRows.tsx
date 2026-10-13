@@ -10,7 +10,7 @@ import {
   splitSettledSubprojects,
   subprojectIsActive,
 } from "@t3tools/client-runtime/state/projectSubprojects";
-import { samePurposeSubprojects } from "@t3tools/client-runtime/state/thread-purpose";
+import { subprojectPurposeTag } from "@t3tools/client-runtime/state/thread-purpose";
 import type { ThreadPurpose } from "@t3tools/contracts";
 import { useState } from "react";
 import { Pressable, View } from "react-native";
@@ -36,7 +36,7 @@ export function MobileSubprojectRows({
   depth = 0,
 }: {
   readonly summary: OrchestratorSummary;
-  /** Resolved purposes: a subproject of the other purpose is a root of its own tab, not listed here. */
+  /** Resolved purposes: a Harness subproject is listed here too, with a "Harness" tag. */
   readonly purposes: ReadonlyMap<string, ThreadPurpose | null>;
   readonly quietCutoff: number;
   readonly onSelectThread: (thread: OrchestratorThreadShell) => void;
@@ -44,61 +44,67 @@ export function MobileSubprojectRows({
 }) {
   const [settledOpen, setSettledOpen] = useState(false);
   const { active, settled } = splitSettledSubprojects(
-    sortOrchestratorSummariesForSidebar(samePurposeSubprojects(summary, purposes), quietCutoff),
+    sortOrchestratorSummariesForSidebar(summary.subprojects, quietCutoff),
   );
   const settledGroup = settledGroupSummary(settled);
-  const renderRow = (sub: OrchestratorSummary) => (
-    <View key={projectKeyOf(sub)}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={labelWithTaskProgress(`Open ${sub.root.title} subproject`, sub)}
-        className="min-h-9 flex-row items-center gap-1.5 pr-1 active:bg-card"
-        style={{ paddingLeft: 8 + depth * 12 }}
-        onPress={() => onSelectThread(sub.root)}
-      >
-        <Text className="text-xs text-foreground-muted">/</Text>
-        <View
-          className={cn(
-            "size-1.5 rounded-full",
-            sub.rollup.needsYou > 0
-              ? "bg-warning-foreground"
-              : subprojectIsActive(sub)
-                ? "bg-adaptive-sky-600-400"
-                : "bg-foreground-muted",
-          )}
-        />
-        <Text className="min-w-0 flex-1 text-xs text-foreground-muted" numberOfLines={1}>
-          {sub.root.title}
-        </Text>
-        {sub.rollup.blocked > 0 ? (
-          <Text className="text-xs text-danger-foreground">Blocked</Text>
-        ) : null}
-        {sub.rollup.needsYou > 0 ? (
-          <Text className="text-xs text-warning-foreground">{sub.rollup.needsYou}</Text>
-        ) : null}
-        <MobileTaskFraction summary={sub} />
-        <Text className="text-xs text-foreground-muted">
-          {relativeTime(sub.rollup.latestActivityAt)}
-        </Text>
-      </Pressable>
-      <View style={{ paddingLeft: 8 + depth * 12 }}>
-        <MobileProjectRequests summary={sub} />
-        <MobileDecisionFeed
+  const renderRow = (sub: OrchestratorSummary) => {
+    const purposeTag = subprojectPurposeTag(summary, sub, purposes);
+    return (
+      <View key={projectKeyOf(sub)}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={labelWithTaskProgress(`Open ${sub.root.title} subproject`, sub)}
+          className="min-h-9 flex-row items-center gap-1.5 pr-1 active:bg-card"
+          style={{ paddingLeft: 8 + depth * 12 }}
+          onPress={() => onSelectThread(sub.root)}
+        >
+          <Text className="text-xs text-foreground-muted">/</Text>
+          <View
+            className={cn(
+              "size-1.5 rounded-full",
+              sub.rollup.needsYou > 0
+                ? "bg-warning-foreground"
+                : subprojectIsActive(sub)
+                  ? "bg-adaptive-sky-600-400"
+                  : "bg-foreground-muted",
+            )}
+          />
+          <Text className="min-w-0 flex-1 text-xs text-foreground-muted" numberOfLines={1}>
+            {sub.root.title}
+          </Text>
+          {purposeTag !== null ? (
+            <Text className="text-xs text-foreground-muted">{purposeTag}</Text>
+          ) : null}
+          {sub.rollup.blocked > 0 ? (
+            <Text className="text-xs text-danger-foreground">Blocked</Text>
+          ) : null}
+          {sub.rollup.needsYou > 0 ? (
+            <Text className="text-xs text-warning-foreground">{sub.rollup.needsYou}</Text>
+          ) : null}
+          <MobileTaskFraction summary={sub} />
+          <Text className="text-xs text-foreground-muted">
+            {relativeTime(sub.rollup.latestActivityAt)}
+          </Text>
+        </Pressable>
+        <View style={{ paddingLeft: 8 + depth * 12 }}>
+          <MobileProjectRequests summary={sub} />
+          <MobileDecisionFeed
+            summary={sub}
+            // Selection reads only the environment and id; a new discussion thread may not
+            // be in this list yet.
+            onOpenThread={(threadId) => onSelectThread({ ...sub.root, id: threadId })}
+          />
+        </View>
+        <MobileSubprojectRows
           summary={sub}
-          // Selection reads only the environment and id; a new discussion thread may not
-          // be in this list yet.
-          onOpenThread={(threadId) => onSelectThread({ ...sub.root, id: threadId })}
+          purposes={purposes}
+          quietCutoff={quietCutoff}
+          onSelectThread={onSelectThread}
+          depth={depth + 1}
         />
       </View>
-      <MobileSubprojectRows
-        summary={sub}
-        purposes={purposes}
-        quietCutoff={quietCutoff}
-        onSelectThread={onSelectThread}
-        depth={depth + 1}
-      />
-    </View>
-  );
+    );
+  };
   return (
     <>
       {active.map(renderRow)}
