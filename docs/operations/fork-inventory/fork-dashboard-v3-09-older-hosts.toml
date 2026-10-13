@@ -1,0 +1,8 @@
+name = "fork-dashboard-v3-09-older-hosts"
+subject = "fix(dashboard): compose older hosts and correct live data snapshots"
+class = "product"
+purpose = "compose older hosts and correct live data snapshots"
+retire_when = "The dashboard-v3 series is intentionally dropped or replaced by equivalent upstream behavior."
+depends_on = ["fork-dashboard-v3-08-decision-release-facts"]
+roles = []
+note = "Replayed independently from live source 84f80d259e0fe213114c6b2159f5ff02b0077455; excludes the Chief of Staff tray series."
