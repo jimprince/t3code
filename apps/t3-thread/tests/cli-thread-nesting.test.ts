@@ -134,6 +134,9 @@ async function run(args: string[]) {
       checkpoints: [],
       proposedPlans: [],
     }));
+  const resultTimeline = vi
+    .spyOn(RemoteEnvironmentClient.prototype, "getThreadResultTimeline")
+    .mockResolvedValue({ items: [], scanned: 0, scanBudget: 1000, scanBudgetExhausted: false });
   let finish!: (value: string) => void;
   let reject!: (error: Error) => void;
   const printed = new Promise<string>((resolve, fail) => {
@@ -155,7 +158,7 @@ async function run(args: string[]) {
   });
   process.argv = [process.execPath, "cli.ts", ...args];
   await import("../src/cli.js");
-  return { output: await printed, list, detail, parent, settle, rename, result };
+  return { output: await printed, list, detail, parent, settle, rename, result, resultTimeline };
 }
 
 describe("CLI nesting readback", () => {
@@ -226,6 +229,14 @@ it.each([
       expect(seen.settle).toHaveBeenCalledWith(childId, { self: undefined });
     if (command === "rename")
       expect(seen.rename).toHaveBeenCalledWith({ threadId: childId, title: "Changed" });
-    if (command === "result") expect(seen.result).toHaveBeenCalledWith(childId);
+    if (command === "result") {
+      expect(seen.resultTimeline).toHaveBeenCalledWith({
+        threadId: childId,
+        count: 1,
+        humanOnly: undefined,
+        assistantOnly: undefined,
+      });
+      expect(seen.result).not.toHaveBeenCalled();
+    }
   },
 );
