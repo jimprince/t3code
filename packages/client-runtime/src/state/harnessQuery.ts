@@ -1,5 +1,5 @@
 import type { HarnessSnapshot } from "@t3tools/contracts";
-import type { Atom } from "effect/unstable/reactivity";
+import type { Atom } from "effect/reactivity";
 import type * as EnvironmentRegistry from "../connection/registry.ts";
 import { HARNESS_REFRESH_INTERVAL_MS } from "./harnessView.ts";
 import { createEnvironmentRpcQueryAtomFamily } from "./runtime.ts";
