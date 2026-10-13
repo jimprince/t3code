@@ -164,7 +164,7 @@ function useNowRows(): {
 function NowStrip({ rows }: { readonly rows: ReadonlyArray<NowRow> }) {
   const ui = useDashboardUi();
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 sm:grid-cols-[150px_minmax(0,1fr)_minmax(230px,auto)]">
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 @xl/dash:grid-cols-[150px_minmax(0,1fr)_minmax(230px,auto)]">
       {rows.map((row) => {
         const roll = rollup(row.tasks);
         const keys = [
@@ -173,7 +173,7 @@ function NowStrip({ rows }: { readonly rows: ReadonlyArray<NowRow> }) {
         return (
           <div key={row.key} className="contents">
             <span className="truncate font-medium">{row.name}</span>
-            <span className="order-last col-span-2 sm:order-none sm:col-span-1">
+            <span className="order-last col-span-2 @xl/dash:order-none @xl/dash:col-span-1">
               <ProgressBar
                 steps={roll.steps}
                 gained={roll.gained}
@@ -181,7 +181,7 @@ function NowStrip({ rows }: { readonly rows: ReadonlyArray<NowRow> }) {
                 tone={keys.length > 0 || roll.idle > 0 ? "warning" : "default"}
               />
             </span>
-            <span className="text-right sm:text-left">
+            <span className="text-right @xl/dash:text-left">
               {row.tasks.length === 0 ? (
                 <span className="text-muted-foreground/80">no open work</span>
               ) : (
@@ -228,7 +228,7 @@ export function VariantB() {
           {rows.utilities ? <NowStrip rows={[rows.utilities]} /> : null}
         </SectionMarker>
       )}
-      <div className="grid grid-cols-1 gap-x-6 lg:grid-cols-[400px_minmax(0,1fr)] lg:items-start">
+      <div className="grid grid-cols-1 gap-x-6 @4xl/dash:grid-cols-[400px_minmax(0,1fr)] @4xl/dash:items-start">
         <SectionMarker name="decisions" className="min-w-0">
           <SectionHeading title="Decisions">
             <b className="font-medium text-foreground">{decisions.length}</b> open
