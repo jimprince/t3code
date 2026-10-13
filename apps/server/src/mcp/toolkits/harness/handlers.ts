@@ -7,7 +7,21 @@ import { HarnessReadService } from "../../../harness/HarnessReadService.ts";
 import { readCaller, unavailable } from "../../threadAccess.ts";
 import { HarnessToolkit } from "./tools.ts";
 
+import { RoutineKindService } from "../../../harness/RoutineKindService.ts";
+
 export const HarnessHandlersLive = McpToolAccess.toLayer(HarnessToolkit, {
+  harness_routine_kind_set: McpToolAccess.writes((input) =>
+    Effect.gen(function* () {
+      const caller = yield* readCaller();
+      const service = yield* RoutineKindService;
+      if (caller.scope.environmentId !== service.environmentId)
+        return yield* new OrchestratorMcpFailure({
+          code: "capability_denied",
+          message: "This credential belongs to another environment.",
+        });
+      return yield* service.set(input).pipe(Effect.mapError(unavailable));
+    }),
+  ),
   harness_snapshot: McpToolAccess.reads((input) =>
     Effect.gen(function* () {
       const caller = yield* readCaller();

@@ -1,3 +1,10 @@
+import {
+  HarnessSnapshotRpc,
+  HarnessRoutineKindSetRpc,
+  ScheduledTaskListInput,
+  ScheduledTaskListResult,
+  ScheduledTaskError,
+} from "@t3tools/contracts";
 import { ThreadRecoveryRpcs } from "@t3tools/contracts";
 import { WsPlanPublishRpc } from "@t3tools/contracts";
 import {
@@ -262,6 +269,13 @@ const WsAutomationScriptsRunRpc = Rpc.make("automationScripts.run", {
 });
 
 export const WsRpcGroup = RpcGroup.make(
+  HarnessSnapshotRpc,
+  HarnessRoutineKindSetRpc,
+  Rpc.make(WS_METHODS.scheduledTasksList, {
+    payload: ScheduledTaskListInput,
+    success: ScheduledTaskListResult,
+    error: ScheduledTaskError,
+  }),
   ...ThreadRecoveryRpcs,
   WsPlanPublishRpc,
   ...HandoffRpcs,
