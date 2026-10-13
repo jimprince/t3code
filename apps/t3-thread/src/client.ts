@@ -676,9 +676,8 @@ export class RemoteEnvironmentClient {
         modelSelection: wireModel(modelSelection),
         runtimeMode,
         interactionMode,
-        workspaceStrategy: input.branch
-          ? { type: "worktree", branch: input.branch, baseRef: input.baseBranch ?? "main" }
-          : { type: "root" },
+        // Only the later launch with the brief provisions a worktree.
+        workspaceStrategy: { type: "root" },
         initialMessage: {
           messageId: NodeCrypto.randomUUID(),
           text: input.workerContext
