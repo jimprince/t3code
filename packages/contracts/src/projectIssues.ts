@@ -81,8 +81,8 @@ export const ProjectIssueDecision = Schema.Struct({
   waiting: Schema.String,
   options: Schema.Array(Schema.Struct({ text: Schema.String, recommended: Schema.Boolean })),
   /**
-   * The context's `deadline:` line, a date (`2026-10-08`) or an instant, UTC. A deferred
-   * card comes back the day before it.
+   * The context's `deadline:` line, a date (`2026-10-08`, the start of that day in the
+   * viewer's zone) or an instant. A deferred card comes back the day before it.
    */
   deadline: Schema.optionalKey(Schema.String),
 });
