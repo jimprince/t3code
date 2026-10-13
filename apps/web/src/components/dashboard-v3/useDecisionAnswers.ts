@@ -12,10 +12,12 @@ import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useUndoableActions } from "../orchestrators/ProjectRequestsSection";
 import type { DecisionRow } from "./context";
-import { parseIssueTaskId } from "./dashboard.logic";
-
-/** How long an answered card stays once the server has taken it, before the next snapshot drops it. */
-const SENT_LINGER_MS = 6_000;
+import {
+  ANSWER_CAP_MS,
+  ANSWER_LINGER_MS,
+  answerSettled,
+  parseIssueTaskId,
+} from "./dashboard.logic";
 
 export interface AnswerRecord {
   readonly row: DecisionRow;
@@ -41,7 +43,9 @@ const failureText = (result: Parameters<typeof squashAtomCommandFailure>[0]): Re
  * Answers a Dashboard decision through the services the Decisions feed already uses: an option on a
  * decision issue goes through `decideProjectRequest`, an approval through the waiting thread's
  * `respondToApproval`. Every answer is held for a few seconds with Undo, then sent; the card shows
- * what happened until the snapshot drops it.
+ * what happened until the snapshot drops it. A delivered answer stays answered while the snapshot
+ * still lists the decision (it lags the answer), up to `ANSWER_CAP_MS`; `reconcile` reports which
+ * decisions are still listed.
  */
 export function useDecisionAnswers() {
   const decide = useAtomCommand(decideProjectRequest, "Decide");
@@ -51,6 +55,7 @@ export function useDecisionAnswers() {
   const undoable = useUndoableActions();
   const [records, setRecords] = useState<ReadonlyMap<string, AnswerRecord>>(new Map());
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const openKeys = useRef<ReadonlySet<string>>(new Set());
   useEffect(() => {
     const live = timers.current;
     return () => {
@@ -75,6 +80,18 @@ export function useDecisionAnswers() {
         return next;
       });
 
+    // Forgets delivered answers that are settled; hands back the same map when none are.
+    const sweep = () =>
+      setRecords((current) => {
+        const now = Date.now();
+        const kept = [...current].filter(
+          ([key, { delivery }]) =>
+            delivery.phase !== "sent" ||
+            !answerSettled({ sentAt: delivery.at, stillOpen: openKeys.current.has(key), now }),
+        );
+        return kept.length === current.size ? current : new Map(kept);
+      });
+
     const perform = (row: DecisionRow, label: string, run: () => Promise<Result>) => {
       const execute = async (): Promise<boolean> => {
         const retry = () => void execute();
@@ -90,17 +107,24 @@ export function useDecisionAnswers() {
           delivery: { phase: "sent", at: Date.now(), notified: result.notified },
           retry: null,
         });
-        clearTimeout(timers.current.get(row.key));
-        timers.current.set(
-          row.key,
-          setTimeout(() => set(row.key, null), SENT_LINGER_MS),
-        );
+        for (const [suffix, delay] of [
+          ["linger", ANSWER_LINGER_MS],
+          ["cap", ANSWER_CAP_MS],
+        ] as const) {
+          clearTimeout(timers.current.get(`${row.key}|${suffix}`));
+          timers.current.set(`${row.key}|${suffix}`, setTimeout(sweep, delay));
+        }
         return true;
       };
       latest.current.undoable.run(row.key, label, execute);
     };
 
     return {
+      /** Reports the decisions the snapshot still lists, so answered ones can be forgotten once gone. */
+      reconcile: (open: ReadonlySet<string>) => {
+        openKeys.current = open;
+        sweep();
+      },
       /** The answer on a card, held (with Undo), sending, sent or failed; null while still open. */
       stateOf: (key: string) => {
         const held = queued.find((entry) => entry.key === key);
