@@ -24,6 +24,7 @@ function isRejectedSession(error: unknown): boolean {
       ("_tag" in current &&
         [
           "EnvironmentAuthInvalidError",
+          "ConnectionBlockedError",
           "EnvironmentScopeRequiredError",
           "EnvironmentOperationForbiddenError",
         ].includes(String(current._tag))) ||

@@ -9,9 +9,14 @@ import {
 import { Effect, Layer, Option, Stream, SubscriptionRef } from "effect";
 import { HttpClient, HttpClientResponse, HttpClientError } from "effect/http";
 import { Atom, AtomRegistry } from "effect/reactivity";
+import { RemoteEnvironmentAuthorization } from "../authorization/service.ts";
 import { EnvironmentRegistry } from "../connection/registry.ts";
 import { EnvironmentSupervisor } from "../connection/supervisor.ts";
-import { PrimaryConnectionTarget, type PreparedConnection } from "../connection/model.ts";
+import {
+  ConnectionBlockedError,
+  PrimaryConnectionTarget,
+  type PreparedConnection,
+} from "../connection/model.ts";
 import { createEnvironmentSessionAtoms, sessionStateGrants } from "./session.ts";
 import { createCommandPermissions } from "./commandPermissions.ts";
 
@@ -73,6 +78,15 @@ const harness = Effect.gen(function* () {
     Layer.mergeAll(
       Layer.succeed(EnvironmentRegistry, environments),
       Layer.succeed(HttpClient.HttpClient, client),
+      Layer.mock(RemoteEnvironmentAuthorization)({
+        authorizeDpopHttp: () =>
+          Effect.fail(
+            new ConnectionBlockedError({
+              reason: "authentication",
+              detail: "Cloud sign-in was revoked.",
+            }),
+          ),
+      }),
     ),
   );
   const sessions = createEnvironmentSessionAtoms(runtime);
@@ -89,7 +103,7 @@ const harness = Effect.gen(function* () {
         }
       });
     });
-  return { replies, registry, atom, permissions, wait, calls: () => calls };
+  return { replies, registry, atom, permissions, wait, prepared, calls: () => calls };
 });
 
 it.live(
@@ -174,6 +188,37 @@ it.live("cancels failed-check retries when the last subscriber unmounts", () =>
       yield* Effect.promise(() => vi.advanceTimersByTimeAsync(30_000));
       expect(h.calls()).toBe(callsAfterUnmount);
     } finally {
+      h.registry.dispose();
+    }
+  }),
+);
+
+it.live("drops previous grants when relay authorization rejects a revoked cloud sign-in", () =>
+  Effect.gen(function* () {
+    const h = yield* harness;
+    h.replies.push(Response.json(granted));
+    const unmount = h.registry.mount(h.atom);
+    try {
+      yield* Effect.promise(() => h.wait((value) => value._tag === "Success"));
+      const permission = h.permissions.permissionAtom(env);
+      expect(h.registry.get(permission)).toBe(true);
+      const previous = Option.getOrThrow(yield* SubscriptionRef.get(h.prepared));
+      yield* SubscriptionRef.set(
+        h.prepared,
+        Option.some({
+          ...previous,
+          httpAuthorization: { _tag: "Dpop", accessToken: "revoked", expiresAtEpochMs: 0 },
+        }),
+      );
+      yield* Effect.promise(() => h.wait((value) => value._tag === "Failure" && !value.waiting));
+      expect(h.calls()).toBe(1);
+      expect(h.registry.get(permission)).toBe(false);
+      expect(sessionStateGrants(h.registry.get(h.atom))).toBeNull();
+      expect((yield* h.permissions.authorize(h.registry, env).pipe(Effect.flip))._tag).toBe(
+        "EnvironmentAuthorizationError",
+      );
+    } finally {
+      unmount();
       h.registry.dispose();
     }
   }),
