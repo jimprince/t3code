@@ -1,0 +1,14 @@
+name = "fork-sidebar-settled-ui"
+subject = "feat(projects): fold settled subprojects and show task progress"
+class = "product"
+purpose = "Keep settled subprojects openable behind a collapsed group and show shared done/total task progress on project surfaces."
+retire_when = "Upstream supplies settled subproject grouping and consistent accessible project progress on web and mobile."
+depends_on = ["fork-subprojects-ui", "fork-subprojects-mobile-main"]
+roles = []
+note = "Approved Settled (N) grouping and task fraction across web, desktop and native mobile. Combines cleanup UI 579436c5 and reviewed fixes b9113800: fractions preserve row activation, accessible row labels include progress, and the collapsed settled toggle retains attention counts. Ordinary settled rows remain folded rather than inline."
+
+[[decision]]
+id = "settled-subprojects-ui-20261012"
+date = "2026-10-11"
+decided = "separate-droppable-concern"
+rationale = "Settled grouping and shared progress are independently removable from the page-table layout. Keep both UI implementation and its review repairs together; attention remains visible on the settled toggle without changing the approved collapsed-row requirement."
