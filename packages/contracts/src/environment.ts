@@ -163,6 +163,8 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   threadSubprojects: Schema.optionalKey(Schema.Boolean),
   /** Server persists thread purpose and serves harness.snapshot. Absent on older servers, so clients hide Move to Harness and skip the snapshot query. */
   harness: Schema.optionalKey(Schema.Boolean),
+  /** Server serves harness.checkPin.set; absent on older servers, so clients hide pin controls. */
+  harnessPin: Schema.optionalKey(Schema.Boolean),
   remoteThreadNesting: Schema.optionalKey(Schema.Boolean),
   /** Server understands thread.auto-settle.set (per-thread auto-settle off).
       Same version-skew contract as threadSettlement. */

@@ -10,7 +10,8 @@ import { Pressable, ScrollView, View } from "react-native";
 import { AppText as Text } from "../../components/AppText";
 import { cn } from "../../lib/cn";
 import {
-  mobileSetHarnessCheckPinned,
+  mobileHarnessCheckPinCommand,
+  refreshHarness,
   useHarnessEnvironments,
   useHarnessNow,
 } from "../../state/harness";
@@ -47,7 +48,7 @@ function Section({
 function CheckBody({ page }: { readonly page: HarnessCheckPage }) {
   const navigation = useNavigation();
   const { check, facts, runs } = page;
-  const setPinned = useAtomCommand(mobileSetHarnessCheckPinned, "Pin check");
+  const setPinned = useAtomCommand(mobileHarnessCheckPinCommand, "Pin check");
   const openThread = (link: { readonly environmentId: string; readonly threadId: string }) =>
     navigation.navigate("Thread", { environmentId: link.environmentId, threadId: link.threadId });
   return (
@@ -78,6 +79,8 @@ function CheckBody({ page }: { readonly page: HarnessCheckPage }) {
               void setPinned({
                 environmentId: check.routine.environmentId,
                 input: { checkKey: check.key, pinned: !check.pinned },
+              }).then((result) => {
+                if (result._tag === "Success") refreshHarness();
               })
             }
           >

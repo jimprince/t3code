@@ -191,6 +191,32 @@ describe("resolveHarnessCheckPage", () => {
   });
 });
 
+describe("pin support on the page", () => {
+  const ref = { environmentId, checkKey: "env:automation:a" };
+  it("follows the server's harnessPin capability, and the pin shows from its snapshot", () => {
+    const pinned = snapshot([routine()]);
+    const state = resolveHarnessCheckPage(
+      [
+        read({
+          snapshot: { ...pinned, pinnedCheckKeys: ["env:automation:a"] },
+          pinSupported: true,
+        }),
+      ],
+      ref,
+      NOW,
+      ZONE,
+    );
+    expect(
+      state.kind === "found" && [state.page.check.pinned, state.page.check.pinSupported],
+    ).toEqual([true, true]);
+    const old = resolveHarnessCheckPage([read()], ref, NOW, ZONE);
+    expect(old.kind === "found" && [old.page.check.pinned, old.page.check.pinSupported]).toEqual([
+      false,
+      false,
+    ]);
+  });
+});
+
 describe("describeFindingsLine", () => {
   it("is null when no run reported a count and shows the count otherwise", () => {
     const [unknown, known] = buildHarnessChecks(

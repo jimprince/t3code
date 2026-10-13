@@ -2,6 +2,7 @@ import {
   forkProjectSelectionClientSettings,
   forkProjectSelectionClientSettingsPatch,
 } from "./forkProjectSelectionSettings.ts";
+import { HarnessPinnedCheckKeys } from "./harness.ts";
 import { SshDeviceHostConfigs } from "./device.ts";
 import {
   AuthSettingsWriteScope,
@@ -1274,16 +1275,13 @@ export const ServerSettings = Schema.Struct({
   environmentIcon: ForwardCompatibleNullable(EnvironmentMachineKind).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
+  /** Environment-scoped stable check keys; unknown checks remain pinned across source refreshes. */
+  harnessPinnedCheckKeys: HarnessPinnedCheckKeys.pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   /** Front desk conversation for the global Chief of Staff tray; null uses title discovery. */
   chiefOfStaffThreadId: Schema.NullOr(ThreadId).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
-  ),
-  /**
-   * Harness check keys pinned to the top of the Harness checks list. Per environment, kept by the
-   * server so every client and agent sees the same pins; a key no check reports any more is inert.
-   */
-  harnessPinnedCheckKeys: Schema.Array(Schema.String).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
   ),
   /**
    * Null means inherit: the repository's t3.json, then "local". The old
@@ -1585,7 +1583,7 @@ export const ServerSettingsPatch = Schema.Struct({
   backgroundActivityProfile: Schema.optionalKey(BackgroundActivityProfile),
   environmentIcon: Schema.optionalKey(Schema.NullOr(EnvironmentMachineKind)),
   chiefOfStaffThreadId: Schema.optionalKey(Schema.NullOr(ThreadId)),
-  harnessPinnedCheckKeys: Schema.optionalKey(Schema.Array(Schema.String)),
+  harnessPinnedCheckKeys: Schema.optionalKey(HarnessPinnedCheckKeys),
   defaultThreadEnvMode: Schema.optionalKey(Schema.NullOr(ThreadEnvMode)),
   newWorktreesStartFromOrigin: Schema.optionalKey(Schema.Boolean),
   worktreeSubmodules: Schema.optionalKey(Schema.NullOr(WorktreeSubmodules)),

@@ -1,7 +1,7 @@
 import type { HarnessSnapshot } from "@t3tools/contracts";
 import { EnvironmentId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
-import { selectHarnessQueuedSends } from "./harnessQuery.ts";
+import { isCheckPinned, selectHarnessQueuedSends } from "./harnessQuery.ts";
 
 function snapshot(
   environmentId: string,
@@ -71,4 +71,11 @@ describe("environment queue selection", () => {
       expect(selectHarnessQueuedSends([snapshot("good"), incomplete])).toBeNull();
     }
   });
+});
+
+it("selects only the current environment's pins and tolerates older hosts", () => {
+  const one = { ...snapshot("one"), pinnedCheckKeys: ["one:checks:a"] };
+  expect(isCheckPinned(one, "one:checks:a")).toBe(true);
+  expect(isCheckPinned(one, "two:checks:a")).toBe(false);
+  expect(isCheckPinned(snapshot("older"), "one:checks:a")).toBe(false);
 });

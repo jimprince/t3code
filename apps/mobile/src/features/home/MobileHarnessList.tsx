@@ -182,9 +182,18 @@ export function MobileHarnessList({
       ),
     [environments],
   );
+  const pinEnabled = useMemo(
+    () =>
+      new Set<string>(
+        environments
+          .filter((environment) => environment.pinSupported)
+          .map((environment) => environment.environmentId),
+      ),
+    [environments],
+  );
   const checks = useMemo(
-    () => buildHarnessChecks(snapshots, now, { unreachable }),
-    [now, snapshots, unreachable],
+    () => buildHarnessChecks(snapshots, now, { unreachable, pinEnabled }),
+    [now, pinEnabled, snapshots, unreachable],
   );
   const strip = useMemo(
     () =>

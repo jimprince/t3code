@@ -4,7 +4,7 @@ import type { HarnessCheckView } from "@t3tools/client-runtime/state/harness-vie
 import { useCallback } from "react";
 
 import { readLocalApi } from "../../localApi";
-import { setHarnessCheckPinnedCommand } from "../../state/harness";
+import { harnessCheckPinCommand, refreshHarness } from "../../state/harness";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 
@@ -16,14 +16,17 @@ const pinLabel = (check: Pick<HarnessCheckView, "pinned">) =>
  * when `pinSupported` is false (an older server), and a failure is a toast, never a silent no-op.
  */
 export function useHarnessCheckPin() {
-  const run = useOrchestrationCommand(setHarnessCheckPinnedCommand, { reportFailure: false });
+  const run = useOrchestrationCommand(harnessCheckPinCommand, { reportFailure: false });
   const setPinned = useCallback(
     async (check: HarnessCheckView, pinned: boolean) => {
       const result = await run({
         environmentId: check.routine.environmentId,
         input: { checkKey: check.key, pinned },
       });
-      if (result._tag === "Success") return true;
+      if (result._tag === "Success") {
+        refreshHarness();
+        return true;
+      }
       toastManager.add(
         stackedThreadToast({
           type: "error",

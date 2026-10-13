@@ -1,9 +1,10 @@
 import { useAtomValue } from "@effect/atom-react";
-import { createHarnessQuery } from "@t3tools/client-runtime/state/harness-query";
-import { createEnvironmentRpcCommand } from "@t3tools/client-runtime/state/runtime";
+import {
+  createHarnessPinCommand,
+  createHarnessQuery,
+} from "@t3tools/client-runtime/state/harness-query";
 import type { EnvironmentId, HarnessSnapshot } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
-import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { useEffect, useState } from "react";
@@ -22,6 +23,8 @@ export interface HarnessEnvironmentView {
   /** The last answer, kept while a refresh is pending or has failed so rows never vanish on a blip. */
   readonly snapshot: HarnessSnapshot | null;
   readonly error: string | null;
+  /** Its server serves harness.checkPin.set; false on an older one, so pin controls are hidden. */
+  readonly pinSupported: boolean;
 }
 
 function formatError(cause: Cause.Cause<unknown>): string {
@@ -46,21 +49,17 @@ const harnessEnvironmentsAtom = Atom.make((get): readonly HarnessEnvironmentView
       label: presentation.entry.target.label,
       snapshot: Option.getOrNull(AsyncResult.value(result)),
       error: result._tag === "Failure" ? formatError(result.cause) : null,
+      pinSupported: configs.get(environmentId)?.environment.capabilities.harnessPin === true,
     });
   }
   return views;
 }).pipe(Atom.withLabel("mobile-harness:environments"));
 
-/** Pins or unpins one check on its server, then reads that server's snapshot again. */
-export const mobileSetHarnessCheckPinned = createEnvironmentRpcCommand(connectionAtomRuntime, {
-  label: "mobile:harness-check-pin",
-  tag: "harness.setCheckPinned",
-  onSuccess: ({ environmentId }, registry) =>
-    Effect.sync(() => registry.refresh(harnessQuery({ environmentId, input: snapshotInput }))),
-});
+/** Pins or unpins one check on its server; the caller reads the snapshot again on success. */
+export const mobileHarnessCheckPinCommand = createHarnessPinCommand(connectionAtomRuntime);
 
 /** Forces a read now. Its identity never changes, so a focus effect can hold it without looping. */
-function refreshHarness() {
+export function refreshHarness() {
   for (const { environmentId } of appAtomRegistry.get(harnessEnvironmentsAtom)) {
     appAtomRegistry.refresh(harnessQuery({ environmentId, input: snapshotInput }));
   }

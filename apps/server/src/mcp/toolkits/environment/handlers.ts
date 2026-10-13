@@ -1,5 +1,6 @@
 import { OrchestratorMcpFailure, type ServerSettings } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as HarnessPin from "../../../harness/HarnessPinService.ts";
 import * as Environment from "../../../environment/ServerEnvironment.ts";
 import * as ThreadCommandExecutor from "../../../orchestration-v2/ThreadCommandExecutor.ts";
 import * as Settings from "../../../serverSettings.ts";
@@ -11,6 +12,7 @@ import { EnvironmentToolkit } from "./tools.ts";
 export function preferences(settings: ServerSettings) {
   const {
     chiefOfStaffThreadId,
+    harnessPinnedCheckKeys,
     defaultThreadEnvMode,
     newWorktreesStartFromOrigin,
     enableProviderUpdateChecks,
@@ -19,6 +21,7 @@ export function preferences(settings: ServerSettings) {
   } = settings;
   const characters = Array.from(sourceControlWritingStyle.customInstructions);
   return {
+    harnessPinnedCheckKeys,
     chiefOfStaffThreadId,
     defaultThreadEnvMode,
     newWorktreesStartFromOrigin,
@@ -43,6 +46,22 @@ const access = Effect.gen(function* () {
   return { ...context, descriptor, settings: yield* Settings.ServerSettingsService };
 });
 export const layer = McpToolAccess.toLayer(EnvironmentToolkit, {
+  harness_check_pin: McpToolAccess.writesEnvironment((input, check) =>
+    Effect.gen(function* () {
+      const scope = yield* McpInvocationContext.McpInvocationContext;
+      const executor = yield* ThreadCommandExecutor.ThreadCommandExecutor;
+      const pin = Effect.gen(function* () {
+        yield* check;
+        yield* access;
+        const service = yield* HarnessPin.HarnessPinService;
+        const pinnedCheckKeys = yield* service.setPinned(input).pipe(Effect.mapError(unavailable));
+        return { pinnedCheckKeys };
+      });
+      return yield* scope.thread === undefined
+        ? pin
+        : executor.withLock(scope.thread.threadId, pin);
+    }),
+  ),
   t3_environment_read: McpToolAccess.reads(() =>
     Effect.gen(function* () {
       const { descriptor, settings } = yield* access;

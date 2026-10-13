@@ -1,8 +1,9 @@
 import { useAtomValue } from "@effect/atom-react";
-import { createHarnessQuery } from "@t3tools/client-runtime/state/harness-query";
-import { createEnvironmentRpcCommand } from "@t3tools/client-runtime/state/runtime";
+import {
+  createHarnessPinCommand,
+  createHarnessQuery,
+} from "@t3tools/client-runtime/state/harness-query";
 import type { EnvironmentId, HarnessSnapshot } from "@t3tools/contracts";
-import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { useEffect } from "react";
@@ -25,6 +26,8 @@ export interface HarnessEnvironmentView {
   readonly snapshot: HarnessSnapshot | null;
   readonly error: string | null;
   readonly isPending: boolean;
+  /** Its server serves harness.checkPin.set; false on an older one, so pin controls are hidden. */
+  readonly pinSupported: boolean;
 }
 
 /**
@@ -45,21 +48,17 @@ const harnessEnvironmentsAtom = Atom.make((get): readonly HarnessEnvironmentView
       snapshot: Option.getOrNull(AsyncResult.value(result)),
       error: result._tag === "Failure" ? formatEnvironmentQueryError(result.cause) : null,
       isPending: result.waiting,
+      pinSupported: configs.get(environmentId)?.environment.capabilities.harnessPin === true,
     });
   }
   return views;
 }).pipe(Atom.withLabel("web-harness:environments"));
 
-/** Pins or unpins one check on its server, then reads that server's snapshot again. */
-export const setHarnessCheckPinnedCommand = createEnvironmentRpcCommand(connectionAtomRuntime, {
-  label: "harness-check-pin",
-  tag: "harness.setCheckPinned",
-  onSuccess: ({ environmentId }, registry) =>
-    Effect.sync(() => registry.refresh(harnessQuery({ environmentId, input: snapshotInput }))),
-});
+/** Pins or unpins one check on its server; the caller reads the snapshot again on success. */
+export const harnessCheckPinCommand = createHarnessPinCommand(connectionAtomRuntime);
 
 /** Forces a read now. Its identity never changes, so effects can hold it without re-subscribing. */
-function refreshHarness() {
+export function refreshHarness() {
   for (const { environmentId } of appAtomRegistry.get(harnessEnvironmentsAtom)) {
     appAtomRegistry.refresh(harnessQuery({ environmentId, input: snapshotInput }));
   }

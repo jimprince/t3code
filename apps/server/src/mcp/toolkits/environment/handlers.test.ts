@@ -14,6 +14,7 @@ import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 import { McpSchema, McpServer } from "effect/ai";
 
+import * as HarnessPin from "../../../harness/HarnessPinService.ts";
 import * as Environment from "../../../environment/ServerEnvironment.ts";
 import * as ThreadCommandExecutor from "../../../orchestration-v2/ThreadCommandExecutor.ts";
 import * as ThreadManagement from "../../../orchestration-v2/ThreadManagementService.ts";
@@ -78,6 +79,13 @@ it.effect("round-trips the Chief of Staff preference through the /mcp registrati
     expect(result.structuredContent).toMatchObject({
       chiefOfStaffThreadId: "e942f826-445e-4cee-a045-0091707e67c7",
     });
+    const pin = yield* call("harness_check_pin", { checkKey: "unknown:key", pinned: true });
+    expect(pin.isError).toBe(false);
+    expect(pin.structuredContent).toEqual({ pinnedCheckKeys: ["unknown:key"] });
+    const again = yield* call("harness_check_pin", { checkKey: "unknown:key", pinned: true });
+    expect(again.structuredContent).toEqual({ pinnedCheckKeys: ["unknown:key"] });
+    const unpin = yield* call("harness_check_pin", { checkKey: "unknown:key", pinned: false });
+    expect(unpin.structuredContent).toEqual({ pinnedCheckKeys: [] });
     const read = yield* call("t3_environment_read", {});
     expect(read.isError).toBe(false);
     expect(read.structuredContent).toMatchObject({
@@ -175,8 +183,53 @@ it.effect("refuses a preferences update when the caller's turn ends while it wai
       Effect.provide(
         McpToolAccess.HandlersLayer.layer(EnvironmentHandlers.layer).pipe(
           Layer.provideMerge(layerDependencies),
+          Layer.provide(HarnessPin.layer.pipe(Layer.provide(layerDependencies))),
         ),
       ),
     );
   }),
+);
+
+it.effect.each(["read-only client", "restricted thread"] as const)(
+  "refuses pin writes from $0 without changing preferences",
+  (kind) =>
+    Effect.gen(function* () {
+      const toolkit = yield* EnvironmentToolkit;
+      const result = yield* toolkit
+        .handle("harness_check_pin", { checkKey: "blocked", pinned: true })
+        .pipe(Stream.unwrap, Stream.runCollect);
+      expect(result.at(-1)?.result).toMatchObject({ code: "capability_denied" });
+      const settings = yield* Settings.ServerSettingsService;
+      expect((yield* settings.getSettings).harnessPinnedCheckKeys).toEqual([]);
+    }).pipe(
+      Effect.provide(
+        McpToolAccess.HandlersLayer.layer(EnvironmentHandlers.layer).pipe(
+          Layer.provideMerge(HarnessPin.layer.pipe(Layer.provideMerge(Settings.layerTest()))),
+          Layer.provideMerge(ThreadCommandExecutor.layer),
+          Layer.provideMerge(layerEnvironment),
+          Layer.provideMerge(
+            Layer.succeed(
+              McpInvocationContext.McpInvocationContext,
+              kind === "read-only client"
+                ? {
+                    ...caller,
+                    thread: undefined,
+                    client: {
+                      sessionId: "readonly",
+                      label: "Readonly agent",
+                      access: "read-only",
+                    },
+                  }
+                : caller,
+            ),
+          ),
+          Layer.provideMerge(
+            Layer.mock(ThreadManagement.ThreadManagementService)({
+              getThreadShell: (id) =>
+                Effect.succeed(liveThreadShell(id, { runtimeMode: "approval-required" })),
+            }),
+          ),
+        ),
+      ),
+    ),
 );

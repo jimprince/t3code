@@ -487,12 +487,26 @@ describe("buildHarnessChecks", () => {
       ]);
     });
 
-    it("degrades when the server cannot pin: nothing is pinned and the control is hidden", () => {
-      const [check] = buildHarnessChecks([snapshot([healthy])], NOW);
-      expect(check?.pinned).toBe(false);
-      expect(check?.pinSupported).toBe(false);
-      const [supported] = buildHarnessChecks([snapshot([healthy], { pinnedCheckKeys: [] })], NOW);
-      expect(supported?.pinSupported).toBe(true);
+    it("shows the pin control only for servers that advertise the harnessPin capability", () => {
+      const other = EnvironmentId.make("other");
+      const checks = buildHarnessChecks(
+        [
+          snapshot([healthy]),
+          snapshot([{ ...healthy, environmentId: other }], { environmentId: other }),
+        ],
+        NOW,
+        { pinEnabled: new Set([other]) },
+      );
+      expect(checks.map((check) => [check.routine.environmentId, check.pinSupported])).toEqual(
+        expect.arrayContaining([
+          [environmentId, false],
+          [other, true],
+        ]),
+      );
+      // No capability set at all (an older server): nothing is pinned either.
+      const [old] = buildHarnessChecks([snapshot([healthy])], NOW);
+      expect(old?.pinSupported).toBe(false);
+      expect(old?.pinned).toBe(false);
     });
 
     it("ignores a pin for a check that is no longer reported", () => {

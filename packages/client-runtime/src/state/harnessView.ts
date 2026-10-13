@@ -15,6 +15,7 @@ import {
 } from "./orchestrators.ts";
 import { supervisionThreadKey } from "./forkNesting.ts";
 import { formatHarnessSchedule } from "./harnessSchedule.ts";
+import { isCheckPinned } from "./harnessQuery.ts";
 
 /** The Harness tab polls its snapshot this often while it is visible. */
 export const HARNESS_REFRESH_INTERVAL_MS = 60_000;
@@ -89,7 +90,7 @@ export interface HarnessCheckView {
   readonly unclassified: boolean;
   /** Pinned to the top of the checks list on its own environment. */
   readonly pinned: boolean;
-  /** Its server can pin; false on an older server, so clients hide the pin control. */
+  /** Its server advertises the harnessPin capability; false on an older server, so clients hide the pin control. */
   readonly pinSupported: boolean;
   readonly owner: HarnessThreadLink | null;
   readonly state: HarnessCheckState;
@@ -256,6 +257,8 @@ function runInstant(run: HarnessRun): number {
 /** What the client adds to the snapshots: environments whose last refresh failed or that are not connected. */
 export interface HarnessBuildOptions {
   readonly unreachable?: ReadonlySet<string>;
+  /** Environments whose server serves the pin RPC (the harnessPin capability); the rest hide the control. */
+  readonly pinEnabled?: ReadonlySet<string>;
   /** IANA zone schedules are shown in; defaults to the device zone. Tests pin it. */
   readonly deviceZone?: string | undefined;
 }
@@ -267,8 +270,8 @@ export function buildHarnessChecks(
   options: HarnessBuildOptions = {},
 ): ReadonlyArray<HarnessCheckView> {
   const rows = snapshots.flatMap((snapshot) => {
-    // Pins belong to the snapshot's own environment, so one server's pin never marks another's check.
-    const pinnedKeys = new Set(snapshot.pinnedCheckKeys ?? []);
+    // Pins are per snapshot, so one server's pin never marks another server's check.
+    const pinSupported = options.pinEnabled?.has(snapshot.environmentId) ?? false;
     return snapshot.routines.map((routine): HarnessCheckView => {
       const { state, evidence, lateSinceMs } = classifyHarnessCheck(routine, {
         now,
@@ -353,7 +356,7 @@ export function buildHarnessChecks(
         spokenLabel: [
           routine.name,
           latenessLabel === null ? stateLabel : `${stateLabel}, ${latenessLabel}`,
-          pinnedKeys.has(routine.key) ? "Pinned" : null,
+          isCheckPinned(snapshot, routine.key) ? "Pinned" : null,
           routine.purpose === "unclassified" ? "Unclassified" : null,
           classification,
           timing,
@@ -362,8 +365,8 @@ export function buildHarnessChecks(
           .filter((part) => part !== null && part !== "")
           .join(", "),
         unclassified: routine.purpose === "unclassified",
-        pinned: pinnedKeys.has(routine.key),
-        pinSupported: snapshot.pinnedCheckKeys !== undefined,
+        pinned: isCheckPinned(snapshot, routine.key),
+        pinSupported,
         owner: routine.owner,
         state,
         stateLabel,

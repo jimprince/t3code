@@ -1,4 +1,6 @@
 import {
+  HarnessCheckPinSetInput,
+  HarnessPinnedCheckKeys,
   BackgroundActivityProfile,
   BackgroundActivityProfileSelection,
   ExecutionEnvironmentDescriptor,
@@ -14,7 +16,10 @@ import * as ThreadManagementService from "../../../orchestration-v2/ThreadManage
 import * as Settings from "../../../serverSettings.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 
+import * as HarnessPin from "../../../harness/HarnessPinService.ts";
+
 const PreferenceFields = {
+  harnessPinnedCheckKeys: ServerSettings.fields.harnessPinnedCheckKeys,
   chiefOfStaffThreadId: ServerSettings.fields.chiefOfStaffThreadId,
   defaultThreadEnvMode: ServerSettings.fields.defaultThreadEnvMode,
   newWorktreesStartFromOrigin: ServerSettings.fields.newWorktreesStartFromOrigin,
@@ -66,4 +71,16 @@ const EnvironmentPreferencesTool = Tool.make("t3_environment_preferences_update"
   }),
   success: Schema.Struct(PreferenceFields),
 }).annotate(Tool.Destructive, true);
-export const EnvironmentToolkit = Toolkit.make(EnvironmentReadTool, EnvironmentPreferencesTool);
+const HarnessCheckPinTool = Tool.make("harness_check_pin", {
+  ...shared,
+  dependencies: [...shared.dependencies, HarnessPin.HarnessPinService],
+  description:
+    "Pin or unpin an environment Harness check. Requires the same write access as environment preferences. Unknown check keys are retained; pinning is idempotent.",
+  parameters: HarnessCheckPinSetInput,
+  success: Schema.Struct({ pinnedCheckKeys: HarnessPinnedCheckKeys }),
+}).annotate(Tool.Destructive, true);
+export const EnvironmentToolkit = Toolkit.make(
+  EnvironmentReadTool,
+  EnvironmentPreferencesTool,
+  HarnessCheckPinTool,
+);

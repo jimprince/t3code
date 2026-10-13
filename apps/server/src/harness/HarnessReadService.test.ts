@@ -30,7 +30,6 @@ import {
   taskQuery,
   executionQuery,
 } from "./HarnessReadService.ts";
-import * as Settings from "../serverSettings.ts";
 import { groupAgents, lateness, routine, threadLink } from "./model.ts";
 
 const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
@@ -51,11 +50,13 @@ const RUN: HarnessRun = {
   evidence: "test",
   threads: [],
 };
+import * as Settings from "../serverSettings.ts";
+
 const db = Layer.mergeAll(
+  Settings.layerTest(),
   AutomationStore.layer,
   ProjectStore.layer,
   Layer.succeed(ServerEnvironmentIdentity, { getEnvironmentId: Effect.succeed(ENV) }),
-  Settings.layerTest(),
 ).pipe(Layer.provideMerge(SqlitePersistence.layerMemory));
 const withDb = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   Effect.scoped(effect.pipe(Effect.provide(db)));
@@ -73,11 +74,19 @@ it.effect(
         yield* insertRun(sql, "preparing", "inside", "c", "preparing", 2);
         yield* insertRun(sql, "running", "inside", "d", "running", 3);
         yield* insertRun(sql, "completed", "inside", "e", "completed", 4);
+        const settings = yield* Settings.ServerSettingsService;
+        yield* settings.updateSettings({ harnessPinnedCheckKeys: ["unknown:key"] });
         const service = yield* make;
         const snapshot = yield* service.snapshot({
           projectIds: [PROJECT],
           routineKeys: ["no-matching-routine"],
         });
+        expect(snapshot.pinnedCheckKeys).toEqual(["unknown:key"]);
+        yield* settings.updateSettings({ harnessPinnedCheckKeys: [] });
+        expect(
+          (yield* service.snapshot({ projectIds: [PROJECT], routineKeys: ["no-matching-routine"] }))
+            .pinnedCheckKeys,
+        ).toEqual([]);
         expect(snapshot.queueSummary).toMatchObject({
           queuedSendCount: 2,
           oldestQueuedRequestedAt: "2026-10-11T05:00:00.000Z",
@@ -89,19 +98,6 @@ it.effect(
         });
       }),
     ),
-);
-it.effect("reports the pinned check keys fresh, outside the one-second snapshot cache", () =>
-  withDb(
-    Effect.gen(function* () {
-      const settings = yield* Settings.ServerSettingsService;
-      const service = yield* make;
-      // A server that can pin always says so, even with nothing pinned.
-      expect((yield* service.snapshot({})).pinnedCheckKeys).toEqual([]);
-      yield* settings.updateSettings({ harnessPinnedCheckKeys: ["env:automation:a"] });
-      // Same clock second: the cached read must not hide the new pin.
-      expect((yield* service.snapshot({})).pinnedCheckKeys).toEqual(["env:automation:a"]);
-    }),
-  ),
 );
 it.effect("empty queue is proven zero; a failed queue read stays unknown", () =>
   withDb(

@@ -30,6 +30,8 @@ export interface HarnessEnvironmentRead {
   readonly snapshot: HarnessSnapshot | null;
   readonly error: string | null;
   readonly isPending?: boolean;
+  /** Its server advertises the harnessPin capability. */
+  readonly pinSupported?: boolean;
 }
 
 export interface HarnessCheckFact {
@@ -124,6 +126,8 @@ export function resolveHarnessCheckPage(
   const check = buildHarnessChecks([snapshot], now, {
     ...options,
     unreachable: environment.error === null ? new Set() : new Set([environment.environmentId]),
+    pinEnabled:
+      environment.pinSupported === true ? new Set([environment.environmentId]) : new Set(),
   }).find((entry) => entry.key === ref.checkKey);
   if (check === undefined) return { kind: "not-found", message: NOT_FOUND };
   const { routine } = check;

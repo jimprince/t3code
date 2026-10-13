@@ -148,14 +148,17 @@ const fixture = Effect.fn("fixture")(function* (
         getSettings: Ref.get(settings),
         setGiteaToken: () => Effect.die("unused synthetic setter"),
         updateSettings: (patch) =>
-          Ref.updateAndGet(settings, (current) => ({
-            ...current,
-            enableDeviceSupport: patch.enableDeviceSupport ?? current.enableDeviceSupport,
-            enableAgentDeviceAccess:
-              patch.enableAgentDeviceAccess ?? current.enableAgentDeviceAccess,
-            deviceOnboardingCompleted:
-              patch.deviceOnboardingCompleted ?? current.deviceOnboardingCompleted,
-          })),
+          Ref.updateAndGet(settings, (current) => {
+            const resolved = typeof patch === "function" ? patch(current) : patch;
+            return {
+              ...current,
+              enableDeviceSupport: resolved.enableDeviceSupport ?? current.enableDeviceSupport,
+              enableAgentDeviceAccess:
+                resolved.enableAgentDeviceAccess ?? current.enableAgentDeviceAccess,
+              deviceOnboardingCompleted:
+                resolved.deviceOnboardingCompleted ?? current.deviceOnboardingCompleted,
+            };
+          }),
         streamChanges: Stream.empty,
         subscribeChanges: Effect.succeed(Stream.empty),
       }),

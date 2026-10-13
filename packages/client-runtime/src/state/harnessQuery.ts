@@ -1,8 +1,11 @@
+import * as Effect from "effect/Effect";
+import * as EnvironmentSupervisor from "../connection/supervisor.ts";
+import { setHarnessCheckPinned } from "../rpc/harness.ts";
 import type { HarnessSnapshot } from "@t3tools/contracts";
 import type { Atom } from "effect/reactivity";
 import type * as EnvironmentRegistry from "../connection/registry.ts";
 import { HARNESS_REFRESH_INTERVAL_MS } from "./harnessView.ts";
-import { createEnvironmentRpcQueryAtomFamily } from "./runtime.ts";
+import { createEnvironmentRpcCommand, createEnvironmentRpcQueryAtomFamily } from "./runtime.ts";
 
 /**
  * Shared Harness query for the client UI. It refreshes while a view observes it and drops its
@@ -62,4 +65,30 @@ export function selectHarnessQueuedSends(
       oldestRequestedAt = queue.oldestQueuedRequestedAt;
   }
   return { count, oldestRequestedAt };
+}
+
+/** @public Pin availability and destination grants are enforced by the shared command. */
+export function createHarnessPinCommand<R, E>(
+  runtime: Atom.AtomRuntime<EnvironmentRegistry.EnvironmentRegistry | R, E>,
+) {
+  return createEnvironmentRpcCommand(runtime, {
+    label: "harness:check-pin",
+    tag: "harness.checkPin.set",
+    execute: (input) =>
+      Effect.gen(function* () {
+        const supervisor = yield* EnvironmentSupervisor.EnvironmentSupervisor;
+        return {
+          pinnedCheckKeys: yield* setHarnessCheckPinned(
+            supervisor.target.environmentId,
+            input.checkKey,
+            input.pinned,
+          ),
+        };
+      }),
+  });
+}
+
+/** @public Snapshots from older hosts have no pins. */
+export function isCheckPinned(snapshot: HarnessSnapshot, checkKey: string): boolean {
+  return snapshot.pinnedCheckKeys?.includes(checkKey) ?? false;
 }
