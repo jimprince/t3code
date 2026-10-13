@@ -6,7 +6,7 @@ import {
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { DashboardTask, EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { use, useCallback, useEffect, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { readProjects, readThreadShells } from "../../state/entities";
 import { useDashboardData } from "../../state/dashboard";
@@ -46,7 +46,14 @@ export type DashboardScope =
  * same rows. It renders the last good snapshot at once and swaps a newer revision in whole; there
  * are no loading states, only "Not loaded yet" before the very first snapshot ever arrives.
  */
-export function DashboardView({ scope }: { readonly scope: DashboardScope }) {
+export function DashboardView({
+  scope,
+  leading,
+}: {
+  readonly scope: DashboardScope;
+  /** Rendered above the Ask box and every section, in all variants (the project's What's next canvas). */
+  readonly leading?: ReactNode;
+}) {
   const [storedVariant] = useDashboardVariant();
   // Home has no previous dashboard to fall back on.
   const variant = storedVariant === "previous" ? "A" : storedVariant;
@@ -224,6 +231,7 @@ export function DashboardView({ scope }: { readonly scope: DashboardScope }) {
           </div>
           <OlderServerLines names={state.olderEnvironments} />
         </div>
+        {leading}
         <AskSection projectHead={projectHead} compact={variant === "B"} />
         {data.asOf === null ? (
           <div data-testid="dashboard-placeholder" className="py-3 text-muted-foreground/80">
