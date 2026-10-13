@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "4b640726114662b14a29ccab1cee21786f32a9f7",
-  "head": "cac8f2af0a01b53f5fd35751da68a6001acaf0b2",
+  "prev": "7f91b333897c7b38c0ec9524a13485fcdff7c454",
+  "head": "535430684b0b8ee86edbe329a1d758f96d2fa9de",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -163,7 +163,8 @@
     "fork-mobile-identities",
     "fork-pr-watch-recovery",
     "fork-shell-snapshot-cache",
-    "fork-sqlite-worker-connections"
+    "fork-sqlite-worker-connections",
+    "refresh-temp"
   ],
   "unapplied": [],
   "hidden": [],
@@ -650,6 +651,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "db0623d3fcd48f30f308abc23a225acc2f5e712e"
+    },
+    "refresh-temp": {
+      "oid": "535430684b0b8ee86edbe329a1d758f96d2fa9de"
     }
   }
 }
