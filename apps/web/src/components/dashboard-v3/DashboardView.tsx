@@ -209,7 +209,7 @@ export function DashboardView({ scope }: { readonly scope: DashboardScope }) {
         data-revision={state.revision}
         data-mounted-at={mountedAt}
         data-snapshot-source={state.snapshotSource}
-        className="flex flex-col gap-2"
+        className="@container/dash flex flex-col gap-2"
       >
         <div {...sectionMarker("freshness", { ready, revision: state.revision })}>
           {/* The switcher leads the row: toasts stack at the top right and must not cover it. */}
