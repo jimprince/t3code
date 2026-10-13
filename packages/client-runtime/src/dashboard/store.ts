@@ -51,7 +51,10 @@ export function createDashboardAtoms<R, ER>(
     idleTtlMs: 0,
     staleTimeMs: 60_000,
     refreshIntervalMs: 60_000,
-    execute: (input: { environmentId: EnvironmentId }) => {
+    execute: (
+      input: { environmentId: EnvironmentId },
+      emit: (value: DashboardSnapshot) => Effect.Effect<void>,
+    ) => {
       const shell = shells.get(input.environmentId);
       const config = configs.get(input.environmentId);
       return shell
@@ -61,6 +64,7 @@ export function createDashboardAtoms<R, ER>(
             config
               ? { version: config.environment.serverVersion, label: config.environment.label }
               : undefined,
+            emit,
           )
         : Effect.never;
     },
