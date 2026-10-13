@@ -1,6 +1,6 @@
 import type { DashboardTask } from "@t3tools/contracts";
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
@@ -8,13 +8,16 @@ import { useDashboardUi } from "./context";
 import {
   ageLabel,
   formatClock,
+  EAGER_PROJECTS,
   newestConfirmation,
+  orderProducts,
+  planWorkstreams,
   projectTasks,
   rollup,
   topLevelProjects,
-  workstreamTasks,
   type ScopedProject,
 } from "./dashboard.logic";
+import { IdleProjects } from "./plan";
 import { DoneHeading, OutcomeList } from "./VariantA";
 import {
   ProgressBar,
@@ -174,10 +177,13 @@ function ProjectRows({
   scoped,
   all,
   showName,
+  eager,
 }: {
   readonly scoped: ScopedProject;
   readonly all: ReadonlyArray<ScopedProject>;
   readonly showName: boolean;
+  /** Open workstreams by default; off for the projects below the first screen on Home. */
+  readonly eager: boolean;
 }) {
   const ui = useDashboardUi();
   const { project } = scoped;
@@ -185,27 +191,53 @@ function ProjectRows({
     (candidate) =>
       candidate.environmentId === scoped.environmentId && candidate.project.parentId === project.id,
   );
+  const workstreams = planWorkstreams(project);
+  // "Work" is the server's placeholder for a workstream without a name: no heading row of its own.
+  const unnamed = workstreams.filter((entry) => entry.workstream.title === "Work");
+  const named = workstreams.filter((entry) => entry.workstream.title !== "Work");
+  const merged = showName && named.length === 0 && unnamed.length === 1 ? unnamed[0]! : null;
+  const projectButton = (
+    <button
+      type="button"
+      className="font-semibold hover:underline"
+      onClick={() => ui.openProject(scoped)}
+    >
+      {project.title}
+    </button>
+  );
+  const rowsFor = (workstream: { readonly id: string }, tasks: ReadonlyArray<DashboardTask>) => {
+    const key = `ws:${scoped.key}|${workstream.id}`;
+    const open =
+      eager &&
+      (merged !== null || named.length === 1 || tasks.some((task) => task.attentionIds.length > 0));
+    return { key, collapsed: ui.isCollapsed(key, !open) };
+  };
   return (
     <>
-      {showName ? (
-        <GroupRow>
-          <button type="button" className="hover:underline" onClick={() => ui.openProject(scoped)}>
-            {project.title}
-          </button>
-        </GroupRow>
-      ) : null}
-      {project.workstreams.map((workstream) => {
-        const tasks = workstreamTasks(project, workstream);
-        if (tasks.length === 0) return null;
-        const key = `ws:${scoped.key}|${workstream.id}`;
-        const open =
-          tasks.some((task) => task.attentionIds.length > 0) || project.workstreams.length === 1;
-        const collapsed = ui.isCollapsed(key, !open);
+      {showName && !merged ? <GroupRow>{projectButton}</GroupRow> : null}
+      {merged ? (
+        (() => {
+          const { key, collapsed } = rowsFor(merged.workstream, merged.tasks);
+          return (
+            <WorkstreamRows
+              scoped={scoped}
+              title={projectButton}
+              tasks={merged.tasks}
+              collapsed={collapsed}
+              toggle={() => ui.toggleCollapsed(key)}
+            />
+          );
+        })()
+      ) : (
+        <TaskRows scoped={scoped} tasks={unnamed.flatMap((entry) => entry.tasks)} />
+      )}
+      {named.map(({ workstream, tasks }) => {
+        const { key, collapsed } = rowsFor(workstream, tasks);
         return (
           <WorkstreamRows
             key={workstream.id}
             scoped={scoped}
-            title={workstream.title}
+            title={<span className="font-medium">{workstream.title}</span>}
             tasks={tasks}
             collapsed={collapsed}
             toggle={() => ui.toggleCollapsed(key)}
@@ -233,6 +265,37 @@ function ProjectRows({
   );
 }
 
+function TaskRows({
+  scoped,
+  tasks,
+}: {
+  readonly scoped: ScopedProject;
+  readonly tasks: ReadonlyArray<DashboardTask>;
+}) {
+  const ui = useDashboardUi();
+  return tasks.map((task) => (
+    <GridRow
+      key={task.id}
+      scoped={scoped}
+      tasks={[task]}
+      indent={1}
+      title={
+        <button
+          type="button"
+          className={cn(
+            "truncate text-left hover:underline",
+            task.status === "pending" && "text-muted-foreground",
+          )}
+          onClick={() => ui.openTask(scoped, task)}
+        >
+          {task.status === "done" ? <span className="text-success">✓ </span> : null}
+          {task.title}
+        </button>
+      }
+    />
+  ));
+}
+
 function WorkstreamRows({
   scoped,
   title,
@@ -241,43 +304,15 @@ function WorkstreamRows({
   toggle,
 }: {
   readonly scoped: ScopedProject;
-  readonly title: string;
+  readonly title: ReactNode;
   readonly tasks: ReadonlyArray<DashboardTask>;
   readonly collapsed: boolean;
   readonly toggle: () => void;
 }) {
-  const ui = useDashboardUi();
   return (
     <>
-      <GridRow
-        scoped={scoped}
-        tasks={tasks}
-        title={<span className="font-medium">{title}</span>}
-        caret={{ collapsed, toggle }}
-      />
-      {collapsed
-        ? null
-        : tasks.map((task) => (
-            <GridRow
-              key={task.id}
-              scoped={scoped}
-              tasks={[task]}
-              indent={1}
-              title={
-                <button
-                  type="button"
-                  className={cn(
-                    "truncate text-left hover:underline",
-                    task.status === "pending" && "text-muted-foreground",
-                  )}
-                  onClick={() => ui.openTask(scoped, task)}
-                >
-                  {task.status === "done" ? <span className="text-success">✓ </span> : null}
-                  {task.title}
-                </button>
-              }
-            />
-          ))}
+      <GridRow scoped={scoped} tasks={tasks} title={title} caret={{ collapsed, toggle }} />
+      {collapsed ? null : <TaskRows scoped={scoped} tasks={tasks} />}
     </>
   );
 }
@@ -286,8 +321,11 @@ function WorkstreamRows({
 export function VariantC() {
   const ui = useDashboardUi();
   const { data, root, decisions } = ui;
-  const { products, utilities } = topLevelProjects(data.projects);
-  const groups = root ? [root] : products;
+  const { utilities, ordered, idle } = useMemo(() => {
+    const { products, utilities } = topLevelProjects(data.projects);
+    return { utilities, ...orderProducts(products, data.projects) };
+  }, [data.projects]);
+  const groups = root ? [root] : ordered;
   const snapshot = { ready: data.asOf !== null, revision: ui.revision };
   const releasesMarker = sectionMarker("releases", snapshot);
   const planMarker = sectionMarker("plan", snapshot);
@@ -329,10 +367,25 @@ export function VariantC() {
             })}
           </tbody>
           <tbody {...planMarker}>
-            {groups.map((scoped) => (
-              <ProjectRows key={scoped.key} scoped={scoped} all={data.projects} showName={!root} />
+            {groups.map((scoped, index) => (
+              <ProjectRows
+                key={scoped.key}
+                scoped={scoped}
+                all={data.projects}
+                showName={!root}
+                eager={root !== null || index < EAGER_PROJECTS}
+              />
             ))}
           </tbody>
+          {root || idle.length === 0 ? null : (
+            <tbody>
+              <tr>
+                <td colSpan={9}>
+                  <IdleProjects projects={idle} />
+                </td>
+              </tr>
+            </tbody>
+          )}
           <tbody {...utilitiesMarker} hidden={root !== null || utilities.length === 0}>
             {!root && utilities.length > 0 ? <GroupRow>Utilities</GroupRow> : null}
             {root
