@@ -2,6 +2,7 @@ import {
   CommandId,
   MessageId,
   PROVIDER_SEND_TURN_MAX_INPUT_CHARS,
+  RoutineKindMetadata,
   ScheduledTask,
   ScheduledTaskError,
   ScheduledTaskId,
@@ -157,6 +158,7 @@ export type WebhookTriggerResult =
     }
   | { readonly _tag: "expired" };
 
+const decodeKindMetadata = Schema.decodeUnknownEffect(Schema.fromJsonString(RoutineKindMetadata));
 const decodeTask = Schema.decodeUnknownEffect(ScheduledTask);
 const decodeTaskId = Schema.decodeUnknownOption(ScheduledTaskId);
 const decodeScheduleJson = Schema.decodeUnknownEffect(
@@ -312,12 +314,14 @@ function webhookEndpoint(
 const decodeRow = (row: ScheduledTaskRow, origin: WebhookOrigin | null = null) =>
   Effect.gen(function* () {
     const schedule = yield* decodeScheduleJson(row.schedule_json);
+    const metadata = yield* decodeKindMetadata(row.schedule_json);
     const webhook = schedule.type === "webhook" ? webhookEndpoint(row, origin) : undefined;
     const workspaceStrategy = yield* decodeWorkspaceStrategyJson(row.workspace_strategy_json);
     const modelSelection = yield* decodeModelSelectionJson(row.model_selection_json);
     return yield* decodeTask({
       // The stored id decodes through the task schema so a corrupt value fails
       // as a typed parse error, not a `ScheduledTaskId.make` defect.
+      ...metadata,
       id: row.task_id,
       title: row.title,
       prompt: row.prompt,
@@ -524,6 +528,7 @@ export const layer = Layer.effect(
     const saveTask = (
       task: ScheduledTask,
       requireExisting: boolean,
+      writeRoutineKind: boolean,
       webhook: {
         readonly token: string | null;
         readonly secret: string | null;
@@ -561,7 +566,7 @@ export const layer = Layer.effect(
           ${task.title},
           ${task.prompt},
           ${task.enabled ? 1 : 0},
-          ${JSON.stringify(task.schedule)},
+          ${JSON.stringify({ ...task.schedule, routineKind: task.routineKind })},
           ${task.projectId},
           ${task.threadId},
           ${JSON.stringify(task.workspaceStrategy)},
@@ -586,7 +591,10 @@ export const layer = Layer.effect(
           title = excluded.title,
           prompt = excluded.prompt,
           enabled = excluded.enabled,
-          schedule_json = excluded.schedule_json,
+          schedule_json = CASE WHEN ${writeRoutineKind ? 1 : 0} = 1 THEN excluded.schedule_json
+            WHEN json_type(scheduled_tasks.schedule_json, '$.routineKind') IS NULL
+              THEN json_remove(excluded.schedule_json, '$.routineKind')
+            ELSE json_set(excluded.schedule_json, '$.routineKind', json_extract(scheduled_tasks.schedule_json, '$.routineKind')) END,
           project_id = excluded.project_id,
           thread_id = excluded.thread_id,
           workspace_strategy_json = excluded.workspace_strategy_json,
@@ -1117,6 +1125,7 @@ export const layer = Layer.effect(
           isSameSchedule(existingTask.schedule, schedule);
         const task: ScheduledTask = {
           id,
+          routineKind: input.routineKind ?? existingTask?.routineKind,
           title: input.title,
           prompt: input.prompt,
           enabled: input.enabled,
@@ -1139,7 +1148,12 @@ export const layer = Layer.effect(
           lastRunError: existingTask?.lastRunError ?? null,
           runCount: existingTask?.runCount ?? 0,
         };
-        yield* saveTask(task, input.requireExisting === true, webhook);
+        yield* saveTask(
+          task,
+          input.requireExisting === true,
+          input.routineKind !== undefined,
+          webhook,
+        );
         yield* notifyChanged;
         return { task: (yield* findTask(id)) ?? task };
       });
