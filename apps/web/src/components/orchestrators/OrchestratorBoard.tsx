@@ -359,61 +359,6 @@ function ProjectSubprojects({ summary }: { readonly summary: OrchestratorSummary
   );
 }
 
-function SubprojectTableRow({ sub }: { readonly sub: OrchestratorSummary }) {
-  const navigate = useNavigate();
-  const progress = taskProgress(sub);
-  const fraction = taskProgressFraction(progress);
-  const working =
-    sub.rollup.working > 0
-      ? String(sub.rollup.working)
-      : subprojectIsActive(sub)
-        ? "Working"
-        : null;
-  const needsYou = sub.rollup.needsYou > 0 ? `${sub.rollup.needsYou} need you` : null;
-  const blocked = sub.rollup.blocked > 0;
-  const openSubproject = () =>
-    void navigate({
-      to: "/orchestrators/$environmentId/$threadId",
-      params: { environmentId: sub.root.environmentId, threadId: sub.root.id },
-    });
-  return (
-    <ClickableRow
-      label={labelWithTaskProgress(`Open ${sub.root.title} subproject`, sub)}
-      onOpen={openSubproject}
-      className="flex-wrap items-baseline gap-x-3 gap-y-0.5 py-1.5 text-sm sm:flex-nowrap"
-    >
-      <span className={`min-w-0 flex-1 truncate font-medium ${SUBPROJECT_COLUMN.name}`}>
-        <span className="text-muted-foreground">/ </span>
-        {sub.root.title}
-      </span>
-      <span className="order-last flex min-w-0 basis-full items-baseline gap-2 sm:order-none sm:basis-auto sm:flex-1">
-        <SubprojectHealth summary={sub} />
-      </span>
-      <span className={SUBPROJECT_COLUMN.progress}>
-        <TaskFraction summary={sub} onActivate={openSubproject} />
-      </span>
-      <span className={`${SUBPROJECT_COLUMN.working} text-muted-foreground`}>{working}</span>
-      <span className={SUBPROJECT_COLUMN.needsYou}>
-        {blocked ? <span className="text-error">Blocked </span> : null}
-        {needsYou === null ? null : <span className="text-warning-foreground">{needsYou}</span>}
-      </span>
-      <span className={`${SUBPROJECT_COLUMN.activity} text-xs text-muted-foreground`}>
-        {formatRelativeTimeLabel(sub.rollup.latestActivityAt)}
-      </span>
-      <span className="order-last basis-full text-xs text-muted-foreground sm:hidden empty:hidden">
-        {[
-          blocked ? "Blocked" : null,
-          needsYou,
-          working === null ? null : working === "Working" ? working : `${working} working`,
-          fraction === null ? null : `${fraction} done`,
-        ]
-          .filter((part) => part !== null)
-          .join(" · ")}
-      </span>
-    </ClickableRow>
-  );
-}
-
 /**
  * The project's subagents and nested workers, one row each: running and waiting first, then recent, with the settled
  * ones behind the same collapsed "Settled (N)" row the subprojects use. A nested worker is tagged
