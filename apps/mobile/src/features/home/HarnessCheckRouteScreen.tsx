@@ -9,7 +9,12 @@ import { Pressable, ScrollView, View } from "react-native";
 
 import { AppText as Text } from "../../components/AppText";
 import { cn } from "../../lib/cn";
-import { useHarnessEnvironments, useHarnessNow } from "../../state/harness";
+import {
+  mobileSetHarnessCheckPinned,
+  useHarnessEnvironments,
+  useHarnessNow,
+} from "../../state/harness";
+import { useAtomCommand } from "../../state/use-atom-command";
 
 const TONE_TEXT: Record<HarnessTone, string> = {
   error: "text-destructive",
@@ -42,6 +47,7 @@ function Section({
 function CheckBody({ page }: { readonly page: HarnessCheckPage }) {
   const navigation = useNavigation();
   const { check, facts, runs } = page;
+  const setPinned = useAtomCommand(mobileSetHarnessCheckPinned, "Pin check");
   const openThread = (link: { readonly environmentId: string; readonly threadId: string }) =>
     navigation.navigate("Thread", { environmentId: link.environmentId, threadId: link.threadId });
   return (
@@ -62,6 +68,23 @@ function CheckBody({ page }: { readonly page: HarnessCheckPage }) {
           <Text accessibilityRole="alert" className="text-sm text-warning-foreground">
             {`The server did not answer (${page.readError}); showing the last read, ${page.freshness.label}.`}
           </Text>
+        ) : null}
+        {check.pinSupported ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ selected: check.pinned }}
+            className="min-h-11 justify-center self-start"
+            onPress={() =>
+              void setPinned({
+                environmentId: check.routine.environmentId,
+                input: { checkKey: check.key, pinned: !check.pinned },
+              })
+            }
+          >
+            <Text className="text-sm text-adaptive-sky-600-400">
+              {check.pinned ? "Unpin from top" : "Pin to top"}
+            </Text>
+          </Pressable>
         ) : null}
         <Text
           className={cn(
