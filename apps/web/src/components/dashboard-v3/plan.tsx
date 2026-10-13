@@ -129,7 +129,7 @@ export function ReleaseLines() {
 }
 
 /** A workstream's row and, when open, its tasks. Collapse is remembered on this device. */
-export function WorkstreamRow({
+function WorkstreamRow({
   scoped,
   workstreamId,
   title,
@@ -223,7 +223,7 @@ export function WorkstreamRow({
 }
 
 /** One line for a subproject or utility: its name, a bar over its own tasks, and the figure. */
-export function SubprojectRow({
+function SubprojectRow({
   scoped,
   all,
   dim = false,
