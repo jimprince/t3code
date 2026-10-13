@@ -17,9 +17,11 @@ import {
   type Ref,
   type ReactElement,
 } from "react";
+import { notificationDispositionForReply } from "@t3tools/client-runtime/notification-eligibility";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createRoot } from "react-dom/client";
 import { create, type ReactTestRenderer } from "react-test-renderer";
+import type { ChatMessage } from "../../types";
 import { shouldUseRestingComposerLayout } from "../composerFooterLayout";
 import { useComposerFocusState } from "./useComposerFocusState";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -1397,16 +1399,23 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain("rounded-2xl bg-message p-3");
   });
 
-  it("identifies user-role messages sent by another agent", async () => {
+  it("renders an agent message as a ruled row without the You heading", async () => {
     const { MessagesTimeline } = await import("./MessagesTimeline");
-    const entry = buildUserTimelineEntry("Review this area");
+    const header =
+      'T3 thread message: thread_id: "t-1"; saved_name: "build-worker"; environment: "dev-vm"; reply: "t3-thread send other-target ..."';
+    const entry = buildUserTimelineEntry(`${header}\nReview this area`);
     const agentMarkup = renderToStaticMarkup(
       <MessagesTimeline
         {...buildProps()}
         timelineEntries={[
           {
             ...entry,
-            message: { ...entry.message, createdBy: "agent", creationSource: "provider" },
+            message: {
+              ...entry.message,
+              createdBy: "agent",
+              creationSource: "server",
+              senderThreadId: ThreadId.make("t-1"),
+            },
           },
         ]}
       />,
@@ -1416,8 +1425,74 @@ describe("MessagesTimeline", () => {
     );
 
     expect(agentMarkup).toContain('data-user-message-attribution="agent"');
-    expect(agentMarkup).toContain("Sent by another agent");
-    expect(userMarkup).not.toContain("Sent by another agent");
+    // The Details text also holds the saved name, so read the name from the attribution element.
+    const attribution = /data-user-message-attribution="agent"[^>]*>((?:(?!<\/p>).)*)<\/p>/.exec(
+      agentMarkup,
+    );
+    expect(attribution?.[1]).toContain("build-worker");
+    expect(agentMarkup).toContain("Review this area");
+    expect(agentMarkup).not.toContain("T3 thread message");
+    expect(agentMarkup).toContain("data-agent-message-details");
+    expect(agentMarkup).not.toContain(">You<");
+    expect(agentMarkup).not.toContain("rounded-2xl bg-message");
+    expect(userMarkup).toContain(">You<");
+    expect(userMarkup).not.toContain("data-user-message-attribution");
+  });
+
+  describe("T3_NOTIFY routing marker", () => {
+    it("is hidden from an assistant message while the stored text and its disposition stay", async () => {
+      const { MessagesTimeline } = await import("./MessagesTimeline");
+      const entry = buildAssistantTimelineEntry("Argon is not available.\nT3_NOTIFY: attention");
+      const markup = renderToStaticMarkup(
+        <MessagesTimeline {...buildProps()} timelineEntries={[entry]} />,
+      );
+
+      expect(markup).toContain("Argon is not available.");
+      expect(markup).not.toContain("T3_NOTIFY");
+      expect(entry.message.text).toBe("Argon is not available.\nT3_NOTIFY: attention");
+      expect(notificationDispositionForReply(entry.message.text)).toBe("attention");
+    });
+
+    it("renders no placeholder for a marker-only reply", async () => {
+      const { MessagesTimeline } = await import("./MessagesTimeline");
+      const markup = renderToStaticMarkup(
+        <MessagesTimeline
+          {...buildProps()}
+          timelineEntries={[buildAssistantTimelineEntry("T3_NOTIFY: quiet")]}
+        />,
+      );
+
+      expect(markup).not.toContain("T3_NOTIFY");
+      expect(markup).not.toContain("(empty response)");
+    });
+
+    it("stays visible where the author put it in a code block", async () => {
+      const { MessagesTimeline } = await import("./MessagesTimeline");
+      const markup = renderToStaticMarkup(
+        <MessagesTimeline
+          {...buildProps()}
+          timelineEntries={[
+            buildAssistantTimelineEntry("End a message like this:\n```\nT3_NOTIFY: quiet\n```"),
+          ]}
+        />,
+      );
+
+      expect(markup).toContain("T3_NOTIFY");
+    });
+
+    it("is hidden from an agent-sent message but not from one a person typed", async () => {
+      const { MessagesTimeline } = await import("./MessagesTimeline");
+      const entry = buildUserTimelineEntry("Result is ready.\nT3_NOTIFY: quiet");
+      const render = (message: ChatMessage) =>
+        renderToStaticMarkup(
+          <MessagesTimeline {...buildProps()} timelineEntries={[{ ...entry, message }]} />,
+        );
+
+      const fromAgent = render({ ...entry.message, createdBy: "agent", creationSource: "server" });
+      expect(fromAgent).toContain("Result is ready.");
+      expect(fromAgent).not.toContain("T3_NOTIFY");
+      expect(render(entry.message)).toContain("T3_NOTIFY: quiet");
+    });
   });
 
   it("keeps a subagent parent-thread link at the top of an empty timeline", async () => {
