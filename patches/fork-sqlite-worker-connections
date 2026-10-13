@@ -1,6 +1,6 @@
-Bottom: 8a416561806a06517aa581998339b3480a012ff7
-Top:    7651dc3d1d16a1a18f2c9ebecf90ee72f95f08f1
+Bottom: d30c86431a045c10bc00fe42400a6324cb3e692e
+Top:    d442a7c1cf0bc55f314b680fe9557c56309b5d8a
 Author: brad <bradprin@live.com>
-Date:   2026-10-13 04:37:21 +0000
+Date:   2026-10-13 04:37:30 +0000
 
 perf(server): run SQLite on worker threads with read connections
