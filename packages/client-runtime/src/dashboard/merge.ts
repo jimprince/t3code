@@ -9,7 +9,29 @@ export function mergeDashboardSnapshots(
     (part): part is { environmentId: EnvironmentId; snapshot: DashboardSnapshot } =>
       part.snapshot !== null,
   );
-  const seen = new Set<string>();
+  const candidates = present.flatMap(({ environmentId, snapshot }) =>
+    snapshot.projects.flatMap((project) =>
+      project.attention.map((attention) => ({
+        environmentId,
+        project,
+        attention,
+        ownsThread:
+          attention.kind === "decision" &&
+          attention.threadId !== null &&
+          project.tasks.some(
+            (task) => task.id === attention.taskId && task.threadId === attention.threadId,
+          ),
+      })),
+    ),
+  );
+  // Tracker reads overlap across hosts. Prefer a task linked to the decision's waiting thread,
+  // rather than whichever environment happens to sort first.
+  const chosen = new Map<string, (typeof candidates)[number]>();
+  for (const candidate of candidates) {
+    const prior = chosen.get(candidate.attention.id);
+    if (!prior || (candidate.ownsThread && !prior.ownsThread))
+      chosen.set(candidate.attention.id, candidate);
+  }
   const sourceKey = (env: EnvironmentId, id: string) => `${env}:${id}`;
   return {
     asOf: present.length
@@ -20,11 +42,11 @@ export function mergeDashboardSnapshots(
     projects: present.flatMap(({ environmentId, snapshot }) =>
       snapshot.projects.map((project) => {
         const attention = project.attention
-          .filter((a) => {
-            if (seen.has(a.id)) return false;
-            seen.add(a.id);
-            return true;
-          })
+          .filter(
+            (a) =>
+              chosen.get(a.id)?.attention === a &&
+              chosen.get(a.id)?.environmentId === environmentId,
+          )
           .map((a) => ({ ...a, sourceId: sourceKey(environmentId, a.sourceId) }));
         return {
           key: `${environmentId}:${project.id}`,
