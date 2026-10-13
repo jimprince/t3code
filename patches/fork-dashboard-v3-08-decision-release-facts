@@ -1,0 +1,6 @@
+Bottom: 4e5188ad4658261a10aeb9c4bf394dc3d5e04eb0
+Top:    dba8ed9c68e5cd86c0e46faf7b3cd771d3398166
+Author: brad <bradprin@live.com>
+Date:   2026-10-13 09:53:12 +0000
+
+fix(web): Dashboard keeps answered decisions answered and renders release facts honestly

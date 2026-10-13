@@ -1,7 +1,7 @@
-Bottom: ca61a88d6e8c2b8ced70a20c69efde8f6afd5032
-Top:    e8fa804db1b540edf60ff33d6be29f722d2db715
+Bottom: e64236834c82d755aee5f45165a812471adaa9a1
+Top:    6185d6b20ce9e046d9d34d65d5f7a6adc67cef30
 Author: brad <bradprin@live.com>
-Date:   2026-10-13 09:22:08 +0000
+Date:   2026-10-13 09:30:41 +0000
 
 fix(desktop): open DevTools only when it is asked for
 
@@ -14,3 +14,4 @@ desktop environment as openDevToolsOnLaunch. Development is still a
 precondition, so a packaged build is unaffected.
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+

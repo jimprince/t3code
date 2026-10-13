@@ -1,6 +1,6 @@
-Bottom: fa57c4a313250964b256aa2c400488a1f063f564
-Top:    8e915eea10eacda68a700aad320c0479dfab3c78
-Author: User <user@example.com>
-Date:   2026-10-13 09:22:08 +0000
+Bottom: c7e5e4262e1695c44dced7f5a0f4f7232f316972
+Top:    3bc59030e7b8ea0d0bd7ab22cd5aa527e6e43cae
+Author: brad <bradprin@live.com>
+Date:   2026-10-13 09:53:12 +0000
 
 perf(server): run SQLite on worker threads with read connections

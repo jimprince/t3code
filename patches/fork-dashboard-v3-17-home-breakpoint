@@ -1,0 +1,6 @@
+Bottom: d689a169a145dc6a5e6e8f493a6fa051defbc252
+Top:    02bfac9f73341dc700a777646db1eeeac9adca34
+Author: brad <bradprin@live.com>
+Date:   2026-10-13 09:53:12 +0000
+
+fix(dashboard): Home keeps Plan and Decisions side by side from 960 px

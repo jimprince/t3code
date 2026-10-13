@@ -1,7 +1,7 @@
-Bottom: e20aba6107636e49bb78164f0f80cd6712957ba6
-Top:    ca61a88d6e8c2b8ced70a20c69efde8f6afd5032
+Bottom: 12b89271311e761a9dac6ebed230b964e85c4c66
+Top:    e64236834c82d755aee5f45165a812471adaa9a1
 Author: brad <bradprin@live.com>
-Date:   2026-10-13 09:22:08 +0000
+Date:   2026-10-13 09:30:41 +0000
 
 fix(web): keep the Projects sidebar to real, unfinished projects
 
@@ -26,3 +26,4 @@ so pin order, settle, nest and archive are reachable without the CLI.
 Rename is left out there, since the row has no inline title editor.
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+

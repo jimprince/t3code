@@ -1,0 +1,6 @@
+Bottom: be4aae76884c3455347380fbc595310926289528
+Top:    ebffa397c54b26babdfe632d9a2f2744456d92f3
+Author: brad <bradprin@live.com>
+Date:   2026-10-13 09:53:12 +0000
+
+feat(dashboard): serve cached environment snapshots

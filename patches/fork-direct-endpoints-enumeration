@@ -1,7 +1,7 @@
-Bottom: c673fb5679014760a027ff2ceda09deea30fb329
-Top:    75523059bb9a758b58dc9c967886d64da01f4acd
+Bottom: d60d598f7922c2e8aa36ccbb8a38e04490b906f8
+Top:    bcd6858cdf3c3992f70b3898d3db727965cff3d4
 Author: brad <bradprin@live.com>
-Date:   2026-10-13 09:22:08 +0000
+Date:   2026-10-13 09:30:41 +0000
 
 fix(server): tolerate unavailable network interface enumeration
 
@@ -12,3 +12,4 @@ config, auth, settings or unrelated discovery failures.
 Refs: brad/t3code-fork#199
 Fork-Class: divergence
 Fork-Retire-When: Direct endpoint discovery no longer enumerates OS interfaces or its replacement handles unavailable enumeration without failing server config.
+

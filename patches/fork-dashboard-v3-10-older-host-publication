@@ -1,0 +1,6 @@
+Bottom: f45ad7de24ec4ce56c2d1a5b3e7c03712a06fd45
+Top:    8fec86ea8b68890611053c0f6fdedcc56350c6e2
+Author: brad <bradprin@live.com>
+Date:   2026-10-13 09:53:12 +0000
+
+fix(dashboard): publish older hosts before slow tracker reads

@@ -1,6 +1,7 @@
-Bottom: ab0fad33e698f59b30ebbd9db67dbf637aaa7faa
-Top:    65cdaefe3210fad950ae165170afd3d622432d80
+Bottom: 35049d3e7da23585f775fbc1e39b0178456337a4
+Top:    0fcd4ce3de8198ed214dc904d88eef235c2e8c37
 Author: brad <bradprin@live.com>
-Date:   2026-10-13 09:21:30 +0000
+Date:   2026-10-13 09:30:41 +0000
 
 feat(projects): open a task in the app
+

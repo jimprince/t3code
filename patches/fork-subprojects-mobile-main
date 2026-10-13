@@ -1,8 +1,7 @@
-Bottom: 2119409af0b6ebedbe150fce6dc67d237d3d569e
-Top:    29951fe9f8ffdd60005bfd8cd40fc85343df8f0c
+Bottom: 40af38aac09277b7954bd86169315fec1669b3f0
+Top:    99b8bf09608e14292e0ef727aa9e8a7c74767753
 Author: brad <bradprin@live.com>
-Date:   2026-10-13 09:22:08 +0000
+Date:   2026-10-13 09:30:41 +0000
 
 feat(mobile): nest subprojects inside their project card on the Projects list
 
-Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

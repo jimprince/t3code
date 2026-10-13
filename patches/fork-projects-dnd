@@ -1,13 +1,6 @@
-Bottom: 29951fe9f8ffdd60005bfd8cd40fc85343df8f0c
-Top:    c82a83539154a37555b654405bcfe51e89518b59
+Bottom: a5fa200eba9f1f9fd8e5d51dc6be8c72b5be68ed
+Top:    4cce369656d483e245cd19d6a7dc6d51043640d9
 Author: brad <bradprin@live.com>
-Date:   2026-10-13 09:22:08 +0000
+Date:   2026-10-13 09:30:41 +0000
 
 feat(web): arrange projects by dragging them in the Projects sidebar
-
-Drag a project row (or Alt+Up/Down on it) to move it. The move pins the
-project, and any project shown above it, at that spot with the same pin
-order keys threads use, so the list reads as dropped on every client.
-Unpin returns a project to automatic order.
-
-Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
