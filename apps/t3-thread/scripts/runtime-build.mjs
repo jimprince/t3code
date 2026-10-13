@@ -24,6 +24,9 @@ export function sourceHash(workspace) {
   visit(NodePath.resolve(workspace, "src"));
   visit(NodePath.resolve(workspace, "scripts"));
   visit(NodePath.resolve(root, "packages/contracts/src"));
+  add(NodePath.resolve(root, "packages/client-runtime/src/state/threadPurpose.ts"));
+  add(NodePath.resolve(root, "packages/client-runtime/src/state/forkNesting.ts"));
+  add(NodePath.resolve(root, "packages/client-runtime/package.json"));
   for (const file of [
     "package.json",
     "pnpm-lock.yaml",
