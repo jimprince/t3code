@@ -840,6 +840,8 @@ const layerPreviewControlsRegistration = toolkitRegistration(
 
 const layerPlansToolkit = toolkitRegistration(PlansToolkit, PlansToolkitHandlersLive);
 
+export const layerHarnessToolkit = toolkitRegistration(HarnessToolkit, HarnessHandlersLive);
+
 export const layerEnvironmentToolkit = toolkitRegistration(
   EnvironmentToolkit,
   EnvironmentHandlers.layer,
@@ -898,7 +900,7 @@ export const layer = Layer.mergeAll(
   layerOrchestratorToolkit,
   layerThreadToolkit,
   toolkitRegistration(RecoveryToolkit, RecoveryHandlersLive),
-  toolkitRegistration(HarnessToolkit, HarnessHandlersLive),
+  layerHarnessToolkit,
   layerAttachmentToolkit,
   layerProjectRegistration,
   layerEnvironmentToolkit,
