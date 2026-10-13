@@ -92,6 +92,28 @@ function harness(
 }
 
 it.layer(NodeServices.layer)("automation engine", (it) => {
+  it.effect("create/edit persists routineKind and an older editor preserves it", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const h = yield* harness();
+        yield* Effect.gen(function* () {
+          const engine = yield* AutomationEngine;
+          const store = yield* AutomationStore;
+          yield* engine.save({ ...daily, routineKind: "check" });
+          expect((yield* store.getAutomation(daily.id)).pipe(Option.getOrThrow).routineKind).toBe(
+            "check",
+          );
+          yield* engine.save({ ...daily, routineKind: "agent-wake" });
+          yield* engine.save({ ...daily, name: "Updated" });
+          expect((yield* engine.list(projectId))[0]).toMatchObject({
+            name: "Updated",
+            routineKind: "agent-wake",
+          });
+        }).pipe(Effect.provide(h.layer));
+      }),
+    ),
+  );
+
   it.effect("fires a daily slot at its time and advances the deadline", () =>
     Effect.scoped(
       Effect.gen(function* () {
