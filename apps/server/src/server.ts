@@ -1,4 +1,5 @@
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
+import * as HarnessPin from "./harness/HarnessPinService.ts";
 import * as HarnessRead from "./harness/HarnessReadService.ts";
 import * as AgentGateway from "./automations/AgentGateway.ts";
 import * as AutomationEngine from "./automations/AutomationEngine.ts";
@@ -576,6 +577,7 @@ const layerAutomationWorker = Layer.effectDiscard(
 const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   layerAutomationWorker,
   HarnessRead.layer,
+  HarnessPin.layer,
   AgentAwarenessRelay.layer,
   // Asks T3 Connect to deliver webhooks it held while this environment was offline.
   HeldHooksWaker.layer,
