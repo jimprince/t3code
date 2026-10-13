@@ -1,3 +1,4 @@
+import { DashboardSnapshot, DashboardSubscribeInput } from "./dashboard.ts";
 import { ThreadRecoveryRpcs } from "./threadRecovery.ts";
 import { MessageForwardRpcs } from "./messageForward.ts";
 import { PlanPublicationInput, PlanPublicationResult } from "./planPublication.ts";
@@ -689,6 +690,8 @@ export const WS_METHODS = {
   projectRequestsCreate: "projectRequests.create",
   projectRequestsUpdate: "projectRequests.update",
   projectRequestsList: "projectRequests.list",
+  dashboardSnapshot: "dashboard.getSnapshot",
+  subscribeDashboard: "dashboard.subscribe",
   projectDashboardGet: "projectDashboard.get",
   projectDashboardSetWidgets: "projectDashboard.setWidgets",
   projectDashboardSetTracker: "projectDashboard.setTracker",
@@ -1181,6 +1184,18 @@ const WsProjectRequestsUpdateRpc = Rpc.make(WS_METHODS.projectRequestsUpdate, {
   payload: ProjectRequestUpdateInput,
   success: ProjectRequestRef,
   error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+});
+
+const WsDashboardSnapshotRpc = Rpc.make(WS_METHODS.dashboardSnapshot, {
+  payload: Schema.Struct({}),
+  success: DashboardSnapshot,
+  error: EnvironmentAuthorizationError,
+});
+const WsSubscribeDashboardRpc = Rpc.make(WS_METHODS.subscribeDashboard, {
+  payload: DashboardSubscribeInput,
+  success: DashboardSnapshot,
+  error: EnvironmentAuthorizationError,
+  stream: true,
 });
 
 const projectDashboardError = Schema.Union([ProjectDashboardError, EnvironmentAuthorizationError]);
@@ -2465,6 +2480,8 @@ export const WsForkRpcGroup = RpcGroup.make(
   WsProjectRequestsCreateRpc,
   WsProjectRequestsUpdateRpc,
   WsProjectRequestsListRpc,
+  WsDashboardSnapshotRpc,
+  WsSubscribeDashboardRpc,
   WsProjectDashboardGetRpc,
   WsProjectDashboardSetWidgetsRpc,
   WsProjectDashboardSetTrackerRpc,
