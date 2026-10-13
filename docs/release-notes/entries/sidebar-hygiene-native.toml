@@ -1,0 +1,4 @@
+id = "sidebar-hygiene-native"
+category = "feature"
+functionality = "threads"
+text = "Claude Task workers nest under their spawning thread and settle after successful completion. Messaging goes through the parent; when the parent resumes the task, automatically settled work reopens. Per-thread completion opt-outs and manual choices stay in control. Failed or cancelled workers remain unsettled, and create_threads and t3_thread_launch still create top-level conversations."
