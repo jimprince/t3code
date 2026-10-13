@@ -14,12 +14,16 @@ import {
   type HarnessTone,
 } from "@t3tools/client-runtime/state/harness-view";
 import { harnessCheckRef } from "@t3tools/client-runtime/state/harness-check-page";
+import {
+  buildHarnessChecksList,
+  harnessOwnerTitles,
+} from "@t3tools/client-runtime/state/harness-checks-list";
 import { buildHarnessStrip } from "@t3tools/client-runtime/state/harness-strip";
 import { buildOrchestratorSummaries } from "@t3tools/client-runtime/state/orchestrators";
 import { partitionThreadPurposes } from "@t3tools/client-runtime/state/thread-purpose";
 import { formatLocalWhen } from "@t3tools/shared/localTime";
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
+import { ChevronDownIcon, ChevronRightIcon, XIcon } from "lucide-react";
 import { useCallback, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
 
 import { useNowMinute } from "../../hooks/useNowMinute";
@@ -28,6 +32,8 @@ import { cn } from "../../lib/utils";
 import { useProjects } from "../../state/entities";
 import { useHarnessEnvironments } from "../../state/harness";
 import { buildThreadRouteParams } from "../../threadRoutes";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
 import { useSidebar } from "../ui/sidebar";
 import { ProjectQueryState } from "../orchestrators/ProjectQueryState";
 import { useOrchestratorThreadShells } from "../orchestrators/useOrchestratorThreads";
@@ -266,10 +272,16 @@ export function HarnessSidebarList() {
       }),
     [environments, now, snapshots, unreachable],
   );
-  const { harness: harnessChecks, unclassified } = useMemo(
-    () => splitHarnessChecks(checks),
-    [checks],
+  // The header counts every Harness check, whatever the filter shows.
+  const harnessChecks = useMemo(() => splitHarnessChecks(checks).harness, [checks]);
+  const [query, setQuery] = useState("");
+  const [feedsExpanded, setFeedsExpanded] = useState(false);
+  const ownerTitle = useMemo(() => harnessOwnerTitles(threads), [threads]);
+  const list = useMemo(
+    () => buildHarnessChecksList(checks, query, ownerTitle),
+    [checks, ownerTitle, query],
   );
+  const showFeeds = feedsExpanded || list.feedsOpen;
   const labelByEnvironment = useMemo(
     () => new Map(environments.map(({ environmentId, label }) => [environmentId, label])),
     [environments],
@@ -434,11 +446,61 @@ export function HarnessSidebarList() {
             No automated checks are registered.
           </p>
         ) : null}
-        <ul className="flex flex-col gap-px">{harnessChecks.map(renderCheck)}</ul>
-        {unclassified.length > 0 ? (
+        {snapshots.length > 0 ? (
+          <div className="flex items-center gap-1 px-2.5 pb-1">
+            <Input
+              type="search"
+              size="compact"
+              aria-label="Filter checks"
+              placeholder="Filter checks"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+            {query !== "" ? (
+              <Button
+                size="icon-xs"
+                variant="ghost-muted"
+                aria-label="Clear the check filter"
+                onClick={() => setQuery("")}
+              >
+                <XIcon aria-hidden />
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+        {list.noMatches ? (
+          <p role="status" className="px-3 py-2 text-xs text-sidebar-muted-foreground">
+            No checks match.
+          </p>
+        ) : null}
+        <ul className="flex flex-col gap-px">{list.checks.map(renderCheck)}</ul>
+        {list.feeds ? (
+          <>
+            <button
+              type="button"
+              aria-expanded={showFeeds}
+              className={cn(
+                "flex w-full cursor-pointer items-center gap-1 px-2.5 text-xs text-sidebar-muted-foreground hover:text-sidebar-foreground",
+                isMobile ? "min-h-11" : "h-7",
+              )}
+              onClick={() => setFeedsExpanded((value) => !value)}
+            >
+              {showFeeds ? (
+                <ChevronDownIcon aria-hidden className="size-3.5" />
+              ) : (
+                <ChevronRightIcon aria-hidden className="size-3.5" />
+              )}
+              {list.feeds.label}
+            </button>
+            {showFeeds ? (
+              <ul className="flex flex-col gap-px">{list.feeds.checks.map(renderCheck)}</ul>
+            ) : null}
+          </>
+        ) : null}
+        {list.unclassified.length > 0 ? (
           <>
             <SectionHeading title="Unclassified" detail="no owner, not Harness" />
-            <ul className="flex flex-col gap-px">{unclassified.map(renderCheck)}</ul>
+            <ul className="flex flex-col gap-px">{list.unclassified.map(renderCheck)}</ul>
           </>
         ) : null}
       </section>

@@ -1,4 +1,4 @@
 id = "harness-tab"
 category = "feature"
 functionality = "Harness visibility"
-text = "A Harness tab beside Threads and Projects lists the agents that improve the tools and their automated checks, showing which checks are late, failing, disabled or not reporting yet, how many errors each run finds, and a one-line environment queue, oldest wait and 24-hour failure strip; a check opens in the main pane with its schedule, evidence and run history; Move to Harness and Move back are in the thread menu."
+text = "A Harness tab beside Threads and Projects lists the agents that improve the tools and their automated checks, showing which checks are late, failing, disabled or not reporting yet, how many errors each run finds, and a one-line environment queue, oldest wait and 24-hour failure strip; a check opens in the main pane with its schedule, evidence and run history, feeds that are not reporting fold into one row, and a filter box finds a check by name, owner, schedule or state; Move to Harness and Move back are in the thread menu."
