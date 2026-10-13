@@ -50,7 +50,14 @@ const fail = (operation: string, detail: string, status?: number) =>
     provider: "gitea",
     operation,
     detail,
-    reason: status === 401 ? "unauthenticated" : status === 429 ? "rate-limited" : "failed",
+    reason:
+      status === 401
+        ? "unauthenticated"
+        : status === 429
+          ? "rate-limited"
+          : status === 404 && operation === "read-pr"
+            ? "not-found"
+            : "failed",
   });
 
 const RepositoryName = Schema.Struct({ full_name: Schema.String });
@@ -68,6 +75,8 @@ const hostOfUrl = (url: string) => {
     return null;
   }
 };
+const canonicalHost = (instance: GiteaInstanceConfig) =>
+  new URL(instance.webOrigin).host.toLowerCase();
 const instanceNames = (instance: GiteaInstanceConfig) =>
   [instance.host, hostOfUrl(instance.webOrigin), ...instance.sshAliases].flatMap((name) =>
     name === null ? [] : [name.toLowerCase()],
@@ -132,7 +141,7 @@ export const make = Effect.gen(function* () {
       (instance) =>
         instanceNames(instance).includes(host) || learnedHosts.get(host) === instance.id,
     );
-    if (matches.length > 0) return matches.length === 1 ? matches[0]!.host.toLowerCase() : null;
+    if (matches.length > 0) return matches.length === 1 ? canonicalHost(matches[0]!) : null;
     if (
       FOREIGN_FORGES.has(detectSourceControlProviderFromRemoteUrl(`https://${host}/`)?.kind ?? "")
     )
@@ -153,7 +162,7 @@ export const make = Effect.gen(function* () {
     );
     if (serving.length === 1) {
       learnedHosts.set(host, serving[0]!.id);
-      return serving[0]!.host.toLowerCase();
+      return canonicalHost(serving[0]!);
     }
     aliasMisses.set(key, now + ALIAS_MISS_TTL_MS);
     return null;
@@ -165,7 +174,15 @@ export const make = Effect.gen(function* () {
   ) =>
     api
       .request(remote.instance, path, schema)
-      .pipe(Effect.mapError((e) => fail("read", e.detail, e.status)));
+      .pipe(
+        Effect.mapError((e) =>
+          fail(
+            /^\/repos\/[^/]+\/[^/]+\/pulls\/\d+$/.test(path) ? "read-pr" : "read",
+            e.detail,
+            e.status,
+          ),
+        ),
+      );
   const read = Effect.fn("GiteaPullRequest.read")(function* (
     input: ProviderRepositoryRef & { number: number },
   ) {
