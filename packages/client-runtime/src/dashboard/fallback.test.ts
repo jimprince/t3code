@@ -9,6 +9,7 @@ import {
   ProjectDashboardError,
   type OrchestrationV2ShellSnapshot,
   type ProjectIssuesListResult,
+  type ProjectIssue,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Deferred from "effect/Deferred";
@@ -486,5 +487,69 @@ it.effect(
           .filter((s) => s.id.startsWith("older:root:"))
           .every((s) => !s.failed && s.coverage === "complete"),
       ).toBe(true);
+    }),
+);
+
+it.effect(
+  "reads tracker decisions for a head with only remote workers even without a local tracker",
+  () =>
+    Effect.gen(function* () {
+      const calls: ThreadId[] = [];
+      const now = "2026-10-11T10:00:00Z";
+      const issue: ProjectIssue = {
+        host: "git.test",
+        repository: "brad/cos",
+        number: 462,
+        title: "Choose an owner",
+        url: "https://git.test/brad/cos/issues/462",
+        status: "pending",
+        labels: ["needs-brad"],
+        isRequest: false,
+        requestSource: null,
+        assignees: [],
+        comments: 0,
+        createdAt: now,
+        updatedAt: now,
+        closedAt: null,
+        linkedThreadIds: [],
+        milestone: null,
+        owner: { threadId: root, title: "Chief of Staff", projectTitle: "VM" },
+        decision: { context: "Proceed?", waiting: root, options: [] },
+      };
+      const client = {
+        "fork.threads.metadata.list": () =>
+          Effect.succeed(
+            roots.map((threadId) => ({
+              threadId,
+              parentThreadId: null,
+            })),
+          ),
+        [WS_METHODS.projectDashboardGet]: () => Effect.succeed({ tracker: null }),
+        [WS_METHODS.projectIssuesList]: ({ rootThreadId }: { rootThreadId: ThreadId }) =>
+          Effect.sync(() => {
+            calls.push(rootThreadId);
+            return { issues: [issue], repositories: [], fetchedAt: now };
+          }),
+        [WS_METHODS.projectRoadmapGet]: () =>
+          Effect.succeed({ tracker: null, versions: [], items: [] }),
+        [WS_METHODS.projectRequestsPendingAsks]: () => Effect.succeed({ asks: [] }),
+      } as unknown as WsRpcProtocolClient;
+      const noAsks = {
+        ...shell,
+        threads: shell.threads.map((t) => ({ ...t, pendingRuntimeRequest: null })),
+      };
+      const snapshot = yield* provideOlderClient(
+        readOlderDashboard(noAsks, undefined, undefined, undefined, [root]),
+        client,
+      );
+      expect(calls).toEqual([root]);
+      expect(snapshot.projects.map((p) => p.rootThreadId)).toEqual([root]);
+      expect(snapshot.projects[0]?.attention).toContainEqual(
+        expect.objectContaining({
+          title: "Choose an owner",
+          question: "Proceed?",
+          threadId: root,
+        }),
+      );
     }),
 );
