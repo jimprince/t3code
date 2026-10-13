@@ -1,7 +1,7 @@
-Bottom: 81621c6253ebd3817d25f79d66c49047d44abad0
-Top:    c2838d88f676fc6db5966fce5502d19fb24f62fd
+Bottom: b66f55384b2edd0beb1cd3070843eb3ba800f5bd
+Top:    805e02fb4e970587280a21f1d96ca5d388accf33
 Author: brad <bradprin@live.com>
-Date:   2026-10-11 08:12:24 +0000
+Date:   2026-10-10 21:04:15 +0000
 
 fix(mobile): fold finished projects into Quiet
 
@@ -12,3 +12,4 @@ Settled and long-quiet projects now fold into a collapsed Quiet group
 using the same projectSidebarBucket rule as web. The seven-day quiet
 window moves into client-runtime as PROJECT_QUIET_AFTER_MS so both
 clients share it.
+

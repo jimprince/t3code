@@ -1,6 +1,0 @@
-Bottom: 66bbb246b9f28d0dbb4b97bcf2ad1be8adaf0fe5
-Top:    3e94f041f3a074b3cf289bac8fbfb37d26a22a84
-Author: brad <bradprin@live.com>
-Date:   2026-10-12 03:54:21 +0000
-
-perf(server): cache shell snapshots with transactional invalidation

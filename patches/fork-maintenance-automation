@@ -1,8 +1,7 @@
-Bottom: dc41c4fe884406114149566a8b76f267931e5fa4
-Top:    4439dfa8876ba01f7ed681cbbe81fd689cbf6556
+Bottom: fcdb846ee89e5414e94ad7bb7a304084ab98261f
+Top:    ed7ce01dbb0f3d79bc485b2a4aa4352e4bb35931
 Author: brad <bradprin@live.com>
-Date:   2026-10-10 22:24:09 +0000
+Date:   2026-10-10 21:04:02 +0000
 
 chore(fork): automate StGit stack maintenance and upstream replay
 
-Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
