@@ -99,3 +99,9 @@ id = "transient-session-check-recovery-277"
 date = "2026-10-13"
 decided = "repair-existing-concern"
 rationale = "Web, desktop, mobile and protected command execution share the last successful grant after transport failures. Definitive credential rejection clears cached grants until a new successful check. Mounted session checks retry from one second to a thirty-second cap, retaining the six-second request timeout."
+
+[[decision]]
+id = "r29-grants-helper-mock-boundary"
+date = "2026-10-13"
+decided = "Keep the real sessionStateGrants helper in isolated session atom mocks."
+rationale = "The #277 recovery helper is used by UI and command permission guards. CI exposed nine existing fixture modules that mocked the entire session module without this export; partial mocks retain the real grant logic and existing revocation assertions."
