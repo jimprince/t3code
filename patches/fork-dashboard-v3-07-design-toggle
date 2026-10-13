@@ -1,0 +1,6 @@
+Bottom: 82e61e8e5c6eb089add01d768a69869304579481
+Top:    82e61e8e5c6eb089add01d768a69869304579481
+Author: brad <bradprin@live.com>
+Date:   2026-10-13 04:34:11 +0000
+
+fix(web): Home design toggle shows A when the stored choice was Previous
