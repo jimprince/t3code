@@ -70,12 +70,15 @@ export function ProjectRequestBox({
   summary,
   quickActions,
   prefill,
+  placeholder = "New request",
 }: {
   readonly summary: OrchestratorSummary;
   /** Chips under the closed box that start a request with their text. */
   readonly quickActions?: ReadonlyArray<RequestQuickAction> | undefined;
   /** Opens the box with this text, such as an Unstick message; each new nonce applies once. */
   readonly prefill?: { readonly text: string; readonly nonce: number } | null | undefined;
+  /** The empty box's hint, such as who the request goes to; the accessible name stays "New request". */
+  readonly placeholder?: string;
 }) {
   const [text, setText] = useState("");
   const [expanded, setExpanded] = useState(false);
@@ -290,7 +293,7 @@ export function ProjectRequestBox({
           aria-label="New request"
           value=""
           readOnly
-          placeholder="New request"
+          placeholder={placeholder}
           onFocus={() => setExpanded(true)}
           onPaste={(event: ClipboardEvent) => {
             const files = imageFiles(event.clipboardData.files);
@@ -307,7 +310,7 @@ export function ProjectRequestBox({
           rows={3}
           disabled={busy}
           autoFocus
-          placeholder="New request"
+          placeholder={placeholder}
           onFocus={(event) => {
             if (!caretToEnd.current) return;
             caretToEnd.current = false;
