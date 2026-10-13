@@ -1,0 +1,14 @@
+name = "fork-harness-purpose"
+subject = "feat(threads): persist and inherit Harness purpose"
+class = "product"
+purpose = "Separate Harness work from project work with a nullable organizational purpose override and creator seeding, without changing nesting or workspace ownership."
+retire_when = "Upstream supports equivalent thread-purpose inheritance and reversible organization across clients and agent creation paths."
+depends_on = ["fork-sidebar-hygiene-seed", "fork-nested-threads", "fork-cross-environment-nesting", "fork-named-agents", "fork-orchestrators-view"]
+roles = []
+note = "No backfill or sidebar UI. Root threads default to project; absent remote ancestry is unknown. Creation seeds are committed with thread.created and never overwrite metadata on replay. Delegates and automation workers inherit via their existing organizational parent. Fresh ownerless schedules retain no recorded seed. The operator CLI ships per machine and does not require a desktop release."
+
+[[decision]]
+id = "harness-root-purpose"
+date = "2026-10-11"
+decided = "One optional nullable purpose on ForkThreadMetadata; top-level creator launches and named-agent handovers copy effective purpose once."
+rationale = "A workspace contains both product and Harness work. Organizational inheritance provides moves without reclassifying unrelated threads or duplicating a hierarchy."
