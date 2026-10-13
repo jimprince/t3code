@@ -76,7 +76,7 @@ export const make = (
         const { rootThreadId, rootProjectId, threads } = yield* resolveRoot(input.threadId);
         const file = yield* store.read;
         const layout = yield* layouts
-          .get(rootThreadId)
+          .getForRoot(rootThreadId)
           .pipe(Effect.mapError((error) => fail(error.message)));
         return {
           rootThreadId,

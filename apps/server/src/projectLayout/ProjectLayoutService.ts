@@ -53,6 +53,10 @@ export class ProjectLayoutService extends Context.Service<
     /** The project's orchestrator thread for any thread in its tree. */
     readonly rootOf: (threadId: ThreadId) => Effect.Effect<ThreadId, ProjectLayoutError>;
     readonly get: (threadId: ThreadId) => Effect.Effect<ProjectLayout, ProjectLayoutError>;
+    /** Read the layout after a service has already resolved and validated the root. */
+    readonly getForRoot: (
+      rootThreadId: ThreadId,
+    ) => Effect.Effect<ProjectLayout, ProjectLayoutError>;
     readonly apply: (
       input: ProjectLayoutApplyInput,
       actor: ProjectLayoutActor,
@@ -240,7 +244,15 @@ const make = Effect.gen(function* () {
       { bufferSize: 1, strategy: "sliding" },
     );
 
-  return ProjectLayoutService.of({ rootOf, get, apply, revert, history, stream });
+  return ProjectLayoutService.of({
+    rootOf,
+    get,
+    getForRoot: current,
+    apply,
+    revert,
+    history,
+    stream,
+  });
 });
 
 export const layer = Layer.effect(ProjectLayoutService, make);
