@@ -2034,7 +2034,9 @@ const layerWsRpc = (
               startup
                 .enqueueCommand(
                   ThreadMessageIntake.launchThread({
-                    ...(input.creatorThreadId === undefined ? {} : { creatorThreadId: input.creatorThreadId }),
+                    ...(input.creatorThreadId === undefined
+                      ? {}
+                      : { creatorThreadId: input.creatorThreadId }),
                     ...(input.purposeSeed === undefined ? {} : { purposeSeed: input.purposeSeed }),
                     commandId: input.commandId,
                     ...(input.threadId === undefined ? {} : { threadId: input.threadId }),
@@ -2124,12 +2126,6 @@ const layerWsRpc = (
             Effect.annotateCurrentSpan({ "orchestration_v2.thread_id": input.threadId }).pipe(
               Effect.andThen(subscribeOrchestrationV2Thread(input)),
             ),
-          ),
-        [WS_METHODS.harnessSnapshot]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.harnessSnapshot,
-            Effect.flatMap(HarnessReadService, (service) => service.snapshot(input)),
-            { "rpc.aggregate": "harness" },
           ),
         [WS_METHODS.scheduledTasksList]: (_input) =>
           scheduledTasks.list().pipe(Effect.map(withVisibleWebhookUrls)),
@@ -3229,6 +3225,8 @@ const layerWsRpc = (
       );
       const forwards = makeMessageForwardService(sql, threadManagement, handoffs.accept);
       const forkHandlers = WsForkRpcGroup.of({
+        [WS_METHODS.harnessSnapshot]: (input) =>
+          Effect.flatMap(HarnessReadService, (service) => service.snapshot(input)),
         ...threadSubscriptionHandlers(threadManagement),
         [WS_METHODS.automationsList]: (input) =>
           automations.list(input.projectId).pipe(Effect.map((list) => ({ automations: list }))),
