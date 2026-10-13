@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "4a8bf91ce245f6abb33c46b198bf9fea4da6c07d",
-  "head": "8c832478fe98ed395dd0c5e76b4b729ece4a5002",
+  "prev": "eee01329e2b1c4cfe9f131e162d2b35a6b5c5983",
+  "head": "18f5230be8501774e1f12f4d5b4ae282e74f2637",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -97,7 +97,8 @@
     "fork-board-declutter",
     "fork-project-skew-gate",
     "fork-request-titles",
-    "fork-page-agent-tray"
+    "fork-page-agent-tray",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-release-publication",
@@ -659,6 +660,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "417f53786d641f51303667812e341ece7d3f9016"
+    },
+    "refresh-temp": {
+      "oid": "18f5230be8501774e1f12f4d5b4ae282e74f2637"
     }
   }
 }
