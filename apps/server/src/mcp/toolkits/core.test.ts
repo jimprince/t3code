@@ -1,6 +1,5 @@
 import * as SqlClient from "effect/sql/SqlClient";
 import { readMetadata, writeMetadata } from "../../forkThreads/MetadataStore.ts";
-import * as SqlitePersistence from "../../persistence/Sqlite.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";

@@ -108,7 +108,7 @@ it.effect("attributes a launched thread's first message to the calling thread", 
     expect(launchedCreator).toBe(sourceThreadId);
     yield* toolkit
       .handle("t3_thread_launch", { title: "Empty claim" })
-      .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(dependencies));
+      .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(layerDependencies));
     expect(launchedSender).toBeUndefined();
     expect(launchedCreator).toBe(sourceThreadId);
   }),

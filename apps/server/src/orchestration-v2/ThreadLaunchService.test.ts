@@ -2499,7 +2499,7 @@ it.effect(
     const dependencies = Layer.mergeAll(
       harness.layer,
       NodeCrypto.layer,
-      ProviderAdapterRegistry.makeLayer([adapter]),
+      ProviderAdapterRegistry.layerFromAdapters([adapter]),
       Layer.mock(ScheduledTasks.ScheduledTaskService)({}),
     );
     const serviceLayer = OrchestratorMcp.layer.pipe(Layer.provide(dependencies));
