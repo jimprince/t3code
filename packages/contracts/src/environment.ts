@@ -197,6 +197,7 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   /** Server accepts the question, task and epic request kinds. Absent on older servers,
       which only know the earlier kinds, so the CLI files a request under one of those. */
   projectItemTypes: Schema.optionalKey(Schema.Boolean),
+  threadResumeFromPlan: Schema.optionalKey(Schema.Boolean),
   pullRequestStackActions: Schema.optionalKey(Schema.Boolean),
   /** The update path clients should offer for this server. Absent on
       servers that must be relaunched manually (dev checkouts, Windows
