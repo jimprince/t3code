@@ -5,6 +5,7 @@ import {
   formatDeadline,
   formatInDeviceZone,
   formatLocalIso,
+  formatLocalWhen,
   localCalendarDay,
 } from "./localTime.ts";
 
@@ -67,5 +68,17 @@ describe("formatInDeviceZone", () => {
     expect(formatInDeviceZone(nine, "UTC")).toBe("03:00 MDT (09:00 UTC)");
     expect(formatInDeviceZone(nine, "America/Edmonton")).toBe("03:00 MDT");
     expect(formatInDeviceZone(at("2026-03-01T09:00:00Z"), "UTC")).toBe("02:00 MST (09:00 UTC)");
+  });
+});
+
+describe("formatLocalWhen", () => {
+  const now = at("2026-10-10T13:41:00-06:00");
+  it("reads the device-zone clock today, weekday and clock this week, then the date", () => {
+    expect(formatLocalWhen(at("2026-10-10T13:40:00-06:00"), now)).toBe("13:40");
+    // 01:30 UTC on the 11th is still the evening of the 10th in Edmonton.
+    expect(formatLocalWhen(at("2026-10-11T01:30:00Z"), now)).toBe("19:30");
+    expect(formatLocalWhen(at("2026-10-09T18:02:00-06:00"), now)).toBe("Fri 18:02");
+    expect(formatLocalWhen(at("2026-10-11T03:00:00-06:00"), now)).toBe("Sun 03:00");
+    expect(formatLocalWhen(at("2026-10-02T18:02:00-06:00"), now)).toBe("Oct 2 18:02");
   });
 });
