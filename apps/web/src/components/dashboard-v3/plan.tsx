@@ -168,8 +168,8 @@ export function WorkstreamRow({
         className={cn(
           "grid grid-cols-[14px_minmax(0,1fr)_auto] items-center gap-x-2.5 py-0.75",
           onOpen
-            ? "sm:grid-cols-[14px_minmax(220px,1.4fr)_minmax(90px,1fr)_minmax(170px,auto)]"
-            : "sm:grid-cols-[14px_minmax(150px,1.25fr)_minmax(110px,1.6fr)_minmax(170px,auto)]",
+            ? "@xl/dash:grid-cols-[14px_minmax(220px,1.4fr)_minmax(90px,1fr)_minmax(170px,auto)]"
+            : "@xl/dash:grid-cols-[14px_minmax(150px,1.25fr)_minmax(110px,1.6fr)_minmax(170px,auto)]",
         )}
       >
         <button
@@ -195,7 +195,7 @@ export function WorkstreamRow({
         >
           {title}
         </button>
-        <span className="order-last col-span-3 sm:order-none sm:col-span-1">
+        <span className="order-last col-span-3 @xl/dash:order-none @xl/dash:col-span-1">
           <ProgressBar
             steps={roll.steps}
             gained={roll.gained}
@@ -237,7 +237,7 @@ export function SubprojectRow({
   const roll = rollup(tasks);
   const keys = blockingKeys(ui.decisionKeysFor, scoped, scoped.project.tasks);
   return (
-    <div className="grid grid-cols-[14px_minmax(0,1fr)_auto] items-center gap-x-2.5 py-0.75 sm:grid-cols-[14px_minmax(150px,1.25fr)_minmax(110px,1.6fr)_minmax(170px,auto)]">
+    <div className="grid grid-cols-[14px_minmax(0,1fr)_auto] items-center gap-x-2.5 py-0.75 @xl/dash:grid-cols-[14px_minmax(150px,1.25fr)_minmax(110px,1.6fr)_minmax(170px,auto)]">
       <span />
       <button
         type="button"
@@ -246,7 +246,7 @@ export function SubprojectRow({
       >
         {scoped.project.title}
       </button>
-      <span className="order-last col-span-3 sm:order-none sm:col-span-1">
+      <span className="order-last col-span-3 @xl/dash:order-none @xl/dash:col-span-1">
         <ProgressBar
           small
           steps={roll.steps}
