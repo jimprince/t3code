@@ -1,3 +1,7 @@
+import * as OrchestratorMcp from "../mcp/OrchestratorMcpService.ts";
+import { resolveCreatorPurpose } from "../forkThreads/ThreadPurpose.ts";
+import { readMetadata, writeMetadata } from "../forkThreads/MetadataStore.ts";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as WorktreeSetupTracker from "../project/WorktreeSetupTracker.ts";
 import * as ProjectCloneTracker from "../project/ProjectCloneTracker.ts";
@@ -15,6 +19,7 @@ import {
   ComposerContextId,
   type ChatAttachment,
   CommandId,
+  EnvironmentId,
   DEFAULT_SERVER_SETTINGS,
   GitCommandError,
   MessageId,
@@ -2423,5 +2428,124 @@ it.effect(
       assert.equal(recovered.projection.runs.length, 1);
       assert.equal(recovered.projection.thread.id, input.threadId);
     }).pipe(Effect.provide(harness.layer));
+  },
+);
+
+it.effect("message-less creator launch inherits once and replay preserves a later override", () => {
+  const harness = makeHarness();
+  return Effect.gen(function* () {
+    const launches = yield* ThreadLaunch.ThreadLaunchService;
+    const sql = yield* SqlClient.SqlClient;
+    const creator = ThreadId.make("purpose-creator");
+    yield* launches.launch(launchInput({ command: "creator-launch", thread: creator }));
+    yield* writeMetadata(sql, {
+      threadId: creator,
+      parentThreadId: ThreadId.make("purpose-owner"),
+    });
+    yield* writeMetadata(sql, {
+      threadId: ThreadId.make("purpose-owner"),
+      parentThreadId: null,
+      purpose: "harness",
+    });
+    const input = {
+      ...launchInput({ command: "purpose-launch", thread: "purpose-child" }),
+      creatorThreadId: creator,
+    };
+    yield* launches.launch(input);
+    const child = ThreadId.make("purpose-child");
+    assert.equal((yield* readMetadata(sql, child))?.purpose, "harness");
+    assert.isNull((yield* readMetadata(sql, child))?.parentThreadId);
+    yield* writeMetadata(sql, { threadId: child, parentThreadId: null, purpose: "project" });
+    yield* launches.launch(input);
+    assert.equal((yield* readMetadata(sql, child))?.purpose, "project");
+    const remote = {
+      ...launchInput({ command: "remote-purpose", thread: "remote-purpose-child" }),
+      purposeSeed: "harness" as const,
+    };
+    yield* launches.launch(remote);
+    assert.equal((yield* readMetadata(sql, remote.threadId))?.purpose, "harness");
+    yield* writeMetadata(sql, {
+      threadId: remote.threadId,
+      parentThreadId: null,
+      purpose: "project",
+    });
+    yield* launches.launch(remote);
+    assert.equal((yield* readMetadata(sql, remote.threadId))?.purpose, "project");
+  }).pipe(Effect.provide(harness.layer));
+});
+
+it.effect(
+  "create_threads seeds ordinary roots while delegate_task inherits without an override",
+  () => {
+    const harness = makeHarness({
+      providers: [
+        {
+          instanceId: modelSelection.instanceId,
+          driver: ProviderDriverKind.make("codex"),
+          enabled: true,
+          installed: true,
+          version: "test",
+          status: "ready",
+          auth: { status: "authenticated" },
+          checkedAt: "2026-10-11T00:00:00.000Z",
+          models: [
+            { slug: modelSelection.model, name: "Test", isCustom: false, capabilities: null },
+          ],
+          slashCommands: [],
+          skills: [],
+        },
+      ],
+    });
+    const dependencies = Layer.mergeAll(
+      harness.layer,
+      NodeCrypto.layer,
+      ProviderAdapterRegistry.makeLayer([adapter]),
+      Layer.mock(ScheduledTasks.ScheduledTaskService)({}),
+    );
+    const serviceLayer = OrchestratorMcp.layer.pipe(Layer.provide(dependencies));
+    return Effect.gen(function* () {
+      const launches = yield* ThreadLaunch.ThreadLaunchService;
+      const threads = yield* ThreadManagement.ThreadManagementService;
+      const sql = yield* SqlClient.SqlClient;
+      const parent = ThreadId.make("mcp-purpose-parent");
+      yield* launches.launch(
+        launchInput({ command: "mcp-parent", thread: parent, message: "Create work" }),
+      );
+      yield* writeMetadata(sql, { threadId: parent, parentThreadId: null, purpose: "harness" });
+      const scope = {
+        environmentId: EnvironmentId.make("test"),
+        requestNamespace: "purpose-test",
+        thread: {
+          threadId: parent,
+          providerSessionId: "purpose-test",
+          providerInstanceId: modelSelection.instanceId,
+        },
+        client: undefined,
+        issuedAt: 1,
+        capabilities: new Set(["orchestration" as const]),
+      };
+      const service = yield* OrchestratorMcp.OrchestratorMcpService;
+      const request = {
+        clientRequestId: "purpose-roots",
+        threads: [{ title: "Ordinary root", prompt: "Work" }],
+      };
+      const created = yield* service.createThreads(scope, request);
+      const root = created.threads[0]!.threadId;
+      assert.equal((yield* readMetadata(sql, root))?.purpose, "harness");
+      assert.isNull((yield* readMetadata(sql, root))?.parentThreadId);
+      yield* writeMetadata(sql, { threadId: root, parentThreadId: null, purpose: "project" });
+      yield* service.createThreads(scope, request);
+      assert.equal((yield* readMetadata(sql, root))?.purpose, "project");
+      const delegated = yield* service.delegateTask(scope, {
+        task: "Work",
+        mode: "async",
+        clientRequestId: "purpose-delegate",
+      });
+      assert.isNotNull(delegated.childThreadId);
+      const child = delegated.childThreadId!;
+      assert.isUndefined((yield* readMetadata(sql, child))?.purpose);
+      assert.equal((yield* readMetadata(sql, child))?.parentThreadId, parent);
+      assert.equal(yield* resolveCreatorPurpose(sql, child, threads.getThreadShell), "harness");
+    }).pipe(Effect.provide(Layer.mergeAll(dependencies, serviceLayer)));
   },
 );
