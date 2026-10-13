@@ -46,7 +46,7 @@ export function nativeCompletionEligible(
     projection.runs.length === 0 &&
     !projection.providerThreads.some(
       (provider) =>
-        provider.codexNativeGoal?.status === "active" ||
+        provider.goal?.status === "active" ||
         backgroundWorkHoldsCompletion(provider.pendingBackgroundTasks ?? []),
     ) &&
     thread.creationSource === "provider" &&

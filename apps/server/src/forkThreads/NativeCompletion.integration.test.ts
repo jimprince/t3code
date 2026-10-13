@@ -24,15 +24,15 @@ import * as Registry from "../orchestration-v2/ProviderAdapterRegistry.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as WorkerLifecycle from "./WorkerLifecycle.ts";
-import { makeOrchestratorV2ReplayLayerWithRegistry } from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
+import * as ProviderReplayHarness from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import { readMetadata, writeMetadata } from "./MetadataStore.ts";
 import { nativeEvidence } from "./NativeCompletion.ts";
 
 const database = SqlitePersistence.layerMemory;
-const runtime = makeOrchestratorV2ReplayLayerWithRegistry(
+const runtime = ProviderReplayHarness.layerWithRegistry(
   { name: "native-completion" },
-  Registry.makeLayer([]),
+  Registry.layerFromAdapters([]),
   { databaseLayer: database, runEffectWorker: false },
 );
 const layer = WorkerLifecycle.layer.pipe(

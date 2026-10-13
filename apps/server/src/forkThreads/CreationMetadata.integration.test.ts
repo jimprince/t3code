@@ -15,14 +15,14 @@ import * as SqlClient from "effect/sql/SqlClient";
 import * as EventSink from "../orchestration-v2/EventSink.ts";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as Registry from "../orchestration-v2/ProviderAdapterRegistry.ts";
-import { makeOrchestratorV2ReplayLayerWithRegistry } from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
+import * as ProviderReplayHarness from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import { readMetadata, writeMetadata } from "./MetadataStore.ts";
 
-const runtime = makeOrchestratorV2ReplayLayerWithRegistry(
+const runtime = ProviderReplayHarness.layerWithRegistry(
   { name: "creation-metadata" },
-  Registry.makeLayer([]),
+  Registry.layerFromAdapters([]),
   { databaseLayer: SqlitePersistence.layerMemory, runEffectWorker: false },
 );
 const layer = Layer.mergeAll(runtime, ProjectionStore.layer).pipe(

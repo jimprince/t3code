@@ -11,6 +11,7 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Crypto from "effect/Crypto";
 import * as FileSystem from "effect/FileSystem";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
@@ -20,7 +21,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as ClaudeAdapter from "../orchestration-v2/Adapters/ClaudeAdapterV2.ts";
-import * as IdAllocator from "../orchestration-v2/IdAllocator.ts";
+import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as Registry from "../orchestration-v2/ProviderAdapterRegistry.ts";
@@ -28,8 +29,8 @@ import * as EffectWorker from "../orchestration-v2/EffectWorker.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
-import { makeOrchestratorV2ReplayLayerWithRegistry } from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
-import { checkpointWorkspace } from "../orchestration-v2/testkit/ReplayFixtureWorkspace.ts";
+import * as ProviderReplayHarness from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
+import { checkpointWorkspace } from "@t3tools/provider-testing/replayWorkspace";
 import * as WorkerLifecycle from "./WorkerLifecycle.ts";
 import { readMetadata } from "./MetadataStore.ts";
 
@@ -49,6 +50,7 @@ it.effect(
           instanceId,
           settings: yield* decodeSettings({}),
           environment: {},
+          crypto: yield* Crypto.Crypto,
           attachmentsDir: cwd,
           fileSystem: yield* FileSystem.FileSystem,
           path: yield* Path.Path,
@@ -70,9 +72,9 @@ it.effect(
           },
         });
         const db = SqlitePersistence.layerMemory;
-        const runtime = makeOrchestratorV2ReplayLayerWithRegistry(
+        const runtime = ProviderReplayHarness.layerWithRegistry(
           { name: "claude-native-hygiene" },
-          Registry.makeSingleLayer(adapter),
+          Registry.layerSingle(adapter),
           { databaseLayer: db, runEffectWorker: false },
         );
         const layer = WorkerLifecycle.layer.pipe(
