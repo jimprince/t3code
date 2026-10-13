@@ -1,0 +1,14 @@
+name = "fork-dashboard-v3-02-subprojects-table"
+subject = "feat(projects): subprojects table, folded sub count, phone header fit"
+class = "product"
+purpose = "subprojects table, folded sub count, phone header fit"
+retire_when = "The dashboard-v3 series is intentionally dropped or replaced by equivalent upstream behavior."
+depends_on = ["fork-subprojects-ui", "fork-subprojects-mobile-main"]
+roles = []
+note = "Replayed independently from live source 022074c127f7e9766bf63b87edc017a552896121; excludes the Chief of Staff tray series."
+
+[[decision]]
+id = "catchup-r29-main-already-carries-subprojects-table"
+date = "2026-10-13"
+decided = "retain-series-identity"
+rationale = "The behavior of live commit 022074c127f7e9766bf63b87edc017a552896121 already resides in its main owning concern, with newer main adaptations. Keep this droppable series identity without duplicating or reverting that implementation."
