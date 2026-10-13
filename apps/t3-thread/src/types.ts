@@ -102,6 +102,7 @@ export interface OrchestrationProposedPlan {
 }
 
 export interface OrchestrationThread {
+  operatorSummary?: import("@t3tools/contracts").OrchestrationV2OperatorSummary;
   hasActionableProposedPlan?: boolean;
   lastError?: string | null;
   parentThreadId?: string | null;

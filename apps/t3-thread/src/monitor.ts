@@ -1,3 +1,4 @@
+import { DateTime } from "effect";
 import { classifyThread } from "./status.js";
 import type { AgentState, OrchestrationMessage, OrchestrationThread, SavedAgent } from "./types.js";
 
@@ -18,6 +19,17 @@ export interface AgentOverview {
 export function getLatestAssistantMessage(
   thread: OrchestrationThread,
 ): OrchestrationMessage | null {
+  if (thread.operatorSummary) {
+    const message = thread.operatorSummary.latestAssistantMessage;
+    return message === null
+      ? null
+      : {
+          ...message,
+          turnId: message.runId,
+          createdAt: DateTime.formatIso(message.createdAt),
+          updatedAt: DateTime.formatIso(message.updatedAt),
+        };
+  }
   for (let index = thread.messages.length - 1; index >= 0; index -= 1) {
     const candidate = thread.messages[index];
     if (candidate.role === "assistant") {

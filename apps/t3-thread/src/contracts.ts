@@ -65,7 +65,13 @@ export function decodeThreadSnapshotItem(input: unknown) {
   if (item.kind !== "snapshot") throw new Error("Expected a V2 thread snapshot.");
   return {
     kind: "snapshot" as const,
-    snapshot: { snapshotSequence: item.snapshotSequence, thread: threadDetail(item.projection) },
+    snapshot: {
+      snapshotSequence: item.snapshotSequence,
+      thread: {
+        ...threadDetail(item.projection),
+        ...(item.operatorSummary === undefined ? {} : { operatorSummary: item.operatorSummary }),
+      },
+    },
   };
 }
 export function decodeThreadShell(input: unknown) {
