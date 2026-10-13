@@ -10,6 +10,7 @@ import {
   ensureWatcherProcess,
   isProcessRunning,
   readProcessIdentity,
+  parseDarwinBootId,
 } from "../src/watcher-process.js";
 
 async function withTempStateDir(test: (stateFile: string) => Promise<void>): Promise<void> {
@@ -33,6 +34,35 @@ async function withTempStateDir(test: (stateFile: string) => Promise<void>): Pro
 }
 
 describe("watcher process helpers", () => {
+  it("uses Darwin boot seconds despite drifting microseconds and local date text", () => {
+    expect(parseDarwinBootId("{ sec = 1790904510, usec = 856511 } Thu Oct 1 19:28:30 2026")).toBe(
+      "1790904510",
+    );
+    expect(parseDarwinBootId("{ sec = 1790904510, usec = 991111 } Fri Oct 2 01:28:30 2026")).toBe(
+      "1790904510",
+    );
+    expect(() => parseDarwinBootId("invalid")).toThrow();
+  });
+
+  it("retains lifetime exclusion when its lease is removed", async () => {
+    await withTempStateDir(async (stateFile) => {
+      const release = await claimWatcherLease();
+      const pidFile = NodePath.join(NodePath.dirname(stateFile), "watch.pid");
+      await NodeFSP.unlink(pidFile);
+      let competingRelease: (() => Promise<void>) | null = null;
+      try {
+        competingRelease = await claimWatcherLease();
+        expect(competingRelease).toBeNull();
+      } finally {
+        await competingRelease?.();
+        await release?.();
+      }
+      const replacement = await claimWatcherLease();
+      expect(replacement).not.toBeNull();
+      await replacement?.();
+    });
+  });
+
   it("keeps a genuine watcher singleton and releases its identity lease", async () => {
     await withTempStateDir(async (stateFile) => {
       const release = await claimWatcherLease();

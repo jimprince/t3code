@@ -5,6 +5,7 @@ import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 import * as NodeUtil from "node:util";
 import { beforeAll, describe, expect, it } from "vite-plus/test";
+import { claimWatcherLease, readProcessIdentity } from "../src/watcher-process.js";
 import { THREAD_ROUTING_LOCK_HELPER } from "@t3tools/shared/threadRoutingState";
 
 const run = NodeUtil.promisify(NodeChildProcess.execFile);
@@ -84,6 +85,45 @@ describe("prebuilt launch", () => {
     }
     // Four real launches, one holding a watcher for a second: parallel CI needs headroom.
   }, 15_000);
+
+  it("watch --ensure exits zero without spawning another watcher after lease drift", async () => {
+    const temp = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-ensure-"));
+    const previous = process.env.T3_AGENT_STATE_FILE;
+    const stateFile = NodePath.join(temp, "state.json");
+    process.env.T3_AGENT_STATE_FILE = stateFile;
+    const release = await claimWatcherLease();
+    try {
+      const identity = await readProcessIdentity(process.pid);
+      await NodeFSP.writeFile(
+        NodePath.join(temp, "watch.pid"),
+        JSON.stringify({ ...identity, bootId: "drifted" }),
+      );
+      const guard = NodePath.join(temp, "no-watcher-spawn.cjs");
+      await NodeFSP.writeFile(
+        guard,
+        `const cp = require("node:child_process");
+const spawn = cp.spawn;
+cp.spawn = (...args) => {
+  if (args[0] === process.execPath) throw new Error("ensure attempted another watcher");
+  return spawn(...args);
+};`,
+      );
+      const result = await run(process.execPath, ["scripts/launch.mjs", "watch", "--ensure"], {
+        cwd: workspace,
+        env: { ...process.env, T3_AGENT_STATE_FILE: stateFile, NODE_OPTIONS: `--require=${guard}` },
+      });
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        ensured: true,
+        status: "already-running",
+        pid: process.pid,
+      });
+    } finally {
+      await release?.();
+      if (previous === undefined) delete process.env.T3_AGENT_STATE_FILE;
+      else process.env.T3_AGENT_STATE_FILE = previous;
+      await NodeFSP.rm(temp, { recursive: true, force: true });
+    }
+  });
 
   it("selects the build by default, refuses stale/missing builds and opts into tsx", async () => {
     const temp = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-wrapper-"));
