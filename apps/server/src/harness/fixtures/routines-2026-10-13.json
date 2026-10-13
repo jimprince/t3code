@@ -1,0 +1,673 @@
+[
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:automations:15c7fd6f-088b-48a2-8c7d-1be461e243b9",
+    "name": "Capture project page photos",
+    "ownerThreadId": "mcp:765eeddc-d7f9-4146-a583-6d278a5cb3d3",
+    "ownerPurpose": "project",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "daily",
+          "time": "04:00",
+          "timeZone": "America/Edmonton"
+        }
+      }
+    ],
+    "proposedKind": "project",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:automations:2a135c02-812c-4dd1-9400-15141fed5da1",
+    "name": "Review outstanding issues",
+    "ownerThreadId": "mcp:765eeddc-d7f9-4146-a583-6d278a5cb3d3",
+    "ownerPurpose": "project",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "weekly",
+          "time": "06:00",
+          "day": 0,
+          "timeZone": "America/Edmonton"
+        }
+      }
+    ],
+    "proposedKind": "project",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:automations:492fe5b1-d3aa-4cf6-b9bb-a87870e71bf7",
+    "name": "Fork health refresh",
+    "ownerThreadId": "mcp:765eeddc-d7f9-4146-a583-6d278a5cb3d3",
+    "ownerPurpose": "project",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "daily",
+          "time": "03:30",
+          "timeZone": "America/Edmonton"
+        }
+      }
+    ],
+    "proposedKind": "project",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:automations:937a61cd-1029-4965-b90e-13211495a0b0",
+    "name": "Review workspaces",
+    "ownerThreadId": "mcp:765eeddc-d7f9-4146-a583-6d278a5cb3d3",
+    "ownerPurpose": "project",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "weekly",
+          "time": "06:00",
+          "day": 0,
+          "timeZone": "America/Edmonton"
+        }
+      }
+    ],
+    "proposedKind": "project",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:automations:97719f22-7b9f-46c2-83e2-0468ac7c1da9",
+    "name": "Nightly fork-efficiency review",
+    "ownerThreadId": "mcp:765eeddc-d7f9-4146-a583-6d278a5cb3d3",
+    "ownerPurpose": "project",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "daily",
+          "time": "03:00",
+          "timeZone": "America/Edmonton"
+        }
+      }
+    ],
+    "proposedKind": "project",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:automations:cb34f58e-3cc7-45c8-aada-373afd2e3de8",
+    "name": "Project photo log after installed releases",
+    "ownerThreadId": "mcp:765eeddc-d7f9-4146-a583-6d278a5cb3d3",
+    "ownerPurpose": "project",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "daily",
+          "time": "04:00",
+          "timeZone": "America/Edmonton"
+        }
+      }
+    ],
+    "proposedKind": "project",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:automations:d55a09f3-c8c4-423a-a145-2ec32650b351",
+    "name": "dashboard-curator sweep",
+    "ownerThreadId": "7f8916b7-6773-484b-bb42-fa114ec41c7b",
+    "ownerPurpose": "harness",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "cron",
+          "expression": "0 7,17 * * *",
+          "timeZone": "America/Edmonton"
+        }
+      }
+    ],
+    "proposedKind": "check",
+    "ambiguous": true
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:automations:32c4df59-c588-49e3-a023-076a66afdec7",
+    "name": "Nightly fork-efficiency review",
+    "ownerThreadId": "115bc0d6-3bb0-4ccb-8714-4ecec7421bdb",
+    "ownerPurpose": "project",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "daily",
+          "time": "03:00",
+          "timeZone": "America/Edmonton"
+        }
+      }
+    ],
+    "proposedKind": "project",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:automations:02eae30c-5796-4fa1-92b9-06f38df7636e",
+    "name": "Staff check every 30 min",
+    "ownerThreadId": "91be516c-e71e-47e8-9ce6-f9e5a83dff4f",
+    "ownerPurpose": "harness",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "cron",
+          "expression": "*/30 * * * *",
+          "timeZone": "UTC"
+        }
+      }
+    ],
+    "proposedKind": "check",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:automations:118aee73-9462-4542-9c45-5cab7bece881",
+    "name": "v2-port-progress-a",
+    "ownerThreadId": "e14d30e1-417a-4e25-9e3d-89b955b4acf6",
+    "ownerPurpose": "project",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "cron",
+          "expression": "0 0-23/3 * * *",
+          "timeZone": "UTC"
+        }
+      }
+    ],
+    "proposedKind": "agent-wake",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:automations:7cda1849-8756-472c-bbbd-8f70bcf9bd89",
+    "name": "v2-port-progress-b",
+    "ownerThreadId": "e14d30e1-417a-4e25-9e3d-89b955b4acf6",
+    "ownerPurpose": "project",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "cron",
+          "expression": "30 1-23/3 * * *",
+          "timeZone": "UTC"
+        }
+      }
+    ],
+    "proposedKind": "agent-wake",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:automations:257e274d-ae46-443b-9026-7370807ab6c8",
+    "name": "Staff check every 30 min",
+    "ownerThreadId": "91be516c-e71e-47e8-9ce6-f9e5a83dff4f",
+    "ownerPurpose": "harness",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "cron",
+          "expression": "*/30 * * * *",
+          "timeZone": "UTC"
+        }
+      }
+    ],
+    "proposedKind": "check",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:automations:7a5d9b53-a06f-41b3-9aca-63c0dee5c29d",
+    "name": "T3 Orchestrator 90-minute progress A",
+    "ownerThreadId": "84d1d649-e75b-4910-a9c1-9292a7b16849",
+    "ownerPurpose": "project",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "cron",
+          "expression": "0 0-21/3 * * *",
+          "timeZone": "UTC"
+        }
+      }
+    ],
+    "proposedKind": "agent-wake",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:automations:5c2a9c2d-5b2b-4a40-a297-8f61b503d0d3",
+    "name": "T3 Orchestrator 90-minute progress B",
+    "ownerThreadId": "84d1d649-e75b-4910-a9c1-9292a7b16849",
+    "ownerPurpose": "project",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "cron",
+          "expression": "30 1-22/3 * * *",
+          "timeZone": "UTC"
+        }
+      }
+    ],
+    "proposedKind": "agent-wake",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:automations:9a40505c-6862-4cfc-a471-874cf63857cb",
+    "name": "T3 Orchestrator status pass A (Sonnet)",
+    "ownerThreadId": "84d1d649-e75b-4910-a9c1-9292a7b16849",
+    "ownerPurpose": "project",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "cron",
+          "expression": "0 0-21/3 * * *",
+          "timeZone": "UTC"
+        }
+      }
+    ],
+    "proposedKind": "agent-wake",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:automations:d55fb398-c31e-4ca5-9712-a901e5d95a96",
+    "name": "T3 Orchestrator status pass B (Sonnet)",
+    "ownerThreadId": "84d1d649-e75b-4910-a9c1-9292a7b16849",
+    "ownerPurpose": "project",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "cron",
+          "expression": "30 1-22/3 * * *",
+          "timeZone": "UTC"
+        }
+      }
+    ],
+    "proposedKind": "agent-wake",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:automations:48f2f2ad-b574-4c80-92b6-70683d5aacbf",
+    "name": "Daily orchestrators' meeting (overnight)",
+    "ownerThreadId": "91be516c-e71e-47e8-9ce6-f9e5a83dff4f",
+    "ownerPurpose": "harness",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "daily",
+          "time": "01:00",
+          "timeZone": "America/Edmonton"
+        }
+      }
+    ],
+    "proposedKind": "agent-wake",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:automations:72e0a7a9-e434-452a-b499-a9247dc5c06a",
+    "name": "T3 Orchestrator status pass A (Sonnet, change-only)",
+    "ownerThreadId": "mcp:765eeddc-d7f9-4146-a583-6d278a5cb3d3",
+    "ownerPurpose": "project",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "cron",
+          "expression": "0 0-21/3 * * *",
+          "timeZone": "UTC"
+        }
+      }
+    ],
+    "proposedKind": "agent-wake",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:automations:c5e741bf-10d4-4e26-895b-a7ce5ba1fddd",
+    "name": "T3 Orchestrator status pass B (Sonnet, change-only)",
+    "ownerThreadId": "mcp:765eeddc-d7f9-4146-a583-6d278a5cb3d3",
+    "ownerPurpose": "project",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "cron",
+          "expression": "30 1-22/3 * * *",
+          "timeZone": "UTC"
+        }
+      }
+    ],
+    "proposedKind": "agent-wake",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:automations:41c254c5-eb22-4737-80de-0b6c34b6f81f",
+    "name": "Nightly fork-efficiency review",
+    "ownerThreadId": "mcp:765eeddc-d7f9-4146-a583-6d278a5cb3d3",
+    "ownerPurpose": "project",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "daily",
+          "time": "03:00",
+          "timeZone": "America/Edmonton"
+        }
+      }
+    ],
+    "proposedKind": "project",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:automations:211ed83b-2530-4289-bd8b-38a028ad1be2",
+    "name": "Deployment change-only progress A",
+    "ownerThreadId": "99ec76a6-2673-4175-ab75-23499a523fe5",
+    "ownerPurpose": "harness",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "cron",
+          "expression": "0 0-21/3 * * *",
+          "timeZone": "UTC"
+        }
+      }
+    ],
+    "proposedKind": "agent-wake",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:automations:08171142-aa08-4f69-bc56-1f36572c4566",
+    "name": "Deployment change-only progress B",
+    "ownerThreadId": "99ec76a6-2673-4175-ab75-23499a523fe5",
+    "ownerPurpose": "harness",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "cron",
+          "expression": "30 1-22/3 * * *",
+          "timeZone": "UTC"
+        }
+      }
+    ],
+    "proposedKind": "agent-wake",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:automations:b845a385-e63e-4142-8318-a586e265b5d8",
+    "name": "Requirements auditor (30 min)",
+    "ownerThreadId": "91be516c-e71e-47e8-9ce6-f9e5a83dff4f",
+    "ownerPurpose": "harness",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "cron",
+          "expression": "15,45 * * * *",
+          "timeZone": "UTC"
+        }
+      }
+    ],
+    "proposedKind": "check",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:automations:f8b7f845-c9ab-45fc-b489-079865b8ca22",
+    "name": "Hourly harness review + orchestrator coach",
+    "ownerThreadId": "91be516c-e71e-47e8-9ce6-f9e5a83dff4f",
+    "ownerPurpose": "harness",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "hourly",
+          "timeZone": "UTC"
+        }
+      }
+    ],
+    "proposedKind": "check",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:automations:75131e57-bc94-4301-88e4-36a8b7c99260",
+    "name": "Daily Harness feedback aggregation",
+    "ownerThreadId": "91be516c-e71e-47e8-9ce6-f9e5a83dff4f",
+    "ownerPurpose": "harness",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "daily",
+          "time": "23:45",
+          "timeZone": "America/Edmonton"
+        }
+      }
+    ],
+    "proposedKind": "check",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:automations:e4810b88-65d9-4cf8-8e72-83e2bdfe12a3",
+    "name": "Audit auditor (6 h)",
+    "ownerThreadId": "91be516c-e71e-47e8-9ce6-f9e5a83dff4f",
+    "ownerPurpose": "harness",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "cron",
+          "expression": "30 1,7,13,19 * * *",
+          "timeZone": "UTC"
+        }
+      }
+    ],
+    "proposedKind": "check",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:scheduled-task:scheduled-task:1ff10bb4-6e03-44bd-b7c6-e746c57d9670",
+    "name": "Routine dispatch v2 dry-run: 24 h RESULT to Operations (window from 2026-10-13T05:17:16Z)",
+    "ownerThreadId": "498134fb-5bd8-407c-81d5-448faa9401ce",
+    "ownerPurpose": "harness",
+    "schedule": {
+      "type": "interval",
+      "everyMs": 86400000
+    },
+    "proposedKind": "check",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:scheduled-task:scheduled-task:command:mcp:7715b78c-3d31-4d6a-92b6-b32d06c5b57f:schedule-task:cos-efficiency-review-2026-10-08",
+    "name": "Efficiency review (every 4 h)",
+    "ownerThreadId": "91be516c-e71e-47e8-9ce6-f9e5a83dff4f",
+    "ownerPurpose": "harness",
+    "schedule": {
+      "type": "interval",
+      "everyMs": 14400000
+    },
+    "proposedKind": "check",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:scheduled-task:scheduled-task:command:mcp:f28fd889-88d3-4bca-a8ea-a15dd1bd1995:schedule-task:rc081-stable-trigger-20261013",
+    "name": "Upstream stable release check (RC081 trigger)",
+    "ownerThreadId": "mcp:765eeddc-d7f9-4146-a583-6d278a5cb3d3",
+    "ownerPurpose": "project",
+    "schedule": {
+      "type": "interval",
+      "everyMs": 86400000
+    },
+    "proposedKind": "check",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:scheduled-task:scheduled-task:6b7be764-f785-42a2-b3ee-d267a3a3f221",
+    "name": "Server stall watch summary (one-week, to 2026-10-19)",
+    "ownerThreadId": "498134fb-5bd8-407c-81d5-448faa9401ce",
+    "ownerPurpose": "harness",
+    "schedule": {
+      "type": "interval",
+      "everyMs": 604800000
+    },
+    "proposedKind": "check",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:scheduled-task:scheduled-task:command:mcp:94db08f2-c573-44fc-8699-99c86db6d93a:schedule-task:agent-watch-3day-schedule-20261011",
+    "name": "Agent-engineering watch (every 3 days)",
+    "ownerThreadId": "1ed7e437-fb38-4866-9b84-829af3de758d",
+    "ownerPurpose": "harness",
+    "schedule": {
+      "type": "interval",
+      "everyMs": 259200000
+    },
+    "proposedKind": "check",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:scheduled-task:scheduled-task:command:mcp:1381f8c5-152e-4755-aded-beb463a76110:schedule-task:lane-f-240-r2-resume-20261010-0700",
+    "name": "Lane F #240 resume after overload hold 07:00Z",
+    "ownerThreadId": "thread:delegated-task:command%3Amcp%3A9a06a2c4-0e3c-4063-b13f-74b8ff2b39ec%3Adelegate-task%3At3-orch-240-f-fault-uat-r2",
+    "ownerPurpose": "project",
+    "schedule": {
+      "type": "fixed_time",
+      "timeOfDay": "07:00",
+      "weekdays": [6]
+    },
+    "proposedKind": "agent-wake",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:scheduled-task:scheduled-task:command:mcp:1381f8c5-152e-4755-aded-beb463a76110:schedule-task:lane-f-240-r2-checkpoint-wake-20261010",
+    "name": "Lane F #240 round 2 05:30Z checkpoint",
+    "ownerThreadId": "thread:delegated-task:command%3Amcp%3A9a06a2c4-0e3c-4063-b13f-74b8ff2b39ec%3Adelegate-task%3At3-orch-240-f-fault-uat-r2",
+    "ownerPurpose": "project",
+    "schedule": {
+      "type": "fixed_time",
+      "timeOfDay": "05:30",
+      "weekdays": [6]
+    },
+    "proposedKind": "agent-wake",
+    "ambiguous": false
+  },
+  {
+    "key": "c9d5fd19-15d1-45f1-856d-3d05a939854d:scheduled-task:scheduled-task:command:mcp:12e7e619-b4f0-46ca-aaf9-aa18561e647b:schedule-task:lane-f-240-checkpoint-wake-20261010",
+    "name": "Lane F #240 03:00Z checkpoint",
+    "ownerThreadId": "thread:delegated-task:command%3Amcp%3A4eea5cec-9923-4321-a307-a4fa5760b52e%3Adelegate-task%3At3-orch-240-f-fault-uat",
+    "ownerPurpose": "project",
+    "schedule": {
+      "type": "fixed_time",
+      "timeOfDay": "03:00",
+      "weekdays": [6]
+    },
+    "proposedKind": "agent-wake",
+    "ambiguous": false
+  },
+  {
+    "key": "5fa7c701-bf4d-496f-b753-55f77b4de905:automations:e86fc19b-f147-44a8-a591-d47296600e0f",
+    "name": "Gemini 4 API availability check",
+    "ownerThreadId": "11cc15e3-12bd-44ba-8636-d3c78e49911b",
+    "ownerPurpose": "harness",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "daily",
+          "time": "19:37",
+          "timeZone": "America/Edmonton"
+        }
+      }
+    ],
+    "proposedKind": "check",
+    "ambiguous": false
+  },
+  {
+    "key": "5fa7c701-bf4d-496f-b753-55f77b4de905:automations:f765ed44-d03d-4cc4-a735-e6dae8c94f6c",
+    "name": "Quota read every 3 h (model-free script)",
+    "ownerThreadId": "11cc15e3-12bd-44ba-8636-d3c78e49911b",
+    "ownerPurpose": "harness",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "cron",
+          "expression": "17 2,5,8,11,14,17,20,23 * * *",
+          "timeZone": "America/Edmonton"
+        }
+      }
+    ],
+    "proposedKind": "check",
+    "ambiguous": false
+  },
+  {
+    "key": "5fa7c701-bf4d-496f-b753-55f77b4de905:automations:236d7638-ddb3-48c7-b9f5-e67814359608",
+    "name": "RC083 spend check reset-45min gmail-claude (one-shot; remove after firing)",
+    "ownerThreadId": "11cc15e3-12bd-44ba-8636-d3c78e49911b",
+    "ownerPurpose": "harness",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "cron",
+          "expression": "15 1 14 10 *",
+          "timeZone": "UTC"
+        }
+      }
+    ],
+    "proposedKind": "check",
+    "ambiguous": false
+  },
+  {
+    "key": "5fa7c701-bf4d-496f-b753-55f77b4de905:automations:f784a451-582c-4015-a592-66bf4e296d9e",
+    "name": "RC083 spend check reset-45min ucalgary-claude (one-shot; remove after firing)",
+    "ownerThreadId": "11cc15e3-12bd-44ba-8636-d3c78e49911b",
+    "ownerPurpose": "harness",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "cron",
+          "expression": "15 20 16 10 *",
+          "timeZone": "UTC"
+        }
+      }
+    ],
+    "proposedKind": "check",
+    "ambiguous": false
+  },
+  {
+    "key": "5fa7c701-bf4d-496f-b753-55f77b4de905:automations:bda903c5-5f51-4c93-844d-8140557bf967",
+    "name": "RC083 spend check reset-45min codex-all (one-shot; remove after firing)",
+    "ownerThreadId": "11cc15e3-12bd-44ba-8636-d3c78e49911b",
+    "ownerPurpose": "harness",
+    "schedule": [
+      {
+        "type": "schedule",
+        "schedule": {
+          "kind": "cron",
+          "expression": "15 3 18 10 *",
+          "timeZone": "UTC"
+        }
+      }
+    ],
+    "proposedKind": "check",
+    "ambiguous": false
+  },
+  {
+    "key": "5fa7c701-bf4d-496f-b753-55f77b4de905:scheduled-task:scheduled-task:command:mcp:5c40e205-c15a-496a-a531-3b3f99471322:schedule-task:cos-watchdog-monitor-20261009",
+    "name": "Watchdog build check-in (Chief of Staff)",
+    "ownerThreadId": "f70324a6-c296-4a34-aed9-ede053bd1c70",
+    "ownerPurpose": "project",
+    "schedule": {
+      "type": "interval",
+      "everyMs": 1800000
+    },
+    "proposedKind": "agent-wake",
+    "ambiguous": true,
+    "ownerPurposeEvidence": "CLI thread shell lists parent=none; no metadata override, so effective root default is project."
+  }
+]

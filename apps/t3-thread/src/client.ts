@@ -192,6 +192,9 @@ function providerInventoryFromConfig(config: ServerConfig): ProviderModelInvento
 }
 
 export type AutomationRpcMethod =
+  | "harnessSnapshot"
+  | "harnessRoutineKindSet"
+  | "scheduledTasksList"
   | "automationsList"
   | "automationsSave"
   | "automationsRemove"
