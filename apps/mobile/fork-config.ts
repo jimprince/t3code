@@ -50,12 +50,22 @@ export function applyMobileForkConfig(upstream: ExpoConfig, fork: MobileForkConf
       ...upstream.ios,
       ...(iosBundleIdentifier ? { bundleIdentifier: iosBundleIdentifier } : {}),
       ...(appleTeamId ? { appleTeamId } : {}),
+      ...(iosBundleIdBase && iosBundleIdentifier
+        ? {
+            entitlements: {
+              ...upstream.ios?.entitlements,
+              "keychain-access-groups": [`$(AppIdentifierPrefix)${iosBundleIdentifier}`],
+            },
+          }
+        : {}),
     },
     android: {
       ...upstream.android,
       ...(androidPackage ? { package: androidPackage } : {}),
     },
-    plugins: upstream.plugins?.map((plugin) => applyWidgetIdentity(plugin, iosBundleIdentifier)),
+    plugins: upstream.plugins?.map((plugin) =>
+      applyExtensionIdentity(plugin, iosBundleIdBase ? iosBundleIdentifier : undefined),
+    ),
     extra: {
       ...extra,
       ...(easProjectId
@@ -71,23 +81,41 @@ export function applyMobileForkConfig(upstream: ExpoConfig, fork: MobileForkConf
   };
 }
 
-function applyWidgetIdentity(
+// Plugins derive native targets and EAS credential declarations from these identities.
+function applyExtensionIdentity(
   plugin: ExpoPlugin,
   iosBundleIdentifier: string | undefined,
 ): ExpoPlugin {
-  if (!iosBundleIdentifier || !Array.isArray(plugin) || plugin[0] !== "expo-widgets") {
+  if (!iosBundleIdentifier || !Array.isArray(plugin)) {
     return plugin;
   }
 
   const options = isRecord(plugin[1]) ? plugin[1] : {};
-  return [
-    "expo-widgets",
-    {
-      ...options,
-      bundleIdentifier: `${iosBundleIdentifier}.widgets`,
-      groupIdentifier: `group.${iosBundleIdentifier}`,
-    },
-  ];
+  switch (plugin[0]) {
+    case "expo-widgets":
+      return [
+        plugin[0],
+        {
+          ...options,
+          bundleIdentifier: `${iosBundleIdentifier}.widgets`,
+          groupIdentifier: `group.${iosBundleIdentifier}`,
+        },
+      ];
+    case "expo-sharing":
+      return [
+        plugin[0],
+        {
+          ...options,
+          ios: {
+            ...(isRecord(options.ios) ? options.ios : {}),
+            extensionBundleIdentifier: `${iosBundleIdentifier}.sharing`,
+            appGroupId: `group.${iosBundleIdentifier}`,
+          },
+        },
+      ];
+    default:
+      return plugin;
+  }
 }
 
 function resolveAppVariant(value: unknown): MobileAppVariant {
