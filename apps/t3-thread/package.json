@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@effect/platform-node": "catalog:",
+    "@t3tools/client-runtime": "workspace:*",
     "@t3tools/contracts": "workspace:*",
     "@t3tools/shared": "workspace:*",
     "commander": "^14.0.3",
