@@ -39,7 +39,7 @@ export class AutomationStore extends Context.Service<
   {
     readonly listAutomations: (projectId?: ProjectId) => Fx<ReadonlyArray<Automation>>;
     readonly getAutomation: (id: string) => Fx<Option.Option<Automation>>;
-    readonly saveAutomation: (automation: Automation) => Fx<void>;
+    readonly saveAutomation: (automation: Automation, writeRoutineKind?: boolean) => Fx<void>;
     /** Inserts unless the id was ever stored, including a deleted tombstone. */
     readonly insertAutomationOnce: (automation: Automation) => Fx<boolean>;
     readonly deleteAutomation: (id: string, deletedAt: string) => Fx<void>;
@@ -103,14 +103,17 @@ const make = Effect.gen(function* () {
       Effect.map((rows) => Option.fromNullishOr(rows[0])),
     );
 
-  const saveAutomation = (automation: Automation) =>
+  const saveAutomation = (automation: Automation, writeRoutineKind = false) =>
     fail(sql`
       INSERT INTO automations (automation_id, project_id, automation_json, created_at, updated_at)
       VALUES (${automation.id}, ${automation.projectId}, ${encodeAutomation(automation)},
               ${automation.createdAt}, ${automation.updatedAt})
       ON CONFLICT (automation_id) DO UPDATE SET
         project_id = excluded.project_id,
-        automation_json = excluded.automation_json,
+        automation_json = CASE WHEN ${writeRoutineKind ? 1 : 0} = 1 THEN excluded.automation_json
+          WHEN json_type(automations.automation_json, '$.routineKind') IS NULL
+            THEN json_remove(excluded.automation_json, '$.routineKind')
+          ELSE json_set(excluded.automation_json, '$.routineKind', json_extract(automations.automation_json, '$.routineKind')) END,
         updated_at = excluded.updated_at
       WHERE automations.deleted_at IS NULL
     `).pipe(Effect.asVoid);

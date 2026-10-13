@@ -1,0 +1,4 @@
+id = "harness-routine-kind"
+category = "feature"
+functionality = "Harness classification"
+text = "Automations and scheduled tasks can be classified as global checks, project routines or agent wake-ups; unset kinds default from their owner’s purpose, and existing routines are classified separately after review."
