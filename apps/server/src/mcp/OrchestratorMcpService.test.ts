@@ -1969,6 +1969,8 @@ describe("OrchestratorMcpService provider resolution", () => {
             dispatch: (command) =>
               Effect.sync(() => {
                 operations.push(command.type);
+                if (command.type === "thread.create")
+                  assert.equal(command.creatorThreadId, parentThreadId);
                 if (command.type === "message.dispatch") accepted = true;
                 return { sequence: 1, storedEvents: [] } as never;
               }),
