@@ -1,0 +1,20 @@
+name = "fork-harness-check-pins"
+subject = "feat(server): pin Harness checks to the top of the checks list"
+class = "product"
+purpose = "Let a person or an agent pin and unpin any Harness check, kept per environment on the server, so a check that matters leads the checks list on every client."
+retire_when = "Upstream provides equivalent pinned Harness checks or Harness is retired."
+depends_on = ["fork-harness-read-service", "fork-harness-tab-ui"]
+roles = []
+note = "One service method, HarnessPinService.setPinned, behind the harness.setCheckPinned RPC and the harness_check_pin MCP tool. Pins are the harnessPinnedCheckKeys list in server settings (no migration, no table), written under one lock so concurrent pins both land, capped at 100, and an unknown or removed key is inert and can still be unpinned. harness.snapshot and harness_snapshot report pinnedCheckKeys, read fresh outside the one-second snapshot cache; the field is absent on an older server, so clients hide the pin control. Client sort, feed grouping and pin controls are included in this concern above the Harness tab base surfaces. Additive files also include apps/web/src/components/harness/useHarnessCheckPin.ts, apps/server/src/harness/rpcHandlers.ts and apps/server/src/harness/rpcHandlers.test.ts. Files: apps/server/src/harness/HarnessPinService.test.ts, apps/server/src/harness/HarnessPinService.ts, apps/server/src/harness/HarnessReadService.test.ts, apps/server/src/harness/HarnessReadService.ts, apps/server/src/mcp/McpHttpServer.ts, apps/server/src/mcp/toolkits/harness/handlers.test.ts, apps/server/src/mcp/toolkits/harness/handlers.ts, apps/server/src/mcp/toolkits/harness/tools.ts, apps/server/src/observability/RpcInstrumentation.ts, apps/server/src/server.ts, apps/server/src/serverSettings.test.ts, apps/server/src/ws.ts, packages/contracts/src/clientRpcPermissions.ts, packages/contracts/src/harness.ts, packages/contracts/src/rpc.ts, packages/contracts/src/settings.ts, docs/user/thread-sidebar.md, docs/release-notes/entries/harness-check-pins.toml"
+
+[[decision]]
+id = "harness-pins-in-server-settings"
+date = "2026-10-13"
+decided = "Pins are a small list in server settings, changed only through HarnessPinService."
+rationale = "Environment preferences already persist per server with change notifications and no migration; a dedicated method keeps the read-modify-write atomic for clients and agents alike, and the snapshot carries the keys so no client reads settings."
+
+[[decision]]
+id = "r29-private-pin-constructor"
+date = "2026-10-13"
+decided = "Keep the pin service constructor private and retain the public service and layer."
+rationale = "Only the local layer consumes make; the complete-tip Knip gate rejects its unused export. Pin persistence, authorization, concurrency locking and all client controls remain unchanged."
