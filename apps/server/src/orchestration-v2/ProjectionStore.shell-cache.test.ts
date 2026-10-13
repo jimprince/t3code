@@ -27,19 +27,16 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Tracer from "effect/Tracer";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
-import {
-  SqlitePersistenceMemory,
-  makeSqlitePersistenceLive,
-} from "../persistence/Layers/Sqlite.ts";
+import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import * as EventStore from "./EventStore.ts";
 import * as ProjectionMaintenance from "./ProjectionMaintenance.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 
 const TestLayer = Layer.mergeAll(ProjectionStore.layer, EventStore.layer).pipe(
-  Layer.provideMerge(SqlitePersistenceMemory),
+  Layer.provideMerge(SqlitePersistence.layerMemory),
 );
 const now = DateTime.makeUnsafe("2026-10-12T00:00:00Z");
 const later = DateTime.makeUnsafe("2026-10-12T01:00:00Z");
@@ -580,7 +577,7 @@ it.effect("another SQLite connection invalidates cached shells", () =>
       yield* assertParity;
     }).pipe(
       Effect.provide(
-        ProjectionStore.layer.pipe(Layer.provideMerge(makeSqlitePersistenceLive(filename))),
+        ProjectionStore.layer.pipe(Layer.provideMerge(SqlitePersistence.layerFromPath(filename))),
       ),
     );
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
