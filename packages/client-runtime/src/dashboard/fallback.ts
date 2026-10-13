@@ -28,6 +28,7 @@ export function composeOlderDashboard(input: {
   revision: number;
   ownRepositories?: ReadonlyMap<ThreadId, string>;
   previous?: DashboardSnapshot;
+  remoteParentThreadIds?: readonly ThreadId[];
 }): DashboardSnapshot {
   const ownRepositories = new Map(rootRepositories(input.shell));
   for (const [root, roadmap] of input.roadmaps)
@@ -87,6 +88,7 @@ export const readOlderDashboard = (
   previous?: DashboardSnapshot,
   reportedVersion?: { readonly version: string; readonly label: string },
   emit: (snapshot: DashboardSnapshot) => Effect.Effect<void> = () => Effect.void,
+  remoteParentThreadIds: readonly ThreadId[] = [],
 ) =>
   Effect.gen(function* () {
     // Even metadata must settle: an older/slow host must not leave the environment at revision 0.
@@ -96,7 +98,7 @@ export const readOlderDashboard = (
       { background: true },
     ).pipe(Effect.timeout("15 seconds"), Effect.option);
     const metadata = Option.getOrElse(metadataResult, () => []);
-    const { roots, threads } = dashboardRoots(shell.threads, metadata);
+    const { roots, threads } = dashboardRoots(shell.threads, metadata, remoteParentThreadIds);
     const skipped = new Set<number>();
     const cached = new Set<number>();
     const attemptedAt = DateTime.formatIso(yield* DateTime.now);
@@ -266,6 +268,7 @@ export const readOlderDashboard = (
         sources: [...sources.values()],
         now,
         revision: ++revision,
+        remoteParentThreadIds,
       });
       for (const project of snapshot.projects) {
         if (!project.rootThreadId) continue;
@@ -403,7 +406,12 @@ export const readOlderDashboard = (
           Effect.option,
           Effect.tap((result) =>
             Effect.sync(() => {
-              if (Option.isSome(result) && !result.value.tracker && !repositories.has(root.id)) {
+              if (
+                Option.isSome(result) &&
+                !result.value.tracker &&
+                !repositories.has(root.id) &&
+                !remoteParentThreadIds.includes(root.id)
+              ) {
                 skipped.add(index * 3);
                 skipped.add(index * 3 + 1);
               }
