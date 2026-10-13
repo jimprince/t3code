@@ -1,0 +1,8 @@
+name = "fork-dashboard-v3-17-home-breakpoint"
+subject = "fix(dashboard): Home keeps Plan and Decisions side by side from 960 px"
+class = "product"
+purpose = "Home keeps Plan and Decisions side by side from 960 px"
+retire_when = "The dashboard-v3 series is intentionally dropped or replaced by equivalent upstream behavior."
+depends_on = ["fork-dashboard-v3-16-container-width"]
+roles = []
+note = "Replayed independently from live source ffe290adc2629b42f4a9ca4d3a3c40e6a51f7e05; excludes the Chief of Staff tray series."
