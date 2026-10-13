@@ -4,6 +4,7 @@ import {
   type EnvironmentId,
   type OrchestrationV2ShellSnapshot,
   type ServerConfig,
+  type ThreadId,
 } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
@@ -22,18 +23,15 @@ import {
   type DashboardAnswer,
 } from "./answers.ts";
 import { OLDER_DASHBOARD_REFRESH_MS, readOlderDashboard } from "./fallback.ts";
-export {
-  createDashboardSnapshotMerger,
-  mergeDashboardSnapshots,
-  compareDashboardVersions,
-  overlayAnswered,
-} from "./merge.ts";
+export { createDashboardSnapshotMerger } from "./merge.ts";
 
 /** Cache lifetime is independent of the subscription lifetime; unmount closes all network reads. */
 export function createDashboardAtoms<R, ER>(
   runtime: Atom.AtomRuntime<EnvironmentRegistry.EnvironmentRegistry | R, ER>,
   options: {
     readonly config: (id: EnvironmentId) => Atom.Atom<ServerConfig | null>;
+    /** Heads with workers on another connected environment still own local tracker decisions. */
+    readonly remoteParentThreadIds?: (id: EnvironmentId) => Atom.Atom<readonly ThreadId[]>;
     readonly readCached?: (id: EnvironmentId) => DashboardSnapshot | null;
     readonly shell: (id: EnvironmentId) => Atom.Atom<OrchestrationV2ShellSnapshot | null>;
   },
@@ -56,7 +54,7 @@ export function createDashboardAtoms<R, ER>(
     idleTtlMs: 0,
     staleTimeMs: OLDER_DASHBOARD_REFRESH_MS,
     execute: (
-      input: { environmentId: EnvironmentId },
+      input: { environmentId: EnvironmentId; remoteParentThreadIds: readonly ThreadId[] },
       emit: (value: DashboardSnapshot) => Effect.Effect<void>,
     ) => {
       const shell = shells.get(input.environmentId);
@@ -69,13 +67,20 @@ export function createDashboardAtoms<R, ER>(
               ? { version: config.environment.serverVersion, label: config.environment.label }
               : undefined,
             emit,
+            input.remoteParentThreadIds,
           )
         : Effect.never;
     },
   });
   // Arm the next refresh only after a pass settles; slow hosts must finish their queue.
-  const fallback = Atom.family((environmentId: EnvironmentId) => {
-    const query = fallbackQuery({ environmentId, input: { environmentId } });
+  const fallbackKey = (environmentId: EnvironmentId, remoteParentThreadIds: readonly ThreadId[]) =>
+    JSON.stringify({ environmentId, remoteParentThreadIds });
+  const fallback = Atom.family((key: string) => {
+    const input = JSON.parse(key) as {
+      environmentId: EnvironmentId;
+      remoteParentThreadIds: readonly ThreadId[];
+    };
+    const query = fallbackQuery({ environmentId: input.environmentId, input });
     const scheduled = query.pipe(Atom.withRefresh(OLDER_DASHBOARD_REFRESH_MS), Atom.setIdleTTL(0));
     return Atom.make((get) => {
       const result = get(query);
@@ -95,11 +100,15 @@ export function createDashboardAtoms<R, ER>(
       const capable = config?.environment.capabilities.dashboardSnapshot === true;
       const shell = capable ? null : get(options.shell(environmentId));
       if (shell) shells.set(environmentId, shell);
+      const remoteParentThreadIds =
+        !capable && options.remoteParentThreadIds
+          ? get(options.remoteParentThreadIds(environmentId))
+          : [];
       // Config absence is still connecting, never permission to try an unsupported RPC.
       const result = capable
         ? get(subscription({ environmentId, input: {} }))
         : config && shell
-          ? get(fallback(environmentId))
+          ? get(fallback(fallbackKey(environmentId, remoteParentThreadIds)))
           : null;
       const value = result ? Option.getOrNull(AsyncResult.value(result)) : null;
       if (value) cache.set(environmentId, value);
@@ -143,7 +152,15 @@ export function createDashboardAtoms<R, ER>(
     registry.refresh(
       capable
         ? subscription({ environmentId, input: {} })
-        : fallbackQuery({ environmentId, input: { environmentId } }),
+        : fallbackQuery({
+            environmentId,
+            input: {
+              environmentId,
+              remoteParentThreadIds: options.remoteParentThreadIds
+                ? registry.get(options.remoteParentThreadIds(environmentId))
+                : [],
+            },
+          }),
     );
   };
   return { snapshot, retry };
