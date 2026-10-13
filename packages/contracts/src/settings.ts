@@ -1279,6 +1279,13 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
   /**
+   * Harness check keys pinned to the top of the Harness checks list. Per environment, kept by the
+   * server so every client and agent sees the same pins; a key no check reports any more is inert.
+   */
+  harnessPinnedCheckKeys: Schema.Array(Schema.String).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
+  /**
    * Null means inherit: the repository's t3.json, then "local". The old
    * default "local" was never persisted (defaults are stripped on write), so
    * it now decodes as inherit, which resolves the same way because the old
@@ -1578,6 +1585,7 @@ export const ServerSettingsPatch = Schema.Struct({
   backgroundActivityProfile: Schema.optionalKey(BackgroundActivityProfile),
   environmentIcon: Schema.optionalKey(Schema.NullOr(EnvironmentMachineKind)),
   chiefOfStaffThreadId: Schema.optionalKey(Schema.NullOr(ThreadId)),
+  harnessPinnedCheckKeys: Schema.optionalKey(Schema.Array(Schema.String)),
   defaultThreadEnvMode: Schema.optionalKey(Schema.NullOr(ThreadEnvMode)),
   newWorktreesStartFromOrigin: Schema.optionalKey(Schema.Boolean),
   worktreeSubmodules: Schema.optionalKey(Schema.NullOr(WorktreeSubmodules)),

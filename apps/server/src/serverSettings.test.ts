@@ -128,6 +128,28 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       }).pipe(Effect.provide(layerServerSettings())),
   );
 
+  it.effect(
+    "persists the pinned Harness check keys, defaults them to none and keeps them across sibling edits",
+    () =>
+      Effect.gen(function* () {
+        const config = yield* ServerConfig.ServerConfig;
+        const fs = yield* FileSystem.FileSystem;
+        const service = yield* ServerSettingsModule.ServerSettingsService;
+        assert.deepStrictEqual((yield* service.getSettings).harnessPinnedCheckKeys, []);
+        yield* service.updateSettings({ harnessPinnedCheckKeys: ["env:automation:a"] });
+        const onDisk = yield* decodeServerSettingsJson(
+          yield* fs.readFileString(config.settingsPath),
+        );
+        assert.deepStrictEqual(onDisk.harnessPinnedCheckKeys, ["env:automation:a"]);
+        yield* service.updateSettings({ enableProviderUpdateChecks: false });
+        assert.deepStrictEqual((yield* service.getSettings).harnessPinnedCheckKeys, [
+          "env:automation:a",
+        ]);
+        yield* service.updateSettings({ harnessPinnedCheckKeys: [] });
+        assert.deepStrictEqual((yield* service.getSettings).harnessPinnedCheckKeys, []);
+      }).pipe(Effect.provide(layerServerSettings())),
+  );
+
   it.effect("migrates saved token delivery to paragraph buffering without resetting settings", () =>
     Effect.gen(function* () {
       const config = yield* ServerConfig.ServerConfig;
