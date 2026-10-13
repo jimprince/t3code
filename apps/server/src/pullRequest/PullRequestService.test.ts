@@ -1,3 +1,7 @@
+import * as GiteaPullRequestProvider from "./GiteaPullRequestProvider.ts";
+import * as ServerSettings from "../serverSettings.ts";
+import { configuredGiteaIdentity } from "../sourceControl/ForkGiteaLinkAdapter.ts";
+import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as KeyValueStore from "effect/persistence/KeyValueStore";
@@ -2490,6 +2494,116 @@ it.effect(
         ),
       );
       assert.strictEqual(unknown._tag, "PullRequestUnavailableError");
+    }),
+);
+
+it.effect.each(["same project", "cross project"])(
+  "reads a public Gitea alias with a non-default web port: %s",
+  (mode) =>
+    Effect.gen(function* () {
+      const instance = {
+        id: "home",
+        host: "git.home",
+        sshAliases: ["gitea"],
+        sshPorts: [2222],
+        webOrigin: "http://git.home:3000",
+        apiOrigin: "https://api.home",
+        token: "test-token",
+      };
+      const context = {
+        remoteName: "origin",
+        remoteUrl: "ssh://git@git.home:2222/brad/local-controller.git",
+        provider: { kind: "gitea" as const, name: "Gitea", baseUrl: instance.webOrigin },
+      };
+      const sourceControl = {
+        resolveLink: () => undefined,
+        resolveHandle: () => Effect.succeed({ context, provider: undefined as never }),
+      };
+      const identity = yield* configuredGiteaIdentity(sourceControl as never, {
+        canonicalKey: "git.home/brad/local-controller",
+        provider: "unknown",
+        rootPath: "/controller",
+        locator: { source: "git-remote", remoteName: "origin", remoteUrl: context.remoteUrl },
+      });
+      assert.equal(identity?.canonicalKey, "git.home:3000/brad/local-controller");
+      const requests: string[] = [];
+      const provider = yield* GiteaPullRequestProvider.make.pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            Layer.succeed(
+              HttpClient.HttpClient,
+              HttpClient.make((request) => {
+                requests.push(request.url);
+                const path = new URL(request.url).pathname;
+                const body = path.endsWith("/pulls/170")
+                  ? {
+                      number: 170,
+                      title: "Deployment",
+                      html_url: "https://git.bradleyprince.com/brad/local-controller/pulls/170",
+                      state: "open",
+                      merged: false,
+                      user: null,
+                      head: { ref: "feature", sha: "abc", repo: null },
+                      base: {
+                        ref: "main",
+                        sha: "def",
+                        repo: { full_name: "brad/local-controller" },
+                      },
+                      created_at: "2026-10-10T00:00:00Z",
+                      updated_at: "2026-10-11T00:00:00Z",
+                    }
+                  : path.endsWith("/status")
+                    ? { total_count: 0, state: "pending", statuses: null }
+                    : path.endsWith("/user")
+                      ? { login: "brad" }
+                      : path.endsWith("/local-controller")
+                        ? { full_name: "brad/local-controller" }
+                        : [];
+                return Effect.succeed(
+                  HttpClientResponse.fromWeb(request, new Response(JSON.stringify(body))),
+                );
+              }),
+            ),
+            ServerSettings.layerTest({ giteaInstances: [instance] }),
+            Layer.mock(SourceControlProviderRegistry.SourceControlProviderRegistry)(sourceControl),
+          ),
+        ),
+      );
+      const target = {
+        ...project({ id: "target", title: "Controller", workspaceRoot: "/controller" }),
+        repositoryIdentity: identity!,
+      };
+      const service = yield* makeService({
+        projects:
+          mode === "same project"
+            ? [target]
+            : [
+                project({
+                  id: "thread",
+                  title: "T3",
+                  workspaceRoot: "/t3",
+                  repository: "jimprince/t3code",
+                }),
+                target,
+              ],
+        providers: [provider, fakeProvider("github")],
+      });
+      for (const host of ["git.bradleyprince.com", "git.home", "gitea", "git.home:3000"]) {
+        const ref = {
+          projectId: (mode === "same project" ? "target" : "thread") as ProjectId,
+          host,
+          repository: "brad/local-controller",
+          number: 170,
+        };
+        const detail = yield* service.detail({ ...ref, allowStale: false });
+        const activity = yield* service.activity(ref);
+        assert.equal(detail.projectId, "target");
+        assert.equal(detail.state, "open");
+        assert.equal(detail.url, "http://git.home:3000/brad/local-controller/pulls/170");
+        assert.deepEqual(activity.comments, []);
+      }
+      assert.isTrue(requests.some((url) => url.endsWith("/pulls/170")));
+      assert.isTrue(requests.every((url) => url.startsWith("https://api.home/api/v1/")));
     }),
 );
 
