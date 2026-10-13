@@ -1,7 +1,7 @@
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
 import type { MessageId, ProjectRequestStartIntakeResult } from "@t3tools/contracts";
 import { XIcon } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent } from "react";
 
 import type { ComposerImageAttachment } from "../../composerDraftStore";
 import { randomUUID } from "../../lib/utils";
@@ -103,11 +103,6 @@ export function ProjectRequestBox({
   const saveForLater = useAtomCommand(saveRequestForLater, "Save for later");
   const sendToOrchestrator = useSendToOrchestrator();
   const sendToThread = useSendToThread();
-  const { query, pending } = useProjectRequests(summary);
-  const sentStatus = useMemo(
-    () => (sent ? sentRequestStatus(sent.messageId, query.data?.issues ?? [], pending) : null),
-    [pending, query.data, sent],
-  );
   const statusTimer = useRef<number | null>(null);
   const sentTimers = useRef<number[]>([]);
   const imagesRef = useRef(images);
@@ -251,13 +246,9 @@ export function ProjectRequestBox({
     setExpanded(false);
     setStatus(null);
     setSent({ messageId: result.messageId, queued: result.queued, intake: result.intake });
-    // The ledger files the request a few seconds after the send; look for it, then
-    // let the line go.
+    // The sent line looks the filed request up itself; let the line go after a while.
     for (const timer of sentTimers.current) window.clearTimeout(timer);
-    sentTimers.current = [
-      ...FILING_CHECKS_MS.map((delay) => window.setTimeout(query.refresh, delay)),
-      window.setTimeout(() => setSent(null), SENT_LINE_MS),
-    ];
+    sentTimers.current = [window.setTimeout(() => setSent(null), SENT_LINE_MS)];
   };
 
   const saveLater = async () => {
@@ -404,7 +395,7 @@ export function ProjectRequestBox({
             </>
           ) : null}
           <span role="status" className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-            {status ?? (sent && sentStatus ? <SentLine status={sentStatus} /> : null)}
+            {status ?? (sent ? <SentLine summary={summary} messageId={sent.messageId} /> : null)}
           </span>
         </div>
       ) : null}
@@ -412,8 +403,33 @@ export function ProjectRequestBox({
   );
 }
 
-/** "Sent · <the filed task's title>", which opens the task; the title once it is filed. */
-function SentLine({ status }: { readonly status: ReturnType<typeof sentRequestStatus> }) {
+/**
+ * "Sent · <the filed task's title>", which opens the task; the title once it is filed.
+ * The project's issue list is read here, once a request has been sent, rather than when the
+ * box mounts: the Dashboard shows the box on every visit and the read can be slow. The ledger
+ * files the request a few seconds after the send, so the list is read again for a minute.
+ */
+function SentLine({
+  summary,
+  messageId,
+}: {
+  readonly summary: OrchestratorSummary;
+  readonly messageId: MessageId;
+}) {
+  const { query, pending } = useProjectRequests(summary);
+  const refresh = useRef(query.refresh);
+  useEffect(() => {
+    refresh.current = query.refresh;
+  });
+  useEffect(() => {
+    const timers = FILING_CHECKS_MS.map((delay) =>
+      window.setTimeout(() => refresh.current(), delay),
+    );
+    return () => {
+      for (const timer of timers) window.clearTimeout(timer);
+    };
+  }, []);
+  const status = sentRequestStatus(messageId, query.data?.issues ?? [], pending);
   if (status.state !== "tracked") return <>Sent</>;
   return (
     <>
