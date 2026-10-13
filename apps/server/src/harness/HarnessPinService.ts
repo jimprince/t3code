@@ -24,7 +24,7 @@ export class HarnessPinService extends Context.Service<
   }
 >()("t3/harness/HarnessPinService") {}
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const settings = yield* Settings.ServerSettingsService;
   // Read-modify-write of one list: two clients pinning at once must both land.
   const lock = yield* Semaphore.make(1);
