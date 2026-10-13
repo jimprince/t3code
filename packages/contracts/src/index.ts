@@ -69,6 +69,7 @@ export * from "./clientRpcPermissions.ts";
 export * from "./embeddedPages.ts";
 
 export * from "./forkThreadMetadata.ts";
+export type { NativeCompletion } from "./forkWorkerLifecycle.ts";
 export * from "./forkSupervisionDrag.ts";
 export * from "./forkThreadOrder.ts";
 
