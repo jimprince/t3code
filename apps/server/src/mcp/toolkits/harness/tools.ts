@@ -1,6 +1,8 @@
 import {
   HarnessPinnedChecks,
   HarnessSetCheckPinnedInput,
+  HarnessRoutineKindSetInput,
+  HarnessRoutineKindSetResult,
   HarnessSnapshot,
   HarnessSnapshotInput,
   OrchestratorMcpFailure,
@@ -12,7 +14,20 @@ import { HarnessReadService } from "../../../harness/HarnessReadService.ts";
 import { ThreadManagementService } from "../../../orchestration-v2/ThreadManagementService.ts";
 import { McpInvocationContext } from "../../McpInvocationContext.ts";
 
+import { RoutineKindService } from "../../../harness/RoutineKindService.ts";
+
 export const HarnessToolkit = Toolkit.make(
+  Tool.make("harness_routine_kind_set", {
+    description:
+      "Classify an environment-local automation or scheduled task as check, project, or agent-wake. Null restores the owner-purpose default. Does not run or reschedule the routine.",
+    parameters: HarnessRoutineKindSetInput,
+    success: HarnessRoutineKindSetResult,
+    failure: OrchestratorMcpFailure,
+    failureMode: "return",
+    dependencies: [RoutineKindService, McpInvocationContext, ThreadManagementService],
+  })
+    .annotate(Tool.Readonly, false)
+    .annotate(Tool.Destructive, false),
   Tool.make("harness_snapshot", {
     description:
       "Read Harness agents/checks, exact bounded run histories, lateness evidence and unknown-or-known findings. Read-only; dispatch and execution success are separate. Sources are non-atomic and individually timestamped. pinnedCheckKeys lists the checks pinned to the top of the checks list; it is absent on a server that cannot pin.",
