@@ -5,7 +5,7 @@ import {
   type AutomationResultMode,
   type AutomationRun,
 } from "@t3tools/contracts";
-import { describe, expect, it } from "vite-plus/test";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import {
   belongsToRoot,
   fromDraft,
@@ -13,6 +13,13 @@ import {
   shortDuration,
   toDraft,
 } from "./projectAutomations.logic";
+
+beforeAll(() => {
+  vi.stubEnv("TZ", "America/Edmonton");
+});
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
 
 const root = ThreadId.make("root");
 const automation: Automation = {
@@ -62,7 +69,7 @@ describe("project automation panel logic", () => {
     );
   });
 
-  // 2026-10-06T01:00Z is Mon 19:00 MDT in Denver.
+  // 2026-10-06T01:00Z is Mon 19:00 MDT in Denver and on the device (Edmonton).
   const now = Date.parse("2026-10-06T01:00:00.000Z");
   const nightly: Automation = {
     ...automation,
@@ -135,7 +142,10 @@ describe("project automation panel logic", () => {
         target: null,
         lastRun: run("failed", "2026-10-06T00:59:40.000Z"),
       }),
-    ).toEqual({ summary: "Weekdays 09:00 UTC · paused", last: "last: failed just now" });
+    ).toEqual({
+      summary: "Weekdays 03:00 MDT (09:00 UTC) · paused",
+      last: "last: failed just now",
+    });
   });
 
   it("rounds durations to one unit", () => {
