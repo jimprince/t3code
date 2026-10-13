@@ -1,7 +1,7 @@
 import * as OrchestratorMcp from "../mcp/OrchestratorMcpService.ts";
 import { resolveCreatorPurpose } from "../forkThreads/ThreadPurpose.ts";
 import { readMetadata, writeMetadata } from "../forkThreads/MetadataStore.ts";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as WorktreeSetupTracker from "../project/WorktreeSetupTracker.ts";
 import * as ProjectCloneTracker from "../project/ProjectCloneTracker.ts";

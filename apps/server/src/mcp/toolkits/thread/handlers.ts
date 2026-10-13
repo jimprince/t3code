@@ -378,7 +378,12 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
     (input) =>
       Effect.gen(function* () {
         const { threads, projection, scope, caller } = yield* readThread(input.threadId);
-        if (input.action === "nest" || input.action === "unnest" || input.action === "move_to_harness" || input.action === "move_to_projects") {
+        if (
+          input.action === "nest" ||
+          input.action === "unnest" ||
+          input.action === "move_to_harness" ||
+          input.action === "move_to_projects"
+        ) {
           if (input.action === "nest" && input.parentThreadId === undefined)
             return yield* new OrchestratorMcpFailure({
               code: "invalid_request",
@@ -396,8 +401,16 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
               commandId,
               threadId: projection.thread.id,
               ...(input.action === "nest" || input.action === "unnest"
-                ? { parentThreadId: input.action === "nest" ? input.parentThreadId! : null, remoteParent: null }
-                : { purpose: input.action === "move_to_harness" ? ("harness" as const) : ("project" as const) }),
+                ? {
+                    parentThreadId: input.action === "nest" ? input.parentThreadId! : null,
+                    remoteParent: null,
+                  }
+                : {
+                    purpose:
+                      input.action === "move_to_harness"
+                        ? ("harness" as const)
+                        : ("project" as const),
+                  }),
             })
             .pipe(
               Effect.mapError(
@@ -405,7 +418,11 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
                   new OrchestratorMcpFailure({ code: "invalid_request", message: String(cause) }),
               ),
             );
-          const effectivePurpose = yield* resolveCreatorPurpose(sql, projection.thread.id, threads.getThreadShell).pipe(Effect.mapError(unavailable));
+          const effectivePurpose = yield* resolveCreatorPurpose(
+            sql,
+            projection.thread.id,
+            threads.getThreadShell,
+          ).pipe(Effect.mapError(unavailable));
           return { metadata, effectivePurpose };
         }
         const common = { commandId: yield* newCommandId(), threadId: projection.thread.id };

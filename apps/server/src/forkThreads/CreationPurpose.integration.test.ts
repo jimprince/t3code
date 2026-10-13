@@ -3,12 +3,12 @@ import { CommandId, EventId, ProjectId, ProviderInstanceId, ThreadId } from "@t3
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as EventSink from "../orchestration-v2/EventSink.ts";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as Registry from "../orchestration-v2/ProviderAdapterRegistry.ts";
 import { makeOrchestratorV2ReplayLayerWithRegistry } from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
-import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
+import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import { readMetadata, writeMetadata } from "./MetadataStore.ts";
 import { resolveCreatorPurpose } from "./ThreadPurpose.ts";
@@ -16,10 +16,10 @@ import { resolveCreatorPurpose } from "./ThreadPurpose.ts";
 const runtime = makeOrchestratorV2ReplayLayerWithRegistry(
   { name: "creation-purpose" },
   Registry.makeLayer([]),
-  { databaseLayer: SqlitePersistenceMemory, runEffectWorker: false },
+  { databaseLayer: SqlitePersistence.layerMemory, runEffectWorker: false },
 );
 const layer = Layer.mergeAll(runtime, ProjectionStore.layer).pipe(
-  Layer.provideMerge(SqlitePersistenceMemory),
+  Layer.provideMerge(SqlitePersistence.layerMemory),
 );
 it.effect(
   "one complete seed preserves delegate ownership, dynamic inherited purpose and root overrides",
