@@ -1,0 +1,4 @@
+id = "harness-purpose"
+category = "feature"
+functionality = "thread organization"
+text = "Agents can move work between Harness and Projects. New workers inherit their supervisor’s purpose, and top-level agent launches keep their creator’s starting purpose."

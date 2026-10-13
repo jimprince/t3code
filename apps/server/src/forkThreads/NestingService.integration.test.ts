@@ -1,3 +1,5 @@
+import { resolveCreatorPurpose } from "./ThreadPurpose.ts";
+import { writeMetadata } from "./MetadataStore.ts";
 import * as DateTime from "effect/DateTime";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -208,5 +210,78 @@ it.effect(
       );
       yield* service.update(input("child", "parent", "cli-nest"));
       assert.deepEqual(events, ["thread.metadata.update:cli-nest:shell-refresh"]);
+    }).pipe(Effect.provide(SqlitePersistenceMemory)),
+);
+
+it.effect(
+  "purpose-only writes preserve nesting and policy, skip no-ops, and replay cannot undo a move",
+  () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      let refreshes = 0;
+      const service = yield* makeNestingService(
+        sql,
+        (threadId) => Effect.succeed(shells.get(threadId) ?? null),
+        () =>
+          Effect.sync(() => {
+            refreshes += 1;
+          }),
+      );
+      yield* service.update({ ...input("child", "parent"), scope: "work", settleOnComplete: true });
+      const move = {
+        commandId: CommandId.make("purpose-move"),
+        threadId: id("child"),
+        purpose: "harness" as const,
+      };
+      const value = yield* service.update(move);
+      assert.equal(value.parentThreadId, id("parent"));
+      assert.equal(value.scope, "work");
+      assert.isTrue(value.settleOnComplete);
+      assert.equal(value.purpose, "harness");
+      assert.equal(refreshes, 2);
+      yield* service.update({ ...move, commandId: CommandId.make("purpose-noop") });
+      assert.equal(refreshes, 2);
+      yield* service.update({
+        ...move,
+        commandId: CommandId.make("purpose-back"),
+        purpose: "project",
+      });
+      yield* service.update(move);
+      assert.equal(
+        (yield* service.list()).find((row) => row.threadId === id("child"))?.purpose,
+        "project",
+      );
+      yield* service.update({
+        ...move,
+        commandId: CommandId.make("purpose-inherit"),
+        purpose: null,
+      });
+      assert.isNull((yield* service.list()).find((row) => row.threadId === id("child"))?.purpose);
+    }).pipe(Effect.provide(SqlitePersistenceMemory)),
+);
+
+it.effect(
+  "native execution fallback resolves an organizational child without persisting native edges",
+  () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* writeMetadata(sql, {
+        threadId: id("parent"),
+        parentThreadId: null,
+        purpose: "harness",
+      });
+      yield* writeMetadata(sql, { threadId: id("child"), parentThreadId: id("native") });
+      const nativeShell = () =>
+        Effect.succeed({
+          lineage: {
+            parentThreadId: id("parent"),
+            rootThreadId: id("parent"),
+            relationshipToParent: "subagent" as const,
+          },
+        });
+      assert.equal(yield* resolveCreatorPurpose(sql, id("child"), nativeShell), "harness");
+      assert.isUndefined((yield* listMetadata(sql)).find((row) => row.threadId === id("native")));
+      yield* writeMetadata(sql, { threadId: id("native"), parentThreadId: null });
+      assert.equal(yield* resolveCreatorPurpose(sql, id("child"), nativeShell), "project");
     }).pipe(Effect.provide(SqlitePersistenceMemory)),
 );
