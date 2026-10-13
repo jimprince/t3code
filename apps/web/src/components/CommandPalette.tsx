@@ -49,6 +49,7 @@ import * as Option from "effect/Option";
 import {
   ArrowLeftIcon,
   ChartNoAxesColumnIcon,
+  LayoutDashboardIcon,
   CheckIcon,
   ChevronRightIcon,
   CornerLeftUpIcon,
@@ -2259,6 +2260,17 @@ function OpenCommandPaletteDialog(props: {
         themeHalves,
         initialAppearance: resolvedTheme,
       });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:home-dashboard",
+    searchTerms: ["home", "dashboard", "plan", "decisions", "overview", "releases"],
+    title: "Open Home dashboard",
+    icon: <LayoutDashboardIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/dashboard" });
     },
   });
 
