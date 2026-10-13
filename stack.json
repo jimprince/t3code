@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "ca050b5c43f53bd3edb663286ee18547aedaee50",
-  "head": "df7310fbfb82949dcd4eaac7d0aff9a70da05294",
+  "prev": "d0aaaeffa2469ccd5398a91a5facf2e0896bbcd5",
+  "head": "3aac24c4c3075ba38e89c8900f556c89e118f632",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -166,7 +166,8 @@
     "fork-sqlite-worker-connections",
     "fork-dashboard-v3-01-plan-widget",
     "fork-dashboard-v3-02-subprojects-table",
-    "fork-dashboard-v3-03-projects-dnd"
+    "fork-dashboard-v3-03-projects-dnd",
+    "fork-dashboard-v3-04-snapshot-service"
   ],
   "unapplied": [],
   "hidden": [],
@@ -272,6 +273,9 @@
     },
     "fork-dashboard-v3-03-projects-dnd": {
       "oid": "df7310fbfb82949dcd4eaac7d0aff9a70da05294"
+    },
+    "fork-dashboard-v3-04-snapshot-service": {
+      "oid": "3aac24c4c3075ba38e89c8900f556c89e118f632"
     },
     "fork-decision-context-media": {
       "oid": "1e6afd754fb0eea09ab4b6730a0eeea6f7599825"
