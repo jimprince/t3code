@@ -4,7 +4,9 @@ import {
   type DashboardSnapshot,
   EnvironmentId,
   ThreadId,
+  RuntimeRequestId,
   WS_METHODS,
+  ProjectDashboardError,
   type OrchestrationV2ShellSnapshot,
   type ProjectIssuesListResult,
 } from "@t3tools/contracts";
@@ -21,6 +23,7 @@ import {
 } from "../connection/model.ts";
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
 import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
+import { EnvironmentRpcRequestObserver } from "../rpc/client.ts";
 import type { RpcSession } from "../rpc/session.ts";
 import { v2ThreadShell } from "../state/orchestrationV2TestFixtures.ts";
 import { readOlderDashboard } from "./fallback.ts";
@@ -31,7 +34,16 @@ const shell: OrchestrationV2ShellSnapshot = {
   snapshotSequence: 1,
   projects: [],
   archivedThreads: [],
-  threads: roots.map((id) => ({ ...v2ThreadShell, id, title: id })),
+  threads: roots.map((id) => ({
+    ...v2ThreadShell,
+    id,
+    title: id,
+    pendingRuntimeRequest: {
+      id: RuntimeRequestId.make(`ask-${id}`),
+      kind: "user_input",
+      createdAt: v2ThreadShell.createdAt,
+    },
+  })),
 };
 const target = new PrimaryConnectionTarget({
   environmentId: EnvironmentId.make("old"),
@@ -87,6 +99,8 @@ describe("older-server RPC composition", () => {
               ],
         });
         const client = {
+          [WS_METHODS.projectDashboardGet]: () =>
+            Effect.fail(new ProjectDashboardError({ message: "Unsupported" })),
           "fork.threads.metadata.list": () =>
             read(
               "metadata",
@@ -132,7 +146,17 @@ describe("older-server RPC composition", () => {
           installedVersion: "0.0.46-nightly.20261005.2689-fork.12",
           latestVersion: null,
         });
+        const beforeReopen = calls.length;
+        const reopened = yield* readOlderDashboard(shell, initial).pipe(
+          Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+        );
+        expect(calls.slice(beforeReopen)).toEqual(["metadata"]);
+        expect(reopened.projects.flatMap((p) => p.tasks).map((t) => t.title)).toEqual([
+          "Real task",
+        ]);
+        expect(reopened.sources.find((s) => s.id === "older:root:issues")?.failed).toBe(false);
         fail = true;
+        yield* TestClock.adjust("5 minutes");
         const failed = yield* readOlderDashboard(shell, initial).pipe(
           Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
         );
@@ -171,6 +195,8 @@ const provideOlderClient = <A, E, R>(effect: Effect.Effect<A, E, R>, client: WsR
   });
 
 const metadataClient = {
+  [WS_METHODS.projectDashboardGet]: () =>
+    Effect.fail(new ProjectDashboardError({ message: "Unsupported" })),
   "fork.threads.metadata.list": () =>
     Effect.succeed(roots.map((threadId) => ({ threadId, parentThreadId: null, subproject: "on" }))),
 };
@@ -301,12 +327,14 @@ it.effect("publishes expired sources before the rest of a large environment comp
     const ids = Array.from({ length: 5 }, (_, i) => ThreadId.make(`head-${i}`));
     const largeShell = {
       ...shell,
-      threads: ids.map((id) => ({ ...v2ThreadShell, id, title: id })),
+      threads: ids.map((id) => ({ ...shell.threads[0]!, id, title: id })),
     };
     const enriched = yield* Deferred.make<DashboardSnapshot>();
     const earlyStarted = yield* Deferred.make<void>();
     const lateStarted = yield* Deferred.make<void>();
     const client = {
+      [WS_METHODS.projectDashboardGet]: () =>
+        Effect.fail(new ProjectDashboardError({ message: "Unsupported" })),
       "fork.threads.metadata.list": () =>
         Effect.succeed(
           ids.map((threadId) => ({ threadId, parentThreadId: null, subproject: "on" })),
@@ -346,4 +374,117 @@ it.effect("publishes expired sources before the rest of a large environment comp
     yield* TestClock.adjust("60 seconds");
     expect((yield* Fiber.join(fiber)).revision).toBe(3);
   }),
+);
+
+it.effect("queued reads get a full deadline after acquiring a permit", () =>
+  Effect.gen(function* () {
+    const ids = Array.from({ length: 4 }, (_, i) => ThreadId.make(`queued-${i}`));
+    const queuedShell = {
+      ...shell,
+      threads: ids.map((id) => ({ ...shell.threads[0]!, id, title: id })),
+    };
+    const waves = yield* Effect.forEach([0, 1, 2], () => Deferred.make<void>());
+    let started = 0;
+    const delayed = <A>(value: A) =>
+      Effect.gen(function* () {
+        const wave = Math.floor(started++ / 4);
+        yield* Deferred.succeed(waves[wave]!, undefined);
+        yield* Effect.sleep("24 seconds");
+        return value;
+      });
+    const client = {
+      ...metadataClient,
+      "fork.threads.metadata.list": () =>
+        Effect.succeed(
+          ids.map((threadId) => ({ threadId, parentThreadId: null, subproject: "on" })),
+        ),
+      [WS_METHODS.projectIssuesList]: () =>
+        delayed({ issues: [], repositories: [], fetchedAt: "2026-10-11T10:00:00Z" }),
+      [WS_METHODS.projectRoadmapGet]: () => delayed({ tracker: null, versions: [], items: [] }),
+      [WS_METHODS.projectRequestsPendingAsks]: () => delayed({ asks: [] }),
+    } as unknown as WsRpcProtocolClient;
+    const fiber = yield* provideOlderClient(readOlderDashboard(queuedShell), client).pipe(
+      Effect.forkChild,
+    );
+    for (const wave of waves) {
+      yield* Deferred.await(wave);
+      yield* TestClock.adjust("24 seconds");
+    }
+    const snapshot = yield* Fiber.join(fiber);
+    expect(started).toBe(12);
+    expect(
+      snapshot.sources
+        .filter((s) => s.id.startsWith("older:queued-"))
+        .every((s) => !s.failed && s.coverage === "bounded"),
+    ).toBe(true);
+  }),
+);
+
+it.effect(
+  "skips unlinked trackers and known-empty asks while retaining linked and pending roots",
+  () =>
+    Effect.gen(function* () {
+      const calls: string[] = [];
+      const observed: string[] = [];
+      const noAsks = {
+        ...shell,
+        threads: shell.threads.map((t) => ({
+          ...t,
+          pendingRuntimeRequest: t.id === root ? null : t.pendingRuntimeRequest,
+        })),
+      };
+      const client = {
+        ...metadataClient,
+        [WS_METHODS.projectDashboardGet]: ({ threadId }: { threadId: ThreadId }) =>
+          Effect.succeed({ tracker: threadId === root ? null : "brad/repo" }),
+        [WS_METHODS.projectIssuesList]: ({ rootThreadId }: { rootThreadId: ThreadId }) =>
+          Effect.sync(() => {
+            calls.push(`issues:${rootThreadId}`);
+            return { issues: [], repositories: [], fetchedAt: "2026-10-11T10:00:00Z" };
+          }),
+        [WS_METHODS.projectRoadmapGet]: ({ threadId }: { threadId: ThreadId }) =>
+          Effect.sync(() => {
+            calls.push(`roadmap:${threadId}`);
+            return { tracker: null, versions: [], items: [] };
+          }),
+        [WS_METHODS.projectRequestsPendingAsks]: ({ threadId }: { threadId: ThreadId }) =>
+          Effect.sync(() => {
+            calls.push(`asks:${threadId}`);
+            return {
+              asks: [
+                {
+                  threadId,
+                  threadTitle: "Pending decision",
+                  projectTitle: "Other",
+                  requestId: RuntimeRequestId.make("ask-other"),
+                  createdAt: "2026-10-11T10:00:00Z",
+                  canRespond: true,
+                  kind: "question",
+                  messageResponse: true,
+                  questions: [{ id: "q", header: "Decision", question: "Proceed?", options: [] }],
+                },
+              ],
+            };
+          }),
+      } as unknown as WsRpcProtocolClient;
+      const snapshot = yield* provideOlderClient(readOlderDashboard(noAsks), client).pipe(
+        Effect.provideService(EnvironmentRpcRequestObserver, {
+          observe: ({ method }) =>
+            Effect.sync(() => {
+              observed.push(method);
+              return Effect.void;
+            }),
+        }),
+      );
+      expect(observed).toEqual([]);
+      expect(snapshot.projects.flatMap((p) => p.attention).map((a) => a.question)).toEqual([
+        "Proceed?",
+      ]);
+      expect(calls.toSorted()).toEqual(["asks:other", "issues:other", "roadmap:other"]);
+      expect(
+        snapshot.sources
+          .filter((s) => s.id.startsWith("older:root:"))
+          .every((s) => !s.failed && s.coverage === "complete"),
+      ).toBe(true);
+    }),
 );
