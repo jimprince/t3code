@@ -95,7 +95,7 @@ export function VariantA() {
     now,
   );
   return (
-    <div className="grid grid-cols-1 gap-x-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+    <div className="grid grid-cols-1 gap-x-6 @5xl/dash:grid-cols-[minmax(0,1fr)_360px] @5xl/dash:items-start">
       <div className="min-w-0">
         <SectionMarker name="releases" hidden={data.releases.length === 0}>
           {data.releases.length > 0 ? (
@@ -128,7 +128,7 @@ export function VariantA() {
         </SectionMarker>
         {root ? null : <UtilityGroup utilities={utilities} all={data.projects} />}
       </div>
-      <aside className="min-w-0 lg:sticky lg:top-2">
+      <aside className="min-w-0 @5xl/dash:sticky @5xl/dash:top-2">
         <SectionMarker name="decisions">
           <SectionHeading title="Decisions">
             <b className="font-medium text-foreground">{decisions.length}</b> open
