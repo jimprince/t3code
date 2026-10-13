@@ -1,7 +1,10 @@
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { Rpc } from "effect/rpc";
 import { EnvironmentId, IsoDateTime, ProjectId, ThreadId } from "./baseSchemas.ts";
 import { EnvironmentAuthorizationError } from "./auth.ts";
+
+import { RoutineKind, RoutineKindSource } from "./routineKind.ts";
 
 const Count = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 export const HarnessSnapshotInput = Schema.Struct({
@@ -81,6 +84,12 @@ export const HarnessRoutine = Schema.Struct({
   projectId: Schema.NullOr(ProjectId),
   owner: Schema.NullOr(HarnessThreadLink),
   purpose: Schema.Literals(["harness", "unclassified"]),
+  // Older Harness servers returned only checks and have no kind capability.
+  routineKind: RoutineKind.pipe(Schema.withDecodingDefaultKey(Effect.succeed("check"))),
+  routineKindSource: RoutineKindSource.pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed("default")),
+  ),
+  ownerThreadId: Schema.NullOr(ThreadId).pipe(Schema.withDecodingDefaultKey(Effect.succeed(null))),
   source: Schema.String,
   sourceStale: Schema.Boolean,
   state: Schema.Literals(["enabled", "disabled", "failing", "unknown", "not shown yet"]),
@@ -175,5 +184,23 @@ export const HarnessSnapshotRpc = Rpc.make("harness.snapshot", {
 export const HarnessSetCheckPinnedRpc = Rpc.make("harness.setCheckPinned", {
   payload: HarnessSetCheckPinnedInput,
   success: HarnessPinnedChecks,
+  error: Schema.Union([HarnessReadError, EnvironmentAuthorizationError]),
+});
+
+export const HarnessRoutineKindSetInput = Schema.Struct({
+  routineKey: Schema.String.check(Schema.isMinLength(1)),
+  // Null restores derivation, allowing an exact undo of a bulk classification.
+  kind: Schema.NullOr(RoutineKind),
+});
+export type HarnessRoutineKindSetInput = typeof HarnessRoutineKindSetInput.Type;
+export const HarnessRoutineKindSetResult = Schema.Struct({
+  routineKey: Schema.String,
+  kind: Schema.NullOr(RoutineKind),
+  source: RoutineKindSource,
+});
+export type HarnessRoutineKindSetResult = typeof HarnessRoutineKindSetResult.Type;
+export const HarnessRoutineKindSetRpc = Rpc.make("harness.routineKind.set", {
+  payload: HarnessRoutineKindSetInput,
+  success: HarnessRoutineKindSetResult,
   error: Schema.Union([HarnessReadError, EnvironmentAuthorizationError]),
 });
