@@ -1,6 +1,8 @@
 import { useAtomValue } from "@effect/atom-react";
 import { createHarnessQuery } from "@t3tools/client-runtime/state/harness-query";
+import { createEnvironmentRpcCommand } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentId, HarnessSnapshot } from "@t3tools/contracts";
+import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { useEffect } from "react";
@@ -47,6 +49,14 @@ const harnessEnvironmentsAtom = Atom.make((get): readonly HarnessEnvironmentView
   }
   return views;
 }).pipe(Atom.withLabel("web-harness:environments"));
+
+/** Pins or unpins one check on its server, then reads that server's snapshot again. */
+export const setHarnessCheckPinnedCommand = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "harness-check-pin",
+  tag: "harness.setCheckPinned",
+  onSuccess: ({ environmentId }, registry) =>
+    Effect.sync(() => registry.refresh(harnessQuery({ environmentId, input: snapshotInput }))),
+});
 
 /** Forces a read now. Its identity never changes, so effects can hold it without re-subscribing. */
 function refreshHarness() {
