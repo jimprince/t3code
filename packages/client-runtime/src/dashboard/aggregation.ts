@@ -61,26 +61,49 @@ const utility = (title: string) =>
 type DashboardShell = Pick<
   OrchestrationV2ThreadShell,
   "id" | "title" | "archivedAt" | "todoProgress" | "updatedAt"
->;
+> &
+  Partial<Pick<OrchestrationV2ThreadShell, "settledOverride">>;
+/** Retired and explicitly settled heads no longer own dashboard work. */
+export const isDashboardThreadActive = (thread: DashboardShell) =>
+  thread.archivedAt === null &&
+  thread.settledOverride !== "settled" &&
+  !/\(retired\b/i.test(thread.title);
+
 export function dashboardRoots(
   shells: readonly DashboardShell[],
   metadata: readonly ForkThreadMetadata[],
+  remoteParentThreadIds: readonly ThreadId[] = [],
 ) {
   const parents = new Map(metadata.map((row) => [row.threadId, row]));
-  const threads = shells.map((thread) => ({
+  const allThreads = shells.map((thread) => ({
     ...thread,
     parentThreadId: parents.get(thread.id)?.parentThreadId ?? null,
     subproject: parents.get(thread.id)?.subproject ?? "auto",
   }));
-  const active = threads.filter((t) => t.archivedAt === null);
-  return {
-    threads,
-    roots: active.filter(
-      (t) =>
-        t.subproject === "on" ||
-        (!t.parentThreadId && active.some((child) => child.parentThreadId === t.id)),
-    ),
-  };
+  const remoteParents = new Set(remoteParentThreadIds);
+  const isRoot = (t: (typeof allThreads)[number]) =>
+    t.subproject === "on" ||
+    (!t.parentThreadId &&
+      (remoteParents.has(t.id) ||
+        allThreads.some(
+          (child) => child.parentThreadId === t.id && isDashboardThreadActive(child),
+        )));
+  const excluded = new Set(allThreads.filter((t) => !isDashboardThreadActive(t)).map((t) => t.id));
+  // A retired head's descendants must not leak back into its parent's Plan or Decisions.
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const thread of allThreads)
+      if (
+        thread.parentThreadId &&
+        excluded.has(thread.parentThreadId) &&
+        !excluded.has(thread.id)
+      ) {
+        excluded.add(thread.id);
+        changed = true;
+      }
+  }
+  const threads = allThreads.filter((t) => !excluded.has(t.id));
+  return { threads, roots: threads.filter((t) => isRoot(t) && isDashboardThreadActive(t)) };
 }
 export function aggregate(input: {
   readonly shells: readonly DashboardShell[];
@@ -91,18 +114,31 @@ export function aggregate(input: {
   readonly samples: readonly ProgressSample[];
   readonly now: string;
   readonly pendingAsks?: readonly ProjectPendingAsk[];
+  readonly remoteParentThreadIds?: readonly ThreadId[];
   readonly previous?: DashboardSnapshot;
   readonly rootRepositories?: ReadonlyMap<ThreadId, string>;
 }): DashboardSnapshot {
-  const { threads, roots } = dashboardRoots(input.shells, input.metadata);
+  const { threads, roots } = dashboardRoots(
+    input.shells,
+    input.metadata,
+    input.remoteParentThreadIds,
+  );
   const projects: DashboardProject[] = [];
   const history = indexSamples(input.samples);
   const trees = new Map(roots.map((root) => [root.id, collectThreadTree(threads, root.id)]));
   // Linked work belongs to the nearest project root, then the repository's own root.
   const owners = new Map<string, ThreadId>();
+  const included = new Set(threads.map((t) => t.id));
+  const excluded = new Set(input.shells.filter((t) => !included.has(t.id)).map((t) => t.id));
   const rows = new Map<string, ProjectIssue>();
-  for (const issues of input.issues.values())
-    for (const issue of issues) {
+  for (const root of roots)
+    for (const issue of input.issues.get(root.id) ?? []) {
+      // Shared repositories can return a retired head's decision through another active root.
+      if (
+        (issue.owner && excluded.has(issue.owner.threadId)) ||
+        (issue.linkedThreadIds.length > 0 && issue.linkedThreadIds.every((id) => excluded.has(id)))
+      )
+        continue;
       const key = issueId(issue.host, issue.repository, issue.number);
       const prior = rows.get(key);
       rows.set(
@@ -115,10 +151,30 @@ export function aggregate(input: {
           : issue,
       );
     }
+  const liveThreads = threads.filter((t) => t.archivedAt === null);
+  const waitingThreads = new Map(
+    [...rows].flatMap(([key, issue]) => {
+      const wanted = issue.decision?.waiting.trim();
+      if (!wanted) return [];
+      // Legacy cards can carry "agent-name (thread-prefix)". A unique saved id is stronger
+      // evidence than the older server's project-head stand-in for an unresolved name.
+      const prefix = wanted.match(/\(([a-f0-9]{8,})\)$/i)?.[1];
+      const matches = liveThreads.filter(
+        (t) => t.id === wanted || (prefix && t.id.startsWith(prefix)),
+      );
+      return matches.length === 1 ? [[key, matches[0]!.id] as const] : [];
+    }),
+  );
   for (const [key, issue] of rows) {
-    const candidates = roots.filter((root) =>
-      input.issues.get(root.id)?.some((i) => issueId(i.host, i.repository, i.number) === key),
+    const waiting = waitingThreads.get(key);
+    const candidates = roots.filter(
+      (root) =>
+        input.issues.get(root.id)?.some((i) => issueId(i.host, i.repository, i.number) === key) ||
+        trees.get(root.id)!.some((t) => t.id === waiting),
     );
+    const waitingOwner = candidates
+      .filter((root) => trees.get(root.id)!.some((t) => t.id === waiting))
+      .sort((a, b) => trees.get(a.id)!.length - trees.get(b.id)!.length)[0];
     const linked = candidates
       .filter((root) => trees.get(root.id)!.some((t) => issue.linkedThreadIds.includes(t.id)))
       .sort(
@@ -135,7 +191,10 @@ export function aggregate(input: {
           a.id.localeCompare(b.id),
       )[0];
     const owner =
-      linked[0] ?? ownRepo ?? [...candidates].sort((a, b) => a.id.localeCompare(b.id))[0];
+      waitingOwner ??
+      linked[0] ??
+      ownRepo ??
+      [...candidates].sort((a, b) => a.id.localeCompare(b.id))[0];
     if (owner) owners.set(key, owner.id);
   }
   const localOwners = new Map<ThreadId, ThreadId>();
@@ -220,7 +279,8 @@ export function aggregate(input: {
             title: issue.title,
             kind: issue.decision ? "decision" : issue.stage === "needs-test" ? "test" : "review",
             url: issue.url,
-            threadId: issue.owner?.threadId ?? issue.linkedThreadIds[0] ?? null,
+            threadId:
+              waitingThreads.get(id) ?? issue.owner?.threadId ?? issue.linkedThreadIds[0] ?? null,
             updatedAt: issue.updatedAt,
             deadline: issue.decision?.deadline ?? null,
             question: (issue.decision?.context ?? issue.title).slice(0, 1500),
@@ -233,7 +293,7 @@ export function aggregate(input: {
           closedAt: issue.closedAt,
           title: issue.title,
           url: issue.url,
-          threadId: linked?.id ?? issue.linkedThreadIds[0] ?? null,
+          threadId: waitingThreads.get(id) ?? linked?.id ?? issue.linkedThreadIds[0] ?? null,
           workstreamId: issue.partOf
             ? issueId(issue.host, issue.repository, issue.partOf)
             : `project:${root.id}:work`,
