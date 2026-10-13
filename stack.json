@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "91abf89b6256a165efadcddeb2dcf52a5c99406d",
-  "head": "a7dae7e89a6dae2c665c1062b9dab92ca4b3c8f8",
+  "prev": "d0899939528fc3e9361619b15a48f022bfad4959",
+  "head": "1f01e9c8118694fdc9308251d77f69fb5176417b",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -164,7 +164,8 @@
     "fork-pr-watch-recovery",
     "fork-shell-snapshot-cache",
     "fork-sqlite-worker-connections",
-    "fork-dashboard-v3-01-plan-widget"
+    "fork-dashboard-v3-01-plan-widget",
+    "fork-dashboard-v3-02-subprojects-table"
   ],
   "unapplied": [],
   "hidden": [],
@@ -264,6 +265,9 @@
     },
     "fork-dashboard-v3-01-plan-widget": {
       "oid": "a7dae7e89a6dae2c665c1062b9dab92ca4b3c8f8"
+    },
+    "fork-dashboard-v3-02-subprojects-table": {
+      "oid": "1f01e9c8118694fdc9308251d77f69fb5176417b"
     },
     "fork-decision-context-media": {
       "oid": "1e6afd754fb0eea09ab4b6730a0eeea6f7599825"
