@@ -6034,8 +6034,10 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       );
 
     const getShellSnapshotUncached: ProjectionStoreV2Shape["getShellSnapshot"] = (options) =>
-      readTransaction(readShellSnapshotRows(options))
-        .pipe(Effect.mapError(shellSnapshotReadError), Effect.flatMap(decodeShellSnapshot));
+      readTransaction(readShellSnapshotRows(options)).pipe(
+        Effect.mapError(shellSnapshotReadError),
+        Effect.flatMap(decodeShellSnapshot),
+      );
 
     let cachedStates: ReadonlyMap<ThreadId, ShellThreadState> | undefined;
     let cachedShells: ReadonlyArray<OrchestrationV2ThreadShell> = [];
