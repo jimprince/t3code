@@ -79,7 +79,8 @@ import {
 import { ProjectLayoutTabView, TAB_DRAG_TYPE, WIDGET_DRAG_TYPE } from "./ProjectLayoutView";
 import { ProjectRoadmapWidget, SaveForLater } from "./ProjectRoadmapWidget";
 import { ProjectPullRequestsWidget } from "./ProjectPullRequestsWidget";
-import { ProjectRequestBox } from "./ProjectRequestBox";
+import { ProjectPlanWidget } from "./ProjectPlanWidget";
+import { ProjectRequestBox, REQUEST_QUICK_ACTIONS } from "./ProjectRequestBox";
 import { ProjectSection } from "./ProjectSection";
 import { ProjectIssuesSummary, ProjectRoadmapSummary } from "./ProjectTabSummaries";
 import { resolveProjectTab, type ProjectTab } from "./projectTabs.logic";
@@ -571,6 +572,10 @@ function ProjectWorkstreams({
 
 interface BoardPage {
   readonly summary: OrchestratorSummary;
+  /** Every project, for widgets that look beyond this one. */
+  readonly summaries: ReadonlyArray<OrchestratorSummary>;
+  /** Brad's previous visit to this page, or null. */
+  readonly since: string | null;
   readonly selectTab: (tab: ProjectTab) => void;
   readonly roadmapTab: string | null;
   readonly tasksTab: string | null;
@@ -634,6 +639,16 @@ function BuiltinWidget({
       );
     case "decisions":
       return <ProjectDecisionFeed summary={summary} />;
+    case "plan":
+      return (
+        <ProjectPlanWidget
+          summary={summary}
+          summaries={page.summaries}
+          allProjects={widget.config.allProjects === true}
+          utilities={widget.config.utilities}
+          since={page.since}
+        />
+      );
     case "needs-you":
       // Needs you folded into the Decisions feed; a layout without a Decisions widget keeps it here.
       return page.decisionsInLayout ? null : <ProjectDecisionFeed summary={summary} />;
@@ -954,8 +969,12 @@ export function OrchestratorBoard({
     layoutTabs.find((item) => item.widgets.some((widget) => widget.type === type))?.id ?? null;
   const roadmapTab = tabWith("roadmap-board");
   const tasksTab = tabWith("issues-board");
+  // A Plan widget shows the subprojects and workstreams itself.
+  const planInLayout = tabWith("plan") !== null;
   const page: BoardPage = {
     summary,
+    summaries,
+    since: previousVisit,
     selectTab,
     roadmapTab,
     tasksTab,
@@ -1028,6 +1047,11 @@ export function OrchestratorBoard({
           <div className="flex min-h-0 flex-1 border-t border-border">
             <div className="topbar-scroll-fade min-h-0 min-w-0 flex-1 overflow-y-auto">
               <WorkspacePageContainer width="wide" className="gap-5">
+                {/* On every tab, first: one line until it is used. */}
+                <ProjectRequestBox
+                  summary={summary}
+                  quickActions={tab === "dashboard" ? REQUEST_QUICK_ACTIONS : undefined}
+                />
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
                   <OrchestratorStatus status={summary.status} />
                   {summary.rollup.working > 0 ? (
