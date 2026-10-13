@@ -1,0 +1,8 @@
+name = "fork-dashboard-v3-07-design-toggle"
+subject = "fix(web): Home design toggle shows A when the stored choice was Previous"
+class = "product"
+purpose = "Home design toggle shows A when the stored choice was Previous"
+retire_when = "The dashboard-v3 series is intentionally dropped or replaced by equivalent upstream behavior."
+depends_on = ["fork-dashboard-v3-06-review-one"]
+roles = []
+note = "Replayed independently from live source e9f1de034671f94dde3fbc32ab27a1f26cf5aeca; excludes the Chief of Staff tray series."
