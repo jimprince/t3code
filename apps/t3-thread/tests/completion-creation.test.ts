@@ -93,3 +93,37 @@ describe("worker completion creation", () => {
     },
   );
 });
+
+it("resolves a source caller's inherited purpose and respects an explicit unnest", async () => {
+  let rows = [
+    { threadId: "owner", parentThreadId: null, purpose: "harness" as "harness" | "project" | null },
+  ];
+  const client = new RemoteEnvironmentClient(environment, {
+    rpcFactory: () => ({
+      request: vi.fn(async () => rows),
+      dispose: vi.fn(async () => undefined),
+      subscribeShellSnapshot: vi.fn(async () => ({
+        kind: "snapshot" as const,
+        snapshot: {
+          projects: [],
+          snapshotSequence: 0,
+          threads: [
+            {
+              id: "native-caller",
+              lineage: {
+                parentThreadId: "owner",
+                rootThreadId: "owner",
+                relationshipToParent: "subagent",
+              },
+            },
+          ],
+        },
+      })),
+      subscribeThreadSnapshot: vi.fn(),
+    }),
+  });
+  expect(await client.effectiveThreadPurpose("native-caller")).toBe("harness");
+  rows = [...rows, { threadId: "native-caller", parentThreadId: null, purpose: null }];
+  expect(await client.effectiveThreadPurpose("native-caller")).toBe("project");
+  expect(await client.effectiveThreadPurpose("unknown-caller")).toBeNull();
+});
