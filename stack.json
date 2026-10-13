@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "c4d38085629ae6e46ee1e4388483fabd43e73b14",
-  "head": "b53cc0b2ac63a613935d8624f99ec07ee1bf04a7",
+  "prev": "8ac8acf16f103c3f31c23d018816a04226c26972",
+  "head": "39a64c2b4512df22de6d71142fb01c09ceac0e03",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -174,7 +174,8 @@
     "fork-dashboard-v3-08-decision-release-facts",
     "fork-dashboard-v3-09-older-hosts",
     "fork-dashboard-v3-10-older-host-publication",
-    "fork-dashboard-v3-11-tracker-read-timeout"
+    "fork-dashboard-v3-11-tracker-read-timeout",
+    "fork-dashboard-v3-12-home-polish"
   ],
   "unapplied": [],
   "hidden": [],
@@ -304,6 +305,9 @@
     },
     "fork-dashboard-v3-11-tracker-read-timeout": {
       "oid": "b53cc0b2ac63a613935d8624f99ec07ee1bf04a7"
+    },
+    "fork-dashboard-v3-12-home-polish": {
+      "oid": "39a64c2b4512df22de6d71142fb01c09ceac0e03"
     },
     "fork-decision-context-media": {
       "oid": "1e6afd754fb0eea09ab4b6730a0eeea6f7599825"
