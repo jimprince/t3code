@@ -1736,8 +1736,9 @@ agent
 agent
   .command("result")
   .argument("<name>", "agent name or raw thread UUID")
-  .option("--tail <count>", "number of messages to show", "1")
+  .option("--tail <count>", "number of timeline items to show", "1")
   .option("--assistant-only", "only show assistant messages")
+  .option("--human-only", "only show human-authored user messages")
   .option(
     "--wait <seconds>",
     "wait up to this many seconds for the latest turn to complete before reading",
@@ -1750,30 +1751,72 @@ agent
   .option("--mark-seen", "record the latest assistant message as reviewed")
   .action(async (name, options) => {
     const { agent: savedAgent, client, saved, target } = await withAgent(name);
-    const detail = options.wait
+    if (options.humanOnly && options.assistantOnly) {
+      throw new Error("--human-only and --assistant-only cannot be combined.");
+    }
+    const waited = options.wait
       ? await client.waitForThread({
           threadId: savedAgent.threadId,
           goal: "completion",
           timeoutMs: Number(options.wait) * 1000,
           intervalMs: Number(options.interval) * 1000,
         })
-      : await client.getThreadDetail(savedAgent.threadId);
-    const tailCount = Math.max(1, Number(options.tail));
+      : null;
+    const tailCount = Number(options.tail);
+    const detail = options.finalMessage
+      ? (waited ?? (await client.getThreadDetail(savedAgent.threadId)))
+      : null;
     const latestAssistant = options.finalMessage
-      ? (getLatestTurnAssistantMessage(detail) ?? getLatestAssistantMessage(detail))
-      : getLatestAssistantMessage(detail);
+      ? (getLatestTurnAssistantMessage(detail!) ?? getLatestAssistantMessage(detail!))
+      : null;
+    const timeline = options.finalMessage
+      ? null
+      : await client.getThreadResultTimeline({
+          threadId: savedAgent.threadId,
+          count: tailCount,
+          humanOnly: options.humanOnly,
+          assistantOnly: options.assistantOnly,
+        });
+    let tailAssistantMessageId: string | null = null;
+    for (const row of timeline?.items ?? []) {
+      if (row.item.type === "assistant_message")
+        tailAssistantMessageId = row.item.messageId ?? null;
+    }
+    const latestAssistantId =
+      latestAssistant?.id ??
+      (options.markSeen
+        ? (
+            await client.getThreadResultTimeline({
+              threadId: savedAgent.threadId,
+              count: 1,
+              assistantOnly: true,
+            })
+          ).items[0]?.item.messageId
+        : tailAssistantMessageId) ??
+      null;
     const messages = options.finalMessage
       ? latestAssistant
         ? [latestAssistant]
         : []
-      : options.assistantOnly
-        ? detail.messages.filter((message) => message.role === "assistant")
-        : detail.messages;
+      : timeline!.items.flatMap((row) =>
+          row.item.type === "user_message" || row.item.type === "assistant_message"
+            ? [
+                {
+                  id: row.item.messageId,
+                  role: row.item.type === "user_message" ? "user" : "assistant",
+                  text: row.item.text,
+                  position: row.position,
+                  sourceThreadId: row.sourceThreadId,
+                  itemId: row.sourceItemId,
+                },
+              ]
+            : [],
+        );
     if (options.markSeen) {
       assertSavedAgentCapability(target, "`result --mark-seen`");
     }
     let markedSeen = false;
-    if (options.markSeen && latestAssistant) {
+    if (options.markSeen && latestAssistantId) {
       await updateState(async (state) => {
         const currentAgent = requireAgent(state, savedAgent.name);
         return {
@@ -1781,7 +1824,7 @@ agent
             ...state,
             agents: upsertAgent(state.agents, {
               ...currentAgent,
-              lastSeenAssistantMessageId: latestAssistant.id,
+              lastSeenAssistantMessageId: latestAssistantId,
             }),
           },
           result: null,
@@ -1794,11 +1837,19 @@ agent
       threadId: savedAgent.threadId,
       environment: savedAgent.environment,
       saved,
-      hasNewOutput: saved ? hasNewAssistantOutput(savedAgent, detail) : null,
-      latestAssistantMessageId: latestAssistant?.id ?? null,
-      latestTurnAssistantMessageId: detail.latestTurn?.assistantMessageId ?? null,
+      hasNewOutput:
+        saved && latestAssistantId !== null
+          ? latestAssistantId !== savedAgent.lastSeenAssistantMessageId
+          : null,
+      latestAssistantMessageId: latestAssistantId,
+      latestTurnAssistantMessageId:
+        detail?.latestTurn?.assistantMessageId ?? waited?.latestTurn?.assistantMessageId ?? null,
       markedSeen,
-      messages: messages.slice(-tailCount),
+      messages,
+      items: timeline?.items ?? [],
+      scanned: timeline?.scanned ?? null,
+      scanBudget: timeline?.scanBudget ?? null,
+      scanBudgetExhausted: timeline?.scanBudgetExhausted ?? false,
     });
   });
 
