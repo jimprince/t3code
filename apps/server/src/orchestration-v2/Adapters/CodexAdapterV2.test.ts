@@ -4208,7 +4208,9 @@ describe("CodexAdapterV2 post-settle continuation", () => {
             const content =
               event.type === "message.updated" && event.message.role === "assistant"
                 ? event.message
-                : event.type === "turn_item.updated" && event.turnItem.type === "reasoning"
+                : event.type === "turn_item.updated" &&
+                    (event.turnItem.type === "reasoning" ||
+                      event.turnItem.type === "assistant_message")
                   ? event.turnItem
                   : null;
             if (content?.nodeId != null && content.streaming) {
@@ -4273,12 +4275,8 @@ describe("CodexAdapterV2 post-settle continuation", () => {
               event.message.text,
               event.message.streaming,
             ]),
-            [
-              ["a", true],
-              ["ab", true],
-              ["abc", true],
-              ["abc", false],
-            ],
+            [["abc", false]],
+            "message snapshots retain final text; all streaming updates remain in turn items",
           );
           assert.deepEqual(
             ["assistant_message", "reasoning"].map(
