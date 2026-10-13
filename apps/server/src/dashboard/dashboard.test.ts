@@ -259,3 +259,42 @@ describe("single-flight refresh", () => {
     }),
   );
 });
+
+describe("durable dashboard cache", () => {
+  it("deduplicates repository records and retains root membership and numeric history", async () => {
+    const { compactStoredDashboard, expandStoredDashboard } = await import("./DashboardStore.ts");
+    const root = ThreadId.make("root");
+    const second = ThreadId.make("second");
+    const issue: ProjectIssue = {
+      host: "git.test",
+      repository: "brad/repo",
+      number: 1,
+      title: "Choose",
+      url: "https://git.test/brad/repo/issues/1",
+      status: "pending",
+      labels: [],
+      isRequest: false,
+      requestSource: null,
+      assignees: [],
+      comments: 0,
+      createdAt: now,
+      updatedAt: now,
+      closedAt: null,
+      linkedThreadIds: [root],
+      latestComment: { author: "agent", body: "Large detail".repeat(1000), createdAt: now },
+    };
+    const snapshot = { revision: 1, asOf: now, projects: [], releases: [], sources: [] };
+    const stored = compactStoredDashboard({
+      snapshot,
+      samples: history,
+      issues: { [root]: [issue], [second]: [{ ...issue, linkedThreadIds: [second] }] },
+    });
+    expect(Object.values(stored.issueRepositories).flat()).toHaveLength(1);
+    expect(stored.samples[0]).toEqual(["task", Date.parse(before), 2, 10, "v1"]);
+    expect(JSON.stringify(stored)).not.toContain("Large detail");
+    const restored = expandStoredDashboard(stored);
+    expect(restored.samples).toEqual(history);
+    expect(restored.issues?.[root]?.[0]?.linkedThreadIds).toEqual([root, second]);
+    expect(restored.issues?.[second]?.[0]?.title).toBe("Choose");
+  });
+});
