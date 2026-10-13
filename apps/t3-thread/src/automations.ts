@@ -1,3 +1,4 @@
+import { ClassificationPlan, classifyRoutines } from "./routineClassification.js";
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import {
@@ -38,9 +39,11 @@ type Options = {
   limit?: string;
   resultMode?: string;
   mode?: string;
+  routineKind?: string;
 };
 
 const DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+const decodeClassificationPlan = Schema.decodeUnknownSync(ClassificationPlan);
 const decodeDefinition = Schema.decodeUnknownSync(AutomationDefinition);
 const decodeScript = Schema.decodeUnknownSync(AutomationScriptDefinition);
 
@@ -111,6 +114,7 @@ function definition(options: Options) {
     projectId: options.project,
     name: options.name,
     enabled: !options.paused,
+    routineKind: options.routineKind,
     ...(options.ownerThread ? { ownerThreadId: options.ownerThread } : {}),
     triggers: [
       ...(timing ? [{ type: "schedule", schedule: timing }] : []),
@@ -169,6 +173,52 @@ export function registerAutomationCommands(
     input: Record<string, unknown>,
   ) => print(await (await client(env)).automationRpc(method, input));
 
+  const harness = program
+    .command("harness")
+    .description("Inspect and classify environment-local routines");
+  harness
+    .command("classify")
+    .requiredOption("--env <name>")
+    .requiredOption("--plan-file <path>", "reviewed JSON classification plan")
+    .option("--apply", "write classifications; otherwise dry-run")
+    .option("--undo-file <path>", "retain original classifications", "routine-kind-undo.json")
+    .action(
+      async (options: { env: string; planFile: string; apply?: boolean; undoFile: string }) => {
+        const remote = await client(options.env);
+        const plan = decodeClassificationPlan(
+          JSON.parse(NodeFS.readFileSync(options.planFile, "utf8")),
+        );
+        print(
+          await classifyRoutines(
+            plan,
+            {
+              snapshot: () => remote.automationRpc("harnessSnapshot", {}),
+              set: (input) => remote.automationRpc("harnessRoutineKindSet", input),
+            },
+            { apply: options.apply === true, undoFile: options.undoFile },
+          ),
+        );
+      },
+    );
+  harness
+    .command("tasks")
+    .requiredOption("--env <name>")
+    .action((options: Options) => call(options.env, "scheduledTasksList", {}));
+  harness
+    .command("snapshot")
+    .requiredOption("--env <name>")
+    .action((options: Options) => call(options.env, "harnessSnapshot", {}));
+  harness
+    .command("routine-kind-set")
+    .argument("<routine-key>")
+    .argument("<kind>", "check, project, agent-wake or default")
+    .requiredOption("--env <name>")
+    .action((routineKey: string, kind: string, options: Options) =>
+      call(options.env, "harnessRoutineKindSet", {
+        routineKey,
+        kind: kind === "default" ? null : kind,
+      }),
+    );
   const automation = program
     .command("automation")
     .description("Manage automation rules: schedule triggers that start agent turns");
@@ -207,6 +257,7 @@ export function registerAutomationCommands(
     .option("--thread <id>", "existing target thread")
     .option("--new-thread", "new thread each run (default)")
     .option("--owner-thread <id>", "orchestrator shown in Projects")
+    .option("--routine-kind <kind>", "check, project or agent-wake (default follows owner purpose)")
     .option("--paused", "create paused")
     .option(
       "--result-mode <mode>",
