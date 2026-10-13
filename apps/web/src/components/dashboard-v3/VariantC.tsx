@@ -115,17 +115,22 @@ function GridRow({
           <span className="text-muted-foreground/60">0</span>
         )}
       </td>
-      <td className={cn(TD, "hidden text-right tabular-nums sm:table-cell")}>
+      <td className={cn(TD, "hidden text-right tabular-nums @xl/dash:table-cell")}>
         {roll.steps && roll.projectedDone !== null && roll.paceBasis ? (
           `~${roll.projectedDone}/${roll.steps.total}`
         ) : (
           <span className="text-muted-foreground/60">·</span>
         )}
       </td>
-      <td className={cn(TD, "hidden max-w-[160px] truncate text-muted-foreground sm:table-cell")}>
+      <td
+        className={cn(
+          TD,
+          "hidden max-w-[160px] truncate text-muted-foreground @xl/dash:table-cell",
+        )}
+      >
         {next}
       </td>
-      <td className={cn(TD, "hidden tabular-nums whitespace-nowrap sm:table-cell")}>
+      <td className={cn(TD, "hidden tabular-nums whitespace-nowrap @xl/dash:table-cell")}>
         {roll.ownerEta ? (
           <>
             {formatClock(roll.ownerEta, now)}{" "}
@@ -146,7 +151,7 @@ function GridRow({
           </>
         ) : null}
       </td>
-      <td className={cn(TD, "hidden text-right tabular-nums sm:table-cell")}>
+      <td className={cn(TD, "hidden text-right tabular-nums @xl/dash:table-cell")}>
         {confirmed ? (
           <span
             className={
@@ -333,18 +338,18 @@ export function VariantC() {
   return (
     <div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-0 border-collapse text-xs sm:min-w-[900px]">
+        <table className="w-full min-w-0 border-collapse text-xs @xl/dash:min-w-[900px]">
           <thead>
             <tr>
               <th className={TH}>Work</th>
               <th className={TH}>Progress</th>
               <th className={cn(TH, "text-right")}>Done</th>
               <th className={cn(TH, "text-right")}>1h</th>
-              <th className={cn(TH, "hidden text-right sm:table-cell")}>By next hour</th>
-              <th className={cn(TH, "hidden sm:table-cell")}>Next</th>
-              <th className={cn(TH, "hidden sm:table-cell")}>ETA</th>
+              <th className={cn(TH, "hidden text-right @xl/dash:table-cell")}>By next hour</th>
+              <th className={cn(TH, "hidden @xl/dash:table-cell")}>Next</th>
+              <th className={cn(TH, "hidden @xl/dash:table-cell")}>ETA</th>
               <th className={TH}>Needs you / blocker</th>
-              <th className={cn(TH, "hidden text-right sm:table-cell")}>Age</th>
+              <th className={cn(TH, "hidden text-right @xl/dash:table-cell")}>Age</th>
             </tr>
           </thead>
           <tbody {...releasesMarker} hidden={data.releases.length === 0}>
@@ -401,7 +406,7 @@ export function VariantC() {
           </tbody>
         </table>
       </div>
-      <div className="grid grid-cols-1 gap-x-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-x-6 @4xl/dash:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <SectionMarker name="decisions">
           <SectionHeading title="Decisions">
             <b className="font-medium text-foreground">{decisions.length}</b> open
