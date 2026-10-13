@@ -8,7 +8,10 @@ import type {
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  ANSWER_CAP_MS,
+  ANSWER_LINGER_MS,
   ageLabel,
+  answerSettled,
   barSegments,
   diffAgainst,
   firstVisitChanges,
@@ -21,6 +24,7 @@ import {
   sourceHealth,
   takeBaseline,
   taskForecast,
+  versionState,
 } from "./dashboard.logic";
 
 const NOW = Date.parse("2026-10-11T13:42:00.000Z");
@@ -323,5 +327,37 @@ describe("ageLabel", () => {
     expect(ageLabel(at(152), NOW)).toBe("2h 32m");
     expect(ageLabel(at(120), NOW)).toBe("2h");
     expect(ageLabel(at(3 * 24 * 60), NOW)).toBe("3d");
+  });
+});
+
+describe("answerSettled", () => {
+  const sentAt = NOW;
+  it("keeps an answer while the snapshot still lists the decision", () => {
+    const at = (ms: number) => answerSettled({ sentAt, stillOpen: true, now: NOW + ms });
+    expect(at(ANSWER_LINGER_MS)).toBe(false);
+    expect(at(ANSWER_CAP_MS - 1)).toBe(false);
+  });
+  it("lets go of a listed decision at the cap", () => {
+    expect(answerSettled({ sentAt, stillOpen: true, now: NOW + ANSWER_CAP_MS })).toBe(true);
+  });
+  it("lets go once the decision left the snapshot, after the linger", () => {
+    expect(answerSettled({ sentAt, stillOpen: false, now: NOW + ANSWER_LINGER_MS - 1 })).toBe(
+      false,
+    );
+    expect(answerSettled({ sentAt, stillOpen: false, now: NOW + ANSWER_LINGER_MS })).toBe(true);
+  });
+});
+
+describe("versionState", () => {
+  it("is unknown without both versions, so no check mark", () => {
+    expect(versionState("0.0.46-fork.12", null)).toBe("unknown");
+    expect(versionState(null, "v0.0.46-fork.12")).toBe("unknown");
+  });
+  it("warns only when installed is older than latest", () => {
+    expect(versionState("0.0.46-fork.11", "v0.0.46-fork.12")).toBe("behind");
+  });
+  it("treats the tag's v prefix and an installed build ahead of latest as current", () => {
+    expect(versionState("0.0.46-fork.12", "v0.0.46-fork.12")).toBe("current");
+    expect(versionState("0.0.46-fork.12", "v0.0.46-fork.11")).toBe("current");
   });
 });
