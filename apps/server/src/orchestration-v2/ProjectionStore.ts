@@ -86,6 +86,8 @@ import * as SqlClient from "effect/sql/SqlClient";
 import { withReadTransaction } from "@t3tools/shared/nodeSqliteClient";
 import type * as Statement from "effect/sql/Statement";
 
+import * as ShellSnapshotDiagnostics from "../diagnostics/ShellSnapshotDiagnostics.ts";
+
 import { MCP_APP_OUTPUT_KEY } from "@t3tools/shared/mcpApp";
 import { threadHtmlRenderAttachmentIds } from "../attachmentStore.ts";
 import {
@@ -1944,6 +1946,11 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
     const journal = cacheEnabled
       ? yield* makeShellInvalidationJournal(sql).pipe(Effect.orDie)
       : undefined;
+    const snapshotDiagnostics = yield* Effect.serviceOption(
+      ShellSnapshotDiagnostics.ShellSnapshotDiagnostics,
+    );
+    const count = (kind: keyof ShellSnapshotDiagnostics.ShellSnapshotCounts) =>
+      Option.isSome(snapshotDiagnostics) ? snapshotDiagnostics.value.record(kind) : Effect.void;
     const cacheSemaphore = Semaphore.makeUnsafe(1);
     // Snapshot reads run on a reader, so clients loading threads never hold up writes.
     const readTransaction = withReadTransaction(sql);
@@ -5923,6 +5930,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
 
     const readShellSnapshotRows = (options: ShellSnapshotOptions | undefined) =>
       Effect.gen(function* () {
+        yield* count("fullBuilds");
         const targetThreadRows = yield* selectShellThreadRows(
           undefined,
           options?.location,
@@ -6028,7 +6036,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       }).pipe(Effect.mapError(shellSnapshotReadError));
 
     const readShellSnapshot: ProjectionStoreV2Shape["readShellSnapshot"] = (options) =>
-      readShellSnapshotRows(options).pipe(
+      count("requests").pipe(
+        Effect.andThen(readShellSnapshotRows(options)),
         Effect.mapError(shellSnapshotReadError),
         Effect.map(decodeShellSnapshot),
       );
@@ -6047,6 +6056,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
 
     const getShellSnapshot: ProjectionStoreV2Shape["getShellSnapshot"] = (options) =>
       Effect.gen(function* () {
+        yield* count("requests");
         // A caller's transaction can read its own writes and then roll back. It must
         // neither consume the journal nor publish those shells into the shared cache.
         if (
@@ -6070,6 +6080,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               const rebuild = cachedStates === undefined || cachedDataVersion !== version;
               let states = cachedStates;
               if (rebuild || dirty.length > 0) {
+                yield* count("fullBuilds");
                 const ids = rebuild ? undefined : dirty.map((row) => ThreadId.make(row.thread_id));
                 const rows = yield* selectShellThreadRows(ids);
                 const threadIds = rows.map((row) => ThreadId.make(row.thread_id));
@@ -6129,7 +6140,10 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               cachedSequence = sequence;
               const key = `${options?.location ?? "all"}:${options?.unsettledOnly ?? false}`;
               const existing = cachedSnapshots.get(key);
-              if (existing !== undefined) return existing;
+              if (existing !== undefined) {
+                yield* count("cacheHits");
+                return existing;
+              }
               // At most six filtered array pairs share the same immutable shells.
               const shells = options?.unsettledOnly
                 ? cachedShells.filter(
