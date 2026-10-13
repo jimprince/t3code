@@ -21,12 +21,13 @@ import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/sql/SqlClient";
 import { listMetadata } from "../forkThreads/MetadataStore.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
+import * as ProjectService from "../project/ProjectService.ts";
 import * as ProjectIssuesService from "../projectIssues/ProjectIssuesService.ts";
 import * as DashboardStore from "./DashboardStore.ts";
 import { pendingAsksOfThread } from "../projectIssues/decisionFeed.logic.ts";
 import { readPendingRequests } from "../projectIssues/pendingAsks.query.ts";
 import { ReleaseHealth } from "./ReleaseSource.ts";
-import { aggregate, BriefingPlan, dashboardRoots } from "./aggregation.ts";
+import { aggregate, BriefingPlan, dashboardRoots, rootRepositories } from "./aggregation.ts";
 import { compactSnapshot, emptySnapshot, sampleProgress } from "./dashboard.logic.ts";
 import { singleFlight } from "./DashboardRefresh.ts";
 
@@ -36,12 +37,14 @@ export class DashboardService extends Context.Service<
     readonly getSnapshot: Effect.Effect<DashboardSnapshot>;
     readonly stream: (afterRevision?: number) => Stream.Stream<DashboardSnapshot>;
     readonly refresh: Effect.Effect<void>;
+    readonly invalidate: Effect.Effect<void>;
   }
 >()("t3/dashboard/DashboardService") {}
 const make = Effect.gen(function* () {
   const engine = yield* ThreadManagement.ThreadManagementService;
   const sql = yield* SqlClient.SqlClient;
-  const issues = yield* ProjectIssuesService.make;
+  const issues = yield* ProjectIssuesService.Service;
+  const projects = yield* ProjectService.ProjectService;
   const store = yield* DashboardStore.DashboardStore;
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -53,12 +56,19 @@ const make = Effect.gen(function* () {
   const issueRows = new Map<ThreadId, readonly ProjectIssue[]>(
     Object.entries(saved?.issues ?? {}).map(([id, rows]) => [id as ThreadId, rows]),
   );
+  const ownRepositories = new Map<ThreadId, string>(
+    Object.entries(saved?.rootRepositories ?? {}).map(([id, repository]) => [
+      id as ThreadId,
+      repository,
+    ]),
+  );
   const sources = new Map<string, DashboardSource>(snapshot.sources.map((s) => [s.id, s]));
   const plans = new Map<string, BriefingPlan>(
     (saved?.plans ?? []).map((plan) => [`${plan.head}.json`, plan]),
   );
-  // Preserve the persisted projects until each source has completed its first refresh.
-  let networkReady = false;
+  let subscribers = 0;
+  let lastWriteAt = 0;
+  const refreshRequests = yield* Queue.sliding<void>(1);
   let releases: readonly DashboardRelease[] =
     saved?.snapshot.releases.filter((r) => r.id !== "server") ?? [];
   const publishLocal = lock
@@ -72,7 +82,7 @@ const make = Effect.gen(function* () {
           kind: "local",
           observedAt: now,
           lastSuccessAt: now,
-          staleAfterMs: 60_000,
+          staleAfterMs: 10 * 60_000,
           coverage: "complete",
           failed: false,
         });
@@ -91,7 +101,7 @@ const make = Effect.gen(function* () {
           { concurrency: 4 },
         )).flat();
         const next = aggregate({
-          shells: shell.threads,
+          shells: [...shell.threads, ...shell.archivedThreads],
           metadata,
           issues: issueRows,
           plans: [...plans.values()],
@@ -100,17 +110,17 @@ const make = Effect.gen(function* () {
           now,
           pendingAsks,
           previous: snapshot,
+          rootRepositories: new Map([
+            ...rootRepositories({ ...shell, projects: yield* projects.listShells() }),
+            ...ownRepositories,
+          ]),
         });
-        if (!networkReady && snapshot.projects.length) {
-          // Local startup must not erase last-good network and plan facts.
-          return;
-        }
         const releaseSource = {
           id: "release:server",
           kind: "release" as const,
           observedAt: now,
           lastSuccessAt: now,
-          staleAfterMs: 60_000,
+          staleAfterMs: 10 * 60_000,
           coverage: "complete" as const,
           failed: false,
         };
@@ -138,7 +148,7 @@ const make = Effect.gen(function* () {
             sources: value.sources.map((s) =>
               s.kind === "local" || s.id === "release:server"
                 ? { ...s, observedAt: "", lastSuccessAt: "" }
-                : s,
+                : { ...s, observedAt: "" },
             ),
             releases: value.releases,
           });
@@ -147,24 +157,23 @@ const make = Effect.gen(function* () {
           samples,
           now,
         );
-        const changed = content(compactSnapshot(next)) !== content(snapshot);
+        const compact = compactSnapshot(next);
+        const changed = content(compact) !== content(snapshot);
         const withRevision = changed
-          ? { ...compactSnapshot(next), revision: snapshot.revision + 1 }
-          : snapshot;
-        if (
-          !changed &&
-          nextSamples.length === samples.length &&
-          nextSamples.every((s, i) => s === samples[i])
-        )
-          return;
-        yield* store.write({
-          snapshot: withRevision,
-          samples: nextSamples,
-          issues: Object.fromEntries(issueRows),
-          plans: [...plans.values()],
-        });
+          ? { ...compact, revision: snapshot.revision + 1 }
+          : { ...compact, revision: snapshot.revision };
         snapshot = withRevision;
         samples = nextSamples;
+        if (Date.parse(now) - lastWriteAt >= 60_000) {
+          yield* store.write({
+            snapshot,
+            samples,
+            issues: Object.fromEntries(issueRows),
+            plans: [...plans.values()],
+            rootRepositories: Object.fromEntries(ownRepositories),
+          });
+          lastWriteAt = Date.parse(now);
+        }
         if (changed) yield* PubSub.publish(changes, snapshot);
       }),
     )
@@ -173,7 +182,13 @@ const make = Effect.gen(function* () {
     Effect.gen(function* () {
       const shell = yield* engine.getShellSnapshot();
       const metadata = yield* listMetadata(sql);
-      const { roots } = dashboardRoots(shell.threads, metadata);
+      const { roots } = dashboardRoots([...shell.threads, ...shell.archivedThreads], metadata);
+      const activeRootIds = new Set(roots.map((r) => r.id));
+      for (const rootId of issueRows.keys())
+        if (!activeRootIds.has(rootId)) issueRows.delete(rootId);
+      for (const rootId of ownRepositories.keys())
+        if (!activeRootIds.has(rootId)) ownRepositories.delete(rootId);
+      const seenSources = new Set<string>(["local", "release:server"]);
       // Roots are serial; the existing repository adapter bounds its network concurrency to four.
       // Its shared repository cache avoids repeated reads for overlapping project scopes.
       for (const root of roots) {
@@ -182,12 +197,19 @@ const make = Effect.gen(function* () {
         if (result._tag === "None") {
           for (const issue of issueRows.get(root.id) ?? []) {
             const id = `gitea:${issue.host}/${issue.repository}`;
+            seenSources.add(id);
             const previous = sources.get(id);
             if (previous) sources.set(id, { ...previous, failed: true, observedAt: now });
           }
           continue;
         }
         const current = result.value;
+        if (current.primaryRepository)
+          ownRepositories.set(
+            root.id,
+            `${current.primaryRepository.host}/${current.primaryRepository.repository}`,
+          );
+        else ownRepositories.delete(root.id);
         const failed = new Set(
           current.repositories
             .filter((r) => r.error !== null)
@@ -200,6 +222,7 @@ const make = Effect.gen(function* () {
         ]);
         for (const repo of current.repositories) {
           const id = `gitea:${repo.host}/${repo.repository}`;
+          seenSources.add(id);
           sources.set(id, {
             id,
             kind: "gitea",
@@ -213,27 +236,43 @@ const make = Effect.gen(function* () {
           });
         }
       }
-      const directory = path.join(NodeOS.homedir(), ".local/share/briefing/tasks");
-      const filenames = yield* fs
-        .readDirectory(directory)
-        .pipe(Effect.orElseSucceed(() => [] as string[]));
-      for (const filename of plans.keys()) {
-        if (!filenames.includes(filename)) {
-          const id = `plan:${filename.slice(0, -5)}`;
-          const previous = sources.get(id);
-          if (previous)
-            sources.set(id, {
-              ...previous,
-              failed: true,
-              coverage: "unavailable",
-              observedAt: DateTime.formatIso(yield* DateTime.now),
-            });
+      const planPaths = [
+        ".local/share/briefing/tasks",
+        ".shared/briefing/tasks",
+        ".shared/data/briefing/tasks",
+      ];
+      let directory: string | null = null;
+      for (const candidate of planPaths) {
+        const full = path.join(NodeOS.homedir(), candidate);
+        if (yield* fs.exists(full)) {
+          directory = full;
+          break;
         }
+      }
+      const directoryRead = directory
+        ? yield* fs.readDirectory(directory).pipe(Effect.option)
+        : { _tag: "Some" as const, value: [] as string[] };
+      const filenames = directoryRead._tag === "Some" ? directoryRead.value : [...plans.keys()];
+      for (const filename of plans.keys())
+        if (!filenames.includes(filename)) plans.delete(filename);
+      if (!directory) {
+        seenSources.add("plan:host");
+        sources.set("plan:host", {
+          id: "plan:host",
+          kind: "plan",
+          observedAt: DateTime.formatIso(yield* DateTime.now),
+          lastSuccessAt: null,
+          staleAfterMs: 2 * 60 * 60_000,
+          coverage: "unavailable",
+          failed: false,
+          detail: "not on this host",
+        });
       }
       for (const filename of filenames.filter((f) => f.endsWith(".json")).slice(0, 64)) {
         const id = `plan:${filename.slice(0, -5)}`;
+        seenSources.add(id);
         const now = DateTime.formatIso(yield* DateTime.now);
-        const plan = yield* fs.readFileString(path.join(directory, filename)).pipe(
+        const plan = yield* fs.readFileString(path.join(directory!, filename)).pipe(
           Effect.filterOrFail(
             (contents) => contents.length <= 256_000,
             () => new Error("Plan exceeds size limit"),
@@ -263,12 +302,40 @@ const make = Effect.gen(function* () {
             failed: true,
           });
       }
-      const releaseHealth = yield* fs
-        .readFileString(path.join(NodeOS.homedir(), ".local/share/reliability/health.json"))
-        .pipe(
-          Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(ReleaseHealth))),
-          Effect.option,
-        );
+      let healthPath: string | null = null;
+      for (const candidate of [
+        ".local/share/reliability/health.json",
+        ".shared/reliability/health.json",
+        ".shared/data/reliability/health.json",
+      ]) {
+        const full = path.join(NodeOS.homedir(), candidate);
+        if (yield* fs.exists(full)) {
+          healthPath = full;
+          break;
+        }
+      }
+      const releaseHealth = healthPath
+        ? yield* fs
+            .readFileString(healthPath)
+            .pipe(
+              Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(ReleaseHealth))),
+              Effect.option,
+            )
+        : { _tag: "None" as const };
+      if (!healthPath) {
+        releases = [];
+        seenSources.add("release:host");
+        sources.set("release:host", {
+          id: "release:host",
+          kind: "release",
+          observedAt: DateTime.formatIso(yield* DateTime.now),
+          lastSuccessAt: null,
+          staleAfterMs: 15 * 60_000,
+          coverage: "unavailable",
+          failed: false,
+          detail: "not on this host",
+        });
+      }
       if (releaseHealth._tag === "Some") {
         const health = releaseHealth.value.release;
         const releaseObservedAt = DateTime.formatIso(yield* DateTime.now);
@@ -276,6 +343,7 @@ const make = Effect.gen(function* () {
           .filter((host) => Number.isFinite(Date.parse(host.checked_at)))
           .map((host) => {
             const sourceId = `release:${host.host}`;
+            seenSources.add(sourceId);
             sources.set(sourceId, {
               id: sourceId,
               kind: "release",
@@ -296,6 +364,7 @@ const make = Effect.gen(function* () {
           });
         if (health.next_release) {
           const sourceId = "release:forecast";
+          seenSources.add(sourceId);
           const prior = sources.get(sourceId);
           const confirmed =
             health.source?.refreshed_at && Number.isFinite(Date.parse(health.source.refreshed_at))
@@ -332,6 +401,7 @@ const make = Effect.gen(function* () {
         }
       } else
         for (const release of releases) {
+          seenSources.add(release.sourceId);
           const previous = sources.get(release.sourceId);
           if (previous)
             sources.set(release.sourceId, {
@@ -340,7 +410,7 @@ const make = Effect.gen(function* () {
               observedAt: DateTime.formatIso(yield* DateTime.now),
             });
         }
-      networkReady = true;
+      for (const id of sources.keys()) if (!seenSources.has(id)) sources.delete(id);
       yield* publishLocal;
     }).pipe(Effect.catchCause(() => Effect.logWarning("Dashboard background refresh failed"))),
   );
@@ -349,6 +419,16 @@ const make = Effect.gen(function* () {
       (mailbox) =>
         Effect.gen(function* () {
           const subscription = yield* PubSub.subscribe(changes);
+          yield* Effect.acquireRelease(
+            Effect.sync(() => {
+              subscribers++;
+            }),
+            () =>
+              Effect.sync(() => {
+                subscribers--;
+              }),
+          );
+          if (subscribers === 1) yield* Queue.offer(refreshRequests, undefined);
           if (snapshot.revision !== afterRevision) Queue.offerUnsafe(mailbox, snapshot);
           yield* Stream.fromSubscription(subscription).pipe(
             Stream.runForEach((value) => Effect.sync(() => Queue.offerUnsafe(mailbox, value))),
@@ -359,9 +439,13 @@ const make = Effect.gen(function* () {
     );
   // Acquisition only loads the durable cache. Network work belongs to scoped background fibers.
   yield* publishLocal;
-  yield* refresh.pipe(
+  yield* Effect.suspend(() => (subscribers > 0 ? refresh : Effect.void)).pipe(
     Effect.andThen(Effect.sleep("60 seconds")),
     Effect.forever,
+    Effect.forkScoped,
+  );
+  yield* Stream.fromQueue(refreshRequests).pipe(
+    Stream.runForEach(() => refresh),
     Effect.forkScoped,
   );
   yield* engine.streamDomainEvents.pipe(
@@ -378,6 +462,11 @@ const make = Effect.gen(function* () {
     Stream.runForEach(() => publishLocal),
     Effect.forkScoped,
   );
-  return DashboardService.of({ getSnapshot: Effect.sync(() => snapshot), stream, refresh });
+  return DashboardService.of({
+    getSnapshot: Effect.sync(() => snapshot),
+    stream,
+    refresh,
+    invalidate: Queue.offer(refreshRequests, undefined).pipe(Effect.asVoid),
+  });
 });
 export const layer = Layer.effect(DashboardService, make).pipe(Layer.provide(DashboardStore.layer));
