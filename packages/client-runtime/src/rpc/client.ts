@@ -6,9 +6,13 @@ import {
   type ClientGuardedRpcTag,
   ORCHESTRATION_V2_WS_METHODS,
   WS_METHODS,
+  ProjectRequestDecideInput,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
+import * as Clock from "effect/Clock";
+import { AtomRegistry } from "effect/reactivity";
+import { dashboardAnswersAtom, dashboardAnswer } from "../dashboard/answers.ts";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -43,6 +47,8 @@ export class EnvironmentRpcRequestObserver extends Context.Reference<{
     observe: () => Effect.succeed(Effect.void),
   }),
 }) {}
+
+const isProjectRequestDecideInput = Schema.is(ProjectRequestDecideInput);
 
 export type EnvironmentRpcTag = keyof WsRpcProtocolClient & string;
 type RpcMethod<TTag extends EnvironmentRpcTag> = WsRpcProtocolClient[TTag];
@@ -205,7 +211,17 @@ export const requestGuarded = Effect.fn("EnvironmentRpc.request")(function* <
     environmentId: supervisor.target.environmentId,
     method: tag,
   });
-  return yield* method(input).pipe(Effect.ensuring(completeObservation));
+  const result = yield* method(input).pipe(Effect.ensuring(completeObservation));
+  if (tag === WS_METHODS.projectRequestsDecide && isProjectRequestDecideInput(input)) {
+    const registry = yield* Effect.serviceOption(AtomRegistry.AtomRegistry);
+    const now = yield* Clock.currentTimeMillis;
+    if (Option.isSome(registry))
+      registry.value.set(dashboardAnswersAtom, [
+        ...registry.value.get(dashboardAnswersAtom).filter((a) => now - a.at < 5 * 60_000),
+        dashboardAnswer(supervisor.target.environmentId, input, now),
+      ]);
+  }
+  return result;
 });
 
 export function runStreamGuarded<TTag extends EnvironmentStreamCommandRpcTag>(
