@@ -3,6 +3,22 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./state/harness-strip": {
+      "types": "./src/state/harnessStrip.ts",
+      "default": "./src/state/harnessStrip.ts"
+    },
+    "./state/harness-check-page": {
+      "types": "./src/state/harnessCheckPage.ts",
+      "default": "./src/state/harnessCheckPage.ts"
+    },
+    "./state/harness-checks-list": {
+      "types": "./src/state/harnessChecksList.ts",
+      "default": "./src/state/harnessChecksList.ts"
+    },
+    "./state/harness-view": {
+      "types": "./src/state/harnessView.ts",
+      "default": "./src/state/harnessView.ts"
+    },
     "./state/harness-query": {
       "types": "./src/state/harnessQuery.ts",
       "default": "./src/state/harnessQuery.ts"

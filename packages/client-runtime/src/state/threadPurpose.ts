@@ -49,6 +49,19 @@ const forestCache = new WeakMap<
   readonly OrchestratorThreadShell[],
   ReadonlyMap<string, ThreadPurpose | null>
 >();
+/** The raw ancestry edge: organizational parent first, then native subagent lineage until metadata exists. */
+function purposeParentKey(thread: OrchestratorThreadShell): string | null {
+  return thread.remoteParent
+    ? `${thread.remoteParent.environmentId}:${thread.remoteParent.threadId}`
+    : thread.parentThreadId != null
+      ? `${thread.environmentId}:${thread.parentThreadId}`
+      : thread.supervisionMetadataPresent !== true &&
+          thread.lineage.relationshipToParent === "subagent" &&
+          thread.lineage.parentThreadId != null
+        ? `${thread.environmentId}:${thread.lineage.parentThreadId}`
+        : null;
+}
+
 export function threadPurposes(threads: readonly OrchestratorThreadShell[]) {
   const cached = forestCache.get(threads);
   if (cached) return cached;
@@ -56,15 +69,7 @@ export function threadPurposes(threads: readonly OrchestratorThreadShell[]) {
     threads.map((thread) => ({
       key: supervisionThreadKey(thread),
       // Keep the raw edge: the navigation forest deliberately drops unavailable parents.
-      parentKey: thread.remoteParent
-        ? `${thread.remoteParent.environmentId}:${thread.remoteParent.threadId}`
-        : thread.parentThreadId != null
-          ? `${thread.environmentId}:${thread.parentThreadId}`
-          : thread.supervisionMetadataPresent !== true &&
-              thread.lineage.relationshipToParent === "subagent" &&
-              thread.lineage.parentThreadId != null
-            ? `${thread.environmentId}:${thread.lineage.parentThreadId}`
-            : null,
+      parentKey: purposeParentKey(thread),
       purpose: thread.purpose,
       unavailable: thread.forkMetadataAvailable === false,
     })),
@@ -150,8 +155,9 @@ export function partitionThreadPurposes(
     const purpose = purposes.get(supervisionThreadKey(summary.root)) ?? null;
     const parent = summary.parentProjectKey;
     if (parent !== null && purposes.get(parent) === purpose) continue;
+    // Unknown ancestry keeps the row where it always was; Harness needs a known purpose.
     if (purpose === "harness") harness.push(summary);
-    else if (purpose === "project") projects.push(summary);
+    else projects.push(summary);
   }
   const byKey = new Map(threads.map((thread) => [supervisionThreadKey(thread), thread]));
   const owners = new Map<string, boolean>();
