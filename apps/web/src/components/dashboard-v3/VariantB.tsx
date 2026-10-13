@@ -1,8 +1,9 @@
 import { CheckIcon } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { useDashboardUi } from "./context";
 import {
+  firstVisitChanges,
   formatClock,
   projectTasks,
   rollup,
@@ -12,7 +13,7 @@ import {
   type ChangeKind,
 } from "./dashboard.logic";
 import { DecisionList } from "./decisions";
-import { BarLegend, ProgressBar, ProgressFigure, SectionHeading, UnknownValue } from "./parts";
+import { BarLegend, ProgressBar, ProgressFigure, SectionHeading, SectionMarker } from "./parts";
 import { ReleaseLines } from "./plan";
 import { InlineButton } from "../ui/button";
 
@@ -26,19 +27,37 @@ const KIND_MARK: Record<ChangeKind, { mark: string; className: string }> = {
 /** How many step advances show before the rest fold behind "Show". */
 const STEP_ROWS = 8;
 
-function ChangeLog() {
+const DAY_MS = 86_400_000;
+
+/**
+ * What the log lists: the changes since this device last looked, or on a first visit, when there
+ * is nothing to compare, the last 24 hours of finished work and every open decision.
+ */
+function useChangeLog() {
   const { sinceLooked, data, now } = useDashboardUi();
+  return useMemo(
+    () => ({
+      since: sinceLooked ? sinceLooked.baseline.at : null,
+      changes: sinceLooked
+        ? sinceLooked.changes
+        : firstVisitChanges(data, new Date(now - DAY_MS).toISOString()),
+    }),
+    [data, now, sinceLooked],
+  );
+}
+
+function ChangeLog() {
+  const { data, now } = useDashboardUi();
+  const { since: sinceAt, changes } = useChangeLog();
   const [all, setAll] = useState(false);
-  if (!sinceLooked)
+  if (changes.length === 0)
     return (
-      <div className="py-1">
-        <UnknownValue>nothing to compare yet</UnknownValue>
+      <div className="py-1 text-muted-foreground/80">
+        {sinceAt
+          ? `No changes since ${formatClock(sinceAt, now)}`
+          : "Nothing finished in the last 24 hours"}
       </div>
     );
-  const since = formatClock(sinceLooked.baseline.at, now);
-  const { changes } = sinceLooked;
-  if (changes.length === 0)
-    return <div className="py-1 text-muted-foreground/80">No changes since {since}</div>;
   const steps = changes.filter((change) => change.kind === "steps");
   const hidden = all ? 0 : Math.max(0, steps.length - STEP_ROWS);
   const shownSteps = new Set(all ? steps : steps.slice(0, STEP_ROWS));
@@ -150,46 +169,48 @@ function NowStrip() {
 
 /** B: the morning review. Decisions first, then what changed since this device last looked. */
 export function VariantB() {
-  const { data, decisions, now, sinceLooked } = useDashboardUi();
+  const { data, decisions, now } = useDashboardUi();
+  const { since, changes } = useChangeLog();
   const by = formatClock(
     new Date((data.asOf ? Date.parse(data.asOf) : now) + 3_600_000).toISOString(),
     now,
   );
+  const done = changes.filter((change) => change.kind === "done").length;
   return (
     <div>
-      {data.releases.length > 0 ? (
-        <>
-          <SectionHeading title="Releases" />
-          <ReleaseLines />
-        </>
-      ) : null}
-      <SectionHeading
-        title={`Now and by ${by}`}
-        right={<BarLegend gainedLabel="last hour" byLabel="next hour" />}
-      />
-      <NowStrip />
+      <SectionMarker name="releases" hidden={data.releases.length === 0}>
+        {data.releases.length > 0 ? (
+          <>
+            <SectionHeading title="Releases" />
+            <ReleaseLines />
+          </>
+        ) : null}
+      </SectionMarker>
+      <SectionMarker name="plan">
+        <SectionHeading
+          title={`Now and by ${by}`}
+          right={<BarLegend gainedLabel="last hour" byLabel="next hour" />}
+        />
+        <NowStrip />
+      </SectionMarker>
       <div className="grid grid-cols-1 gap-x-6 lg:grid-cols-[400px_minmax(0,1fr)] lg:items-start">
-        <div className="min-w-0">
+        <SectionMarker name="decisions" className="min-w-0">
           <SectionHeading title="Decisions">
             <b className="font-medium text-foreground">{decisions.length}</b> open
           </SectionHeading>
           <DecisionList />
-        </div>
-        <div className="min-w-0">
+        </SectionMarker>
+        <SectionMarker name="outcomes" className="min-w-0">
           <SectionHeading
-            title={
-              sinceLooked ? `Changes since ${formatClock(sinceLooked.baseline.at, now)}` : "Changes"
-            }
+            title={since ? `Changes since ${formatClock(since, now)}` : "Last 24 hours"}
           >
-            {sinceLooked ? (
-              <>
-                <b className="font-medium text-foreground">{sinceLooked.outcomes.length} done</b> ·{" "}
-                {sinceLooked.changes.filter((c) => c.kind === "steps").length} step advances
-              </>
+            <b className="font-medium text-foreground">{done} done</b>
+            {since ? (
+              <> · {changes.filter((change) => change.kind === "steps").length} step advances</>
             ) : null}
           </SectionHeading>
           <ChangeLog />
-        </div>
+        </SectionMarker>
       </div>
     </div>
   );
