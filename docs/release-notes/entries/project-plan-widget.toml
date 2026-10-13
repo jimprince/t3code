@@ -1,0 +1,4 @@
+id = "project-plan-widget"
+category = "feature"
+functionality = "projects"
+text = "A Plan widget for project pages shows tasks by project and workstream with progress bars, what finished in the last hour, 4 hours or today, where that pace leads, what has stalled, and what waits on you, ending with what finished since your last visit. The New request box now comes first, with chips for common requests."
