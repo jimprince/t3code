@@ -195,7 +195,7 @@ const authorizeRequest = Effect.fn("EnvironmentRpc.authorize")(function* (
 
 export const requestGuarded = Effect.fn("EnvironmentRpc.request")(function* <
   TTag extends EnvironmentUnaryRpcTag,
->(tag: TTag, input: EnvironmentRpcInput<TTag>) {
+>(tag: TTag, input: EnvironmentRpcInput<TTag>, options?: { readonly background?: boolean }) {
   const supervisor = yield* EnvironmentSupervisor.EnvironmentSupervisor;
   yield* Effect.annotateCurrentSpan({
     "environment.id": supervisor.target.environmentId,
@@ -207,10 +207,12 @@ export const requestGuarded = Effect.fn("EnvironmentRpc.request")(function* <
   const method = session.client[tag] as (
     input: EnvironmentRpcInput<TTag>,
   ) => Effect.Effect<EnvironmentRpcSuccess<TTag>, EnvironmentRpcFailure<TTag>>;
-  const completeObservation = yield* observer.observe({
-    environmentId: supervisor.target.environmentId,
-    method: tag,
-  });
+  const completeObservation = options?.background
+    ? Effect.void
+    : yield* observer.observe({
+        environmentId: supervisor.target.environmentId,
+        method: tag,
+      });
   const result = yield* method(input).pipe(Effect.ensuring(completeObservation));
   if (tag === WS_METHODS.projectRequestsDecide && isProjectRequestDecideInput(input)) {
     const registry = yield* Effect.serviceOption(AtomRegistry.AtomRegistry);
@@ -459,7 +461,9 @@ export function subscribe<TTag extends EnvironmentSubscriptionRpcTag>(
 export const request = <TTag extends Exclude<EnvironmentUnaryRpcTag, ClientGuardedRpcTag>>(
   tag: TTag,
   input: EnvironmentRpcInput<TTag>,
-) => requestGuarded(tag, input);
+  /** Background reads do not participate in user-facing request latency observation. */
+  options?: { readonly background?: boolean },
+) => requestGuarded(tag, input, options);
 
 export const runStream = <
   TTag extends Exclude<EnvironmentStreamCommandRpcTag, ClientGuardedRpcTag>,
