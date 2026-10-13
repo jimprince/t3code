@@ -88,22 +88,11 @@ export const listMetadata = (sql: SqlClient.SqlClient) =>
   sql<{ payload: string }>`SELECT payload FROM fork_thread_metadata ORDER BY thread_id`.pipe(
     Effect.flatMap((rows) => Effect.forEach(rows, (row) => decodeMetadata(row.payload))),
   );
-/** Seed delegation ownership in the creation transaction; later organizational edits always win. */
-export const seedDelegatedMetadata = (
-  sql: SqlClient.SqlClient,
-  child: ThreadId,
-  parent: ThreadId,
-) =>
+/** Insert the complete creation seed once; replay and later organizational edits always win. */
+export const seedCreationMetadata = (sql: SqlClient.SqlClient, value: ForkThreadMetadata) =>
   Effect.gen(function* () {
-    const value: ForkThreadMetadata = {
-      threadId: child,
-      parentThreadId: parent,
-      remoteParent: null,
-      subproject: "off",
-      settleOnComplete: true,
-    };
     const payload = yield* encodeMetadata(value);
-    yield* sql`INSERT OR IGNORE INTO fork_thread_metadata (thread_id, payload) VALUES (${child}, ${payload})`;
+    yield* sql`INSERT OR IGNORE INTO fork_thread_metadata (thread_id, payload) VALUES (${value.threadId}, ${payload})`;
   });
 /** Organizational readback is indexed by the same opaque ID as native thread shells. */
 export const readMetadata = (sql: SqlClient.SqlClient, threadId: ThreadId) =>
