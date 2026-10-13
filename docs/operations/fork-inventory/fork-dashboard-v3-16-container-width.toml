@@ -1,0 +1,8 @@
+name = "fork-dashboard-v3-16-container-width"
+subject = "fix(dashboard): lay out by container width so the project Dashboard stays readable beside the chat panel"
+class = "product"
+purpose = "lay out by container width so the project Dashboard stays readable beside the chat panel"
+retire_when = "The dashboard-v3 series is intentionally dropped or replaced by equivalent upstream behavior."
+depends_on = ["fork-dashboard-v3-15-request-read-budget"]
+roles = []
+note = "Replayed independently from live source f9abfaa165edba3244a18aa9fec2cb1bf9803a6e; excludes the Chief of Staff tray series."
