@@ -18,3 +18,9 @@ id = "harness-root-purpose"
 date = "2026-10-11"
 decided = "One optional nullable purpose on ForkThreadMetadata; top-level creator launches and named-agent handovers copy effective purpose once."
 rationale = "A workspace contains both product and Harness work. Organizational inheritance provides moves without reclassifying unrelated threads or duplicating a hierarchy."
+
+[[decision]]
+id = "catchup-r29-purpose-hook-test-boundary"
+date = "2026-10-13"
+decided = "repair"
+rationale = "Mock readThreadPurposeMove in useThreadActionMenu tests, matching the existing isolated hook dependencies. Otherwise the new purpose helper loads the real connection/UI graph under a deliberately minimal React mock."
