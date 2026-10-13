@@ -260,6 +260,10 @@ export const ProjectPendingRequest = Schema.Struct({
 export type ProjectPendingRequest = typeof ProjectPendingRequest.Type;
 
 export const ProjectIssuesListResult = Schema.Struct({
+  /** The root's own tracker, distinct from repositories linked by its descendants. */
+  primaryRepository: Schema.optionalKey(
+    Schema.NullOr(Schema.Struct({ host: Schema.String, repository: Schema.String })),
+  ),
   repositories: Schema.Array(ProjectIssueRepository),
   issues: Schema.Array(ProjectIssue),
   fetchedAt: IsoDateTime,
