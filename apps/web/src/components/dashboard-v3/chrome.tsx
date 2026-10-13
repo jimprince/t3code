@@ -136,7 +136,9 @@ export function OlderServerLines({ names }: { readonly names: ReadonlyArray<stri
  * and every project page.
  */
 export function VariantSwitcher({ withPrevious = true }: { readonly withPrevious?: boolean }) {
-  const [variant, setVariant] = useDashboardVariant();
+  const [stored, setVariant] = useDashboardVariant();
+  // Home has no previous dashboard, so a stored "previous" reads as A there, as the page renders it.
+  const variant = !withPrevious && stored === "previous" ? "A" : stored;
   return (
     <ToggleGroup
       aria-label="Dashboard design"
