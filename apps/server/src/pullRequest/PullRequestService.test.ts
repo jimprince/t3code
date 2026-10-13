@@ -1,5 +1,4 @@
 import * as GiteaPullRequestProvider from "./GiteaPullRequestProvider.ts";
-import * as ServerSettings from "../serverSettings.ts";
 import { configuredGiteaIdentity } from "../sourceControl/ForkGiteaLinkAdapter.ts";
 import { HttpClient, HttpClientResponse } from "effect/http";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -2564,7 +2563,7 @@ it.effect.each(["same project", "cross project"])(
                 );
               }),
             ),
-            ServerSettings.layerTest({ giteaInstances: [instance] }),
+            ServerSettingsService.layerTest({ giteaInstances: [instance] }),
             Layer.mock(SourceControlProviderRegistry.SourceControlProviderRegistry)(sourceControl),
           ),
         ),
