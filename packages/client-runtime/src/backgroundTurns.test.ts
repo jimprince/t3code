@@ -43,6 +43,13 @@ describe("V2 worker traffic", () => {
       }).runs,
     ).toEqual([]);
   });
+  it("previews the reply without its T3_NOTIFY routing marker", () => {
+    const lastLine = (text: string) =>
+      deriveBackgroundTraffic({ ...input, messages: [messages[0]!, { ...messages[1]!, text }] })
+        .runs[0]?.lastLine;
+    expect(lastLine("Done\nT3_NOTIFY: quiet")).toBe("Done");
+    expect(lastLine("T3_NOTIFY: quiet")).toBeNull();
+  });
   it("uses native sender attribution and legacy notification names", () => {
     expect(
       deriveBackgroundTraffic({

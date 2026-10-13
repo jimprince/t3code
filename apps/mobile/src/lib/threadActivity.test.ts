@@ -19,6 +19,7 @@ import {
   type OrchestrationV2ProjectedTurnItem,
   type OrchestrationV2TurnItem,
 } from "@t3tools/contracts";
+import { notificationDispositionForReply } from "@t3tools/client-runtime/notification-eligibility";
 import { resolveUserMessagePresentation } from "@t3tools/client-runtime/user-message";
 import { summarizeToolGroup } from "@t3tools/client-runtime/work-log/presentation";
 import * as DateTime from "effect/DateTime";
@@ -336,6 +337,56 @@ describe("buildThreadFeed", () => {
     const messageEntry = feed.find((entry) => entry.type === "message");
     expect(messageEntry?.message.senderThreadId).toBe(sourceThreadId);
     expect(messageEntry?.message.sourceThreadId).toBe(threadId);
+  });
+
+  // ThreadFeed renders `resolveUserMessagePresentation(entry.message).text` for every message row.
+  describe("T3_NOTIFY routing marker in the rendered message text", () => {
+    const rendered = (item: OrchestrationV2TurnItem) => {
+      const entry = buildThreadFeed([projected(item, 0)]).find((e) => e.type === "message");
+      expect(entry).toBeDefined();
+      return { stored: entry!.message.text, shown: resolveUserMessagePresentation(entry!.message) };
+    };
+
+    it("is hidden from an assistant reply while the stored text keeps it", () => {
+      const { stored, shown } = rendered({
+        ...assistantMessage(),
+        text: "Argon is not available.\nT3_NOTIFY: attention",
+      });
+      expect(shown.text).toBe("Argon is not available.");
+      expect(stored).toBe("Argon is not available.\nT3_NOTIFY: attention");
+      expect(notificationDispositionForReply(stored)).toBe("attention");
+    });
+
+    it("hides a marker still streaming in", () => {
+      const { shown } = rendered({
+        ...assistantMessage(),
+        text: "Working on it.\nT3_NOTI",
+        streaming: true,
+      });
+      expect(shown.text).toBe("Working on it.");
+    });
+
+    it("shows nothing for a marker-only reply, which the feed then skips", () => {
+      const { shown } = rendered({ ...assistantMessage(), text: "T3_NOTIFY: quiet" });
+      expect(shown.text).toBe("");
+    });
+
+    it("is hidden from an agent-sent message but not from one a person typed", () => {
+      const sent = rendered({
+        ...userMessage(),
+        createdBy: "agent",
+        creationSource: "mcp",
+        text: "Done.\nT3_NOTIFY: quiet",
+      });
+      const typed = rendered({ ...userMessage(), text: "Done.\nT3_NOTIFY: quiet" });
+      expect(sent.shown.text).toBe("Done.");
+      expect(typed.shown.text).toBe("Done.\nT3_NOTIFY: quiet");
+    });
+
+    it("keeps a marker the author put in a code block", () => {
+      const text = "End a message like this:\n```\nT3_NOTIFY: quiet\n```";
+      expect(rendered({ ...assistantMessage(), text }).shown.text).toBe(text);
+    });
   });
 
   it("anchors feedback before later committed turns", () => {

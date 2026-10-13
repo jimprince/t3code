@@ -1,5 +1,7 @@
 import { readMessageOrigin } from "@t3tools/shared/messageOrigin";
 
+import { stripNotifyMarker } from "./notifyMarker.ts";
+
 /**
  * Brad view: an orchestrator thread's worker traffic folds out of the way.
  *
@@ -59,7 +61,6 @@ export interface DeriveBackgroundTrafficInput {
 }
 
 const ATTENTION_MARKER = /(?:^|\n)T3_NOTIFY: attention\s*$/;
-const NOTIFY_MARKER = /(?:^|\n)T3_NOTIFY: (?:quiet|attention)\s*$/;
 const LAST_LINE_MAX_CHARS = 160;
 
 interface TurnUnit {
@@ -72,8 +73,7 @@ interface TurnUnit {
 }
 
 function firstLine(text: string): string | null {
-  const line = text
-    .replace(NOTIFY_MARKER, "")
+  const line = stripNotifyMarker(text)
     .split("\n")
     .map((candidate) => candidate.trim())
     .find((candidate) => candidate.length > 0);

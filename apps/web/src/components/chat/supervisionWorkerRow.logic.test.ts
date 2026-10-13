@@ -3,6 +3,7 @@ import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell
 import {
   formatWorkerCount,
   supervisionWorkerDuration,
+  supervisionWorkerOutput,
   supervisionWorkerStatus,
 } from "./supervisionWorkerRow.logic";
 
@@ -30,6 +31,20 @@ describe("supervisionWorkerStatus", () => {
     expect(supervisionWorkerStatus(run("failed"))).toBe("error");
     expect(supervisionWorkerStatus(run("interrupted"))).toBe("interrupted");
     expect(supervisionWorkerStatus(base)).toBe("ready");
+  });
+});
+
+describe("supervisionWorkerOutput", () => {
+  const thread = (output: string | null, lastError?: string) =>
+    ({
+      source: { workerSummary: { output } },
+      runtime: lastError === undefined ? null : { lastError },
+    }) as unknown as Pick<EnvironmentThreadShell, "source" | "runtime">;
+
+  it("leaves out the T3_NOTIFY routing marker", () => {
+    expect(supervisionWorkerOutput(thread("Shipped it"))).toBe("Shipped it");
+    expect(supervisionWorkerOutput(thread("T3_NOTIFY: quiet", "boom"))).toBe("boom");
+    expect(supervisionWorkerOutput(thread("T3_NOTIFY: quiet"))).toBe("");
   });
 });
 

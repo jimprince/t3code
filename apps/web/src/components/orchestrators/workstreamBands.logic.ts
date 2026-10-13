@@ -2,6 +2,7 @@ import {
   isThreadWorking,
   type OrchestratorThreadShell,
 } from "@t3tools/client-runtime/state/orchestrators";
+import { stripNotifyMarker } from "@t3tools/client-runtime/notify-marker";
 import type { ProjectIssue } from "@t3tools/contracts";
 
 import { epicPhase, formatEpicProgress } from "./projectHorizon.logic";
@@ -91,9 +92,9 @@ export function blockedNotes(rows: ReadonlyArray<BlockedRow>) {
   return { tasks, workers };
 }
 
-/** First line of a message, cut at a word near `max` characters. */
+/** First line of a message, cut at a word near `max` characters; the T3_NOTIFY marker is not content. */
 export function firstLine(text: string | null | undefined, max = 140): string | null {
-  const line = (text ?? "")
+  const line = stripNotifyMarker(text ?? "")
     .split("\n")
     .map((part) => part.replace(/^[#>*\s-]+/, "").trim())
     .find((part) => part.length > 0);

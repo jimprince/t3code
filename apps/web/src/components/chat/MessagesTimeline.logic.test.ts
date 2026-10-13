@@ -607,6 +607,23 @@ describe("resolveAssistantMessageCopyState", () => {
     });
   });
 
+  it("copies the reply without its T3_NOTIFY routing marker", () => {
+    expect(
+      resolveAssistantMessageCopyState({
+        showCopyButton: true,
+        text: "Ship it\nT3_NOTIFY: attention",
+        streaming: false,
+      }),
+    ).toEqual({ text: "Ship it", visible: true });
+    expect(
+      resolveAssistantMessageCopyState({
+        showCopyButton: true,
+        text: "T3_NOTIFY: quiet",
+        streaming: false,
+      }),
+    ).toEqual({ text: null, visible: false });
+  });
+
   it("hides copy while an assistant message is still streaming", () => {
     expect(
       resolveAssistantMessageCopyState({
