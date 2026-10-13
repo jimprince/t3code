@@ -17,6 +17,7 @@ import {
   releaseTask,
   TaskRow,
   UnknownValue,
+  useSectionMarker,
   WaitingOnYou,
 } from "./parts";
 
@@ -318,12 +319,13 @@ export function UtilityGroup({
   readonly all: ReadonlyArray<ScopedProject>;
 }) {
   const ui = useDashboardUi();
-  if (utilities.length === 0) return null;
+  const marker = useSectionMarker("utilities");
+  if (utilities.length === 0) return <div {...marker} hidden />;
   const phone = typeof window !== "undefined" && window.matchMedia("(max-width: 640px)").matches;
   const key = "utilities";
   const collapsed = ui.isCollapsed(key, phone);
   return (
-    <div className="border-t border-border py-1.5">
+    <div {...marker} className="border-t border-border py-1.5">
       <button
         type="button"
         aria-expanded={!collapsed}
