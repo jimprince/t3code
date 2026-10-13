@@ -1,0 +1,14 @@
+name = "fork-dashboard-v3-03-projects-dnd"
+subject = "feat(web): arrange projects by dragging them in the Projects sidebar"
+class = "product"
+purpose = "arrange projects by dragging them in the Projects sidebar"
+retire_when = "The dashboard-v3 series is intentionally dropped or replaced by equivalent upstream behavior."
+depends_on = ["fork-projects-dnd"]
+roles = []
+note = "Replayed independently from live source 3f4831940db7185da3877c2eafcef906f49fbe06; excludes the Chief of Staff tray series."
+
+[[decision]]
+id = "catchup-r29-main-already-carries-projects-dnd"
+date = "2026-10-13"
+decided = "retain-series-identity"
+rationale = "The behavior of live commit 3f4831940db7185da3877c2eafcef906f49fbe06 already resides in its main owning concern, with newer main adaptations. Keep this droppable series identity without duplicating or reverting that implementation."
