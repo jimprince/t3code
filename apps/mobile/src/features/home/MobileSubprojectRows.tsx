@@ -10,6 +10,8 @@ import {
   splitSettledSubprojects,
   subprojectIsActive,
 } from "@t3tools/client-runtime/state/projectSubprojects";
+import { samePurposeSubprojects } from "@t3tools/client-runtime/state/thread-purpose";
+import type { ThreadPurpose } from "@t3tools/contracts";
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 
@@ -28,18 +30,21 @@ import { MobileTaskFraction } from "./MobileTaskFraction";
  */
 export function MobileSubprojectRows({
   summary,
+  purposes,
   quietCutoff,
   onSelectThread,
   depth = 0,
 }: {
   readonly summary: OrchestratorSummary;
+  /** Resolved purposes: a subproject of the other purpose is a root of its own tab, not listed here. */
+  readonly purposes: ReadonlyMap<string, ThreadPurpose | null>;
   readonly quietCutoff: number;
   readonly onSelectThread: (thread: OrchestratorThreadShell) => void;
   readonly depth?: number;
 }) {
   const [settledOpen, setSettledOpen] = useState(false);
   const { active, settled } = splitSettledSubprojects(
-    sortOrchestratorSummariesForSidebar(summary.subprojects, quietCutoff),
+    sortOrchestratorSummariesForSidebar(samePurposeSubprojects(summary, purposes), quietCutoff),
   );
   const settledGroup = settledGroupSummary(settled);
   const renderRow = (sub: OrchestratorSummary) => (
@@ -87,6 +92,7 @@ export function MobileSubprojectRows({
       </View>
       <MobileSubprojectRows
         summary={sub}
+        purposes={purposes}
         quietCutoff={quietCutoff}
         onSelectThread={onSelectThread}
         depth={depth + 1}
