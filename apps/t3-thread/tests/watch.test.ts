@@ -1412,6 +1412,16 @@ describe("notification preferences", () => {
 
   it.each([
     ["all", undefined, "ordinary", 1],
+    ["all", undefined, "No change.", 0],
+    ["all", undefined, "Nothing new for you.", 0],
+    ["all", undefined, " \nNo change.\n ", 0],
+    ["all", undefined, "\tNothing new for you.\r\n", 0],
+    ["all", undefined, "No change. More text.", 1],
+    ["all", undefined, "No change.\n\nAnother paragraph.", 1],
+    ["all", undefined, "Nothing new for you. T3_NOTIFY: quiet", 1],
+    ["all", undefined, "no change", 1],
+    ["all", undefined, "**No change.**", 1],
+    ["all", undefined, "Found No change. in the log.", 1],
     ["attention", undefined, "ordinary", 0],
     ["none", undefined, "ordinary", 0],
     ["all", undefined, "T3_NOTIFY: quiet", 0],
