@@ -8,7 +8,7 @@ import {
   projectTasks,
   rollup,
   subprojectsOf,
-  workstreamTasks,
+  planWorkstreams,
   versionState,
   type ScopedProject,
 } from "./dashboard.logic";
@@ -32,10 +32,10 @@ function blockingKeys(
 }
 
 /**
- * Releases (R10): where the release stands, how far the nightlies lag, and installed against
- * latest. A line shows only the facts the snapshot has; the rest is left out or marked unknown.
- * When a release's source is stale or failed, its phase, ETA and nightly lag read as unknown since
- * the source's last success rather than as current.
+ * Releases (R10): where the release stands, when it lands, and installed against latest, in one or
+ * two lines each. A line shows only the facts the snapshot has; the rest is left out or marked
+ * unknown. When a release's source is stale or failed, its phase, ETA and nightly lag read as
+ * unknown since the source's last success rather than as current.
  */
 export function ReleaseLines() {
   const ui = useDashboardUi();
@@ -53,76 +53,72 @@ export function ReleaseLines() {
         const stale = health === "stale" || health === "failed";
         const since = ui.sourceLastSuccessAt(release.sourceId);
         const version = versionState(release.installedVersion, release.latestVersion);
+        const hasVersions = release.installedVersion !== null || release.latestVersion !== null;
+        const hasLag = lag !== undefined && lag !== null;
         return (
-          <div key={`${environmentId}:${release.id}`} className="flex flex-col py-1">
-            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 sm:grid-cols-[130px_minmax(0,1fr)_170px_auto]">
-              <span className="truncate font-semibold">{release.title}</span>
-              <span className="order-3 col-span-2 sm:order-none sm:col-span-1">
-                {found?.task.progress ? (
-                  <ProgressBar
-                    steps={{ done: found.task.progress.done, total: found.task.progress.total }}
-                    gained={roll?.gained ?? null}
-                    projectedDone={roll?.projectedDone ?? null}
-                    tone={keys.length > 0 ? "warning" : "default"}
-                  />
-                ) : null}
-              </span>
-              <span className="text-right tabular-nums sm:text-left">
+          <div key={`${environmentId}:${release.id}`} className="flex flex-col gap-0.5 py-1.5">
+            <div className="flex items-baseline gap-x-3">
+              <span className="min-w-0 flex-1 font-semibold break-words">{release.title}</span>
+              <span className="flex flex-wrap items-baseline justify-end gap-x-3 text-right tabular-nums">
                 {stale ? (
-                  <>
-                    <UnknownValue since={since}>phase unknown</UnknownValue>
-                    {" · "}
-                  </>
-                ) : release.phase ? (
-                  <>{release.phase} · </>
-                ) : null}
-                {found?.task.progress ? (
-                  <>
-                    {found.task.progress.done}/{found.task.progress.total}
-                    {roll?.gained ? <span className="text-info"> +{roll.gained}</span> : null}
-                  </>
+                  <UnknownValue since={since}>phase and ETA unknown</UnknownValue>
                 ) : (
-                  <UnknownValue>no step list</UnknownValue>
+                  <>
+                    {release.phase ? <span>{release.phase}</span> : null}
+                    {found?.task.progress ? (
+                      <>
+                        <span>
+                          {found.task.progress.done}/{found.task.progress.total}
+                          {roll?.gained ? <span className="text-info"> +{roll.gained}</span> : null}
+                        </span>
+                        <span className="w-24 self-center">
+                          <ProgressBar
+                            small
+                            steps={{
+                              done: found.task.progress.done,
+                              total: found.task.progress.total,
+                            }}
+                            gained={roll?.gained ?? null}
+                            projectedDone={roll?.projectedDone ?? null}
+                            tone={keys.length > 0 ? "warning" : "default"}
+                          />
+                        </span>
+                      </>
+                    ) : null}
+                    {eta ? <span>ETA {formatClock(eta, now)}</span> : null}
+                  </>
                 )}
-              </span>
-              <span className="text-right tabular-nums">
-                {stale ? (
-                  <UnknownValue since={since}>ETA unknown</UnknownValue>
-                ) : eta ? (
-                  <>ETA {formatClock(eta, now)} </>
-                ) : null}
                 <WaitingOnYou keys={keys} />
               </span>
             </div>
-            {lag !== undefined && lag !== null ? (
-              <div className="grid grid-cols-[130px_minmax(0,1fr)] gap-x-3 py-0.5 text-xs">
-                <span className="font-semibold">Nightlies</span>
-                <span>
-                  {stale ? (
-                    <UnknownValue since={since}>lag unknown</UnknownValue>
-                  ) : (
-                    <span className={lag > 0 ? "text-destructive-foreground" : "text-success"}>
-                      {lag > 0 ? `${lag} ${lag === 1 ? "day" : "days"} behind` : "caught up"}
+            {hasVersions || hasLag ? (
+              <div className="flex flex-wrap items-baseline gap-x-3 text-xs">
+                {hasVersions ? (
+                  <span>
+                    <span className={cn(version === "behind" && "text-warning-foreground")}>
+                      {release.installedVersion ?? <UnknownValue />}
+                    </span>{" "}
+                    <span className="text-muted-foreground">
+                      installed · latest {release.latestVersion ?? <UnknownValue />}
                     </span>
-                  )}
-                  {release.nightlySync ? <span>, sync {release.nightlySync}</span> : null}
-                  <span className="text-muted-foreground"> · catch-up </span>
-                  <UnknownValue />
-                </span>
-              </div>
-            ) : null}
-            {release.installedVersion !== null || release.latestVersion !== null ? (
-              <div className="grid grid-cols-[130px_minmax(0,1fr)] gap-x-3 py-0.5 text-xs">
-                <span className="font-semibold">Installed</span>
-                <span>
-                  <span className={cn(version === "behind" && "text-warning-foreground")}>
-                    {release.installedVersion ?? <UnknownValue />}
-                  </span>{" "}
-                  <span className="text-muted-foreground">
-                    · latest {release.latestVersion ?? <UnknownValue />}
+                    {version === "current" ? <span className="text-success"> ✓</span> : null}
                   </span>
-                  {version === "current" ? <span className="text-success"> ✓</span> : null}
-                </span>
+                ) : null}
+                {hasLag ? (
+                  <span>
+                    {stale ? (
+                      <UnknownValue since={since}>nightly lag unknown</UnknownValue>
+                    ) : (
+                      <span className={lag > 0 ? "text-destructive-foreground" : "text-success"}>
+                        nightlies{" "}
+                        {lag > 0 ? `${lag} ${lag === 1 ? "day" : "days"} behind` : "caught up"}
+                      </span>
+                    )}
+                    {release.nightlySync ? <span>, sync {release.nightlySync}</span> : null}
+                    <span className="text-muted-foreground"> · catch-up </span>
+                    <UnknownValue />
+                  </span>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -139,12 +135,15 @@ export function WorkstreamRow({
   title,
   tasks,
   openByDefault,
+  onOpen,
 }: {
   readonly scoped: ScopedProject;
   readonly workstreamId: string;
   readonly title: string;
   readonly tasks: ReadonlyArray<DashboardTask>;
   readonly openByDefault: boolean;
+  /** Makes the row a project heading: the name opens the project, only the caret collapses. */
+  readonly onOpen?: (() => void) | undefined;
 }) {
   const ui = useDashboardUi();
   const key = `ws:${scoped.key}|${workstreamId}`;
@@ -165,7 +164,14 @@ export function WorkstreamRow({
   const tone = allDone ? "done" : keys.length > 0 || roll.idle > 0 ? "warning" : "default";
   return (
     <div>
-      <div className="grid grid-cols-[14px_minmax(0,1fr)_auto] items-center gap-x-2.5 py-0.75 sm:grid-cols-[14px_minmax(150px,1.25fr)_minmax(110px,1.6fr)_minmax(170px,auto)]">
+      <div
+        className={cn(
+          "grid grid-cols-[14px_minmax(0,1fr)_auto] items-center gap-x-2.5 py-0.75",
+          onOpen
+            ? "sm:grid-cols-[14px_minmax(220px,1.4fr)_minmax(90px,1fr)_minmax(170px,auto)]"
+            : "sm:grid-cols-[14px_minmax(150px,1.25fr)_minmax(110px,1.6fr)_minmax(170px,auto)]",
+        )}
+      >
         <button
           type="button"
           aria-label={collapsed ? "Expand" : "Collapse"}
@@ -181,8 +187,11 @@ export function WorkstreamRow({
         </button>
         <button
           type="button"
-          className="min-w-0 truncate text-left font-medium hover:underline"
-          onClick={() => ui.toggleCollapsed(key)}
+          className={cn(
+            "min-w-0 truncate text-left hover:underline",
+            onOpen ? "font-semibold" : "font-medium",
+          )}
+          onClick={onOpen ?? (() => ui.toggleCollapsed(key))}
         >
           {title}
         </button>
@@ -265,17 +274,25 @@ export function ProjectGroup({
   scoped,
   all,
   showName = true,
+  eager = true,
 }: {
   readonly scoped: ScopedProject;
   readonly all: ReadonlyArray<ScopedProject>;
   readonly showName?: boolean;
+  /** Open workstreams by default; off for the projects below the first screen on Home. */
+  readonly eager?: boolean;
 }) {
   const ui = useDashboardUi();
   const { project } = scoped;
   const subs = subprojectsOf(all, scoped).filter((sub) => sub.project.parentId === project.id);
-  const workstreams = project.workstreams
-    .map((workstream) => ({ workstream, tasks: workstreamTasks(project, workstream) }))
-    .filter((entry) => entry.tasks.length > 0);
+  const workstreams = planWorkstreams(project);
+  // "Work" is the server's placeholder when a workstream has no name of its own, so it gets no
+  // heading row: a project with nothing else shows its summary on the project row, otherwise the
+  // tasks list straight under the project name.
+  const unnamed = workstreams.filter((entry) => entry.workstream.title === "Work");
+  const named = workstreams.filter((entry) => entry.workstream.title !== "Work");
+  const merged = showName && named.length === 0 && unnamed.length === 1 ? unnamed[0]! : null;
+  const looseTasks = merged ? [] : unnamed.flatMap((entry) => entry.tasks);
   const name = (
     <button
       type="button"
@@ -287,7 +304,18 @@ export function ProjectGroup({
   );
   return (
     <div className="border-t border-border py-1.5 first:border-t-0">
-      {showName ? <div className="flex items-baseline gap-2 pb-1">{name}</div> : null}
+      {merged ? (
+        <WorkstreamRow
+          scoped={scoped}
+          workstreamId={merged.workstream.id}
+          title={project.title}
+          tasks={merged.tasks}
+          openByDefault={eager}
+          onOpen={() => ui.openProject(scoped)}
+        />
+      ) : showName ? (
+        <div className="flex items-baseline gap-2 pb-1">{name}</div>
+      ) : null}
       {workstreams.length === 0 && subs.length === 0 ? (
         <div className="py-0.5 pl-6 text-muted-foreground/80">
           {project.omittedTaskCount > 0
@@ -295,7 +323,10 @@ export function ProjectGroup({
             : "No open work"}
         </div>
       ) : null}
-      {workstreams.map(({ workstream, tasks }) => (
+      {looseTasks.map((task) => (
+        <TaskRow key={task.id} scoped={scoped} task={task} />
+      ))}
+      {named.map(({ workstream, tasks }) => (
         <WorkstreamRow
           key={workstream.id}
           scoped={scoped}
@@ -303,12 +334,13 @@ export function ProjectGroup({
           title={workstream.title}
           tasks={tasks}
           openByDefault={
-            workstreams.length === 1 ||
-            tasks.some(
-              (task) =>
-                task.attentionIds.length > 0 ||
-                (task.movement.state === "measured" && (task.movement.doneDelta ?? 0) > 0),
-            )
+            eager &&
+            (named.length === 1 ||
+              tasks.some(
+                (task) =>
+                  task.attentionIds.length > 0 ||
+                  (task.movement.state === "measured" && (task.movement.doneDelta ?? 0) > 0),
+              ))
           }
         />
       ))}
@@ -356,6 +388,25 @@ export function UtilityGroup({
       {collapsed
         ? null
         : utilities.map((scoped) => <SubprojectRow key={scoped.key} scoped={scoped} all={all} />)}
+    </div>
+  );
+}
+
+/** Projects with no tasks at all, as one trailing line instead of a "No open work" block each. */
+export function IdleProjects({ projects }: { readonly projects: ReadonlyArray<ScopedProject> }) {
+  const ui = useDashboardUi();
+  if (projects.length === 0) return null;
+  return (
+    <div className="border-t border-border py-1.5 text-muted-foreground">
+      Idle:{" "}
+      {projects.map((scoped, index) => (
+        <span key={scoped.key}>
+          {index > 0 ? ", " : ""}
+          <button type="button" className="hover:underline" onClick={() => ui.openProject(scoped)}>
+            {scoped.project.title}
+          </button>
+        </span>
+      ))}
     </div>
   );
 }
