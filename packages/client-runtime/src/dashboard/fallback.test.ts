@@ -240,7 +240,7 @@ describe("older-server first revision", () => {
       ).pipe(Effect.forkChild);
       yield* Deferred.await(core);
       yield* Deferred.await(started);
-      yield* TestClock.adjust("5 seconds");
+      yield* TestClock.adjust("60 seconds");
       const settled = yield* Fiber.join(fiber);
       expect(settled.revision).toBe(2);
       expect(settled.projects).toHaveLength(2);
@@ -284,7 +284,7 @@ describe("older-server first revision", () => {
         Effect.forkChild,
       );
       yield* Deferred.await(started);
-      yield* TestClock.adjust("5 seconds");
+      yield* TestClock.adjust("15 seconds");
       const settled = yield* Fiber.join(fiber);
       expect(settled.revision).toBe(baseline.revision + 1);
       expect(settled.projects[0]?.title).toBe("VM head");
@@ -330,7 +330,7 @@ it.effect("publishes expired sources before the rest of a large environment comp
       client,
     ).pipe(Effect.forkChild);
     yield* Deferred.await(earlyStarted);
-    yield* TestClock.adjust("5 seconds");
+    yield* TestClock.adjust("60 seconds");
     const partial = yield* Deferred.await(enriched);
     yield* Deferred.await(lateStarted);
     expect(partial.projects).toHaveLength(5);
@@ -343,7 +343,7 @@ it.effect("publishes expired sources before the rest of a large environment comp
       failed: false,
       detail: "Read pending",
     });
-    yield* TestClock.adjust("5 seconds");
+    yield* TestClock.adjust("60 seconds");
     expect((yield* Fiber.join(fiber)).revision).toBe(3);
   }),
 );
