@@ -93,3 +93,9 @@ id = "catchup-2908-native-ping-timeout"
 date = "2026-10-10"
 decided = "narrow"
 rationale = "fork.12 tolerated busy servers through an Effect rc.115 pinger overlay. Stable Effect 4.0.2 exposes a native pingTimeout (#15563), so the client protocol sets a 30 second PING_TIMEOUT consumed by the RPC session and the overlay is not ported; heartbeat tests are kept."
+
+[[decision]]
+id = "transient-session-check-recovery-277"
+date = "2026-10-13"
+decided = "repair-existing-concern"
+rationale = "Web, desktop, mobile and protected command execution share the last successful grant after transport failures. Definitive credential rejection clears cached grants until a new successful check. Mounted session checks retry from one second to a thirty-second cap, retaining the six-second request timeout."
