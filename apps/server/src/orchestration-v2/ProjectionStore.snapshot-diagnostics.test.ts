@@ -78,7 +78,9 @@ it.effect("retains the RPC caller through nested service labels", () =>
     const traces = yield* Traces.TraceDiagnostics;
     const group = WsRpcGroup.omit(
       ...[...WsRpcGroup.requests.keys()].filter(
-        (tag): tag is Exclude<
+        (
+          tag,
+        ): tag is Exclude<
           keyof typeof RpcAuthorization.RPC_REQUIRED_SCOPES,
           typeof WS_METHODS.serverProbe | typeof WS_METHODS.serverGetTraceDiagnostics
         > => tag !== WS_METHODS.serverProbe && tag !== WS_METHODS.serverGetTraceDiagnostics,
