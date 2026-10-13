@@ -3,6 +3,7 @@ import {
   type supervisionForest,
 } from "@t3tools/client-runtime/state/fork-nesting";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import type { PurposeMove, PurposeMoveId } from "@t3tools/client-runtime/state/thread-purpose";
 import type { ContextMenuItem, ThreadId } from "@t3tools/contracts";
 import { canSupervise } from "./sidebar/supervisionDragIntent";
 
@@ -14,7 +15,8 @@ export type ThreadNestingMenuId =
   | `nest-under:${string}`
   | "move-to-sidebar"
   | "subproject-on"
-  | "subproject-off";
+  | "subproject-off"
+  | PurposeMoveId;
 
 export interface ThreadNestingMenuState {
   readonly canStartNestedThread: boolean;
@@ -24,6 +26,8 @@ export interface ThreadNestingMenuState {
   /** Whether the thread is marked a project in its own right; null when the host cannot say. */
   readonly subproject: "on" | "off" | null;
   readonly parentCandidates: ReadonlyArray<{ readonly id: ThreadId; readonly title: string }>;
+  /** Move to Harness or back, resolved by the caller from the joined purpose forest; null when none applies. */
+  readonly purposeMove: PurposeMove | null;
 }
 
 /**
@@ -36,6 +40,7 @@ export function resolveThreadNestingMenuState(input: {
   readonly forest: ReturnType<typeof supervisionForest>;
   readonly supported: boolean;
   readonly subprojectsSupported?: boolean;
+  readonly purposeMove?: PurposeMove | null;
 }): ThreadNestingMenuState | null {
   const { thread, forest } = input;
   if (!input.supported) return null;
@@ -45,6 +50,7 @@ export function resolveThreadNestingMenuState(input: {
   return {
     canStartNestedThread: true,
     isNested: currentParent !== undefined,
+    purposeMove: input.purposeMove ?? null,
     ownsWorkers: (forest.children.get(key) ?? []).length > 0,
     subproject:
       input.subprojectsSupported !== true
@@ -71,6 +77,9 @@ export function isThreadNestingMenuId(id: string | null | undefined): id is Thre
     id === "move-to-sidebar" ||
     id === "subproject-on" ||
     id === "subproject-off" ||
+    id === "move-to-harness" ||
+    id === "move-to-projects" ||
+    id === "move-to-threads" ||
     (id?.startsWith("nest-under:") ?? false)
   );
 }
@@ -107,7 +116,7 @@ function subprojectItems(
 /**
  * Splices nesting actions into the shared thread action menu: "New thread
  * under this one" joins the new-thread item at the top, and "Nest under…" /
- * "Move to sidebar" / "Show as subproject" join the lifecycle group before Rename.
+ * "Move to sidebar" / "Show as subproject" / "Move to Harness" join the lifecycle group before Rename.
  */
 export function withThreadNestingMenuItems<T extends string>(
   items: ReadonlyArray<ContextMenuItem<T>>,
@@ -132,6 +141,9 @@ export function withThreadNestingMenuItems<T extends string>(
       : []),
     ...(state.isNested ? [{ id: "move-to-sidebar" as const, label: "Move to sidebar" }] : []),
     ...subprojectItems(state),
+    ...(state.purposeMove === null
+      ? []
+      : [{ id: state.purposeMove.id, label: state.purposeMove.label }]),
   ];
   const result: ContextMenuItem<T | ThreadNestingMenuId>[] = [...items];
   const branchIndex = result.findIndex((item) => item.id === "new-thread-on-branch");
