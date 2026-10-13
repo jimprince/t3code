@@ -1,4 +1,5 @@
 import { HarnessReadService } from "./harness/HarnessReadService.ts";
+import * as DashboardService from "./dashboard/DashboardService.ts";
 import { authenticatedHandlers as recoveryHandlers } from "./threadRecovery/rpc.ts";
 import { HumanIngress } from "./threadRecovery/HumanIngress.ts";
 import { makeMessageForwardService } from "./forkThreads/MessageForwardService.ts";
@@ -1377,6 +1378,7 @@ const layerWsRpc = (
       const sourceControlRepositories =
         yield* SourceControlRepositoryService.SourceControlRepositoryService;
       const withPullRequestViewer = pullRequests.withRoutingCredential;
+      const dashboard = yield* DashboardService.DashboardService;
       const projectIssues = yield* ProjectIssuesService.make;
       const requestLedger = yield* RequestLedger.make({ projectIssues, threadIssues });
       const decisionFeed = yield* DecisionFeed.make({ projectIssues, ledger: requestLedger });
@@ -3268,6 +3270,8 @@ const layerWsRpc = (
         [WS_METHODS.projectRoadmapGet]: (input) => projectRoadmap.get(input),
         [WS_METHODS.projectRoadmapMove]: (input) => projectRoadmap.move(input),
         [WS_METHODS.projectRoadmapSaveVersion]: (input) => projectRoadmap.saveVersion(input),
+        [WS_METHODS.dashboardSnapshot]: () => dashboard.getSnapshot,
+        [WS_METHODS.subscribeDashboard]: (input) => dashboard.stream(input.afterRevision),
         [WS_METHODS.projectDashboardGet]: (input) =>
           projectDashboard.get(input).pipe(Effect.tap(() => pullRequestSync.refreshStale)),
         [WS_METHODS.projectDashboardSetWidgets]: (input) => projectDashboard.setWidgets(input),
@@ -3344,6 +3348,7 @@ export const layer = Layer.unwrap(
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     const pullRequests = yield* PullRequestService.PullRequestService;
     const projectLayouts = yield* ProjectLayoutService.ProjectLayoutService;
+    const dashboardService = yield* DashboardService.DashboardService;
     const sql = yield* SqlClient.SqlClient;
     return HttpRouter.add(
       "GET",
@@ -3406,6 +3411,7 @@ export const layer = Layer.unwrap(
               // their defects, not the rest of the server's.
               Layer.provide(DefectReporter.layer),
               Layer.provide(Layer.succeed(SqlClient.SqlClient, sql)),
+              Layer.provide(Layer.succeed(DashboardService.DashboardService, dashboardService)),
               Layer.provide(AgentSessionScanner.layer),
               Layer.provide(ProviderMaintenanceRunner.layer),
               Layer.provide(Layer.succeed(ServerSelfUpdate.ServerSelfUpdate, serverSelfUpdate)),
