@@ -116,6 +116,7 @@ function CheckRow({
         <Text className="min-w-0 flex-1 text-sm text-foreground" numberOfLines={1}>
           {check.name}
         </Text>
+        {check.pinned ? <Text className="text-xs text-foreground-muted">Pinned</Text> : null}
         <Text className={cn("text-xs", TONE_TEXT[check.tone])}>
           {check.latenessLabel ?? check.stateLabel}
         </Text>
