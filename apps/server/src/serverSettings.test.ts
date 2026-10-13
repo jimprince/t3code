@@ -32,6 +32,7 @@ import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import * as ServerConfig from "./config.ts";
 import * as SqlitePersistence from "./persistence/Sqlite.ts";
 import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
+import * as HarnessPin from "./harness/HarnessPinService.ts";
 import * as ServerSettingsModule from "./serverSettings.ts";
 import { resolveProviderInstanceTerminalEnvironment } from "./terminal/Manager.ts";
 
@@ -100,6 +101,37 @@ const recordProviderUsage = (provider: string, instanceId: string | null = provi
   });
 
 it.layer(NodeServices.layer)("server settings", (it) => {
+  it.effect(
+    "persists, deduplicates and clears Harness pins without resetting sibling settings",
+    () =>
+      Effect.gen(function* () {
+        const config = yield* ServerConfig.ServerConfig;
+        const fs = yield* FileSystem.FileSystem;
+        const service = yield* ServerSettingsModule.ServerSettingsService;
+        assert.deepEqual((yield* service.getSettings).harnessPinnedCheckKeys, []);
+        const changes = yield* service.subscribeChanges;
+        const observed = yield* changes.pipe(Stream.take(1), Stream.runCollect, Effect.forkChild);
+        yield* service.updateSettings({
+          harnessPinnedCheckKeys: ["a", "a", "unknown:b"],
+          enableProviderUpdateChecks: false,
+        });
+        assert.deepEqual((yield* Fiber.join(observed))[0]?.harnessPinnedCheckKeys, [
+          "a",
+          "unknown:b",
+        ]);
+        const disk = yield* decodeServerSettingsJson(yield* fs.readFileString(config.settingsPath));
+        assert.deepEqual(disk.harnessPinnedCheckKeys, ["a", "unknown:b"]);
+        const pin = yield* HarnessPin.HarnessPinService;
+        yield* pin.setPinned({ checkKey: "a", pinned: false });
+        yield* pin.setPinned({ checkKey: "unknown:b", pinned: false });
+        const cleared = yield* decodeServerSettingsJson(
+          yield* fs.readFileString(config.settingsPath),
+        );
+        assert.deepEqual(cleared.harnessPinnedCheckKeys, []);
+        assert.isFalse(cleared.enableProviderUpdateChecks);
+      }).pipe(Effect.provide(HarnessPin.layer.pipe(Layer.provideMerge(layerServerSettings())))),
+  );
+
   it.effect(
     "persists and clears the Chief of Staff preference without resetting sibling preferences",
     () =>

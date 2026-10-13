@@ -1,0 +1,4 @@
+id = "harness-check-pins"
+category = "feature"
+functionality = "Harness"
+text = "Agents can pin and unpin Harness checks, with selections saved per environment and shared across clients."

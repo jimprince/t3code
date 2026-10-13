@@ -3,6 +3,26 @@ import { Rpc } from "effect/rpc";
 import { EnvironmentId, IsoDateTime, ProjectId, ThreadId } from "./baseSchemas.ts";
 import { EnvironmentAuthorizationError } from "./auth.ts";
 
+export const HarnessCheckKey = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(512));
+export const HarnessPinnedCheckKeys = Schema.Array(HarnessCheckKey).check(Schema.isMaxLength(200));
+export const HarnessCheckPinSetInput = Schema.Struct({
+  checkKey: HarnessCheckKey,
+  pinned: Schema.Boolean,
+});
+export type HarnessCheckPinSetInput = typeof HarnessCheckPinSetInput.Type;
+export class HarnessPinError extends Schema.TaggedError<HarnessPinError>()("HarnessPinError", {
+  cause: Schema.Defect(),
+}) {
+  override get message(): string {
+    return "Harness check pin could not be saved (maximum 200 pins).";
+  }
+}
+export const HarnessCheckPinSetRpc = Rpc.make("harness.checkPin.set", {
+  payload: HarnessCheckPinSetInput,
+  success: Schema.Struct({ pinnedCheckKeys: HarnessPinnedCheckKeys }),
+  error: Schema.Union([HarnessPinError, EnvironmentAuthorizationError]),
+});
+
 const Count = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 export const HarnessSnapshotInput = Schema.Struct({
   projectIds: Schema.optionalKey(Schema.Array(ProjectId).check(Schema.isMaxLength(100))),
@@ -146,6 +166,7 @@ export const HarnessSnapshot = Schema.Struct({
   sources: Schema.Array(HarnessSource),
   // Optional for clients reading an older environment.
   queueSummary: Schema.optionalKey(HarnessQueueSummary),
+  pinnedCheckKeys: Schema.optionalKey(HarnessPinnedCheckKeys),
   agents: Schema.Array(HarnessAgent),
   routines: Schema.Array(HarnessRoutine),
 });

@@ -141,6 +141,10 @@ const normalizeServerSettings = (
   encodeServerSettings(settings).pipe(
     Effect.flatMap(decodeServerSettings),
     Effect.map(foldProviderInstanceEnabledFlags),
+    Effect.map((next) => ({
+      ...next,
+      harnessPinnedCheckKeys: [...new Set(next.harnessPinnedCheckKeys)],
+    })),
     Effect.map((next) => ({ ...next, ...deriveLegacyProjectOverrides(next) })),
     Effect.mapError(
       (cause) =>
@@ -285,9 +289,9 @@ export class ServerSettingsService extends Context.Service<
     /** Read the current settings. */
     readonly getSettings: Effect.Effect<ServerSettings, ServerSettingsError>;
 
-    /** Patch settings and persist. Returns the new full settings object. */
+    /** Patch settings and persist. Computed patches run under the write lock against current settings. */
     readonly updateSettings: (
-      patch: ServerSettingsPatch,
+      patch: ServerSettingsPatch | ((current: ServerSettings) => ServerSettingsPatch),
     ) => Effect.Effect<ServerSettings, ServerSettingsError>;
 
     /** Rotate only an existing instance credential; no secret data in the receipt. */
@@ -386,7 +390,12 @@ const makeTest = (overrides: DeepPartial<ServerSettings> = {}) =>
       getSettings,
       updateSettings: (patch) =>
         updateTestSettings((currentSettings) =>
-          Effect.succeed(applyServerSettingsPatch(currentSettings, patch)),
+          Effect.succeed(
+            applyServerSettingsPatch(
+              currentSettings,
+              typeof patch === "function" ? patch(currentSettings) : patch,
+            ),
+          ),
         ),
       setGiteaToken: (input) =>
         writeSemaphore.withPermits(1)(
@@ -1530,7 +1539,9 @@ const make = Effect.gen(function* () {
     ),
     updateSettings: (patch) =>
       updateAndPersistSettings((current) =>
-        Effect.succeed(applyServerSettingsPatch(current, patch)),
+        Effect.succeed(
+          applyServerSettingsPatch(current, typeof patch === "function" ? patch(current) : patch),
+        ),
       ),
     updateProviderInstance: (mutation, patch = {}) =>
       updateAndPersistSettings((current) =>

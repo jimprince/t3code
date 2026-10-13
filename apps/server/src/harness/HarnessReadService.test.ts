@@ -50,7 +50,10 @@ const RUN: HarnessRun = {
   evidence: "test",
   threads: [],
 };
+import * as Settings from "../serverSettings.ts";
+
 const db = Layer.mergeAll(
+  Settings.layerTest(),
   AutomationStore.layer,
   ProjectStore.layer,
   Layer.succeed(ServerEnvironmentIdentity, { getEnvironmentId: Effect.succeed(ENV) }),
@@ -71,11 +74,19 @@ it.effect(
         yield* insertRun(sql, "preparing", "inside", "c", "preparing", 2);
         yield* insertRun(sql, "running", "inside", "d", "running", 3);
         yield* insertRun(sql, "completed", "inside", "e", "completed", 4);
+        const settings = yield* Settings.ServerSettingsService;
+        yield* settings.updateSettings({ harnessPinnedCheckKeys: ["unknown:key"] });
         const service = yield* make;
         const snapshot = yield* service.snapshot({
           projectIds: [PROJECT],
           routineKeys: ["no-matching-routine"],
         });
+        expect(snapshot.pinnedCheckKeys).toEqual(["unknown:key"]);
+        yield* settings.updateSettings({ harnessPinnedCheckKeys: [] });
+        expect(
+          (yield* service.snapshot({ projectIds: [PROJECT], routineKeys: ["no-matching-routine"] }))
+            .pinnedCheckKeys,
+        ).toEqual([]);
         expect(snapshot.queueSummary).toMatchObject({
           queuedSendCount: 2,
           oldestQueuedRequestedAt: "2026-10-11T05:00:00.000Z",

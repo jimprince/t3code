@@ -1,3 +1,4 @@
+import * as HarnessPin from "../harness/HarnessPinService.ts";
 import { HarnessToolkit } from "./toolkits/harness/tools.ts";
 import { HarnessHandlersLive } from "./toolkits/harness/handlers.ts";
 import { RecoveryToolkit, RecoveryHandlersLive } from "./toolkits/recovery/tools.ts";
@@ -843,7 +844,7 @@ const layerPlansToolkit = toolkitRegistration(PlansToolkit, PlansToolkitHandlers
 export const layerEnvironmentToolkit = toolkitRegistration(
   EnvironmentToolkit,
   EnvironmentHandlers.layer,
-).pipe(Layer.provide(ThreadCommandExecutor.layer));
+).pipe(Layer.provide(Layer.mergeAll(ThreadCommandExecutor.layer, HarnessPin.layer)));
 
 const layerProjectRegistration = toolkitRegistration(ProjectToolkit, ProjectHandlers.layer);
 

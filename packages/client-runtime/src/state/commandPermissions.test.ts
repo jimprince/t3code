@@ -7,6 +7,7 @@ import type { RpcSession } from "../rpc/session.ts";
 import { describe, expect, it } from "@effect/vitest";
 import { vi } from "vite-plus/test";
 import {
+  AuthSettingsWriteScope,
   AuthOrchestrationOperateScope,
   AuthSourceControlWriteScope,
   ThreadId,
@@ -22,6 +23,7 @@ import * as Layer from "effect/Layer";
 import * as TestClock from "effect/testing/TestClock";
 import { Atom, AtomRegistry, AsyncResult } from "effect/reactivity";
 import { EnvironmentRegistry } from "../connection/registry.ts";
+import { createHarnessPinCommand } from "./harnessQuery.ts";
 import { createCommandPermissions } from "./commandPermissions.ts";
 import { createEnvironmentRpcCommand } from "./runtime.ts";
 
@@ -260,4 +262,105 @@ it.effect("rejects protected unary and streamed RPCs outside a guarded command",
     expect(streamed._tag).toBe("EnvironmentAuthorizationError");
     expect(writes).toBe(0);
   }),
+);
+
+it.effect(
+  "Harness pin availability and execution require destination settings-write permission",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const registry = yield* setup;
+        const command = createHarnessPinCommand(runtime);
+        const pinPermissions = createCommandPermissions(runtime, WS_METHODS.harnessCheckPinSet);
+        registry.set(sessions(env), AsyncResult.success(grant(true)));
+        expect(registry.get(command.permissionAtom(env))).toBe(false);
+        expect(
+          (yield* pinPermissions.authorize(registry, env).pipe(Effect.flip)).requiredPermission,
+        ).toBe(AuthSettingsWriteScope);
+        registry.set(
+          sessions(env),
+          AsyncResult.success({
+            ...grant(false),
+            scopes: [AuthSettingsWriteScope],
+            permissions: [AuthSettingsWriteScope],
+          }),
+        );
+        expect(registry.get(command.permissionAtom(env))).toBe(true);
+        yield* pinPermissions.authorize(registry, env);
+        registry.set(sessions(other), AsyncResult.success(grant(false)));
+        expect(
+          (yield* pinPermissions.authorize(registry, other).pipe(Effect.flip)).requiredPermission,
+        ).toBe(AuthSettingsWriteScope);
+      }),
+    ),
+);
+
+it.effect(
+  "the Harness pin command calls the exported mutation and returns full pins only for an authorized environment",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const registry = yield* setup;
+        let pins: string[] = [];
+        let writes = 0;
+        const session = {
+          client: {
+            [WS_METHODS.harnessCheckPinSet]: (input: { checkKey: string; pinned: boolean }) =>
+              Effect.sync(() => {
+                writes++;
+                pins = input.pinned
+                  ? [...new Set([...pins, input.checkKey])]
+                  : pins.filter((key) => key !== input.checkKey);
+                return { pinnedCheckKeys: pins };
+              }),
+          },
+        } as unknown as RpcSession;
+        const supervisor = {
+          target: { environmentId: env, label: "target" },
+          session: yield* SubscriptionRef.make(Option.some(session)),
+        } as unknown as EnvironmentSupervisor["Service"];
+        const pinRuntime = Atom.runtime(
+          Layer.succeed(EnvironmentRegistry, {
+            run: (_id: EnvironmentId, effect: Effect.Effect<unknown>) =>
+              effect.pipe(Effect.provideService(EnvironmentSupervisor, supervisor)),
+          } as unknown as EnvironmentRegistry["Service"]),
+        );
+        const command = createHarnessPinCommand(pinRuntime);
+        registry.set(
+          sessions(env),
+          AsyncResult.success({
+            ...grant(false),
+            scopes: [AuthSettingsWriteScope],
+            permissions: [AuthSettingsWriteScope],
+          }),
+        );
+        const result = yield* Effect.promise(() =>
+          command.run(registry, {
+            environmentId: env,
+            input: { checkKey: "unknown:key", pinned: true },
+          }),
+        );
+        expect(result).toMatchObject({
+          _tag: "Success",
+          value: { pinnedCheckKeys: ["unknown:key"] },
+        });
+        const unpin = yield* Effect.promise(() =>
+          command.run(registry, {
+            environmentId: env,
+            input: { checkKey: "unknown:key", pinned: false },
+          }),
+        );
+        expect(unpin).toMatchObject({ _tag: "Success", value: { pinnedCheckKeys: [] } });
+        registry.set(sessions(other), AsyncResult.success(grant(false)));
+        expect(
+          (yield* Effect.promise(() =>
+            command.run(registry, {
+              environmentId: other,
+              input: { checkKey: "blocked", pinned: true },
+            }),
+          ))._tag,
+        ).toBe("Failure");
+        expect(writes).toBe(2);
+      }),
+    ),
 );

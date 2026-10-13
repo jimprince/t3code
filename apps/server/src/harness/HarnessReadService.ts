@@ -1,3 +1,4 @@
+import * as Settings from "../serverSettings.ts";
 import { effectivePurpose } from "@t3tools/client-runtime/state/thread-purpose";
 import {
   EnvironmentId,
@@ -311,6 +312,7 @@ export const queuedSendSummary = Effect.fn("HarnessReadService.queuedSendSummary
 
 /** Sources are stamped separately: this is deliberately an honest non-atomic read model. */
 export const make = Effect.gen(function* () {
+  const settings = yield* Settings.ServerSettingsService;
   const sql = yield* SqlClient.SqlClient;
   const automations = yield* AutomationStore.AutomationStore;
   const projects = yield* ProjectStore.ProjectStoreV2;
@@ -973,8 +975,9 @@ export const make = Effect.gen(function* () {
         const now = yield* DateTime.now;
         const key = encodeJson([Math.floor(DateTime.toEpochMillis(now) / 1000), validated]);
         const previous = cached;
-        if (previous && previous.key === key) return previous.value;
-        const value = yield* readSnapshot(validated);
+        const pinnedCheckKeys = (yield* settings.getSettings).harnessPinnedCheckKeys;
+        if (previous && previous.key === key) return { ...previous.value, pinnedCheckKeys };
+        const value = { ...(yield* readSnapshot(validated)), pinnedCheckKeys };
         cached = { key, value };
         return value;
       }).pipe(
