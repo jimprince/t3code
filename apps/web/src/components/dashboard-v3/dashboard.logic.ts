@@ -7,6 +7,7 @@ import type {
   DashboardTask,
   EnvironmentId,
 } from "@t3tools/contracts";
+import { compareDashboardVersions } from "@t3tools/client-runtime/dashboard/merge";
 
 /** The Dashboard's client-side model: snapshots of every connected environment, merged. */
 
@@ -259,6 +260,39 @@ export function parseIssueTaskId(
   const match = /^issue:([^/]+)\/(.+)#(\d+)$/.exec(id);
   if (!match) return null;
   return { host: match[1]!, repository: match[2]!, number: Number(match[3]) };
+}
+
+/** How long a delivered answer stays on screen at least, so it never just vanishes. */
+export const ANSWER_LINGER_MS = 6_000;
+/** The longest a delivered answer is held back while the snapshot still lists the decision. */
+export const ANSWER_CAP_MS = 10 * 60_000;
+
+/**
+ * Whether a delivered answer can stop being remembered. The snapshot lags the answer by a Gitea
+ * refresh, so a decision that is still listed stays answered (never back to open) until it leaves
+ * the snapshot or the cap passes.
+ */
+export function answerSettled(input: {
+  readonly sentAt: number;
+  readonly stillOpen: boolean;
+  readonly now: number;
+}): boolean {
+  const age = input.now - input.sentAt;
+  return age >= ANSWER_CAP_MS || (!input.stillOpen && age >= ANSWER_LINGER_MS);
+}
+
+// ---------------------------------------------------------------------------
+// Releases
+
+export type VersionState = "unknown" | "behind" | "current";
+
+/**
+ * Installed against latest. Only an installed version older than a known latest is "behind"; with
+ * no known latest nothing can be said, and an installed build newer than latest is current.
+ */
+export function versionState(installed: string | null, latest: string | null): VersionState {
+  if (installed === null || latest === null) return "unknown";
+  return compareDashboardVersions(installed, latest) < 0 ? "behind" : "current";
 }
 
 // ---------------------------------------------------------------------------
