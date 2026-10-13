@@ -14,7 +14,7 @@ import { BarLegend, OutcomeRow, SectionHeading, SectionMarker, UnknownValue } fr
 import { IdleProjects, ProjectGroup, ReleaseLines, UtilityGroup } from "./plan";
 
 /** "last hour 13 steps · 2 stalled · 1 replanned": the Plan's totals, only from what was measured. */
-export function PlanTotals() {
+function PlanTotals() {
   const { data } = useDashboardUi();
   const tasks = data.projects.flatMap((p) => p.project.tasks);
   const roll = rollup(tasks);
