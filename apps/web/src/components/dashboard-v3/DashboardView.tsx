@@ -1,30 +1,37 @@
 import {
   buildOrchestratorSummaries,
+  joinOrchestratorMetadata,
   type OrchestratorSummary,
 } from "@t3tools/client-runtime/state/orchestrators";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { DashboardTask, EnvironmentId, ThreadId } from "@t3tools/contracts";
-import { useNavigate } from "@tanstack/react-router";
-import { use, useMemo, useState } from "react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { use, useCallback, useMemo, useState } from "react";
 
-import { useProjects } from "../../state/entities";
+import { readProjects, readThreadShells } from "../../state/entities";
 import { useDashboardData } from "../../state/dashboard";
+import { useSupervisionMetadata } from "../../state/forkSupervision";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { Sheet, SheetPopup } from "../ui/sheet";
 import { OpenTaskContext } from "../orchestrators/TaskLink";
 import { ProjectTaskPanel } from "../orchestrators/ProjectTaskPanel";
-import { useOrchestratorThreadShells } from "../orchestrators/useOrchestratorThreads";
-import { AskBar, FreshnessStamp, VariantSwitcher } from "./chrome";
+import { AskSection, FreshnessStamp, OlderServerLines, VariantSwitcher } from "./chrome";
 import { DashboardUiProvider, type DashboardUi, type DecisionRow } from "./context";
-import { rankDecisions, scopeToProject, sourceHealth, type ScopedProject } from "./dashboard.logic";
+import {
+  parseIssueTaskId,
+  rankDecisions,
+  scopeToProject,
+  sourceHealth,
+  type ScopedProject,
+} from "./dashboard.logic";
 import { DecisionDialog } from "./decisions";
 import { useCollapsedKeys, useDashboardVariant, useMinuteClock } from "./prefs";
+import { sectionMarker } from "./parts";
 import { useDecisionAnswers } from "./useDecisionAnswers";
 import { useVisitBaseline } from "./useVisitBaseline";
 import { VariantA } from "./VariantA";
 import { VariantB } from "./VariantB";
 import { VariantC } from "./VariantC";
-import { parseIssueTaskId } from "./dashboard.logic";
 
 export type DashboardScope =
   | { readonly kind: "home" }
@@ -33,8 +40,6 @@ export type DashboardScope =
       readonly environmentId: EnvironmentId;
       readonly threadId: ThreadId;
     };
-
-const COS_TITLE = /chief of staff/i;
 
 /**
  * The Dashboard: Home across every connected environment, or one project page, both built from the
@@ -51,39 +56,52 @@ export function DashboardView({ scope }: { readonly scope: DashboardScope }) {
   const openTaskInPage = use(OpenTaskContext);
   const collapse = useCollapsedKeys();
   const answers = useDecisionAnswers();
+  const metadata = useSupervisionMetadata();
   const [dialogKeys, setDialogKeys] = useState<ReadonlyArray<string>>([]);
   const [sheet, setSheet] = useState<{
     readonly summary: OrchestratorSummary;
     readonly ref: { host: string; repository: string; number: number };
   } | null>(null);
   const [prefill, setPrefill] = useState<{ text: string; nonce: number } | null>(null);
+  // Captured once per instance for the cold-load trace.
+  const [mountedAt] = useState(() => performance.now());
 
-  const projects = useProjects();
-  const threads = useOrchestratorThreadShells();
-  const summaries = useMemo(
-    () => buildOrchestratorSummaries(threads, projects),
-    [projects, threads],
+  const environmentId = scope.kind === "project" ? scope.environmentId : null;
+  const threadId = scope.kind === "project" ? scope.threadId : null;
+  const scopeKey = environmentId && threadId ? `${environmentId}:${threadId}` : "home";
+  const projectHead = useMemo(
+    () => (environmentId && threadId ? { environmentId, threadId } : null),
+    [environmentId, threadId],
   );
 
   const scoped = useMemo(
     () =>
-      scope.kind === "home"
-        ? { data: state.data, root: null }
-        : scopeToProject(state.data, scope.environmentId, scope.threadId),
-    [scope, state.data],
+      environmentId && threadId
+        ? scopeToProject(state.data, environmentId, threadId)
+        : { data: state.data, root: null },
+    [environmentId, threadId, state.data],
   );
   const { data, root } = scoped;
 
-  const summaryFor = (target: ScopedProject): OrchestratorSummary | null => {
-    const exact = summaries.find(
-      (summary) =>
-        summary.root.environmentId === target.environmentId &&
-        summary.root.id === target.project.rootThreadId,
-    );
-    if (exact) return exact;
-    // A head-only project has no thread of its own; the page's own project answers for it.
-    return root && root !== target ? summaryFor(root) : null;
-  };
+  // Summaries are read when a click needs one, not subscribed to: thread shells change constantly
+  // while agents run, and the page must not re-render with them.
+  const summaryFor = useCallback(
+    (target: ScopedProject): OrchestratorSummary | null => {
+      const summaries = buildOrchestratorSummaries(
+        joinOrchestratorMetadata(readThreadShells(), metadata),
+        readProjects(),
+      );
+      const find = (of: ScopedProject) =>
+        summaries.find(
+          (summary) =>
+            summary.root.environmentId === of.environmentId &&
+            summary.root.id === of.project.rootThreadId,
+        ) ?? null;
+      // A head-only project has no thread of its own; the page's own project answers for it.
+      return find(target) ?? (root && root !== target ? find(root) : null);
+    },
+    [metadata, root],
+  );
 
   const decisions = useMemo<ReadonlyArray<DecisionRow>>(() => {
     const rows = data.projects.flatMap((entry) =>
@@ -101,74 +119,116 @@ export function DashboardView({ scope }: { readonly scope: DashboardScope }) {
   }, [data.projects]);
 
   const openKeys = useMemo(() => new Set(decisions.map((row) => row.key)), [decisions]);
-  const sinceLooked = useVisitBaseline(root ? root.key : "home", data);
+  // A project page keeps its own baseline; it must never overwrite Home's. Without the project in
+  // the snapshot there is nothing worth storing yet.
+  const sinceLooked = useVisitBaseline(scopeKey, data, scope.kind === "home" || root !== null);
 
-  const openTask = (target: ScopedProject, task: DashboardTask) => {
-    const issue = parseIssueTaskId(task.id);
-    const summary = summaryFor(target);
-    if (issue && openTaskInPage) return openTaskInPage(issue);
-    if (issue && summary) return setSheet({ summary, ref: issue });
-    if (task.url) return void window.open(task.url, "_blank", "noopener,noreferrer");
-    if (task.threadId)
-      void navigate({
-        to: "/$environmentId/$threadId",
-        params: buildThreadRouteParams(scopeThreadRef(target.environmentId, task.threadId)),
-      });
-  };
-
-  const ui: DashboardUi = {
-    data,
-    now,
-    decisions,
-    answers,
-    decisionKeysFor: (target, task) =>
-      task.attentionIds
-        .map((id) => `${target.key}|${id}`)
-        .filter((key) => openKeys.has(key) && answers.stateOf(key) === null),
-    openDecisions: setDialogKeys,
-    openTask,
-    openProject: (target) => {
-      const threadId = target.project.rootThreadId;
-      if (!threadId || target === root) return;
-      void navigate({
-        to: "/orchestrators/$environmentId/$threadId",
-        params: { environmentId: target.environmentId, threadId },
-      });
+  const openTask = useCallback(
+    (target: ScopedProject, task: DashboardTask) => {
+      const issue = parseIssueTaskId(task.id);
+      if (issue && openTaskInPage) return openTaskInPage(issue);
+      const summary = issue ? summaryFor(target) : null;
+      if (issue && summary) return setSheet({ summary, ref: issue });
+      if (task.url) return void window.open(task.url, "_blank", "noopener,noreferrer");
+      if (task.threadId)
+        void navigate({
+          to: "/$environmentId/$threadId",
+          params: buildThreadRouteParams(scopeThreadRef(target.environmentId, task.threadId)),
+        });
     },
-    summaryFor,
-    sourceHealth: (sourceId) => {
-      const source = data.sources.find((entry) => entry.id === sourceId);
-      return source ? sourceHealth(source, now) : null;
-    },
-    isCollapsed: collapse.isCollapsed,
-    toggleCollapsed: collapse.toggle,
-    sinceLooked,
-    root,
-    prefill,
-    unstick: (title) =>
-      setPrefill((current) => ({
-        text: `${title} has had no steps in the last hour. Check it and restart or reassign.`,
-        nonce: (current?.nonce ?? 0) + 1,
-      })),
-  };
+    [navigate, openTaskInPage, summaryFor],
+  );
 
-  const askSummary = root
-    ? summaryFor(root)
-    : (summaries.find((summary) => COS_TITLE.test(summary.root.title)) ?? null);
-  const askRoute = root ? root.project.title : (askSummary?.root.title ?? "Chief of Staff");
+  const stateOf = answers.stateOf;
+  const ui = useMemo<DashboardUi>(
+    () => ({
+      data,
+      revision: state.revision,
+      now,
+      decisions,
+      answers,
+      decisionKeysFor: (target, task) =>
+        task.attentionIds
+          .map((id) => `${target.key}|${id}`)
+          .filter((key) => openKeys.has(key) && stateOf(key) === null),
+      openDecisions: setDialogKeys,
+      openTask,
+      openProject: (target) => {
+        const head = target.project.rootThreadId;
+        if (!head || target === root) return;
+        void navigate({
+          to: "/orchestrators/$environmentId/$threadId",
+          params: { environmentId: target.environmentId, threadId: head },
+        });
+      },
+      summaryFor,
+      sourceHealth: (sourceId) => {
+        const source = data.sources.find((entry) => entry.id === sourceId);
+        return source ? sourceHealth(source, now) : null;
+      },
+      isCollapsed: collapse.isCollapsed,
+      toggleCollapsed: collapse.toggle,
+      sinceLooked,
+      root,
+      prefill,
+      unstick: (title) =>
+        setPrefill((current) => ({
+          text: `${title} has had no steps in the last hour. Check it and restart or reassign.`,
+          nonce: (current?.nonce ?? 0) + 1,
+        })),
+    }),
+    [
+      answers,
+      collapse.isCollapsed,
+      collapse.toggle,
+      data,
+      decisions,
+      navigate,
+      now,
+      openKeys,
+      openTask,
+      prefill,
+      root,
+      sinceLooked,
+      state.revision,
+      stateOf,
+      summaryFor,
+    ],
+  );
 
+  const ready = data.asOf !== null;
   return (
     <DashboardUiProvider value={ui}>
-      <div className="flex flex-col gap-2">
-        <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1">
-          <FreshnessStamp failed={state.failed} />
-          <span className="flex-1" />
-          <span className="text-xs text-muted-foreground">Last hour</span>
-          <VariantSwitcher />
+      <div
+        data-testid="dashboard-root"
+        data-ready={ready ? "true" : "false"}
+        data-revision={state.revision}
+        data-mounted-at={mountedAt}
+        data-snapshot-source={state.snapshotSource}
+        className="flex flex-col gap-2"
+      >
+        <div {...sectionMarker("freshness", { ready, revision: state.revision })}>
+          <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1">
+            {scope.kind === "project" ? (
+              <Link to="/dashboard" className="text-xs text-muted-foreground hover:text-foreground">
+                Home
+              </Link>
+            ) : null}
+            <FreshnessStamp failed={state.failed} onRetry={state.retry} />
+            <span className="flex-1" />
+            <VariantSwitcher withPrevious={scope.kind === "project"} />
+          </div>
+          <OlderServerLines names={state.olderEnvironments} />
         </div>
-        <AskBar summary={askSummary} routeLabel={askRoute} compact={variant === "B"} />
+        <AskSection projectHead={projectHead} compact={variant === "B"} />
         {data.asOf === null ? (
-          <div className="py-3 text-muted-foreground/80">Not loaded yet</div>
+          <div data-testid="dashboard-placeholder" className="py-3 text-muted-foreground/80">
+            Not loaded yet
+          </div>
+        ) : scope.kind === "project" && root === null ? (
+          <div className="py-3 text-muted-foreground/80">
+            Not in this environment&apos;s snapshot
+          </div>
         ) : variant === "B" ? (
           <VariantB />
         ) : variant === "C" ? (

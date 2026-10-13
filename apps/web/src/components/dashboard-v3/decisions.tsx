@@ -18,17 +18,14 @@ const KIND_WORD = {
   test: "test",
 } as const;
 
-/** "blocks fork.13 · T3 Code": what waits on this answer, from the tasks it blocks. */
+/** "T3 Code · blocks fork.13": the project, and what waits on this answer when the snapshot knows. */
 function consequence(row: DecisionRow): string {
   const { project } = row.scoped;
   const titles = row.attention.blockingTaskIds
     .map((id) => project.tasks.find((task) => task.id === id)?.title)
     .filter((title): title is string => !!title);
-  const blocks =
-    titles.length === 0
-      ? "blocks nothing"
-      : `blocks ${titles[0]}${titles.length > 1 ? ` and ${titles.length - 1} more` : ""}`;
-  return `${project.title} · ${blocks}`;
+  if (titles.length === 0) return project.title;
+  return `${project.title} · blocks ${titles[0]}${titles.length > 1 ? ` and ${titles.length - 1} more` : ""}`;
 }
 
 /** The lead of the question, for the compact feed; the full text opens in the card. */
