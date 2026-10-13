@@ -1,0 +1,4 @@
+id = "projects-dnd"
+category = "feature"
+functionality = "projects"
+text = "Drag a project in the Projects sidebar, or press Alt+Up or Alt+Down on it, to put it where you want; arranged projects stay above the rest until unpinned."
