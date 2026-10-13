@@ -24,6 +24,7 @@ import { cn } from "../../lib/cn";
 import { relativeTime } from "../../lib/time";
 import { MobileDecisionFeed } from "./MobileDecisionFeed";
 import { MobileProjectRequests } from "./MobileProjectRequests";
+import { MobileTaskFraction } from "./MobileTaskFraction";
 
 /**
  * A project's subprojects as compact "/ Name" rows inside its card, the web sidebar's
