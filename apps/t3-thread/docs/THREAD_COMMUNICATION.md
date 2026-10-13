@@ -44,6 +44,11 @@ Neither line suppresses required escalations. Omitting the line preserves the
 usual behavior. Successful direct sends, including accepted queued sends, deduplicate
 only the matching subscriber and turn; `all` explicitly opts into both notices.
 
+An entire final reply of `No change.` or `Nothing new for you.` creates no
+completion notification, including at `all`. Only surrounding whitespace is
+trimmed; case, markdown, another paragraph or an appended footer remain meaningful.
+See [No-change replies](../../../docs/user/no-change-replies.md) for the server behavior.
+
 ## First-delivery guide
 
 The short guide appears once per subscriber across all workers. Only a confirmed
