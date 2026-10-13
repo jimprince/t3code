@@ -1,0 +1,4 @@
+id = "no-change-suppress"
+category = "fix"
+functionality = "Agent completion results"
+text = "Exact No change. and Nothing new for you. replies stay in the timeline without creating automatic request answers, completion notices, mobile finished cards, delegate result wakes or worker output previews. Replies with additional text and required attention still appear."

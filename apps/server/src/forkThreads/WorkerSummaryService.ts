@@ -1,3 +1,4 @@
+import { isNoChangeReply } from "@t3tools/shared/completionOutput";
 import type { ThreadId, OrchestrationV2ThreadShell } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/sql/SqlClient";
@@ -5,7 +6,7 @@ import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.t
 
 /** A bounded first nonblank line; scanning stops as soon as the preview is full. */
 function workerOutput(text: string | null): string | null {
-  if (text === null) return null;
+  if (text === null || isNoChangeReply(text)) return null;
   const start = /\S/u.exec(text)?.index;
   if (start === undefined) return null;
   let result = "";
@@ -30,7 +31,7 @@ export const readWorkerSummaries = (sql: SqlClient.SqlClient, threadIds: Readonl
       activity: string | null;
     }>`
     SELECT t.thread_id,
-      (SELECT substr(json_extract(m.payload_json, '$.text'),1,4096) FROM orchestration_v2_projection_messages m WHERE m.thread_id=t.thread_id AND m.role='assistant' ORDER BY m.updated_at DESC, m.message_id DESC LIMIT 1) AS output,
+      (SELECT json_extract(m.payload_json, '$.text') FROM orchestration_v2_projection_messages m WHERE m.thread_id=t.thread_id AND m.role='assistant' ORDER BY m.updated_at DESC, m.message_id DESC LIMIT 1) AS output,
       (SELECT count(*) FROM orchestration_v2_projection_messages m WHERE m.thread_id=t.thread_id) AS message_count,
       (SELECT count(*) FROM orchestration_v2_projection_turn_items i WHERE i.thread_id=t.thread_id AND i.type IN ('command_execution','file_change','dynamic_tool','mcp_tool_call','web_search')) AS tool_count,
       (SELECT json_extract(p.payload_json,'$.tokenUsage.usedTokens') FROM orchestration_v2_projection_provider_turns p WHERE p.thread_id=t.thread_id ORDER BY p.ordinal DESC LIMIT 1) AS used_tokens,
