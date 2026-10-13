@@ -78,35 +78,93 @@ export function sourceHealth(source: DashboardSource, now: number): SourceHealth
 
 const titleCase = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
 
-/** A source id in words: "plan:voice" is "Voice tasks", "gitea:host/owner/repo" is "Gitea, repo". */
-export function sourceLabel(source: Pick<DashboardSource, "id" | "kind">): string {
-  const [, rest = ""] = source.id.split(/:(.*)/s);
+/** What a source id needs to be said in words: server names and project titles, never ids. */
+export interface SourceNames {
+  /** Server label by environment id. */
+  readonly environments: ReadonlyMap<string, string>;
+  /** Project title by root thread id. */
+  readonly projectTitle: (rootThreadId: string) => string | undefined;
+}
+
+/**
+ * A source in words, split into the server it belongs to and what it reads: "plan:voice" is
+ * "Voice tasks", "gitea:host/owner/repo" is "Gitea repo", and a read of an older server's project
+ * is "<project title> tracker issues". Merged ids carry the environment id first; it names the server.
+ */
+export function describeSource(
+  source: Pick<DashboardSource, "id" | "kind">,
+  names: SourceNames,
+): { readonly server: string | null; readonly what: string } {
+  let server: string | null = null;
+  let rest = source.id;
+  for (const [environmentId, label] of names.environments)
+    if (rest.startsWith(`${environmentId}:`)) {
+      server = label;
+      rest = rest.slice(environmentId.length + 1);
+      break;
+    }
+  const older = /^older:(.+):(issues|roadmap|asks)$/.exec(rest);
+  if (older) {
+    const project = names.projectTitle(older[1]!) ?? "a project";
+    const part = { issues: "tracker issues", roadmap: "roadmap", asks: "pending requests" }[
+      older[2] as "issues" | "roadmap" | "asks"
+    ];
+    return { server, what: `${project} ${part}` };
+  }
+  if (rest === "older:metadata") return { server, what: "Thread metadata" };
+  const [, detail = ""] = rest.split(/:(.*)/s);
   switch (source.kind) {
     case "local":
-      return "Local orchestration";
+      return { server, what: "Local orchestration" };
     case "gitea":
-      return `Gitea, ${rest.split("/").at(-1) || rest}`;
+      return { server, what: `Gitea ${detail.split("/").at(-1) || detail}` };
     case "plan":
-      return `${titleCase(rest)} tasks`;
+      return { server, what: `${titleCase(detail)} tasks` };
     case "release":
-      return "Release status";
+      return { server, what: "Release status" };
   }
 }
 
-/** The header's amber suffix: the first source that is not fresh, "Voice tasks stale". */
-export function freshnessSuffix(
+/** One source for the sources table: "brad-linux-dev · Chief of Staff tracker issues". */
+export function sourceLabel(
+  source: Pick<DashboardSource, "id" | "kind">,
+  names: SourceNames,
+): string {
+  const { server, what } = describeSource(source, names);
+  return server ? `${server} · ${what}` : what;
+}
+
+/**
+ * The header's one phrase about sources that are late: "brad-linux-dev: 51 reads slow, showing last
+ * known". Routine lateness is not an alarm; `failed` is true only when no source has ever returned
+ * data, the one case with nothing to show.
+ */
+export function freshnessSummary(
   sources: ReadonlyArray<DashboardSource>,
   now: number,
+  names: SourceNames,
 ): { readonly text: string; readonly failed: boolean } | null {
-  const bad = sources
-    .map((source) => ({ source, health: sourceHealth(source, now) }))
-    .filter((entry) => entry.health === "stale" || entry.health === "failed");
-  const first = bad[0];
-  if (!first) return null;
-  const more = bad.length > 1 ? ` and ${bad.length - 1} more` : "";
-  return first.health === "failed"
-    ? { text: `${sourceLabel(first.source)} refresh failed${more}`, failed: true }
-    : { text: `${sourceLabel(first.source)} stale${more}`, failed: false };
+  const late = sources.filter((source) => {
+    const health = sourceHealth(source, now);
+    return health === "stale" || health === "failed";
+  });
+  if (late.length === 0) return null;
+  const failed = sources.every((source) => source.lastSuccessAt === null && source.failed);
+  if (late.length === 1) {
+    const { server, what } = describeSource(late[0]!, names);
+    return { text: `${server ? `${server} ` : ""}${what} slow, showing last known`, failed };
+  }
+  const byServer = new Map<string, number>();
+  for (const source of late) {
+    const server = describeSource(source, names).server ?? "Dashboard";
+    byServer.set(server, (byServer.get(server) ?? 0) + 1);
+  }
+  const groups = [...byServer].map(
+    ([server, count]) => `${server}: ${count} ${count === 1 ? "read" : "reads"} slow`,
+  );
+  const shown = groups.slice(0, 2).join(", ");
+  const more = groups.length > 2 ? ` and ${groups.length - 2} more` : "";
+  return { text: `${shown}${more}, showing last known`, failed };
 }
 
 // ---------------------------------------------------------------------------
@@ -484,6 +542,68 @@ export function workstreamTasks(
 ): DashboardTask[] {
   const wanted = new Set(workstream.taskIds);
   return project.tasks.filter((task) => wanted.has(task.id));
+}
+
+/**
+ * A project's workstreams with the tasks to list under each. An epic heads its own workstream (its
+ * id is that workstream's id), so it is not repeated as a task row inside the workstream it sits in.
+ * Workstreams left with no task are dropped.
+ */
+export function planWorkstreams(
+  project: DashboardProject,
+): Array<{ readonly workstream: DashboardProject["workstreams"][number]; tasks: DashboardTask[] }> {
+  const entries = project.workstreams
+    .map((workstream) => ({ workstream, tasks: workstreamTasks(project, workstream) }))
+    .filter((entry) => entry.tasks.length > 0);
+  const epicIds = new Set(entries.map((entry) => entry.workstream.id));
+  return entries
+    .map((entry) => ({
+      workstream: entry.workstream,
+      tasks: entry.tasks.filter((task) => !epicIds.has(task.id) || task.id === entry.workstream.id),
+    }))
+    .filter((entry) => entry.tasks.length > 0);
+}
+
+/**
+ * How many projects on Home open their workstreams by default. The rest show their workstream rows
+ * collapsed, so the first paint draws a screenful rather than every task of every project.
+ */
+export const EAGER_PROJECTS = 2;
+
+/**
+ * Home's order of products: what needs a decision first, then work that is moving, then queued
+ * work, then finished work. Projects with no tasks at all are returned apart as `idle`, for one
+ * trailing line. The order inside a rank is the snapshot's.
+ */
+export function orderProducts(
+  products: ReadonlyArray<ScopedProject>,
+  all: ReadonlyArray<ScopedProject>,
+): { readonly ordered: ScopedProject[]; readonly idle: ScopedProject[] } {
+  const rank = (scoped: ScopedProject): number | null => {
+    const tasks = projectTasks(all, scoped);
+    if (scoped.project.attention.length > 0 || tasks.some((t) => t.attentionIds.length > 0))
+      return 0;
+    if (tasks.length === 0) return scoped.project.omittedTaskCount > 0 ? 2 : null;
+    const open = tasks.filter((task) => task.status !== "done");
+    if (
+      open.some(
+        (task) =>
+          task.status === "working" ||
+          task.status === "review" ||
+          (task.movement.state === "measured" && (task.movement.doneDelta ?? 0) > 0),
+      )
+    )
+      return 1;
+    return open.length > 0 ? 2 : 3;
+  };
+  const ranked = products.map((scoped, index) => ({ scoped, index, rank: rank(scoped) }));
+  return {
+    ordered: ranked
+      .filter((entry) => entry.rank !== null)
+      .toSorted((a, b) => a.rank! - b.rank! || a.index - b.index)
+      .map((entry) => entry.scoped),
+    idle: ranked.filter((entry) => entry.rank === null).map((entry) => entry.scoped),
+  };
 }
 
 /** A project's tasks and those of its subprojects, for its own line on Home. */
