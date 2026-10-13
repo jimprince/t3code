@@ -1,0 +1,8 @@
+name = "fork-dashboard-v3-14-connected-decisions"
+subject = "fix(dashboard): preserve VM decisions across connected hosts"
+class = "product"
+purpose = "preserve VM decisions across connected hosts"
+retire_when = "The dashboard-v3 series is intentionally dropped or replaced by equivalent upstream behavior."
+depends_on = ["fork-dashboard-v3-13-older-host-cache"]
+roles = []
+note = "Replayed independently from live source 2ad3bfce0dce096a8cd365bb54a168cc228c2888; excludes the Chief of Staff tray series."
