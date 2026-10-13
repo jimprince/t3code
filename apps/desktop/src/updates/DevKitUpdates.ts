@@ -61,6 +61,15 @@ export interface DevKitPrebuildStatus {
   readonly error: string | null;
 }
 
+/** Fixed managed slots only; another development checkout must not drive this kit. */
+export const isManagedDevKitCheckout = (
+  rootDir: string,
+  homeDirectory: string,
+  path: Pick<DesktopEnvironment.DesktopEnvironment["Service"]["path"], "join">,
+): boolean =>
+  rootDir === path.join(homeDirectory, "Developer", "t3code-dev") ||
+  rootDir === path.join(homeDirectory, "Developer", ".t3-code-dev-prepared", "t3code-dev");
+
 /** Only the kit's own app qualifies: a dev app from any other checkout must not rebuild the kit's. */
 export const resolve = (
   environment: DesktopEnvironment.DesktopEnvironment["Service"],
@@ -71,7 +80,7 @@ export const resolve = (
     if (
       environment.platform !== "darwin" ||
       !environment.isDevelopment ||
-      environment.rootDir !== path.join(homeDirectory, "Developer", "t3code-dev")
+      !isManagedDevKitCheckout(environment.rootDir, homeDirectory, path)
     ) {
       return Option.none<DevKit>();
     }
