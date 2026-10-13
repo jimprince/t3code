@@ -34,6 +34,8 @@ export interface DashboardUi {
   readonly openProject: (scoped: ScopedProject) => void;
   readonly summaryFor: (scoped: ScopedProject) => OrchestratorSummary | null;
   readonly sourceHealth: (sourceId: string) => SourceHealth | null;
+  /** When a source last succeeded; null when it never has or is not in the snapshot. */
+  readonly sourceLastSuccessAt: (sourceId: string) => string | null;
   readonly isCollapsed: (key: string, defaultCollapsed: boolean) => boolean;
   readonly toggleCollapsed: (key: string) => void;
   /** Changes since this device last looked; null on a first visit, when there is nothing to compare. */
