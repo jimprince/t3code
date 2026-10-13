@@ -10,6 +10,7 @@ import * as NodeUtil from "node:util";
 
 import type * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import {
+  reduceDesktopUpdateStateOnDownloadFailure,
   reduceDesktopUpdateStateOnNoUpdate,
   reduceDesktopUpdateStateOnUpdateAvailable,
 } from "./updateMachine.ts";
@@ -47,6 +48,17 @@ export interface DevKitStatus {
   readonly branch: string;
   readonly needsUpdate: boolean;
   readonly workerRunning: boolean;
+  /** The kit's background prebuild of the next tree; null from a kit that does not report one. */
+  readonly prebuild: DevKitPrebuildStatus | null;
+}
+
+export interface DevKitPrebuildStatus {
+  readonly state: "idle" | "building" | "ready" | "failed";
+  /** `ready to switch:` (full SHA), the only tree a switch would launch. */
+  readonly readySha: string | null;
+  /** `prebuild revision:` (full SHA), the tree being or last built. */
+  readonly revision: string | null;
+  readonly error: string | null;
 }
 
 /** Only the kit's own app qualifies: a dev app from any other checkout must not rebuild the kit's. */
@@ -103,6 +115,21 @@ export function parseDevKitStatus(output: string): (DevKitStatus & { fetched: bo
     liveSha: short(live?.[1]),
     needsUpdate: needs[1] === "yes",
     workerRunning: output.match(/update worker:\s+(\w+)/)?.[1] === "running",
+    prebuild: parsePrebuild(output),
+  };
+}
+
+function parsePrebuild(output: string): DevKitPrebuildStatus | null {
+  const state = output.match(/^prebuild state:\s+(idle|building|ready|failed)\b/m)?.[1];
+  if (!state) return null;
+  const sha = (label: string) =>
+    output.match(new RegExp(`^${label}:\\s+([0-9a-f]{40})\\b`, "m"))?.[1] ?? null;
+  const error = output.match(/^prebuild error:\s+(.+)$/m)?.[1]?.trim();
+  return {
+    state: state as DevKitPrebuildStatus["state"],
+    readySha: sha("ready to switch"),
+    revision: sha("prebuild revision"),
+    error: error && error !== "none" ? error : null,
   };
 }
 
@@ -114,6 +141,17 @@ export interface DevKitVerdict {
   readonly behind: boolean;
   /** origin differs from this build only in files the kit hot-reloads without a restart. */
   readonly hotReload: boolean;
+  /** How far the kit's background prebuild of origin's tip has got; null when it has no say. */
+  readonly prebuild: DevKitPrebuildVerdict | null;
+}
+
+export interface DevKitPrebuildVerdict {
+  /** `ready` only when the prepared tree is origin's current tip; an older one is `stale`. */
+  readonly kind: "ready" | "building" | "stale" | "failed";
+  readonly sha: string | null;
+  readonly error: string | null;
+  /** What the kit's log says it is doing, while building. */
+  readonly detail: string | null;
 }
 
 const sameCommit = (a: string, b: string) => a.startsWith(b) || b.startsWith(a);
@@ -143,43 +181,119 @@ export function decideVerdict(
   const behind =
     builtSha !== null && liveSha !== null ? !sameCommit(builtSha, liveSha) : status.needsUpdate;
   const hotReload = behind && changedPaths !== null && changedPaths.every(isHotReloadPath);
-  return { branch: status.branch, builtSha, liveSha, behind: behind && !hotReload, hotReload };
+  return {
+    branch: status.branch,
+    builtSha,
+    liveSha,
+    behind: behind && !hotReload,
+    hotReload,
+    prebuild: behind && !hotReload ? decidePrebuild(status, length) : null,
+  };
 }
 
-/** Reads the verdict for a status, asking git what origin changed only when the SHAs differ. */
-export const evaluateStatus = (kit: DevKit, status: DevKitStatus): Effect.Effect<DevKitVerdict> =>
+// A prepared tree counts as ready only for origin's current tip; anything older is superseded.
+function decidePrebuild(status: DevKitStatus, length: number): DevKitPrebuildVerdict | null {
+  const { prebuild, liveSha } = status;
+  if (prebuild === null) return null;
+  const ready = prebuild.readySha ?? (prebuild.state === "ready" ? prebuild.revision : null);
+  const short = (sha: string | null) => (sha ? sha.slice(0, length) : null);
+  if (ready !== null) {
+    return liveSha !== null && sameCommit(ready, liveSha)
+      ? { kind: "ready", sha: short(ready), error: null, detail: null }
+      : { kind: "stale", sha: short(ready), error: null, detail: null };
+  }
+  if (prebuild.state === "building") {
+    return {
+      kind: "building",
+      sha: short(prebuild.revision) ?? liveSha,
+      error: null,
+      detail: null,
+    };
+  }
+  if (prebuild.state === "failed") {
+    return {
+      kind: "failed",
+      sha: short(prebuild.revision) ?? liveSha,
+      error: prebuild.error ?? "The background build failed.",
+      detail: null,
+    };
+  }
+  return null;
+}
+
+/**
+ * Reads the verdict for a status, asking git what origin changed only when the SHAs differ and,
+ * while a prebuild runs, the kit's log for its current step (only if the log is still moving).
+ */
+export const evaluateStatus = (
+  kit: DevKit,
+  status: DevKitStatus,
+  nowMs: number,
+): Effect.Effect<DevKitVerdict> =>
   Effect.gen(function* () {
-    const first = decideVerdict(status, kit.appSha, null);
-    if (!first.behind || kit.appSha === null || status.liveSha === null) return first;
-    const changed = yield* git(kit.checkout, [
-      "diff",
-      "--name-only",
-      kit.appSha,
-      status.liveSha,
-    ]).pipe(Effect.option);
-    return Option.isNone(changed)
-      ? first
-      : decideVerdict(status, kit.appSha, changed.value.split("\n").filter(Boolean));
+    let verdict = decideVerdict(status, kit.appSha, null);
+    if (verdict.behind && kit.appSha !== null && status.liveSha !== null) {
+      const changed = yield* git(kit.checkout, [
+        "diff",
+        "--name-only",
+        kit.appSha,
+        status.liveSha,
+      ]).pipe(Effect.option);
+      if (Option.isSome(changed)) {
+        verdict = decideVerdict(status, kit.appSha, changed.value.split("\n").filter(Boolean));
+      }
+    }
+    if (verdict.prebuild?.kind !== "building") return verdict;
+    const log = Option.getOrNull(yield* readLog(kit, 0));
+    const step =
+      log !== null && nowMs - log.mtimeMs < STUCK_AFTER_MS ? summarizeKitLog(log.text).step : null;
+    return { ...verdict, prebuild: { ...verdict.prebuild, detail: step } };
   });
 
-/** The state the button shows for one verdict; both SHAs are in the message. */
+/**
+ * The state the button shows for one verdict; both SHAs are in the message. A ready prebuild is
+ * the one-click "available" update; building and stale ones offer no action (the kit is working
+ * on it); a failed one reuses the download-failure state, whose button retries.
+ */
 export function reduceStateOnDevKitVerdict(
   state: DesktopUpdateState,
   verdict: DevKitVerdict,
   checkedAt: string,
 ): DesktopUpdateState {
-  const { liveSha, builtSha } = verdict;
+  const { liveSha, builtSha, prebuild } = verdict;
   const origin = `origin/${verdict.branch}`;
+  const available = reduceDesktopUpdateStateOnUpdateAvailable(state, liveSha ?? origin, checkedAt);
+  const dev = { updateSource: "dev-kit" } as const;
+  if (verdict.behind && prebuild?.kind === "ready") {
+    return { ...available, ...dev, message: `Ready: switch to ${liveSha}.` };
+  }
+  if (verdict.behind && prebuild?.kind === "failed") {
+    return {
+      ...reduceDesktopUpdateStateOnDownloadFailure(
+        available,
+        `Preparing ${prebuild.sha} failed: ${prebuild.error}`,
+      ),
+      ...dev,
+    };
+  }
+  if (verdict.behind && (prebuild?.kind === "building" || prebuild?.kind === "stale")) {
+    const message =
+      prebuild.kind === "building"
+        ? `Preparing ${prebuild.sha} in the background${prebuild.detail ? `: ${prebuild.detail}` : ""}.`
+        : `Preparing ${liveSha ?? origin}: the prepared build (${prebuild.sha}) is for an older commit.`;
+    return { ...available, ...dev, status: "idle", message };
+  }
   if (verdict.behind) {
     return {
-      ...reduceDesktopUpdateStateOnUpdateAvailable(state, liveSha ?? origin, checkedAt),
+      ...available,
+      ...dev,
       message: `${origin} is at ${liveSha ?? "a newer commit"}, ahead of this build${builtSha ? ` (${builtSha})` : ""}.`,
     };
   }
   const message = verdict.hotReload
     ? `Up to date: ${origin} is at ${liveSha}, which differs from this build (${builtSha}) only in web or docs files the kit hot-reloads.`
     : `Up to date: ${origin}${(liveSha ?? builtSha) ? ` is at ${liveSha ?? builtSha}, the commit this build was made from` : " has not moved past this build"}.`;
-  return { ...reduceDesktopUpdateStateOnNoUpdate(state, checkedAt), message };
+  return { ...reduceDesktopUpdateStateOnNoUpdate(state, checkedAt), ...dev, message };
 }
 
 /** What a running rebuild is doing, from the kit's log text written since the update was pressed. */
@@ -207,6 +321,8 @@ const duration = (ms: number) => {
  * (or since the press, when it has not changed yet); past STUCK_AFTER_MS it says so plainly.
  */
 export function describeRebuild(input: {
+  /** A prepared tree is being switched to, not built. */
+  readonly switching?: boolean;
   readonly target: string | null;
   readonly step: string | null;
   readonly progress: string | null;
@@ -220,7 +336,9 @@ export function describeRebuild(input: {
     `${duration(input.elapsedMs)} elapsed`,
     `last activity ${duration(input.idleMs)} ago`,
   ];
-  const head = `Rebuilding T3 Code (Dev)${input.target ? ` at ${input.target}` : ""}: ${parts.join(" · ")}.`;
+  const head = input.switching
+    ? `Switching to ${input.target}… ${parts.join(" · ")}.`
+    : `Rebuilding T3 Code (Dev)${input.target ? ` at ${input.target}` : ""}: ${parts.join(" · ")}.`;
   return input.idleMs >= STUCK_AFTER_MS
     ? `${head} No log activity for ${duration(input.idleMs)}; it may be stuck. Log: ${input.logPath}`
     : `${head} The app quits and relaunches when it is done.`;

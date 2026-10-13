@@ -306,6 +306,8 @@ function makeKitHome(options: {
   readonly failBuild?: boolean;
   /** The kit worker never finishes: --status reports it running. */
   readonly stuck?: boolean;
+  /** Extra `--status` lines, e.g. the prebuild contract. */
+  readonly extraStatus?: ReadonlyArray<string>;
   /** Report the build the way newer kits do, as `verified app revision:` instead of `checkout:`. */
   readonly verified?: string;
   /** The checkout catches up on this --status call, as when the app relaunches after an overrun. */
@@ -326,6 +328,7 @@ if [ "$1" = "--status" ]; then
   echo "branch followed: live   fetched: yes"
   ${options.verified ? `echo "verified app revision: ${options.verified}"` : 'echo "checkout:        $head on live"'}
   echo "origin/live:  $tip"
+  ${(options.extraStatus ?? []).map((line) => `echo "${line}"`).join("\n  ") || "true"}
   echo "dev app running: yes   update worker: ${options.stuck ? "running" : "idle"}"
   if [ "$head" = "$tip" ]; then echo "needs update:    no"; else echo "needs update:    yes (automatic updater will apply it)"; fi
 else
@@ -361,6 +364,19 @@ fi
 const devKitHarness = (kit: ReturnType<typeof makeKitHome>) =>
   makeHarness({ environment: kit.environment, env: kit.env });
 
+const runUpdate = (updates: DesktopUpdates.DesktopUpdates["Service"]) =>
+  Effect.gen(function* () {
+    const finished = { value: false };
+    const fiber = yield* Effect.forkChild(
+      updates.startUpdate.pipe(Effect.tap(() => Effect.sync(() => (finished.value = true)))),
+    );
+    for (let attempt = 0; attempt < 200 && !finished.value; attempt += 1) {
+      yield* TestClock.adjust("10 seconds");
+      yield* Effect.promise(() => new Promise((resolve) => setTimeout(resolve, 20)));
+    }
+    return yield* Fiber.join(fiber);
+  });
+
 describe("DesktopUpdates in the Mac dev kit app", () => {
   it.effect("checks origin/live against the build and shows both short SHAs", () => {
     const kit = makeKitHome({ head: "abc1234", tip: "def5678" });
@@ -389,19 +405,6 @@ describe("DesktopUpdates in the Mac dev kit app", () => {
       Effect.ensuring(Effect.sync(() => NodeFS.rmSync(kit.home, { recursive: true, force: true }))),
     );
   });
-
-  const runUpdate = (updates: DesktopUpdates.DesktopUpdates["Service"]) =>
-    Effect.gen(function* () {
-      const finished = { value: false };
-      const fiber = yield* Effect.forkChild(
-        updates.startUpdate.pipe(Effect.tap(() => Effect.sync(() => (finished.value = true)))),
-      );
-      for (let attempt = 0; attempt < 200 && !finished.value; attempt += 1) {
-        yield* TestClock.adjust("10 seconds");
-        yield* Effect.promise(() => new Promise((resolve) => setTimeout(resolve, 20)));
-      }
-      return yield* Fiber.join(fiber);
-    });
 
   it.effect("updates by asking the kit to rebuild and reports the result", () => {
     const kit = makeKitHome({ head: "abc1234", tip: "def5678" });
@@ -447,11 +450,22 @@ describe("DesktopUpdates in the Mac dev kit app", () => {
         for (let attempt = 0; attempt < 100 && kit.requests() === 0; attempt += 1) {
           yield* settle;
         }
+        // Let the update loop reach its first sleep before the clock moves.
+        for (let attempt = 0; attempt < 10; attempt += 1) {
+          yield* settle;
+        }
         kit.appendLog(
           "\n==> Installing dependencies (vp i)\nProgress: resolved 12, reused 10, downloaded 0\n",
         );
         yield* TestClock.adjust("5 seconds");
-        yield* settle;
+        for (
+          let attempt = 0;
+          attempt < 100 &&
+          !messages().some((message) => message.includes("Installing dependencies"));
+          attempt += 1
+        ) {
+          yield* settle;
+        }
         const live = messages().findLast((message) => message.includes("Installing dependencies"));
         assert.include(live, "resolved 12, reused 10");
         assert.include(live, "5s elapsed");
@@ -578,9 +592,9 @@ function makeKitCheckout(home: string, file: string) {
   NodeFS.writeFileSync(NodePath.join(checkout, file), "b");
   git("add", "-A");
   git("commit", "-q", "-m", "b");
-  const tip = git("rev-parse", "--short=9", "HEAD");
+  const tipFull = git("rev-parse", "HEAD");
   git("checkout", "-q", "--detach", started);
-  return { started: started.slice(0, 9), tip };
+  return { started: started.slice(0, 9), tip: tipFull.slice(0, 9), tipFull };
 }
 
 const checkOnce = (harness: ReturnType<typeof devKitHarness>) =>
@@ -592,30 +606,34 @@ const checkOnce = (harness: ReturnType<typeof devKitHarness>) =>
     }),
   ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
 
-describe("DesktopUpdates dev kit Check trusts the app's own commit", () => {
-  const withKit = (
-    file: string,
-    options: (c: { started: string; tip: string }) => Parameters<typeof makeKitHome>[0],
-    assertState: (state: DesktopUpdateState, c: { started: string; tip: string }) => void,
-  ) => {
-    const scratch = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-devkit-git-"));
-    const commits = makeKitCheckout(scratch, file);
-    const kit = makeKitHome(options(commits));
-    // The kit home is separate; move the checkout under it so the app finds its own HEAD.
-    NodeFS.cpSync(NodePath.join(scratch, "Developer"), NodePath.join(kit.home, "Developer"), {
-      recursive: true,
-    });
-    return checkOnce(devKitHarness(kit)).pipe(
-      Effect.map((state) => assertState(state, commits)),
-      Effect.ensuring(
-        Effect.sync(() => {
-          NodeFS.rmSync(kit.home, { recursive: true, force: true });
-          NodeFS.rmSync(scratch, { recursive: true, force: true });
-        }),
-      ),
-    );
-  };
+type Commits = { started: string; tip: string; tipFull: string };
 
+const withKit = (
+  file: string,
+  options: (c: Commits) => Parameters<typeof makeKitHome>[0],
+  assertState: (state: DesktopUpdateState, c: Commits) => void,
+  prepare: (kit: ReturnType<typeof makeKitHome>) => void = () => undefined,
+) => {
+  const scratch = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-devkit-git-"));
+  const commits = makeKitCheckout(scratch, file);
+  const kit = makeKitHome(options(commits));
+  prepare(kit);
+  // The kit home is separate; move the checkout under it so the app finds its own HEAD.
+  NodeFS.cpSync(NodePath.join(scratch, "Developer"), NodePath.join(kit.home, "Developer"), {
+    recursive: true,
+  });
+  return checkOnce(devKitHarness(kit)).pipe(
+    Effect.map((state) => assertState(state, commits)),
+    Effect.ensuring(
+      Effect.sync(() => {
+        NodeFS.rmSync(kit.home, { recursive: true, force: true });
+        NodeFS.rmSync(scratch, { recursive: true, force: true });
+      }),
+    ),
+  );
+};
+
+describe("DesktopUpdates dev kit Check trusts the app's own commit", () => {
   it.effect(
     "is up to date when the kit's verified revision is stale but the app is at origin",
     () =>
@@ -662,5 +680,145 @@ describe("DesktopUpdates dev kit Check trusts the app's own commit", () => {
         assert.include(state.message, c.tip);
       },
     ),
+  );
+});
+
+describe("DesktopUpdates dev kit prebuild states", () => {
+  const stale = "ffe290adc2629b42f4a9ca4d3a3c40e6a51f7e05";
+  const base = (c: Commits, extraStatus: ReadonlyArray<string>) => ({
+    head: "ffe290adc",
+    tip: c.tip,
+    verified: stale,
+    extraStatus,
+  });
+  const file = "apps/desktop/src/x.ts";
+
+  it.effect("says it is preparing the tip in the background, with the kit's current step", () =>
+    withKit(
+      file,
+      (c) =>
+        base(c, [
+          "ready to switch: none",
+          "prebuild state: building",
+          `prebuild revision: ${c.tipFull}`,
+          "prebuild error: none",
+        ]),
+      (state, c) => {
+        assert.equal(state.status, "idle");
+        assert.equal(
+          state.message,
+          `Preparing ${c.tip} in the background: Installing dependencies (vp i).`,
+        );
+        assert.equal(state.updateSource, "dev-kit");
+      },
+      (kit) => kit.appendLog("==> Installing dependencies (vp i)\n"),
+    ),
+  );
+
+  it.effect("offers the switch only when the ready tree is origin's current tip", () =>
+    withKit(
+      file,
+      (c) =>
+        base(c, [
+          `ready to switch: ${c.tipFull}`,
+          "prebuild state: ready",
+          `prebuild revision: ${c.tipFull}`,
+          "prebuild error: none",
+        ]),
+      (state, c) => {
+        assert.equal(state.status, "available");
+        assert.equal(state.availableVersion, c.tip);
+        assert.equal(state.message, `Ready: switch to ${c.tip}.`);
+      },
+    ),
+  );
+
+  it.effect("never shows a ready tree for an older commit as ready", () =>
+    withKit(
+      file,
+      (c) =>
+        base(c, [
+          `ready to switch: ${c.started.padEnd(40, "0")}`,
+          "prebuild state: ready",
+          `prebuild revision: ${c.started.padEnd(40, "0")}`,
+          "prebuild error: none",
+        ]),
+      (state, c) => {
+        assert.equal(state.status, "idle");
+        assert.include(state.message, "older commit");
+        assert.notInclude(state.message, "Ready");
+        assert.include(state.message, c.tip);
+      },
+    ),
+  );
+
+  it.effect("shows the sanitized failure and keeps the button as the retry", () =>
+    withKit(
+      file,
+      (c) =>
+        base(c, [
+          "ready to switch: none",
+          "prebuild state: failed",
+          `prebuild revision: ${c.tipFull}`,
+          "prebuild error: vp i exited 1",
+        ]),
+      (state, c) => {
+        assert.equal(state.status, "available");
+        assert.equal(state.errorContext, "download");
+        assert.equal(state.canRetry, true);
+        assert.equal(state.message, `Preparing ${c.tip} failed: vp i exited 1`);
+      },
+    ),
+  );
+
+  it.effect("falls back to the plain behind message when the kit reports no prebuild", () =>
+    withKit(
+      file,
+      (c) => base(c, []),
+      (state, c) => {
+        assert.equal(state.status, "available");
+        assert.equal(
+          state.message,
+          `origin/live is at ${c.tip}, ahead of this build (${c.started}).`,
+        );
+      },
+    ),
+  );
+
+  it.effect(
+    "switching to a ready tree says so on the card and ends when the app is current",
+    () => {
+      const tip = "def567890";
+      const kit = makeKitHome({
+        head: "abc1234",
+        tip,
+        extraStatus: [
+          `ready to switch: ${tip.padEnd(40, "0")}`,
+          "prebuild state: ready",
+          `prebuild revision: ${tip.padEnd(40, "0")}`,
+          "prebuild error: none",
+        ],
+      });
+      const harness = devKitHarness(kit);
+      return Effect.scoped(
+        Effect.gen(function* () {
+          const updates = yield* DesktopUpdates.DesktopUpdates;
+          yield* updates.configure;
+          const checked = yield* updates.check("test");
+          assert.equal(checked.state.message, `Ready: switch to ${tip}.`);
+          const result = yield* runUpdate(updates);
+          assert.equal(kit.requests(), 1);
+          assert.equal(result.completed, true);
+          const card = harness.sentStates.find((state) => state.updatePhase === "installing");
+          assert.include(card?.message, `Switching to ${tip}…`);
+          assert.notInclude(card?.message, "Rebuilding");
+        }),
+      ).pipe(
+        Effect.provide(Layer.merge(TestClock.layer(), harness.layer)),
+        Effect.ensuring(
+          Effect.sync(() => NodeFS.rmSync(kit.home, { recursive: true, force: true })),
+        ),
+      );
+    },
   );
 });

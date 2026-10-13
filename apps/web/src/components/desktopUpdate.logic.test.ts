@@ -58,23 +58,20 @@ describe("desktop update button state", () => {
     expect(getDesktopUpdateButtonTooltip(state)).toContain("Click to retry");
   });
 
-  it("tells the commit comparison the Mac dev build reports, but not a failed download", () => {
+  it("shows the Mac dev kit's own message as the tooltip, only for the dev kit", () => {
     const comparison = "origin/live is at def5678, ahead of this build (abc1234).";
+    const dev = { ...baseState, updateSource: "dev-kit" as const };
     expect(
       getDesktopUpdateButtonTooltip({
-        ...baseState,
+        ...dev,
         status: "available",
         availableVersion: "def5678",
         message: comparison,
       }),
     ).toBe(comparison);
     expect(
-      getDesktopUpdateButtonTooltip({
-        ...baseState,
-        status: "up-to-date",
-        message: "Up to date at abc1234.",
-      }),
-    ).toBe("Up to date at abc1234.");
+      getDesktopUpdateButtonTooltip({ ...dev, status: "idle", message: "Preparing def5678." }),
+    ).toBe("Preparing def5678.");
     expect(
       getDesktopUpdateButtonTooltip({
         ...baseState,

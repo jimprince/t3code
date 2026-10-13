@@ -25,6 +25,7 @@ describe("parseDevKitStatus", () => {
       liveSha: "def5678",
       needsUpdate: true,
       workerRunning: true,
+      prebuild: null,
     });
   });
 
@@ -49,6 +50,7 @@ needs update:    yes (automatic updater will apply it)
       liveSha: null,
       needsUpdate: true,
       workerRunning: true,
+      prebuild: null,
     });
   });
 
@@ -146,5 +148,35 @@ needs update:    yes (automatic updater will apply it)
       decideVerdict(behind, appSha, ["apps/web/src/a.tsx", "apps/desktop/b.ts"]).behind,
       true,
     );
+  });
+});
+
+describe("prebuild status lines", () => {
+  const full = "a".repeat(40);
+  const lines = (state: string, ready: string, error: string) => `origin/live:  ${"a".repeat(9)}
+ready to switch: ${ready}
+prebuild state: ${state}
+prebuild revision: ${full}
+prebuild error: ${error}
+needs update:    yes
+`;
+
+  it("reads the four additive lines, and null prebuild from a kit without them", () => {
+    assert.deepEqual(parseDevKitStatus(lines("failed", "none", "vp i exited 1"))?.prebuild, {
+      state: "failed",
+      readySha: null,
+      revision: full,
+      error: "vp i exited 1",
+    });
+    assert.equal(parseDevKitStatus(lines("ready", full, "none"))?.prebuild?.readySha, full);
+    assert.equal(parseDevKitStatus(status("yes", "def5678"))?.prebuild, null);
+  });
+
+  it("calls a prepared tree ready only when it is origin's tip", () => {
+    const behind = (ready: string) =>
+      decideVerdict(parseDevKitStatus(lines("ready", ready, "none"))!, "b".repeat(40), null)
+        .prebuild?.kind;
+    assert.equal(behind(full), "ready");
+    assert.equal(behind("c".repeat(40)), "stale");
   });
 });

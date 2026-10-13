@@ -296,6 +296,8 @@ export interface DesktopUpdateState {
   downloadTransferredBytes?: number;
   downloadTotalBytes?: number;
   systemIdleSeconds?: number;
+  /** Set when the Mac dev kit, not electron-updater, supplies the update; `message` then explains Check. */
+  updateSource?: "dev-kit";
   enabled: boolean;
   status: DesktopUpdateStatus;
   channel: DesktopUpdateChannel;
@@ -331,6 +333,7 @@ export const DesktopUpdateStateSchema = Schema.Struct({
   downloadTransferredBytes: Schema.optionalKey(Schema.Number),
   downloadTotalBytes: Schema.optionalKey(Schema.Number),
   systemIdleSeconds: Schema.optionalKey(Schema.Number),
+  updateSource: Schema.optionalKey(Schema.Literal("dev-kit")),
   enabled: Schema.Boolean,
   status: DesktopUpdateStatusSchema,
   channel: DesktopUpdateChannelSchema,
