@@ -11,22 +11,22 @@ import {
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as EventSink from "../orchestration-v2/EventSink.ts";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as Registry from "../orchestration-v2/ProviderAdapterRegistry.ts";
-import { makeOrchestratorV2ReplayLayerWithRegistry } from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
-import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
+import * as ProviderReplayHarness from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
+import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import { readMetadata, writeMetadata } from "./MetadataStore.ts";
 
-const runtime = makeOrchestratorV2ReplayLayerWithRegistry(
+const runtime = ProviderReplayHarness.layerWithRegistry(
   { name: "creation-metadata" },
-  Registry.makeLayer([]),
-  { databaseLayer: SqlitePersistenceMemory, runEffectWorker: false },
+  Registry.layerFromAdapters([]),
+  { databaseLayer: SqlitePersistence.layerMemory, runEffectWorker: false },
 );
 const layer = Layer.mergeAll(runtime, ProjectionStore.layer).pipe(
-  Layer.provideMerge(SqlitePersistenceMemory),
+  Layer.provideMerge(SqlitePersistence.layerMemory),
 );
 it.effect(
   "seeds a delegate before its separately persisted task and preserves explicit metadata on replay",
@@ -154,6 +154,6 @@ it.effect(
           },
         ],
       });
-      assert.equal(yield* readMetadata(sql, nativeId), undefined);
+      assert.equal((yield* readMetadata(sql, nativeId))?.parentThreadId, parentId);
     }).pipe(Effect.provide(layer)),
 );
