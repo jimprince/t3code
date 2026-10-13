@@ -154,6 +154,6 @@ it.effect(
           },
         ],
       });
-      assert.equal(yield* readMetadata(sql, nativeId), undefined);
+      assert.equal((yield* readMetadata(sql, nativeId))?.parentThreadId, parentId);
     }).pipe(Effect.provide(layer)),
 );
