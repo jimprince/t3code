@@ -1802,23 +1802,29 @@ function renderFeedEntry(
               "min-w-0 gap-2",
               isAgentRow ? "w-full border-l-2 border-border pl-3" : "rounded-[20px] px-3.5 py-2.5",
             )}
-            style={isAgentRow ? null : {
-              backgroundColor: userBubbleColor,
-              maxWidth:
-                props.usesNativeWorkspaceColumns && Platform.OS === "ios" && !Platform.isPad
-                  ? "85%"
-                  : props.userBubbleMaxWidth,
-              ...(hasReviewCommentContext
-                ? { width: props.reviewCommentBubbleWidth }
-                : hasWideBlock
-                  ? {
-                      width:
-                        props.usesNativeWorkspaceColumns && Platform.OS === "ios" && !Platform.isPad
-                          ? "85%"
-                          : props.userBubbleMaxWidth,
-                    }
-                  : null),
-            }}
+            style={
+              isAgentRow
+                ? null
+                : {
+                    backgroundColor: userBubbleColor,
+                    maxWidth:
+                      props.usesNativeWorkspaceColumns && Platform.OS === "ios" && !Platform.isPad
+                        ? "85%"
+                        : props.userBubbleMaxWidth,
+                    ...(hasReviewCommentContext
+                      ? { width: props.reviewCommentBubbleWidth }
+                      : hasWideBlock
+                        ? {
+                            width:
+                              props.usesNativeWorkspaceColumns &&
+                              Platform.OS === "ios" &&
+                              !Platform.isPad
+                                ? "85%"
+                                : props.userBubbleMaxWidth,
+                          }
+                        : null),
+                  }
+            }
           >
             {isAgentRow ? (
               <AgentMessageSender
