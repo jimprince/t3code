@@ -23,6 +23,9 @@ import {
 } from "./contracts.js";
 
 export const RPC_METHODS = {
+  harnessSnapshot: WS_METHODS.harnessSnapshot,
+  harnessRoutineKindSet: WS_METHODS.harnessRoutineKindSet,
+  scheduledTasksList: WS_METHODS.scheduledTasksList,
   "thread.session.generation": "thread.session.generation",
   "thread.resume": "thread.resume",
   "thread.stop.receipt": "thread.stop.receipt",

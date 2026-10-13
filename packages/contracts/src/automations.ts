@@ -1,3 +1,4 @@
+import { RoutineKind } from "./routineKind.ts";
 import * as Cron from "effect/Cron";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
@@ -127,6 +128,7 @@ export const AutomationDefinition = Schema.Struct({
   enabled: Schema.Boolean,
   /** Orchestrator the automation reports to; new threads nest under it. */
   ownerThreadId: Schema.optionalKey(ThreadId),
+  routineKind: Schema.optional(RoutineKind),
   /** Empty means the automation only runs by hand. */
   triggers: Schema.Array(AutomationTrigger).check(Schema.isMaxLength(10)),
   actions: Schema.Array(AutomationAction).check(Schema.isMinLength(1), Schema.isMaxLength(10)),
