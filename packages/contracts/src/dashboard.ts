@@ -3,6 +3,7 @@ import { IsoDateTime, NonNegativeInt, ThreadId } from "./baseSchemas.ts";
 
 export const DashboardSource = Schema.Struct({
   id: Schema.String,
+  detail: Schema.optionalKey(Schema.NullOr(Schema.String)),
   kind: Schema.Literals(["local", "gitea", "plan", "release"]),
   observedAt: IsoDateTime,
   lastSuccessAt: Schema.NullOr(IsoDateTime),
