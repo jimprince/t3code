@@ -3,6 +3,7 @@ import type {
   HarnessRun,
   HarnessSnapshot,
   HarnessThreadLink,
+  HarnessTrend,
 } from "@t3tools/contracts";
 import { formatLocalWhen } from "@t3tools/shared/localTime";
 import {
@@ -13,6 +14,7 @@ import {
   type ThreadDisplayStatus,
 } from "./orchestrators.ts";
 import { supervisionThreadKey } from "./forkNesting.ts";
+import { formatHarnessSchedule } from "./harnessSchedule.ts";
 
 /** The Harness tab polls its snapshot this often while it is visible. */
 export const HARNESS_REFRESH_INTERVAL_MS = 60_000;
@@ -73,13 +75,14 @@ export interface HarnessCheckView {
   readonly whatItChecks: string | null;
   readonly lifecycleLabel: "Standing" | "Conditional" | null;
   readonly contextLabel: "Persistent" | "New instance per run" | null;
+  /** The schedule in words ("Daily 01:00", "Every 30 min"), never the stored JSON. */
   readonly schedule: string;
-  /** "Conditional · New instance per run · every 30 min". */
+  /** "Conditional · New instance per run · Every 30 min". */
   readonly classification: string;
   /** "last 13:40 · next 14:10 · Not currently live". */
   readonly timing: string;
-  /** "errors 2.5 / run (1 2 3 4)" or "errors unknown". */
-  readonly errorsText: string;
+  /** "errors 2.5 / run (1 2 3 4)"; null when no run reported a count, so a row says nothing rather than "unknown". */
+  readonly errorsText: string | null;
   /** The row's whole story for a screen reader: name, state, lateness, classification, timing, errors. */
   readonly spokenLabel: string;
   /** No owner classified it; listed apart from the Harness checks. */
@@ -207,22 +210,34 @@ export function classifyHarnessCheck(
   };
 }
 
-function errorsView(routine: HarnessRoutine): HarnessErrorsView {
-  const { errorsPerRun, failedExecutions } = routine;
+/** A trend as words: "unknown" when no run reported a count, otherwise "3.5 / run" and "1 2 3 ?". */
+export function describeHarnessTrend(trend: HarnessTrend): {
+  readonly known: boolean;
+  readonly label: string;
+  readonly trend: string;
+  /** A count above zero on every recent known run, with at least two to say so. */
+  readonly everyRun: boolean;
+} {
   // `recent` is newest first; the trend reads left to right in time.
-  const newest = errorsPerRun.recent.slice(0, TREND_RUNS);
+  const newest = trend.recent.slice(0, TREND_RUNS);
   const recent = newest.map((_, index) => newest[newest.length - 1 - index] ?? null);
-  const known = errorsPerRun.knownSamples > 0;
-  const knownCounts = errorsPerRun.recent.filter((count): count is number => count !== null);
+  const knownCounts = trend.recent.filter((count): count is number => count !== null);
   return {
-    known,
+    known: trend.knownSamples > 0,
     label:
-      errorsPerRun.average === null
+      trend.average === null
         ? "unknown"
-        : `${Number.isInteger(errorsPerRun.average) ? errorsPerRun.average : errorsPerRun.average.toFixed(1)} / run`,
+        : `${Number.isInteger(trend.average) ? trend.average : trend.average.toFixed(1)} / run`,
     trend: recent.map((count) => (count === null ? "?" : String(count))).join(" "),
     everyRun:
       knownCounts.length >= ERRORS_EVERY_RUN_MIN_SAMPLES && knownCounts.every((count) => count > 0),
+  };
+}
+
+function errorsView(routine: HarnessRoutine): HarnessErrorsView {
+  const { errorsPerRun, failedExecutions } = routine;
+  return {
+    ...describeHarnessTrend(errorsPerRun),
     failedLabel:
       failedExecutions.sampleSize === 0
         ? null
@@ -237,6 +252,8 @@ function runInstant(run: HarnessRun): number {
 /** What the client adds to the snapshots: environments whose last refresh failed or that are not connected. */
 export interface HarnessBuildOptions {
   readonly unreachable?: ReadonlySet<string>;
+  /** IANA zone schedules are shown in; defaults to the device zone. Tests pin it. */
+  readonly deviceZone?: string | undefined;
 }
 
 /** One row per check with every label the list and its details need, in sidebar order. */
@@ -298,7 +315,11 @@ export function buildHarnessChecks(
         state === "disabled" || routine.nextExpectedRun === null
           ? null
           : formatLocalWhen(Date.parse(routine.nextExpectedRun), now);
-      const classification = [lifecycleLabel, contextLabel, routine.scheduleOrTrigger]
+      const schedule = formatHarnessSchedule(routine.scheduleOrTrigger, {
+        now,
+        deviceZone: options.deviceZone,
+      });
+      const classification = [lifecycleLabel, contextLabel, schedule]
         .filter((part) => part !== null && part !== "")
         .join(" · ");
       const timing = [
@@ -308,14 +329,17 @@ export function buildHarnessChecks(
       ]
         .filter((part) => part !== null)
         .join(" · ");
-      const errorsText = `errors ${errors.label}${errors.known && errors.trend ? ` (${errors.trend})` : ""}`;
+      // No run reported a count: the row drops the text, and the details say it is unknown.
+      const errorsText = errors.known
+        ? `errors ${errors.label}${errors.trend ? ` (${errors.trend})` : ""}`
+        : null;
       return {
         key: routine.key,
         name: routine.name,
         whatItChecks: routine.whatItChecks,
         lifecycleLabel,
         contextLabel,
-        schedule: routine.scheduleOrTrigger,
+        schedule,
         classification,
         timing,
         errorsText,

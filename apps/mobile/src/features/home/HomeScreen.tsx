@@ -1284,7 +1284,11 @@ export function HomeScreen(props: HomeScreenProps) {
         ) : homeMode === "harness" ? (
           <View className="flex-1">
             {homeModeSelector}
-            <MobileHarnessList harnessRoots={harnessRoots} onSelectThread={props.onSelectThread} />
+            <MobileHarnessList
+              harnessRoots={harnessRoots}
+              threads={props.threads}
+              onSelectThread={props.onSelectThread}
+            />
           </View>
         ) : (
           <SwipeableScrollGateProvider enabled={swipeEnabled} activation={swipeRowActivation}>

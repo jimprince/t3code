@@ -380,6 +380,55 @@ describe("buildHarnessChecks", () => {
     );
   });
 
+  it("drops the errors text on a row whose runs never reported a count, and keeps it when known", () => {
+    const [unknown, known] = buildHarnessChecks(
+      [
+        snapshot([
+          routine({ key: "a", name: "A" }),
+          routine({
+            key: "b",
+            name: "B",
+            errorsPerRun: {
+              sampleSize: 3,
+              knownSamples: 3,
+              missingSamples: 0,
+              average: 0,
+              recent: [0, 0, 0],
+            },
+          }),
+        ]),
+      ],
+      NOW,
+    );
+    // Unknown is never shown as zero or green: the row says nothing, and the details say unknown.
+    expect(unknown?.errorsText).toBeNull();
+    expect(unknown?.errors.known).toBe(false);
+    expect(unknown?.spokenLabel).not.toContain("errors");
+    expect(known?.errorsText).toBe("errors 0 / run (0 0 0)");
+  });
+
+  it("shows the schedule in words on the row, never the stored JSON", () => {
+    const [check] = buildHarnessChecks(
+      [
+        snapshot([
+          routine({
+            scheduleOrTrigger: JSON.stringify([
+              {
+                type: "schedule",
+                schedule: { kind: "daily", time: "01:00", timeZone: "America/Edmonton" },
+              },
+            ]),
+          }),
+        ]),
+      ],
+      NOW,
+      { deviceZone: "America/Edmonton" },
+    );
+    expect(check?.schedule).toBe("Daily 01:00");
+    expect(check?.classification).toBe("Conditional · New instance per run · Daily 01:00");
+    expect(check?.spokenLabel).not.toMatch(/[{}[\]"]/);
+  });
+
   it("labels a per-run agent between runs and never a persistent one", () => {
     const [perRun, persistent, running] = buildHarnessChecks(
       [
