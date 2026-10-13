@@ -4329,7 +4329,11 @@ describe("CodexAdapterV2 post-settle continuation", () => {
               1,
             );
           }
-        }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
+        }).pipe(
+          Effect.provide(
+            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),
+          ),
+        ),
       ),
   );
 
