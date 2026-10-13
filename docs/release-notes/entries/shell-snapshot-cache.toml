@@ -1,0 +1,4 @@
+id = "shell-snapshot-cache"
+category = "performance"
+functionality = "thread sidebar"
+text = "Keep thread-list reads responsive by reusing unchanged thread snapshots between projection updates."
