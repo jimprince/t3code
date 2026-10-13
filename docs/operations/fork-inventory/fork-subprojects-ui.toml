@@ -22,3 +22,15 @@ id = "catchup-2908-subproject-mutation-guards"
 date = "2026-10-10"
 decided = "adapt"
 rationale = "Use upstream orchestration guards (#9786–#9791, #10298) for subproject/worker forward and reverse mutations. Preserve compact rows, rollup counts, breadcrumbs and explicit marking alongside nested creation/drop and reset entry points. Static sidebar/header/palette consumer review passed; composed CI remains required."
+
+[[decision]]
+id = "subproject-page-table-20261012"
+date = "2026-10-11"
+decided = "refresh-existing-concern"
+rationale = "The approved subproject table, folded count and phone header fit extend the existing subprojects UI concern. Keep them in this patch rather than adding a second page layout concern; settled grouping remains independently droppable above it."
+
+[[decision]]
+id = "catchup-r29-shared-subproject-rules"
+date = "2026-10-13"
+decided = "relocate"
+rationale = "Port main's table/progress/count behavior into r28's shared client-runtime rules and tests, retaining one implementation used by web and mobile."
