@@ -1,15 +1,22 @@
 import type { HarnessSnapshot } from "@t3tools/contracts";
-import type { Atom } from "effect/unstable/reactivity";
+import type { Atom } from "effect/reactivity";
 import type * as EnvironmentRegistry from "../connection/registry.ts";
+import { HARNESS_REFRESH_INTERVAL_MS } from "./harnessView.ts";
 import { createEnvironmentRpcQueryAtomFamily } from "./runtime.ts";
 
-/** @public Shared Harness query for the client UI; callers own mounted refreshes. */
+/**
+ * Shared Harness query for the client UI. It refreshes while a view observes it and drops its
+ * subscription when none does, so a hidden Harness tab costs nothing.
+ */
 export function createHarnessQuery<R, E>(
   runtime: Atom.AtomRuntime<EnvironmentRegistry.EnvironmentRegistry | R, E>,
 ) {
   return createEnvironmentRpcQueryAtomFamily(runtime, {
     label: "harness",
     tag: "harness.snapshot",
+    staleTimeMs: 30_000,
+    refreshIntervalMs: HARNESS_REFRESH_INTERVAL_MS,
+    idleTtlMs: 0,
   });
 }
 /** @public Joins the snapshot rows consumed by the client Harness view. */
