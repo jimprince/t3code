@@ -1,8 +1,17 @@
+import { useMemo } from "react";
+
 import { useDashboardUi } from "./context";
-import { formatClock, outcomesSince, rollup, topLevelProjects } from "./dashboard.logic";
+import {
+  EAGER_PROJECTS,
+  formatClock,
+  orderProducts,
+  outcomesSince,
+  rollup,
+  topLevelProjects,
+} from "./dashboard.logic";
 import { DecisionList } from "./decisions";
 import { BarLegend, OutcomeRow, SectionHeading, SectionMarker, UnknownValue } from "./parts";
-import { ProjectGroup, ReleaseLines, UtilityGroup } from "./plan";
+import { IdleProjects, ProjectGroup, ReleaseLines, UtilityGroup } from "./plan";
 
 /** "last hour 13 steps · 2 stalled · 1 replanned": the Plan's totals, only from what was measured. */
 export function PlanTotals() {
@@ -76,8 +85,11 @@ export function DoneHeading() {
 /** A: the Plan on the left (releases, projects, workstreams, tasks), the one Decisions feed on the right. */
 export function VariantA() {
   const { data, root, decisions, now } = useDashboardUi();
-  const { products, utilities } = topLevelProjects(data.projects);
-  const groups = root ? [root] : products;
+  const { utilities, ordered, idle } = useMemo(() => {
+    const { products, utilities } = topLevelProjects(data.projects);
+    return { utilities, ...orderProducts(products, data.projects) };
+  }, [data.projects]);
+  const groups = root ? [root] : ordered;
   const by = formatClock(
     new Date((data.asOf ? Date.parse(data.asOf) : now) + 3_600_000).toISOString(),
     now,
@@ -100,12 +112,19 @@ export function VariantA() {
           >
             <PlanTotals />
           </SectionHeading>
-          {groups.length === 0 && utilities.length === 0 ? (
+          {groups.length === 0 && idle.length === 0 && utilities.length === 0 ? (
             <div className="py-1 text-muted-foreground/80">No open work</div>
           ) : null}
-          {groups.map((scoped) => (
-            <ProjectGroup key={scoped.key} scoped={scoped} all={data.projects} showName={!root} />
+          {groups.map((scoped, index) => (
+            <ProjectGroup
+              key={scoped.key}
+              scoped={scoped}
+              all={data.projects}
+              showName={!root}
+              eager={root !== null || index < EAGER_PROJECTS}
+            />
           ))}
+          {root ? null : <IdleProjects projects={idle} />}
         </SectionMarker>
         {root ? null : <UtilityGroup utilities={utilities} all={data.projects} />}
       </div>
