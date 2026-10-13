@@ -1,3 +1,4 @@
+import { withReadTransaction } from "@t3tools/shared/nodeSqliteClient";
 import type {
   ApplicationStoredEvent,
   OrchestrationProjectShell,
@@ -46,7 +47,7 @@ export const loadShellSnapshotParts = <E1, E2, E3, E4>(input: {
   readonly latestSequence: Effect.Effect<number, E4>;
 }) =>
   Effect.gen(function* () {
-    const read = yield* input.sql.withTransaction(
+    const read = yield* withReadTransaction(input.sql)(
       Effect.all({
         decodeThreads: input.readThreads,
         projects: input.listProjects,
