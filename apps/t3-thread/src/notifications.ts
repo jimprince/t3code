@@ -1,3 +1,4 @@
+import { isNoChangeReply } from "@t3tools/shared/completionOutput";
 import { pendingInputKey } from "./inputReminders.js";
 import * as NodeCrypto from "node:crypto";
 import { pendingRequests } from "./v2/requests.js";
@@ -232,6 +233,7 @@ export function shouldNotify(
 
 function turnResultDisposition(thread: OrchestrationThread): "quiet" | "attention" | null {
   const text = getLatestTurnAssistantMessage(thread)?.text.trim() ?? "";
+  if (isNoChangeReply(text)) return "quiet";
   const disposition = text.match(/(?:^|\n)T3_NOTIFY: (quiet|attention)$/)?.[1];
   return disposition === "quiet" || disposition === "attention" ? disposition : null;
 }
