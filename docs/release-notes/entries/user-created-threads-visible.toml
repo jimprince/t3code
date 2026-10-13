@@ -1,0 +1,4 @@
+id = "user-created-threads-visible"
+category = "fix"
+functionality = "threads"
+text = "Keep threads you create in the app visible in Threads after they delegate work, on desktop, web and mobile."
