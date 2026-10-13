@@ -3,61 +3,137 @@ import type { ScopedSupervisionMetadata } from "./forkNesting.ts";
 import type { OrchestratorSummary, SubagentRow } from "./orchestrators.ts";
 
 /**
- * Subproject rules shared by every client: the web sidebar and project page and the mobile
- * Home list render these, so what counts as top level, a rollup line or a fold hint is decided once.
+ * Subproject rules the mobile Projects list renders, so what counts as top level, a rollup line
+ * or a fold hint is decided here rather than in the screen.
  */
 
 export const projectKeyOf = (summary: OrchestratorSummary) =>
   `${summary.root.environmentId}:${summary.root.id}`;
 
-/** Whether the open page or thread is the project's own (its root or a worker), not a subproject's. */
-export const ownTreeContains = (summary: OrchestratorSummary, threadKey: string | null) =>
-  threadKey !== null &&
-  [summary.root, ...summary.descendants].some(
-    (thread) => `${thread.environmentId}:${thread.id}` === threadKey,
-  );
+/** Subprojects that are listed inline beneath a project, at any depth; a settled one hides its subtree. */
+function visibleSubprojectCount(summary: OrchestratorSummary): number {
+  return summary.subprojects
+    .filter((sub) => !isSettledProject(sub))
+    .reduce((total, sub) => total + 1 + visibleSubprojectCount(sub), 0);
+}
 
-/** Each task linked in the project and every subproject beneath it once, with whether it is closed. */
-function linkedTasks(summary: OrchestratorSummary): ReadonlyMap<string, boolean> {
-  const tasks = new Map<string, boolean>();
+/** "1 sub", "3 subs": the hint a folded project card keeps for the rows it hides, null without any. Settled subprojects are not counted: they sit behind their own row. */
+export function subprojectCountLabel(summary: OrchestratorSummary): string | null {
+  const count = visibleSubprojectCount(summary);
+  return count === 0 ? null : `${count} ${count === 1 ? "sub" : "subs"}`;
+}
+
+/** Busy now: its workers or its own orchestrator are active, or it is supervising them. */
+export const subprojectIsActive = (summary: OrchestratorSummary) =>
+  summary.rollup.working > 0 ||
+  summary.status === "working" ||
+  summary.status === "monitoring" ||
+  summary.status === "supervising";
+
+/** The keys with `key` added if it was missing, removed if it was there. */
+export const toggleProjectKey = (
+  keys: ReadonlyArray<string>,
+  key: string,
+): ReadonlyArray<string> =>
+  keys.includes(key) ? keys.filter((candidate) => candidate !== key) : [...keys, key];
+
+/**
+ * How much of a project's work is happening inside its subprojects, for the line under its
+ * card ("2 of 6 working in subprojects"). Null when none of it is.
+ */
+export function subprojectWorkingLabel(summary: OrchestratorSummary): string | null {
+  const total = summary.rollup.working;
+  const inSubprojects = total - summary.activeWorkerCount;
+  if (inSubprojects <= 0) return null;
+  return inSubprojects === total
+    ? `${total} working in subprojects`
+    : `${inSubprojects} of ${total} working in subprojects`;
+}
+
+/** The projects a client lists on their own; subprojects appear nested inside these. */
+export const topLevelProjects = (summaries: ReadonlyArray<OrchestratorSummary>) =>
+  summaries.filter((summary) => summary.parentProjectKey === null);
+
+/** A settled (or retired) subproject: done with, so lists fold it away and tallies skip it. */
+export const isSettledProject = (summary: OrchestratorSummary) =>
+  summary.root.settledOverride === "settled";
+
+/** A project's direct subprojects split into the ones listed inline and the settled ones, order kept. */
+export function splitSettledSubprojects(subprojects: ReadonlyArray<OrchestratorSummary>): {
+  readonly active: ReadonlyArray<OrchestratorSummary>;
+  readonly settled: ReadonlyArray<OrchestratorSummary>;
+} {
+  return {
+    active: subprojects.filter((sub) => !isSettledProject(sub)),
+    settled: subprojects.filter(isSettledProject),
+  };
+}
+
+/**
+ * Tasks done of tasks known, for a project and its non-settled subprojects. `unknown` counts
+ * the linked issues with no synced snapshot: they are in neither number, since nothing says
+ * whether they are open or done.
+ */
+export interface TaskProgress {
+  readonly done: number;
+  readonly total: number;
+  readonly unknown: number;
+}
+
+type TaskState = "open" | "closed" | "unknown";
+
+/** Each task linked in the project and its non-settled subprojects once; open wins over closed. */
+function scopedTasks(summary: OrchestratorSummary): ReadonlyMap<string, TaskState> {
+  const tasks = new Map<string, TaskState>();
   const visit = (project: OrchestratorSummary) => {
     for (const issue of project.issues) {
       const key = `${issue.host}/${issue.repository}#${issue.number}`;
-      // A task is open when any link to it says so, as openTaskCount always counted it.
-      tasks.set(key, (tasks.get(key) ?? true) && issue.snapshot?.state === "closed");
+      // The snapshot is required by the contract, but a link can still arrive before its first sync.
+      const state: TaskState = issue.snapshot?.state ?? "unknown";
+      const known = tasks.get(key);
+      // A task linked twice is open when any link says so, else closed when any link says so.
+      if (known === undefined || state === "open" || (state === "closed" && known === "unknown")) {
+        tasks.set(key, state);
+      }
     }
-    project.subprojects.forEach(visit);
+    // A settled subproject drops out whole, nested subprojects included.
+    project.subprojects.filter((sub) => !isSettledProject(sub)).forEach(visit);
   };
   visit(summary);
   return tasks;
 }
 
-/** Open tasks across the project and every subproject beneath it, each linked issue once. */
-export function openTaskCount(summary: OrchestratorSummary): number {
-  return [...linkedTasks(summary).values()].filter((closed) => !closed).length;
+/** The done/total tally every surface shows for a project or subproject row. */
+export function taskProgress(summary: OrchestratorSummary): TaskProgress {
+  let done = 0;
+  let total = 0;
+  let unknown = 0;
+  for (const state of scopedTasks(summary).values()) {
+    if (state === "unknown") unknown += 1;
+    else {
+      total += 1;
+      if (state === "closed") done += 1;
+    }
+  }
+  return { done, total, unknown };
 }
 
-/** The Progress column of the subprojects table: tasks closed of tasks linked, null with none. */
-export function taskProgressLabel(summary: OrchestratorSummary): string | null {
-  const tasks = [...linkedTasks(summary).values()];
-  if (tasks.length === 0) return null;
-  return `${tasks.filter(Boolean).length} of ${tasks.length}`;
-}
+/** "24/36": the compact fraction, null when no task is known. */
+export const taskProgressFraction = (progress: TaskProgress): string | null =>
+  progress.total === 0 ? null : `${progress.done}/${progress.total}`;
 
-/** Every subproject beneath a project, at any depth: what folding its card hides. */
-function subprojectCount(summary: OrchestratorSummary): number {
-  return summary.subprojects.reduce((total, sub) => total + 1 + subprojectCount(sub), 0);
-}
+/** "24 of 36 tasks done": the tooltip and accessible label of the fraction. */
+export const taskProgressDescription = (progress: TaskProgress): string | null =>
+  progress.total === 0 ? null : `${progress.done} of ${progress.total} tasks done`;
 
-/** "1 sub", "3 subs": the hint a folded project card keeps, null without subprojects. */
-export function subprojectCountLabel(summary: OrchestratorSummary): string | null {
-  const count = subprojectCount(summary);
-  return count === 0 ? null : `${count} ${count === 1 ? "sub" : "subs"}`;
-}
+/** Every known task is done: surfaces dim the fraction. */
+export const taskProgressComplete = (progress: TaskProgress): boolean =>
+  progress.total > 0 && progress.done === progress.total;
 
-/** Every subproject beneath a project, at any depth: what folding its card hides. */
-function subprojectCount(summary: OrchestratorSummary): number {
-  return summary.subprojects.reduce((total, sub) => total + 1 + subprojectCount(sub), 0);
+/** A row's accessible label with the project's task progress appended: "Open Ops subproject, 24 of 36 tasks done". */
+export function labelWithTaskProgress(label: string, summary: OrchestratorSummary): string {
+  const description = taskProgressDescription(taskProgress(summary));
+  return description === null ? label : `${label}, ${description}`;
 }
 
 /** A project's subagent rows split into the ones listed inline and the settled ones, order kept. */
@@ -134,12 +210,12 @@ export function settledGroupSummary(
   };
 }
 
-/** Busy now: its workers or its own orchestrator are active, or it is supervising them. */
-export const subprojectIsActive = (summary: OrchestratorSummary) =>
-  summary.rollup.working > 0 ||
-  summary.status === "working" ||
-  summary.status === "monitoring" ||
-  summary.status === "supervising";
+/** Whether the open page or thread is the project's own (its root or a worker), not a subproject's. */
+export const ownTreeContains = (summary: OrchestratorSummary, threadKey: string | null) =>
+  threadKey !== null &&
+  [summary.root, ...summary.descendants].some(
+    (thread) => `${thread.environmentId}:${thread.id}` === threadKey,
+  );
 
 /**
  * The thread whose project page owns `start`: the nearest ancestor on the nesting sidecar that is
@@ -206,29 +282,11 @@ export const subprojectNeedsYou = (summary: OrchestratorSummary) =>
 export const subprojectBlocked = (summary: OrchestratorSummary) =>
   summary.subprojects.reduce((total, sub) => total + sub.rollup.blocked, 0);
 
-/** Subproject cards this device has collapsed in the Projects sidebar; expanded is the default. */
 export const COLLAPSED_SUBPROJECTS_KEY = "t3code:projects:collapsed-subprojects";
+export const EXPANDED_SETTLED_KEY = "t3code:projects:expanded-settled";
 
-/** The keys with `key` added if it was missing, removed if it was there. */
-export const toggleProjectKey = (
-  keys: ReadonlyArray<string>,
-  key: string,
-): ReadonlyArray<string> =>
-  keys.includes(key) ? keys.filter((candidate) => candidate !== key) : [...keys, key];
-
-/**
- * How much of a project's work is happening inside its subprojects, for the line under its
- * card ("2 of 6 working in subprojects"). Null when none of it is.
- */
-export function subprojectWorkingLabel(summary: OrchestratorSummary): string | null {
-  const total = summary.rollup.working;
-  const inSubprojects = total - summary.activeWorkerCount;
-  if (inSubprojects <= 0) return null;
-  return inSubprojects === total
-    ? `${total} working in subprojects`
-    : `${inSubprojects} of ${total} working in subprojects`;
-}
-
-/** The projects a client lists on their own; subprojects appear nested inside these. */
-export const topLevelProjects = (summaries: ReadonlyArray<OrchestratorSummary>) =>
-  summaries.filter((summary) => summary.parentProjectKey === null);
+/** Open known tasks in this project and its active subprojects. */
+export const openTaskCount = (summary: OrchestratorSummary): number => {
+  const progress = taskProgress(summary);
+  return progress.total - progress.done + progress.unknown;
+};
