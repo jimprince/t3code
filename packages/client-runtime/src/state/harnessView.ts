@@ -87,6 +87,10 @@ export interface HarnessCheckView {
   readonly spokenLabel: string;
   /** No owner classified it; listed apart from the Harness checks. */
   readonly unclassified: boolean;
+  /** Pinned to the top of the checks list on its own environment. */
+  readonly pinned: boolean;
+  /** Its server can pin; false on an older server, so clients hide the pin control. */
+  readonly pinSupported: boolean;
   readonly owner: HarnessThreadLink | null;
   readonly state: HarnessCheckState;
   readonly stateLabel: string;
@@ -262,8 +266,10 @@ export function buildHarnessChecks(
   now: number,
   options: HarnessBuildOptions = {},
 ): ReadonlyArray<HarnessCheckView> {
-  const rows = snapshots.flatMap((snapshot) =>
-    snapshot.routines.map((routine): HarnessCheckView => {
+  const rows = snapshots.flatMap((snapshot) => {
+    // Pins belong to the snapshot's own environment, so one server's pin never marks another's check.
+    const pinnedKeys = new Set(snapshot.pinnedCheckKeys ?? []);
+    return snapshot.routines.map((routine): HarnessCheckView => {
       const { state, evidence, lateSinceMs } = classifyHarnessCheck(routine, {
         now,
         generatedAt: snapshot.generatedAt,
@@ -347,6 +353,7 @@ export function buildHarnessChecks(
         spokenLabel: [
           routine.name,
           latenessLabel === null ? stateLabel : `${stateLabel}, ${latenessLabel}`,
+          pinnedKeys.has(routine.key) ? "Pinned" : null,
           routine.purpose === "unclassified" ? "Unclassified" : null,
           classification,
           timing,
@@ -355,6 +362,8 @@ export function buildHarnessChecks(
           .filter((part) => part !== null && part !== "")
           .join(", "),
         unclassified: routine.purpose === "unclassified",
+        pinned: pinnedKeys.has(routine.key),
+        pinSupported: snapshot.pinnedCheckKeys !== undefined,
         owner: routine.owner,
         state,
         stateLabel,
@@ -371,10 +380,12 @@ export function buildHarnessChecks(
             ? ERRORS_EVERY_RUN_RANK
             : presentation.rank,
       };
-    }),
-  );
+    });
+  });
   return [...rows].sort(
     (left, right) =>
+      // Pins lead, above even a failing check, then each group keeps its own order.
+      Number(right.pinned) - Number(left.pinned) ||
       left.rank - right.rank ||
       left.name.localeCompare(right.name, undefined, { sensitivity: "base" }) ||
       left.key.localeCompare(right.key),
@@ -383,15 +394,16 @@ export function buildHarnessChecks(
 
 /**
  * Harness checks and, apart, routines no owner has classified (an ownerless schedule): those are
- * listed in their own labeled group instead of passing as Harness checks.
+ * listed in their own labeled group instead of passing as Harness checks. A pinned routine is the
+ * exception: someone chose it, so it leads the checks wherever it came from.
  */
 export function splitHarnessChecks(checks: ReadonlyArray<HarnessCheckView>): {
   readonly harness: ReadonlyArray<HarnessCheckView>;
   readonly unclassified: ReadonlyArray<HarnessCheckView>;
 } {
   return {
-    harness: checks.filter((check) => !check.unclassified),
-    unclassified: checks.filter((check) => check.unclassified),
+    harness: checks.filter((check) => !check.unclassified || check.pinned),
+    unclassified: checks.filter((check) => check.unclassified && !check.pinned),
   };
 }
 
