@@ -67,7 +67,7 @@ const thread = (
     updatedAt,
     runtime: { status: todoProgress ? "running" : "idle" },
     pendingBackgroundTasks: [],
-    codexNativeGoal: null,
+    goal: null,
     todoProgress,
   }) as unknown as OrchestratorThreadShell;
 
