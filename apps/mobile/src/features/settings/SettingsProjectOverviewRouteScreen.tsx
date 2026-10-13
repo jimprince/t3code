@@ -3,6 +3,7 @@ import { useEnvironmentQuery } from "../../state/query";
 import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollView";
 import { AppText as Text, AppTextInput } from "../../components/AppText";
 import { ProjectFavicon } from "../../components/ProjectFavicon";
+import { automationScheduleText } from "@t3tools/client-runtime/automation-schedule";
 import { deriveProjectGroupLabel } from "@t3tools/client-runtime/state/project-grouping";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { useState } from "react";
@@ -195,10 +196,16 @@ function MemberAutomations({ member }: { readonly member: EnvironmentProject }) 
       <View key={automation.id} className="gap-1 p-4">
         <Text className="text-base text-foreground">{automation.name}</Text>
         <Text className="text-sm text-foreground-muted">
-          {automation.enabled
-            ? (schedule?.kind ?? (trigger?.type === "event" ? `on ${trigger.event}` : "manual"))
-            : "Paused"}
-          {schedule ? ` · ${schedule.timeZone}` : ""}
+          {!automation.enabled
+            ? "Paused"
+            : schedule
+              ? automationScheduleText(
+                  schedule,
+                  Date.parse(automation.nextRunAt ?? automation.updatedAt),
+                )
+              : trigger?.type === "event"
+                ? `on ${trigger.event}`
+                : "manual"}
           {automation.nextRunAt ? ` · Next ${new Date(automation.nextRunAt).toLocaleString()}` : ""}
         </Text>
         {(runs.data?.runs ?? [])
