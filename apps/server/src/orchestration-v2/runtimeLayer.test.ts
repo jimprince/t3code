@@ -2712,7 +2712,6 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
     }),
   );
 
-<<<<<<< ours
   it.effect("archiving ends watches, and an archived thread cannot start one", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;
@@ -2814,74 +2813,6 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
               detail: () => Effect.die("host unreachable"),
               activity: () => Effect.die("host unreachable"),
             }),
-=======
-  it.effect.each(["timeout", "500", "429", "403", "unsupported", "not-found", "unauthenticated"])(
-    "classifies unreadable pull request watches: %s",
-    (failure) =>
-      Effect.gen(function* () {
-        const orchestrator = yield* Orchestrator.OrchestratorV2;
-        const threadId = ThreadId.make(`runtime-pull-request-watch-unreadable-${failure}`);
-        const projectId = ProjectId.make(`pr-watch-unreadable-project-${failure}`);
-        yield* seedProject({
-          projectId,
-          title: "Watch unreadable",
-          workspaceRoot: "/workspace/watch-unreadable",
-          defaultModelSelection: null,
-          createdAt: "2026-10-01T00:00:00.000Z",
-        });
-        yield* orchestrator.dispatch({
-          type: "thread.create",
-          createdBy: "user",
-          creationSource: "web",
-          commandId: CommandId.make(`pr-watch-unreadable-create-${failure}`),
-          threadId,
-          projectId,
-          title: "Watch unreadable",
-          modelSelection,
-          runtimeMode: "full-access",
-          interactionMode: "default",
-          branch: null,
-          worktreePath: null,
-        });
-        yield* orchestrator.dispatch({
-          type: "thread.pull-request.watch",
-          commandId: CommandId.make(`pr-watch-unreadable-start-${failure}`),
-          threadId,
-          host: "github.com",
-          repository: "pingdotgg/t3code",
-          number: 8,
-          watching: true,
-          link: { url: "https://github.com/pingdotgg/t3code/pull/8", source: "agent" },
-        });
-        let reads = 0;
-        const terminal = failure === "not-found" || failure === "unauthenticated";
-        const error =
-          failure === "unauthenticated" || failure === "unsupported"
-            ? new PullRequestUnavailableError({
-                reason:
-                  failure === "unauthenticated" ? "cli-unauthenticated" : "provider-unsupported",
-              })
-            : new PullRequestOperationError({
-                operation: "detail",
-                detail:
-                  failure === "timeout"
-                    ? "Could not reach the configured Gitea API."
-                    : `Gitea API returned HTTP ${failure}.`,
-                ...(failure === "not-found" ? { reason: "not-found" as const } : {}),
-              });
-        const reactor = yield* PullRequestWatchReactor.make.pipe(
-          Effect.provide(
-            Layer.mergeAll(
-              NodeServices.layer,
-              Layer.mock(PullRequestService.PullRequestService)({
-                detail: (input) =>
-                  Effect.sync(() => {
-                    if (input.projectId === projectId) reads++;
-                  }).pipe(Effect.andThen(Effect.fail(error))),
-                activity: () => Effect.fail(error),
-              }),
-            ),
->>>>>>> theirs
           ),
         );
         yield* reactor.sweep;
@@ -3336,6 +3267,110 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
       assert.deepEqual(yield* summaries, ["#11: checks failed", "#11: new comments"]);
     }),
   );
+
+  it.effect.each(["timeout", "500", "429", "403", "unsupported", "not-found", "unauthenticated"])(
+    "classifies unreadable pull request watches: %s",
+    (failure) =>
+      Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const threadId = ThreadId.make(`runtime-pull-request-watch-unreadable-${failure}`);
+        const projectId = ProjectId.make(`pr-watch-unreadable-project-${failure}`);
+        yield* seedProject({
+          projectId,
+          title: "Watch unreadable",
+          workspaceRoot: "/workspace/watch-unreadable",
+          defaultModelSelection: null,
+          createdAt: "2026-10-01T00:00:00.000Z",
+        });
+        yield* orchestrator.dispatch({
+          type: "thread.create",
+          createdBy: "user",
+          creationSource: "web",
+          commandId: CommandId.make(`pr-watch-unreadable-create-${failure}`),
+          threadId,
+          projectId,
+          title: "Watch unreadable",
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: null,
+        });
+        yield* orchestrator.dispatch({
+          type: "thread.pull-request.watch",
+          commandId: CommandId.make(`pr-watch-unreadable-start-${failure}`),
+          threadId,
+          host: "github.com",
+          repository: "pingdotgg/t3code",
+          number: 8,
+          watching: true,
+          link: { url: "https://github.com/pingdotgg/t3code/pull/8", source: "agent" },
+        });
+        let reads = 0;
+        const terminal = failure === "not-found" || failure === "unauthenticated";
+        const error =
+          failure === "unauthenticated" || failure === "unsupported"
+            ? new PullRequestUnavailableError({
+                reason:
+                  failure === "unauthenticated" ? "cli-unauthenticated" : "provider-unsupported",
+              })
+            : new PullRequestOperationError({
+                operation: "detail",
+                detail:
+                  failure === "timeout"
+                    ? "Could not reach the configured Gitea API."
+                    : `Gitea API returned HTTP ${failure}.`,
+                ...(failure === "not-found" ? { reason: "not-found" as const } : {}),
+              });
+        const reactor = yield* PullRequestWatchReactor.make.pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              NodeServices.layer,
+              Layer.mock(PullRequestService.PullRequestService)({
+                detail: (input) =>
+                  Effect.sync(() => {
+                    if (input.projectId === projectId) reads++;
+                  }).pipe(Effect.andThen(Effect.fail(error))),
+                activity: () => Effect.fail(error),
+              }),
+            ),
+          ),
+        );
+        yield* reactor.sweep;
+        if (!terminal) {
+          // A second sweep at the same clock cannot spend another host read.
+          yield* reactor.sweep;
+          assert.equal(reads, 1);
+          for (let pass = 1; pass < 17; pass += 1) {
+            yield* TestClock.adjust("5 minutes");
+            yield* reactor.sweep;
+          }
+        }
+        const thread = yield* orchestrator.getThreadShell(threadId);
+        if (terminal) assert.isUndefined(thread?.pullRequests?.[0]?.watch);
+        else assert.isDefined(thread?.pullRequests?.[0]?.watch);
+        const { messages } = yield* orchestrator.getThreadRecords(threadId, ["messages"]);
+        if (!terminal)
+          yield* orchestrator.dispatch({
+            type: "thread.pull-request.watch",
+            commandId: CommandId.make(`pr-watch-unreadable-cleanup-${failure}`),
+            threadId,
+            host: "github.com",
+            repository: "pingdotgg/t3code",
+            number: 8,
+            watching: false,
+          });
+        assert.deepEqual(
+          messages.flatMap((message) => message.notification?.summary ?? []),
+          [
+            terminal
+              ? "#8: stopped watching, pull request unavailable"
+              : "#8: watching, host reads are failing",
+          ],
+        );
+      }),
+  );
+
 
   it.effect.each([
     "single page",
