@@ -2,12 +2,15 @@ import {
   DEFAULT_SERVER_SETTINGS,
   EnvironmentAuthorizationError,
   EnvironmentId,
+  ThreadId,
   type RelayClientInstallProgressEvent,
   type ServerConfigStreamEvent,
   type ServerLifecycleStreamEvent,
   WS_METHODS,
 } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
+import { AtomRegistry } from "effect/reactivity";
+import { dashboardAnswersAtom } from "../dashboard/answers.ts";
 import * as Cause from "effect/Cause";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -32,6 +35,7 @@ import * as RpcSession from "../rpc/session.ts";
 import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
 import {
   EnvironmentRpcRequestObserver,
+  RpcPermissionGuard,
   request,
   runStream,
   subscribe,
@@ -680,6 +684,46 @@ describe("environment RPC", () => {
       }
       expect(observations).toEqual(["input 1", "stream", "expected failure", "input 2", "defect"]);
       expect(observedDefects).toEqual([defect]);
+    }),
+  );
+});
+
+describe("dashboard decision acknowledgement", () => {
+  it.effect("records only successfully acknowledged answers in the app registry", () =>
+    Effect.gen(function* () {
+      const registry = AtomRegistry.make();
+      let fail = false;
+      const client = {
+        [WS_METHODS.projectRequestsDecide]: () =>
+          fail
+            ? Effect.fail(
+                new EnvironmentAuthorizationError({
+                  message: "No permission",
+                  requiredScope: "orchestration:operate",
+                }),
+              )
+            : Effect.succeed({ notifiedThreadId: null }),
+      } as unknown as WsRpcProtocolClient;
+      const { activeSession, supervisor } = yield* makeHarness();
+      yield* SubscriptionRef.set(activeSession, Option.some(session(client)));
+      const call = request(WS_METHODS.projectRequestsDecide, {
+        threadId: ThreadId.make("root"),
+        reference: "brad/repo#1",
+        decision: "option",
+        option: "Yes",
+      }).pipe(
+        Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+        Effect.provideService(AtomRegistry.AtomRegistry, registry),
+        Effect.provideService(RpcPermissionGuard, { authorize: () => Effect.void }),
+      );
+      yield* call;
+      expect(registry.get(dashboardAnswersAtom)).toMatchObject([
+        { reference: "brad/repo#1", rootThreadId: "root", environmentId: TARGET.environmentId },
+      ]);
+      fail = true;
+      yield* call.pipe(Effect.exit);
+      expect(registry.get(dashboardAnswersAtom)).toHaveLength(1);
+      registry.dispose();
     }),
   );
 });
