@@ -95,6 +95,10 @@ describe("project issue metadata refresh", () => {
           ),
         ),
       );
+      expect(result.primaryRepository).toEqual({
+        host: "git.home:3000",
+        repository: "brad/t3code-fork",
+      });
       expect(result.issues).toMatchObject([
         { title: "Fixed title", status: "done", linkedThreadIds: [threadId], partOf: 9 },
       ]);
