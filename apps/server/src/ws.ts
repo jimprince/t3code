@@ -1,4 +1,5 @@
 import * as HarnessPinRpc from "./harness/rpcHandlers.ts";
+import { RoutineKindService } from "./harness/RoutineKindService.ts";
 import { HarnessReadService } from "./harness/HarnessReadService.ts";
 import { authenticatedHandlers as recoveryHandlers } from "./threadRecovery/rpc.ts";
 import { HumanIngress } from "./threadRecovery/HumanIngress.ts";
@@ -3264,6 +3265,8 @@ const layerWsRpc = (
       );
       const forwards = makeMessageForwardService(sql, threadManagement, handoffs.accept);
       const forkHandlers = WsForkRpcGroup.of({
+        [WS_METHODS.harnessRoutineKindSet]: (input) =>
+          Effect.flatMap(RoutineKindService, (service) => service.set(input)),
         [WS_METHODS.harnessSnapshot]: (input) =>
           Effect.flatMap(HarnessReadService, (service) => service.snapshot(input)),
         ...HarnessPinRpc.handlers,
