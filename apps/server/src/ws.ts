@@ -1,3 +1,4 @@
+import { HarnessReadService } from "./harness/HarnessReadService.ts";
 import { authenticatedHandlers as recoveryHandlers } from "./threadRecovery/rpc.ts";
 import { HumanIngress } from "./threadRecovery/HumanIngress.ts";
 import { makeMessageForwardService } from "./forkThreads/MessageForwardService.ts";
@@ -2035,7 +2036,9 @@ const layerWsRpc = (
               startup
                 .enqueueCommand(
                   ThreadMessageIntake.launchThread({
-                    ...(input.creatorThreadId === undefined ? {} : { creatorThreadId: input.creatorThreadId }),
+                    ...(input.creatorThreadId === undefined
+                      ? {}
+                      : { creatorThreadId: input.creatorThreadId }),
                     ...(input.purposeSeed === undefined ? {} : { purposeSeed: input.purposeSeed }),
                     commandId: input.commandId,
                     ...(input.threadId === undefined ? {} : { threadId: input.threadId }),
@@ -3224,6 +3227,8 @@ const layerWsRpc = (
       );
       const forwards = makeMessageForwardService(sql, threadManagement, handoffs.accept);
       const forkHandlers = WsForkRpcGroup.of({
+        [WS_METHODS.harnessSnapshot]: (input) =>
+          Effect.flatMap(HarnessReadService, (service) => service.snapshot(input)),
         ...threadSubscriptionHandlers(threadManagement),
         [WS_METHODS.automationsList]: (input) =>
           automations.list(input.projectId).pipe(Effect.map((list) => ({ automations: list }))),
