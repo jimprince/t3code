@@ -1,0 +1,8 @@
+name = "fork-dashboard-v3-13-older-host-cache"
+subject = "fix(dashboard): finish and cache older-host background reads"
+class = "product"
+purpose = "finish and cache older-host background reads"
+retire_when = "The dashboard-v3 series is intentionally dropped or replaced by equivalent upstream behavior."
+depends_on = ["fork-dashboard-v3-12-home-polish"]
+roles = []
+note = "Replayed independently from live source 3c730c1d467321382a801e1ab7b0b52f23a7769a; excludes the Chief of Staff tray series."
