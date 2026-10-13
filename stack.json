@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "e03bdf45d6c714f1d6a5c4ac632815c2b0525510",
-  "head": "ab4c96c9acfecb58ad1d88c2dfebed8f397ebfdd",
+  "prev": "19ed960f9a31a0f66a32c7886f6930ba17a7a46b",
+  "head": "17ff8c9b675c32dfbc3c1f9681118a4ce4c1a434",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -170,7 +170,8 @@
     "fork-dashboard-v3-04-snapshot-service",
     "fork-dashboard-v3-05-views",
     "fork-dashboard-v3-06-review-one",
-    "fork-dashboard-v3-07-design-toggle"
+    "fork-dashboard-v3-07-design-toggle",
+    "fork-dashboard-v3-08-decision-release-facts"
   ],
   "unapplied": [],
   "hidden": [],
@@ -288,6 +289,9 @@
     },
     "fork-dashboard-v3-07-design-toggle": {
       "oid": "ab4c96c9acfecb58ad1d88c2dfebed8f397ebfdd"
+    },
+    "fork-dashboard-v3-08-decision-release-facts": {
+      "oid": "17ff8c9b675c32dfbc3c1f9681118a4ce4c1a434"
     },
     "fork-decision-context-media": {
       "oid": "1e6afd754fb0eea09ab4b6730a0eeea6f7599825"
