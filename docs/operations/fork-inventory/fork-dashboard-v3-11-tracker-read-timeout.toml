@@ -1,0 +1,8 @@
+name = "fork-dashboard-v3-11-tracker-read-timeout"
+subject = "fix(dashboard): keep slow older-host tracker reads instead of timing them out"
+class = "product"
+purpose = "keep slow older-host tracker reads instead of timing them out"
+retire_when = "The dashboard-v3 series is intentionally dropped or replaced by equivalent upstream behavior."
+depends_on = ["fork-dashboard-v3-10-older-host-publication"]
+roles = []
+note = "Replayed independently from live source b2a459fcf3120bc30fedf851b364319ab1704c4c; excludes the Chief of Staff tray series."
