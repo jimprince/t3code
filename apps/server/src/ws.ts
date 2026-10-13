@@ -1,3 +1,4 @@
+import * as HarnessPinRpc from "./harness/rpcHandlers.ts";
 import { HarnessReadService } from "./harness/HarnessReadService.ts";
 import { authenticatedHandlers as recoveryHandlers } from "./threadRecovery/rpc.ts";
 import { HumanIngress } from "./threadRecovery/HumanIngress.ts";
@@ -3265,6 +3266,7 @@ const layerWsRpc = (
       const forkHandlers = WsForkRpcGroup.of({
         [WS_METHODS.harnessSnapshot]: (input) =>
           Effect.flatMap(HarnessReadService, (service) => service.snapshot(input)),
+        ...HarnessPinRpc.handlers,
         ...threadSubscriptionHandlers(threadManagement),
         [WS_METHODS.automationsList]: (input) =>
           automations.list(input.projectId).pipe(Effect.map((list) => ({ automations: list }))),

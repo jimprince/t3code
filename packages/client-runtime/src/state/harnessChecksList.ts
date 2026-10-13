@@ -24,7 +24,11 @@ export function harnessOwnerTitles(
  * feed whose source went stale. They say a source is missing, not that a check ran, and fill the
  * list when many feeds are not set up. A failing feed is never one: it needs a look.
  */
-export function isHarnessFeedRow(check: Pick<HarnessCheckView, "state" | "key">): boolean {
+export function isHarnessFeedRow(
+  check: Pick<HarnessCheckView, "state" | "key" | "pinned">,
+): boolean {
+  // A pinned row is never one: someone chose to see it.
+  if (check.pinned) return false;
   return (
     check.state === "not-shown" || (check.state === "source-stale" && check.key.includes(":feed:"))
   );
