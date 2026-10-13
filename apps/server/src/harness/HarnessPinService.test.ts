@@ -1,6 +1,9 @@
 import { assert, it } from "@effect/vitest";
+import { DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
+import * as Stream from "effect/Stream";
 
 import * as Settings from "../serverSettings.ts";
 import * as HarnessPin from "./HarnessPinService.ts";
@@ -32,22 +35,57 @@ it.effect("pins and unpins one check and reports the pinned keys each time", () 
   }).pipe(Effect.provide(layer)),
 );
 
-it.effect("keeps both pins when two clients pin at once", () =>
+// A settings double that yields between the read and the write, as the real store does when it
+// hits disk: without the service's lock, two pins both read the old list and one write is lost.
+const layerYieldingSettings = Layer.effect(
+  Settings.ServerSettingsService,
   Effect.gen(function* () {
-    const pins = yield* HarnessPin.HarnessPinService;
-    yield* Effect.all(
-      [
-        pins.setPinned({ checkKey: "env:automation:a", pinned: true }),
-        pins.setPinned({ checkKey: "env:automation:b", pinned: true }),
-      ],
-      { concurrency: "unbounded" },
+    const stored = yield* Ref.make<ReadonlyArray<string>>([]);
+    const snapshot = Ref.get(stored).pipe(
+      Effect.tap(() => Effect.yieldNow),
+      Effect.map((keys) => ({ ...DEFAULT_SERVER_SETTINGS, harnessPinnedCheckKeys: keys })),
     );
-    const settings = yield* Settings.ServerSettingsService;
-    assert.sameMembers(
-      [...(yield* settings.getSettings).harnessPinnedCheckKeys],
-      ["env:automation:a", "env:automation:b"],
-    );
-  }).pipe(Effect.provide(layer)),
+    return Settings.ServerSettingsService.of({
+      ...unusedSettings,
+      getSettings: snapshot,
+      updateSettings: (patch) =>
+        Effect.yieldNow.pipe(
+          Effect.andThen(Ref.set(stored, patch.harnessPinnedCheckKeys ?? [])),
+          Effect.andThen(snapshot),
+        ),
+    });
+  }),
+);
+const unusedSettings = Settings.ServerSettingsService.of({
+  start: Effect.void,
+  ready: Effect.void,
+  getSettings: Effect.never,
+  updateSettings: () => Effect.never,
+  setGiteaToken: () => Effect.never,
+  updateProviderInstance: () => Effect.never,
+  withSettingsSnapshot: () => Effect.never,
+  streamChanges: Stream.empty,
+  subscribeChanges: Effect.succeed(Stream.empty),
+});
+
+it.effect(
+  "keeps both pins when two clients pin at once, even with a yield between read and write",
+  () =>
+    Effect.gen(function* () {
+      const pins = yield* HarnessPin.HarnessPinService;
+      yield* Effect.all(
+        [
+          pins.setPinned({ checkKey: "env:automation:a", pinned: true }),
+          pins.setPinned({ checkKey: "env:automation:b", pinned: true }),
+        ],
+        { concurrency: "unbounded" },
+      );
+      const settings = yield* Settings.ServerSettingsService;
+      assert.sameMembers(
+        [...(yield* settings.getSettings).harnessPinnedCheckKeys],
+        ["env:automation:a", "env:automation:b"],
+      );
+    }).pipe(Effect.provide(HarnessPin.layer.pipe(Layer.provideMerge(layerYieldingSettings)))),
 );
 
 it.effect("refuses a pin past the limit but still lets any pin be removed", () =>

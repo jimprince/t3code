@@ -49,18 +49,21 @@ const layerEnvironment = Layer.mock(Environment.ServerEnvironment)({
     capabilities: { repositoryIdentity: false },
   }),
 });
-const layer = McpHttpServer.layerHarnessToolkit.pipe(
-  Layer.provideMerge(McpServer.McpServer.layer),
-  Layer.provide(
-    Layer.mock(ThreadManagement.ThreadManagementService)({
-      getThreadShell: (id) => Effect.succeed(liveThreadShell(id)),
-    }),
-  ),
-  Layer.provide(layerEnvironment),
-  Layer.provide(Layer.mock(HarnessReadService)({})),
-  Layer.provide(HarnessPin.layer),
-  Layer.provideMerge(Settings.layerTest()),
-);
+/** The /mcp registration with a caller thread whose shell has these modes. */
+const layerForCaller = (modes: Parameters<typeof liveThreadShell>[1] = {}) =>
+  McpHttpServer.layerHarnessToolkit.pipe(
+    Layer.provideMerge(McpServer.McpServer.layer),
+    Layer.provide(
+      Layer.mock(ThreadManagement.ThreadManagementService)({
+        getThreadShell: (id) => Effect.succeed(liveThreadShell(id, modes)),
+      }),
+    ),
+    Layer.provide(layerEnvironment),
+    Layer.provide(Layer.mock(HarnessReadService)({})),
+    Layer.provide(HarnessPin.layer),
+    Layer.provideMerge(Settings.layerTest()),
+  );
+const layer = layerForCaller();
 
 it.effect("pins, repeats and unpins a check through the /mcp registration and reads it back", () =>
   Effect.gen(function* () {
@@ -106,4 +109,23 @@ it.effect("refuses a credential that belongs to another environment and a malfor
     const settings = yield* Settings.ServerSettingsService;
     expect((yield* settings.getSettings).harnessPinnedCheckKeys).toEqual([]);
   }).pipe(Effect.provide(layer)),
+);
+
+it.effect("refuses a caller that is not full-access and leaves the pins alone", () =>
+  Effect.gen(function* () {
+    const server = yield* McpServer.McpServer;
+    const refused = yield* server
+      .callTool({
+        name: "harness_check_pin",
+        arguments: { checkKey: "env:automation:audit", pinned: true },
+      })
+      .pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, scope(environmentId)),
+        Effect.provideService(McpSchema.McpServerClient, client),
+      );
+    expect(refused.isError).toBe(true);
+    expect(JSON.stringify(refused.structuredContent ?? refused.content)).toMatch(/full-access/);
+    const settings = yield* Settings.ServerSettingsService;
+    expect((yield* settings.getSettings).harnessPinnedCheckKeys).toEqual([]);
+  }).pipe(Effect.provide(layerForCaller({ runtimeMode: "approval-required" }))),
 );

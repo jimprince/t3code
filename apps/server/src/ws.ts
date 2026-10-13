@@ -1,4 +1,4 @@
-import { HarnessPinService } from "./harness/HarnessPinService.ts";
+import * as HarnessPinRpc from "./harness/rpcHandlers.ts";
 import { HarnessReadService } from "./harness/HarnessReadService.ts";
 import * as DashboardService from "./dashboard/DashboardService.ts";
 import { authenticatedHandlers as recoveryHandlers } from "./threadRecovery/rpc.ts";
@@ -3230,10 +3230,7 @@ const layerWsRpc = (
       const forkHandlers = WsForkRpcGroup.of({
         [WS_METHODS.harnessSnapshot]: (input) =>
           Effect.flatMap(HarnessReadService, (service) => service.snapshot(input)),
-        [WS_METHODS.harnessSetCheckPinned]: (input) =>
-          Effect.flatMap(HarnessPinService, (service) => service.setPinned(input)).pipe(
-            Effect.map((pinnedCheckKeys) => ({ pinnedCheckKeys })),
-          ),
+        ...HarnessPinRpc.handlers,
         ...threadSubscriptionHandlers(threadManagement),
         [WS_METHODS.automationsList]: (input) =>
           automations.list(input.projectId).pipe(Effect.map((list) => ({ automations: list }))),
