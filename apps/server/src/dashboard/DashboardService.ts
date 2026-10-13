@@ -101,7 +101,7 @@ const make = Effect.gen(function* () {
           { concurrency: 4 },
         )).flat();
         const next = aggregate({
-          shells: shell.threads,
+          shells: [...shell.threads, ...shell.archivedThreads],
           metadata,
           issues: issueRows,
           plans: [...plans.values()],
@@ -182,7 +182,7 @@ const make = Effect.gen(function* () {
     Effect.gen(function* () {
       const shell = yield* engine.getShellSnapshot();
       const metadata = yield* listMetadata(sql);
-      const { roots } = dashboardRoots(shell.threads, metadata);
+      const { roots } = dashboardRoots([...shell.threads, ...shell.archivedThreads], metadata);
       const activeRootIds = new Set(roots.map((r) => r.id));
       for (const rootId of issueRows.keys())
         if (!activeRootIds.has(rootId)) issueRows.delete(rootId);
