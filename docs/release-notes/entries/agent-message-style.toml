@@ -1,0 +1,4 @@
+id = "agent-message-style"
+category = "feature"
+functionality = "threads"
+text = "Agent and automation messages no longer look like yours: they render as a ruled row headed by the sender's thread, with the t3-thread header and reply command behind Details, on web, desktop and mobile."
