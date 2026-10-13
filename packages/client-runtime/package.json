@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./state/thread-purpose": {
+      "types": "./src/state/threadPurpose.ts",
+      "default": "./src/state/threadPurpose.ts"
+    },
     "./decision-context": {
       "types": "./src/decisionContext.ts",
       "default": "./src/decisionContext.ts"

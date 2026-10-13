@@ -19,6 +19,9 @@ export interface OrchestratorThreadShell extends EnvironmentThreadShell {
   readonly parentThreadId?: ThreadId | null;
   readonly remoteParent?: ForkRemoteParent | null;
   readonly scope?: string | null;
+  readonly forkMetadataAvailable?: boolean;
+  readonly supervisionMetadataPresent?: boolean;
+  readonly purpose?: import("@t3tools/contracts").ThreadPurpose | null;
   readonly supervisionParentKey?: string | null;
   /**
    * `on` means "a project in its own right": a nested thread renders as a subproject
@@ -120,6 +123,8 @@ export function joinOrchestratorMetadata(
       parentThreadId: row?.parentThreadId ?? null,
       remoteParent: row?.remoteParent ?? null,
       scope: row?.scope ?? null,
+      purpose: row?.purpose ?? null,
+      supervisionMetadataPresent: row !== undefined,
       subproject: row?.subproject ?? thread.subproject ?? "auto",
       supervisionParentKey: parents.get(threadActivityKey(thread)) ?? null,
     };
