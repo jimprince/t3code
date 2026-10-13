@@ -16,8 +16,15 @@ import {
   type ScopedProject,
 } from "./dashboard.logic";
 import { DoneHeading, OutcomeList } from "./VariantA";
-import { ProgressBar, releaseTask, UnknownValue, WaitingOnYou } from "./parts";
-import { SectionHeading } from "./parts";
+import {
+  ProgressBar,
+  releaseTask,
+  SectionHeading,
+  SectionMarker,
+  sectionMarker,
+  UnknownValue,
+  WaitingOnYou,
+} from "./parts";
 import { DecisionCard } from "./decisions";
 
 const TH =
@@ -281,6 +288,10 @@ export function VariantC() {
   const { data, root, decisions } = ui;
   const { products, utilities } = topLevelProjects(data.projects);
   const groups = root ? [root] : products;
+  const snapshot = { ready: data.asOf !== null, revision: ui.revision };
+  const releasesMarker = sectionMarker("releases", snapshot);
+  const planMarker = sectionMarker("plan", snapshot);
+  const utilitiesMarker = sectionMarker("utilities", snapshot);
   return (
     <div>
       <div className="overflow-x-auto">
@@ -298,7 +309,7 @@ export function VariantC() {
               <th className={cn(TH, "hidden text-right sm:table-cell")}>Age</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody {...releasesMarker} hidden={data.releases.length === 0}>
             {data.releases.length > 0 ? <GroupRow>{root ? "Release" : "Releases"}</GroupRow> : null}
             {data.releases.map(({ environmentId, release }) => {
               const found = releaseTask(data.projects, release);
@@ -316,9 +327,13 @@ export function VariantC() {
                 />
               );
             })}
+          </tbody>
+          <tbody {...planMarker}>
             {groups.map((scoped) => (
               <ProjectRows key={scoped.key} scoped={scoped} all={data.projects} showName={!root} />
             ))}
+          </tbody>
+          <tbody {...utilitiesMarker} hidden={root !== null || utilities.length === 0}>
             {!root && utilities.length > 0 ? <GroupRow>Utilities</GroupRow> : null}
             {root
               ? null
@@ -334,7 +349,7 @@ export function VariantC() {
         </table>
       </div>
       <div className="grid grid-cols-1 gap-x-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-        <div>
+        <SectionMarker name="decisions">
           <SectionHeading title="Decisions">
             <b className="font-medium text-foreground">{decisions.length}</b> open
           </SectionHeading>
@@ -347,11 +362,11 @@ export function VariantC() {
               ))}
             </div>
           )}
-        </div>
-        <div>
+        </SectionMarker>
+        <SectionMarker name="outcomes">
           <DoneHeading />
           <OutcomeList />
-        </div>
+        </SectionMarker>
       </div>
     </div>
   );

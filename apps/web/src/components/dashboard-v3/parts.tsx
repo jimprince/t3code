@@ -71,6 +71,58 @@ export function ProgressBar({
   );
 }
 
+export type SectionName =
+  | "ask"
+  | "freshness"
+  | "plan"
+  | "releases"
+  | "decisions"
+  | "outcomes"
+  | "utilities";
+
+/**
+ * The attributes the cold-load trace reads to tell when a section shows its rows or its truthful
+ * empty state. A section is ready once a whole snapshot is on screen, with that snapshot's revision.
+ */
+export function sectionMarker(
+  name: SectionName,
+  snapshot: { readonly ready: boolean; readonly revision: string },
+) {
+  return {
+    "data-testid": `dashboard-section-${name}`,
+    "data-ready": snapshot.ready ? "true" : "false",
+    "data-revision": snapshot.revision,
+  } as const;
+}
+
+export function useSectionMarker(name: SectionName) {
+  const { data, revision } = useDashboardUi();
+  return sectionMarker(name, { ready: data.asOf !== null, revision });
+}
+
+/**
+ * A layout-neutral block that carries a section's marker. `hidden` keeps an empty section present
+ * for the trace without taking a flex or grid gap.
+ */
+export function SectionMarker({
+  name,
+  hidden = false,
+  className,
+  children,
+}: {
+  readonly name: SectionName;
+  readonly hidden?: boolean;
+  readonly className?: string;
+  readonly children?: ReactNode;
+}) {
+  const marker = useSectionMarker(name);
+  return (
+    <div {...marker} hidden={hidden} className={className}>
+      {children}
+    </div>
+  );
+}
+
 /** Unknown stays unknown: italic, never 0 and never an old value presented as current. */
 export function UnknownValue({
   since,
@@ -162,10 +214,11 @@ export function ProgressFigure({
   );
 }
 
+// "blocked" without an open decision means another issue holds the task, not Brad.
 const STATUS_WORDS: Record<DashboardTask["status"], string> = {
   pending: "queued",
   working: "in progress",
-  blocked: "waiting on you",
+  blocked: "blocked",
   review: "ready for review",
   done: "done",
 };
@@ -199,8 +252,8 @@ export function TaskRow({
     <span className="text-warning-foreground" aria-label="needs attention">
       ▲
     </span>
-  ) : task.status === "pending" ? (
-    <span className="text-muted-foreground/60" aria-label="queued">
+  ) : task.status === "pending" || task.status === "blocked" ? (
+    <span className="text-muted-foreground/60" aria-label={STATUS_WORDS[task.status]}>
       ○
     </span>
   ) : (
@@ -222,7 +275,7 @@ export function TaskRow({
         {task.title}
         {ref ? <span className="ml-1 text-muted-foreground/70">#{ref}</span> : null}
       </button>
-      <span className="hidden sm:block">
+      <span className="order-last col-span-3 pl-6 sm:order-none sm:col-span-1 sm:pl-0">
         {task.progress && !stale ? (
           <ProgressBar
             small
