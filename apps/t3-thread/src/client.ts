@@ -348,7 +348,7 @@ export class RemoteEnvironmentClient {
   }
 
   async getThreadDetail(threadId: string): Promise<OrchestrationThread> {
-    return this.findThread(threadId);
+    return this.findThread(threadId, { fullHistory: true });
   }
 
   async listThreads(): Promise<OrchestrationThreadShell[]> {
@@ -370,6 +370,48 @@ export class RemoteEnvironmentClient {
     automationId?: string;
   }): Promise<readonly ProjectAutomation[]> {
     throw new Error("Project automation commands require the M3 automation services.");
+  }
+
+  async listWorktreeGcThreads(): Promise<WorktreeGcThread[]> {
+    const rpc = await this.openRpc();
+    try {
+      const archived = await rpc.request<OrchestrationV2ShellSnapshot>(
+        "getArchivedShellSnapshot",
+        {},
+      );
+      const rows: WorktreeGcThread[] = [];
+      for (const raw of archived.threads) {
+        const thread = gcThreadShell(raw);
+        if (!thread.worktreePath) continue;
+        // GC needs old running commands that the bounded timeline can omit.
+        // Read full execution state before planning and again before removal.
+        const detail = await rpc.subscribeThreadSnapshot<{
+          kind: "snapshot";
+          snapshot: { thread: OrchestrationThread };
+        }>(thread.id, { fullHistory: true });
+        if (!detail.snapshot.thread.projection)
+          throw new Error("GC requires a V2 execution projection.");
+        rows.push({
+          id: thread.id,
+          worktreePath: thread.worktreePath,
+          archivedAt: thread.archivedAt,
+          workActive: projectionHasWork(detail.snapshot.thread.projection),
+        });
+      }
+      // A just-unarchived thread vetoes every alias of its checkout.
+      const active = await this.listThreads();
+      return [
+        ...rows,
+        ...active.map((thread) => ({
+          id: thread.id,
+          worktreePath: thread.worktreePath,
+          archivedAt: null,
+          workActive: true,
+        })),
+      ];
+    } finally {
+      await rpc.dispose();
+    }
   }
 
   async listProjects(): Promise<OrchestrationProjectShell[]> {
@@ -545,7 +587,15 @@ export class RemoteEnvironmentClient {
     };
   }
 
-  async findThread(threadId: string): Promise<OrchestrationThread> {
+  /**
+   * Bounded recent history and execution state. Transcript consumers opt into fullHistory.
+   * Nesting fields come from the fork metadata table; callers that do not need them
+   * pass `nesting: false`.
+   */
+  async findThread(
+    threadId: string,
+    options: { readonly nesting?: boolean; readonly fullHistory?: boolean } = {},
+  ): Promise<OrchestrationThread> {
     const rpc = await this.openRpc();
     try {
       const item = await rpc.subscribeThreadSnapshot<{
@@ -554,7 +604,7 @@ export class RemoteEnvironmentClient {
           snapshotSequence: number;
           thread: OrchestrationThread;
         };
-      }>(threadId);
+      }>(threadId, { fullHistory: options.fullHistory });
       if (item.kind !== "snapshot") {
         throw new Error(`Expected a thread snapshot for '${threadId}', received '${item.kind}'.`);
       }
@@ -753,7 +803,7 @@ export class RemoteEnvironmentClient {
           snapshotSequence: number;
           thread: OrchestrationThread;
         };
-      }>(input.threadId);
+      }>(input.threadId, { fullHistory: input.planId !== undefined });
       if (item.kind !== "snapshot") {
         throw new Error(
           `Expected a thread snapshot for '${input.threadId}', received '${item.kind}'.`,

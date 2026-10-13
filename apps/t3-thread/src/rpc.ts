@@ -109,9 +109,16 @@ export class T3RpcClient {
     ) as T;
   }
 
-  async subscribeThreadSnapshot<T>(threadId: string): Promise<T> {
+  async subscribeThreadSnapshot<T>(
+    threadId: string,
+    options: { fullHistory?: boolean | undefined } = {},
+  ): Promise<T> {
     return decodeThreadSnapshotItem(
-      await this.requestStreamFirst("subscribeThread", { threadId }),
+      await this.requestStreamFirst("subscribeThread", {
+        threadId,
+        acceptBoundedSnapshot: options.fullHistory !== true,
+        includeOperatorSummary: options.fullHistory !== true,
+      }),
     ) as T;
   }
 
@@ -124,6 +131,7 @@ export class T3RpcClient {
       Stream.runHead(
         client[ORCHESTRATION_V2_WS_METHODS.subscribeThread]({
           threadId: ThreadId.make(threadId),
+          acceptBoundedSnapshot: true,
         }).pipe(Stream.filter(matches)),
       ),
     );
