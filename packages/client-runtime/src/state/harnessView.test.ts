@@ -429,6 +429,89 @@ describe("buildHarnessChecks", () => {
     expect(check?.spokenLabel).not.toMatch(/[{}[\]"]/);
   });
 
+  describe("pinned checks", () => {
+    const failing = routine({
+      key: "env:automation:failing",
+      name: "Release canary",
+      state: "failing",
+      history: [run({ outcome: "failed" })],
+    });
+    const late = routine({
+      key: "env:automation:late",
+      name: "Nightly review",
+      lateness: { ...routine().lateness, state: "overdue", overdue: true, latenessMs: 1_500_000 },
+    });
+    const healthy = routine({
+      key: "env:automation:healthy",
+      name: "Zeta sweeper",
+      errorsPerRun: { sampleSize: 1, knownSamples: 1, missingSamples: 0, average: 0, recent: [0] },
+    });
+    const names = (snap: HarnessSnapshot) =>
+      buildHarnessChecks([snap], NOW).map((check) => check.name);
+
+    it("sorts a pinned check above failing, overdue and healthy ones, and back when unpinned", () => {
+      const routines = [failing, late, healthy];
+      expect(names(snapshot(routines))).toEqual([
+        "Release canary",
+        "Nightly review",
+        "Zeta sweeper",
+      ]);
+      expect(names(snapshot(routines, { pinnedCheckKeys: ["env:automation:healthy"] }))).toEqual([
+        "Zeta sweeper",
+        "Release canary",
+        "Nightly review",
+      ]);
+      // Unpinned again: the pin list is empty and the order is the plain one.
+      expect(names(snapshot(routines, { pinnedCheckKeys: [] }))).toEqual([
+        "Release canary",
+        "Nightly review",
+        "Zeta sweeper",
+      ]);
+    });
+
+    it("keeps pins on their own environment: another server's key never marks this one's check", () => {
+      const other = EnvironmentId.make("other");
+      const checks = buildHarnessChecks(
+        [
+          snapshot([healthy], { pinnedCheckKeys: [] }),
+          snapshot([{ ...healthy, environmentId: other }], {
+            environmentId: other,
+            pinnedCheckKeys: ["env:automation:healthy"],
+          }),
+        ],
+        NOW,
+      );
+      expect(checks.map((check) => [check.routine.environmentId, check.pinned])).toEqual([
+        [other, true],
+        [environmentId, false],
+      ]);
+    });
+
+    it("degrades when the server cannot pin: nothing is pinned and the control is hidden", () => {
+      const [check] = buildHarnessChecks([snapshot([healthy])], NOW);
+      expect(check?.pinned).toBe(false);
+      expect(check?.pinSupported).toBe(false);
+      const [supported] = buildHarnessChecks([snapshot([healthy], { pinnedCheckKeys: [] })], NOW);
+      expect(supported?.pinSupported).toBe(true);
+    });
+
+    it("ignores a pin for a check that is no longer reported", () => {
+      const checks = buildHarnessChecks(
+        [snapshot([healthy], { pinnedCheckKeys: ["env:automation:removed"] })],
+        NOW,
+      );
+      expect(checks.map((check) => check.pinned)).toEqual([false]);
+    });
+
+    it("says Pinned to a screen reader", () => {
+      const [check] = buildHarnessChecks(
+        [snapshot([healthy], { pinnedCheckKeys: ["env:automation:healthy"] })],
+        NOW,
+      );
+      expect(check?.spokenLabel).toContain("Pinned");
+    });
+  });
+
   it("labels a per-run agent between runs and never a persistent one", () => {
     const [perRun, persistent, running] = buildHarnessChecks(
       [
