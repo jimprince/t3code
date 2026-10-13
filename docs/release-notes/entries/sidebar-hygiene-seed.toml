@@ -1,0 +1,4 @@
+id = "sidebar-hygiene-seed"
+category = "fix"
+functionality = "threads"
+text = "New delegated workers retain their parent even when task details arrive separately. Replaying history preserves your later moves and completion choices."
