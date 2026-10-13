@@ -1,0 +1,14 @@
+name = "fork-harness-routine-kind"
+subject = "feat(harness): classify routines explicitly"
+class = "product"
+purpose = "Give automations and scheduled tasks an explicit routine kind so global checks, project routines and agent wake-ups can be presented in their own places."
+retire_when = "Upstream provides equivalent explicit routine classification and owner-purpose defaults, or Harness is retired."
+depends_on = ["fork-harness-read-service", "fork-harness-check-pins"]
+roles = []
+note = "RoutineKindService.set is shared by RPC and MCP; explicit check/project/agent-wake metadata lives in existing automation_json and schedule_json, with owner-purpose defaults and immediate cache invalidation. Classification is applied separately after review. Pins on project and agent-wake routines stay inert. Existing shared files retain their current inventory owners. apps/t3-thread changes are excluded from desktop releases and require separate CLI installation. Files: apps/server/src/auth/RpcAuthorization.ts, apps/server/src/automations/AutomationEngine.test.ts, apps/server/src/automations/AutomationEngine.ts, apps/server/src/automations/AutomationStore.ts, apps/server/src/harness/RoutineKindService.test.ts, apps/server/src/harness/RoutineKindService.ts, apps/server/src/harness/fixtures/routines-2026-10-13.json, apps/server/src/harness/model.ts, apps/server/src/mcp/OrchestratorMcpService.ts, apps/server/src/mcp/toolkits/core.test.ts, apps/server/src/mcp/toolkits/worktree/registration.test.ts, apps/server/src/scheduledTasks/ScheduledTaskService.ts, apps/t3-thread/src/automations.ts, apps/t3-thread/src/client.ts, apps/t3-thread/src/contracts.ts, apps/t3-thread/src/routineClassification.ts, apps/t3-thread/src/rpc.ts, docs/operations/routine-kind.md, packages/contracts/src/automations.ts, packages/contracts/src/index.ts, packages/contracts/src/orchestratorMcp.ts, packages/contracts/src/routineKind.ts, packages/contracts/src/scheduledTask.ts, packages/shared/src/t3McpToolPresentation.ts, docs/operations/fork-inventory/fork-harness-routine-kind.toml, docs/release-notes/entries/harness-routine-kind.toml"
+
+[[patch.decision]]
+id = "harness-routine-kind-in-existing-json"
+date = "2026-10-13"
+decided = "Store optional explicit routine kinds in existing JSON and resolve defaults from owner purpose, without a migration or name guessing."
+rationale = "Existing records and older editors keep working; one classification setter and persisted-kind cache signatures keep RPC, MCP and snapshots consistent without rescheduling routines."
