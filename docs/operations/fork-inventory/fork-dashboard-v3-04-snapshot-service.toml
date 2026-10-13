@@ -1,0 +1,8 @@
+name = "fork-dashboard-v3-04-snapshot-service"
+subject = "feat(dashboard): serve cached environment snapshots"
+class = "product"
+purpose = "serve cached environment snapshots"
+retire_when = "The dashboard-v3 series is intentionally dropped or replaced by equivalent upstream behavior."
+depends_on = ["fork-subprojects-ui"]
+roles = []
+note = "Replayed independently from live source 28763dbf6146a9db56d7b8c27c43295526b0969b; excludes the Chief of Staff tray series."
