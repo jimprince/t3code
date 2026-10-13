@@ -2129,12 +2129,6 @@ const layerWsRpc = (
               Effect.andThen(subscribeOrchestrationV2Thread(input)),
             ),
           ),
-        [WS_METHODS.harnessSnapshot]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.harnessSnapshot,
-            Effect.flatMap(HarnessReadService, (service) => service.snapshot(input)),
-            { "rpc.aggregate": "harness" },
-          ),
         [WS_METHODS.scheduledTasksList]: (_input) =>
           scheduledTasks.list().pipe(Effect.map(withVisibleWebhookUrls)),
         [WS_METHODS.scheduledTasksSubscribe]: (_input) =>
@@ -3233,6 +3227,8 @@ const layerWsRpc = (
       );
       const forwards = makeMessageForwardService(sql, threadManagement, handoffs.accept);
       const forkHandlers = WsForkRpcGroup.of({
+        [WS_METHODS.harnessSnapshot]: (input) =>
+          Effect.flatMap(HarnessReadService, (service) => service.snapshot(input)),
         ...threadSubscriptionHandlers(threadManagement),
         [WS_METHODS.automationsList]: (input) =>
           automations.list(input.projectId).pipe(Effect.map((list) => ({ automations: list }))),
