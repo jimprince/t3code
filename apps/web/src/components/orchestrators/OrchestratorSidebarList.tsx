@@ -60,20 +60,20 @@ import { useUiStateStore } from "../../uiStateStore";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { toastManager } from "../ui/toast";
 import { OrchestratorStatus } from "./OrchestratorStatus";
+import { SettledSubprojectsToggle, TaskFraction } from "./TaskFraction";
 import { useDeferredProjectSidebarBuckets } from "./projectSidebarOrder";
 import { planProjectMove } from "./projectSidebarMove.logic";
 import {
   COLLAPSED_SUBPROJECTS_KEY,
-  openTaskCount,
   ownTreeContains,
   projectKeyOf,
-  subprojectCountLabel,
   subprojectIsActive,
   subprojectWorkingLabel,
   toggleProjectKey,
   topLevelProjects,
 } from "@t3tools/client-runtime/state/projectSubprojects";
 import { useOrchestratorThreadShells } from "./useOrchestratorThreads";
+import { useSettledExpansion, type SettledExpansion } from "./useSettledExpansion";
 
 const STANDALONE_STATUS: Record<
   StandaloneThreadStatus,
@@ -127,11 +127,13 @@ function SubprojectRows({
   summary,
   selectedRoute,
   sortSubprojects,
+  settledExpansion,
   depth = 0,
 }: {
   readonly summary: OrchestratorSummary;
   readonly selectedRoute: string | null;
   readonly sortSubprojects: SortSubprojects;
+  readonly settledExpansion: SettledExpansion;
   readonly depth?: number;
 }) {
   const { active, settled } = splitSettledSubprojects(sortSubprojects(summary));
@@ -255,57 +257,57 @@ function SubprojectRow({
   readonly depth: number;
 }) {
   const navigate = useNavigate();
-  return sortSubprojects(summary).map((sub) => {
-    const { rollup } = sub;
-    const selected = ownTreeContains(sub, selectedRoute);
-    return (
-      <div key={projectKeyOf(sub)}>
-        <button
-          type="button"
-          aria-label={`Open ${sub.root.title} subproject`}
-          aria-current={selected ? "page" : undefined}
-          style={{ paddingLeft: `${0.625 + depth * 0.75}rem` }}
-          className={`pointer-events-auto flex h-6 w-full cursor-pointer items-center gap-1.5 rounded pr-1.5 text-left text-3xs hover:bg-sidebar-row-hover ${
-            selected
-              ? "bg-sidebar-row-active text-sidebar-foreground"
-              : "text-sidebar-muted-foreground"
+  const { rollup } = sub;
+  const selected = ownTreeContains(sub, selectedRoute);
+  return (
+    <div>
+      <button
+        type="button"
+        aria-label={labelWithTaskProgress(`Open ${sub.root.title} subproject`, sub)}
+        aria-current={selected ? "page" : undefined}
+        style={{ paddingLeft: `${0.625 + depth * 0.75}rem` }}
+        className={`pointer-events-auto flex h-6 w-full cursor-pointer items-center gap-1.5 rounded pr-1.5 text-left text-3xs hover:bg-sidebar-row-hover ${
+          selected
+            ? "bg-sidebar-row-active text-sidebar-foreground"
+            : "text-sidebar-muted-foreground"
+        }`}
+        onClick={() =>
+          void navigate({
+            to: "/orchestrators/$environmentId/$threadId",
+            params: { environmentId: sub.root.environmentId, threadId: sub.root.id },
+          })
+        }
+      >
+        <span aria-hidden>/</span>
+        <span
+          aria-hidden
+          className={`size-1.5 shrink-0 rounded-full ${
+            rollup.needsYou > 0
+              ? "bg-warning"
+              : subprojectIsActive(sub)
+                ? "bg-info"
+                : "bg-muted-foreground/40"
           }`}
-          onClick={() =>
-            void navigate({
-              to: "/orchestrators/$environmentId/$threadId",
-              params: { environmentId: sub.root.environmentId, threadId: sub.root.id },
-            })
-          }
-        >
-          <span aria-hidden>/</span>
-          <span
-            aria-hidden
-            className={`size-1.5 shrink-0 rounded-full ${
-              rollup.needsYou > 0
-                ? "bg-warning"
-                : subprojectIsActive(sub)
-                  ? "bg-info"
-                  : "bg-muted-foreground/40"
-            }`}
-          />
-          <span className="min-w-0 flex-1 truncate">{sub.root.title}</span>
-          {rollup.blocked > 0 ? <span className="shrink-0 text-error">Blocked</span> : null}
-          {rollup.needsYou > 0 ? (
-            <span className="shrink-0 tabular-nums text-warning-foreground">{rollup.needsYou}</span>
-          ) : null}
-          <span className="shrink-0 tabular-nums">
-            {formatRelativeTimeLabel(rollup.latestActivityAt)}
-          </span>
-        </button>
-        <SubprojectRows
-          summary={sub}
-          selectedRoute={selectedRoute}
-          sortSubprojects={sortSubprojects}
-          depth={depth + 1}
         />
-      </div>
-    );
-  });
+        <span className="min-w-0 flex-1 truncate">{sub.root.title}</span>
+        {rollup.blocked > 0 ? <span className="shrink-0 text-error">Blocked</span> : null}
+        {rollup.needsYou > 0 ? (
+          <span className="shrink-0 tabular-nums text-warning-foreground">{rollup.needsYou}</span>
+        ) : null}
+        <TaskFraction summary={sub} />
+        <span className="shrink-0 tabular-nums">
+          {formatRelativeTimeLabel(rollup.latestActivityAt)}
+        </span>
+      </button>
+      <SubprojectRows
+        summary={sub}
+        selectedRoute={selectedRoute}
+        sortSubprojects={sortSubprojects}
+        settledExpansion={settledExpansion}
+        depth={depth + 1}
+      />
+    </div>
+  );
 }
 
 /** What a draggable row needs from dnd-kit, plus Alt+Up/Down for the keyboard. */
@@ -323,6 +325,7 @@ function ProjectRow({
   sortSubprojects,
   collapsed,
   onToggleSubprojects,
+  settledExpansion,
   arrange,
 }: {
   readonly summary: OrchestratorSummary;
@@ -330,11 +333,11 @@ function ProjectRow({
   readonly sortSubprojects: SortSubprojects;
   readonly collapsed: boolean;
   readonly onToggleSubprojects: (projectKey: string) => void;
+  readonly settledExpansion: SettledExpansion;
   readonly arrange?: ProjectRowArrange | undefined;
 }) {
   const navigate = useNavigate();
   const selected = ownTreeContains(summary, selectedRoute);
-  const openIssues = openTaskCount(summary);
   const { rollup } = summary;
   const hasSubprojects = summary.subprojects.length > 0;
   const agentRows = projectSubagentRows(summary, purposes);
@@ -366,6 +369,11 @@ function ProjectRow({
     },
     [openMenu],
   );
+  const openProject = () =>
+    void navigate({
+      to: "/orchestrators/$environmentId/$threadId",
+      params: { environmentId: rootRef.environmentId, threadId: rootRef.threadId },
+    });
   const onMove = arrange?.onMove;
   const handleKeyDown = useCallback(
     (event: ReactKeyboardEvent) => {
@@ -397,12 +405,7 @@ function ProjectRow({
         aria-keyshortcuts={arrange ? "Alt+ArrowUp Alt+ArrowDown" : undefined}
         className="absolute inset-0 z-0 cursor-pointer rounded-md focus-visible:outline-2 focus-visible:outline-ring"
         onKeyDown={handleKeyDown}
-        onClick={() =>
-          void navigate({
-            to: "/orchestrators/$environmentId/$threadId",
-            params: { environmentId: rootRef.environmentId, threadId: rootRef.threadId },
-          })
-        }
+        onClick={openProject}
       />
       <div className="pointer-events-none relative z-10 flex w-full flex-col gap-1.5 px-2.5 py-2 text-left">
         <span className="flex min-w-0 w-full items-center gap-2">
@@ -467,6 +470,7 @@ function ProjectRow({
               summary={summary}
               selectedRoute={selectedRoute}
               sortSubprojects={sortSubprojects}
+              settledExpansion={settledExpansion}
             />
           </div>
         ) : null}
@@ -528,6 +532,7 @@ export function OrchestratorSidebarList() {
       setCollapsedProjects((current) => toggleProjectKey(current, projectKey)),
     [setCollapsedProjects],
   );
+  const settledExpansion = useSettledExpansion();
   const [quietCutoff] = useState(() => Date.now() - PROJECT_QUIET_AFTER_MS);
   // Every project, subprojects included: each carries its own sidebar bucket.
   const allSummaries = useMemo(
@@ -713,6 +718,7 @@ export function OrchestratorSidebarList() {
                     sortSubprojects={sortSubprojects}
                     collapsed={collapsedProjects.includes(projectKeyOf(summary))}
                     onToggleSubprojects={toggleSubprojects}
+                    settledExpansion={settledExpansion}
                   />
                 ))}
               </ul>
@@ -743,6 +749,7 @@ export function OrchestratorSidebarList() {
                       sortSubprojects={sortSubprojects}
                       collapsed={collapsedProjects.includes(projectKeyOf(summary))}
                       onToggleSubprojects={toggleSubprojects}
+                      settledExpansion={settledExpansion}
                     />
                   ))}
                 </ul>
