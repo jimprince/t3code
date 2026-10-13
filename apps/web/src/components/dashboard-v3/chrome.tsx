@@ -1,10 +1,14 @@
-import { useState } from "react";
+import { buildOrchestratorSummaries } from "@t3tools/client-runtime/state/orchestrators";
+import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { useMemo, useState } from "react";
 
+import { useProjects } from "../../state/entities";
+import { InlineButton } from "../ui/button";
 import { Dialog, DialogHeader, DialogPopup, DialogTitle } from "../ui/dialog";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { ProjectRequestBox, REQUEST_QUICK_ACTIONS } from "../orchestrators/ProjectRequestBox";
-import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
+import { useOrchestratorThreadShells } from "../orchestrators/useOrchestratorThreads";
 import { useDashboardUi } from "./context";
 import {
   formatClock,
@@ -19,7 +23,9 @@ import {
   useDashboardVariant,
   type DashboardVariant,
 } from "./prefs";
-import { UnknownValue } from "./parts";
+import { UnknownValue, useSectionMarker } from "./parts";
+
+const COS_TITLE = /chief of staff/i;
 
 const HEALTH_WORD: Record<SourceHealth, string> = {
   fresh: "fresh",
@@ -38,7 +44,14 @@ const HEALTH_CLASS: Record<SourceHealth, string> = {
  * "as of 7:42 am" in local time, with an amber suffix naming a stale source and a red one when a
  * refresh failed. Opens the sources table so each fact keeps the age of its own source.
  */
-export function FreshnessStamp({ failed }: { readonly failed: boolean }) {
+export function FreshnessStamp({
+  failed,
+  onRetry,
+}: {
+  readonly failed: boolean;
+  /** Offered beside "refresh failed"; absent when the data layer has no way to retry. */
+  readonly onRetry?: (() => void) | undefined;
+}) {
   const { data, now } = useDashboardUi();
   const [open, setOpen] = useState(false);
   if (data.asOf === null) return null;
@@ -60,6 +73,11 @@ export function FreshnessStamp({ failed }: { readonly failed: boolean }) {
         ) : null}
         {failed ? <span className="text-destructive-foreground">· refresh failed</span> : null}
       </button>
+      {failed && onRetry ? (
+        <InlineButton tone="muted" onClick={onRetry}>
+          Retry
+        </InlineButton>
+      ) : null}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogPopup className="max-w-xl">
           <DialogHeader>
@@ -103,11 +121,21 @@ export function FreshnessStamp({ failed }: { readonly failed: boolean }) {
   );
 }
 
+/** One muted line per connected server that predates the Dashboard snapshot. */
+export function OlderServerLines({ names }: { readonly names: ReadonlyArray<string> }) {
+  return names.map((name) => (
+    <div key={name} className="text-xs text-muted-foreground">
+      {name} runs an older server
+    </div>
+  ));
+}
+
 /**
- * A three-segment control (plus the previous dashboard) for the review: it is removed with the
- * losing variants once Brad picks. One preference for Home and every project page.
+ * A three-segment control (plus the previous dashboard on project pages, the only place it exists)
+ * for the review: it is removed with the losing variants once Brad picks. One preference for Home
+ * and every project page.
  */
-export function VariantSwitcher() {
+export function VariantSwitcher({ withPrevious = true }: { readonly withPrevious?: boolean }) {
   const [variant, setVariant] = useDashboardVariant();
   return (
     <ToggleGroup
@@ -119,7 +147,7 @@ export function VariantSwitcher() {
           setVariant(value as DashboardVariant);
       }}
     >
-      {DASHBOARD_VARIANTS.map((value) => (
+      {DASHBOARD_VARIANTS.filter((value) => withPrevious || value !== "previous").map((value) => (
         <Tooltip key={value}>
           <TooltipTrigger
             render={<Toggle value={value}>{value === "previous" ? "Previous" : value}</Toggle>}
@@ -131,27 +159,45 @@ export function VariantSwitcher() {
   );
 }
 
-/** Ask first (R11): the existing request box, routed to the Chief of Staff on Home. */
-export function AskBar({
-  summary,
-  routeLabel,
+/**
+ * Ask first (R11): the existing request box, routed to the Chief of Staff on Home and to the page's
+ * own project head on a project page. It reads the thread shells itself so a shell change
+ * re-renders only this box, not the whole Dashboard.
+ */
+export function AskSection({
+  projectHead,
   compact = false,
 }: {
-  readonly summary: OrchestratorSummary | null;
-  readonly routeLabel: string;
+  /** The project page's head thread; null on Home. */
+  readonly projectHead: {
+    readonly environmentId: EnvironmentId;
+    readonly threadId: ThreadId;
+  } | null;
   readonly compact?: boolean;
 }) {
   const ui = useDashboardUi();
-  const prefill = ui.prefill;
-  if (!summary) return null;
+  const marker = useSectionMarker("ask");
+  const projects = useProjects();
+  const threads = useOrchestratorThreadShells();
+  const summary = useMemo(() => {
+    const summaries = buildOrchestratorSummaries(threads, projects);
+    return projectHead
+      ? (summaries.find(
+          (entry) =>
+            entry.root.environmentId === projectHead.environmentId &&
+            entry.root.id === projectHead.threadId,
+        ) ?? null)
+      : (summaries.find((entry) => COS_TITLE.test(entry.root.title)) ?? null);
+  }, [projectHead, projects, threads]);
+  if (!summary) return <div {...marker} hidden />;
   return (
-    <div className="flex flex-col gap-1">
+    <div {...marker}>
       <ProjectRequestBox
         summary={summary}
         quickActions={compact ? undefined : REQUEST_QUICK_ACTIONS}
-        prefill={prefill}
+        prefill={ui.prefill}
+        placeholder={`New request to ${summary.root.title}`}
       />
-      <span className="text-xs text-muted-foreground">goes to {routeLabel}</span>
     </div>
   );
 }
