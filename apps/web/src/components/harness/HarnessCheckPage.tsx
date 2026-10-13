@@ -7,7 +7,7 @@ import {
 import type { HarnessTone } from "@t3tools/client-runtime/state/harness-view";
 import type { HarnessThreadLink } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
-import { ChevronLeftIcon } from "lucide-react";
+import { ChevronLeftIcon, PinIcon, PinOffIcon } from "lucide-react";
 import { useMemo, type ReactNode } from "react";
 
 import { useNowMinute } from "../../hooks/useNowMinute";
@@ -21,6 +21,7 @@ import { SidebarInset, useSidebar } from "../ui/sidebar";
 import { WorkspacePageContainer } from "../WorkspacePageContainer";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { TONE_DOT } from "./harnessTone";
+import { useHarnessCheckPin } from "./useHarnessCheckPin";
 
 const TONE_TEXT: Record<HarnessTone, string> = {
   error: "text-error",
@@ -171,6 +172,7 @@ export function HarnessCheckPage({ checkRef }: { readonly checkRef: HarnessCheck
   const nowMinute = useNowMinute();
   const now = useMemo(() => Date.parse(`${nowMinute}:00Z`), [nowMinute]);
   const [, setSidebarMode] = useSidebarMode();
+  const { setPinned, pinLabel } = useHarnessCheckPin();
   const { isMobile, open, setOpen, setOpenMobile } = useSidebar();
   const state = useMemo(
     () => resolveHarnessCheckPage(environments, checkRef, now),
@@ -200,6 +202,17 @@ export function HarnessCheckPage({ checkRef }: { readonly checkRef: HarnessCheck
           <h1 className="min-w-0 flex-1 truncate text-sm font-medium">
             {page ? page.check.name : "Check"}
           </h1>
+          {page?.check.pinSupported ? (
+            <Button
+              size="xs"
+              variant="ghost-muted"
+              aria-pressed={page.check.pinned}
+              onClick={() => void setPinned(page.check, !page.check.pinned)}
+            >
+              {page.check.pinned ? <PinOffIcon aria-hidden /> : <PinIcon aria-hidden />}
+              {pinLabel(page.check)}
+            </Button>
+          ) : null}
           {page ? (
             <button
               type="button"
