@@ -66,6 +66,28 @@ export const PROJECT_WIDGET_TYPES: ReadonlyArray<ProjectWidgetType> = [
     fields: [],
   },
   {
+    type: "plan",
+    title: "Plan",
+    description:
+      "Tasks grouped by project and workstream, each with a progress bar: how far it has come, what finished in the chosen window (last hour, 4 hours, today), and where that pace takes it one window ahead. Stalled work shows amber; 'waiting on you' opens that project's Decisions. Ends with what finished since Brad's last visit. Covers this project and its subprojects, or every project.",
+    fields: [
+      {
+        key: "allProjects",
+        kind: "boolean",
+        label: "All projects",
+        description: "Show every top-level project instead of this one and its subprojects.",
+        default: false,
+      },
+      {
+        key: "utilities",
+        kind: "text",
+        label: "Utility projects",
+        description: "Project titles, one per line, grouped last under Utilities.",
+        default: "",
+      },
+    ],
+  },
+  {
     type: "requests",
     title: "Requests",
     description: "Brad's requests still with the agents or waiting for a release.",
