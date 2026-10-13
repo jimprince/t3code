@@ -1,0 +1,8 @@
+name = "fork-dashboard-v3-08-decision-release-facts"
+subject = "fix(web): Dashboard keeps answered decisions answered and renders release facts honestly"
+class = "product"
+purpose = "Dashboard keeps answered decisions answered and renders release facts honestly"
+retire_when = "The dashboard-v3 series is intentionally dropped or replaced by equivalent upstream behavior."
+depends_on = ["fork-dashboard-v3-07-design-toggle"]
+roles = []
+note = "Replayed independently from live source 8ca87176a2278601e541ee7987a96d390a7cffdd; excludes the Chief of Staff tray series."
