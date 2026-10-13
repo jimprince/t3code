@@ -1,3 +1,4 @@
+import { resolveCreatorPurpose } from "../forkThreads/ThreadPurpose.ts";
 import { assert, it } from "@effect/vitest";
 import { vi } from "vite-plus/test";
 import {
@@ -46,7 +47,7 @@ const issuesTestContext = Layer.mergeAll(
   FetchHttpClient.layer,
 );
 import { AgentGateway, layer as gatewayLayer } from "./AgentGateway.ts";
-import { listMetadata } from "../forkThreads/MetadataStore.ts";
+import { writeMetadata, listMetadata } from "../forkThreads/MetadataStore.ts";
 
 // Issues are a separate lane; this test exercises the native launch/record boundary only.
 vi.mock("../projectIssues/ProjectIssuesService.ts", async () => {
@@ -190,6 +191,11 @@ it.effect(
         assert.equal(launches[0]?.reuseExistingThread, true);
         const ownerThreadId = ThreadId.make("automation-owner");
         yield* threads.dispatch(create(ownerThreadId));
+        yield* writeMetadata(sql, {
+          threadId: ownerThreadId,
+          parentThreadId: null,
+          purpose: "harness",
+        });
         const fresh = {
           ...partial,
           threadId: ThreadId.make("fresh"),
@@ -199,6 +205,7 @@ it.effect(
         assert.equal((yield* gateway.advance(ownedRun, fresh)).status, "running");
         assert.equal((yield* gateway.advance(ownedRun, fresh)).status, "running");
         assert.equal(launches.length, 2);
+        assert.equal(yield* resolveCreatorPurpose(sql, fresh.threadId), "harness");
         assert.equal(launches[1]?.reuseExistingThread, true);
         assert.equal(
           (yield* listMetadata(sql)).find((row) => row.threadId === fresh.threadId)?.parentThreadId,
