@@ -263,3 +263,9 @@ passed as `--wsl-runtime`; see the
 Add `--signed` after configuring the platform credentials in the
 [release runbook](./release.md). macOS passkeys need a signed, provisioned app; follow the
 [Connect setup](./connect-setup.md#desktop-passkeys) for local signing and renderer HMR.
+
+### Harness owner feeds
+
+`harness.snapshot` and MCP `harness_snapshot` share one environment-local read service. Owner feeds are opt-in through `T3CODE_HARNESS_FEED_DIR`; unset means no filesystem feed directory. Provide copies of `health.json`, `detection-readback.json`, `canary-policy.json`, `canary-state.json`, `canary-tick-readback.json` and `availability.json` in that directory. Symlinks, other filenames and files over 2 MiB are refused. No owner commands run. `T3CODE_HARNESS_FEED_ENVIRONMENTS` is a JSON map from canary host keys to verified environment IDs; without a mapping, cross-host thread links are unavailable.
+
+Freshness uses `T3CODE_HARNESS_FEED_STALE_MS` (default 300000; availability capped at 90000). Accepted canary policy is configuration, while state, tick and individual route readbacks carry freshness. `T3CODE_HARNESS_LATE_GRACE_MS` defaults to zero and controls displayed lateness evidence, not paging or monitor rules. Reliability owns those rules. Optional `run-receipts.json` has an `observedAt` timestamp and bounded `receipts` containing exact `routineKey`, `runKey`, `observedAt`, nonnegative `findingsCount` and `coverage: "complete"`; missing, stale or partial receipts leave findings unknown. Runtime error-item counts are separate and exclude child runs.
