@@ -82,6 +82,95 @@ describe("older-server dashboard", () => {
     expect(tasks[0]?.movement.state).toBe("unknown");
     expect(snapshot.projects.flatMap((p) => p.attention)).toHaveLength(1);
   });
+  it("keeps a head with only remote workers and routes a cross-project decision to its waiting thread", () => {
+    const remote = ThreadId.make("a6aac268-fd81-462c-ab1d-4b2d92609ba0");
+    const scenario = {
+      ...input,
+      shell: {
+        ...shell,
+        threads: shell.threads.map((t) => (t.id === root ? { ...t, id: remote } : t)),
+      },
+      metadata: metadata.map((row) =>
+        row.threadId === root ? { threadId: remote, parentThreadId: null } : row,
+      ),
+      remoteParentThreadIds: [remote],
+      issues: new Map([
+        [
+          other,
+          [
+            {
+              ...issue,
+              linkedThreadIds: [],
+              decision: { ...issue.decision!, waiting: "clinic-scheduler-orchestrator (a6aac268)" },
+              owner: { threadId: other, title: "Other", projectTitle: "VM" },
+            },
+          ],
+        ],
+      ]),
+      ownRepositories: new Map([[other, "git.test/brad/repo"]]),
+    };
+    const snapshot = composeOlderDashboard(scenario);
+    expect(snapshot.projects.find((p) => p.rootThreadId === remote)?.attention).toHaveLength(1);
+    expect(snapshot.projects.find((p) => p.rootThreadId === other)?.attention).toHaveLength(0);
+    expect(snapshot.projects.find((p) => p.rootThreadId === remote)?.tasks[0]?.threadId).toBe(
+      remote,
+    );
+    const ambiguous = composeOlderDashboard({
+      ...scenario,
+      shell: {
+        ...scenario.shell,
+        threads: [
+          ...scenario.shell.threads,
+          {
+            ...scenario.shell.threads[0]!,
+            id: ThreadId.make("a6aac268-1111-1111-1111-111111111111"),
+          },
+        ],
+      },
+    });
+    expect(ambiguous.projects.find((p) => p.rootThreadId === remote)?.attention).toHaveLength(0);
+    expect(composeOlderDashboard({ ...input, metadata: [] }).projects).toHaveLength(0);
+  });
+
+  it("attributes a duplicated tracker decision to its owning host regardless of host order", () => {
+    const snapshot = composeOlderDashboard(input);
+    const project = snapshot.projects.find((p) => p.attention.length)!;
+    const attention = { ...project.attention[0]!, threadId: root };
+    const mac = {
+      ...snapshot,
+      projects: [
+        {
+          ...project,
+          rootThreadId: other,
+          attention: [attention],
+          tasks: project.tasks.map((task) => ({ ...task, threadId: null })),
+        },
+      ],
+    };
+    const vm = {
+      ...snapshot,
+      projects: [
+        {
+          ...project,
+          rootThreadId: root,
+          attention: [attention],
+          tasks: project.tasks.map((task) => ({ ...task, threadId: root })),
+        },
+      ],
+    };
+    const parts = [
+      { environmentId: EnvironmentId.make("mac"), snapshot: mac },
+      { environmentId: EnvironmentId.make("vm"), snapshot: vm },
+    ];
+    for (const entries of [parts, parts.toReversed()]) {
+      const decisions = mergeDashboardSnapshots(entries).projects.filter(
+        (p) => p.project.attention.length,
+      );
+      expect(decisions.map((p) => p.environmentId)).toEqual(["vm"]);
+      expect(decisions[0]?.project.attention[0]?.sourceId).toBe("vm:gitea:git.test/brad/repo");
+    }
+  });
+
   it("assigns unlinked repository work to its own root before a cross-repository root", () => {
     const snapshot = aggregate({
       ...input,
