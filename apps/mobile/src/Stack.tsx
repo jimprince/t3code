@@ -58,6 +58,7 @@ import { ThreadRouteScreen } from "./features/threads/ThreadRouteScreen";
 import { McpAppFullscreenScreen } from "./features/threads/McpAppFullscreenScreen";
 import { ConnectionsRouteScreen } from "./features/connection/ConnectionsRouteScreen";
 import { ConnectionsNewRouteScreen } from "./features/connection/ConnectionsNewRouteScreen";
+import { HarnessCheckRouteScreen } from "./features/home/HarnessCheckRouteScreen";
 import { HomeRouteScreen } from "./features/home/HomeRouteScreen";
 import { AddProjectDestinationRoute } from "./features/projects/AddProjectDestinationRoute";
 import { AddProjectLocalRoute } from "./features/projects/AddProjectLocalRoute";
@@ -699,6 +700,12 @@ const RootStackConfig = createWorkspaceStackNavigator({
       screen: ThreadRouteScreen,
       linking: THREAD_LINKING_PREFIX,
       options: GLASS_HEADER_OPTIONS,
+    }),
+    // A Harness check opened from its row in the Harness list; the key is the one its snapshot gives it.
+    HarnessCheck: createNativeStackScreen({
+      screen: HarnessCheckRouteScreen,
+      linking: "harness/checks/:environmentId/:checkKey",
+      options: { ...SOLID_HEADER_OPTIONS, title: "Check" },
     }),
     ThreadTerminal: createNativeStackScreen({
       screen: ThreadTerminalRouteScreen,
