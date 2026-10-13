@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 
 import { cn } from "../../lib/utils";
 import { useDashboardUi } from "./context";
+import { isThreadPlanTaskId } from "./resumeFromPlan.logic";
+import { ThreadPlanLine } from "./ThreadPlanLine";
 import {
   barSegments,
   formatClock,
@@ -296,6 +298,14 @@ export function TaskRow({
       <span className="text-right @xl/dash:col-auto">
         <TaskFigure scoped={scoped} task={task} roll={roll} keys={keys} stale={stale} idle={idle} />
       </span>
+      {task.threadId && !done ? (
+        <ThreadPlanLine
+          environmentId={scoped.environmentId}
+          task={task}
+          planRow={isThreadPlanTaskId(task.id)}
+          className="order-last col-span-3 mt-1 pl-6 @xl/dash:order-none @xl/dash:col-span-3 @xl/dash:col-start-2 @xl/dash:mt-0 @xl/dash:pl-0"
+        />
+      ) : null}
     </div>
   );
 }
