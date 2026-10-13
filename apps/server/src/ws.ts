@@ -1379,7 +1379,7 @@ const layerWsRpc = (
         yield* SourceControlRepositoryService.SourceControlRepositoryService;
       const withPullRequestViewer = pullRequests.withRoutingCredential;
       const dashboard = yield* DashboardService.DashboardService;
-      const projectIssues = yield* ProjectIssuesService.make;
+      const projectIssues = yield* ProjectIssuesService.Service;
       const requestLedger = yield* RequestLedger.make({ projectIssues, threadIssues });
       const decisionFeed = yield* DecisionFeed.make({ projectIssues, ledger: requestLedger });
       const planTaskLauncher = yield* PlanTaskLaunch.make.pipe(Effect.orDie);
@@ -2036,7 +2036,9 @@ const layerWsRpc = (
               startup
                 .enqueueCommand(
                   ThreadMessageIntake.launchThread({
-                    ...(input.creatorThreadId === undefined ? {} : { creatorThreadId: input.creatorThreadId }),
+                    ...(input.creatorThreadId === undefined
+                      ? {}
+                      : { creatorThreadId: input.creatorThreadId }),
                     ...(input.purposeSeed === undefined ? {} : { purposeSeed: input.purposeSeed }),
                     commandId: input.commandId,
                     ...(input.threadId === undefined ? {} : { threadId: input.threadId }),
@@ -2126,12 +2128,6 @@ const layerWsRpc = (
             Effect.annotateCurrentSpan({ "orchestration_v2.thread_id": input.threadId }).pipe(
               Effect.andThen(subscribeOrchestrationV2Thread(input)),
             ),
-          ),
-        [WS_METHODS.harnessSnapshot]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.harnessSnapshot,
-            Effect.flatMap(HarnessReadService, (service) => service.snapshot(input)),
-            { "rpc.aggregate": "harness" },
           ),
         [WS_METHODS.scheduledTasksList]: (_input) =>
           scheduledTasks.list().pipe(Effect.map(withVisibleWebhookUrls)),
@@ -3231,6 +3227,8 @@ const layerWsRpc = (
       );
       const forwards = makeMessageForwardService(sql, threadManagement, handoffs.accept);
       const forkHandlers = WsForkRpcGroup.of({
+        [WS_METHODS.harnessSnapshot]: (input) =>
+          Effect.flatMap(HarnessReadService, (service) => service.snapshot(input)),
         ...threadSubscriptionHandlers(threadManagement),
         [WS_METHODS.automationsList]: (input) =>
           automations.list(input.projectId).pipe(Effect.map((list) => ({ automations: list }))),
@@ -3262,9 +3260,11 @@ const layerWsRpc = (
             Effect.flatMap((result) => requestLedger.decorate(result, input.rootThreadId)),
             Effect.flatMap((result) => decisionFeed.enrich(result, input.rootThreadId)),
           ),
-        [WS_METHODS.projectRequestsSettle]: (input) => requestLedger.settle(input),
+        [WS_METHODS.projectRequestsSettle]: (input) =>
+          requestLedger.settle(input).pipe(Effect.tap(() => dashboard.invalidate)),
         [WS_METHODS.projectRequestsCreate]: (input) => requestLedger.create(input),
-        [WS_METHODS.projectRequestsUpdate]: (input) => requestLedger.update(input),
+        [WS_METHODS.projectRequestsUpdate]: (input) =>
+          requestLedger.update(input).pipe(Effect.tap(() => dashboard.invalidate)),
         [WS_METHODS.projectCanvasRead]: (input) => projectCanvas.read(input),
         [WS_METHODS.projectCanvasAction]: (input) => projectCanvas.logAction(input),
         [WS_METHODS.projectRoadmapGet]: (input) => projectRoadmap.get(input),
@@ -3316,10 +3316,14 @@ const layerWsRpc = (
         [WS_METHODS.subscribeProjectLayout]: (input) => projectLayout.stream(input.threadId),
         [WS_METHODS.projectRequestsDiscuss]: (input) => requestLedger.discuss(input),
         [WS_METHODS.projectRequestsPendingAsks]: (input) => decisionFeed.pendingAsks(input),
-        [WS_METHODS.projectRequestsApproveMerge]: (input) => decisionFeed.approveAndMerge(input),
-        [WS_METHODS.projectRequestsSendBack]: (input) => decisionFeed.sendBack(input),
-        [WS_METHODS.projectRequestsDefer]: (input) => decisionFeed.defer(input),
-        [WS_METHODS.projectRequestsDecide]: (input) => requestLedger.decide(input),
+        [WS_METHODS.projectRequestsApproveMerge]: (input) =>
+          decisionFeed.approveAndMerge(input).pipe(Effect.tap(() => dashboard.invalidate)),
+        [WS_METHODS.projectRequestsSendBack]: (input) =>
+          decisionFeed.sendBack(input).pipe(Effect.tap(() => dashboard.invalidate)),
+        [WS_METHODS.projectRequestsDefer]: (input) =>
+          decisionFeed.defer(input).pipe(Effect.tap(() => dashboard.invalidate)),
+        [WS_METHODS.projectRequestsDecide]: (input) =>
+          requestLedger.decide(input).pipe(Effect.tap(() => dashboard.invalidate)),
       });
       return Context.merge(
         Context.merge(
@@ -3349,6 +3353,7 @@ export const layer = Layer.unwrap(
     const pullRequests = yield* PullRequestService.PullRequestService;
     const projectLayouts = yield* ProjectLayoutService.ProjectLayoutService;
     const dashboardService = yield* DashboardService.DashboardService;
+    const sharedProjectIssues = yield* ProjectIssuesService.Service;
     const sql = yield* SqlClient.SqlClient;
     return HttpRouter.add(
       "GET",
@@ -3412,6 +3417,7 @@ export const layer = Layer.unwrap(
               Layer.provide(DefectReporter.layer),
               Layer.provide(Layer.succeed(SqlClient.SqlClient, sql)),
               Layer.provide(Layer.succeed(DashboardService.DashboardService, dashboardService)),
+              Layer.provide(Layer.succeed(ProjectIssuesService.Service, sharedProjectIssues)),
               Layer.provide(AgentSessionScanner.layer),
               Layer.provide(ProviderMaintenanceRunner.layer),
               Layer.provide(Layer.succeed(ServerSelfUpdate.ServerSelfUpdate, serverSelfUpdate)),
@@ -3450,7 +3456,12 @@ export const layer = Layer.unwrap(
                 }),
               ),
             ),
-          (connected) => Effect.forkDetach(Fiber.await(connected).pipe(Effect.andThen(sessions.markDisconnected(session.sessionId)))),
+          (connected) =>
+            Effect.forkDetach(
+              Fiber.await(connected).pipe(
+                Effect.andThen(sessions.markDisconnected(session.sessionId)),
+              ),
+            ),
         );
       }).pipe(
         Effect.catchTags({
