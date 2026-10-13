@@ -48,7 +48,12 @@ const summary = (
     parentProjectKey:
       options.parent === undefined || options.parent === null ? null : `env:${options.parent}`,
     issues: options.issues ?? [],
-    rollup: { needsYou: options.needsYou ?? 0, working: 0, blocked: options.blocked ?? 0, latestActivityAt: "" },
+    rollup: {
+      needsYou: options.needsYou ?? 0,
+      working: 0,
+      blocked: options.blocked ?? 0,
+      latestActivityAt: "",
+    },
   }) as unknown as OrchestratorSummary;
 
 describe("project subprojects", () => {

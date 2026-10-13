@@ -189,7 +189,6 @@ export const subprojectNeedsYou = (summary: OrchestratorSummary) =>
 export const subprojectBlocked = (summary: OrchestratorSummary) =>
   summary.subprojects.reduce((total, sub) => total + sub.rollup.blocked, 0);
 
-
 export const COLLAPSED_SUBPROJECTS_KEY = "t3code:projects:collapsed-subprojects";
 export const EXPANDED_SETTLED_KEY = "t3code:projects:expanded-settled";
 

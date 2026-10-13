@@ -2,7 +2,10 @@ import * as Schema from "effect/Schema";
 import { useMemo } from "react";
 
 import { useLocalStorage } from "../../hooks/useLocalStorage";
-import { EXPANDED_SETTLED_KEY, toggleProjectKey } from "@t3tools/client-runtime/state/projectSubprojects";
+import {
+  EXPANDED_SETTLED_KEY,
+  toggleProjectKey,
+} from "@t3tools/client-runtime/state/projectSubprojects";
 
 const NO_PROJECT_KEYS: ReadonlyArray<string> = [];
 const ProjectKeys = Schema.Array(Schema.String);
