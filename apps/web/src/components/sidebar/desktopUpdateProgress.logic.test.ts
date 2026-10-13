@@ -21,6 +21,26 @@ const state = (change: Partial<DesktopUpdateState> = {}): DesktopUpdateState =>
   }) as DesktopUpdateState;
 
 describe("desktop update progress", () => {
+  it("shows the dev kit's rebuild message while installing", () => {
+    expect(
+      resolveDesktopUpdateProgress(
+        state({
+          availableVersion: "def5678",
+          updatePhase: "installing",
+          message: "Rebuilding T3 Code (Dev) at def5678.",
+        }),
+        "running",
+      ),
+    ).toMatchObject({
+      title: "Updating to def5678",
+      step: 4,
+      detail: "Rebuilding T3 Code (Dev) at def5678.",
+    });
+    expect(
+      resolveDesktopUpdateProgress(state({ updatePhase: "installing" }), "running"),
+    ).toMatchObject({ detail: null });
+  });
+
   it("counts the five phases of an update this window started", () => {
     expect(
       resolveDesktopUpdateProgress(

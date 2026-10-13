@@ -86,7 +86,12 @@ export function resolveDesktopUpdateProgress(
     title,
     step: UPDATE_PHASES.indexOf(phase) + 1,
     label: PHASE_LABEL[phase],
-    detail: phase === "downloading" ? describeDownload(state) : null,
+    detail:
+      phase === "downloading"
+        ? describeDownload(state)
+        : phase === "installing"
+          ? state.message
+          : null,
   };
 }
 
