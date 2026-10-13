@@ -12,6 +12,8 @@ import {
   type ProjectIssuesListResult,
   type ThreadId,
 } from "@t3tools/contracts";
+import * as Context from "effect/Context";
+import * as Layer from "effect/Layer";
 import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -86,6 +88,7 @@ const REPO_LOOKUP_TTL_MS = 10 * 60_000;
 const fail = (message: string) => new ProjectIssuesError({ message });
 
 export interface ProjectRepositories {
+  readonly primaryRepository?: { readonly host: string; readonly repository: string } | null;
   readonly treeThreadIds: ReadonlySet<ThreadId>;
   readonly targets: ReadonlyArray<GiteaRepositoryTarget>;
   /** Issue keys linked to each tree thread, for linkedThreadIds. */
@@ -244,13 +247,18 @@ export const make = Effect.gen(function* () {
       );
       const rootTracker = yield* trackerForRoot(threads, rootThreadId);
       const targets = new Map<string, GiteaRepositoryTarget>();
+      let primaryRepository: { host: string; repository: string } | null = null;
       for (const project of projects) {
         const target = yield* repositoryForProject(
           project,
           instances,
           project.id === rootProjectId ? rootTracker : null,
         ).pipe(Effect.orElseSucceed(() => null));
-        if (target) targets.set(repositoryKey(target), target);
+        if (target) {
+          targets.set(repositoryKey(target), target);
+          if (project.id === rootProjectId)
+            primaryRepository = { host: target.host, repository: target.repository };
+        }
       }
       const linkedThreads = new Map<string, ThreadId[]>();
       for (const thread of tree) {
@@ -266,6 +274,7 @@ export const make = Effect.gen(function* () {
         }
       }
       return {
+        primaryRepository,
         treeThreadIds: new Set(tree.map((thread) => thread.id)),
         targets: [...targets.values()],
         linkedThreads,
@@ -430,6 +439,7 @@ export const make = Effect.gen(function* () {
         }
       }
       return {
+        primaryRepository: project.primaryRepository ?? null,
         repositories,
         issues: issues.toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
         fetchedAt: DateTime.formatIso(yield* DateTime.now),
@@ -487,3 +497,8 @@ export const make = Effect.gen(function* () {
 });
 
 export type ProjectIssuesService = Effect.Success<typeof make>;
+
+export class Service extends Context.Service<Service, ProjectIssuesService>()(
+  "t3/projectIssues/ProjectIssuesService/Service",
+) {}
+export const layer = Layer.effect(Service, make);
