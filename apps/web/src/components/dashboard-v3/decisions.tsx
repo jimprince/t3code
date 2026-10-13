@@ -5,6 +5,7 @@ import { CheckIcon } from "lucide-react";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { Button, InlineButton } from "../ui/button";
 import { Dialog, DialogHeader, DialogPopup, DialogTitle } from "../ui/dialog";
+import { Tooltip, TooltipTrigger, TooltipPopup } from "../ui/tooltip";
 import { DecisionMarkdown } from "../orchestrators/DecisionMarkdown";
 import { useDashboardUi, type DecisionRow } from "./context";
 import { formatDeadline } from "./dashboard.logic";
@@ -135,14 +136,21 @@ export function DecisionCard({
       <div className="mt-1 flex flex-wrap items-center gap-1">
         {mode === "option"
           ? attention.options.map((option) => (
-              <Button
-                key={option.text}
-                size="xs"
-                variant={option.recommended ? "default" : "outline"}
-                onClick={() => answers.answerOption(row, option.text)}
-              >
-                {option.text}
-              </Button>
+              <Tooltip key={option.text}>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      size="sm-multiline"
+                      variant={option.recommended ? "default" : "outline"}
+                      className="max-w-full"
+                      onClick={() => answers.answerOption(row, option.text)}
+                    />
+                  }
+                >
+                  <span className="line-clamp-2 min-w-0 text-left break-words">{option.text}</span>
+                </TooltipTrigger>
+                <TooltipPopup>{option.text}</TooltipPopup>
+              </Tooltip>
             ))
           : null}
         {mode === "approval" ? (
