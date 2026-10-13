@@ -1,0 +1,14 @@
+name = "fork-mobile-identities"
+subject = "fix(mobile): give the fork's share extension and keychain their own identities"
+class = "product"
+purpose = "Give all fork iOS targets, app groups and keychain access their variant-specific fork identities."
+retire_when = "Upstream's identity overlay derives all extension and keychain identities from the resolved app bundle identifier."
+depends_on = ["fork-mobile-delivery"]
+roles = []
+note = "Overlay only; app.config.ts remains upstream-owned. Files: apps/mobile/fork-config.ts, apps/mobile/fork-config.test.ts, docs/mobile/ios-deployment.md, docs/release-notes/entries/mobile-identities.toml. No credential bootstrap, native build, workflow dispatch or Apple/EAS account mutation."
+
+[[decision]]
+id = "fork-ios-all-target-identities-20261011"
+date = "2026-10-11"
+decided = "Derive share, widget, app-group and keychain identities from the variant's fork app bundle identifier in the export overlay."
+rationale = "Upstream derives sharing and keychain identities before the overlay. All production targets must be provisionable by Brad's team, and development/preview identities must remain separate. Preserve upstream plugins, entitlements unrelated to identity and native behavior."
