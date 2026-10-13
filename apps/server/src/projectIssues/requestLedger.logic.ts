@@ -1,3 +1,4 @@
+import { isNoChangeReply } from "@t3tools/shared/completionOutput";
 import { isPageAgentThreadId } from "@t3tools/contracts";
 import type { ProjectIssue, ProjectIssueRequestSource, ThreadId } from "@t3tools/contracts";
 
@@ -372,7 +373,7 @@ export function answerToMessage(
   const replies = span.filter((message) => message.role === "assistant");
   if (replies.length === 0 || replies.some((message) => message.isStreaming)) return null;
   const reply = replies.findLast((message) => message.text.trim().length > 0);
-  return reply
+  return reply && !isNoChangeReply(reply.text)
     ? { text: reply.text.trim(), askedAt: asked.createdAt, answeredAt: reply.createdAt }
     : null;
 }

@@ -126,6 +126,7 @@ const withLedger = <A>(
     threadId: ThreadId;
     reference: string;
   }) => Effect.Effect<unknown, ThreadIssueOperationError> = () => Effect.die("unused issue link"),
+  engineOverrides: Record<string, unknown> = {},
 ) =>
   Effect.gen(function* () {
     yield* initializeMetadata(yield* SqlClient.SqlClient);
@@ -147,6 +148,7 @@ const withLedger = <A>(
           archivedThreads: [],
           projects: [{ id: "project", workspaceRoot: "/repo" }],
         }),
+      ...engineOverrides,
     } as never),
     Effect.provideService(ProjectService, {
       getShell: () => Effect.succeed(Option.some({ id: "project", workspaceRoot: "/repo" })),
@@ -269,4 +271,71 @@ it.effect(
       ]);
       expect(gitea.calls.filter((step) => step === "POST /issues/14/labels")).toHaveLength(1);
     }),
+);
+
+it.effect.each(
+  [
+    ["No change.", true],
+    ["Nothing new for you.", true],
+    [" \nNo change.\r\n ", true],
+    ["\tNothing new for you.\n", true],
+    ["No change. More text.", false],
+    ["No change.\n\nAnother paragraph.", false],
+    ["Nothing new for you. T3_NOTIFY: quiet", false],
+    ["no change", false],
+    ["**No change.**", false],
+    ["Found No change. in the log.", false],
+  ].map(([text, silent], key) => ({ text: text as string, silent: silent as boolean, key })),
+)(
+  "ledger decorates final output %j without filing an assistant request",
+  ({ text, silent, key }) => {
+    const gitea = fakeGitea();
+    const messageId = `message:ledger-no-change:${key}`;
+    const now = DateTime.makeUnsafe("2026-10-12T00:00:00Z");
+    const messages = [
+      {
+        id: messageId,
+        runId: "run",
+        role: "user",
+        text: "Check for changes.",
+        streaming: false,
+        createdAt: now,
+      },
+      {
+        id: `${messageId}:reply`,
+        runId: "run",
+        role: "assistant",
+        text,
+        streaming: false,
+        createdAt: now,
+      },
+    ];
+    return withLedger(
+      gitea,
+      () => Effect.die("unexpected dispatch"),
+      (ledger) =>
+        Effect.gen(function* () {
+          const issues = [
+            { isRequest: true, closedAt: null, requestSource: { messageId, threadId: root } },
+          ];
+          const decorated = yield* ledger.withAnswers(issues as never);
+          expect(decorated[0]?.answer?.text ?? null).toBe(silent ? null : text.trim());
+          yield* ledger.observeDispatch(
+            { type: "message.updated", threadId: root, messageId: `${messageId}:reply`, text },
+            "web",
+          );
+          expect(gitea.calls).toEqual([]);
+          expect(messages[1]?.text).toBe(text);
+        }),
+      undefined,
+      {
+        getShellSnapshot: () =>
+          Effect.succeed({
+            threads: [{ ...thread(root, "Root"), latestRunId: "run", activeRunId: null }],
+            archivedThreads: [],
+          }),
+        getThreadProjection: () => Effect.succeed({ messages }),
+      },
+    );
+  },
 );
