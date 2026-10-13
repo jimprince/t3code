@@ -13,3 +13,9 @@ id = "v2-port-2689"
 date = "2026-10-05"
 decided = "keep-on-top"
 rationale = "Retain explicit Node bundle builds, source stamps, atomic runtime deployment and adaptive polling above the native V2 CLI."
+
+[[decision]]
+id = "fork17-synchronous-tail-fixture-metrics"
+date = "2026-10-13"
+decided = "Retain r28 synchronous metrics receipts while reconciling the published tail fixture."
+rationale = "The fixture already uses writeFileSync before replying to concurrent RPCs; the published fork17 change is equivalent. Preserve one NodeFS import and the existing bounded-status fixture behavior."
