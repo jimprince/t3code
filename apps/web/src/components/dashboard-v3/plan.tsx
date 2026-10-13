@@ -9,6 +9,7 @@ import {
   rollup,
   subprojectsOf,
   workstreamTasks,
+  versionState,
   type ScopedProject,
 } from "./dashboard.logic";
 import {
@@ -33,6 +34,8 @@ function blockingKeys(
 /**
  * Releases (R10): where the release stands, how far the nightlies lag, and installed against
  * latest. A line shows only the facts the snapshot has; the rest is left out or marked unknown.
+ * When a release's source is stale or failed, its phase, ETA and nightly lag read as unknown since
+ * the source's last success rather than as current.
  */
 export function ReleaseLines() {
   const ui = useDashboardUi();
@@ -46,10 +49,10 @@ export function ReleaseLines() {
         const keys = found ? ui.decisionKeysFor(found.scoped, found.task) : [];
         const eta = release.eta ?? roll?.ownerEta ?? null;
         const lag = release.nightlyLagDays;
-        const mismatch =
-          release.installedVersion !== null &&
-          release.latestVersion !== null &&
-          release.installedVersion !== release.latestVersion;
+        const health = ui.sourceHealth(release.sourceId);
+        const stale = health === "stale" || health === "failed";
+        const since = ui.sourceLastSuccessAt(release.sourceId);
+        const version = versionState(release.installedVersion, release.latestVersion);
         return (
           <div key={`${environmentId}:${release.id}`} className="flex flex-col py-1">
             <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 sm:grid-cols-[130px_minmax(0,1fr)_170px_auto]">
@@ -65,7 +68,14 @@ export function ReleaseLines() {
                 ) : null}
               </span>
               <span className="text-right tabular-nums sm:text-left">
-                {release.phase ? <>{release.phase} · </> : null}
+                {stale ? (
+                  <>
+                    <UnknownValue since={since}>phase unknown</UnknownValue>
+                    {" · "}
+                  </>
+                ) : release.phase ? (
+                  <>{release.phase} · </>
+                ) : null}
                 {found?.task.progress ? (
                   <>
                     {found.task.progress.done}/{found.task.progress.total}
@@ -76,7 +86,11 @@ export function ReleaseLines() {
                 )}
               </span>
               <span className="text-right tabular-nums">
-                {eta ? <>ETA {formatClock(eta, now)} </> : null}
+                {stale ? (
+                  <UnknownValue since={since}>ETA unknown</UnknownValue>
+                ) : eta ? (
+                  <>ETA {formatClock(eta, now)} </>
+                ) : null}
                 <WaitingOnYou keys={keys} />
               </span>
             </div>
@@ -84,12 +98,14 @@ export function ReleaseLines() {
               <div className="grid grid-cols-[130px_minmax(0,1fr)] gap-x-3 py-0.5 text-xs">
                 <span className="font-semibold">Nightlies</span>
                 <span>
-                  <span className={lag > 0 ? "text-destructive-foreground" : "text-success"}>
-                    {lag > 0 ? `${lag} ${lag === 1 ? "day" : "days"} behind` : "caught up"}
-                  </span>
-                  {release.nightlySync ? (
-                    <span>, last synced {formatClock(release.nightlySync, now)}</span>
-                  ) : null}
+                  {stale ? (
+                    <UnknownValue since={since}>lag unknown</UnknownValue>
+                  ) : (
+                    <span className={lag > 0 ? "text-destructive-foreground" : "text-success"}>
+                      {lag > 0 ? `${lag} ${lag === 1 ? "day" : "days"} behind` : "caught up"}
+                    </span>
+                  )}
+                  {release.nightlySync ? <span>, sync {release.nightlySync}</span> : null}
                   <span className="text-muted-foreground"> · catch-up </span>
                   <UnknownValue />
                 </span>
@@ -99,15 +115,13 @@ export function ReleaseLines() {
               <div className="grid grid-cols-[130px_minmax(0,1fr)] gap-x-3 py-0.5 text-xs">
                 <span className="font-semibold">Installed</span>
                 <span>
-                  <span className={cn(mismatch && "text-warning-foreground")}>
+                  <span className={cn(version === "behind" && "text-warning-foreground")}>
                     {release.installedVersion ?? <UnknownValue />}
                   </span>{" "}
                   <span className="text-muted-foreground">
                     · latest {release.latestVersion ?? <UnknownValue />}
                   </span>
-                  {!mismatch && release.installedVersion !== null ? (
-                    <span className="text-success"> ✓</span>
-                  ) : null}
+                  {version === "current" ? <span className="text-success"> ✓</span> : null}
                 </span>
               </div>
             ) : null}
