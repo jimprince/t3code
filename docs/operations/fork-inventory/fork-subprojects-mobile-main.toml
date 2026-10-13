@@ -1,4 +1,4 @@
-name = "fork-subprojects-mobile"
+name = "fork-subprojects-mobile-main"
 subject = "feat(mobile): nest subprojects inside their project card on the Projects list"
 class = "product"
 purpose = "Show a subproject on the mobile Projects list the way the web sidebar does: nested inside its parent's card as a compact '/ Name' row, with the card's counts rolled up, the 'N of M working in subprojects' line and a fold, not as a project of its own (#156, mock B plus A's rollup line; Brad, 2026-10-10)."
@@ -12,3 +12,9 @@ id = "catchup-2908-native-home-scroll"
 date = "2026-10-10"
 decided = "adapt"
 rationale = "Upstream .2908 turned MobileOrchestratorList into a full-screen HomeScrollView (header first, safe-area and native column insets, empty state inside the scroll view). The nesting, rollup counts, working line and fold are re-applied by hand on that structure rather than taking the fork.12-based function; behavior is unchanged."
+
+[[decision]]
+id = "catchup-r29-published-mobile-name"
+date = "2026-10-13"
+decided = "rename+merge"
+rationale = "Keep main's published fork-subprojects-mobile-main concern name for r28's adapted fork-subprojects-mobile implementation; merge main's later shared helper changes into this single concern. No duplicate mobile implementation or concern."
