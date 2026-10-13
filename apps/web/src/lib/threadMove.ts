@@ -1,4 +1,5 @@
 import type { EnvironmentId, ProjectId, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
+import { formatLocalIso } from "@t3tools/shared/localTime";
 
 export type ThreadMovePhase = "exporting" | "importing" | "archiving";
 
@@ -95,7 +96,7 @@ export function buildThreadMoveFailureReport(input: {
     `From: ${input.sourceLabel ?? input.source.environmentId} (env ${input.source.environmentId})`,
     `To: ${input.targetLabel ?? input.target.environmentId} (env ${input.target.environmentId}, project ${input.target.projectId})`,
     `Failed while: ${input.phase}`,
-    `At: ${new Date().toISOString()}`,
+    `At: ${formatLocalIso(Date.now())}`,
     ...(causeLines.length > 0 ? ["Error chain:", ...causeLines.map((line) => `  ${line}`)] : []),
   ].join("\n");
 }
