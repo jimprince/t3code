@@ -137,11 +137,14 @@ export function DecisionCard({
           ? attention.options.map((option) => (
               <Button
                 key={option.text}
-                size="xs"
+                size="sm-multiline"
                 variant={option.recommended ? "default" : "outline"}
+                className="max-w-full"
                 onClick={() => answers.answerOption(row, option.text)}
               >
-                {option.text}
+                <span className="line-clamp-2 min-w-0 text-left break-words" title={option.text}>
+                  {option.text}
+                </span>
               </Button>
             ))
           : null}
