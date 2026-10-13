@@ -1,6 +1,6 @@
-Bottom: ed2878b25b74170dc9783d1f7b82b575742f0f49
-Top:    c7e9f5aa9e44693c35edc92f0a572feda8355a70
+Bottom: 51d69cd2ae44db4d530a7edee69c5b77b8f6077b
+Top:    d4c2350161758aa9ee9c20486af9f4e9334e67fd
 Author: brad <bradprin@live.com>
-Date:   2026-10-13 10:06:46 +0000
+Date:   2026-10-13 10:08:34 +0000
 
 feat(web): Home and project Dashboard with Plan board, Since you looked and Executive grid variants
