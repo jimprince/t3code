@@ -351,7 +351,7 @@ export const make = Effect.gen(function* () {
     // Tags and reasons identify local routing/auth failures without logging provider bodies.
     yield* Effect.logWarning("pull request watch read failed", {
       threadIds: group.targets.map((target) => target.thread.id),
-      pullRequest: threadPullRequestKeyOf(target.link),
+      pullRequest: group.key,
       read,
       failureType: error?._tag ?? "unknown",
       reason: error?.reason,
