@@ -1,0 +1,4 @@
+id = "pr-watch-recovery"
+category = "fix"
+functionality = "pull-requests"
+text = "Keep pull request watches registered through temporary read failures, report degraded monitoring, and correctly resolve Gitea links with custom web ports."
