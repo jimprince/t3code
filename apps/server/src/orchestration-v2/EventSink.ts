@@ -1,8 +1,11 @@
+import { hasLiveChildren } from "../forkThreads/WorkerLifecycleMetadata.ts";
+import { nativeCompletionEligible, readNativeTask } from "../forkThreads/NativeCompletion.ts";
 import { SendBindingWrite } from "../forkThreads/SendBindings.ts";
 import { ResumeAdmission } from "../threadRecovery/ResumeAdmission.ts";
 import { ThreadRecoveryError } from "@t3tools/contracts";
 import { HumanIngress } from "../threadRecovery/HumanIngress.ts";
-import { seedCreationMetadata } from "../forkThreads/MetadataStore.ts";
+import { EventId } from "@t3tools/contracts";
+import { seedCreationMetadata, readMetadata, writeMetadata } from "../forkThreads/MetadataStore.ts";
 import { MessageAdmission } from "../forkThreads/MessageAdmission.ts";
 import {
   CommandId,
@@ -351,6 +354,21 @@ const layerBase: Layer.Layer<
         const principal = yield* HumanIngress;
         const normalized: OrchestrationV2DomainEvent[] = [];
         for (const event of events) {
+          // Provider ingestion can own the parent's command lock. Validate again
+          // in this transaction so it cannot reopen between decision and commit.
+          if (event.type === "thread.settled" && event.nativeCompletion !== undefined) {
+            const projection = yield* projectionStore.getThreadProjection(event.threadId);
+            const task = yield* readNativeTask(sql, event.threadId);
+            const metadata = yield* readMetadata(sql, event.threadId);
+            if (
+              !nativeCompletionEligible(projection, task, event.nativeCompletion, metadata) ||
+              (yield* hasLiveChildren(sql, event.threadId, projectionStore.getThreadShell))
+            )
+              return yield* new EventSinkWriteError({
+                eventCount: events.length,
+                cause: "Native completion changed before commit.",
+              });
+          }
           if (event.type === "message.updated" && event.payload.role === "user") {
             const previous = yield* sql<{
               payload_json: string;
@@ -376,6 +394,49 @@ const layerBase: Layer.Layer<
               payload: { ...payload, ...(origin ? { humanOrigin: origin } : {}) },
             });
           } else normalized.push(event);
+          // A resumed native generation bypasses ordinary message admission.
+          // Only undo our own automatic settlement, never a manual decision.
+          if (
+            event.type === "subagent.updated" &&
+            event.payload.origin === "provider_native" &&
+            event.payload.status === "running" &&
+            event.payload.childThreadId !== null &&
+            event.payload.startedAt !== null
+          ) {
+            const task = event.payload;
+            const metadata = yield* readMetadata(sql, task.childThreadId!);
+            const receipt = metadata?.nativeCompletion;
+            if (
+              receipt &&
+              receipt.taskId === task.id &&
+              receipt.parentThreadId === task.threadId &&
+              metadata?.parentThreadId === task.threadId &&
+              metadata.settleOnComplete !== false &&
+              DateTime.formatIso(task.startedAt!) > receipt.updatedAt
+            ) {
+              const child = yield* projectionStore.getThread(task.childThreadId!);
+              if (
+                child.settledOverride === "settled" &&
+                child.autoSettleDisabledAt == null &&
+                child.pinnedAt == null &&
+                child.archivedAt == null &&
+                child.deletedAt == null
+              )
+                normalized.push({
+                  id: EventId.make(`${event.id}:native-reopen:${child.id}`),
+                  type: "thread.unsettled",
+                  threadId: child.id,
+                  occurredAt: event.occurredAt,
+                  payload: {
+                    ...child,
+                    settledOverride: null,
+                    settledAt: null,
+                    unsettledAt: event.occurredAt,
+                    updatedAt: event.occurredAt,
+                  },
+                });
+            }
+          }
         }
         events = normalized;
         if (recoveryTables.length > 0) {
@@ -423,10 +484,23 @@ const layerBase: Layer.Layer<
           concurrency: 1,
         });
         for (const { event } of storedEvents) {
+          if (event.type === "thread.settled" || event.type === "thread.unsettled") {
+            const metadata = yield* readMetadata(sql, event.threadId);
+            if (
+              metadata &&
+              (event.nativeCompletion !== undefined || metadata.nativeCompletion != null)
+            )
+              yield* writeMetadata(sql, {
+                ...metadata,
+                nativeCompletion:
+                  event.type === "thread.settled" ? (event.nativeCompletion ?? null) : null,
+              });
+          }
           if (event.type !== "thread.created") continue;
           const { lineage, creationSource } = event.payload;
           const parent =
-            creationSource === "mcp" && lineage.relationshipToParent === "subagent"
+            (creationSource === "mcp" || creationSource === "provider") &&
+            lineage.relationshipToParent === "subagent"
               ? lineage.parentThreadId
               : null;
           if (parent !== null || event.purposeSeed !== undefined) {
