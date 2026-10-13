@@ -1,3 +1,4 @@
+import { RoutineKind } from "./routineKind.ts";
 import { ForkThreadMetadata } from "./forkThreadMetadata.ts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -525,6 +526,7 @@ export const OrchestratorMcpCapabilitiesResult = Schema.Struct({
 export type OrchestratorMcpCapabilitiesResult = typeof OrchestratorMcpCapabilitiesResult.Type;
 
 export const OrchestratorMcpScheduleTaskInput = Schema.Struct({
+  routineKind: Schema.optional(RoutineKind),
   projectId: OrchestratorMcpProjectTarget,
   prompt: OrchestratorMcpPrompt.annotate({
     description: "Prompt executed on every scheduled run.",
@@ -551,6 +553,7 @@ export type OrchestratorMcpScheduleTaskInput = typeof OrchestratorMcpScheduleTas
 
 /** Summary of a scheduled task returned by the schedule/list/update tools. */
 export const OrchestratorMcpScheduledTask = Schema.Struct({
+  routineKind: Schema.optional(RoutineKind),
   scheduledTaskId: ScheduledTaskId,
   title: Schema.String,
   prompt: Schema.String,
@@ -592,6 +595,7 @@ export type OrchestratorMcpListScheduledTasksResult =
   typeof OrchestratorMcpListScheduledTasksResult.Type;
 
 export const OrchestratorMcpUpdateScheduledTaskInput = Schema.Struct({
+  routineKind: Schema.optional(RoutineKind),
   scheduledTaskId: ScheduledTaskId,
   prompt: Schema.optional(OrchestratorMcpPrompt),
   title: Schema.optional(OrchestratorMcpTitle),

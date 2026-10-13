@@ -4,7 +4,9 @@ import {
   HarnessReadError,
   HarnessSnapshotInput,
   ProjectId,
+  ThreadId,
   ScheduledTaskSchedule,
+  RoutineKindMetadata,
   type Automation,
   type AutomationRun,
   type HarnessAgent,
@@ -46,6 +48,7 @@ const decodeHosts = Schema.decodeUnknownEffect(
   Schema.fromJsonString(Schema.Record(Schema.String, EnvironmentId)),
 );
 const decodeSchedule = Schema.decodeUnknownEffect(Schema.fromJsonString(ScheduledTaskSchedule));
+const decodeKindMetadata = Schema.decodeUnknownEffect(Schema.fromJsonString(RoutineKindMetadata));
 const decodeInput = Schema.decodeUnknownEffect(HarnessSnapshotInput);
 const iso = () => Effect.map(DateTime.now, DateTime.formatIso);
 interface MessageRow {
@@ -595,8 +598,9 @@ export const make = Effect.gen(function* () {
           ? (targets[0] ?? null)
           : null;
         const allNew = targets.every((target) => target === null);
-        const purpose = membership(target) ?? membership(definition.ownerThreadId);
-        if (purpose === "project") return;
+        const wakeOwner =
+          definition.routineKind === "agent-wake" ? (definition.ownerThreadId ?? target) : null;
+        const purpose = membership(definition.ownerThreadId ?? target);
         const next = (after: string) => nextScheduledRun(definition.triggers, after);
         const expected = history
           .filter((run) => run.expectedAt !== null)
@@ -606,9 +610,11 @@ export const make = Effect.gen(function* () {
         rows.push(
           routine({
             key: `${environmentId}:${sourceKey}:${definition.id}`,
-            agentKey: target
-              ? `${environmentId}:thread:${target}`
-              : `${environmentId}:automation:${definition.id}`,
+            agentKey: wakeOwner
+              ? `${environmentId}:thread:${wakeOwner}`
+              : target
+                ? `${environmentId}:thread:${target}`
+                : `${environmentId}:automation:${definition.id}`,
             name: definition.name,
             whatItChecks: definition.actions
               .map((action) => action.script ?? action.prompt ?? "unknown")
@@ -622,6 +628,9 @@ export const make = Effect.gen(function* () {
                 ? threadLink(environmentId, target)
                 : null,
             purpose: purpose === "harness" ? "harness" : "unclassified",
+            routineKind: definition.routineKind ?? (purpose === "project" ? "project" : "check"),
+            routineKindSource: definition.routineKind === undefined ? "default" : "explicit",
+            ownerThreadId: definition.ownerThreadId ?? (target ? ThreadId.make(target) : null),
             source: sourceKey,
             sourceStale: sources.some(
               (source) =>
@@ -738,7 +747,7 @@ export const make = Effect.gen(function* () {
       }
       for (const task of tasks.filter((task) => include(ProjectId.make(task.project_id)))) {
         const purpose = membership(task.thread_id);
-        if (purpose === "project") continue;
+
         const history = (taskHistories.get(task.task_id)?.messages ?? []).map((message) =>
           executionRun(
             environmentId,
@@ -754,6 +763,7 @@ export const make = Effect.gen(function* () {
           ),
         );
         const schedule = yield* decodeSchedule(task.schedule_json);
+        const kindMetadata = yield* decodeKindMetadata(task.schedule_json);
         const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
         const next = (after: string) => {
           const at = nextScheduledRunAt(
@@ -785,6 +795,9 @@ export const make = Effect.gen(function* () {
             projectId: ProjectId.make(task.project_id),
             owner: task.thread_id ? threadLink(environmentId, task.thread_id) : null,
             purpose: purpose === "harness" ? "harness" : "unclassified",
+            routineKind: kindMetadata.routineKind ?? (purpose === "project" ? "project" : "check"),
+            routineKindSource: kindMetadata.routineKind === undefined ? "default" : "explicit",
+            ownerThreadId: task.thread_id ? ThreadId.make(task.thread_id) : null,
             source: "scheduled-tasks",
             sourceStale: sources.some(
               (source) =>
@@ -973,7 +986,13 @@ export const make = Effect.gen(function* () {
       Effect.gen(function* () {
         const validated = yield* decodeInput(input);
         const now = yield* DateTime.now;
-        const key = encodeJson([Math.floor(DateTime.toEpochMillis(now) / 1000), validated]);
+        const kinds = yield* sql<{ key: string; kind: string | null }>`
+          SELECT 'automations:' || automation_id AS key, CASE WHEN json_valid(automation_json) THEN json_extract(automation_json, '$.routineKind') END AS kind
+          FROM automations WHERE deleted_at IS NULL
+          UNION ALL
+          SELECT 'scheduled-task:' || task_id AS key, CASE WHEN json_valid(schedule_json) THEN json_extract(schedule_json, '$.routineKind') END AS kind
+          FROM scheduled_tasks ORDER BY key`.pipe(Effect.catch(() => Effect.succeed(null)));
+        const key = encodeJson([Math.floor(DateTime.toEpochMillis(now) / 1000), validated, kinds]);
         const previous = cached;
         const value =
           previous && previous.key === key ? previous.value : yield* readSnapshot(validated);
