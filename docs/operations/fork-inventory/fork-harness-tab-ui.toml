@@ -1,0 +1,20 @@
+name = "fork-harness-tab-ui"
+subject = "feat(web): add Harness tab beside Threads and Projects"
+class = "product"
+purpose = "Show Harness agents and automated checks beside Threads and Projects with shared purpose partitions, honest run signals and reversible web purpose moves."
+retire_when = "Upstream provides equivalent multi-client Harness navigation and purpose-aware organization or Harness is retired."
+depends_on = ["fork-harness-read-service", "fork-sidebar-settled-ui"]
+roles = []
+note = "Combines reviewed UI commits 220fd641, 6bd75c18 and health strip 187daca4. The shared strip consumes complete environment queue totals once, including automation executions; incomplete or older hosts retain unknown sends. Files also include packages/client-runtime/src/state/harnessStrip.ts and packages/client-runtime/src/state/harnessStrip.test.ts. Web, desktop and phone expose reversible purpose moves; native mobile reads the same data without Move actions. Includes the optional harness capability and shared purpose partition; no startup index or Reliability monitor. Files: apps/mobile/src/features/home/HomeScreen.tsx, apps/mobile/src/features/home/MobileHarnessList.tsx, apps/mobile/src/features/home/MobileSubprojectRows.tsx, apps/mobile/src/state/harness.ts, apps/server/src/environment/ServerEnvironment.ts, apps/web/src/components/Sidebar.tsx, apps/web/src/components/chat/forkThreadCommands.ts, apps/web/src/components/harness/HarnessCheckDetails.tsx, apps/web/src/components/harness/HarnessSidebarList.tsx, apps/web/src/components/orchestrators/OrchestratorSidebarList.tsx, apps/web/src/components/settings/SettingsPanels.tsx, apps/web/src/components/threadNestingMenu.logic.test.ts, apps/web/src/components/threadNestingMenu.logic.ts, apps/web/src/hooks/useThreadActionMenu.ts, apps/web/src/hooks/useThreadNesting.tsx, apps/web/src/state/forkPurpose.ts, apps/web/src/state/harness.ts, docs/release-notes/entries/harness-tab.toml, docs/user/thread-sidebar.md, packages/client-runtime/package.json, packages/client-runtime/src/state/harnessQuery.ts, packages/client-runtime/src/state/harnessView.test.ts, packages/client-runtime/src/state/harnessView.ts, packages/client-runtime/src/state/orchestrators.ts, packages/client-runtime/src/state/threadPurpose.test.ts, packages/client-runtime/src/state/threadPurpose.ts, packages/contracts/src/environment.ts, packages/shared/src/localTime.test.ts, packages/shared/src/localTime.ts"
+
+[[decision]]
+id = "harness-tab-reviewed-ui-20261012"
+date = "2026-10-11"
+decided = "One separately droppable tab concern containing both implementation and Opus review repairs."
+rationale = "Brad chose a third tab beside Threads and Projects. Shared selectors preserve organization across clients; unknown findings, stale reads, dispatch-only results and missing owner classifications never default to healthy. Native mobile remains read-only."
+
+[[decision]]
+id = "harness-design-b-health-strip"
+date = "2026-10-11"
+decided = "Brad approved design B with Queue N, Oldest wait Xm and Failed 24h N on web, desktop, phone and native mobile."
+rationale = "Use the snapshot environment total for queue depth and oldest wait without adding automation rows again; retain unknown or lower-bound signals for incomplete coverage and older environments."
