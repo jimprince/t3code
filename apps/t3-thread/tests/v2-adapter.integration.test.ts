@@ -21,7 +21,7 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
   const state = NodePath.join(directory, "operator-state.json");
   await NodeFSP.mkdir(NodePath.join(home, "userdata"), { recursive: true });
   await NodeFSP.mkdir(repo);
-  NodeChildProcess.execFileSync("git", ["init", "-q", repo]);
+  NodeChildProcess.execFileSync("git", ["init", "-q", "-b", "main", repo]);
   NodeChildProcess.execFileSync("git", [
     "-C",
     repo,
@@ -126,6 +126,14 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
   await new Promise<void>((resolve, reject) =>
     reservation.close((error) => (error ? reject(error) : resolve())),
   );
+  const gitBin = NodePath.join(directory, "bin");
+  const worktreeAdds = NodePath.join(directory, "worktree-adds");
+  await NodeFSP.mkdir(gitBin);
+  await NodeFSP.writeFile(
+    NodePath.join(gitBin, "git"),
+    `#!/bin/sh\nprevious=''\nfor argument in "$@"; do\n  if [ "$previous" = 'worktree' ] && [ "$argument" = 'add' ]; then printf 'add\\n' >> '${worktreeAdds}'; fi\n  previous="$argument"\ndone\nexec /usr/bin/git "$@"\n`,
+    { mode: 0o755 },
+  );
   const server = NodeChildProcess.spawn(
     process.execPath,
     [
@@ -144,6 +152,7 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
       cwd: repo,
       env: {
         ...process.env,
+        PATH: `${gitBin}:${process.env.PATH}`,
         T3CODE_DISABLE_STARTUP_RESUME: "1",
         T3CODE_DEV_AUTH_TOKEN: "",
         T3CODE_HOME: home,
@@ -192,6 +201,7 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
     const created = await client.createAgentThread({
       projectId: project.id,
       title: "CLI worker",
+      branch: "cli-first-turn",
       provider: "cli_custom",
       model: "gpt-6.1-sol",
       runtimeMode: "approval-required",
@@ -223,6 +233,17 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
         ? item.projection.providerTurns.length > 0
         : item.kind === "event" && item.event.type === "provider-turn.updated";
     });
+
+    const preparedDetail = await client.findThread(created.threadId);
+    expect(preparedDetail.branch).toBe("cli-first-turn");
+    expect(preparedDetail.worktreePath).not.toBeNull();
+    const worktrees = NodeChildProcess.execFileSync(
+      "git",
+      ["-C", repo, "worktree", "list", "--porcelain"],
+      { encoding: "utf8" },
+    );
+    expect(worktrees.match(/^branch refs\/heads\/cli-first-turn$/gm)).toHaveLength(1);
+    expect((await NodeFSP.readFile(worktreeAdds, "utf8")).trim().split("\n")).toEqual(["add"]);
 
     await rpc.waitForThreadEvent(created.threadId, (item) => {
       return item.kind === "snapshot"

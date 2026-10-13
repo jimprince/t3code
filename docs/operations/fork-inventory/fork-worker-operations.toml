@@ -36,3 +36,9 @@ id = "catchup-2908-worker-authorization"
 date = "2026-10-10"
 decided = "relocate+adapt"
 rationale = "Upstream granular authorization (#9786–#9791, #10298) replaces broad thread-operation guards. Keep subscription keep/remove/restore and authorized queue resume through the native write wrapper, retaining MCP session/auth termination. Provider package extraction (#17299) moves per-turn worker identity into provider-core and the extracted ACP/Grok/OpenCode/Cursor boundaries, with a server compatibility re-export. Identity and subscription behavior remain; local static conflict review passed, composed CI remains the gate."
+
+[[decision]]
+id = "bounded-operator-reads-and-worktree-claim-276-278"
+date = "2026-10-13"
+decided = "repair-existing-concern"
+rationale = "Default CLI thread reads and event waits opt into bounded snapshots. An optional operator summary preserves native message/plan totals and the latest assistant reply with indexed reads in the snapshot transaction. Full result/history reads, archived-worktree GC (which must retain background work from old runs), and explicit historical-plan lookup opt into full history. The empty creation claim uses root; the launch with the brief alone provisions a worktree."

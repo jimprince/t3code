@@ -2,6 +2,7 @@ import { projectTurnItemForWire } from "./WireProjection.ts";
 import * as Stream from "effect/Stream";
 import { makeThreadFind, findProjectedThreadItems } from "./ThreadFind.ts";
 import type {
+  OrchestrationV2OperatorSummary,
   OrchestrationV2SearchThreadInput,
   OrchestrationV2SearchThreadResult,
   OrchestrationV2ThreadHistoryPage,
@@ -529,12 +530,14 @@ export interface ProjectionStoreV2Shape {
       readonly anchorItemId?: TurnItemId | undefined;
       readonly anchorThreadId?: ThreadId | undefined;
       readonly requiredRunId?: RunId | undefined;
+      readonly includeOperatorSummary?: boolean | undefined;
     },
   ) => Effect.Effect<
     {
       readonly schemaVersion: number;
       readonly snapshotSequence: number;
       readonly projection: OrchestrationV2ThreadProjection;
+      readonly operatorSummary?: OrchestrationV2OperatorSummary | undefined;
     },
     ProjectionStoreV2Error
   >;
@@ -5254,7 +5257,40 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 AND aggregate_kind = 'thread'
                 AND stream_id = ${threadId}
             `;
+          const operatorSummary = options.includeOperatorSummary
+            ? yield* Effect.gen(function* () {
+                const counts = yield* sql<{ message_count: number; plan_count: number }>`
+              SELECT
+                (SELECT COUNT(*) FROM orchestration_v2_projection_messages WHERE thread_id = ${threadId}) AS message_count,
+                (SELECT COUNT(*) FROM orchestration_v2_projection_plans WHERE thread_id = ${threadId} AND kind = 'proposed_plan') AS plan_count
+            `;
+                const latest = yield* sql<PayloadRow>`
+              WITH ordinals AS (
+                SELECT json_extract(payload_json, '$.messageId') AS message_id, MIN(ordinal) AS ordinal
+                FROM orchestration_v2_projection_turn_items
+                WHERE thread_id = ${threadId} AND type = 'assistant_message'
+                GROUP BY json_extract(payload_json, '$.messageId')
+              )
+              SELECT payload_json FROM orchestration_v2_projection_messages
+              WHERE message_id = (
+                SELECT message.message_id FROM orchestration_v2_projection_messages message
+                LEFT JOIN ordinals ON ordinals.message_id = message.message_id
+                WHERE message.thread_id = ${threadId} AND message.role = 'assistant'
+                ORDER BY COALESCE(ordinals.ordinal, 9007199254740991) DESC,
+                  message.created_at DESC, message.message_id DESC LIMIT 1
+              )
+            `;
+                return {
+                  messageCount: counts[0]?.message_count ?? 0,
+                  proposedPlanCount: counts[0]?.plan_count ?? 0,
+                  latestAssistantMessage: latest[0]
+                    ? yield* decodeMessagePayload(latest[0].payload_json)
+                    : null,
+                };
+              })
+            : undefined;
           return {
+            ...(operatorSummary === undefined ? {} : { operatorSummary }),
             schemaVersion: ORCHESTRATION_V2_PROJECTION_SCHEMA_VERSION,
             snapshotSequence: rows[0]?.snapshot_sequence ?? 0,
             projection,
@@ -6938,6 +6974,20 @@ export const layerMemory: Layer.Layer<ProjectionStoreV2> = Layer.effect(
             const visibleTurnItems = candidates.slice(start);
             return {
               ...snapshot,
+              ...(options.includeOperatorSummary
+                ? {
+                    operatorSummary: {
+                      messageCount: snapshot.projection.messages.length,
+                      proposedPlanCount: snapshot.projection.plans.filter(
+                        (plan) => plan.kind === "proposed_plan",
+                      ).length,
+                      latestAssistantMessage:
+                        snapshot.projection.messages.findLast(
+                          (message) => message.role === "assistant",
+                        ) ?? null,
+                    },
+                  }
+                : {}),
               projection: { ...snapshot.projection, visibleTurnItems },
             };
           }),
