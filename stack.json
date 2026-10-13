@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "dd8fb7a2e8d88bacee3c27480527f90d4b3f3258",
-  "head": "5ebb7a5210423117dedfc4d7b62282711d8baeab",
+  "prev": "b87f9565c6684351d8b7ca3e8f0da2b7d5b96de8",
+  "head": "1e5c9b44d545dc0d788206de1ea609a41735c953",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -177,7 +177,8 @@
     "fork-dashboard-v3-11-tracker-read-timeout",
     "fork-dashboard-v3-12-home-polish",
     "fork-dashboard-v3-13-older-host-cache",
-    "fork-dashboard-v3-14-connected-decisions"
+    "fork-dashboard-v3-14-connected-decisions",
+    "fork-dashboard-v3-15-request-read-budget"
   ],
   "unapplied": [],
   "hidden": [],
@@ -316,6 +317,9 @@
     },
     "fork-dashboard-v3-14-connected-decisions": {
       "oid": "5ebb7a5210423117dedfc4d7b62282711d8baeab"
+    },
+    "fork-dashboard-v3-15-request-read-budget": {
+      "oid": "1e5c9b44d545dc0d788206de1ea609a41735c953"
     },
     "fork-decision-context-media": {
       "oid": "1e6afd754fb0eea09ab4b6730a0eeea6f7599825"
