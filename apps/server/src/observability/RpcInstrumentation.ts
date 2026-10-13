@@ -69,6 +69,8 @@ const RPC_AGGREGATES = {
   "projectRoadmap.get": "project-roadmap",
   "projectRoadmap.move": "project-roadmap",
   "projectRoadmap.saveVersion": "project-roadmap",
+  "dashboard.getSnapshot": "dashboard",
+  "dashboard.subscribe": "dashboard",
   "projectDashboard.get": "project-dashboard",
   "projectDashboard.setTracker": "project-dashboard",
   "projectDashboard.setWidgets": "project-dashboard",
@@ -277,6 +279,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.subscribeServerLifecycle]: "server",
   [WS_METHODS.subscribeAuthAccess]: "auth",
   [WS_METHODS.subscribeBackgroundPolicy]: "server",
+  [WS_METHODS.harnessSnapshot]: "harness",
 } as const satisfies Readonly<Record<WsRpcMethod, string>>;
 
 const RPC_SPAN_PREFIX = "ws.rpc";
