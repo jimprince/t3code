@@ -6,7 +6,7 @@ import {
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { DashboardTask, EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { use, useCallback, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
 
 import { readProjects, readThreadShells } from "../../state/entities";
 import { useDashboardData } from "../../state/dashboard";
@@ -119,6 +119,8 @@ export function DashboardView({ scope }: { readonly scope: DashboardScope }) {
   }, [data.projects]);
 
   const openKeys = useMemo(() => new Set(decisions.map((row) => row.key)), [decisions]);
+  const reconcileAnswers = answers.reconcile;
+  useEffect(() => reconcileAnswers(openKeys), [reconcileAnswers, openKeys]);
   // A project page keeps its own baseline; it must never overwrite Home's. Without the project in
   // the snapshot there is nothing worth storing yet.
   const sinceLooked = useVisitBaseline(scopeKey, data, scope.kind === "home" || root !== null);
@@ -166,6 +168,8 @@ export function DashboardView({ scope }: { readonly scope: DashboardScope }) {
         const source = data.sources.find((entry) => entry.id === sourceId);
         return source ? sourceHealth(source, now) : null;
       },
+      sourceLastSuccessAt: (sourceId) =>
+        data.sources.find((entry) => entry.id === sourceId)?.lastSuccessAt ?? null,
       isCollapsed: collapse.isCollapsed,
       toggleCollapsed: collapse.toggle,
       sinceLooked,
