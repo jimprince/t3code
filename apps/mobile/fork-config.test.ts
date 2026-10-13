@@ -32,6 +32,10 @@ function makeUpstreamConfig(appVariant: "development" | "preview" | "production"
       bundleIdentifier: `com.upstream.mobile${suffix}`,
       associatedDomains: ["applinks:upstream.example"],
       infoPlist: { UpstreamSentinel: true },
+      entitlements: {
+        "keychain-access-groups": [`$(AppIdentifierPrefix)com.upstream.mobile${suffix}`],
+        "com.apple.developer.applesignin": ["Default"],
+      },
     },
     android: {
       package: `com.upstream.mobile${suffix}`,
@@ -48,6 +52,18 @@ function makeUpstreamConfig(appVariant: "development" | "preview" | "production"
           groupIdentifier: `group.com.upstream.mobile${suffix}`,
           frequentUpdates: true,
           widgets: [{ name: "UpstreamWidget" }],
+        },
+      ],
+      [
+        "expo-sharing",
+        {
+          ios: {
+            enabled: true,
+            extensionBundleIdentifier: `com.upstream.mobile${suffix}.sharing`,
+            appGroupId: `group.com.upstream.mobile${suffix}`,
+            activationRule: { supportsText: true },
+          },
+          android: { enabled: true },
         },
       ],
       "./plugins/withIosCocoaPodsUuidCache.cjs",
@@ -88,6 +104,9 @@ describe("applyMobileForkConfig", () => {
         appleTeamId: "CBCQ6MJF4B",
         bundleIdentifier: `com.brad.t3code${identifierSuffix}`,
         associatedDomains: ["applinks:clerk.t3.codes", "webcredentials:clerk.t3.codes"],
+        entitlements: {
+          "keychain-access-groups": [`$(AppIdentifierPrefix)com.brad.t3code${identifierSuffix}`],
+        },
       },
       android: {
         package: `com.brad.t3code${identifierSuffix}`,
@@ -111,6 +130,17 @@ describe("applyMobileForkConfig", () => {
       bundleIdentifier: `com.brad.t3code${identifierSuffix}.widgets`,
       groupIdentifier: `group.com.brad.t3code${identifierSuffix}`,
       frequentUpdates: true,
+    });
+    expect(
+      plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === "expo-sharing")?.[1],
+    ).toMatchObject({
+      ios: {
+        enabled: true,
+        extensionBundleIdentifier: `com.brad.t3code${identifierSuffix}.sharing`,
+        appGroupId: `group.com.brad.t3code${identifierSuffix}`,
+        activationRule: { supportsText: true },
+      },
+      android: { enabled: true },
     });
     expect(buildProperties).toMatchObject({
       ios: {
@@ -168,6 +198,18 @@ describe("applyMobileForkConfig", () => {
           widgets: [{ name: "UpstreamWidget" }],
         },
       ],
+      [
+        "expo-sharing",
+        {
+          ios: {
+            enabled: true,
+            extensionBundleIdentifier: "com.example.fork.dev.sharing",
+            appGroupId: "group.com.example.fork.dev",
+            activationRule: { supportsText: true },
+          },
+          android: { enabled: true },
+        },
+      ],
       "./plugins/withIosCocoaPodsUuidCache.cjs",
     ]);
   });
@@ -182,6 +224,28 @@ describe("applyMobileForkConfig", () => {
       const result = applyMobileForkConfig(makeUpstreamConfig(appVariant), forkConfig);
 
       expect(result.ios?.bundleIdentifier).toBe(`com.example.fork${identifierSuffix}`);
+      expect(result.ios?.entitlements).toEqual({
+        "keychain-access-groups": [`$(AppIdentifierPrefix)com.example.fork${identifierSuffix}`],
+        "com.apple.developer.applesignin": ["Default"],
+      });
+      expect(
+        result.plugins?.find(
+          (plugin) => Array.isArray(plugin) && plugin[0] === "expo-widgets",
+        )?.[1],
+      ).toMatchObject({
+        bundleIdentifier: `com.example.fork${identifierSuffix}.widgets`,
+        groupIdentifier: `group.com.example.fork${identifierSuffix}`,
+      });
+      expect(
+        result.plugins?.find(
+          (plugin) => Array.isArray(plugin) && plugin[0] === "expo-sharing",
+        )?.[1],
+      ).toMatchObject({
+        ios: {
+          extensionBundleIdentifier: `com.example.fork${identifierSuffix}.sharing`,
+          appGroupId: `group.com.example.fork${identifierSuffix}`,
+        },
+      });
       expect(result.android?.package).toBe(`com.example.fork${identifierSuffix}`);
       expect(result.scheme).toBe(`example-fork${schemeSuffix}`);
       expect(result.runtimeVersion).toEqual({ policy: runtimePolicy });
@@ -193,6 +257,7 @@ describe("applyMobileForkConfig", () => {
     const result = applyMobileForkConfig(upstream, {});
 
     expect(result.ios).toEqual(upstream.ios);
+    expect(result.plugins).toEqual(upstream.plugins);
     expect(result.android).toEqual(upstream.android);
     expect(result.scheme).toBe(upstream.scheme);
     expect(result.updates).toEqual(upstream.updates);
