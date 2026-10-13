@@ -46,7 +46,7 @@ it.effect(
         const messages = yield* Queue.unbounded<SDKMessage>();
         const instanceId = ProviderInstanceId.make("claudeAgent");
         const sessionId = "native-hygiene-session";
-        const adapter = ClaudeAdapter.makeClaudeAdapterV2({
+        const adapter = yield* ClaudeAdapter.makeClaudeAdapterV2({
           instanceId,
           settings: yield* decodeSettings({}),
           environment: {},
