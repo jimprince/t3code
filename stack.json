@@ -1,10 +1,12 @@
 {
   "version": 5,
-  "prev": "9ebcd5f5e0aba011bc3e8063de4bb8e5a0dffc6b",
-  "head": "59b8d7f121608e8c519364435a99b6d92c66443c",
+  "prev": "7d2b14ec90f8e0d7b2c20e53a459082de43ef786",
+  "head": "08997ed65dfb6b94534fb5b5474983157e7afdb4",
   "applied": [
     "fork-build-ci-compat",
-    "fork-worker-operations",
+    "fork-worker-operations"
+  ],
+  "unapplied": [
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
     "fork-general-chat",
@@ -184,7 +186,6 @@
     "fork-dashboard-v3-16-container-width",
     "fork-dashboard-v3-17-home-breakpoint"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
