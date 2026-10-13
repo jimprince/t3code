@@ -10,7 +10,12 @@ import { v2ThreadShell } from "../state/orchestrationV2TestFixtures.ts";
 import { aggregate } from "./aggregation.ts";
 import { composeOlderDashboard } from "./fallback.ts";
 import { compactSnapshot, sampleProgress } from "./progress.ts";
-import { compareDashboardVersions, mergeDashboardSnapshots, overlayAnswered } from "./merge.ts";
+import {
+  compareDashboardVersions,
+  createDashboardSnapshotMerger,
+  mergeDashboardSnapshots,
+  overlayAnswered,
+} from "./merge.ts";
 const now = "2026-10-11T10:00:00.000Z";
 const root = ThreadId.make("a-root");
 const other = ThreadId.make("b-root");
@@ -189,6 +194,30 @@ describe("older-server dashboard", () => {
         (p) => p.attention,
       ),
     ).toHaveLength(1);
+  });
+  it("reuses unchanged merges and refreshes when an environment or snapshot changes", () => {
+    const merge = createDashboardSnapshotMerger();
+    const snapshot = composeOlderDashboard(input);
+    const environmentId = EnvironmentId.make("one");
+    const first = merge([{ environmentId, snapshot }]);
+    expect(merge([{ environmentId, snapshot }])).toBe(first);
+    const updated = {
+      ...snapshot,
+      projects: snapshot.projects.map((p) => ({ ...p, title: "Updated" })),
+    };
+    const refreshed = merge([{ environmentId, snapshot: updated }]);
+    expect(refreshed).not.toBe(first);
+    expect(refreshed.projects[0]?.project.title).toBe("Updated");
+    const moved = merge([{ environmentId: EnvironmentId.make("two"), snapshot: updated }]);
+    expect(moved.projects[0]?.environmentId).toBe("two");
+    expect(merge([]).projects).toEqual([]);
+  });
+  it("keeps the snapshot's identity when no answer touches it", () => {
+    const snapshot = composeOlderDashboard(input);
+    expect(overlayAnswered(snapshot, new Map(), Date.parse(now))).toBe(snapshot);
+    expect(
+      overlayAnswered(snapshot, new Map([["unrelated", Date.parse(now)]]), Date.parse(now)),
+    ).toBe(snapshot);
   });
   it("orders v-prefixed nightly and fork versions numerically", () => {
     expect(
