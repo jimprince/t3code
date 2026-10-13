@@ -1,5 +1,7 @@
 import {
   CommandId,
+  PullRequestOperationError,
+  PullRequestUnavailableError,
   MessageId,
   type OrchestrationV2Notification,
   type PullRequestActivity,
@@ -41,8 +43,8 @@ import { evaluatePullRequestWatch, pullRequestWatchMessage } from "./pullRequest
  * limit, which every machine on the same account shares.
  */
 const SWEEP_MINUTES = 2;
-/** Reads in a row that failed for a reason other than a rate limit before the watch ends. */
-const READ_FAILURE_LIMIT = 8;
+/** Consecutive retryable failures before one degraded-monitoring notice. */
+const READ_FAILURE_LIMIT = 15;
 /**
  * Without a host fingerprint, a pull request with nothing in flight is read again only when its
  * sync snapshot moves, or after this long, for news the snapshot cannot show, such as a bot
@@ -56,6 +58,8 @@ const QUIET_REREAD_MS = 10 * 60_000;
 const FINGERPRINT_REREAD_MS = 30 * 60_000;
 
 const isProviderError = Schema.is(PullRequestProviderError);
+const isPullRequestOperationError = Schema.is(PullRequestOperationError);
+const isPullRequestUnavailableError = Schema.is(PullRequestUnavailableError);
 
 /** A rate limit is the host asking us to wait, not a sign the pull request cannot be read. */
 const isRateLimited = (cause: Cause.Cause<PullRequestService.PullRequestError>) =>
@@ -282,8 +286,8 @@ export const make = Effect.gen(function* () {
   const ended = (target: WatchTarget, reason: WatchEndReason) =>
     Effect.suspend(() => reportEnd(lifeKey(target), lifeOf(target), reason));
 
-  // Reads in a row that failed, per pull request. Kept in memory: a restart only delays the stop.
-  const readFailures = new Map<string, number>();
+  // Retry state is shared per pull request while notification delivery stays per watch.
+  const readFailures = new Map<string, { count: number; retryAt: number; notified: Set<string> }>();
   const lastReads = new Map<string, LastRead>();
   // Replies past each long thread's first page, per pull request, so a pass pages a thread
   // again only when the host's count of it moves. A restart pages each thread once more.
@@ -323,21 +327,63 @@ export const make = Effect.gen(function* () {
       });
     });
 
-  // A watch that cannot read its pull request ends with a wake saying so, rather than showing
-  // "Watching" while it learns nothing.
-  const giveUp = (target: WatchTarget) =>
-    record(target, null, {
-      text: `T3 Code stopped watching pull request #${target.link.number} (${target.link.url}) because it failed to read it from the host ${READ_FAILURE_LIMIT} times in a row. Check it yourself, and call watch_pull_request to watch it again.`,
-      notification: {
-        source: { kind: "monitor" },
-        outcome: "failed",
-        summary: `#${target.link.number}: stopped watching, could not read it`,
-      },
-    }).pipe(
-      Effect.tap(() => woke(target)),
-      Effect.catch(() => record(target, null)),
-      Effect.tap(() => ended(target, "unreadable")),
-    );
+  const readFailed = Effect.fn("PullRequestWatchReactor.readFailed")(function* (
+    group: WatchGroup,
+    cause: Cause.Cause<PullRequestService.PullRequestError>,
+    read: "detail" | "activity",
+  ) {
+    if (Cause.hasInterruptsOnly(cause)) return yield* Effect.failCause(cause);
+    const error = Option.getOrUndefined(Cause.findErrorOption(cause));
+    // Only a missing PR detail proves deletion; a missing comments endpoint does not.
+    const terminal =
+      (isPullRequestOperationError(error) && error.reason === "not-found" && read === "detail") ||
+      (isPullRequestUnavailableError(error) && error.reason === "cli-unauthenticated");
+    const key = group.key;
+    const previous = readFailures.get(key);
+    const count = (previous?.count ?? 0) + 1;
+    const now = yield* Clock.currentTimeMillis;
+    const failure = {
+      count,
+      retryAt: now + Math.min(2 ** Math.min(count - 1, 3), 5) * 60_000,
+      notified: previous?.notified ?? new Set<string>(),
+    };
+    readFailures.set(key, failure);
+    // Tags and reasons identify local routing/auth failures without logging provider bodies.
+    yield* Effect.logWarning("pull request watch read failed", {
+      threadIds: group.targets.map((target) => target.thread.id),
+      pullRequest: threadPullRequestKeyOf(target.link),
+      read,
+      failureType: error?._tag ?? "unknown",
+      reason: error?.reason,
+      consecutiveFailures: count,
+      terminal,
+      retryAt: failure.retryAt,
+    });
+    const landed = yield* eachTarget(group, (target) => Effect.gen(function* () {
+    if (terminal) {
+      yield* record(target, null, {
+        text: `T3 Code stopped watching pull request #${target.link.number} (${target.link.url}) because ${isPullRequestOperationError(error) ? "the pull request no longer exists" : "the host credentials no longer work"}.`,
+        notification: {
+          source: { kind: "monitor" },
+          outcome: "failed",
+          summary: `#${target.link.number}: stopped watching, pull request unavailable`,
+        },
+      });
+      yield* ended(target, "unreadable");
+    } else if (count >= READ_FAILURE_LIMIT && !failure.notified.has(watchKey(target))) {
+      yield* record(target, target.watch, {
+        text: `T3 Code has failed to read pull request #${target.link.number} (${target.link.url}) ${count} times in a row. Monitoring is degraded; T3 Code keeps the watch registered and retries with up to five minutes between reads. Check the host connection and credentials. You do not need to register the watch again.`,
+        notification: {
+          source: { kind: "monitor" },
+          outcome: "failed",
+          summary: `#${target.link.number}: watching, host reads are failing`,
+        },
+      });
+      failure.notified.add(watchKey(target));
+    }
+    }));
+    if (terminal && landed) readFailures.delete(key);
+  });
 
   const readRemarks = Effect.fn("PullRequestWatchReactor.readRemarks")(
     function* (key: string, reference: PullRequestRef, activity: PullRequestActivity) {
@@ -473,6 +519,7 @@ export const make = Effect.gen(function* () {
     fingerprint: ProviderChangeRequestWatchFingerprint | null,
   ) {
     const now = yield* Clock.currentTimeMillis;
+    if ((readFailures.get(group.key)?.retryAt ?? 0) > now) return;
     const last = lastReads.get(group.key);
     const plan = planRead(group, last, fingerprint, now);
     if (!plan.detail) return;
@@ -480,33 +527,28 @@ export const make = Effect.gen(function* () {
     // The reads are recorded against this fingerprint, so a cached answer older than it must not
     // stand in for them. Clients are not told: this only drops this pull request's cached reads.
     if (fingerprint !== null) yield* pullRequests.invalidate({ reference });
-    const read = yield* Effect.exit(
-      Effect.all(
-        [
-          pullRequests.detail({ ...reference, allowStale: false }),
-          plan.activity
-            ? pullRequests.activity(reference).pipe(Effect.map(Option.some))
-            : Effect.succeed(Option.none<PullRequestActivity>()),
-        ],
-        { concurrency: 2 },
-      ),
+    const [detailRead, activityRead] = yield* Effect.all(
+      [
+        Effect.exit(pullRequests.detail({ ...reference, allowStale: false })),
+        Effect.exit(plan.activity
+          ? pullRequests.activity(reference).pipe(Effect.map(Option.some))
+          : Effect.succeed(Option.none<PullRequestActivity>())),
+      ], { concurrency: 2 },
     );
-    if (Exit.isFailure(read)) {
-      if (Cause.hasInterruptsOnly(read.cause)) return yield* Effect.failCause(read.cause);
+    if (Exit.isFailure(detailRead)) {
       lastReads.delete(group.key);
-      // The host's pause refuses later reads without a request, so waiting it out is free.
-      if (isRateLimited(read.cause)) return;
-      const failures = (readFailures.get(group.key) ?? 0) + 1;
-      readFailures.set(group.key, failures);
-      // The count stays until every stop lands, so a failed stop is tried again on the next
-      // failed read, and a watch started after the stops begins from zero.
-      if (failures >= READ_FAILURE_LIMIT && (yield* eachTarget(group, giveUp))) {
-        readFailures.delete(group.key);
-      }
-      return yield* Effect.failCause(read.cause);
+      if (isRateLimited(detailRead.cause)) return;
+      return yield* readFailed(group, detailRead.cause, "detail");
+    }
+    const detail = detailRead.value;
+    // Terminal detail wins even when the comments endpoint fails.
+    if (detail.state === "open" && Exit.isFailure(activityRead)) {
+      lastReads.delete(group.key);
+      if (isRateLimited(activityRead.cause)) return;
+      return yield* readFailed(group, activityRead.cause, "activity");
     }
     readFailures.delete(group.key);
-    const [detail, activity] = read.value;
+    const activity = Exit.isSuccess(activityRead) ? activityRead.value : Option.none<PullRequestActivity>();
     const headSha = detail.headSha ?? null;
     for (const target of group.targets) {
       const life = lifeOf(target);

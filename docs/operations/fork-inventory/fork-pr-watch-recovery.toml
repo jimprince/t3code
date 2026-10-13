@@ -1,0 +1,8 @@
+name = "fork-pr-watch-recovery"
+subject = "fix(pull-requests): retain watches across retryable read failures"
+class = "upstream-bound"
+purpose = "Keep native PR watches useful through configured Gitea alias routing and retryable read failures, with bounded backoff and honest persistent-failure notifications."
+retire_when = "Upstream preserves retryable watches, reports degraded monitoring, and configured Gitea aliases match canonical web hosts including ports."
+depends_on = ["fork-gitea-pr-browser"]
+roles = []
+note = "PR170/171 on fork.13 failed locally because aliases returned git.home while configured identities use git.home:3000. Auth revocation and PR detail deletion remain terminal; auxiliary 404s and unresolved routing retry. Recovery never requires re-registration."
