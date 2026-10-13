@@ -1,3 +1,4 @@
+import { HarnessReadService } from "./harness/HarnessReadService.ts";
 import { authenticatedHandlers as recoveryHandlers } from "./threadRecovery/rpc.ts";
 import { HumanIngress } from "./threadRecovery/HumanIngress.ts";
 import { makeMessageForwardService } from "./forkThreads/MessageForwardService.ts";
@@ -2123,6 +2124,12 @@ const layerWsRpc = (
             Effect.annotateCurrentSpan({ "orchestration_v2.thread_id": input.threadId }).pipe(
               Effect.andThen(subscribeOrchestrationV2Thread(input)),
             ),
+          ),
+        [WS_METHODS.harnessSnapshot]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.harnessSnapshot,
+            Effect.flatMap(HarnessReadService, (service) => service.snapshot(input)),
+            { "rpc.aggregate": "harness" },
           ),
         [WS_METHODS.scheduledTasksList]: (_input) =>
           scheduledTasks.list().pipe(Effect.map(withVisibleWebhookUrls)),

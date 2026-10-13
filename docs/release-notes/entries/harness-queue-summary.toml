@@ -1,0 +1,4 @@
+id = "harness-queue-summary"
+category = "feature"
+functionality = "Harness visibility"
+text = "Harness snapshots report queued sends and the oldest requested time across the environment, including automation executions; incomplete or unavailable queue reads remain unknown."
