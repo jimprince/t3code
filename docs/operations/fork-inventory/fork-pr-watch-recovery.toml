@@ -6,3 +6,9 @@ retire_when = "Upstream preserves retryable watches, reports degraded monitoring
 depends_on = ["fork-gitea-pr-browser"]
 roles = []
 note = "PR170/171 on fork.13 failed locally because aliases returned git.home while configured identities use git.home:3000. Auth revocation and PR detail deletion remain terminal; auxiliary 404s and unresolved routing retry. Recovery never requires re-registration."
+
+[[decision]]
+id = "catchup-r29-watch-fixture-lifecycle"
+date = "2026-10-13"
+decided = "repair"
+rationale = "Explicitly stop the restarted settlement-test watch in the shared runtime-layer fixture. Retryable host errors now correctly retain watches; unrelated fixture watches must not contribute reads to later grouping, rate-limit and fingerprint tests. All existing behavior assertions remain."
