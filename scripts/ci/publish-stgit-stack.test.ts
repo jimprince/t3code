@@ -123,6 +123,7 @@ const run = (
       ...process.env,
       STGIT_DISABLE_POST_RELEASE_HOOK: "1",
       SYNC_GIT_BIN: "/usr/bin/git",
+      STGIT_ACTIVE_PUBLICATION_FILE: NodePath.join(repo.dir, ".git/active-publication.json"),
       STGIT_EXPECTED_REMOTE_MAIN: repo.git("config", "test.leaseMain"),
       STGIT_EXPECTED_REMOTE_STACK: repo.git("config", "test.leaseStack"),
       STGIT_EXPECTED_PATCH_REFS_JSON: repo.git("config", "test.leasePatches"),
@@ -733,4 +734,144 @@ printf '"}\\n'
       }
     },
   );
+});
+
+describe("active publication marker", () => {
+  const markerPath = (repo: FixtureRepo) => NodePath.join(repo.dir, ".git/active-publication.json");
+  const marker = (head: string, startedAt = new Date().toISOString()) => ({
+    schema: "t3code.active-publication/v1",
+    owner: "test-publisher",
+    token: "test-token",
+    startedAt,
+    targetMain: { remote: "origin", ref: "refs/heads/main", oid: head },
+  });
+
+  it.each([0, 1])(
+    "writes owner/start/target during publication and removes it on exit %s",
+    (exit) => {
+      const fixture = seedPublication();
+      try {
+        const path = markerPath(fixture.repo);
+        const captured = NodePath.join(fixture.repo.dir, ".git/captured-marker.json");
+        fixture.repo.writeFile(
+          "scripts/ci/require-publication-ci",
+          `#!/usr/bin/env bash
+cat "$STGIT_ACTIVE_PUBLICATION_FILE" > .git/captured-marker.json
+exit ${exit}
+`,
+        );
+        fixture.repo.git("update-index", "--assume-unchanged", "scripts/ci/require-publication-ci");
+        const result = run(fixture.repo, "--push", { T3_THREAD_ID: "test-owner" });
+        assert.equal(result.status, exit, result.stderr);
+        const value = JSON.parse(NodeFS.readFileSync(captured, "utf8"));
+        assert.equal(value.owner, "test-owner");
+        assert.isTrue(Number.isFinite(Date.parse(value.startedAt)));
+        assert.deepEqual(value.targetMain, {
+          remote: "origin",
+          ref: "refs/heads/main",
+          oid: fixture.head,
+        });
+        assert.isFalse(NodeFS.existsSync(path));
+      } finally {
+        fixture.repo.cleanup();
+        NodeFS.rmSync(fixture.remote, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it("refuses a second publisher while an active marker exists", () => {
+    const fixture = seedPublication();
+    try {
+      const value = marker(fixture.head);
+      const path = markerPath(fixture.repo);
+      NodeFS.writeFileSync(path, JSON.stringify(value));
+      const before = gitAt(fixture.remote, "show-ref");
+      const result = run(fixture.repo, "--push");
+      assert.notEqual(result.status, 0);
+      assert.include(result.stderr, "Active publication");
+      assert.deepEqual(JSON.parse(NodeFS.readFileSync(path, "utf8")), value);
+      assert.equal(gitAt(fixture.remote, "show-ref"), before);
+    } finally {
+      fixture.repo.cleanup();
+      NodeFS.rmSync(fixture.remote, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses an overlapping publisher until the first exits", async () => {
+    const fixture = seedPublication();
+    const path = markerPath(fixture.repo);
+    let child: NodeChildProcess.ChildProcess | undefined;
+    try {
+      fixture.repo.writeFile(
+        "scripts/ci/require-publication-ci",
+        "#!/usr/bin/env bash\necho publication-ready\nread -r proceed\nexit 1\n",
+      );
+      fixture.repo.git("update-index", "--assume-unchanged", "scripts/ci/require-publication-ci");
+      child = NodeChildProcess.spawn(script, ["--push"], {
+        cwd: fixture.repo.dir,
+        env: {
+          ...process.env,
+          SYNC_GIT_BIN: "/usr/bin/git",
+          STGIT_ACTIVE_PUBLICATION_FILE: path,
+          STGIT_EXPECTED_REMOTE_MAIN: fixture.remoteBase,
+          STGIT_EXPECTED_REMOTE_STACK: fixture.stackOid,
+          STGIT_EXPECTED_PATCH_REFS_JSON: fixture.repo.git("config", "test.leasePatches"),
+        },
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      const started = child;
+      let output = "";
+      const exited = new Promise<number | null>((resolve, reject) => {
+        started.once("error", reject);
+        started.once("close", resolve);
+      });
+      await new Promise<void>((resolve, reject) => {
+        started.stdout?.on("data", (chunk) => {
+          output += chunk.toString();
+          if (output.includes("publication-ready")) resolve();
+        });
+        started.once("error", reject);
+        started.once("exit", () =>
+          reject(new Error("publisher exited before its ready milestone")),
+        );
+      });
+      assert.isTrue(NodeFS.existsSync(path));
+      const second = run(fixture.repo, "--push");
+      assert.notEqual(second.status, 0);
+      assert.include(second.stderr, "Active publication");
+      started.stdin?.end("proceed\n");
+      assert.equal(await exited, 1);
+      assert.isFalse(NodeFS.existsSync(path));
+      child = undefined;
+    } finally {
+      child?.stdin?.end("proceed\n");
+      if (child) {
+        await new Promise<void>((resolve) => {
+          child!.once("close", () => resolve());
+          child!.kill("SIGTERM");
+        });
+      }
+      fixture.repo.cleanup();
+      NodeFS.rmSync(fixture.remote, { recursive: true, force: true });
+    }
+  });
+
+  it("expires a dead publisher after two hours with a warning", () => {
+    const fixture = seedPublication();
+    try {
+      const path = markerPath(fixture.repo);
+      NodeFS.writeFileSync(
+        path,
+        JSON.stringify(marker(fixture.head, new Date(Date.now() - 7201_000).toISOString())),
+      );
+      const result = run(fixture.repo, "--push");
+      assert.equal(result.status, 0, result.stderr);
+      assert.include(result.stderr, "Ignoring stale active publication");
+      assert.isFalse(NodeFS.existsSync(path));
+      assert.equal(gitAt(fixture.remote, "rev-parse", "refs/heads/main"), fixture.head);
+    } finally {
+      fixture.repo.cleanup();
+      NodeFS.rmSync(fixture.remote, { recursive: true, force: true });
+    }
+  });
 });

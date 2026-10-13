@@ -314,6 +314,18 @@ scripts/ci/publish-stgit-stack --check
 scripts/ci/publish-stgit-stack --push
 ```
 
+Push mode creates a host-local `~/.local/share/ci-repair-bot/runtime/state/active-publication.json`
+marker before publication checks and removes its own marker on success, failure,
+or handled termination. It records the owner, UTC start time, and target `main`
+SHA. A second publisher refuses an active marker. Markers older than two hours
+are ignored with a warning; cleanup cannot remove a replacement owner's marker.
+Set `STGIT_ACTIVE_PUBLICATION_FILE` to an absolute path when the bot uses another
+state directory, always beside its configured `operator-paused` flag. The bot's
+expiry-aware pause reader must be deployed to pause worker/publisher admission
+and report that state through the controller. Existing manual pause files stay
+independent and never expire. This marker coordinates writers on one machine;
+preparation-time Git leases still protect publication across machines.
+
 Check mode is non-mutating and checks publication policy and leases only.
 Push mode reads fresh GitHub evidence and rejects changed source without
 successful exact candidate CI. Tagging an unchanged main may reuse its main CI.

@@ -19,6 +19,23 @@ release_tag="${STGIT_RELEASE_TAG:-}"
 release_tag_sha="${STGIT_RELEASE_TAG_SHA:-}"
 backup_namespace="${STGIT_BACKUP_NAMESPACE:-manual}"
 
+# Host-local writer admission is separate from immutable preparation-time leases.
+publication_helper="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/active-publication.py"
+publication_file="${STGIT_ACTIVE_PUBLICATION_FILE:-$HOME/.local/share/ci-repair-bot/runtime/state/active-publication.json}"
+publication_token=""
+cleanup_publication() {
+  if [[ -n "$publication_token" ]]; then
+    python3 "$publication_helper" release "$publication_file" "$publication_token" ||
+      echo "Could not remove active publication marker; inspect $publication_file." >&2
+  fi
+}
+trap cleanup_publication EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+if [[ "$mode" == "--push" ]]; then
+  publication_token="$(python3 "$publication_helper" acquire "$publication_file" "$remote" "$(git_cmd rev-parse HEAD)" "$$")"
+fi
+
 # A preparation record is local to this checkout and is never renewed here.
 lease_file="$(git_cmd rev-parse --git-path stgit-publication-lease.json)"
 if [[ -f "$lease_file" ]]; then
@@ -130,7 +147,7 @@ desired_refs="$(mktemp)"
 obsolete_refs="$(mktemp)"
 expected_refs="$(mktemp)"
 verified_refs="$(mktemp)"
-trap 'rm -f "$remote_refs" "$desired_refs" "$obsolete_refs" "$expected_refs" "$verified_refs"' EXIT
+trap 'rm -f "$remote_refs" "$desired_refs" "$obsolete_refs" "$expected_refs" "$verified_refs"; cleanup_publication' EXIT
 
 query_refs=(refs/heads/main "$stack_ref" 'refs/patches/stgit/adopt/*')
 if [[ -n "$release_ref" ]]; then
