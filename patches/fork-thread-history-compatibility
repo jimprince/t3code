@@ -1,7 +1,7 @@
-Bottom: 1de0a65fb3d93ff97779679603537919ca6279fe
-Top:    04d22b968f2c1fa9992033742381113cf6607265
+Bottom: 87eaba546eea6839c0eaba703be8cf5d6ca322ab
+Top:    edd1b0f9f9f908b92b16d323d4109081dbd1cdfb
 Author: brad <bradprin@live.com>
-Date:   2026-10-13 05:46:55 +0000
+Date:   2026-10-13 09:19:24 +0000
 
 fix(threads): preserve historical goal data without goal automation
 
