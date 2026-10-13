@@ -18,6 +18,7 @@ import {
   ProjectId,
   type RunId,
   type RuntimeMode,
+  type ThreadPurpose,
   type ScheduledTaskId,
   ThreadId,
 } from "@t3tools/contracts";
@@ -76,6 +77,7 @@ export interface ThreadLaunchInitialMessage {
 }
 
 export interface ThreadLaunchInput {
+  readonly creatorThreadId?: ThreadId;
   /**
    * Runs once the thread exists, before its task issue starts or its first message is dispatched.
    * A failure fails the launch there, so no turn has started. Must be idempotent: a retried launch
@@ -83,6 +85,7 @@ export interface ThreadLaunchInput {
    * already nested, which is why nesting belongs here and not after the launch.
    */
   readonly afterClaim?: (threadId: ThreadId) => Effect.Effect<unknown, ForkThreadMetadataError>;
+  readonly purposeSeed?: ThreadPurpose;
   readonly commandId: CommandId;
   readonly threadId?: ThreadId;
   readonly reuseExistingThread?: boolean;
@@ -764,6 +767,10 @@ const make = Effect.gen(function* () {
               })
             : threads.dispatch({
                 type: "thread.create",
+                ...(input.creatorThreadId === undefined
+                  ? {}
+                  : { creatorThreadId: input.creatorThreadId }),
+                ...(input.purposeSeed === undefined ? {} : { purposeSeed: input.purposeSeed }),
                 commandId: input.commandId,
                 threadId: candidateThreadId,
                 projectId: input.projectId,

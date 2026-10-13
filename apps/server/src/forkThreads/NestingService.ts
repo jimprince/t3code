@@ -85,6 +85,7 @@ export const makeNestingService = <E, R, DispatchError, DispatchContext>(
             }
             const value: ForkThreadMetadata = {
               ...existing,
+              ...(input.purpose !== undefined ? { purpose: input.purpose } : {}),
               ...(input.subproject !== undefined ? { subproject: input.subproject } : {}),
               ...(input.settleOnComplete !== undefined
                 ? { settleOnComplete: input.settleOnComplete }
@@ -119,13 +120,14 @@ export const makeNestingService = <E, R, DispatchError, DispatchContext>(
     const update = (input: ForkThreadMetadataUpdate) =>
       Effect.gen(function* () {
         const before =
-          input.subproject === undefined
+          input.subproject === undefined && input.purpose === undefined
             ? undefined
             : (yield* list()).find((row) => row.threadId === input.threadId);
         const value = yield* persist(input);
         if (
-          input.subproject !== undefined &&
+          (input.subproject !== undefined || input.purpose !== undefined) &&
           (before?.subproject ?? "auto") === (value.subproject ?? "auto") &&
+          (before?.purpose ?? null) === (value.purpose ?? null) &&
           input.parentThreadId === undefined &&
           input.remoteParent === undefined &&
           input.scope === undefined &&
