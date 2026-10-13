@@ -76,6 +76,11 @@ export function composeOlderDashboard(input: {
   return compactSnapshot({ ...snapshot, revision: input.revision });
 }
 
+// Older hosts serve tracker reads uncached; fork.12 on the VM measured ~24 s per
+// projectIssues.list. The first revision is published before these reads, so a
+// generous deadline only delays enrichment instead of dropping the data.
+const TRACKER_READ_DEADLINE = "60 seconds";
+
 export const readOlderDashboard = (
   shell: OrchestrationV2ShellSnapshot,
   previous?: DashboardSnapshot,
@@ -85,7 +90,7 @@ export const readOlderDashboard = (
   Effect.gen(function* () {
     // Even metadata must settle: an older/slow host must not leave the environment at revision 0.
     const metadataResult = yield* request("fork.threads.metadata.list", {}).pipe(
-      Effect.timeout("5 seconds"),
+      Effect.timeout("15 seconds"),
       Effect.option,
     );
     const metadata = Option.getOrElse(metadataResult, () => []);
@@ -94,17 +99,17 @@ export const readOlderDashboard = (
     const jobs = roots.flatMap((root) => [
       request(WS_METHODS.projectIssuesList, { rootThreadId: root.id }).pipe(
         Effect.map((value) => ({ kind: "issues" as const, root: root.id, value })),
-        Effect.timeout("5 seconds"),
+        Effect.timeout(TRACKER_READ_DEADLINE),
         Effect.option,
       ),
       request(WS_METHODS.projectRoadmapGet, { threadId: root.id }).pipe(
         Effect.map((value) => ({ kind: "roadmap" as const, root: root.id, value })),
-        Effect.timeout("5 seconds"),
+        Effect.timeout(TRACKER_READ_DEADLINE),
         Effect.option,
       ),
       request(WS_METHODS.projectRequestsPendingAsks, { threadId: root.id }).pipe(
         Effect.map((value) => ({ kind: "asks" as const, root: root.id, value })),
-        Effect.timeout("5 seconds"),
+        Effect.timeout(TRACKER_READ_DEADLINE),
         Effect.option,
       ),
     ]);
