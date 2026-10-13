@@ -246,6 +246,7 @@ export const make = Effect.gen(function* () {
       launchThreadParent: true,
       reliableHandoffs: true,
       threadSubprojects: true,
+      harness: true,
       remoteThreadNesting: true,
       threadAutoSettleOptOut: true,
       threadSubscriptions: true,

@@ -86,7 +86,7 @@ export function lastActivityAt(
   );
 }
 
-function resolveThreadDisplayStatus(
+export function resolveThreadDisplayStatus(
   thread: OrchestratorThreadShell & { hasActiveDescendants?: boolean; settled?: boolean },
 ): ThreadDisplayStatus {
   if (thread.hasPendingApprovals) return "approval";
