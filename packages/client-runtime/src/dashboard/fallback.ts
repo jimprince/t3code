@@ -13,7 +13,12 @@ import {
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { request } from "../rpc/client.ts";
-import { aggregate, dashboardRoots, rootRepositories } from "./aggregation.ts";
+import {
+  aggregate,
+  dashboardRoots,
+  isDashboardThreadActive,
+  rootRepositories,
+} from "./aggregation.ts";
 import { compactSnapshot, issueId } from "./progress.ts";
 
 /** Same reads as Previous's Plan, Roadmap and Decisions; no history is inferred from activity. */
@@ -28,6 +33,7 @@ export function composeOlderDashboard(input: {
   revision: number;
   ownRepositories?: ReadonlyMap<ThreadId, string>;
   previous?: DashboardSnapshot;
+  remoteParentThreadIds?: readonly ThreadId[];
 }): DashboardSnapshot {
   const ownRepositories = new Map(rootRepositories(input.shell));
   for (const [root, roadmap] of input.roadmaps)
@@ -37,7 +43,7 @@ export function composeOlderDashboard(input: {
     ownRepositories.set(root, repository);
   const snapshot = aggregate({
     ...input,
-    shells: input.shell.threads,
+    shells: [...input.shell.threads, ...input.shell.archivedThreads],
     plans: [],
     samples: [],
     pendingAsks: input.asks,
@@ -87,6 +93,7 @@ export const readOlderDashboard = (
   previous?: DashboardSnapshot,
   reportedVersion?: { readonly version: string; readonly label: string },
   emit: (snapshot: DashboardSnapshot) => Effect.Effect<void> = () => Effect.void,
+  remoteParentThreadIds: readonly ThreadId[] = [],
 ) =>
   Effect.gen(function* () {
     // Even metadata must settle: an older/slow host must not leave the environment at revision 0.
@@ -96,7 +103,17 @@ export const readOlderDashboard = (
       { background: true },
     ).pipe(Effect.timeout("15 seconds"), Effect.option);
     const metadata = Option.getOrElse(metadataResult, () => []);
-    const { roots, threads } = dashboardRoots(shell.threads, metadata);
+    const { roots, threads } = dashboardRoots(
+      [...shell.threads, ...shell.archivedThreads],
+      metadata,
+      remoteParentThreadIds,
+    );
+    const includedThreadIds = new Set(threads.map((t) => t.id));
+    const excludedThreadIds = new Set(
+      [...shell.threads, ...shell.archivedThreads]
+        .filter((t) => !includedThreadIds.has(t.id) || !isDashboardThreadActive(t))
+        .map((t) => t.id),
+    );
     const skipped = new Set<number>();
     const cached = new Set<number>();
     const attemptedAt = DateTime.formatIso(yield* DateTime.now);
@@ -266,6 +283,7 @@ export const readOlderDashboard = (
         sources: [...sources.values()],
         now,
         revision: ++revision,
+        remoteParentThreadIds,
       });
       for (const project of snapshot.projects) {
         if (!project.rootThreadId) continue;
@@ -281,9 +299,10 @@ export const readOlderDashboard = (
         if (prior && (issueFailure || askFailure || failedRepos.size)) {
           const retained = prior.tasks.filter(
             (t) =>
-              (issueFailure && t.sourceId !== "local") ||
-              failedRepos.has(t.sourceId) ||
-              (askFailure && t.attentionIds.some((id) => id.startsWith("runtime:"))),
+              (!t.threadId || !excludedThreadIds.has(t.threadId)) &&
+              ((issueFailure && t.sourceId !== "local") ||
+                failedRepos.has(t.sourceId) ||
+                (askFailure && t.attentionIds.some((id) => id.startsWith("runtime:")))),
           );
           const tasks = [
             ...project.tasks.filter((t) => !retained.some((old) => old.id === t.id)),
@@ -293,9 +312,10 @@ export const readOlderDashboard = (
             ...project.attention.filter((a) => !failedRepos.has(a.sourceId)),
             ...prior.attention.filter(
               (a) =>
-                (issueFailure && a.sourceId !== "local") ||
-                failedRepos.has(a.sourceId) ||
-                (askFailure && a.requestId !== null),
+                (!a.threadId || !excludedThreadIds.has(a.threadId)) &&
+                ((issueFailure && a.sourceId !== "local") ||
+                  failedRepos.has(a.sourceId) ||
+                  (askFailure && a.requestId !== null)),
             ),
           ];
           Object.assign(project, {
@@ -347,9 +367,33 @@ export const readOlderDashboard = (
         });
       }
       // Missing metadata cannot prove projects disappeared. Keep the last coherent tree, marked unknown.
-      if (Option.isNone(metadataResult) && previous)
+      if (Option.isNone(metadataResult) && previous) {
+        const excludedProjects = new Set(
+          previous.projects
+            .filter((project) => {
+              const thread = [...shell.threads, ...shell.archivedThreads].find(
+                (t) => t.id === project.rootThreadId,
+              );
+              return (
+                /\(retired\b/i.test(project.title) || (thread && !isDashboardThreadActive(thread))
+              );
+            })
+            .map((p) => p.id),
+        );
+        for (let changed = true; changed;) {
+          changed = false;
+          for (const project of previous.projects)
+            if (
+              project.parentId &&
+              excludedProjects.has(project.parentId) &&
+              !excludedProjects.has(project.id)
+            ) {
+              excludedProjects.add(project.id);
+              changed = true;
+            }
+        }
         Object.assign(snapshot, {
-          projects: previous.projects,
+          projects: previous.projects.filter((p) => !excludedProjects.has(p.id)),
           sources: [
             ...previous.sources
               .filter(
@@ -365,6 +409,7 @@ export const readOlderDashboard = (
             ...snapshot.sources.filter((s) => s.kind === "release"),
           ],
         });
+      }
       return compactSnapshot(snapshot);
     };
     // Shell + metadata identify the heads without waiting for remote trackers. Every emitted value
@@ -403,7 +448,12 @@ export const readOlderDashboard = (
           Effect.option,
           Effect.tap((result) =>
             Effect.sync(() => {
-              if (Option.isSome(result) && !result.value.tracker && !repositories.has(root.id)) {
+              if (
+                Option.isSome(result) &&
+                !result.value.tracker &&
+                !repositories.has(root.id) &&
+                !remoteParentThreadIds.includes(root.id)
+              ) {
                 skipped.add(index * 3);
                 skipped.add(index * 3 + 1);
               }
