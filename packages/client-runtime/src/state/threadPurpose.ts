@@ -124,17 +124,20 @@ export function purposeMoveFor(
 }
 
 /**
- * A project's subprojects that belong in its own card: those of the same purpose. One of the
- * other purpose is a root of its own tab, so web and native both leave it out of this card.
+ * The plain tag a subproject row carries when its purpose differs from its project's: "Harness"
+ * for a Harness subproject listed in a project's card, null otherwise. Projects lists every active
+ * subproject (organizational nesting is the truth); a Harness subproject is also a root of the
+ * Harness tab, so the tag says why it sits in both places.
  */
-export function samePurposeSubprojects(
-  summary: OrchestratorSummary,
+export function subprojectPurposeTag(
+  parent: OrchestratorSummary,
+  sub: OrchestratorSummary,
   purposes: ReadonlyMap<string, ThreadPurpose | null>,
-): ReadonlyArray<OrchestratorSummary> {
-  const purpose = purposes.get(supervisionThreadKey(summary.root));
-  return summary.subprojects.filter(
-    (sub) => purposes.get(supervisionThreadKey(sub.root)) === purpose,
-  );
+): "Harness" | null {
+  return purposes.get(supervisionThreadKey(sub.root)) === "harness" &&
+    purposes.get(supervisionThreadKey(parent.root)) !== "harness"
+    ? "Harness"
+    : null;
 }
 
 /** Partition after resolving all ancestry, preserving complete summaries for attention rollups. */
