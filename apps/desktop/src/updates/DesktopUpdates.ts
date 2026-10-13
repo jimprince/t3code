@@ -437,6 +437,17 @@ export const make = Effect.gen(function* () {
 
   const isDevKitRebuilding = (state: DesktopUpdateState) => state.updatePhase === "installing";
 
+  // The latest Check, for what Update does: switch to a prepared tree or rebuild.
+  const devKitVerdictRef = yield* Ref.make<Option.Option<DevKitUpdates.DevKitVerdict>>(
+    Option.none(),
+  );
+
+  const evaluateDevKit = (kit: DevKitUpdates.DevKit) => (status: DevKitUpdates.DevKitStatus) =>
+    Clock.currentTimeMillis.pipe(
+      Effect.flatMap((now) => DevKitUpdates.evaluateStatus(kit, status, now)),
+      Effect.tap((verdict) => Ref.set(devKitVerdictRef, Option.some(verdict))),
+    );
+
   const applyDevKitVerdict = (verdict: DevKitUpdates.DevKitVerdict) =>
     currentIsoTimestamp.pipe(
       Effect.flatMap((checkedAt) =>
@@ -458,7 +469,7 @@ export const make = Effect.gen(function* () {
   // Check for the Mac dev kit: its status script compares this build with origin.
   const checkDevKit = (kit: DevKitUpdates.DevKit) =>
     DevKitUpdates.readStatus(kit).pipe(
-      Effect.flatMap((status) => DevKitUpdates.evaluateStatus(kit, status)),
+      Effect.flatMap(evaluateDevKit(kit)),
       Effect.flatMap(applyDevKitVerdict),
       Effect.catchTags({ DevKitUpdateError: (error) => failDevKit(error, "check") }),
       Effect.as(true),
@@ -473,6 +484,10 @@ export const make = Effect.gen(function* () {
   const rebuildDevKit = (kit: DevKitUpdates.DevKit) =>
     Effect.gen(function* () {
       const { availableVersion } = yield* Ref.get(updateStateRef);
+      const switching = Option.exists(
+        yield* Ref.get(devKitVerdictRef),
+        (verdict) => verdict.prebuild?.kind === "ready",
+      );
       const pressedAt = yield* Clock.currentTimeMillis;
       const logOffset = yield* DevKitUpdates.logSize(kit);
       const describe = (
@@ -482,6 +497,7 @@ export const make = Effect.gen(function* () {
         now: number,
       ) =>
         DevKitUpdates.describeRebuild({
+          switching,
           target: availableVersion,
           step,
           progress,
@@ -496,7 +512,12 @@ export const make = Effect.gen(function* () {
         errorContext: null,
         canRetry: false,
       }));
-      yield* logUpdaterInfo("requesting a dev kit rebuild", { target: availableVersion });
+      yield* logUpdaterInfo(
+        switching ? "requesting a dev kit switch" : "requesting a dev kit rebuild",
+        {
+          target: availableVersion,
+        },
+      );
       yield* DevKitUpdates.requestUpdate(kit);
       let behindWhileIdle = 0;
       for (let tick = 0; tick < DEV_KIT_REBUILD_MAX_TICKS; tick++) {
@@ -515,7 +536,12 @@ export const make = Effect.gen(function* () {
           behindWhileIdle = 0;
           continue;
         }
-        const verdict = yield* DevKitUpdates.evaluateStatus(kit, status);
+        const verdict = yield* evaluateDevKit(kit)(status);
+        if (verdict.prebuild?.kind === "failed") {
+          return yield* new DevKitUpdates.DevKitUpdateError({
+            message: `Preparing ${verdict.prebuild.sha} failed: ${verdict.prebuild.error}`,
+          });
+        }
         if (!verdict.behind) {
           yield* applyDevKitVerdict(verdict);
           return { accepted: true, completed: true, state: yield* Ref.get(updateStateRef) };
