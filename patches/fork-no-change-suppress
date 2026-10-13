@@ -1,0 +1,6 @@
+Bottom: 52a57fb875ce262010d2d4e497ae5e4a8a4634b9
+Top:    d4fef40cab0300ef6cd37f21db1132b8a5bed73a
+Author: brad <bradprin@live.com>
+Date:   2026-10-13 09:21:21 +0000
+
+feat(server): suppress exact no-change completion results
