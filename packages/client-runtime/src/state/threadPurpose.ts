@@ -49,6 +49,19 @@ const forestCache = new WeakMap<
   readonly OrchestratorThreadShell[],
   ReadonlyMap<string, ThreadPurpose | null>
 >();
+/** The raw ancestry edge: organizational parent first, then native subagent lineage until metadata exists. */
+function purposeParentKey(thread: OrchestratorThreadShell): string | null {
+  return thread.remoteParent
+    ? `${thread.remoteParent.environmentId}:${thread.remoteParent.threadId}`
+    : thread.parentThreadId != null
+      ? `${thread.environmentId}:${thread.parentThreadId}`
+      : thread.supervisionMetadataPresent !== true &&
+          thread.lineage.relationshipToParent === "subagent" &&
+          thread.lineage.parentThreadId != null
+        ? `${thread.environmentId}:${thread.lineage.parentThreadId}`
+        : null;
+}
+
 export function threadPurposes(threads: readonly OrchestratorThreadShell[]) {
   const cached = forestCache.get(threads);
   if (cached) return cached;
@@ -56,21 +69,72 @@ export function threadPurposes(threads: readonly OrchestratorThreadShell[]) {
     threads.map((thread) => ({
       key: supervisionThreadKey(thread),
       // Keep the raw edge: the navigation forest deliberately drops unavailable parents.
-      parentKey: thread.remoteParent
-        ? `${thread.remoteParent.environmentId}:${thread.remoteParent.threadId}`
-        : thread.parentThreadId != null
-          ? `${thread.environmentId}:${thread.parentThreadId}`
-          : thread.supervisionMetadataPresent !== true &&
-              thread.lineage.relationshipToParent === "subagent" &&
-              thread.lineage.parentThreadId != null
-            ? `${thread.environmentId}:${thread.lineage.parentThreadId}`
-            : null,
+      parentKey: purposeParentKey(thread),
       purpose: thread.purpose,
       unavailable: thread.forkMetadataAvailable === false,
     })),
   );
   forestCache.set(threads, result);
   return result;
+}
+
+export type PurposeMoveId = "move-to-harness" | "move-to-projects" | "move-to-threads";
+export interface PurposeMove {
+  readonly id: PurposeMoveId;
+  readonly label: string;
+  /**
+   * Written as the thread's own override; nesting, pin and settle are untouched. Null clears the
+   * override, so the thread follows its supervisor again.
+   */
+  readonly purpose: ThreadPurpose | null;
+}
+
+/**
+ * The one reversible move a thread offers between Harness and the rest, or null when it has none.
+ * Only a top-level thread (or one that already carries its own override) moves; a worker follows
+ * its root. Moving back says where the thread returns: Projects when it is project-shaped
+ * (owns workers or is marked a project), Threads when it is a plain standalone thread. An
+ * unknown purpose (remote ancestry not connected) offers nothing rather than a guess.
+ */
+export function purposeMoveFor(
+  threads: readonly OrchestratorThreadShell[],
+  key: string,
+): PurposeMove | null {
+  const thread = threads.find((candidate) => supervisionThreadKey(candidate) === key);
+  if (!thread || thread.archivedAt !== null) return null;
+  const effective = threadPurposes(threads).get(key) ?? null;
+  if (effective === null) return null;
+  if (purposeParentKey(thread) !== null && thread.purpose == null) return null;
+  if (effective === "project") {
+    return { id: "move-to-harness", label: "Move to Harness", purpose: "harness" };
+  }
+  const projectShaped =
+    thread.subproject === "on" ||
+    threads.some((other) => other.archivedAt === null && purposeParentKey(other) === key);
+  // Clear the override when its supervisor (or the root default) already says project, so the
+  // thread follows a later supervisor. Pin "project" only where it must stay out of a Harness
+  // parent, or when the parent's purpose is not known yet.
+  const parentKey = purposeParentKey(thread);
+  const inherited =
+    parentKey === null ? "project" : (threadPurposes(threads).get(parentKey) ?? null);
+  const purpose = inherited === "project" ? null : "project";
+  return projectShaped
+    ? { id: "move-to-projects", label: "Move back to Projects", purpose }
+    : { id: "move-to-threads", label: "Move back to Threads", purpose };
+}
+
+/**
+ * A project's subprojects that belong in its own card: those of the same purpose. One of the
+ * other purpose is a root of its own tab, so web and native both leave it out of this card.
+ */
+export function samePurposeSubprojects(
+  summary: OrchestratorSummary,
+  purposes: ReadonlyMap<string, ThreadPurpose | null>,
+): ReadonlyArray<OrchestratorSummary> {
+  const purpose = purposes.get(supervisionThreadKey(summary.root));
+  return summary.subprojects.filter(
+    (sub) => purposes.get(supervisionThreadKey(sub.root)) === purpose,
+  );
 }
 
 /** Partition after resolving all ancestry, preserving complete summaries for attention rollups. */
@@ -88,8 +152,9 @@ export function partitionThreadPurposes(
     const purpose = purposes.get(supervisionThreadKey(summary.root)) ?? null;
     const parent = summary.parentProjectKey;
     if (parent !== null && purposes.get(parent) === purpose) continue;
+    // Unknown ancestry keeps the row where it always was; Harness needs a known purpose.
     if (purpose === "harness") harness.push(summary);
-    else if (purpose === "project") projects.push(summary);
+    else projects.push(summary);
   }
   const byKey = new Map(threads.map((thread) => [supervisionThreadKey(thread), thread]));
   const owners = new Map<string, boolean>();
