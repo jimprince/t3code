@@ -28,6 +28,8 @@ export const RPC_METHODS = {
   scheduledTasksList: WS_METHODS.scheduledTasksList,
   "thread.session.generation": "thread.session.generation",
   "thread.resume": "thread.resume",
+  "thread.resumeFromPlan": "thread.resumeFromPlan",
+  "thread.previewResumePlan": "thread.previewResumePlan",
   "thread.stop.receipt": "thread.stop.receipt",
   "thread.human.pending.list": "thread.human.pending.list",
   "thread.session.reset": "thread.session.reset",

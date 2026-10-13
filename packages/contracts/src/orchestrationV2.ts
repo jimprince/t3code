@@ -1170,7 +1170,18 @@ export type OrchestrationV2PlanStep = typeof OrchestrationV2PlanStep.Type;
 export const OrchestrationV2TodoProgress = Schema.Struct({
   completed: NonNegativeInt,
   total: NonNegativeInt,
+  currentStep: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({
+        id: TrimmedNonEmptyString,
+        text: TrimmedNonEmptyString,
+        status: Schema.Literals(["running", "pending"]),
+      }),
+    ),
+  ),
 });
+export const ThreadTodoProgress = OrchestrationV2TodoProgress;
+export type ThreadTodoProgress = typeof ThreadTodoProgress.Type;
 export type OrchestrationV2TodoProgress = typeof OrchestrationV2TodoProgress.Type;
 
 export const OrchestrationV2UserInputQuestion = Schema.Struct({
@@ -1863,6 +1874,29 @@ export const OrchestrationV2LatestVisibleMessageSummary = Schema.Struct({
 export type OrchestrationV2LatestVisibleMessageSummary =
   typeof OrchestrationV2LatestVisibleMessageSummary.Type;
 
+export const OrchestrationV2PlanResumeState = Schema.Struct({
+  latestRunStatus: Schema.NullOr(OrchestrationV2RunStatus),
+  hasLiveSession: Schema.Boolean,
+  hasLiveTurn: Schema.Boolean,
+  failedSession: Schema.Boolean,
+});
+export const ThreadFilePlan = Schema.Struct({
+  planPath: Schema.String,
+  host: Schema.String,
+  planTitle: Schema.String,
+  status: Schema.String,
+  done: Schema.Int,
+  total: Schema.Int,
+  currentStep: Schema.NullOr(
+    Schema.Struct({
+      id: Schema.String,
+      text: Schema.String,
+      status: Schema.Literals(["running", "pending"]),
+    }),
+  ),
+  hasResumePoint: Schema.Boolean,
+});
+export type ThreadFilePlan = typeof ThreadFilePlan.Type;
 export const OrchestrationV2ThreadShell = Schema.Struct({
   notificationOrigin: Schema.optional(NotificationOrigin),
   notificationSuperseded: Schema.optional(Schema.Boolean),
@@ -1918,6 +1952,9 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
   hasActionableProposedPlan: Schema.Boolean,
   /** Null when the thread has no to-do list; omitted by servers that predate it. */
   todoProgress: Schema.optional(Schema.NullOr(OrchestrationV2TodoProgress)),
+  /** Absent on older servers; authoritative runtime evidence for plan recovery. */
+  filePlan: Schema.optionalKey(ThreadFilePlan),
+  planResumeState: Schema.optional(OrchestrationV2PlanResumeState),
   // Normalized post-settlement background work for sidebar Waiting pills.
   // Empty when the latest root run is still active or no pending work remains.
   pendingBackgroundTasks: Schema.optional(Schema.Array(OrchestrationV2PendingBackgroundTask)).pipe(

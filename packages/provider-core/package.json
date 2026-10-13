@@ -186,6 +186,10 @@
     "./server/t3ThreadIdentityEnv": {
       "types": "./src/server/t3ThreadIdentityEnv.ts",
       "import": "./src/server/t3ThreadIdentityEnv.ts"
+    },
+    "./server/providerTextRedaction": {
+      "types": "./src/server/providerTextRedaction.ts",
+      "import": "./src/server/providerTextRedaction.ts"
     }
   },
   "scripts": {

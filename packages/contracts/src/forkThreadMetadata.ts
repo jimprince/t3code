@@ -1,5 +1,6 @@
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/rpc/Rpc";
+import { ThreadResumeProvenance } from "./threadResume.ts";
 import { NativeCompletion } from "./forkWorkerLifecycle.ts";
 import { CommandId, ThreadId } from "./baseSchemas.ts";
 import { EnvironmentAuthorizationError } from "./auth.ts";
@@ -16,6 +17,7 @@ export type ThreadPurpose = typeof ThreadPurpose.Type;
 /** Organizational supervision is independent of provider execution lineage. */
 export const ForkThreadMetadata = Schema.Struct({
   threadId: ThreadId,
+  resumedFrom: Schema.optionalKey(ThreadResumeProvenance),
   purpose: Schema.optionalKey(Schema.NullOr(ThreadPurpose)),
   subproject: Schema.optionalKey(Schema.NullOr(ThreadSubprojectMode)),
   parentThreadId: Schema.NullOr(ThreadId),
