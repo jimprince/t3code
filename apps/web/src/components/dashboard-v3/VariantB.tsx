@@ -1,3 +1,4 @@
+import type { DashboardTask } from "@t3tools/contracts";
 import { CheckIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -7,14 +8,16 @@ import {
   formatClock,
   projectTasks,
   rollup,
+  orderProducts,
+  planWorkstreams,
   topLevelProjects,
-  workstreamTasks,
   type Change,
   type ChangeKind,
+  type ScopedProject,
 } from "./dashboard.logic";
 import { DecisionList } from "./decisions";
 import { BarLegend, ProgressBar, ProgressFigure, SectionHeading, SectionMarker } from "./parts";
-import { ReleaseLines } from "./plan";
+import { IdleProjects, ReleaseLines } from "./plan";
 import { InlineButton } from "../ui/button";
 
 const KIND_MARK: Record<ChangeKind, { mark: string; className: string }> = {
@@ -95,48 +98,73 @@ function ChangeLog() {
   );
 }
 
-/** One bar per project (Home) or workstream (project page): the plan and the forecast, compactly. */
-function NowStrip() {
-  const ui = useDashboardUi();
-  const { data, root } = ui;
-  const { products, utilities } = topLevelProjects(data.projects);
-  const rows = root
-    ? [
-        ...root.project.workstreams.map((workstream) => ({
-          key: `${root.key}|${workstream.id}`,
-          name: workstream.title,
-          tasks: workstreamTasks(root.project, workstream),
-          scoped: root,
-        })),
-        ...data.projects
-          .filter((p) => p !== root)
-          .map((scoped) => ({
-            key: scoped.key,
-            name: scoped.project.title,
-            tasks: projectTasks(data.projects, scoped),
-            scoped,
+interface NowRow {
+  readonly key: string;
+  readonly name: string;
+  readonly tasks: ReadonlyArray<DashboardTask>;
+  readonly scoped: ScopedProject;
+}
+
+/**
+ * The strip's rows: one per project on Home (Utilities as one row of their own, so it can carry its
+ * own section marker), one per workstream and nested project on a project page.
+ */
+function useNowRows(): {
+  readonly plan: ReadonlyArray<NowRow>;
+  readonly idle: ReadonlyArray<ScopedProject>;
+  readonly utilities: NowRow | null;
+} {
+  const { data, root } = useDashboardUi();
+  return useMemo(() => {
+    if (root)
+      return {
+        plan: [
+          ...planWorkstreams(root.project).map(({ workstream, tasks }) => ({
+            key: `${root.key}|${workstream.id}`,
+            name: workstream.title,
+            tasks,
+            scoped: root,
           })),
-      ]
-    : [
-        ...products.map((scoped) => ({
-          key: scoped.key,
-          name: scoped.project.title,
-          tasks: projectTasks(data.projects, scoped),
-          scoped,
-        })),
-        ...(utilities.length > 0
-          ? [
-              {
-                key: "utilities",
-                name: "Utilities",
-                tasks: utilities.flatMap((scoped) => projectTasks(data.projects, scoped)),
-                scoped: utilities[0]!,
-              },
-            ]
-          : []),
-      ];
+          ...data.projects
+            .filter((p) => p !== root)
+            .map((scoped) => ({
+              key: scoped.key,
+              name: scoped.project.title,
+              tasks: projectTasks(data.projects, scoped),
+              scoped,
+            })),
+        ],
+        idle: [],
+        utilities: null,
+      };
+    const { products, utilities } = topLevelProjects(data.projects);
+    const { ordered, idle } = orderProducts(products, data.projects);
+    return {
+      idle,
+      plan: ordered.map((scoped) => ({
+        key: scoped.key,
+        name: scoped.project.title,
+        tasks: projectTasks(data.projects, scoped),
+        scoped,
+      })),
+      utilities:
+        utilities.length > 0
+          ? {
+              key: "utilities",
+              name: "Utilities",
+              tasks: utilities.flatMap((scoped) => projectTasks(data.projects, scoped)),
+              scoped: utilities[0]!,
+            }
+          : null,
+    };
+  }, [data.projects, root]);
+}
+
+/** One bar per project (Home) or workstream (project page): the plan and the forecast, compactly. */
+function NowStrip({ rows }: { readonly rows: ReadonlyArray<NowRow> }) {
+  const ui = useDashboardUi();
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 sm:grid-cols-[150px_minmax(0,1fr)_230px]">
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 sm:grid-cols-[150px_minmax(0,1fr)_minmax(230px,auto)]">
       {rows.map((row) => {
         const roll = rollup(row.tasks);
         const keys = [
@@ -169,8 +197,9 @@ function NowStrip() {
 
 /** B: the morning review. Decisions first, then what changed since this device last looked. */
 export function VariantB() {
-  const { data, decisions, now } = useDashboardUi();
+  const { data, decisions, now, root } = useDashboardUi();
   const { since, changes } = useChangeLog();
+  const rows = useNowRows();
   const by = formatClock(
     new Date((data.asOf ? Date.parse(data.asOf) : now) + 3_600_000).toISOString(),
     now,
@@ -191,8 +220,14 @@ export function VariantB() {
           title={`Now and by ${by}`}
           right={<BarLegend gainedLabel="last hour" byLabel="next hour" />}
         />
-        <NowStrip />
+        <NowStrip rows={rows.plan} />
+        <IdleProjects projects={rows.idle} />
       </SectionMarker>
+      {root ? null : (
+        <SectionMarker name="utilities" hidden={rows.utilities === null}>
+          {rows.utilities ? <NowStrip rows={[rows.utilities]} /> : null}
+        </SectionMarker>
+      )}
       <div className="grid grid-cols-1 gap-x-6 lg:grid-cols-[400px_minmax(0,1fr)] lg:items-start">
         <SectionMarker name="decisions" className="min-w-0">
           <SectionHeading title="Decisions">
