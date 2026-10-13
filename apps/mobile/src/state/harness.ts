@@ -1,7 +1,9 @@
 import { useAtomValue } from "@effect/atom-react";
 import { createHarnessQuery } from "@t3tools/client-runtime/state/harness-query";
+import { createEnvironmentRpcCommand } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentId, HarnessSnapshot } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { useEffect, useState } from "react";
@@ -48,6 +50,14 @@ const harnessEnvironmentsAtom = Atom.make((get): readonly HarnessEnvironmentView
   }
   return views;
 }).pipe(Atom.withLabel("mobile-harness:environments"));
+
+/** Pins or unpins one check on its server, then reads that server's snapshot again. */
+export const mobileSetHarnessCheckPinned = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "mobile:harness-check-pin",
+  tag: "harness.setCheckPinned",
+  onSuccess: ({ environmentId }, registry) =>
+    Effect.sync(() => registry.refresh(harnessQuery({ environmentId, input: snapshotInput }))),
+});
 
 /** Forces a read now. Its identity never changes, so a focus effect can hold it without looping. */
 function refreshHarness() {
