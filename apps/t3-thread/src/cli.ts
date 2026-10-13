@@ -1098,7 +1098,24 @@ agent
         : undefined;
     // `options.preamble` is false only when `--no-preamble` was passed (Commander convention).
     const initialMessage = options.message;
+    const creatorEndpoint =
+      parentEndpoint ??
+      (resolveCallerThreadId()
+        ? await resolveThreadEndpoint(
+            state,
+            resolveCallerThreadId()!,
+            undefined,
+            resolveCallerEnvironmentMetadata(),
+          )
+        : null);
+    const creatorPurpose =
+      creatorEndpoint && !localParent
+        ? await new RemoteEnvironmentClient(
+            requireEnvironment(state, creatorEndpoint.environment),
+          ).effectiveThreadPurpose(creatorEndpoint.threadId)
+        : null;
     const created = await client.createAgentThread({
+      ...(creatorPurpose === null ? {} : { purposeSeed: creatorPurpose }),
       parentThreadId: nesting ? (localParent ?? null) : null,
       remoteParent: nesting ? remoteParent : undefined,
       pin: options.pin === true,

@@ -46,6 +46,7 @@ vi.mock("./useThreadNesting", () => ({
   useThreadNestingActions: () => ({ runNestingMenuAction: vi.fn() }),
 }));
 vi.mock("../state/forkSupervision", () => ({ supervision: { forest: "forest" } }));
+vi.mock("../state/forkPurpose", () => ({ readThreadPurposeMove: () => null }));
 vi.mock("../rpc/atomRegistry", () => ({ appAtomRegistry: { get: () => null } }));
 
 vi.mock("../components/CustomSnoozeDialog", () => ({ requestCustomSnooze: vi.fn() }));
