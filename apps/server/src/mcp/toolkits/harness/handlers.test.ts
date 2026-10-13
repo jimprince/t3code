@@ -6,6 +6,7 @@ import * as Layer from "effect/Layer";
 import { McpSchema, McpServer } from "effect/ai";
 
 import * as Environment from "../../../environment/ServerEnvironment.ts";
+import { RoutineKindService } from "../../../harness/RoutineKindService.ts";
 import * as HarnessPin from "../../../harness/HarnessPinService.ts";
 import { HarnessReadService } from "../../../harness/HarnessReadService.ts";
 import * as ThreadManagement from "../../../orchestration-v2/ThreadManagementService.ts";
@@ -61,6 +62,7 @@ const layerForCaller = (modes: Parameters<typeof liveThreadShell>[1] = {}) =>
     Layer.provide(layerEnvironment),
     Layer.provide(Layer.mock(HarnessReadService)({})),
     Layer.provide(HarnessPin.layer),
+    Layer.provide(Layer.mock(RoutineKindService)({ environmentId })),
     Layer.provideMerge(Settings.layerTest()),
   );
 const layer = layerForCaller();
