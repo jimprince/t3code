@@ -121,6 +121,7 @@ export interface OrchestrationThread {
   lastError?: string | null;
   parentThreadId?: string | null;
   executionParentThreadId?: string | null;
+  lineage?: import("@t3tools/contracts").OrchestrationV2ThreadShell["lineage"];
   remoteParent?: { environmentId: string; threadId: string } | null;
   scope?: string | null;
   runtimeRequests?: readonly OrchestrationV2RuntimeRequest[];
@@ -168,6 +169,7 @@ export interface OrchestrationThreadShell {
   lastError?: string | null;
   parentThreadId?: string | null;
   executionParentThreadId?: string | null;
+  lineage?: import("@t3tools/contracts").OrchestrationV2ThreadShell["lineage"];
   remoteParent?: { environmentId: string; threadId: string } | null;
   scope?: string | null;
   id: string;
