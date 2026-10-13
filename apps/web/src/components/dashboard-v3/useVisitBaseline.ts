@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import { diffAgainst, takeBaseline, type Baseline, type DashboardData } from "./dashboard.logic";
 
@@ -18,15 +18,17 @@ function read(key: string): Baseline | null {
  * What changed since this device last looked, derived on the client from the baseline it stored.
  * The baseline a visit compares against is the one stored before it began; a new one is stored only
  * after the page has been visible for ten seconds, so a quick glance does not swallow the changes.
+ * Each scope (Home, one project page) keeps its own baseline.
  */
-export function useVisitBaseline(scopeKey: string, data: DashboardData) {
+export function useVisitBaseline(scopeKey: string, data: DashboardData, enabled = true) {
   const storageKey = `t3.dashboard.baseline.${scopeKey}`;
-  const [previous] = useState(() => read(storageKey));
+  // Read once per scope, so the baseline a visit compares against does not move when this visit stores one.
+  const previous = useMemo(() => read(storageKey), [storageKey]);
   const latest = useRef(data);
   useEffect(() => {
     latest.current = data;
   }, [data]);
-  const hasData = data.asOf !== null;
+  const hasData = enabled && data.asOf !== null;
   useEffect(() => {
     if (!hasData) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
