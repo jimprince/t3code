@@ -1,0 +1,4 @@
+id = "harness-check-pins"
+category = "feature"
+functionality = "Harness visibility"
+text = "Any Harness check can be pinned to the top of the checks list, above failing ones, from its row menu, its page or the harness_check_pin tool; pins are kept per server and show on every client."
