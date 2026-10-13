@@ -1,13 +1,14 @@
 import * as NodeHttp from "node:http";
 import * as NodeModule from "node:module";
 import * as NodeEvents from "node:events";
+import * as NodeFS from "node:fs";
 import * as NodeFSP from "node:fs/promises";
 const require = NodeModule.createRequire(import.meta.url);
 const socketRequire = NodeModule.createRequire(require.resolve("@effect/platform-node/NodeSocket"));
 const { WebSocketServer } = socketRequire("ws");
 const jsonMode = process.argv[3] === "threads";
 const metrics = { connections: 0, shellReads: 0, archiveReads: 0, queueReads: [], refreshes: 0 };
-const record = () => NodeFSP.writeFile(`${process.argv[2]}.metrics`, JSON.stringify(metrics));
+const record = () => NodeFS.writeFileSync(`${process.argv[2]}.metrics`, JSON.stringify(metrics));
 const at = "2026-10-05T00:00:00.000Z";
 const thread = (id) => ({
   id,
