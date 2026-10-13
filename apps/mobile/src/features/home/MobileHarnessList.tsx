@@ -1,10 +1,14 @@
 import { selectHarnessQueuedSends } from "@t3tools/client-runtime/state/harness-query";
 import { useFocusEffect } from "@react-navigation/native";
+import {
+  buildHarnessChecksList,
+  harnessOwnerTitles,
+} from "@t3tools/client-runtime/state/harness-checks-list";
+import { harnessCheckRef } from "@t3tools/client-runtime/state/harness-check-page";
 import { buildHarnessStrip } from "@t3tools/client-runtime/state/harness-strip";
 import {
   buildHarnessAgents,
   buildHarnessChecks,
-  buildHarnessRunRows,
   describeHarnessAgent,
   describeHarnessFreshness,
   describeHarnessSources,
@@ -21,13 +25,14 @@ import type {
 } from "@t3tools/client-runtime/state/orchestrators";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import { formatLocalWhen } from "@t3tools/shared/localTime";
-import { useEffect, useMemo, useState } from "react";
+import { useNavigation } from "@react-navigation/native";
+import { useMemo, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 
-import { AppText as Text } from "../../components/AppText";
+import { AppText as Text, AppTextInput as TextInput } from "../../components/AppText";
 import { EmptyState } from "../../components/EmptyState";
 import { cn } from "../../lib/cn";
-import { useHarnessEnvironments } from "../../state/harness";
+import { useHarnessEnvironments, useHarnessNow } from "../../state/harness";
 
 type OpenThread = (thread: Pick<EnvironmentThreadShell, "environmentId" | "id">) => void;
 
@@ -90,46 +95,39 @@ function AgentRow({
   );
 }
 
+/** One check: a row that opens the check's own screen. */
 function CheckRow({
   check,
-  now,
-  expanded,
-  onToggle,
   onOpen,
 }: {
   readonly check: HarnessCheckView;
-  readonly now: number;
-  readonly expanded: boolean;
-  readonly onToggle: () => void;
-  readonly onOpen: OpenThread;
+  readonly onOpen: (check: HarnessCheckView) => void;
 }) {
   const { errors } = check;
-  const runs = expanded ? buildHarnessRunRows(check.routine, now) : [];
   return (
-    <View className="border-b border-border">
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={check.spokenLabel}
-        accessibilityState={{ expanded }}
-        className="min-h-11 gap-0.5 px-2 py-2 active:bg-card"
-        onPress={onToggle}
-      >
-        <View className="flex-row items-center gap-2">
-          <View className={cn("h-2 w-2 rounded-full", TONE_DOT[check.tone])} />
-          <Text className="min-w-0 flex-1 text-sm text-foreground" numberOfLines={1}>
-            {check.name}
-          </Text>
-          <Text className={cn("text-xs", TONE_TEXT[check.tone])}>
-            {check.latenessLabel ?? check.stateLabel}
-          </Text>
-        </View>
-        <Text className="pl-4 text-xs text-foreground-muted" numberOfLines={1}>
-          {check.classification}
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={check.spokenLabel}
+      className="min-h-11 gap-0.5 border-b border-border px-2 py-2 active:bg-card"
+      onPress={() => onOpen(check)}
+    >
+      <View className="flex-row items-center gap-2">
+        <View className={cn("h-2 w-2 rounded-full", TONE_DOT[check.tone])} />
+        <Text className="min-w-0 flex-1 text-sm text-foreground" numberOfLines={1}>
+          {check.name}
         </Text>
-        <View className="flex-row gap-2 pl-4">
-          <Text className="min-w-0 flex-1 text-xs text-foreground-muted" numberOfLines={1}>
-            {check.timing}
-          </Text>
+        <Text className={cn("text-xs", TONE_TEXT[check.tone])}>
+          {check.latenessLabel ?? check.stateLabel}
+        </Text>
+      </View>
+      <Text className="pl-4 text-xs text-foreground-muted" numberOfLines={1}>
+        {check.classification}
+      </Text>
+      <View className="flex-row gap-2 pl-4">
+        <Text className="min-w-0 flex-1 text-xs text-foreground-muted" numberOfLines={1}>
+          {check.timing}
+        </Text>
+        {check.errorsText === null ? null : (
           <Text
             className={cn(
               "text-xs",
@@ -138,72 +136,31 @@ function CheckRow({
           >
             {check.errorsText}
           </Text>
-        </View>
-      </Pressable>
-      {expanded ? (
-        <View className="gap-1 px-2 pb-2">
-          <Text className="text-xs text-foreground">{check.evidence}</Text>
-          {check.whatItChecks ? (
-            <Text className="text-xs text-foreground-muted">{check.whatItChecks}</Text>
-          ) : null}
-          <Text className="text-xs text-foreground-muted">
-            {`Findings per run: ${errors.known ? errors.label : "unknown (no run reported a count)"}${errors.failedLabel ? ` · ${errors.failedLabel}` : ""}`}
-          </Text>
-          {runs.length === 0 ? (
-            <Text className="text-xs text-foreground-muted">No runs retained.</Text>
-          ) : (
-            runs.map((run) => (
-              <View key={run.key} className="min-h-11 flex-row items-center gap-2">
-                <Text className="w-24 text-xs text-foreground-muted">{run.timeLabel}</Text>
-                <Text
-                  className={cn(
-                    "min-w-0 flex-1 text-xs",
-                    run.failed ? "text-destructive" : "text-foreground-muted",
-                  )}
-                  numberOfLines={1}
-                >
-                  {run.outcomeLabel}
-                </Text>
-                <Text className="text-xs text-foreground-muted">{run.errorsLabel}</Text>
-                {run.thread ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Open run of ${check.name} at ${run.timeLabel}`}
-                    className="min-h-11 justify-center px-2"
-                    onPress={() =>
-                      run.thread &&
-                      onOpen({ environmentId: run.thread.environmentId, id: run.thread.threadId })
-                    }
-                  >
-                    <Text className="text-xs text-adaptive-sky-600-400">Open</Text>
-                  </Pressable>
-                ) : (
-                  <Text className="w-12 text-right text-xs text-foreground-muted">none</Text>
-                )}
-              </View>
-            ))
-          )}
-        </View>
-      ) : null}
-    </View>
+        )}
+      </View>
+    </Pressable>
   );
 }
 
 /**
  * The Harness tab on the phone, read-only: the Harness roots, then the automated checks with their
  * schedule, lateness and findings per run. Mirrors the web list through the same client-runtime
- * view model. Run history opens inline; Move to Harness stays a web menu action for now.
+ * view model. A check opens its own screen with its run history; Move to Harness stays a web
+ * menu action for now.
  */
 export function MobileHarnessList({
   harnessRoots,
+  threads,
   onSelectThread,
 }: {
   readonly harnessRoots: ReadonlyArray<OrchestratorSummary | OrchestratorThreadShell>;
+  /** Every thread shell, so the filter can match a check by its owner thread's title. */
+  readonly threads: ReadonlyArray<Pick<EnvironmentThreadShell, "environmentId" | "id" | "title">>;
   readonly onSelectThread: OpenThread;
 }) {
   const { environments, refresh } = useHarnessEnvironments();
   const [idleExpanded, setIdleExpanded] = useState(false);
-  const [expandedCheck, setExpandedCheck] = useState<string | null>(null);
+  const navigation = useNavigation();
   // Read again each time the tab regains focus; the query's own interval covers the time between.
   useFocusEffect(refresh);
   const agents = useMemo(() => buildHarnessAgents(harnessRoots), [harnessRoots]);
@@ -213,12 +170,7 @@ export function MobileHarnessList({
     () => environments.flatMap(({ snapshot }) => (snapshot === null ? [] : [snapshot])),
     [environments],
   );
-  // A minute clock keeps "late" and "stale" current even when polling has stopped.
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(timer);
-  }, []);
+  const now = useHarnessNow();
   // A host whose last refresh failed can no longer confirm its rows, however recent they are.
   const unreachable = useMemo(
     () =>
@@ -245,10 +197,16 @@ export function MobileHarnessList({
       }),
     [environments, now, snapshots, unreachable],
   );
-  const { harness: harnessChecks, unclassified } = useMemo(
-    () => splitHarnessChecks(checks),
-    [checks],
+  // The header counts every Harness check, whatever the filter shows.
+  const harnessChecks = useMemo(() => splitHarnessChecks(checks).harness, [checks]);
+  const [query, setQuery] = useState("");
+  const [feedsExpanded, setFeedsExpanded] = useState(false);
+  const ownerTitle = useMemo(() => harnessOwnerTitles(threads), [threads]);
+  const list = useMemo(
+    () => buildHarnessChecksList(checks, query, ownerTitle),
+    [checks, ownerTitle, query],
   );
+  const showFeeds = feedsExpanded || list.feedsOpen;
   const oldest = snapshots.map((snapshot) => snapshot.generatedAt).sort()[0];
   const freshness = describeHarnessFreshness(oldest ?? null, now);
   const count = (state: HarnessCheckView["state"]) =>
@@ -258,15 +216,10 @@ export function MobileHarnessList({
     count("overdue") > 0 ? `${count("overdue")} overdue` : null,
     ...describeHarnessSources(snapshots),
   ].filter((part) => part !== null);
+  const openCheck = (check: HarnessCheckView) =>
+    navigation.navigate("HarnessCheck", harnessCheckRef(check));
   const renderCheck = (check: HarnessCheckView) => (
-    <CheckRow
-      key={check.key}
-      check={check}
-      now={now}
-      expanded={expandedCheck === check.key}
-      onToggle={() => setExpandedCheck((key) => (key === check.key ? null : check.key))}
-      onOpen={onSelectThread}
-    />
+    <CheckRow key={check.key} check={check} onOpen={openCheck} />
   );
   const failedEnvironments = environments.filter((environment) => environment.error !== null);
 
@@ -360,13 +313,58 @@ export function MobileHarnessList({
           No automated checks are registered.
         </Text>
       ) : null}
-      {harnessChecks.map(renderCheck)}
-      {unclassified.length > 0 ? (
+      {snapshots.length > 0 ? (
+        <View className="flex-row items-center gap-2 px-2 pb-1">
+          <TextInput
+            accessibilityLabel="Filter checks"
+            autoCapitalize="none"
+            autoCorrect={false}
+            clearButtonMode="never"
+            placeholder="Filter checks"
+            returnKeyType="search"
+            className="min-h-11 min-w-0 flex-1 rounded-xl py-1.5 text-sm"
+            value={query}
+            onChangeText={setQuery}
+          />
+          {query !== "" ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Clear the check filter"
+              className="min-h-11 justify-center px-2"
+              onPress={() => setQuery("")}
+            >
+              <Text className="text-sm text-adaptive-sky-600-400">Clear</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+      {list.noMatches ? (
+        <Text accessibilityRole="alert" className="px-2 py-2 text-xs text-foreground-muted">
+          No checks match.
+        </Text>
+      ) : null}
+      {list.checks.map(renderCheck)}
+      {list.feeds ? (
+        <>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showFeeds }}
+            className="min-h-11 justify-center px-2 active:bg-card"
+            onPress={() => setFeedsExpanded((value) => !value)}
+          >
+            <Text className="text-xs text-foreground-muted">
+              {showFeeds ? "Hide" : "Show"} {list.feeds.label}
+            </Text>
+          </Pressable>
+          {showFeeds ? list.feeds.checks.map(renderCheck) : null}
+        </>
+      ) : null}
+      {list.unclassified.length > 0 ? (
         <>
           <Text className="px-2 pt-3 pb-1 text-xs font-t3-medium text-foreground-muted">
             UNCLASSIFIED no owner, not Harness
           </Text>
-          {unclassified.map(renderCheck)}
+          {list.unclassified.map(renderCheck)}
         </>
       ) : null}
     </ScrollView>
