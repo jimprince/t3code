@@ -101,6 +101,8 @@ it.effect(
           ...parent,
           id: threadId,
           title: name,
+          createdBy: "agent" as const,
+          creationSource: "mcp" as const,
           createdAt: now,
           updatedAt: now,
           lineage: {
