@@ -1,0 +1,8 @@
+name = "fork-dashboard-v3-12-home-polish"
+subject = "fix(dashboard): tidy Home releases, wrapped decision options and idle ordering"
+class = "product"
+purpose = "tidy Home releases, wrapped decision options and idle ordering"
+retire_when = "The dashboard-v3 series is intentionally dropped or replaced by equivalent upstream behavior."
+depends_on = ["fork-dashboard-v3-11-tracker-read-timeout"]
+roles = []
+note = "Replayed independently from live source f78c2e54ff09df36c2a1a617c13b8a817b214ffd; excludes the Chief of Staff tray series."
