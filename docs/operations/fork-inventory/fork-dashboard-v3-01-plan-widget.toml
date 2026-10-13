@@ -1,0 +1,14 @@
+name = "fork-dashboard-v3-01-plan-widget"
+subject = "feat(web): Plan widget with task progress bars and Ask first on project pages"
+class = "product"
+purpose = "Plan widget with task progress bars and Ask first on project pages"
+retire_when = "The dashboard-v3 series is intentionally dropped or replaced by equivalent upstream behavior."
+depends_on = ["fork-project-plan"]
+roles = []
+note = "Replayed independently from live source 6f0038d183d20106b62bb98529723b8206b93bad; excludes the Chief of Staff tray series."
+
+[[decision]]
+id = "catchup-r29-main-already-carries-plan-widget"
+date = "2026-10-13"
+decided = "retain-series-identity"
+rationale = "The behavior of live commit 6f0038d183d20106b62bb98529723b8206b93bad already resides in its main owning concern, with newer main adaptations. Keep this droppable series identity without duplicating or reverting that implementation."
