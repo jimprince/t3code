@@ -3375,7 +3375,9 @@ export const layer = Layer.unwrap(
         );
         const clientOrigin = readClientConnectionOrigin(request);
         const clientAnalyticsProps = readClientAnalyticsProps(request);
-        yield* sessions.recordClientConnection(session.sessionId, clientOrigin);
+        // Session bookkeeping writes wait for the database writer, which can be
+        // busy for seconds. They must never hold up the websocket upgrade.
+        yield* Effect.forkDetach(sessions.recordClientConnection(session.sessionId, clientOrigin));
         yield* analytics.record("client.connected", clientAnalyticsProps);
         const rpcWebSocketHttpEffect = yield* Effect.gen(function* () {
           const { protocol, httpEffect } = yield* RpcServer.makeProtocolWithHttpEffectWebsocket;
@@ -3428,7 +3430,7 @@ export const layer = Layer.unwrap(
           ),
         );
         return yield* Effect.acquireUseRelease(
-          sessions.markConnected(session.sessionId),
+          Effect.forkDetach(sessions.markConnected(session.sessionId)),
           () =>
             Effect.raceFirst(
               rpcWebSocketHttpEffect,
@@ -3440,7 +3442,7 @@ export const layer = Layer.unwrap(
                 }),
               ),
             ),
-          () => sessions.markDisconnected(session.sessionId),
+          (connected) => Effect.forkDetach(Fiber.await(connected).pipe(Effect.andThen(sessions.markDisconnected(session.sessionId)))),
         );
       }).pipe(
         Effect.catchTags({
