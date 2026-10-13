@@ -1,5 +1,6 @@
 import type { AuthSessionState, EnvironmentId, ServerConfig } from "@t3tools/contracts";
 import * as Data from "effect/Data";
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
@@ -15,6 +16,48 @@ import * as ManagedRelay from "../relay/managedRelay.ts";
 import { safeErrorLogAttributes } from "../errors/safeLog.ts";
 import { executeAuthenticatedEnvironmentHttpRequest } from "./environmentHttpAuth.ts";
 import { followStreamInEnvironment } from "./environmentStreams.ts";
+
+function isRejectedSession(error: unknown): boolean {
+  let current = error;
+  for (let depth = 0; depth < 8 && typeof current === "object" && current !== null; depth++) {
+    if (
+      ("_tag" in current &&
+        [
+          "EnvironmentAuthInvalidError",
+          "EnvironmentScopeRequiredError",
+          "EnvironmentOperationForbiddenError",
+        ].includes(String(current._tag))) ||
+      ("status" in current && (current.status === 401 || current.status === 403)) ||
+      ("authenticated" in current && current.authenticated === false)
+    )
+      return true;
+    current = "cause" in current ? current.cause : null;
+  }
+  return false;
+}
+
+/** Only transport failures may reuse grants; rejected credentials always fail closed. */
+function isTransientSessionFailure(error: unknown): boolean {
+  if (typeof error !== "object" || error === null || !("_tag" in error) || isRejectedSession(error))
+    return false;
+  return (
+    error._tag === "RemoteEnvironmentAuthTimeoutError" ||
+    error._tag === "RemoteEnvironmentAuthFetchError" ||
+    (error._tag === "RemoteEnvironmentAuthUndeclaredStatusError" &&
+      "status" in error &&
+      typeof error.status === "number" &&
+      error.status >= 500)
+  );
+}
+
+/** Shared by visible scope checks and the command's execution guard. */
+export function sessionStateGrants(result: AsyncResult.AsyncResult<AuthSessionState, unknown>) {
+  if (result._tag === "Failure") {
+    const error = Option.getOrNull(Cause.findErrorOption(result.cause));
+    if (!isTransientSessionFailure(error)) return null;
+  }
+  return Option.getOrNull(AsyncResult.value(result));
+}
 
 /** @public Required to name the error in consumers' inferred session results. */
 export class SessionHttpClientUnavailable extends Data.TaggedError(
@@ -130,8 +173,10 @@ function makeEnvironmentSessionAtoms<R, E>(
   // Keyed on the prepared connection's identity: a reconnect (new credential,
   // new base URL) swaps the prepared value, which re-runs the fetch, so scope
   // changes from re-pairing are picked up without an explicit refresh.
-  const sessionStateAtom = Atom.family((environmentId: EnvironmentId) =>
-    runtime
+  const sessionStateAtom = Atom.family((environmentId: EnvironmentId) => {
+    let failures = 0;
+    let rejected = false;
+    const source = runtime
       .atom((get) => {
         const prepared = Option.getOrNull(get(preparedConnectionValueAtom(environmentId)));
         if (prepared === null) {
@@ -152,16 +197,40 @@ function makeEnvironmentSessionAtoms<R, E>(
         });
       })
       .pipe(
-        Atom.swr({ staleTime: 30_000, revalidateOnMount: true }),
         Atom.setIdleTTL(5 * 60_000),
+        Atom.swr({ staleTime: 30_000, revalidateOnMount: true }),
         Atom.withLabel(`environment-session-state:${environmentId}`),
-      ),
-  );
+      );
+    return Atom.transform(source, (get) => {
+      const result = get(source);
+      if (result._tag === "Success") {
+        failures = 0;
+        rejected = false;
+      }
+      if (
+        result._tag === "Failure" &&
+        !isTransientSessionFailure(Option.getOrNull(Cause.findErrorOption(result.cause)))
+      )
+        rejected = true;
+      if (result._tag === "Failure" && !result.waiting) {
+        const delay = Math.min(1_000 * 2 ** Math.min(failures++, 5), 30_000);
+        const retry = Effect.runFork(
+          Effect.sleep(delay).pipe(Effect.andThen(Effect.sync(() => get.refresh(source)))),
+        );
+        get.addFinalizer(() => retry.interruptUnsafe());
+      }
+      return rejected && result._tag === "Failure"
+        ? AsyncResult.failure(result.cause, {
+            previousSuccess: Option.none<AsyncResult.Success<AuthSessionState>>(),
+            waiting: result.waiting,
+          })
+        : result;
+    });
+  });
 
   const sessionStateValueAtom = Atom.family((environmentId: EnvironmentId) =>
-    Atom.make(
-      (get): AuthSessionState | null =>
-        Option.getOrNull(AsyncResult.value(get(sessionStateAtom(environmentId)))) ?? null,
+    Atom.make((get): AuthSessionState | null =>
+      sessionStateGrants(get(sessionStateAtom(environmentId))),
     ).pipe(Atom.withLabel(`environment-session-state-value:${environmentId}`)),
   );
 
