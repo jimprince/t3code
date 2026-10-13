@@ -660,7 +660,10 @@ it.layer(NodeServices.layer)("Harness production read model", (it) => {
             snapshot.routines.find((row) => row.key.endsWith(":automations:unknown-owner"))
               ?.purpose,
           ).toBe("unclassified");
-          expect(snapshot.routines.some((row) => row.key.endsWith(":project-rule"))).toBe(false);
+          expect(snapshot.routines.find((row) => row.key.endsWith(":project-rule"))).toMatchObject({
+            routineKind: "project",
+            routineKindSource: "default",
+          });
           expect(snapshot.routines.find((row) => row.key.endsWith(":watchdog:240"))).toMatchObject({
             state: "disabled",
             lateness: { overdue: false },
@@ -698,3 +701,23 @@ it.layer(NodeServices.layer)("Harness production read model", (it) => {
       ),
   );
 });
+
+it.effect(
+  "classification cache reads preserve the snapshot's per-source degradation when automation storage is unavailable",
+  () =>
+    withDb(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`ALTER TABLE automations RENAME TO unavailable_automations`;
+        const service = yield* make;
+        const snapshot = yield* service.snapshot({});
+        expect(snapshot.sources.find((source) => source.key === "automations")).toMatchObject({
+          status: "unavailable",
+        });
+        expect(snapshot.routines.find((row) => row.key.endsWith(":watchdog:240"))).toMatchObject({
+          state: "disabled",
+          routineKind: "check",
+        });
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
+);

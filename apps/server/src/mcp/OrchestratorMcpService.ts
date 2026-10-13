@@ -246,6 +246,7 @@ function scheduledTaskWorkspaceStrategy(
  */
 function scheduledTaskSummary(task: ScheduledTask, mayRun: boolean): OrchestratorMcpScheduledTask {
   return {
+    ...(task.routineKind === undefined ? {} : { routineKind: task.routineKind }),
     scheduledTaskId: task.id,
     title: task.title,
     prompt: task.prompt,
@@ -1551,6 +1552,7 @@ const make = Effect.gen(function* () {
         const title =
           input.title ?? (derivedTitle.length > 0 ? derivedTitle.slice(0, 80) : "Scheduled task");
         const upsertInput: ScheduledTaskUpsertInput = {
+          routineKind: input.routineKind,
           title,
           prompt: input.prompt,
           enabled: input.enabled ?? true,
@@ -1632,6 +1634,7 @@ const make = Effect.gen(function* () {
             ? existing.workspaceStrategy
             : scheduledTaskWorkspaceStrategy(input.bindToCurrentThread);
         const upsertInput: ScheduledTaskUpsertInput = {
+          routineKind: input.routineKind,
           id: existing.id,
           title: input.title ?? existing.title,
           prompt: input.prompt ?? existing.prompt,

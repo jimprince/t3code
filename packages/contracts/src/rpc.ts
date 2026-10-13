@@ -60,7 +60,11 @@ import {
   ResourceRecoveryExecuteRpc,
 } from "./forkResourceRecoveryRpc.ts";
 import { ForkThreadOrderResetRpc } from "./forkThreadOrder.ts";
-import { HarnessSetCheckPinnedRpc, HarnessSnapshotRpc } from "./harness.ts";
+import {
+  HarnessSetCheckPinnedRpc,
+  HarnessSnapshotRpc,
+  HarnessRoutineKindSetRpc,
+} from "./harness.ts";
 import { ForkThreadMetadataRpcs } from "./forkThreadMetadata.ts";
 import { SupervisionDropRpc } from "./forkSupervisionDrag.ts";
 import { THREAD_SUBSCRIPTION_METHODS, ThreadSubscriptionRpcs } from "./threadSubscriptions.ts";
@@ -474,6 +478,7 @@ import { Project, ProjectMutation, ProjectMutationError } from "./project.ts";
 export const WS_METHODS = {
   harnessSnapshot: "harness.snapshot",
   harnessSetCheckPinned: "harness.setCheckPinned",
+  harnessRoutineKindSet: "harness.routineKind.set",
   automationsList: "automations.list",
   automationsSave: "automations.save",
   automationsRemove: "automations.remove",
@@ -2457,6 +2462,7 @@ export const WsForkRpcGroup = RpcGroup.make(
   ...ForkThreadMetadataRpcs,
   HarnessSnapshotRpc,
   HarnessSetCheckPinnedRpc,
+  HarnessRoutineKindSetRpc,
   HeadlessDeliveryRpc,
   ResourceRecoveryPreviewRpc,
   ResourceRecoveryExecuteRpc,
