@@ -1,6 +1,6 @@
-Bottom: b5fc1d30c1cb8d8e9798d6e88a22356b6f9f210c
-Top:    7cb338ccface0bc941bad906e499fd265ec15ec8
+Bottom: 2dcb7df67b0be9f9cc8bcb725b780d5ec5550a12
+Top:    97ae86f1d83253d2d3f712fe2b81ecc66db3ab21
 Author: brad <bradprin@live.com>
-Date:   2026-10-13 04:57:42 +0000
+Date:   2026-10-13 04:57:49 +0000
 
 feat(projects): subprojects table, folded sub count, phone header fit
