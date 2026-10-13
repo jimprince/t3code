@@ -1,0 +1,4 @@
+id = "sidebar-settled-subprojects"
+category = "feature"
+functionality = "projects"
+text = "Settled subprojects fold into one collapsed Settled row in the Projects sidebar, the project page and mobile, and project cards and subproject rows show tasks done of total as a fraction like 24/36."
