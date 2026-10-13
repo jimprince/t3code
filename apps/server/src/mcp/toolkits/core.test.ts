@@ -495,6 +495,7 @@ it.effect("a client caller targets any thread within its ceiling and cannot act 
   }).pipe(
     Effect.provide(
       layerThreadToolkit.pipe(
+        Layer.provideMerge(SqlitePersistence.layerMemory),
         Layer.provideMerge(McpServer.McpServer.layer),
         Layer.provide(NodeCrypto.layer),
         Layer.provide(

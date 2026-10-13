@@ -2501,6 +2501,7 @@ it.effect(
       NodeCrypto.layer,
       ProviderAdapterRegistry.layerFromAdapters([adapter]),
       Layer.mock(ScheduledTasks.ScheduledTaskService)({}),
+      Layer.mock(SecretRequests.SecretRequests)({}),
     );
     const serviceLayer = OrchestratorMcp.layer.pipe(Layer.provide(dependencies));
     return Effect.gen(function* () {
