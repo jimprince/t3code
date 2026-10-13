@@ -1,5 +1,6 @@
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/rpc/Rpc";
+import { NativeCompletion } from "./forkWorkerLifecycle.ts";
 import { CommandId, ThreadId } from "./baseSchemas.ts";
 import { EnvironmentAuthorizationError } from "./auth.ts";
 
@@ -21,6 +22,7 @@ export const ForkThreadMetadata = Schema.Struct({
   scope: Schema.optionalKey(Schema.NullOr(Schema.String)),
   settleOnComplete: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
   remoteParent: Schema.optionalKey(Schema.NullOr(ForkRemoteParent)),
+  nativeCompletion: Schema.optionalKey(Schema.NullOr(NativeCompletion)),
 });
 export type ForkThreadMetadata = typeof ForkThreadMetadata.Type;
 export const ForkThreadMetadataUpdate = Schema.Struct({
