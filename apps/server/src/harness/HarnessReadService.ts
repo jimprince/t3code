@@ -29,6 +29,7 @@ import { ServerEnvironmentIdentity } from "../environment/ServerEnvironment.ts";
 import { listMetadata } from "../forkThreads/MetadataStore.ts";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import { nextScheduledRunAt } from "../scheduledTasks/Schedule.ts";
+import * as Settings from "../serverSettings.ts";
 import {
   FEED_FILES,
   feedRoutines,
@@ -315,6 +316,7 @@ export const make = Effect.gen(function* () {
   const automations = yield* AutomationStore.AutomationStore;
   const projects = yield* ProjectStore.ProjectStoreV2;
   const environmentId = yield* (yield* ServerEnvironmentIdentity).getEnvironmentId;
+  const settings = yield* Settings.ServerSettingsService;
   const directory = yield* Config.String("T3CODE_HARNESS_FEED_DIR").pipe(Config.withDefault(""));
   const graceMs = yield* Config.Int("T3CODE_HARNESS_LATE_GRACE_MS").pipe(Config.withDefault(0));
   const staleMs = yield* Config.Int("T3CODE_HARNESS_FEED_STALE_MS").pipe(
@@ -973,10 +975,12 @@ export const make = Effect.gen(function* () {
         const now = yield* DateTime.now;
         const key = encodeJson([Math.floor(DateTime.toEpochMillis(now) / 1000), validated]);
         const previous = cached;
-        if (previous && previous.key === key) return previous.value;
-        const value = yield* readSnapshot(validated);
+        const value =
+          previous && previous.key === key ? previous.value : yield* readSnapshot(validated);
         cached = { key, value };
-        return value;
+        // Pins are read fresh, outside the one-second cache, so a pin shows on the next read.
+        const { harnessPinnedCheckKeys } = yield* settings.getSettings;
+        return { ...value, pinnedCheckKeys: harnessPinnedCheckKeys };
       }).pipe(
         Effect.mapError(
           () => new HarnessReadError({ message: "Harness snapshot could not be read." }),
