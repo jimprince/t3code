@@ -3341,6 +3341,8 @@ export const OrchestrationV2SubscribeThreadInput = Schema.Struct({
   requestCompletionMarker: Schema.optionalKey(Schema.Boolean),
   /** Allows snapshot fallbacks to contain a bounded, pageable history window. */
   acceptBoundedSnapshot: Schema.optionalKey(Schema.Boolean),
+  /** Operator reads retain totals and the latest reply without loading old turn items. */
+  includeOperatorSummary: Schema.optionalKey(Schema.Boolean),
   /**
    * Allows bounded snapshot fallbacks to omit `projection.turnItems` entries
    * that repeat local visible rows. See `turnItemsOmitLocalVisible`.
@@ -3455,6 +3457,13 @@ const OrchestrationV2UnknownThreadStreamEvent = Schema.Struct({
   ),
 );
 
+export const OrchestrationV2OperatorSummary = Schema.Struct({
+  messageCount: NonNegativeInt,
+  proposedPlanCount: NonNegativeInt,
+  latestAssistantMessage: Schema.NullOr(OrchestrationV2ConversationMessage),
+});
+export type OrchestrationV2OperatorSummary = typeof OrchestrationV2OperatorSummary.Type;
+
 export const OrchestrationV2ThreadStreamItem = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal("synchronized"),
@@ -3471,6 +3480,7 @@ export const OrchestrationV2ThreadStreamItem = Schema.Union([
     hasMoreHistory: Schema.optionalKey(Schema.Boolean),
     latestLocalTurnOrdinal: Schema.optionalKey(Schema.NullOr(NonNegativeInt)),
     payloadBudgetExceeded: Schema.optionalKey(Schema.Boolean),
+    operatorSummary: Schema.optionalKey(OrchestrationV2OperatorSummary),
     /** Same meaning as on `OrchestrationV2ThreadBoundedSnapshot`. */
     turnItemsOmitLocalVisible: Schema.optionalKey(Schema.Literal(true)),
   }),

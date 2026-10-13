@@ -512,7 +512,7 @@ export class RemoteEnvironmentClient {
   }
 
   async getThreadDetail(threadId: string): Promise<OrchestrationThread> {
-    return this.findThread(threadId);
+    return this.findThread(threadId, { fullHistory: true });
   }
 
   async listThreads(): Promise<OrchestrationThreadShell[]> {
@@ -569,12 +569,12 @@ export class RemoteEnvironmentClient {
       for (const raw of archived.threads) {
         const thread = gcThreadShell(raw);
         if (!thread.worktreePath) continue;
-        // Native thread snapshots retain active execution entities. Read them
-        // before planning, and again through this method before each removal.
+        // GC needs old running commands that the bounded timeline can omit.
+        // Read full execution state before planning and again before removal.
         const detail = await rpc.subscribeThreadSnapshot<{
           kind: "snapshot";
           snapshot: { thread: OrchestrationThread };
-        }>(thread.id);
+        }>(thread.id, { fullHistory: true });
         if (!detail.snapshot.thread.projection)
           throw new Error("GC requires a V2 execution projection.");
         rows.push({
@@ -774,12 +774,13 @@ export class RemoteEnvironmentClient {
   }
 
   /**
-   * One thread's snapshot. Nesting fields come from the full fork metadata table, read after
-   * the snapshot; callers that never look at parent, scope or subproject pass `nesting: false`.
+   * Bounded recent history and execution state. Transcript consumers opt into fullHistory.
+   * Nesting fields come from the fork metadata table; callers that do not need them
+   * pass `nesting: false`.
    */
   async findThread(
     threadId: string,
-    options: { readonly nesting?: boolean } = {},
+    options: { readonly nesting?: boolean; readonly fullHistory?: boolean } = {},
   ): Promise<OrchestrationThread> {
     const rpc = await this.openRpc();
     try {
@@ -789,7 +790,7 @@ export class RemoteEnvironmentClient {
           snapshotSequence: number;
           thread: OrchestrationThread;
         };
-      }>(threadId);
+      }>(threadId, { fullHistory: options.fullHistory });
       if (item.kind !== "snapshot") {
         throw new Error(`Expected a thread snapshot for '${threadId}', received '${item.kind}'.`);
       }
@@ -947,9 +948,8 @@ export class RemoteEnvironmentClient {
         modelSelection: wireModel(modelSelection),
         runtimeMode,
         interactionMode,
-        workspaceStrategy: input.branch
-          ? { type: "worktree", branch: input.branch, baseRef: input.baseBranch ?? "main" }
-          : { type: "root" },
+        // The claim never provisions the worktree; only the launch with the brief does.
+        workspaceStrategy: { type: "root" },
       });
       // One metadata write between the empty claim and the first turn: organizational
       // parent (local or remote) and completion policy land before the worker starts.
@@ -1335,7 +1335,7 @@ export class RemoteEnvironmentClient {
           snapshotSequence: number;
           thread: OrchestrationThread;
         };
-      }>(input.threadId);
+      }>(input.threadId, { fullHistory: input.planId !== undefined });
       if (item.kind !== "snapshot") {
         throw new Error(
           `Expected a thread snapshot for '${input.threadId}', received '${item.kind}'.`,

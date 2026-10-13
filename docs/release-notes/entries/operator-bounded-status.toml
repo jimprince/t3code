@@ -1,0 +1,4 @@
+id = "operator-bounded-status"
+category = "performance"
+functionality = "worker operations"
+text = "Thread status and supervision reads use bounded history while keeping message totals and the latest reply, reducing stalls on long conversations."

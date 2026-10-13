@@ -1980,8 +1980,8 @@ agent
       reason: status.reason,
       latestTurn: thread.latestTurn,
       session: thread.session,
-      proposedPlans: thread.proposedPlans.length,
-      messageCount: thread.messages.length,
+      proposedPlans: thread.operatorSummary?.proposedPlanCount ?? thread.proposedPlans.length,
+      messageCount: thread.operatorSummary?.messageCount ?? thread.messages.length,
       hasNewOutput: saved ? hasNewAssistantOutput(savedAgent, thread) : null,
       latestAssistantMessageId: latestAssistant?.id ?? null,
       latestAssistantPreview: latestAssistant ? summarizeMessageText(latestAssistant.text) : null,
@@ -2404,7 +2404,7 @@ agent
   .option("--tail <count>", "number of activity rows to show", "10")
   .action(async (name, options) => {
     const { agent: savedAgent, client, saved } = await withAgent(name);
-    const thread = await client.getThreadDetail(savedAgent.threadId);
+    const thread = await client.findThread(savedAgent.threadId);
     const tailCount = Math.max(1, Number(options.tail));
     printJson({
       agent: saved ? savedAgent.name : null,
@@ -2837,14 +2837,14 @@ agent
   .option("--mark-seen", "record the latest assistant message as reviewed")
   .action(async (name, options) => {
     const { agent: savedAgent, client, saved, target } = await withAgent(name);
-    const detail = options.wait
-      ? await client.waitForThread({
-          threadId: savedAgent.threadId,
-          goal: "completion",
-          timeoutMs: Number(options.wait) * 1000,
-          intervalMs: Number(options.interval) * 1000,
-        })
-      : await client.getThreadDetail(savedAgent.threadId);
+    if (options.wait)
+      await client.waitForThread({
+        threadId: savedAgent.threadId,
+        goal: "completion",
+        timeoutMs: Number(options.wait) * 1000,
+        intervalMs: Number(options.interval) * 1000,
+      });
+    const detail = await client.getThreadDetail(savedAgent.threadId);
     const tailCount = Math.max(1, Number(options.tail));
     const latestAssistant = options.finalMessage
       ? (getLatestTurnAssistantMessage(detail) ?? getLatestAssistantMessage(detail))
@@ -2894,7 +2894,7 @@ agent
   .argument("<name>", "agent name")
   .action(async (name) => {
     const { agent: savedAgent, client } = await withAgent(name);
-    const detail = await client.getThreadDetail(savedAgent.threadId);
+    const detail = await client.findThread(savedAgent.threadId);
     const latestAssistant = getLatestAssistantMessage(detail);
     if (!latestAssistant) {
       throw new Error(`Agent '${savedAgent.name}' has no assistant message to acknowledge.`);
