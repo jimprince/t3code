@@ -1,8 +1,10 @@
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { supervisionForest } from "@t3tools/client-runtime/state/fork-nesting";
+import type { PurposeMove } from "@t3tools/client-runtime/state/thread-purpose";
 import { describe, expect, it } from "vite-plus/test";
 import { makeThreadFixture } from "../test-fixtures";
 import {
+  isThreadNestingMenuId,
   nestUnderMenuTarget,
   resolveThreadNestingMenuState,
   withThreadNestingMenuItems,
@@ -128,6 +130,48 @@ describe("subproject menu items", () => {
     for (const ids of [items("root", true), items("child", false)]) {
       expect(ids).not.toContain("subproject-on");
       expect(ids).not.toContain("subproject-off");
+    }
+  });
+});
+
+describe("Move to Harness menu items", () => {
+  const harnessMove = {
+    id: "move-to-harness",
+    label: "Move to Harness",
+    purpose: "harness",
+  } as const;
+  const items = (id: string, purposeMove: PurposeMove | null) =>
+    withThreadNestingMenuItems(
+      [{ id: "rename", label: "Rename" }],
+      resolveThreadNestingMenuState({
+        thread: threads.find((t) => t.id === id)!,
+        forest,
+        supported: true,
+        purposeMove,
+      }),
+    );
+
+  it("lists the move the caller resolved, before Rename, under the label that says where it goes", () => {
+    const listed = items("other", harnessMove);
+    expect(listed.map((item) => item.id)).toContain("move-to-harness");
+    expect(listed.find((item) => item.id === "move-to-harness")?.label).toBe("Move to Harness");
+    expect(listed.at(-1)?.id).toBe("rename");
+    const back = items("root", {
+      id: "move-to-projects",
+      label: "Move back to Projects",
+      purpose: "project",
+    });
+    expect(back.find((item) => item.id === "move-to-projects")?.label).toBe(
+      "Move back to Projects",
+    );
+  });
+
+  it("lists no move when none applies, and routes all three move ids to the nesting handler", () => {
+    expect(items("other", null).map((item) => item.id)).not.toEqual(
+      expect.arrayContaining(["move-to-harness", "move-to-projects", "move-to-threads"]),
+    );
+    for (const id of ["move-to-harness", "move-to-projects", "move-to-threads"]) {
+      expect(isThreadNestingMenuId(id)).toBe(true);
     }
   });
 });
