@@ -69,10 +69,13 @@ export const REQUEST_QUICK_ACTIONS: ReadonlyArray<RequestQuickAction> = [
 export function ProjectRequestBox({
   summary,
   quickActions,
+  prefill,
 }: {
   readonly summary: OrchestratorSummary;
   /** Chips under the closed box that start a request with their text. */
   readonly quickActions?: ReadonlyArray<RequestQuickAction> | undefined;
+  /** Opens the box with this text, such as an Unstick message; each new nonce applies once. */
+  readonly prefill?: { readonly text: string; readonly nonce: number } | null | undefined;
 }) {
   const [text, setText] = useState("");
   const [expanded, setExpanded] = useState(false);
@@ -151,6 +154,14 @@ export function ProjectRequestBox({
     setImages([]);
   };
   const open = expanded || text.length > 0 || images.length > 0;
+  const appliedPrefill = useRef(prefill?.nonce ?? 0);
+  useEffect(() => {
+    if (!prefill || prefill.nonce === appliedPrefill.current) return;
+    appliedPrefill.current = prefill.nonce;
+    caretToEnd.current = true;
+    setText(prefill.text);
+    setExpanded(true);
+  }, [prefill]);
 
   const send = async () => {
     if ((!text.trim() && images.length === 0) || sending.current) return;
