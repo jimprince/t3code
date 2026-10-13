@@ -21,6 +21,8 @@ export interface DecisionRow {
 /** What every part of the Dashboard reads, so the variants stay thin arrangements of shared rows. */
 export interface DashboardUi {
   readonly data: DashboardData;
+  /** The revision of the snapshot on screen, as the cold-load trace's section markers report it. */
+  readonly revision: string;
   readonly now: number;
   /** Every open decision in scope, already in the order of the one feed. */
   readonly decisions: ReadonlyArray<DecisionRow>;
