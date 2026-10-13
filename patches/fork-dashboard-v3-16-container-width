@@ -1,6 +1,6 @@
-Bottom: 5bde77991674437fc9ad7b15506876d03b9fbc23
-Top:    84bf72875a0be350896a9460dcdf6642490dd4fc
+Bottom: 60e676726996ba93a8a60c2db7b0bb51c2d70621
+Top:    c019182e4b0f90a65ae59f99e953684dfa9517fe
 Author: brad <bradprin@live.com>
-Date:   2026-10-13 04:48:23 +0000
+Date:   2026-10-13 04:48:29 +0000
 
 fix(dashboard): lay out by container width so the project Dashboard stays readable beside the chat panel
