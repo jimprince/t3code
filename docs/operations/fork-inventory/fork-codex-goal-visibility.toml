@@ -1,0 +1,32 @@
+name = "fork-codex-goal-visibility"
+subject = "feat(codex): surface active goals in thread status"
+class = "upstream-bound"
+purpose = "Project Codex app-server native goal notifications into thread activity, reconnect-hydrated status, sidebar liveness, and a compact composer line without taking ownership of the goal lifecycle."
+retire_when = "Upstream surfaces equivalent read-only native Codex goal status and liveness without the retired fork-owned goal compatibility schema."
+depends_on = ["fork-provider-turn-safety"]
+roles = []
+note = "Read-only integration. Codex remains the sole owner of goal creation, editing, pausing, resuming, clearing, and continuation. Uses codexNativeGoal and thread.codex-native-goal.* identifiers to remain distinct from retired goal_json and thread.goal-set compatibility."
+
+[[decision]]
+id = "upstream-background-banner-view-agents"
+date = "2026-09-26"
+decided = "adapt"
+rationale = "Upstream added a View-agents shortcut beside the banner's Stop button. Keep it inside this patch's activeBackgroundLiveness-gated actions spread so a goal-only banner still renders no actions, and keep the fork's non-animated status dot."
+
+[[decision]]
+id = "upstream-provider-event-type-removal"
+date = "2026-09-20"
+decided = "narrow"
+rationale = "Keep upstream's removal of the redundant ProviderRuntimeEventType literal list; model Codex goal events only in their concrete schemas and the canonical ProviderRuntimeEventV2 union."
+
+[[decision]]
+id = "v2-native-goal-projection"
+date = "2026-10-06"
+decided = "adapt"
+rationale = "Native root provider threads carry the read-only goal through V2 provider-thread events and shell projection. Child goal events stay scoped to their native thread; reconnect hydrates from app-server."
+
+[[decision]]
+id = "catchup-r29-native-goals-already-supply-visibility"
+date = "2026-10-13"
+decided = "retain-concern-narrow-implementation"
+rationale = "Retain the published main concern name. r28 already adapted dependent features to upstream native provider goals after the approved fork.12 retirement. Its production visibility and historical compatibility remain; reintroducing the parallel codexNativeGoal schema would duplicate goal tracking. This patch retains the inventory identity while native implementation is supplied by the proven base."
