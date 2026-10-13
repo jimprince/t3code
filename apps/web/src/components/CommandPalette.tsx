@@ -571,6 +571,13 @@ export function CommandPalette({ children }: { children: ReactNode }) {
         });
         return;
       }
+      if (command === "home.open") {
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen(false);
+        void navigate({ to: "/dashboard" });
+        return;
+      }
       if (command === "usage.open") {
         event.preventDefault();
         event.stopPropagation();
@@ -2268,6 +2275,7 @@ function OpenCommandPaletteDialog(props: {
     value: "action:home-dashboard",
     searchTerms: ["home", "dashboard", "plan", "decisions", "overview", "releases"],
     title: "Open Home dashboard",
+    shortcutCommand: "home.open",
     icon: <LayoutDashboardIcon className={ITEM_ICON_CLASS} />,
     run: async () => {
       await navigate({ to: "/dashboard" });
