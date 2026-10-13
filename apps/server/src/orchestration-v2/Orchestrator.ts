@@ -23,6 +23,8 @@ import { listMetadata } from "../forkThreads/MetadataStore.ts";
 import { hasLiveChildren, readWorkerMetadata } from "../forkThreads/WorkerLifecycleMetadata.ts";
 import { archiveEligible } from "../forkThreads/ArchiveDeadlines.ts";
 import { completionEligible } from "../forkThreads/WorkerLifecyclePolicy.ts";
+import { nativeCompletionEligible, readNativeTask } from "../forkThreads/NativeCompletion.ts";
+import type { NativeCompletion } from "@t3tools/contracts";
 import { pinnedReorderUpdatedAt } from "../forkThreads/ThreadOrderReset.ts";
 import { synchronizedLegacyPullRequest } from "../sourceControl/forkPullRequestUrl.ts";
 import {
@@ -2501,6 +2503,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     events: Ref.Ref<Array<OrchestrationV2DomainEvent>>,
     effects: Ref.Ref<Array<PendingOrchestrationEffectV2>>,
     preservePins = false,
+    nativeCompletion?: NativeCompletion,
   ) {
     const thread = yield* projectionStore.getThread(command.threadId).pipe(
       Effect.mapError(
@@ -3480,6 +3483,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       providerInstanceId: updatedThread.providerInstanceId,
       occurredAt: now,
       payload: updatedThread,
+      ...(nativeCompletion ? { nativeCompletion } : {}),
     });
 
     if (command.type === "thread.metadata.update" && command.regenerateTitle === true) {
@@ -10690,6 +10694,18 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               cause: "Worker completion is no longer eligible.",
             });
         }
+        if (command.nativeCompletion !== undefined) {
+          const current = yield* projectionStore
+            .getThreadProjection(command.threadId)
+            .pipe(mapDispatchError(command));
+          const task = yield* readNativeTask(sql, command.threadId).pipe(mapDispatchError(command));
+          if (!nativeCompletionEligible(current, task, command.nativeCompletion, organization))
+            return yield* new OrchestratorDispatchError({
+              commandId: command.commandId,
+              commandType: command.type,
+              cause: "Native completion is no longer eligible.",
+            });
+        }
         yield* dispatchThreadMutation(
           {
             type: "thread.settle",
@@ -10699,7 +10715,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           },
           events,
           effects,
-          command.completionRunId !== undefined,
+          command.completionRunId !== undefined || command.nativeCompletion !== undefined,
+          command.nativeCompletion,
         );
         break;
       }
