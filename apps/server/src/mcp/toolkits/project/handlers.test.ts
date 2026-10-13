@@ -45,6 +45,7 @@ it.effect("attributes a launched thread's first message to the calling thread", 
       archivedAt: null,
       deletedAt: null,
     } as OrchestrationV2ThreadShell;
+    let launchedCreator: ThreadId | undefined;
     let launchedSender: ThreadId | undefined;
     let launchedIssue: string | undefined;
     const layerDependencies = Layer.mergeAll(
@@ -66,6 +67,7 @@ it.effect("attributes a launched thread's first message to the calling thread", 
       }),
       Layer.mock(ThreadLaunch.ThreadLaunchService)({
         launch: (input) => {
+          launchedCreator = input.creatorThreadId;
           launchedSender = input.initialMessage?.senderThreadId;
           launchedIssue = input.issue;
           return Effect.succeed({
@@ -103,6 +105,12 @@ it.effect("attributes a launched thread's first message to the calling thread", 
     expect(result.at(-1)?.result).toMatchObject({ projectId, modelSelection });
     expect(launchedSender).toBe(sourceThreadId);
     expect(launchedIssue).toBe("brad/tasks#7");
+    expect(launchedCreator).toBe(sourceThreadId);
+    yield* toolkit
+      .handle("t3_thread_launch", { title: "Empty claim" })
+      .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(dependencies));
+    expect(launchedSender).toBeUndefined();
+    expect(launchedCreator).toBe(sourceThreadId);
   }),
 );
 

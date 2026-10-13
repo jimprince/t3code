@@ -1,5 +1,6 @@
 import {
   ForkThreadMetadata,
+  ThreadPurpose,
   MessageForwardSource,
   EnvironmentId,
   MessageForwardBundle,
@@ -38,12 +39,14 @@ import * as McpInvocationContext from "../../McpInvocationContext.ts";
 
 const ThreadOrganizeTool = Tool.make("t3_thread_organize", {
   description:
-    "Nest, unnest, pin, snooze, settle, archive, or mark a thread unread. nest requires parentThreadId. clientRequestId makes nesting retries idempotent. Omit threadId for this thread. snooze requires snoozedUntil. Existing thread lifecycle rules apply; this does not schedule a future action. Settling this thread takes effect when your turn completes, returning settlesWhenTurnEnds=true; a turn that fails or is interrupted, or a queued message, leaves it active.",
+    "Move to Harness or Projects, nest, unnest, pin, snooze, settle, archive, or mark a thread unread. nest requires parentThreadId. clientRequestId makes nesting retries idempotent. Omit threadId for this thread. snooze requires snoozedUntil. Existing thread lifecycle rules apply; this does not schedule a future action. Settling this thread takes effect when your turn completes, returning settlesWhenTurnEnds=true; a turn that fails or is interrupted, or a queued message, leaves it active.",
   parameters: Schema.Struct({
     threadId: Schema.optional(ThreadId),
     action: Schema.Literals([
       "nest",
       "unnest",
+      "move_to_harness",
+      "move_to_projects",
       "pin",
       "unpin",
       "snooze",
@@ -61,7 +64,7 @@ const ThreadOrganizeTool = Tool.make("t3_thread_organize", {
   success: Schema.Union([
     OrchestrationV2DispatchCommandResult,
     Schema.Struct({ settlesWhenTurnEnds: Schema.Literal(true) }),
-    Schema.Struct({ metadata: ForkThreadMetadata }),
+    Schema.Struct({ metadata: ForkThreadMetadata, effectivePurpose: Schema.NullOr(ThreadPurpose) }),
   ]),
   failure: OrchestratorMcpFailure,
   failureMode: "return" as const,
