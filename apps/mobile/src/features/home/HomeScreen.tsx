@@ -16,10 +16,7 @@ import {
   toggleProjectKey,
   projectKeyOf,
 } from "@t3tools/client-runtime/state/projectSubprojects";
-import {
-  partitionThreadPurposes,
-  samePurposeSubprojects,
-} from "@t3tools/client-runtime/state/thread-purpose";
+import { partitionThreadPurposes } from "@t3tools/client-runtime/state/thread-purpose";
 import type { ThreadPurpose } from "@t3tools/contracts";
 import { MobileDecisionFeed } from "./MobileDecisionFeed";
 import { MobileHarnessList } from "./MobileHarnessList";
@@ -320,7 +317,7 @@ function MobileOrchestratorList({
   const [foldedProjects, setFoldedProjects] = useState<ReadonlyArray<string>>([]);
   const [quietCutoff] = useState(() => Date.now() - PROJECT_QUIET_AFTER_MS);
   // The partition already lists top-level projects (and a project nested under Harness) as roots;
-  // same-purpose subprojects nest inside their project's card.
+  // every active subproject nests inside its project's card, a Harness one tagged as such.
   const projects = allSummaries;
   const active = projects.filter(
     (summary) => projectSidebarBucket(summary, quietCutoff) !== "quiet",
@@ -411,7 +408,7 @@ function MobileOrchestratorList({
           // thread may not be in this list yet.
           onOpenThread={(threadId) => onSelectThread({ ...summary.root, id: threadId })}
         />
-        {samePurposeSubprojects(summary, purposes).length > 0 ? (
+        {summary.subprojects.length > 0 ? (
           <View className="mt-2 border-t border-border">
             <Pressable
               accessibilityRole="button"

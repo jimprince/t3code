@@ -11,8 +11,9 @@ import {
 } from "@t3tools/client-runtime/state/orchestrators";
 import {
   partitionThreadPurposes,
-  samePurposeSubprojects,
+  subprojectPurposeTag,
 } from "@t3tools/client-runtime/state/thread-purpose";
+import type { ThreadPurpose } from "@t3tools/contracts";
 import {
   closestCenter,
   DndContext,
@@ -120,12 +121,14 @@ function SubprojectRows({
   summary,
   selectedRoute,
   sortSubprojects,
+  purposes,
   settledExpansion,
   depth = 0,
 }: {
   readonly summary: OrchestratorSummary;
   readonly selectedRoute: string | null;
   readonly sortSubprojects: SortSubprojects;
+  readonly purposes: ReadonlyMap<string, ThreadPurpose | null>;
   readonly settledExpansion: SettledExpansion;
   readonly depth?: number;
 }) {
@@ -135,8 +138,10 @@ function SubprojectRows({
     <SubprojectRow
       key={projectKeyOf(sub)}
       sub={sub}
+      purposeTag={subprojectPurposeTag(summary, sub, purposes)}
       selectedRoute={selectedRoute}
       sortSubprojects={sortSubprojects}
+      purposes={purposes}
       settledExpansion={settledExpansion}
       depth={depth}
     />
@@ -162,14 +167,19 @@ function SubprojectRows({
 
 function SubprojectRow({
   sub,
+  purposeTag,
   selectedRoute,
   sortSubprojects,
+  purposes,
   settledExpansion,
   depth,
 }: {
   readonly sub: OrchestratorSummary;
+  /** "Harness" when this subproject belongs to the Harness tab as well as its project's card. */
+  readonly purposeTag: "Harness" | null;
   readonly selectedRoute: string | null;
   readonly sortSubprojects: SortSubprojects;
+  readonly purposes: ReadonlyMap<string, ThreadPurpose | null>;
   readonly settledExpansion: SettledExpansion;
   readonly depth: number;
 }) {
@@ -207,6 +217,7 @@ function SubprojectRow({
           }`}
         />
         <span className="min-w-0 flex-1 truncate">{sub.root.title}</span>
+        {purposeTag !== null ? <span className="shrink-0">{purposeTag}</span> : null}
         {rollup.blocked > 0 ? <span className="shrink-0 text-error">Blocked</span> : null}
         {rollup.needsYou > 0 ? (
           <span className="shrink-0 tabular-nums text-warning-foreground">{rollup.needsYou}</span>
@@ -220,6 +231,7 @@ function SubprojectRow({
         summary={sub}
         selectedRoute={selectedRoute}
         sortSubprojects={sortSubprojects}
+        purposes={purposes}
         settledExpansion={settledExpansion}
         depth={depth + 1}
       />
@@ -240,6 +252,7 @@ function ProjectRow({
   summary,
   selectedRoute,
   sortSubprojects,
+  purposes,
   collapsed,
   onToggleSubprojects,
   settledExpansion,
@@ -248,6 +261,7 @@ function ProjectRow({
   readonly summary: OrchestratorSummary;
   readonly selectedRoute: string | null;
   readonly sortSubprojects: SortSubprojects;
+  readonly purposes: ReadonlyMap<string, ThreadPurpose | null>;
   readonly collapsed: boolean;
   readonly onToggleSubprojects: (projectKey: string) => void;
   readonly settledExpansion: SettledExpansion;
@@ -256,7 +270,7 @@ function ProjectRow({
   const navigate = useNavigate();
   const selected = ownTreeContains(summary, selectedRoute);
   const { rollup } = summary;
-  const hasSubprojects = sortSubprojects(summary).length > 0;
+  const hasSubprojects = summary.subprojects.length > 0;
   const workingInSubprojects = subprojectWorkingLabel(summary);
   const foldedHint = subprojectCountLabel(summary);
   const rootRef = scopeThreadRef(summary.root.environmentId, summary.root.id);
@@ -382,6 +396,7 @@ function ProjectRow({
               summary={summary}
               selectedRoute={selectedRoute}
               sortSubprojects={sortSubprojects}
+              purposes={purposes}
               settledExpansion={settledExpansion}
             />
           </div>
@@ -486,13 +501,8 @@ export function OrchestratorSidebarList() {
   );
   const sortSubprojects = useCallback(
     (summary: OrchestratorSummary) =>
-      sortOrchestratorSummariesForSidebar(
-        // A subproject of the other purpose is a root of its own tab, not a row in this card.
-        samePurposeSubprojects(summary, purposes),
-        quietCutoff,
-        displayedBuckets,
-      ),
-    [displayedBuckets, purposes, quietCutoff],
+      sortOrchestratorSummariesForSidebar(summary.subprojects, quietCutoff, displayedBuckets),
+    [displayedBuckets, quietCutoff],
   );
   const active = orderedSummaries.filter(
     (summary) => displayedBuckets.get(threadKey(summary.root)) !== "quiet",
@@ -643,6 +653,7 @@ export function OrchestratorSidebarList() {
                     summary={summary}
                     selectedRoute={selectedRoute}
                     sortSubprojects={sortSubprojects}
+                    purposes={purposes}
                     collapsed={collapsedProjects.includes(projectKeyOf(summary))}
                     onToggleSubprojects={toggleSubprojects}
                     settledExpansion={settledExpansion}
@@ -674,6 +685,7 @@ export function OrchestratorSidebarList() {
                       summary={summary}
                       selectedRoute={selectedRoute}
                       sortSubprojects={sortSubprojects}
+                      purposes={purposes}
                       collapsed={collapsedProjects.includes(projectKeyOf(summary))}
                       onToggleSubprojects={toggleSubprojects}
                       settledExpansion={settledExpansion}

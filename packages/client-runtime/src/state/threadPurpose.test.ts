@@ -5,7 +5,7 @@ import { buildOrchestratorSummaries, joinOrchestratorMetadata } from "./orchestr
 import {
   partitionThreadPurposes,
   purposeMoveFor,
-  samePurposeSubprojects,
+  subprojectPurposeTag,
   threadPurposes,
 } from "./threadPurpose.ts";
 
@@ -305,9 +305,10 @@ it("keeps a project whose purpose is unknown in Projects, never hiding it", () =
   expect(result.harness).toEqual([]);
 });
 
-it("leaves a subproject of the other purpose out of its parent's card, for web and native alike", () => {
+it("keeps a Harness subproject in its project's card with a tag, and as a Harness root too", () => {
+  const ids = ["project", "plain", "reliability", "dashboard"];
   const threads = joinOrchestratorMetadata(
-    ["head", "worker", "same", "other"].map((id) =>
+    ids.map((id) =>
       presentThreadShell(EnvironmentId.make("env"), {
         ...v2ThreadShell,
         id: ThreadId.make(id),
@@ -317,37 +318,54 @@ it("leaves a subproject of the other purpose out of its parent's card, for web a
     [
       {
         environmentId: "env",
-        threadId: ThreadId.make("head"),
+        threadId: ThreadId.make("project"),
         parentThreadId: null,
+        purpose: "project" as const,
+      },
+      {
+        environmentId: "env",
+        threadId: ThreadId.make("plain"),
+        parentThreadId: ThreadId.make("project"),
+        subproject: "on" as const,
+      },
+      {
+        environmentId: "env",
+        threadId: ThreadId.make("reliability"),
+        parentThreadId: ThreadId.make("project"),
+        subproject: "on" as const,
         purpose: "harness" as const,
       },
+      // Inherits Harness from its supervisor.
       {
         environmentId: "env",
-        threadId: ThreadId.make("worker"),
-        parentThreadId: ThreadId.make("head"),
-      },
-      {
-        environmentId: "env",
-        threadId: ThreadId.make("same"),
-        parentThreadId: ThreadId.make("head"),
+        threadId: ThreadId.make("dashboard"),
+        parentThreadId: ThreadId.make("reliability"),
         subproject: "on" as const,
-      },
-      {
-        environmentId: "env",
-        threadId: ThreadId.make("other"),
-        parentThreadId: ThreadId.make("head"),
-        subproject: "on" as const,
-        purpose: "project" as const,
       },
     ],
   );
   const summaries = buildOrchestratorSummaries(threads, []);
-  const head = summaries.find((summary) => summary.root.id === "head")!;
+  const project = summaries.find((summary) => summary.root.id === "project")!;
+  const reliability = project.subprojects.find((sub) => sub.root.id === "reliability")!;
   const purposes = threadPurposes(threads);
-  expect(head.subprojects.map((sub) => sub.root.id).toSorted()).toEqual(["other", "same"]);
-  expect(samePurposeSubprojects(head, purposes).map((sub) => sub.root.id)).toEqual(["same"]);
-  // The other one is a root of its own tab instead.
-  expect(partitionThreadPurposes(threads, summaries).projects.map((sub) => sub.root.id)).toEqual([
-    "other",
+  expect(project.subprojects.map((sub) => sub.root.id).toSorted()).toEqual([
+    "plain",
+    "reliability",
+  ]);
+  const tags = project.subprojects.map((sub) => [
+    sub.root.id,
+    subprojectPurposeTag(project, sub, purposes),
+  ]);
+  expect(tags.toSorted()).toEqual([
+    ["plain", null],
+    ["reliability", "Harness"],
+  ]);
+  // Under a Harness parent it already shares the purpose: no tag.
+  expect(subprojectPurposeTag(reliability, reliability.subprojects[0]!, purposes)).toBeNull();
+  // The Harness root is also listed in the Harness tab.
+  const partition = partitionThreadPurposes(threads, summaries);
+  expect(partition.projects.map((sub) => sub.root.id)).toEqual(["project"]);
+  expect(partition.harness.map((row) => ("root" in row ? row.root.id : row.id))).toEqual([
+    "reliability",
   ]);
 });
