@@ -15,10 +15,33 @@ import { useEnvironments } from "./environments";
 
 import { serverEnvironment } from "./server";
 import { environmentSnapshotAtom } from "./shell";
+import { supervision } from "./forkSupervision";
+import { environmentThreadShells } from "./threads";
+
+const remoteParentThreadIds = Atom.family((environmentId: EnvironmentId) =>
+  Atom.make((get) => {
+    const active = new Set(
+      get(environmentThreadShells.threadShellsAtom)
+        .filter((thread) => thread.archivedAt === null)
+        .map((thread) => `${thread.environmentId}:${thread.id}`),
+    );
+    return [
+      ...new Set(
+        get(supervision.metadata).flatMap((row) =>
+          row.remoteParent?.environmentId === environmentId &&
+          active.has(`${row.environmentId}:${row.threadId}`)
+            ? [row.remoteParent.threadId]
+            : [],
+        ),
+      ),
+    ].toSorted();
+  }).pipe(Atom.setIdleTTL(0)),
+);
 const dashboard = createDashboardAtoms(connectionAtomRuntime, {
   config: serverEnvironment.configValueAtom,
   shell: environmentSnapshotAtom,
   readCached: readStored,
+  remoteParentThreadIds,
 });
 
 const mergeStable = createDashboardSnapshotMerger();
