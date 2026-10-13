@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "1acf362c6cba9c16c85de1580b5b7d8557e1bd19",
-  "head": "b02ba833029c4aeadd2e2a19f8e109ca61a46369",
+  "prev": "b23d4d3e6f47b81e4555c331dea25b14a7baf6d0",
+  "head": "7040662f981a331f68ab61006c313d6baf25900d",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -156,7 +156,8 @@
     "fork-project-plan",
     "fork-sidebar-settled-ui",
     "fork-sidebar-hygiene-seed",
-    "fork-harness-purpose"
+    "fork-harness-purpose",
+    "fork-harness-read-service"
   ],
   "unapplied": [],
   "hidden": [],
@@ -322,6 +323,9 @@
     },
     "fork-harness-purpose": {
       "oid": "b02ba833029c4aeadd2e2a19f8e109ca61a46369"
+    },
+    "fork-harness-read-service": {
+      "oid": "7040662f981a331f68ab61006c313d6baf25900d"
     },
     "fork-headless-delivery": {
       "oid": "6007c705efb9396497a68300d3600bfc54dcbd8b"
