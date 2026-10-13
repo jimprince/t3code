@@ -1,6 +1,6 @@
-Bottom: f59f3a0e101ab4afc6185a48df945247ffc170a2
-Top:    93c1fe77cd4b3a83ab408537cbba558d49deaa1e
+Bottom: 416fe0fb1861a74344790efa5493b4d5b8c2ce9b
+Top:    ef7c11c5826afd0b8f6a77960a5a099fe46746a1
 Author: brad <bradprin@live.com>
-Date:   2026-10-13 04:37:01 +0000
+Date:   2026-10-13 04:37:05 +0000
 
 fix(dashboard): preserve VM decisions across connected hosts
