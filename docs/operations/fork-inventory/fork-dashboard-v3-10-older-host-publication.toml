@@ -1,0 +1,8 @@
+name = "fork-dashboard-v3-10-older-host-publication"
+subject = "fix(dashboard): publish older hosts before slow tracker reads"
+class = "product"
+purpose = "publish older hosts before slow tracker reads"
+retire_when = "The dashboard-v3 series is intentionally dropped or replaced by equivalent upstream behavior."
+depends_on = ["fork-dashboard-v3-09-older-hosts"]
+roles = []
+note = "Replayed independently from live source 0b98bb6f5d0bf9e113a20867f2ab7a6fb259e420; excludes the Chief of Staff tray series."

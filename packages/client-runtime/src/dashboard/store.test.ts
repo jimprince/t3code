@@ -1,6 +1,6 @@
 import { describe, expect } from "vite-plus/test";
 import { it } from "@effect/vitest";
-import { EnvironmentId, WS_METHODS, type ServerConfig } from "@t3tools/contracts";
+import { EnvironmentId, ThreadId, WS_METHODS, type ServerConfig } from "@t3tools/contracts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -15,11 +15,13 @@ import {
   AVAILABLE_CONNECTION_STATE,
   PrimaryConnectionTarget,
   type PreparedConnection,
+  type SupervisorConnectionState,
 } from "../connection/model.ts";
 import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
 import type { RpcSession } from "../rpc/session.ts";
 import { emptySnapshot } from "./progress.ts";
 import { createDashboardAtoms } from "./store.ts";
+import { v2ThreadShell } from "../state/orchestrationV2TestFixtures.ts";
 const environmentId = EnvironmentId.make("test");
 const target = new PrimaryConnectionTarget({
   environmentId,
@@ -124,3 +126,100 @@ describe("dashboard subscription lifetime", () => {
     }),
   );
 });
+
+it.effect("an older VM publishes a live dashboard while its tracker RPC is still pending", () =>
+  Effect.gen(function* () {
+    const root = ThreadId.make("vm-head");
+    const received = yield* Deferred.make<void>();
+    const trackerStarted = yield* Deferred.make<void>();
+    const client = {
+      "fork.threads.metadata.list": () =>
+        Effect.succeed([{ threadId: root, parentThreadId: null, subproject: "on" }]),
+      [WS_METHODS.projectIssuesList]: () =>
+        Deferred.succeed(trackerStarted, undefined).pipe(Effect.andThen(Effect.never)),
+      [WS_METHODS.projectRoadmapGet]: () =>
+        Effect.succeed({ tracker: null, versions: [], items: [] }),
+      [WS_METHODS.projectRequestsPendingAsks]: () => Effect.succeed({ asks: [] }),
+    } as unknown as WsRpcProtocolClient;
+    const session: RpcSession = {
+      client,
+      initialConfig: Effect.never,
+      subscribeServerConfig: (input) => client.subscribeServerConfig(input),
+      ready: Effect.void,
+      probe: Effect.void,
+      closed: Effect.never,
+    };
+    const state: SupervisorConnectionState = {
+      ...AVAILABLE_CONNECTION_STATE,
+      phase: "connected",
+      desired: true,
+      network: "online",
+      attempt: 1,
+      generation: 1,
+    };
+    const supervisor = EnvironmentSupervisor.EnvironmentSupervisor.of({
+      target,
+      state: yield* SubscriptionRef.make(state),
+      session: yield* SubscriptionRef.make(Option.some(session)),
+      prepared: yield* SubscriptionRef.make<Option.Option<PreparedConnection>>(Option.none()),
+      connect: Effect.void,
+      disconnect: Effect.void,
+      retryNow: Effect.void,
+    });
+    const run: EnvironmentRegistry.EnvironmentRegistry["Service"]["run"] = (_, effect) =>
+      Effect.provideService(effect, EnvironmentSupervisor.EnvironmentSupervisor, supervisor);
+    const followStream: EnvironmentRegistry.EnvironmentRegistry["Service"]["followStream"] = (
+      _,
+      stream,
+    ) => Stream.provideService(stream, EnvironmentSupervisor.EnvironmentSupervisor, supervisor);
+    const runtime = Atom.runtime(
+      Layer.succeed(EnvironmentRegistry.EnvironmentRegistry, {
+        run,
+        followStream,
+      } as unknown as EnvironmentRegistry.EnvironmentRegistry["Service"]),
+    );
+    const registry = AtomRegistry.make();
+    const configAtom = Atom.make({
+      environment: {
+        capabilities: { dashboardSnapshot: false },
+        serverVersion: "fork.12",
+        label: "VM",
+      },
+    } as unknown as ServerConfig);
+    const shellAtom = Atom.make({
+      schemaVersion: 1 as const,
+      snapshotSequence: 1,
+      projects: [],
+      archivedThreads: [],
+      threads: [{ ...v2ThreadShell, id: root, title: "T3 Orchestrator" }],
+    });
+    const dashboard = createDashboardAtoms(runtime, {
+      config: () => configAtom,
+      shell: () => shellAtom,
+    });
+    const atom = dashboard.snapshot(environmentId);
+    const unsubscribe = registry.subscribe(
+      atom,
+      (value) => {
+        if (value.snapshot?.revision === 1) Deferred.doneUnsafe(received, Exit.void);
+      },
+      { immediate: true },
+    );
+    try {
+      yield* Deferred.await(received);
+      yield* Deferred.await(trackerStarted);
+      const value = registry.get(atom);
+      expect(value).toMatchObject({
+        refreshing: true,
+        failed: false,
+        olderServer: true,
+        source: "live",
+      });
+      expect(value.snapshot?.projects[0]?.title).toBe("T3 Orchestrator");
+      expect(value.snapshot?.releases[0]?.installedVersion).toBe("fork.12");
+    } finally {
+      unsubscribe();
+      registry.dispose();
+    }
+  }),
+);
