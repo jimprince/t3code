@@ -132,10 +132,16 @@ cp.spawn = (...args) => {
       for (const dir of ["scripts", "src", "dist", "bin", "node_modules/.bin"])
         await NodeFSP.mkdir(NodePath.join(ws, dir), { recursive: true });
       await NodeFSP.mkdir(NodePath.join(temp, "packages/contracts/src"), { recursive: true });
+      await NodeFSP.mkdir(NodePath.join(temp, "packages/client-runtime/src/state"), {
+        recursive: true,
+      });
       for (const file of [
         "package.json",
         "pnpm-lock.yaml",
         "packages/contracts/package.json",
+        "packages/client-runtime/package.json",
+        "packages/client-runtime/src/state/threadPurpose.ts",
+        "packages/client-runtime/src/state/forkNesting.ts",
         "apps/t3-thread/package.json",
       ])
         await NodeFSP.writeFile(NodePath.join(temp, file), "{}");
