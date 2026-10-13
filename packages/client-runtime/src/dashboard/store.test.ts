@@ -150,7 +150,7 @@ it.effect("an older VM publishes a live dashboard while its tracker RPC is still
       "fork.threads.metadata.list": () =>
         Effect.sync(() => {
           metadataReads++;
-          return [{ threadId: root, parentThreadId: null, subproject: "on" }];
+          return [{ threadId: root, parentThreadId: null }];
         }),
       [WS_METHODS.projectDashboardGet]: () =>
         Effect.fail(new ProjectDashboardError({ message: "Unsupported" })),
@@ -220,6 +220,7 @@ it.effect("an older VM publishes a live dashboard while its tracker RPC is still
     const dashboard = createDashboardAtoms(runtime, {
       config: () => configAtom,
       shell: () => shellAtom,
+      remoteParentThreadIds: () => Atom.make([root]),
     });
     const atom = dashboard.snapshot(environmentId);
     const unsubscribe = registry.subscribe(
