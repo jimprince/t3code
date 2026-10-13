@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./state/harness-query": {
+      "types": "./src/state/harnessQuery.ts",
+      "default": "./src/state/harnessQuery.ts"
+    },
     "./state/thread-purpose": {
       "types": "./src/state/threadPurpose.ts",
       "default": "./src/state/threadPurpose.ts"
