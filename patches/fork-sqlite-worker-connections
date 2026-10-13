@@ -1,0 +1,6 @@
+Bottom: 4b70b8a6351181d339455c00419d3e360182a852
+Top:    4b70b8a6351181d339455c00419d3e360182a852
+Author: brad <bradprin@live.com>
+Date:   2026-10-13 04:32:00 +0000
+
+perf(server): run SQLite on worker threads with read connections
