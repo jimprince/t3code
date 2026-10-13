@@ -1,3 +1,5 @@
+import { formatLocalIso } from "@t3tools/shared/localTime";
+
 /**
  * The shape of an expo-updates log entry we care about. Mirrors
  * `UpdatesLogEntry` structurally so the model needs no native module at test
@@ -76,8 +78,6 @@ export function formatStartupCrashReport(
   if (records.length === 0) return `${header}\nNo startup crashes recorded.`;
   return [
     header,
-    ...records.map(
-      (record) => `\n--- ${new Date(record.timestamp).toISOString()} ---\n${record.detail}`,
-    ),
+    ...records.map((record) => `\n--- ${formatLocalIso(record.timestamp)} ---\n${record.detail}`),
   ].join("\n");
 }
