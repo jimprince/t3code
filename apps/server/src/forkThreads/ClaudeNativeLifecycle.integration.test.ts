@@ -18,7 +18,7 @@ import * as Path from "effect/Path";
 import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as ClaudeAdapter from "../orchestration-v2/Adapters/ClaudeAdapterV2.ts";
 import * as IdAllocator from "../orchestration-v2/IdAllocator.ts";
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
@@ -27,7 +27,7 @@ import * as Registry from "../orchestration-v2/ProviderAdapterRegistry.ts";
 import * as EffectWorker from "../orchestration-v2/EffectWorker.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import * as ServerSettings from "../serverSettings.ts";
-import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
+import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import { makeOrchestratorV2ReplayLayerWithRegistry } from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
 import { checkpointWorkspace } from "../orchestration-v2/testkit/ReplayFixtureWorkspace.ts";
 import * as WorkerLifecycle from "./WorkerLifecycle.ts";
@@ -69,7 +69,7 @@ it.effect(
             assertComplete: Effect.void,
           },
         });
-        const db = SqlitePersistenceMemory;
+        const db = SqlitePersistence.layerMemory;
         const runtime = makeOrchestratorV2ReplayLayerWithRegistry(
           { name: "claude-native-hygiene" },
           Registry.makeSingleLayer(adapter),

@@ -16,7 +16,7 @@ import {
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as EventSink from "../orchestration-v2/EventSink.ts";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
@@ -25,11 +25,11 @@ import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.t
 import * as ServerSettings from "../serverSettings.ts";
 import * as WorkerLifecycle from "./WorkerLifecycle.ts";
 import { makeOrchestratorV2ReplayLayerWithRegistry } from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
-import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
+import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import { readMetadata, writeMetadata } from "./MetadataStore.ts";
 import { nativeEvidence } from "./NativeCompletion.ts";
 
-const database = SqlitePersistenceMemory;
+const database = SqlitePersistence.layerMemory;
 const runtime = makeOrchestratorV2ReplayLayerWithRegistry(
   { name: "native-completion" },
   Registry.makeLayer([]),
