@@ -26,7 +26,7 @@ export function indexSamples(
   for (const list of index.values()) list.sort((a, b) => a.atMs - b.atMs);
   return index;
 }
-export const MOVEMENT_WINDOW_MS = 60 * 60_000;
+const MOVEMENT_WINDOW_MS = 60 * 60_000;
 /** Require a real sample within ten minutes of the window boundary, with an unchanged plan throughout. */
 export function movement(
   taskId: string,
