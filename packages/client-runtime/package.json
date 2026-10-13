@@ -7,6 +7,10 @@
       "types": "./src/state/harnessStrip.ts",
       "default": "./src/state/harnessStrip.ts"
     },
+    "./state/harness-check-page": {
+      "types": "./src/state/harnessCheckPage.ts",
+      "default": "./src/state/harnessCheckPage.ts"
+    },
     "./state/harness-view": {
       "types": "./src/state/harnessView.ts",
       "default": "./src/state/harnessView.ts"

@@ -225,6 +225,7 @@ import {
 } from "./threadActionMenu.logic";
 import { ThreadIssueBadges } from "./ThreadIssueBadges";
 import { HarnessSidebarList } from "./harness/HarnessSidebarList";
+import { useSidebarMode } from "./sidebarMode";
 import { OrchestratorSidebarList } from "./orchestrators/OrchestratorSidebarList";
 import { ChiefOfStaffRow } from "./cos-tray/ChiefOfStaffRow";
 import { useThreadsVisibleInThreadsMode } from "./orchestrators/useOrchestratorThreads";
@@ -338,7 +339,6 @@ const SETTLED_TAIL_PAGE_COUNT = 25;
 const SETTLED_SHELF_EXPANDED_KEY = "t3code:sidebar:settled-expanded";
 const SNOOZED_SHELF_EXPANDED_KEY = "t3code:sidebar:snoozed-expanded";
 const WORKING_SHELF_EXPANDED_KEY = "t3code:sidebar:working-expanded";
-const SIDEBAR_MODE_SCHEMA = Schema.Literals(["threads", "orchestrators", "harness"]);
 
 // Working beta: when this client saw each thread leave the Working shelf.
 // Module scope keeps the inbox order across routes that unmount the sidebar.
@@ -2560,11 +2560,7 @@ export default function Sidebar() {
   const workingShelfEnabled = useClientSettings((s) => s.sidebarWorkingShelfEnabled);
   const orchestratorsEnabled = useClientSettings((s) => s.sidebarOrchestratorsEnabled);
   const threads = useThreadsVisibleInThreadsMode(allThreads, orchestratorsEnabled);
-  const [sidebarMode, setSidebarMode] = useLocalStorage(
-    "t3code:sidebar:mode",
-    "threads" as const,
-    SIDEBAR_MODE_SCHEMA,
-  );
+  const [sidebarMode, setSidebarMode] = useSidebarMode();
   // Explicit per-mode flags: the Threads chrome (search, new thread, thread lists) must never
   // render under Projects or Harness, so no branch reads "not Projects" as "Threads".
   const showProjects = orchestratorsEnabled && sidebarMode === "orchestrators";

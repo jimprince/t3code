@@ -13,11 +13,12 @@ import {
   type HarnessCheckView,
   type HarnessTone,
 } from "@t3tools/client-runtime/state/harness-view";
+import { harnessCheckRef } from "@t3tools/client-runtime/state/harness-check-page";
 import { buildHarnessStrip } from "@t3tools/client-runtime/state/harness-strip";
 import { buildOrchestratorSummaries } from "@t3tools/client-runtime/state/orchestrators";
 import { partitionThreadPurposes } from "@t3tools/client-runtime/state/thread-purpose";
 import { formatLocalWhen } from "@t3tools/shared/localTime";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useParams } from "@tanstack/react-router";
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 import { useCallback, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
 
@@ -27,12 +28,11 @@ import { cn } from "../../lib/utils";
 import { useProjects } from "../../state/entities";
 import { useHarnessEnvironments } from "../../state/harness";
 import { buildThreadRouteParams } from "../../threadRoutes";
-import { Sheet, SheetHeader, SheetPopup, SheetTitle } from "../ui/sheet";
 import { useSidebar } from "../ui/sidebar";
 import { ProjectQueryState } from "../orchestrators/ProjectQueryState";
 import { useOrchestratorThreadShells } from "../orchestrators/useOrchestratorThreads";
 import { useSelectedRoute } from "../orchestrators/OrchestratorSidebarList";
-import { HarnessCheckDetails } from "./HarnessCheckDetails";
+import { TONE_DOT } from "./harnessTone";
 
 const DOT: Record<HarnessAgentBucket, string> = {
   failed: "bg-error",
@@ -50,12 +50,6 @@ const TONE_TEXT: Record<HarnessTone, string> = {
   warning: "text-warning-foreground",
   muted: "text-sidebar-muted-foreground",
   ok: "text-success-foreground",
-};
-const TONE_DOT: Record<HarnessTone, string> = {
-  error: "bg-error",
-  warning: "bg-warning",
-  muted: "bg-muted-foreground/40",
-  ok: "bg-success",
 };
 
 function SectionHeading({
@@ -148,32 +142,43 @@ function HarnessAgentRow({
   );
 }
 
+/** The check open in the main pane, as `<environmentId>:<checkKey>`, or null on any other page. */
+function useSelectedCheck() {
+  return useParams({
+    strict: false,
+    select: (params: { environmentId?: string; checkKey?: string }) =>
+      params.environmentId && params.checkKey
+        ? { environmentId: params.environmentId, checkKey: params.checkKey }
+        : null,
+  });
+}
+
+/** One check: a compact row that opens the check's own page in the main pane. */
 function HarnessCheckRow({
   check,
   environmentLabel,
-  now,
-  expanded,
+  selected,
   touch,
-  onToggle,
+  onOpen,
 }: {
   readonly check: HarnessCheckView;
   readonly environmentLabel: string | null;
-  readonly now: number;
-  readonly expanded: boolean;
+  readonly selected: boolean;
   readonly touch: boolean;
-  readonly onToggle: () => void;
+  readonly onOpen: (check: HarnessCheckView) => void;
 }) {
   return (
     <li>
       <button
         type="button"
-        aria-expanded={expanded}
         aria-label={check.spokenLabel}
+        aria-current={selected ? "page" : undefined}
         className={cn(
           "flex w-full cursor-pointer flex-col gap-0.5 rounded-md px-2.5 py-1.5 text-left hover:bg-sidebar-row-hover",
           touch && "min-h-11",
+          selected && "bg-sidebar-row-active",
         )}
-        onClick={onToggle}
+        onClick={() => onOpen(check)}
       >
         <span className="flex w-full min-w-0 items-center gap-2 text-sm">
           <span
@@ -184,34 +189,24 @@ function HarnessCheckRow({
           <span className={cn("shrink-0 text-xs", TONE_TEXT[check.tone])}>
             {check.latenessLabel ?? check.stateLabel}
           </span>
-          {expanded ? (
-            <ChevronDownIcon
-              aria-hidden
-              className="size-3.5 shrink-0 text-sidebar-muted-foreground"
-            />
-          ) : (
-            <ChevronRightIcon
-              aria-hidden
-              className="size-3.5 shrink-0 text-sidebar-muted-foreground"
-            />
-          )}
         </span>
         <span className="truncate pl-3.5 text-3xs text-sidebar-muted-foreground">
           {[check.classification, environmentLabel].filter((part) => part).join(" · ")}
         </span>
         <span className="flex min-w-0 gap-2 pl-3.5 text-3xs text-sidebar-muted-foreground">
           <span className="min-w-0 flex-1 truncate">{check.timing}</span>
-          <span
-            className={cn(
-              "shrink-0 tabular-nums",
-              check.errors.everyRun ? "text-warning-foreground" : undefined,
-            )}
-          >
-            {check.errorsText}
-          </span>
+          {check.errorsText === null ? null : (
+            <span
+              className={cn(
+                "shrink-0 tabular-nums",
+                check.errors.everyRun ? "text-warning-foreground" : undefined,
+              )}
+            >
+              {check.errorsText}
+            </span>
+          )}
         </span>
       </button>
-      {expanded && !touch ? <HarnessCheckDetails check={check} now={now} touch={false} /> : null}
     </li>
   );
 }
@@ -225,10 +220,11 @@ export function HarnessSidebarList() {
   const projects = useProjects();
   const threads = useOrchestratorThreadShells();
   const selectedRoute = useSelectedRoute();
-  const { isMobile } = useSidebar();
+  const { isMobile, setOpenMobile } = useSidebar();
+  const navigate = useNavigate();
+  const selectedCheck = useSelectedCheck();
   const { environments, refresh } = useHarnessEnvironments();
   const [idleExpanded, setIdleExpanded] = useState(false);
-  const [expandedCheck, setExpandedCheck] = useState<string | null>(null);
 
   const agents = useMemo(() => {
     const summaries = buildOrchestratorSummaries(threads, projects);
@@ -287,7 +283,17 @@ export function HarnessSidebarList() {
     problemCount("overdue") > 0 ? `${problemCount("overdue")} overdue` : null,
     ...describeHarnessSources(snapshots),
   ].filter((part) => part !== null);
-  const expanded = checks.find((check) => check.key === expandedCheck) ?? null;
+  // A phone's drawer closes so the check's page shows.
+  const openCheck = useCallback(
+    (check: HarnessCheckView) => {
+      void navigate({
+        to: "/harness/checks/$environmentId/$checkKey",
+        params: harnessCheckRef(check),
+      });
+      if (isMobile) setOpenMobile(false);
+    },
+    [isMobile, navigate, setOpenMobile],
+  );
   const renderCheck = (check: HarnessCheckView) => (
     <HarnessCheckRow
       key={check.key}
@@ -297,10 +303,12 @@ export function HarnessSidebarList() {
           ? (labelByEnvironment.get(check.routine.environmentId) ?? null)
           : null
       }
-      now={now}
+      selected={
+        selectedCheck?.environmentId === check.routine.environmentId &&
+        selectedCheck.checkKey === check.key
+      }
       touch={isMobile}
-      expanded={expandedCheck === check.key}
-      onToggle={() => setExpandedCheck((key) => (key === check.key ? null : check.key))}
+      onOpen={openCheck}
     />
   );
 
@@ -434,28 +442,6 @@ export function HarnessSidebarList() {
           </>
         ) : null}
       </section>
-
-      {isMobile ? (
-        <Sheet
-          open={expanded !== null}
-          onOpenChange={(open) => {
-            if (!open) setExpandedCheck(null);
-          }}
-        >
-          <SheetPopup side="bottom" className="max-h-[80vh]">
-            {expanded ? (
-              <>
-                <SheetHeader>
-                  <SheetTitle>{expanded.name}</SheetTitle>
-                </SheetHeader>
-                <div className="min-h-0 overflow-y-auto pb-4">
-                  <HarnessCheckDetails check={expanded} now={now} touch />
-                </div>
-              </>
-            ) : null}
-          </SheetPopup>
-        </Sheet>
-      ) : null}
     </div>
   );
 }
