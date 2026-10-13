@@ -18,3 +18,9 @@ id = "harness-design-b-health-strip"
 date = "2026-10-11"
 decided = "Brad approved design B with Queue N, Oldest wait Xm and Failed 24h N on web, desktop, phone and native mobile."
 rationale = "Use the snapshot environment total for queue depth and oldest wait without adding automation rows again; retain unknown or lower-bound signals for incomplete coverage and older environments."
+
+[[decision]]
+id = "r29-projects-active-subprojects"
+date = "2026-10-13"
+decided = "List every active subproject and tag Harness children rather than filtering by purpose."
+rationale = "Projects cards must preserve organizational nesting and match their counts; shared purpose helpers belong to fork-harness-purpose, while web and native render paths and their real-render tests belong here."

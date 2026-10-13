@@ -1,0 +1,4 @@
+id = "projects-active-subprojects"
+category = "fix"
+functionality = "Projects sidebar"
+text = "Project cards list every active subproject, including Harness work, so their rows match their counts. Harness subprojects carry a plain tag; settled subprojects stay in the collapsed Settled row on web and mobile."
