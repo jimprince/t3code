@@ -648,7 +648,14 @@ it.effect("a caller cannot rewrite a scheduled task that runs above its own mode
       scheduledTaskId: "task-auto",
       enabled: false,
     });
-    expect(allowed.isError).toBe(false);
+    expect(allowed.isError, JSON.stringify(allowed)).toBe(false);
+    expect(allowed.structuredContent).not.toHaveProperty("routineKind");
+    const classified = yield* call("update_scheduled_task", {
+      scheduledTaskId: "task-auto",
+      routineKind: "project",
+    });
+    expect(classified.isError, JSON.stringify(classified)).toBe(false);
+    expect(classified.structuredContent).toMatchObject({ routineKind: "project" });
   }).pipe(
     Effect.provide(
       McpHttpServer.layerOrchestratorToolkit.pipe(
