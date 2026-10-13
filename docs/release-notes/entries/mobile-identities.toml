@@ -1,0 +1,4 @@
+id = "mobile-identities"
+category = "fix"
+functionality = "mobile"
+text = "The fork's iOS share extension and keychain use fork identities, keeping production, development and preview builds separate from upstream."
