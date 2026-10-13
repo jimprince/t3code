@@ -73,11 +73,14 @@ import {
   isOrchestrationV2SupersededInterrupt,
 } from "@t3tools/shared/orchestrationV2Timeline";
 import { derivePendingBackgroundWork } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
+import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
+import * as Option from "effect/Option";
+import * as Semaphore from "effect/Semaphore";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 import type * as Statement from "effect/sql/Statement";
@@ -1875,10 +1878,72 @@ function shellFromState(input: {
   };
 }
 
+let shellCacheId = 0;
+
+// TEMP triggers journal changes on this connection in the same transaction as the
+// projection writes. This covers EventSink, rebuilds and direct SQL writers without
+// publishing uncommitted invalidations. Other connections are covered by data_version.
+const makeShellInvalidationJournal = (sql: SqlClient.SqlClient) =>
+  Effect.gen(function* () {
+    const table = `shell_snapshot_dirty_${shellCacheId++}`;
+    const triggers: string[] = [];
+    yield* sql.unsafe(`CREATE TEMP TABLE ${table} (thread_id TEXT PRIMARY KEY)`);
+    yield* Effect.addFinalizer(() =>
+      Effect.gen(function* () {
+        for (const trigger of triggers) yield* sql.unsafe(`DROP TRIGGER IF EXISTS ${trigger}`);
+        yield* sql.unsafe(`DROP TABLE IF EXISTS ${table}`);
+      }).pipe(Effect.orDie),
+    );
+    for (const projection of [
+      "threads",
+      "runs",
+      "messages",
+      "plans",
+      "turn_items",
+      "runtime_requests",
+      "provider_threads",
+      "provider_session_bindings",
+      "provider_sessions",
+    ]) {
+      for (const operation of ["INSERT", "UPDATE", "DELETE"]) {
+        const trigger = `${table}_${projection}_${operation}`;
+        const rows =
+          operation === "INSERT" ? ["NEW"] : operation === "DELETE" ? ["OLD"] : ["OLD", "NEW"];
+        // An outer UPSERT can override a trigger OR IGNORE policy; guard inserts explicitly.
+        const statements = rows
+          .map(
+            (row) =>
+              `INSERT INTO ${table} SELECT ${row}.thread_id WHERE ${row}.thread_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM ${table} WHERE thread_id = ${row}.thread_id);` +
+              (projection === "provider_sessions"
+                ? `INSERT INTO ${table} SELECT binding.thread_id FROM orchestration_v2_projection_provider_session_bindings binding WHERE binding.provider_session_id = ${row}.provider_session_id AND NOT EXISTS (SELECT 1 FROM ${table} dirty WHERE dirty.thread_id = binding.thread_id);`
+                : ""),
+          )
+          .join("\n");
+        yield* sql.unsafe(
+          `CREATE TEMP TRIGGER ${trigger} AFTER ${operation} ON main.orchestration_v2_projection_${projection} BEGIN ${statements} END`,
+        );
+        triggers.push(trigger);
+      }
+    }
+    return {
+      read: sql.unsafe<{ readonly thread_id: string }>(`SELECT thread_id FROM ${table}`),
+      clear: sql.unsafe(`DELETE FROM ${table}`),
+    };
+  });
+
 export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> = Layer.effect(
   ProjectionStoreV2,
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+    const cacheEnabled =
+      (yield* Config.String("T3CODE_SHELL_SNAPSHOT_CACHE").pipe(
+        Config.withDefault("1"),
+        Effect.orDie,
+      )) !== "0";
+    const journal = cacheEnabled
+      ? yield* makeShellInvalidationJournal(sql).pipe(Effect.orDie)
+      : undefined;
+    const cacheSemaphore = Semaphore.makeUnsafe(1);
 
     // For run upserts: a snapshot without `path` keeps the value another event recorded there.
     const keepRecordedRunField = (payload: Statement.Fragment, path: string) => sql`
@@ -5975,10 +6040,136 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
         Effect.map(decodeShellSnapshot),
       );
 
-    const getShellSnapshot: ProjectionStoreV2Shape["getShellSnapshot"] = (options) =>
+    const getShellSnapshotUncached: ProjectionStoreV2Shape["getShellSnapshot"] = (options) =>
       sql
         .withTransaction(readShellSnapshotRows(options))
         .pipe(Effect.mapError(shellSnapshotReadError), Effect.flatMap(decodeShellSnapshot));
+
+    let cachedStates: ReadonlyMap<ThreadId, ShellThreadState> | undefined;
+    let cachedShells: ReadonlyArray<OrchestrationV2ThreadShell> = [];
+    let cachedDataVersion: number | undefined;
+    let cachedSequence: number | undefined;
+    const cachedSnapshots = new Map<string, OrchestrationV2ThreadShellSnapshot>();
+
+    const getShellSnapshot: ProjectionStoreV2Shape["getShellSnapshot"] = (options) =>
+      Effect.gen(function* () {
+        // A caller's transaction can read its own writes and then roll back. It must
+        // neither consume the journal nor publish those shells into the shared cache.
+        if (
+          journal === undefined ||
+          Option.isSome(yield* Effect.serviceOption(sql.transactionService))
+        ) {
+          return yield* getShellSnapshotUncached(options);
+        }
+        return yield* cacheSemaphore.withPermit(
+          sql.withTransaction(
+            Effect.gen(function* () {
+              const version = (yield* sql<{
+                readonly data_version: number;
+              }>`PRAGMA data_version`)[0]!.data_version;
+              const sequence =
+                (yield* sql<{ readonly snapshot_sequence: number | null }>`
+            SELECT MAX(sequence) AS snapshot_sequence FROM orchestration_events
+            WHERE application_event_version = 2 AND aggregate_kind = 'thread'
+          `)[0]?.snapshot_sequence ?? 0;
+              const dirty = yield* journal.read;
+              const rebuild = cachedStates === undefined || cachedDataVersion !== version;
+              let states = cachedStates;
+              if (rebuild || dirty.length > 0) {
+                const ids = rebuild ? undefined : dirty.map((row) => ThreadId.make(row.thread_id));
+                const rows = yield* selectShellThreadRows(ids);
+                const threadIds = rows.map((row) => ThreadId.make(row.thread_id));
+                const [runRows, itemCountRows, providerThreadRows, pendingTurnItemRows] =
+                  threadIds.length === 0
+                    ? ([[], [], [], []] as const)
+                    : yield* Effect.all([
+                        selectShellRunRows(threadIds),
+                        selectShellRunItemCounts(threadIds),
+                        selectShellProviderThreadRows(threadIds),
+                        selectShellPendingTurnItemRows(threadIds),
+                      ]);
+                const runMaps = runMapsByThreadId({ runRows, itemCountRows });
+                const background = yield* pendingBackgroundDataByThreadId({
+                  providerThreadRows,
+                  pendingTurnItemRows,
+                });
+                const updated = new Map(rebuild ? [] : cachedStates);
+                for (const row of dirty) updated.delete(ThreadId.make(row.thread_id));
+                for (const row of rows) {
+                  const state = yield* shellThreadStateFromRow({ row, ...runMaps, ...background });
+                  updated.set(state.thread.id, state);
+                }
+                // Let SQLite preserve its exact timestamp and binary ID ordering.
+                const orderedRows = rebuild
+                  ? rows
+                  : yield* sql<{ readonly thread_id: string }>`
+              SELECT thread_id FROM orchestration_v2_projection_threads
+              WHERE deleted_at IS NULL ORDER BY updated_at ASC, thread_id ASC
+            `;
+                states = new Map(
+                  orderedRows.map((row) => {
+                    const id = ThreadId.make(row.thread_id);
+                    return [id, updated.get(id)!] as const;
+                  }),
+                );
+                if (dirty.length > 0) yield* journal.clear;
+              }
+              // Publish while still holding the transaction and cache permit. Cancellation
+              // or a failed commit leaves the dirty journal intact for the next read. No
+              // uncommitted main-database writes are ever admitted into this cache.
+              if (cachedStates !== states || cachedSequence !== sequence) cachedSnapshots.clear();
+              if (cachedStates !== states) {
+                // Fork descendants recalculate inherited counts when any source changes.
+                cachedShells = [...states!.values()].map((state) =>
+                  shellFromState({
+                    state,
+                    visibleItemCount: visibleItemCountForShell({
+                      threadId: state.thread.id,
+                      statesByThreadId: states!,
+                    }),
+                  }),
+                );
+              }
+              cachedStates = states;
+              cachedDataVersion = version;
+              cachedSequence = sequence;
+              const key = `${options?.location ?? "all"}:${options?.unsettledOnly ?? false}`;
+              const existing = cachedSnapshots.get(key);
+              if (existing !== undefined) return existing;
+              // At most six filtered array pairs share the same immutable shells.
+              const shells = options?.unsettledOnly
+                ? cachedShells.filter(
+                    (thread) => thread.settledAt === null && thread.settledOverride !== "settled",
+                  )
+                : cachedShells;
+              const snapshot = {
+                schemaVersion: ORCHESTRATION_V2_PROJECTION_SCHEMA_VERSION,
+                snapshotSequence: sequence,
+                threads:
+                  options?.location === "archive"
+                    ? []
+                    : shells.filter((thread) => thread.archivedAt === null),
+                archivedThreads:
+                  options?.location === "active"
+                    ? []
+                    : shells.filter((thread) => thread.archivedAt !== null),
+              };
+              cachedSnapshots.set(key, snapshot);
+              return snapshot;
+            }).pipe(
+              // A filtered uncached read can succeed when an unrelated archived or
+              // settled projection cannot decode. Preserve that behavior on rebuild failure.
+              Effect.catch(() => getShellSnapshotUncached(options)),
+            ),
+          ),
+        );
+      }).pipe(
+        Effect.mapError((cause) =>
+          isProjectionStoreReadError(cause)
+            ? cause
+            : new ProjectionStoreReadError({ threadId: ThreadId.make("thread:shell"), cause }),
+        ),
+      );
 
     // Preserve caller order and null slots; read each fork-source frontier once.
     const getThreadShells: ProjectionStoreV2Shape["getThreadShells"] = (requestedIds) =>
