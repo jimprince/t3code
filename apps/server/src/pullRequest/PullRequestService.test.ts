@@ -1,7 +1,7 @@
 import * as GiteaPullRequestProvider from "./GiteaPullRequestProvider.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { configuredGiteaIdentity } from "../sourceControl/ForkGiteaLinkAdapter.ts";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { HttpClient, HttpClientResponse } from "effect/http";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as KeyValueStore from "effect/persistence/KeyValueStore";

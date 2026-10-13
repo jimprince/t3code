@@ -359,29 +359,31 @@ export const make = Effect.gen(function* () {
       terminal,
       retryAt: failure.retryAt,
     });
-    const landed = yield* eachTarget(group, (target) => Effect.gen(function* () {
-    if (terminal) {
-      yield* record(target, null, {
-        text: `T3 Code stopped watching pull request #${target.link.number} (${target.link.url}) because ${isPullRequestOperationError(error) ? "the pull request no longer exists" : "the host credentials no longer work"}.`,
-        notification: {
-          source: { kind: "monitor" },
-          outcome: "failed",
-          summary: `#${target.link.number}: stopped watching, pull request unavailable`,
-        },
-      });
-      yield* ended(target, "unreadable");
-    } else if (count >= READ_FAILURE_LIMIT && !failure.notified.has(watchKey(target))) {
-      yield* record(target, target.watch, {
-        text: `T3 Code has failed to read pull request #${target.link.number} (${target.link.url}) ${count} times in a row. Monitoring is degraded; T3 Code keeps the watch registered and retries with up to five minutes between reads. Check the host connection and credentials. You do not need to register the watch again.`,
-        notification: {
-          source: { kind: "monitor" },
-          outcome: "failed",
-          summary: `#${target.link.number}: watching, host reads are failing`,
-        },
-      });
-      failure.notified.add(watchKey(target));
-    }
-    }));
+    const landed = yield* eachTarget(group, (target) =>
+      Effect.gen(function* () {
+        if (terminal) {
+          yield* record(target, null, {
+            text: `T3 Code stopped watching pull request #${target.link.number} (${target.link.url}) because ${isPullRequestOperationError(error) ? "the pull request no longer exists" : "the host credentials no longer work"}.`,
+            notification: {
+              source: { kind: "monitor" },
+              outcome: "failed",
+              summary: `#${target.link.number}: stopped watching, pull request unavailable`,
+            },
+          });
+          yield* ended(target, "unreadable");
+        } else if (count >= READ_FAILURE_LIMIT && !failure.notified.has(watchKey(target))) {
+          yield* record(target, target.watch, {
+            text: `T3 Code has failed to read pull request #${target.link.number} (${target.link.url}) ${count} times in a row. Monitoring is degraded; T3 Code keeps the watch registered and retries with up to five minutes between reads. Check the host connection and credentials. You do not need to register the watch again.`,
+            notification: {
+              source: { kind: "monitor" },
+              outcome: "failed",
+              summary: `#${target.link.number}: watching, host reads are failing`,
+            },
+          });
+          failure.notified.add(watchKey(target));
+        }
+      }),
+    );
     if (terminal && landed) readFailures.delete(key);
   });
 
@@ -530,10 +532,13 @@ export const make = Effect.gen(function* () {
     const [detailRead, activityRead] = yield* Effect.all(
       [
         Effect.exit(pullRequests.detail({ ...reference, allowStale: false })),
-        Effect.exit(plan.activity
-          ? pullRequests.activity(reference).pipe(Effect.map(Option.some))
-          : Effect.succeed(Option.none<PullRequestActivity>())),
-      ], { concurrency: 2 },
+        Effect.exit(
+          plan.activity
+            ? pullRequests.activity(reference).pipe(Effect.map(Option.some))
+            : Effect.succeed(Option.none<PullRequestActivity>()),
+        ),
+      ],
+      { concurrency: 2 },
     );
     if (Exit.isFailure(detailRead)) {
       lastReads.delete(group.key);
@@ -548,7 +553,9 @@ export const make = Effect.gen(function* () {
       return yield* readFailed(group, activityRead.cause, "activity");
     }
     readFailures.delete(group.key);
-    const activity = Exit.isSuccess(activityRead) ? activityRead.value : Option.none<PullRequestActivity>();
+    const activity = Exit.isSuccess(activityRead)
+      ? activityRead.value
+      : Option.none<PullRequestActivity>();
     const headSha = detail.headSha ?? null;
     for (const target of group.targets) {
       const life = lifeOf(target);
