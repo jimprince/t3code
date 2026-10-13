@@ -16,6 +16,9 @@ import * as ServerConfig from "../config.ts";
 // Size the -wal file is cut back to on the first commit after a WAL reset.
 export const WAL_SIZE_LIMIT_BYTES = 32 * 1024 * 1024;
 
+// Read-only connections beside the single writer.
+const SQLITE_READER_CONNECTIONS = 4;
+
 const layerSetup = Layer.effectDiscard(
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
@@ -23,6 +26,10 @@ const layerSetup = Layer.effectDiscard(
     yield* sql`PRAGMA busy_timeout = 5000;`;
     yield* sql`PRAGMA foreign_keys = ON;`;
     yield* sql`PRAGMA journal_mode = WAL;`;
+    // In WAL mode NORMAL skips the fsync on every commit and syncs at
+    // checkpoints instead. The database stays consistent through a crash;
+    // power loss can drop only the most recent commits.
+    yield* sql`PRAGMA synchronous = NORMAL;`;
     // PASSIVE checkpoints never shrink the -wal file, so it otherwise keeps its
     // largest size until the last connection closes.
     yield* sql.unsafe(`PRAGMA journal_size_limit = ${WAL_SIZE_LIMIT_BYTES};`);
@@ -54,6 +61,8 @@ export const layerFromPath = Effect.fn("makeSqlitePersistenceLive")(function* (d
     layerSetup,
     NodeSqliteClient.layer({
       filename: dbPath,
+      // Queries run off the main thread, and reads never wait for the writer.
+      workers: { readers: SQLITE_READER_CONNECTIONS },
       spanAttributes: {
         "db.name": path.basename(dbPath),
         "service.name": "t3code-server",
