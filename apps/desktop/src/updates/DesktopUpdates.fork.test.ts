@@ -3,6 +3,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import type { DesktopUpdateState } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as TestClock from "effect/testing/TestClock";
@@ -294,4 +295,177 @@ describe("DesktopUpdates", () => {
       );
     },
   );
+});
+
+// A stand-in for ~/t3-mac-dev/dev-launch.sh: `head` is the checkout, `tip` is origin, and an
+// update request moves head to tip unless the kit is told to fail.
+function makeKitHome(options: {
+  readonly head: string;
+  readonly tip: string;
+  readonly failBuild?: boolean;
+}) {
+  const home = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-devkit-home-"));
+  const kitDir = NodePath.join(home, "t3-mac-dev");
+  NodeFS.mkdirSync(kitDir, { recursive: true });
+  NodeFS.writeFileSync(NodePath.join(kitDir, "head"), options.head);
+  NodeFS.writeFileSync(NodePath.join(kitDir, "tip"), options.tip);
+  NodeFS.writeFileSync(
+    NodePath.join(kitDir, "dev-launch.sh"),
+    `dir="$(cd "$(dirname "$0")" && pwd)"
+head="$(cat "$dir/head")"; tip="$(cat "$dir/tip")"
+if [ "$1" = "--status" ]; then
+  echo "branch followed: live   fetched: yes"
+  echo "checkout:        $head on live"
+  echo "origin/live:  $tip"
+  echo "dev app running: yes   update worker: idle"
+  if [ "$head" = "$tip" ]; then echo "needs update:    no"; else echo "needs update:    yes (automatic updater will apply it)"; fi
+else
+  echo requested >>"$dir/requests"
+  ${options.failBuild ? "true" : 'cp "$dir/tip" "$dir/head"'}
+fi
+`,
+  );
+  return {
+    home,
+    requests: () => {
+      try {
+        return NodeFS.readFileSync(NodePath.join(kitDir, "requests"), "utf8").trim().split("\n")
+          .length;
+      } catch {
+        return 0;
+      }
+    },
+    environment: {
+      homeDirectory: home,
+      isPackaged: false,
+      dirname: NodePath.join(home, "Developer", "t3code-dev", "apps", "desktop", "src"),
+    },
+    env: { VITE_DEV_SERVER_URL: "http://localhost:5733" },
+  };
+}
+
+const devKitHarness = (kit: ReturnType<typeof makeKitHome>) =>
+  makeHarness({ environment: kit.environment, env: kit.env });
+
+describe("DesktopUpdates in the Mac dev kit app", () => {
+  it.effect("checks origin/live against the build and shows both short SHAs", () => {
+    const kit = makeKitHome({ head: "abc1234", tip: "def5678" });
+    const harness = devKitHarness(kit);
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+        assert.equal((yield* updates.getState).enabled, true);
+
+        const behind = yield* updates.check("test");
+        assert.equal(behind.checked, true);
+        assert.equal(behind.state.status, "available");
+        assert.equal(behind.state.availableVersion, "def5678");
+        assert.include(behind.state.message, "abc1234");
+        assert.include(behind.state.message, "def5678");
+
+        NodeFS.writeFileSync(NodePath.join(kit.home, "t3-mac-dev", "tip"), "abc1234");
+        const current = yield* updates.check("test");
+        assert.equal(current.state.status, "up-to-date");
+        assert.include(current.state.message, "abc1234");
+        assert.equal(harness.checkCount(), 0);
+      }),
+    ).pipe(
+      Effect.provide(Layer.merge(TestClock.layer(), harness.layer)),
+      Effect.ensuring(Effect.sync(() => NodeFS.rmSync(kit.home, { recursive: true, force: true }))),
+    );
+  });
+
+  const runUpdate = (updates: DesktopUpdates.DesktopUpdates["Service"]) =>
+    Effect.gen(function* () {
+      const finished = { value: false };
+      const fiber = yield* Effect.forkChild(
+        updates.startUpdate.pipe(Effect.tap(() => Effect.sync(() => (finished.value = true)))),
+      );
+      for (let attempt = 0; attempt < 200 && !finished.value; attempt += 1) {
+        yield* TestClock.adjust("10 seconds");
+        yield* Effect.promise(() => new Promise((resolve) => setTimeout(resolve, 20)));
+      }
+      return yield* Fiber.join(fiber);
+    });
+
+  it.effect("updates by asking the kit to rebuild and reports the result", () => {
+    const kit = makeKitHome({ head: "abc1234", tip: "def5678" });
+    const harness = devKitHarness(kit);
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+        const result = yield* runUpdate(updates);
+        assert.equal(kit.requests(), 1);
+        assert.equal(result.completed, true);
+        assert.equal(result.state.status, "up-to-date");
+        assert.equal(
+          harness.sentStates.some(
+            (state) => state.updatePhase === "installing" && state.message?.includes("Rebuilding"),
+          ),
+          true,
+        );
+        assert.equal(harness.checkCount(), 0);
+      }),
+    ).pipe(
+      Effect.provide(Layer.merge(TestClock.layer(), harness.layer)),
+      Effect.ensuring(Effect.sync(() => NodeFS.rmSync(kit.home, { recursive: true, force: true }))),
+    );
+  });
+
+  it.effect("reports a retryable error when the rebuild leaves the app behind", () => {
+    const kit = makeKitHome({ head: "abc1234", tip: "def5678", failBuild: true });
+    const harness = devKitHarness(kit);
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+        const result = yield* runUpdate(updates);
+        assert.equal(result.completed, false);
+        assert.equal(result.state.status, "error");
+        assert.equal(result.state.errorContext, "install");
+        assert.equal(result.state.canRetry, true);
+      }),
+    ).pipe(
+      Effect.provide(Layer.merge(TestClock.layer(), harness.layer)),
+      Effect.ensuring(Effect.sync(() => NodeFS.rmSync(kit.home, { recursive: true, force: true }))),
+    );
+  });
+
+  it.effect("leaves a dev app from another checkout, or without the kit, disabled", () => {
+    const kit = makeKitHome({ head: "abc1234", tip: "def5678" });
+    const otherCheckout = makeHarness({
+      environment: { ...kit.environment, dirname: "/elsewhere/apps/desktop/src" },
+      env: kit.env,
+    });
+    const noKit = makeKitHome({ head: "abc1234", tip: "def5678" });
+    NodeFS.rmSync(NodePath.join(noKit.home, "t3-mac-dev"), { recursive: true });
+    const withoutKit = devKitHarness(noKit);
+    const disabledState = Effect.gen(function* () {
+      const updates = yield* DesktopUpdates.DesktopUpdates;
+      yield* updates.configure;
+      return yield* updates.getState;
+    });
+    return Effect.scoped(
+      Effect.gen(function* () {
+        for (const harness of [otherCheckout, withoutKit]) {
+          const state = yield* disabledState.pipe(Effect.provide(harness.layer));
+          assert.equal(state.enabled, false);
+          assert.equal(
+            state.message,
+            "Automatic updates are only available in packaged production builds.",
+          );
+        }
+      }),
+    ).pipe(
+      Effect.provide(TestClock.layer()),
+      Effect.ensuring(
+        Effect.sync(() => {
+          NodeFS.rmSync(kit.home, { recursive: true, force: true });
+          NodeFS.rmSync(noKit.home, { recursive: true, force: true });
+        }),
+      ),
+    );
+  });
 });
