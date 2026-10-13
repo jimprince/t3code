@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "99cd252a2309785bb9eb1f922bb5822a6d904a8e",
-  "head": "e72e14ee0f878f6295202a1206c92d86bc697325",
+  "prev": "01a2f9734eec3db7d7bb25754f5a79c3e24aad78",
+  "head": "6ffc1f76e7710a6a02d7bdf961b264c155febab4",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -154,7 +154,8 @@
     "fork-projects-dnd",
     "fork-local-time",
     "fork-project-plan",
-    "fork-sidebar-settled-ui"
+    "fork-sidebar-settled-ui",
+    "fork-sidebar-hygiene-seed"
   ],
   "unapplied": [],
   "hidden": [],
@@ -536,6 +537,9 @@
     },
     "fork-sidebar-drag-to-nest": {
       "oid": "cfdab465059ac7eb7ebaab47c219d860862b3d88"
+    },
+    "fork-sidebar-hygiene-seed": {
+      "oid": "6ffc1f76e7710a6a02d7bdf961b264c155febab4"
     },
     "fork-sidebar-nested-tidiness": {
       "oid": "c8c9326de3a38d5547a83ecee3195aff0cca7db5"
