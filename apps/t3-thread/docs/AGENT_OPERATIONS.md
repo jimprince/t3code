@@ -1315,6 +1315,9 @@ buttons: `docs/user/project-canvas/funnel/index.html`:
 
 ## Scripts and automations
 
+For explicit check/project/agent-wake classification, the Harness RPC/MCP contract,
+and reviewed bulk changes with undo, see [Routine classification](../../../docs/operations/routine-kind.md).
+
 The server owns both; the CLI does not need to stay open. A **script** is a named prompt
 procedure in one project (`--project <id>`) or shared by every project (`--global`); a
 project script shadows a global one of the same name. An **automation** is an on/off rule:

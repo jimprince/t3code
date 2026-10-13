@@ -102,4 +102,5 @@ export * from "./planPublication.ts";
 export * from "./threadRecovery.ts";
 
 export * from "./harness.ts";
+export * from "./routineKind.ts";
 export * from "./dashboard.ts";
