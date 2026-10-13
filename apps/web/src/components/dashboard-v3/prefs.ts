@@ -1,5 +1,5 @@
 import * as Schema from "effect/Schema";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 
@@ -37,11 +37,12 @@ export function useCollapsedKeys() {
       ),
     [setKeys],
   );
-  return {
-    isCollapsed: (key: string, defaultCollapsed: boolean) =>
+  const isCollapsed = useCallback(
+    (key: string, defaultCollapsed: boolean) =>
       keys.includes(key) ? !defaultCollapsed : defaultCollapsed,
-    toggle,
-  };
+    [keys],
+  );
+  return useMemo(() => ({ isCollapsed, toggle }), [isCollapsed, toggle]);
 }
 
 /** The wall clock, ticking once a minute: ages and "by 8:42" labels stay honest without animation. */
