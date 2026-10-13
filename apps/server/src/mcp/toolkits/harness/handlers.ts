@@ -1,11 +1,12 @@
 import { OrchestratorMcpFailure } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as McpToolAccess from "../../McpToolAccess.ts";
 import { HarnessReadService } from "../../../harness/HarnessReadService.ts";
 import { readCaller, unavailable } from "../../threadAccess.ts";
 import { HarnessToolkit } from "./tools.ts";
 
-export const HarnessHandlersLive = HarnessToolkit.toLayer({
-  harness_snapshot: (input) =>
+export const HarnessHandlersLive = McpToolAccess.toLayer(HarnessToolkit, {
+  harness_snapshot: McpToolAccess.reads((input) =>
     Effect.gen(function* () {
       const caller = yield* readCaller();
       const snapshot = yield* (yield* HarnessReadService)
@@ -18,4 +19,5 @@ export const HarnessHandlersLive = HarnessToolkit.toLayer({
         });
       return snapshot;
     }),
+  ),
 });
