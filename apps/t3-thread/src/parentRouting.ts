@@ -1,10 +1,41 @@
 import type {
   OrchestrationThreadShell,
+  OrchestrationThread,
   SavedEnvironment,
   SavedAgent,
   SavedSubscription,
   StateFile,
 } from "./types.js";
+import { classifyThread } from "./status.js";
+
+/** Explicitly reopening a completed source keeps its derived attention route active. */
+export function sourceRouteExpiry(thread: OrchestrationThreadShell | OrchestrationThread) {
+  if (thread.archivedAt) return "archived" as const;
+  if (thread.settledOverride === "settled") return "settled" as const;
+  const reopened =
+    thread.settledOverride === "active" &&
+    Date.parse(thread.unsettledAt ?? "") >= Date.parse(thread.latestTurn?.completedAt ?? "");
+  if (!reopened && classifyThread(thread).state === "completed") return "completed" as const;
+  return null;
+}
+
+export function reconcileDerivedRoute(
+  route: SavedSubscription,
+  thread: OrchestrationThreadShell | OrchestrationThread,
+  now: string,
+): SavedSubscription {
+  if (!route.nestingDerived || route.expiryReason === "unsubscribed") return route;
+  const expiryReason = sourceRouteExpiry(thread);
+  if ((route.expiryReason ?? null) === expiryReason) return route;
+  return {
+    ...route,
+    expiryReason,
+    expiredAt: expiryReason ? now : null,
+    updatedAt: now,
+    inactivityObservation: null,
+    errorEventKey: null,
+  };
+}
 
 type Recipient = {
   subscriberThreadId: string;
@@ -107,7 +138,7 @@ export function parentInputRoute(
         state,
       )
     : null;
-  if (!parentId || thread.archivedAt || thread.settledOverride === "settled") return null;
+  if (!parentId || sourceRouteExpiry(thread)) return null;
   const remoteEnvironment = thread.remoteParent
     ? state.environments.find(
         (environment) => environment.environmentId === thread.remoteParent!.environmentId,

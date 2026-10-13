@@ -1,0 +1,4 @@
+id = "derived-notification-route-expiry"
+category = "fix"
+functionality = "threads"
+text = "Derived supervisor notification routes expire when their source settles, archives, or completes, and return when it is reopened. Route inspection shows active counts and expiry reasons; explicit subscriptions remain unchanged."
