@@ -357,6 +357,28 @@ export function diffAgainst(
   return { changes, outcomes };
 }
 
+/**
+ * What the log shows on a first visit, when there is no baseline to diff against: the last 24 hours
+ * of finished work and every decision that is open now.
+ */
+export function firstVisitChanges(data: DashboardData, since: string): ReadonlyArray<Change> {
+  const decisions = data.projects.flatMap(({ key, project }) =>
+    project.attention.map((item): Change => ({
+      kind: "decision-new",
+      projectKey: key,
+      taskId: item.taskId,
+      text: item.title,
+    })),
+  );
+  const done = outcomesSince(data, since).map((outcome): Change => ({
+    kind: "done",
+    projectKey: outcome.projectKey,
+    taskId: outcome.task.id,
+    text: outcome.task.title,
+  }));
+  return [...decisions, ...done];
+}
+
 export interface Outcome {
   readonly projectKey: string;
   readonly task: DashboardTask;

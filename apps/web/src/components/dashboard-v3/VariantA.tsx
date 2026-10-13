@@ -1,7 +1,7 @@
 import { useDashboardUi } from "./context";
 import { formatClock, outcomesSince, rollup, topLevelProjects } from "./dashboard.logic";
 import { DecisionList } from "./decisions";
-import { BarLegend, OutcomeRow, SectionHeading, UnknownValue } from "./parts";
+import { BarLegend, OutcomeRow, SectionHeading, SectionMarker, UnknownValue } from "./parts";
 import { ProjectGroup, ReleaseLines, UtilityGroup } from "./plan";
 
 /** "last hour 13 steps · 2 stalled · 1 replanned": the Plan's totals, only from what was measured. */
@@ -85,33 +85,41 @@ export function VariantA() {
   return (
     <div className="grid grid-cols-1 gap-x-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
       <div className="min-w-0">
-        {data.releases.length > 0 ? (
-          <>
-            <SectionHeading title={root ? "Release" : "Releases"} />
-            <ReleaseLines />
-          </>
-        ) : null}
-        <SectionHeading
-          title="Plan"
-          right={<BarLegend gainedLabel="last hour" byLabel={`by ${by}`} />}
-        >
-          <PlanTotals />
-        </SectionHeading>
-        {groups.length === 0 && utilities.length === 0 ? (
-          <div className="py-1 text-muted-foreground/80">No open work</div>
-        ) : null}
-        {groups.map((scoped) => (
-          <ProjectGroup key={scoped.key} scoped={scoped} all={data.projects} showName={!root} />
-        ))}
+        <SectionMarker name="releases" hidden={data.releases.length === 0}>
+          {data.releases.length > 0 ? (
+            <>
+              <SectionHeading title={root ? "Release" : "Releases"} />
+              <ReleaseLines />
+            </>
+          ) : null}
+        </SectionMarker>
+        <SectionMarker name="plan">
+          <SectionHeading
+            title="Plan"
+            right={<BarLegend gainedLabel="last hour" byLabel={`by ${by}`} />}
+          >
+            <PlanTotals />
+          </SectionHeading>
+          {groups.length === 0 && utilities.length === 0 ? (
+            <div className="py-1 text-muted-foreground/80">No open work</div>
+          ) : null}
+          {groups.map((scoped) => (
+            <ProjectGroup key={scoped.key} scoped={scoped} all={data.projects} showName={!root} />
+          ))}
+        </SectionMarker>
         {root ? null : <UtilityGroup utilities={utilities} all={data.projects} />}
       </div>
       <aside className="min-w-0 lg:sticky lg:top-2">
-        <SectionHeading title="Decisions">
-          <b className="font-medium text-foreground">{decisions.length}</b> open
-        </SectionHeading>
-        <DecisionList />
-        <DoneHeading />
-        <OutcomeList limit={8} />
+        <SectionMarker name="decisions">
+          <SectionHeading title="Decisions">
+            <b className="font-medium text-foreground">{decisions.length}</b> open
+          </SectionHeading>
+          <DecisionList />
+        </SectionMarker>
+        <SectionMarker name="outcomes">
+          <DoneHeading />
+          <OutcomeList limit={8} />
+        </SectionMarker>
       </aside>
     </div>
   );
