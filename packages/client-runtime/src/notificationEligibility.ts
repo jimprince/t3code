@@ -1,3 +1,4 @@
+import { isNoChangeReply } from "@t3tools/shared/completionOutput";
 import * as DateTime from "effect/DateTime";
 import { readMessageOrigin } from "@t3tools/shared/messageOrigin";
 import type { OrchestrationV2ThreadShell, ThreadNotificationEvent } from "@t3tools/contracts";
@@ -186,6 +187,7 @@ export function groupedNotificationTitle(events: ReadonlyArray<ThreadNotificatio
 export function notificationDispositionForReply(
   text: string | null | undefined,
 ): "quiet" | "attention" | null {
+  if (isNoChangeReply(text)) return "quiet";
   const match = /(?:^|\n)T3_NOTIFY:\s*(quiet|attention)\s*$/.exec(text?.trim() ?? "");
   return match ? (match[1] as "quiet" | "attention") : null;
 }
