@@ -249,3 +249,64 @@ describe("filtering", () => {
     ).toBe(true);
   });
 });
+
+describe("pinned checks in the list", () => {
+  const pin = (...keys: string[]) =>
+    buildHarnessChecks(
+      [
+        snapshot([
+          routine({
+            key: "env:automation:failing",
+            name: "Release canary",
+            state: "failing",
+            history: [run({ outcome: "failed" })],
+          }),
+          notShownFeed("env:feed:canary-probes", "Canary probes: not shown yet"),
+          routine({
+            key: "env:automation:orphan",
+            name: "Orphan reminder",
+            purpose: "unclassified",
+          }),
+          routine({
+            key: "env:automation:audit",
+            name: "Audit auditor (6 h)",
+            history: [],
+            lastRun: null,
+          }),
+        ]),
+      ].map((snap) => ({ ...snap, pinnedCheckKeys: keys })),
+      NOW,
+      ZONE,
+    );
+
+  it("leads the list above a failing check, and a pinned feed row or orphan is not folded away", () => {
+    const list = buildHarnessChecksList(
+      pin("env:automation:audit", "env:feed:canary-probes", "env:automation:orphan"),
+      "",
+    );
+    // Pinned rows lead in their usual order: not run yet, on time, not reporting.
+    expect(list.checks.map((check) => check.name).slice(0, 3)).toEqual([
+      "Audit auditor (6 h)",
+      "Orphan reminder",
+      "Canary probes: not shown yet",
+    ]);
+    expect(list.checks[0]?.name).not.toBe("Release canary");
+    expect(list.feeds).toBeNull();
+    expect(list.unclassified).toEqual([]);
+  });
+
+  it("still filters a pinned check by the search box", () => {
+    const checks = pin("env:automation:audit");
+    expect(buildHarnessChecksList(checks, "audit").checks.map((check) => check.name)).toEqual([
+      "Audit auditor (6 h)",
+    ]);
+    expect(buildHarnessChecksList(checks, "release").checks.map((check) => check.name)).toEqual([
+      "Release canary",
+    ]);
+  });
+
+  it("returns the feed row to its group when it is unpinned", () => {
+    const list = buildHarnessChecksList(pin(), "");
+    expect(list.feeds?.checks.map((check) => check.name)).toEqual(["Canary probes: not shown yet"]);
+  });
+});
