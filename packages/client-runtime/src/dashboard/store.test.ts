@@ -1,6 +1,12 @@
-import { describe, expect } from "vite-plus/test";
+import { describe, expect, vi } from "vite-plus/test";
 import { it } from "@effect/vitest";
-import { EnvironmentId, ThreadId, WS_METHODS, type ServerConfig } from "@t3tools/contracts";
+import {
+  ProjectDashboardError,
+  EnvironmentId,
+  ThreadId,
+  WS_METHODS,
+  type ServerConfig,
+} from "@t3tools/contracts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -106,9 +112,13 @@ describe("dashboard subscription lifetime", () => {
       const registry = AtomRegistry.make();
       const configAtom = Atom.make(config(true));
       const shellAtom = Atom.make(null);
+      let shellReads = 0;
       const dashboard = createDashboardAtoms(runtime, {
         config: () => configAtom,
-        shell: () => shellAtom,
+        shell: () => {
+          shellReads++;
+          return shellAtom;
+        },
       });
       const atom = dashboard.snapshot(environmentId);
       const unsubscribe = registry.subscribe(
@@ -119,6 +129,7 @@ describe("dashboard subscription lifetime", () => {
         { immediate: true },
       );
       yield* Deferred.await(received);
+      expect(shellReads).toBe(0);
       unsubscribe();
       yield* Deferred.await(closed);
       expect(registry.get(atom).snapshot?.revision).toBe(7);
@@ -132,11 +143,24 @@ it.effect("an older VM publishes a live dashboard while its tracker RPC is still
     const root = ThreadId.make("vm-head");
     const received = yield* Deferred.make<void>();
     const trackerStarted = yield* Deferred.make<void>();
+    let trackerReads = 0;
+    let metadataReads = 0;
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const client = {
       "fork.threads.metadata.list": () =>
-        Effect.succeed([{ threadId: root, parentThreadId: null, subproject: "on" }]),
+        Effect.sync(() => {
+          metadataReads++;
+          return [{ threadId: root, parentThreadId: null, subproject: "on" }];
+        }),
+      [WS_METHODS.projectDashboardGet]: () =>
+        Effect.fail(new ProjectDashboardError({ message: "Unsupported" })),
       [WS_METHODS.projectIssuesList]: () =>
-        Deferred.succeed(trackerStarted, undefined).pipe(Effect.andThen(Effect.never)),
+        Effect.sync(() => {
+          trackerReads++;
+        }).pipe(
+          Effect.andThen(Deferred.succeed(trackerStarted, undefined)),
+          Effect.andThen(Effect.never),
+        ),
       [WS_METHODS.projectRoadmapGet]: () =>
         Effect.succeed({ tracker: null, versions: [], items: [] }),
       [WS_METHODS.projectRequestsPendingAsks]: () => Effect.succeed({ asks: [] }),
@@ -217,9 +241,13 @@ it.effect("an older VM publishes a live dashboard while its tracker RPC is still
       });
       expect(value.snapshot?.projects[0]?.title).toBe("T3 Orchestrator");
       expect(value.snapshot?.releases[0]?.installedVersion).toBe("fork.12");
+      yield* Effect.promise(() => vi.advanceTimersByTimeAsync(5 * 60_000 + 1));
+      expect(trackerReads).toBe(1);
+      expect(metadataReads).toBe(1);
     } finally {
       unsubscribe();
       registry.dispose();
+      vi.useRealTimers();
     }
   }),
 );
