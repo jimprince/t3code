@@ -1,7 +1,6 @@
 Bottom: 79c78dcddc72192a05ebeb47ef2aa5f502837e78
-Top:    7c7e4507f18afcb67c38d3a58105b9b319d900ee
+Top:    515dc22d20ca5e75093ed0b81936eaa2a1a11a41
 Author: brad <bradprin@live.com>
-Date:   2026-10-13 04:37:39 +0000
+Date:   2026-10-13 09:20:51 +0000
 
-feat(fork): operate worker threads from the t3-thread CLI
-
+feat(threads): add operator CLI and subscription workflows
