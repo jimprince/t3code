@@ -288,6 +288,10 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
     "thread-send",
   ),
   t3_thread_forward_prepare: tool(["Read", "Reading", "Read", "a portable message"], "thread-read"),
+  t3_thread_resume_from_plan: tool(
+    ["Resume from plan", "Resuming from plan", "Requested plan recovery for", "this thread"],
+    "thread-fork",
+  ),
   t3_thread_fork: tool(["Fork", "Forking", "Requested a fork of", "this thread"], "thread-fork"),
   t3_thread_merge_back: tool(
     ["Merge", "Merging", "Requested a merge of", "thread context"],

@@ -1,3 +1,4 @@
+import { ThreadResumeService } from "../orchestration-v2/ThreadResumeService.ts";
 import { McpSchema, McpServer } from "effect/ai";
 import * as McpHttpServer from "../mcp/McpHttpServer.ts";
 import * as McpInvocationContext from "../mcp/McpInvocationContext.ts";
@@ -92,6 +93,7 @@ const mcpLayer = McpHttpServer.layerThreadToolkit.pipe(
     Layer.mock(ProviderRegistry.ProviderRegistry)({ getProviders: Effect.succeed([]) }),
   ),
   Layer.provide(Layer.mock(ThreadSearch.ThreadSearch)({})),
+  Layer.provide(Layer.mock(ThreadResumeService)({})),
   Layer.provide(Layer.mock(ScheduledTaskService.ScheduledTaskService)({})),
   Layer.provide(NodeServices.layer),
 );
