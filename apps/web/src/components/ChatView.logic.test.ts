@@ -1,5 +1,6 @@
 import { findRecordedWorktreeSetup, resolveVisibleWorktreeSetup } from "./ChatView.logic";
 import {
+  chatViewOwnsEvent,
   recallCheckoutIsRepo,
   rememberCheckoutIsRepo,
   shouldShowTimelineMinimap,
@@ -101,6 +102,41 @@ describe("shouldShowTimelineMinimap", () => {
     expect(shouldShowTimelineMinimap("full")).toBe(true);
     expect(shouldShowTimelineMinimap("project-request")).toBe(true);
     expect(shouldShowTimelineMinimap("project-panel")).toBe(false);
+  });
+});
+
+describe("chatViewOwnsEvent", () => {
+  const pageRoot = { name: "page" };
+  const trayRoot = { name: "tray" };
+  // A target whose closest ChatView root is `root` (null: outside every ChatView).
+  const targetIn = (root: object | null) => ({ closest: () => root }) as unknown as EventTarget;
+
+  it("lets the full page view keep events from the page, its own root and bodyless targets", () => {
+    for (const target of [targetIn(null), targetIn(pageRoot), null]) {
+      expect(chatViewOwnsEvent({ presentation: "full", root: pageRoot, target })).toBe(true);
+    }
+  });
+
+  it("keeps the full page view out of events from inside a tray", () => {
+    expect(
+      chatViewOwnsEvent({ presentation: "full", root: pageRoot, target: targetIn(trayRoot) }),
+    ).toBe(false);
+  });
+
+  it("answers a tray only to events from inside its own root", () => {
+    expect(
+      chatViewOwnsEvent({ presentation: "tray", root: trayRoot, target: targetIn(trayRoot) }),
+    ).toBe(true);
+    expect(
+      chatViewOwnsEvent({ presentation: "tray", root: trayRoot, target: targetIn(null) }),
+    ).toBe(false);
+    expect(
+      chatViewOwnsEvent({ presentation: "tray", root: trayRoot, target: targetIn(pageRoot) }),
+    ).toBe(false);
+    expect(chatViewOwnsEvent({ presentation: "tray", root: trayRoot, target: null })).toBe(false);
+    expect(chatViewOwnsEvent({ presentation: "tray", root: null, target: targetIn(null) })).toBe(
+      false,
+    );
   });
 });
 
