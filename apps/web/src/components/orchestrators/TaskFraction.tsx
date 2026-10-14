@@ -55,23 +55,25 @@ export function TaskFraction({
 }
 
 /**
- * The one collapsed row that holds a project's settled subprojects: "Settled (2)", with a
- * warning count after it when any of them needs you or is blocked.
+ * The one collapsed row that holds a project's settled subprojects and subagents: "Settled (2)",
+ * with a warning count after it when any settled subproject needs you or is blocked.
  */
 export function SettledSubprojectsToggle({
   settled,
+  settledSubagents = 0,
   expanded,
   onToggle,
   className,
   style,
 }: {
   readonly settled: ReadonlyArray<OrchestratorSummary>;
+  readonly settledSubagents?: number;
   readonly expanded: boolean;
   readonly onToggle: () => void;
   readonly className?: string;
   readonly style?: CSSProperties;
 }) {
-  const group = settledGroupSummary(settled);
+  const group = settledGroupSummary(settled, settledSubagents);
   return (
     <button
       type="button"

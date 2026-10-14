@@ -1,6 +1,8 @@
 import {
   buildOrchestratorSummaries,
+  lastActivityAt,
   type OrchestratorSummary,
+  type SubagentRow,
 } from "@t3tools/client-runtime/state/orchestrators";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
@@ -95,9 +97,12 @@ import { resolveProjectTab, type ProjectTab } from "./projectTabs.logic";
 import { HEALTH_LABEL, isHealthStale, latestWorkChangeAt } from "./projectHealth.logic";
 import { deriveBlocked, type BlockedRow } from "./projectWork.logic";
 import { projectReturnState } from "./projectNavigation";
+import { threadPurposes } from "@t3tools/client-runtime/state/thread-purpose";
 import {
   projectKeyOf,
+  projectSubagentRows,
   projectTrail,
+  splitSettledSubagents,
   subprojectBlocked,
   subprojectIsActive,
   subprojectNeedsYou,
@@ -365,6 +370,82 @@ function ProjectSubprojects({ summary }: { readonly summary: OrchestratorSummary
         {settledOpen
           ? settled.map((sub) => <SubprojectTableRow key={projectKeyOf(sub)} sub={sub} />)
           : null}
+      </ul>
+    </ProjectSection>
+  );
+}
+
+/**
+ * The project's subagents, one row each: running and waiting first, then recent, with the settled
+ * ones behind the same collapsed "Settled (N)" row the subprojects use. A provider-native subagent
+ * is tagged read-only; a row opens the subagent's own thread and "Back to project" returns here.
+ */
+function ProjectSubagents({ summary }: { readonly summary: OrchestratorSummary }) {
+  const navigate = useNavigate();
+  const settledExpansion = useSettledExpansion();
+  const threads = useOrchestratorThreadShells();
+  const purposes = useMemo(() => threadPurposes(threads), [threads]);
+  const rows = projectSubagentRows(summary, purposes);
+  if (rows.length === 0) return null;
+  const { active, settled } = splitSettledSubagents(rows);
+  const settledOpen = settledExpansion.expanded.includes(projectKeyOf(summary));
+  const renderRow = (row: SubagentRow) => {
+    const { thread } = row;
+    const state = row.needsYou ? "Needs you" : row.working ? "Working" : null;
+    return (
+      <ClickableRow
+        key={`${thread.environmentId}:${thread.id}`}
+        label={`Open ${thread.title} subagent`}
+        onOpen={() =>
+          void navigate({
+            to: "/$environmentId/$threadId",
+            params: buildThreadRouteParams(scopeThreadRef(thread.environmentId, thread.id)),
+            state: projectReturnState({
+              environmentId: summary.root.environmentId,
+              threadId: summary.root.id,
+            }),
+          })
+        }
+        className="items-baseline gap-x-3 py-1.5 text-sm"
+      >
+        <span className="min-w-0 flex-1 truncate font-medium">{thread.title}</span>
+        {row.parentKey !== projectKeyOf(summary) && row.parentTitle !== null ? (
+          <span className="hidden min-w-0 max-w-48 truncate text-xs text-muted-foreground sm:block">
+            via {row.parentTitle}
+          </span>
+        ) : null}
+        {row.readOnly ? (
+          <span className="shrink-0 text-xs text-muted-foreground">read-only</span>
+        ) : null}
+        <span
+          className={`w-20 shrink-0 text-right text-xs ${
+            row.needsYou ? "text-warning-foreground" : "text-muted-foreground"
+          }`}
+        >
+          {state}
+        </span>
+        <span className="w-20 shrink-0 text-right text-xs text-muted-foreground">
+          {formatRelativeTimeLabel(lastActivityAt(thread))}
+        </span>
+      </ClickableRow>
+    );
+  };
+  return (
+    <ProjectSection title="Subagents" count={active.length}>
+      <ul className="divide-y divide-border">
+        {active.map(renderRow)}
+        {settled.length > 0 ? (
+          <li>
+            <SettledSubprojectsToggle
+              settled={[]}
+              settledSubagents={settled.length}
+              expanded={settledOpen}
+              onToggle={() => settledExpansion.toggle(projectKeyOf(summary))}
+              className="py-1.5 text-xs text-muted-foreground"
+            />
+          </li>
+        ) : null}
+        {settledOpen ? settled.map(renderRow) : null}
       </ul>
     </ProjectSection>
   );
@@ -985,6 +1066,9 @@ export function OrchestratorBoard({
                     <ProjectHealthLine summary={summary} />
                     {tab === "dashboard" && !planInLayout ? (
                       <ProjectSubprojects summary={summary} />
+                    ) : null}
+                    {tab === "dashboard" && !planInLayout ? (
+                      <ProjectSubagents summary={summary} />
                     ) : null}
                     {tab === "dashboard" && !planInLayout ? (
                       <ProjectWorkstreams summary={summary} since={previousVisit} />
