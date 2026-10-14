@@ -5,7 +5,7 @@ purpose = "Ship fork desktop identity, flavors, code signing, isolated app data,
 retire_when = "Upstream or maintained shared tooling provides equivalent fork identity, signing, and update-channel handling."
 depends_on = ["fork-build-ci-compat"]
 roles = []
-note = "#214: Existing update-state IPC adds optional phase and byte counters; startUpdate runs the entire confirmed flow with existing retry errors. Reorganized 2026-09-06 from fork-desktop-distribution. The packaged Linux portal identity fixture retains the fork desktop-entry name when upstream changes its own identity."
+note = "#214: Existing update-state IPC adds optional phase and byte counters; startUpdate runs the entire confirmed flow with existing retry errors. Reorganized 2026-09-06 from fork-desktop-distribution. The packaged Linux portal identity fixture retains the fork desktop-entry name when upstream changes its own identity. T3 Code (Dev) on the Mac is the t3-mac-dev kit's vp run dev:desktop app, not the packaged Fork Dev flavor; when it runs from the kit checkout, DevKitUpdates replaces electron-updater with the kit: Check is dev-launch.sh --status, Update is dev-launch.sh, which kicks the kit's update LaunchAgent."
 [[decision]]
 id = "v2-port-2689"
 date = "2026-10-05"
