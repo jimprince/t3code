@@ -40,14 +40,11 @@ export interface DashboardNotice {
 export type ReportNotice = (notice: Omit<DashboardNotice, "id">) => void;
 
 /** "1st", "2nd", "11th": a position said aloud. */
-export function ordinal(n: number): string {
+function ordinal(n: number): string {
   const rest = n % 100;
   if (rest >= 11 && rest <= 13) return `${n}th`;
   return `${n}${(["th", "st", "nd", "rd"] as const)[n % 10 > 3 ? 0 : n % 10]}`;
 }
-
-/** The workstream a snapshot task belongs to as an epic number; null for the non-epic group. */
-export const epicNumber = (task: Pick<DashboardTask, "partOf">) => task.partOf ?? null;
 
 /** What an order write needs to know of an item: a task, or an epic when a workstream moves. */
 export interface Subject {
@@ -116,7 +113,7 @@ export interface OrderActions {
 }
 
 /** Whether a project has a Gitea tracker repository to file into. */
-export const hasTracker = (scoped: ScopedProject) =>
+const hasTracker = (scoped: ScopedProject) =>
   scoped.project.planSource === "tracker" ||
   scoped.project.sourceIds.some((id) => id.startsWith("gitea:"));
 
@@ -130,7 +127,7 @@ export function failureText(result: unknown): string {
 }
 
 /** A placement as the server takes it: references are issue numbers, never ranks. */
-export const toProjectPlace = (place: PlaceTarget): ProjectRequestPlace =>
+const toProjectPlace = (place: PlaceTarget): ProjectRequestPlace =>
   place.to === "before" || place.to === "after"
     ? { to: place.to, reference: String(numberOf({ id: place.id }) ?? "") }
     : { to: place.to };

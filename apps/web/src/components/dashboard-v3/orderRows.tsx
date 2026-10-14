@@ -63,7 +63,7 @@ const usePlanOrder = () => {
 };
 
 /** The workstream a placement lands in: an epic's number, or null for Other work. */
-export function destinationOf(entry: PlanWorkstreamEntry): PlanDestination {
+function destinationOf(entry: PlanWorkstreamEntry): PlanDestination {
   const epic = isEpicHeader(entry.workstream) ? issueNumber(entry.workstream.id) : null;
   return {
     key: entry.workstream.id,
