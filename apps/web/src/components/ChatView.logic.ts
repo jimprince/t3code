@@ -72,10 +72,37 @@ export const MAX_HIDDEN_MOUNTED_TERMINAL_THREADS = 10;
 
 export const ENVIRONMENT_RECONNECT_WARNING_GRACE_MS = 2_000;
 
-export function shouldShowTimelineMinimap(
-  presentation: "full" | "project-panel" | "project-request",
-): boolean {
-  return presentation !== "project-panel";
+/**
+ * "full" is the page thread view. "tray" is the Chief of Staff tray's trimmed conversation;
+ * "project-panel" and "project-request" are the project page's embedded conversations.
+ */
+export type ChatViewPresentation = "full" | "project-panel" | "project-request" | "tray";
+
+export function shouldShowTimelineMinimap(presentation: ChatViewPresentation): boolean {
+  return presentation !== "project-panel" && presentation !== "tray";
+}
+
+export const CHAT_VIEW_ROOT_ATTRIBUTE = "data-chat-view-root";
+
+/**
+ * Whether a window-level key or paste event is meant for this ChatView. Several ChatViews can be
+ * mounted at once (the page thread plus the Chief of Staff tray), and each registers global
+ * handlers. The full page view keeps handling events from anywhere outside another ChatView, so
+ * it behaves the same with a tray open but unfocused; any other presentation answers only to
+ * events from inside its own root.
+ */
+export function chatViewOwnsEvent(input: {
+  readonly presentation: ChatViewPresentation;
+  readonly root: unknown;
+  readonly target: EventTarget | null;
+}): boolean {
+  const closest = (input.target as { closest?: (selector: string) => unknown } | null)?.closest;
+  const targetRoot =
+    typeof closest === "function"
+      ? closest.call(input.target, `[${CHAT_VIEW_ROOT_ATTRIBUTE}]`)
+      : null;
+  if (input.presentation === "full") return targetRoot === null || targetRoot === input.root;
+  return input.root !== null && targetRoot === input.root;
 }
 
 export function agentControlledBrowserCloseConfirmation(
