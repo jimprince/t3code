@@ -1,6 +1,6 @@
-Bottom: cba68ecebf4fdcddd0e663545c8d7ee1328bcd97
-Top:    6f29faf366e866196164b36a70bd549c6f44a5a2
+Bottom: 39903f631e8dfae3cd7d99f5e120e0ec7f72cc5a
+Top:    640a199ce6cc49b7ac08981175901266446c8ea1
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 12:04:14 +0000
+Date:   2026-10-14 12:10:35 +0000
 
 feat(harness): classify routines explicitly
