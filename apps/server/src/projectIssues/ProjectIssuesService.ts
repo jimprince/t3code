@@ -229,11 +229,12 @@ export const make = Effect.gen(function* () {
               Effect.mapError(() => fail("Could not read thread parents.")),
             )).map((row) => [row.threadId, row]),
           );
-          return [...snapshot.threads, ...snapshot.archivedThreads].map((thread) => ({
+          const threads = [...snapshot.threads, ...snapshot.archivedThreads].map((thread) => ({
             ...thread,
             parentThreadId: parents.get(thread.id)?.parentThreadId ?? null,
             subproject: parents.get(thread.id)?.subproject ?? "auto",
           }));
+          return threads;
         }));
       const tree = collectThreadTree(threads, rootThreadId);
       if (tree.length === 0) return yield* fail(`Thread '${rootThreadId}' was not found.`);
