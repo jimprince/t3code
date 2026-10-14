@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { DateTime } from "effect";
 import { EnvironmentId, ThreadId, RunId, ProviderInstanceId, TurnId } from "@t3tools/contracts";
 
+import { sortActiveThreadsByOrderKey } from "./threadSort.ts";
 import type { EnvironmentProject } from "./models.ts";
 import { presentThreadShell } from "./models.ts";
 import { v2ThreadShell } from "./orchestrationV2TestFixtures.ts";
@@ -65,6 +66,8 @@ const thread = (
   const { session, latestTurn, agentPanelSummary, ...fields } = overrides;
   const base = presentThreadShell(EnvironmentId.make("env-1"), {
     ...v2ThreadShell,
+    createdBy: "agent",
+    creationSource: "mcp",
     id: ThreadId.make(id),
     title: id,
     projectId: "project-a" as EnvironmentThreadShell["projectId"],
@@ -860,4 +863,127 @@ it("joins imported scope and remote parents from the sidecar, excluding executio
       ],
     ),
   ).toEqual([]);
+});
+
+describe("user-created roots in Threads", () => {
+  const userRoot = (id: string, fields: Overrides = {}) => {
+    const root = thread(id, null, fields);
+    return {
+      ...root,
+      source: { ...root.source, createdBy: "user" as const, creationSource: "web" as const },
+    };
+  };
+  const delegatedChild = (id: string, parent: string) => {
+    const child = thread(id, parent, {
+      settledOverride: "settled",
+      settledAt: "2026-10-13T12:00:00.000Z",
+    });
+    const lineage = {
+      rootThreadId: ThreadId.make(parent),
+      parentThreadId: ThreadId.make(parent),
+      relationshipToParent: "subagent" as const,
+    };
+    return { ...child, lineage, source: { ...child.source, lineage } };
+  };
+  const visibleIds = (all: EnvironmentThreadShell[]) =>
+    threadsVisibleInThreadsMode(all, true).map((item) => item.id);
+
+  it("keeps both Mac user roots with settled delegates in Threads and Projects, hiding their descendants", () => {
+    const creation = userRoot("creation", { title: "Agent Creation and Communication Options" });
+    const review = userRoot("review", { title: "Review Agent Creation and Communication" });
+    const all = [
+      creation,
+      delegatedChild("creation-child", "creation"),
+      review,
+      delegatedChild("review-child", "review"),
+      thread("grandchild", "review-child"),
+    ];
+    expect(visibleIds(all)).toEqual(["creation", "review"]);
+    expect(
+      buildOrchestratorSummaries(all, [project("project-a")]).map((item) => item.root.id),
+    ).toEqual(["creation", "review"]);
+  });
+
+  it.each(["web", "mobile"] as const)("keeps a user root created from %s", (creationSource) => {
+    const root = userRoot("root");
+    expect(
+      visibleIds([
+        { ...root, source: { ...root.source, creationSource } },
+        delegatedChild("child", "root"),
+      ]),
+    ).toEqual(["root"]);
+  });
+
+  it.each(["mcp", "provider", "server"] as const)(
+    "keeps non-UI roots from %s out of Threads",
+    (creationSource) => {
+      const root = userRoot("root");
+      expect(
+        visibleIds([
+          { ...root, source: { ...root.source, creationSource } },
+          delegatedChild("child", "root"),
+        ]),
+      ).toEqual([]);
+    },
+  );
+
+  it("falls back to the existing exclusion when origin metadata is absent", () => {
+    const root = userRoot("legacy");
+    const legacy = { ...root, source: { ...root.source } };
+    Reflect.deleteProperty(legacy.source, "createdBy");
+    Reflect.deleteProperty(legacy.source, "creationSource");
+    expect(visibleIds([legacy, delegatedChild("child", "legacy")])).toEqual([]);
+  });
+
+  it("keeps agent roots out even with a UI creation source", () => {
+    const root = userRoot("root");
+    expect(
+      visibleIds([
+        { ...root, source: { ...root.source, createdBy: "agent" } },
+        delegatedChild("child", "root"),
+      ]),
+    ).toEqual([]);
+  });
+
+  it.each([true, false])(
+    "keeps explicit user projects out of Threads (has children: %s)",
+    (hasChildren) => {
+      const root = userRoot("root", { subproject: "on" });
+      expect(visibleIds([root, ...(hasChildren ? [delegatedChild("child", "root")] : [])])).toEqual(
+        [],
+      );
+    },
+  );
+
+  it("keeps harness-purpose user roots and their inherited-purpose children out", () => {
+    const root = userRoot("root", { purpose: "harness" });
+    expect(visibleIds([root, delegatedChild("child", "root")])).toEqual([]);
+  });
+
+  it("does not turn archived children into projects", () => {
+    const user = userRoot("user");
+    const agent = thread("agent", null);
+    const all = [
+      user,
+      agent,
+      { ...delegatedChild("user-child", "user"), archivedAt: "2026-10-13T13:00:00.000Z" },
+      { ...delegatedChild("agent-child", "agent"), archivedAt: "2026-10-13T13:00:00.000Z" },
+    ];
+    expect(visibleIds(all)).toEqual(all.map((item) => item.id));
+    expect(buildOrchestratorSummaries(all, [])).toEqual([]);
+  });
+
+  it("keeps childless user roots and sorts the newest user root above unkeyed active threads", () => {
+    const older = userRoot("older");
+    const newest = userRoot("newest", { createdAt: "2026-10-13T12:00:00.000Z" });
+    expect(visibleIds([older, newest])).toEqual(["older", "newest"]);
+    const visible = threadsVisibleInThreadsMode(
+      [older, newest, delegatedChild("child", "newest")],
+      true,
+    );
+    expect(sortActiveThreadsByOrderKey(visible).map((item) => item.id)).toEqual([
+      "newest",
+      "older",
+    ]);
+  });
 });
