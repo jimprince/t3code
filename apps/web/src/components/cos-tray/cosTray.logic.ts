@@ -1,4 +1,4 @@
-import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { selectScopedChiefOfStaffThread } from "@t3tools/client-runtime/chief-of-staff";
 
 /** open: full tray; minimized: a rail on desktop, a peek bar on a phone; closed: nothing on screen. */
 export type CosTrayMode = "open" | "minimized" | "closed";
@@ -34,38 +34,5 @@ export function formatLastReply(iso: string, now: Date = new Date()): string {
   return at.toDateString() === now.toDateString() ? time : `${weekdayFormat.format(at)} ${time}`;
 }
 
-interface CandidateThread {
-  readonly environmentId: EnvironmentId;
-  readonly id: ThreadId;
-  readonly title: string;
-  readonly archivedAt: string | null;
-}
-
-/** Only the exact front desk titles match, so Chief of Staff Operations is never picked by name. */
-const FRONT_DESK_TITLE = /^(chief[ -]of[ -]staff|front desk)$/i;
-
-/**
- * The front desk thread: the environment preference when one names a thread (not found means no
- * tray, never a guess), else the primary environment's thread with a front desk title.
- */
-export function selectChiefOfStaffThread(input: {
-  readonly threads: ReadonlyArray<CandidateThread>;
-  readonly preferred: { readonly environmentId: EnvironmentId; readonly threadId: ThreadId } | null;
-  readonly primaryEnvironmentId: EnvironmentId | null;
-}): { readonly environmentId: EnvironmentId; readonly threadId: ThreadId } | null {
-  const live = input.threads.filter((thread) => thread.archivedAt === null);
-  const { preferred } = input;
-  if (preferred) {
-    const found = live.find(
-      (thread) =>
-        thread.environmentId === preferred.environmentId && thread.id === preferred.threadId,
-    );
-    return found ? { environmentId: found.environmentId, threadId: found.id } : null;
-  }
-  const found = live.find(
-    (thread) =>
-      thread.environmentId === input.primaryEnvironmentId &&
-      FRONT_DESK_TITLE.test(thread.title.trim()),
-  );
-  return found ? { environmentId: found.environmentId, threadId: found.id } : null;
-}
+// Compatibility export for existing tray consumers; selection is shared with every client.
+export const selectChiefOfStaffThread = selectScopedChiefOfStaffThread;
