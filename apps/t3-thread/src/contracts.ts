@@ -1,3 +1,4 @@
+import { ThreadResumeRpc, ThreadResumePreviewRpc } from "@t3tools/contracts";
 import {
   HarnessSnapshotRpc,
   HarnessRoutineKindSetRpc,
@@ -269,6 +270,8 @@ const WsAutomationScriptsRunRpc = Rpc.make("automationScripts.run", {
 });
 
 export const WsRpcGroup = RpcGroup.make(
+  ThreadResumeRpc,
+  ThreadResumePreviewRpc,
   HarnessSnapshotRpc,
   HarnessRoutineKindSetRpc,
   Rpc.make(WS_METHODS.scheduledTasksList, {

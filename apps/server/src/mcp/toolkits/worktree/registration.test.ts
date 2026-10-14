@@ -1,3 +1,4 @@
+import { ThreadResumeService } from "../../../orchestration-v2/ThreadResumeService.ts";
 import { HarnessPinService } from "../../../harness/HarnessPinService.ts";
 import { RoutineKindService } from "../../../harness/RoutineKindService.ts";
 import { HarnessReadService } from "../../../harness/HarnessReadService.ts";
@@ -65,6 +66,7 @@ const layerStubServices = Layer.mergeAll(
   Layer.mock(SourceControlRepositoryService.SourceControlRepositoryService)({}),
   Layer.mock(ThreadLaunchService.ThreadLaunchService)({}),
   Layer.mock(ThreadSearch.ThreadSearch)({}),
+  Layer.mock(ThreadResumeService)({}),
 );
 
 const ToolsListPayload = Schema.fromJsonString(
