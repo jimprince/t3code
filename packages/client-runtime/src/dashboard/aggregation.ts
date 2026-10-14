@@ -1,3 +1,4 @@
+import { isThreadResumable } from "../threadResume.ts";
 import type {
   DashboardAttention,
   DashboardProject,
@@ -62,7 +63,17 @@ type DashboardShell = Pick<
   OrchestrationV2ThreadShell,
   "id" | "title" | "archivedAt" | "todoProgress" | "updatedAt"
 > &
-  Partial<Pick<OrchestrationV2ThreadShell, "settledOverride">>;
+  Partial<Pick<OrchestrationV2ThreadShell, "settledOverride" | "status" | "planResumeState">>;
+/** A run is in flight: working or waiting on someone. */
+const IN_FLIGHT_RUN_STATUSES: ReadonlySet<string> = new Set([
+  "preparing",
+  "queued",
+  "starting",
+  "running",
+  "waiting",
+]);
+const isThreadInFlight = (thread: DashboardShell) =>
+  thread.status !== undefined && IN_FLIGHT_RUN_STATUSES.has(thread.status);
 /** Retired and explicitly settled heads no longer own dashboard work. */
 export const isDashboardThreadActive = (thread: DashboardShell) =>
   thread.archivedAt === null &&
@@ -210,6 +221,8 @@ export function aggregate(input: {
       .filter(([key]) => owners.get(key) === root.id)
       .map(([, issue]) => issue);
     const attention: DashboardAttention[] = [];
+    // Threads whose steps an issue row already counts as its own progress.
+    const progressSources = new Set<ThreadId>();
     const tasks: DashboardTask[] = issues
       .filter(
         (i) =>
@@ -242,6 +255,7 @@ export function aggregate(input: {
                 confirmedAt: DateTime.formatIso(linked.updatedAt),
               }
             : null;
+        if (!issue.epic && linked?.todoProgress) progressSources.add(linked.id);
         const attentionIds: string[] = [];
         if (
           issue.status !== "done" &&
@@ -310,17 +324,25 @@ export function aggregate(input: {
           progress,
           movement: movement(id, progress, history, input.now),
           forecast: null,
-          nextStep: null,
+          nextStep: linked?.todoProgress?.currentStep?.text ?? null,
           attentionIds,
         };
       });
-    // A to-do list is a real plan, but a thread without a plan is not executive progress.
+    // A to-do list is a real plan, but a thread without a plan is not executive progress. Only
+    // threads still at work, or stopped with steps left (resumable), keep a row; finished ones drop.
     for (const thread of tree) {
+      const resumable = isThreadResumable(thread);
       if (
         localOwners.get(thread.id) !== root.id ||
         !thread.todoProgress ||
         thread.todoProgress.total === 0 ||
-        issues.some((i) => i.linkedThreadIds.includes(thread.id))
+        thread.todoProgress.completed >= thread.todoProgress.total ||
+        !(isThreadInFlight(thread) || resumable) ||
+        // The thread an issue row shows is covered by it. Another linked thread keeps its own row
+        // only when it is stopped and resumable (say a dead worker beside the head the row resolves
+        // to); an in-flight one is covered by its issue and must not add a second row.
+        tasks.some((task) => task.threadId === thread.id) ||
+        (!resumable && issues.some((i) => i.linkedThreadIds.includes(thread.id)))
       )
         continue;
       const id = `thread-plan:${thread.id}`;
@@ -339,11 +361,17 @@ export function aggregate(input: {
         url: null,
         threadId: thread.id,
         workstreamId: `project:${root.id}:work`,
-        status: progress.done === progress.total ? "done" : "working",
-        progress,
-        movement: movement(id, progress, history, input.now),
+        // A stopped thread is neither working nor stalled-by-idle: "blocked" keeps it out of both.
+        status: resumable ? "blocked" : "working",
+        // An issue row that borrows this thread's steps already counts them; the dashboard totals
+        // sum task progress, so this row shows none.
+        progress: progressSources.has(thread.id) ? null : progress,
+        // Stopped work is frozen: no gain or pace forecast from before it stopped.
+        movement: resumable
+          ? movement(id, null, history, input.now)
+          : movement(id, progress, history, input.now),
         forecast: null,
-        nextStep: null,
+        nextStep: thread.todoProgress.currentStep?.text ?? null,
         attentionIds: [],
       });
     }
