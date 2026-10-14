@@ -9,7 +9,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import { resolveStorage } from "../../lib/storage";
 import { toggleCosTray, type CosTrayMode } from "./cosTray.logic";
 
-export const COS_TRAY_STORAGE_KEY = "t3code:cos-tray";
+const COS_TRAY_STORAGE_KEY = "t3code:cos-tray";
 
 interface CosTrayState {
   readonly mode: CosTrayMode;
