@@ -1,6 +1,6 @@
-Bottom: 263aef0737308ba12d0de2d872359e263615d1ef
-Top:    d4539d8dd2b67a1edaeeb2c722dd1b25325c4889
+Bottom: dfd985db16017c224713c4291232a5e2d16d1480
+Top:    f2ed4c425fe5c7fce4ea67c25a88915a9457c7f1
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 16:22:48 +0000
+Date:   2026-10-14 18:02:46 +0000
 
 feat(server): expose per-caller shell build counters

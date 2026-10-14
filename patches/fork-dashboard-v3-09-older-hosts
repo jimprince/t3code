@@ -1,6 +1,6 @@
-Bottom: 50e837a08f747c478f200f23b555a7c0beb614e2
-Top:    731ff8eb8d7da7abd52c111bd100f271f1fe1d61
+Bottom: b227612e55441a1e94819cfa82516e934fcd8c8b
+Top:    8bc56880c7281962098117bba5f573a7e32f779f
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 16:22:48 +0000
+Date:   2026-10-14 18:02:46 +0000
 
 fix(dashboard): compose older hosts and correct live data snapshots

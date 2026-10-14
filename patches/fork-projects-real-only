@@ -1,6 +1,6 @@
-Bottom: 26d0e29cf509d3f97cca25d5c8bd83e313f1d6fc
-Top:    7b650f04ea805548eac72c2e55ac1feaec22493d
+Bottom: 7d134a5a4ed47b45c175b3fe02ee30e05c12bda0
+Top:    22666d3bfbbf5f9c0333f9859bab692414caacfd
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 16:22:48 +0000
+Date:   2026-10-14 18:02:46 +0000
 
 fix(web): keep the Projects sidebar to real, unfinished projects

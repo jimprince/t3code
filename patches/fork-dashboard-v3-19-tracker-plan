@@ -1,6 +1,6 @@
-Bottom: 55bc460012737306a43f7eb43ee1fc64a86f29b5
-Top:    c8e5f570b9527ec835d81f28343d3d73dad3dff2
+Bottom: ba855bfae74ce7ff92a74d988385b09fe29ee985
+Top:    46501f6eadd52a31c9308f90d8ff7c4aa7a61427
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 16:22:48 +0000
+Date:   2026-10-14 18:02:46 +0000
 
 feat(dashboard): derive Plan from tracker (#297)
