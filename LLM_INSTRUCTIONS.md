@@ -83,6 +83,17 @@ retry blocked network access, run `stg init`, commit, or fabricate refs. Deliver
 a finished working tree plus exact changed paths, real test commands/results,
 and the owning-patch/new-concern recommendation. Dependencies are preinstalled.
 
+### Finish work tested in Dev
+
+Accepted fork changes include integration into canonical `main` through the
+existing T3 Orchestrator; Brad does not need to ask for integration again.
+Running locally or on `dev` (including a legacy live preview) is an intermediate
+result. Unless Brad explicitly limits the task to preview/dev-only or holds
+integration, follow the [Dev-to-main handoff](./docs/operations/fork-maintenance.md#dev-to-main-handoff)
+with the exact candidate and verification evidence. Confirm the existing owner
+accepts responsibility for integration, and keep publication pending until
+verified on remote `main`. This does not bypass owner, CI, or release gates.
+
 ## Release and upstream-sync routing
 
 A push to `main` is a release: `fork-push-nightly.yml` publishes it, and every
