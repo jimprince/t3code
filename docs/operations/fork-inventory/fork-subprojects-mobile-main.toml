@@ -18,3 +18,9 @@ id = "catchup-r29-published-mobile-name"
 date = "2026-10-13"
 decided = "rename+merge"
 rationale = "Keep main's published fork-subprojects-mobile-main concern name for r28's adapted fork-subprojects-mobile implementation; merge main's later shared helper changes into this single concern. No duplicate mobile implementation or concern."
+
+[[decision]]
+id = "subagents-under-projects-20261013"
+date = "2026-10-13"
+decided = "refresh-existing-concern"
+rationale = "Mobile Projects and Harness are built from every live shell, provider-native subagents included, while Threads keeps the navigation list that drops them; the card then counts subagent work as web does and MobileSubprojectRows renders the same subagent rows and Settled shelf. A provider-native subagent thread's bar gains Back to project beside Open parent when the project is further up than the parent. Rendering only; the rules are client-runtime's shared ones in fork-subprojects-ui."
