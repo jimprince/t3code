@@ -1,6 +1,6 @@
-Bottom: 9f856c1a998db4c8cebb736e9a89f5b5ff1b279b
-Top:    a8731d8c3c803a50682b5a676d7e65ae55bc62ed
+Bottom: 3f0dd10a2d1184ddfd50385072c2140b9f1a9b7f
+Top:    b702e3f7000e15be75c170484c31cfba4b698c36
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 11:42:25 +0000
+Date:   2026-10-14 11:46:36 +0000
 
 fix(web): Dashboard review round 1 (blocked wording, project Ask target, markers, Home entry points)
