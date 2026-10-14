@@ -128,7 +128,7 @@ export function DashboardView({
   const sinceLooked = useVisitBaseline(scopeKey, data, scope.kind === "home" || root !== null);
 
   const openTask = useCallback(
-    (target: ScopedProject, task: DashboardTask) => {
+    (target: ScopedProject, task: Pick<DashboardTask, "id" | "url" | "threadId">) => {
       const issue = parseIssueTaskId(task.id);
       if (issue && openTaskInPage) return openTaskInPage(issue);
       const summary = issue ? summaryFor(target) : null;
