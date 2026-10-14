@@ -1,4 +1,6 @@
-import type { OrchestratorSummary } from "./orchestrators.ts";
+import type { ThreadPurpose } from "@t3tools/contracts";
+import type { ScopedSupervisionMetadata } from "./forkNesting.ts";
+import type { OrchestratorSummary, SubagentRow } from "./orchestrators.ts";
 
 /**
  * Subproject rules the mobile Projects list renders, so what counts as top level, a rollup line
@@ -134,12 +136,50 @@ export function labelWithTaskProgress(label: string, summary: OrchestratorSummar
   return description === null ? label : `${label}, ${description}`;
 }
 
+/** A project's subagent rows split into the ones listed inline and the settled ones, order kept. */
+export function splitSettledSubagents(rows: ReadonlyArray<SubagentRow>): {
+  readonly active: ReadonlyArray<SubagentRow>;
+  readonly settled: ReadonlyArray<SubagentRow>;
+} {
+  return {
+    active: rows.filter((row) => !row.settled),
+    settled: rows.filter((row) => row.settled),
+  };
+}
+
 /**
- * What the collapsed Settled row says: how many subprojects it holds and, when any of them
- * needs you or is blocked, how many (attention beats settled, as in the Quiet bucket), so
- * that work is not hidden silently.
+ * The subagent rows a project card lists. One whose effective purpose is Harness while the card's
+ * is not belongs to the Harness tab, like any Harness root, so it is left out here; an unknown
+ * purpose stays where it always was.
  */
-export function settledGroupSummary(settled: ReadonlyArray<OrchestratorSummary>): {
+export function projectSubagentRows(
+  summary: OrchestratorSummary,
+  purposes: ReadonlyMap<string, ThreadPurpose | null>,
+): ReadonlyArray<SubagentRow> {
+  const cardHarness =
+    purposes.get(`${summary.root.environmentId}:${summary.root.id}`) === "harness";
+  return cardHarness
+    ? summary.subagentRows
+    : summary.subagentRows.filter(
+        (row) => purposes.get(`${row.thread.environmentId}:${row.thread.id}`) !== "harness",
+      );
+}
+
+/** "1 agent", "3 agents": the hint a folded project card keeps for the subagent rows it hides. Settled ones sit behind the Settled row and are not counted. */
+export function subagentCountLabel(rows: ReadonlyArray<SubagentRow>): string | null {
+  const count = splitSettledSubagents(rows).active.length;
+  return count === 0 ? null : `${count} ${count === 1 ? "agent" : "agents"}`;
+}
+
+/**
+ * What the collapsed Settled row says: how many settled subprojects and subagents it holds and,
+ * when any settled subproject needs you or is blocked, how many (attention beats settled, as in
+ * the Quiet bucket), so that work is not hidden silently.
+ */
+export function settledGroupSummary(
+  settled: ReadonlyArray<OrchestratorSummary>,
+  settledSubagents: number = 0,
+): {
   readonly label: string;
   readonly attention: boolean;
   /** The row's screen-reader name, without the Show/Hide verb. */
@@ -151,11 +191,18 @@ export function settledGroupSummary(settled: ReadonlyArray<OrchestratorSummary>)
     ...(needsYou > 0 ? [`${needsYou} need you`] : []),
     ...(blocked > 0 ? [`${blocked} blocked`] : []),
   ];
-  const noun = settled.length === 1 ? "subproject" : "subprojects";
+  const held = [
+    ...(settled.length > 0
+      ? [`${settled.length} settled ${settled.length === 1 ? "subproject" : "subprojects"}`]
+      : []),
+    ...(settledSubagents > 0
+      ? [`${settledSubagents} settled ${settledSubagents === 1 ? "subagent" : "subagents"}`]
+      : []),
+  ];
   return {
-    label: [`Settled (${settled.length})`, ...notes].join(" · "),
+    label: [`Settled (${settled.length + settledSubagents})`, ...notes].join(" · "),
     attention: notes.length > 0,
-    description: [`${settled.length} settled ${noun}`, ...notes].join(", "),
+    description: [held.join(", "), ...notes].join(", "),
   };
 }
 
@@ -165,6 +212,48 @@ export const ownTreeContains = (summary: OrchestratorSummary, threadKey: string 
   [summary.root, ...summary.descendants].some(
     (thread) => `${thread.environmentId}:${thread.id}` === threadKey,
   );
+
+/**
+ * The thread whose project page owns `start`: the nearest ancestor on the nesting sidecar that is
+ * top-level or a subproject, the same rule `buildOrchestratorSummaries` uses to place a worker.
+ * `lineageParentId` stands in for a start thread the sidecar has no row for yet (a fresh native
+ * subagent). Null when `start` has no parent, so a standalone thread or a project root gets no
+ * way back. Reads only the sidecar, so a thread view can ask without subscribing to every shell.
+ */
+export function owningProjectRoot(
+  metadata: ReadonlyArray<ScopedSupervisionMetadata>,
+  start: {
+    readonly environmentId: string;
+    readonly threadId: string;
+    readonly lineageParentId?: string | null;
+  },
+): { readonly environmentId: string; readonly threadId: string } | null {
+  const rows = new Map(metadata.map((row) => [`${row.environmentId}:${row.threadId}`, row]));
+  const parentOf = (environmentId: string, threadId: string, fallback: string | null) => {
+    const row = rows.get(`${environmentId}:${threadId}`);
+    if (row === undefined) {
+      return fallback === null ? null : { environmentId, threadId: fallback };
+    }
+    if (row.remoteParent) {
+      return {
+        environmentId: row.remoteParent.environmentId,
+        threadId: row.remoteParent.threadId as string,
+      };
+    }
+    return row.parentThreadId === null ? null : { environmentId, threadId: row.parentThreadId };
+  };
+  const seen = new Set([`${start.environmentId}:${start.threadId}`]);
+  let parent = parentOf(start.environmentId, start.threadId, start.lineageParentId ?? null);
+  while (parent !== null) {
+    const key = `${parent.environmentId}:${parent.threadId}`;
+    if (seen.has(key)) return null;
+    seen.add(key);
+    const above = parentOf(parent.environmentId, parent.threadId, null);
+    if (above === null || rows.get(key)?.subproject === "on") return parent;
+    parent = above;
+  }
+  return null;
+}
 
 /** The enclosing projects of a subproject, outermost first; empty for a top-level project. */
 export function projectTrail(

@@ -24,6 +24,8 @@ export function ProviderSubagentBar(props: {
   /** Null until the subagent's root turn arrives. */
   readonly status: ProviderSubagentStatus | null;
   readonly onOpenParent: (() => void) | null;
+  /** Set when the project is further up than the parent, as for a subagent of a worker. */
+  readonly onBackToProject?: (() => void) | null;
 }) {
   const live = props.status !== null && isOrchestrationV2WorkActive(props.status.status);
   const nowMs = useVisibleSecondClock(live);
@@ -67,6 +69,13 @@ export function ProviderSubagentBar(props: {
           {statusLabel} · Runs on its own
         </Text>
       </View>
+      {props.onBackToProject ? (
+        <RequestActionButton
+          label="Back to project"
+          tone="secondary"
+          onPress={props.onBackToProject}
+        />
+      ) : null}
       {props.onOpenParent ? (
         <RequestActionButton label="Open parent" tone="secondary" onPress={props.onOpenParent} />
       ) : null}

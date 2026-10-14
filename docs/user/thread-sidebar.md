@@ -334,6 +334,17 @@ numbers. Settled subprojects are not listed inline: one collapsed **Settled (N)*
 the list, in the card, on the project page and on mobile. Open it to see them; they
 still open like any subproject.
 
+### Subagents in a project
+
+Subagents of a project's agents, whether the provider started them or a delegated task
+did, also list under the project, below its subprojects, as `- Name` rows: working or
+waiting ones first, then recent ones, with the worker that started a subagent named
+when it is not the project itself. A subagent the provider runs on its own is tagged
+**read-only**. Finished subagents fold into the same **Settled (N)** row. Opening a row
+opens the subagent's thread, and **Back to project** returns. These rows do not change
+the project's counts, and subagents never appear in **Threads**. A thread you created
+in the app that delegates stays in **Threads** and also shows these rows in **Projects**.
+
 To turn a subproject back into a plain worker, choose **Show as worker** from its
 menu or from **Edit** on its page. On mobile, **Projects** nests a subproject in
 its parent's card as the same one-line row, with the card's counts rolled up and a

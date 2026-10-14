@@ -42,6 +42,7 @@ function shell(
     worker?: boolean;
     settled?: boolean;
     environmentId?: EnvironmentId;
+    activity?: string;
   },
 ): OrchestratorThreadShell {
   return {
@@ -49,7 +50,7 @@ function shell(
       id: ThreadId.make(id),
       environmentId: options.environmentId ?? DEV,
       title: options.title,
-      latestUserMessageAt: now,
+      latestUserMessageAt: options.activity ?? now,
       settledOverride: options.settled ? "settled" : null,
     }),
     parentThreadId: options.parent ? ThreadId.make(options.parent) : null,
@@ -129,5 +130,109 @@ describe("Projects sidebar card subprojects", () => {
     expect(subprojectCountLabel(orchestrator)).toBe("4 subs");
     const inCard = opens(render()).filter((title) => title !== "Delivery");
     expect(inCard).toHaveLength(4);
+  });
+});
+
+/** A subagent as the stores hold it: lineage "subagent", provider-created when native. */
+function subagent(
+  id: string,
+  parent: string,
+  kind: "native" | "delegate",
+  options: { title: string; settled?: boolean; activity?: string; purpose?: "harness" },
+): OrchestratorThreadShell {
+  const base = shell(id, { ...options, parent, worker: true });
+  const lineage = {
+    rootThreadId: ThreadId.make(parent),
+    parentThreadId: ThreadId.make(parent),
+    relationshipToParent: "subagent" as const,
+  };
+  return {
+    ...base,
+    lineage,
+    source: {
+      ...base.source,
+      lineage,
+      createdBy: "agent",
+      creationSource: kind === "native" ? "provider" : "mcp",
+    },
+  };
+}
+const opensAgents = (markup: string) =>
+  [...markup.matchAll(/aria-label="Open ([^"]+) subagent"/g)].map((match) => match[1]);
+const agentRow = (markup: string, title: string) =>
+  markup.slice(markup.indexOf(`aria-label="Open ${title} subagent"`)).split("</button>")[0]!;
+
+describe("Projects sidebar card subagents", () => {
+  beforeEach(() => {
+    const [orchestrator, ...rest] = liveShape();
+    shells.current = [
+      {
+        ...orchestrator!,
+        // The roster says the Claude Task child is still going; its own shell reads idle.
+        pendingBackgroundTasks: [
+          { taskId: "t1", kind: "subagent", childThreadId: ThreadId.make("claude-task") },
+        ],
+      },
+      ...rest,
+      subagent("claude-task", "orchestrator", "native", {
+        title: "Explore the cache layer",
+        activity: "2026-10-13T09:00:00.000Z",
+      }),
+      subagent("delegate", "orchestrator", "delegate", {
+        title: "Fix the flake",
+        activity: "2026-10-13T10:00:00.000Z",
+      }),
+      subagent("deep", "orchestrator-worker", "native", {
+        title: "Review runner",
+        activity: "2026-10-13T08:00:00.000Z",
+      }),
+      subagent("old", "orchestrator", "delegate", { title: "Old task", settled: true }),
+      subagent("harness-helper", "orchestrator", "native", {
+        title: "Harness helper",
+        purpose: "harness",
+      }),
+    ];
+  });
+
+  it("lists nested subagents under their project, a worker's too: working first, then newest", () => {
+    expect(opensAgents(render())).toEqual([
+      "Explore the cache layer",
+      "Fix the flake",
+      "Review runner",
+    ]);
+  });
+
+  it("tags only provider-native subagents read-only and names a worker as the parent", () => {
+    const markup = render();
+    expect(agentRow(markup, "Explore the cache layer")).toContain(">read-only<");
+    expect(agentRow(markup, "Fix the flake")).not.toContain("read-only");
+    expect(agentRow(markup, "Review runner")).toContain("· Worker");
+    expect(agentRow(markup, "Fix the flake")).not.toContain("·");
+  });
+
+  it("shows the running subagent with the working dot", () => {
+    expect(agentRow(render(), "Explore the cache layer")).toContain("bg-info");
+  });
+
+  it("folds settled subagents into the one Settled row with the settled subprojects", () => {
+    const markup = render();
+    expect(markup).toContain("Settled (3)");
+    expect(markup).not.toContain("Open Old task subagent");
+  });
+
+  it("keeps a Harness subagent off the Projects card", () => {
+    expect(opensAgents(render())).not.toContain("Harness helper");
+  });
+
+  it("leaves the subproject rows and their count as they were", () => {
+    const markup = render();
+    expect(opens(markup).filter((title) => title !== "Delivery")).toHaveLength(4);
+    const summaries = buildOrchestratorSummaries(
+      shells.current as ReadonlyArray<OrchestratorThreadShell>,
+      [],
+    );
+    expect(
+      subprojectCountLabel(summaries.find((summary) => summary.root.id === "orchestrator")!),
+    ).toBe("4 subs");
   });
 });
