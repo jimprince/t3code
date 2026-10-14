@@ -1,5 +1,5 @@
 import type { EnvironmentId } from "@t3tools/contracts";
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { useDashboardData } from "../../state/dashboard";
@@ -17,7 +17,17 @@ import { Button } from "../ui/button";
  * supplies the slice of the Dashboard context that card reads (the clock, the answers, and a way
  * to open a task).
  */
-export function CosDecisionPin({ environmentId }: { readonly environmentId: EnvironmentId }) {
+export function CosDecisionPin({
+  environmentId,
+  id,
+  open,
+  onClose,
+}: {
+  readonly environmentId: EnvironmentId;
+  readonly id: string;
+  readonly open: boolean;
+  readonly onClose: () => void;
+}) {
   const { data } = useDashboardData();
   const now = useMinuteClock();
   const answers = useDecisionAnswers();
@@ -71,32 +81,50 @@ export function CosDecisionPin({ environmentId }: { readonly environmentId: Envi
   if (!row) return null;
   return (
     <DashboardUiProvider value={ui}>
-      <div data-testid="cos-decision-pin" className="shrink-0 border-b border-border px-3 py-1">
-        {shown.length > 1 ? (
-          <div className="flex items-center justify-end gap-1 text-xs text-muted-foreground">
-            <Button
-              size="icon-xs"
-              variant="ghost"
-              aria-label="Previous decision"
-              disabled={at === 0}
-              onClick={() => setIndex(at - 1)}
-            >
-              <ChevronLeftIcon />
-            </Button>
-            <span>
-              {at + 1} of {shown.length}
-            </span>
-            <Button
-              size="icon-xs"
-              variant="ghost"
-              aria-label="Next decision"
-              disabled={at === shown.length - 1}
-              onClick={() => setIndex(at + 1)}
-            >
-              <ChevronRightIcon />
-            </Button>
-          </div>
-        ) : null}
+      <div
+        id={id}
+        data-testid="cos-decision-pin"
+        // Keep answer delivery and Undo alive when only the view is collapsed.
+        hidden={!open}
+        className="shrink-0 border-b border-border px-3 py-1"
+        onKeyDown={(event) => {
+          if (event.key !== "Escape" || event.defaultPrevented) return;
+          event.preventDefault();
+          event.stopPropagation();
+          onClose();
+        }}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <Button size="xs" variant="ghost-muted" onClick={onClose}>
+            <XIcon />
+            Hide decisions
+          </Button>
+          {shown.length > 1 ? (
+            <div className="flex items-center justify-end gap-1 text-xs text-muted-foreground">
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                aria-label="Previous decision"
+                disabled={at === 0}
+                onClick={() => setIndex(at - 1)}
+              >
+                <ChevronLeftIcon />
+              </Button>
+              <span>
+                {at + 1} of {shown.length}
+              </span>
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                aria-label="Next decision"
+                disabled={at === shown.length - 1}
+                onClick={() => setIndex(at + 1)}
+              >
+                <ChevronRightIcon />
+              </Button>
+            </div>
+          ) : null}
+        </div>
         <div className="max-h-[40dvh] overflow-y-auto">
           <DecisionCard key={row.key} row={row} />
         </div>
