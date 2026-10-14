@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createHash } from "node:crypto";
+import * as NodeCrypto from "node:crypto";
 import { epicNumber, filingPlace, registerRequestOrderCommands } from "./requestOrderCommands.js";
 import { registerRecoveryCommands } from "./recoveryCommands.js";
 import { ThreadId, MessageId } from "@t3tools/contracts";
@@ -2079,7 +2079,7 @@ request
         await client.projectRequest("projectRequestsCreate", {
           messageId:
             options.messageId ??
-            `cli:${createHash("sha256")
+            `cli:${NodeCrypto.createHash("sha256")
               .update(JSON.stringify([target.threadId, process.env.T3_THREAD_ID, title, options]))
               .digest("hex")}`,
           threadId: target.threadId,
