@@ -1,6 +1,6 @@
-Bottom: 039defffe049321d457cd97a4ce9b59cf6a5bf33
-Top:    fb4b55fa481e855d7ac5dc806b2fa741a7b353b6
+Bottom: 62b7bf33e5aff963bc6975f751d6f93da39a9b19
+Top:    6e84021354d601f4c20ebf7e4fb24426a64b490d
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 11:42:25 +0000
+Date:   2026-10-14 11:45:34 +0000
 
 feat(projects): fold settled subprojects and show task progress
