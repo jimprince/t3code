@@ -101,6 +101,10 @@ import {
   ProjectIssuesGetResult,
   ProjectIssuesListInput,
   ProjectIssuesListResult,
+  ProjectRequestOrderBatchInput,
+  ProjectRequestOrderBatchResult,
+  ProjectRequestWithdrawInput,
+  ProjectRequestWithdrawResult,
   ProjectRequestOrderInput,
   ProjectRequestOrderResult,
   ProjectRequestQueueInput,
@@ -702,6 +706,8 @@ export const WS_METHODS = {
   projectRequestsSubmit: "projectRequests.submit",
   projectRequestsStartIntake: "projectRequests.startIntake",
   projectRequestsOrder: "projectRequests.order",
+  projectRequestsOrderBatch: "projectRequests.orderBatch",
+  projectRequestsWithdraw: "projectRequests.withdraw",
   projectRequestsQueue: "projectRequests.queue",
   projectRequestsNext: "projectRequests.next",
   projectRequestsCreate: "projectRequests.create",
@@ -1194,6 +1200,17 @@ const WsProjectRequestsStartIntakeRpc = Rpc.make(WS_METHODS.projectRequestsStart
 const WsProjectRequestsOrderRpc = Rpc.make(WS_METHODS.projectRequestsOrder, {
   payload: ProjectRequestOrderInput,
   success: ProjectRequestOrderResult,
+  error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectRequestsOrderBatchRpc = Rpc.make(WS_METHODS.projectRequestsOrderBatch, {
+  payload: ProjectRequestOrderBatchInput,
+  success: ProjectRequestOrderBatchResult,
+  error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+});
+const WsProjectRequestsWithdrawRpc = Rpc.make(WS_METHODS.projectRequestsWithdraw, {
+  payload: ProjectRequestWithdrawInput,
+  success: ProjectRequestWithdrawResult,
   error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
 });
 
@@ -2517,6 +2534,8 @@ export const WsForkRpcGroup = RpcGroup.make(
   WsProjectIssuesListRpc,
   WsProjectRequestsSettleRpc,
   WsProjectRequestsOrderRpc,
+  WsProjectRequestsOrderBatchRpc,
+  WsProjectRequestsWithdrawRpc,
   WsProjectRequestsQueueRpc,
   WsProjectRequestsNextRpc,
   WsProjectRequestsCreateRpc,

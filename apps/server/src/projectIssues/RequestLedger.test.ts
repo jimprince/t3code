@@ -378,6 +378,11 @@ function filingGitea() {
       );
     if (failing.has(`${request.method} ${path}`)) return reply(500, {});
     if (path === "/labels" && request.method === "GET") return reply(200, labels);
+    if (path === "/labels" && request.method === "POST") {
+      const label = { id: labels.length + 1, name: payload.name };
+      labels.push(label);
+      return reply(201, label);
+    }
     if (path === "/issues" && request.method === "POST") {
       const number = ++counter;
       records.set(number, { ...payload, state: "open" });
@@ -389,6 +394,14 @@ function filingGitea() {
     const number = Number(path.split("/")[2]);
     const row = records.get(number);
     if (!row) return reply(404, {});
+    if (path.endsWith("/comments") && request.method === "GET")
+      return reply(
+        200,
+        comments.map((body) => ({ body, created_at: "2026-10-14T00:00:00Z" })),
+      );
+    if (path.endsWith("/labels") && request.method === "POST") {
+      row.labels = [...new Set([...row.labels, ...payload.labels])];
+    }
     if (path.endsWith("/comments") && request.method === "POST") {
       comments.push(payload.body);
       return reply(201, {});
@@ -795,3 +808,178 @@ it.effect("rejects an agent duplicate close before any tracker call", () => {
       }),
   );
 });
+
+const expectedFailure = <A, R>(effect: Effect.Effect<A, ProjectIssuesError, R>) =>
+  Effect.match(effect, {
+    onFailure: (error) => error,
+    onSuccess: () => expect.fail("Expected the request to be rejected."),
+  });
+
+describe("withdrawal and batch rank", () => {
+  it.effect(
+    "withdraws Brad's filing with a verified label and comment, tells its owner, and omits closed history",
+    () => {
+      const gitea = filingGitea();
+      const told: string[] = [];
+      return withLedger(
+        gitea,
+        (command) =>
+          Effect.sync(() => {
+            told.push(command.threadId);
+          }),
+        (ledger) =>
+          Effect.gen(function* () {
+            yield* ledger.create({
+              threadId: root,
+              title: "Mistake",
+              kind: "task",
+              detail: "original words",
+            });
+            told.length = 0;
+            const input = { threadId: root, reference: "21", actor: "brad" as const };
+            const denied = yield* expectedFailure(
+              ledger.withdraw({ threadId: root, reference: "21" }),
+            );
+            expect(denied.message).toContain("Only Brad");
+            expect(gitea.records.get(21)?.state).toBe("open");
+            const result = yield* ledger.withdraw(input);
+            expect(result).toEqual({ withdrawn: true, notifiedThreadId: root });
+            expect(gitea.records.get(21)?.state).toBe("closed");
+            expect(gitea.comments).toEqual(["Filed by mistake. Withdrawn by Brad."]);
+            expect((yield* gitea.list()).issues.find((i) => i.number === 21)?.labels).toContain(
+              "withdrawn",
+            );
+            expect(told).toEqual([root]);
+            expect(
+              (yield* ledger.listForThread({ threadId: root })).issues.map((i) => i.number),
+            ).not.toContain(21);
+            yield* ledger.withdraw(input);
+            expect(gitea.comments).toHaveLength(1);
+          }),
+        () => Effect.void,
+        {},
+        { list: gitea.list },
+      );
+    },
+  );
+  it.effect(
+    "ranks unranked siblings in one pass with one refresh and only attributes the moved row",
+    () => {
+      const gitea = filingGitea();
+      let refreshed = 0;
+      return withLedger(
+        gitea,
+        () => Effect.void,
+        (ledger) =>
+          Effect.gen(function* () {
+            for (const title of ["A", "B", "C"])
+              yield* ledger.create({
+                threadId: root,
+                title,
+                kind: "task",
+                detail: title,
+                partOf: 8,
+              });
+            refreshed = 0;
+            gitea.calls.length = 0;
+            const result = yield* ledger.orderBatch({
+              threadId: root,
+              references: ["23", "21", "22"],
+              movedReference: "23",
+              actor: "brad",
+            });
+            expect(result.ranks).toEqual(
+              [23, 21, 22].map((number, i) => ({ number, rank: (i + 1) * RANK_GAP })),
+            );
+            expect(refreshed).toBe(1);
+            expect(gitea.calls.filter((c) => c.startsWith("PATCH /issues/"))).toHaveLength(3);
+            expect(parsePlacedByTrailer(gitea.records.get(23)?.body)).toEqual({ kind: "brad" });
+            expect(parsePlacedByTrailer(gitea.records.get(21)?.body)).toBeNull();
+            expect(parsePlacedByTrailer(gitea.records.get(22)?.body)).toBeNull();
+            expect(gitea.records.get(22)?.body).toContain("> B");
+            expect(
+              (yield* ledger.queue({ threadId: root, epic: 8 })).workstreams[0]?.next.map(
+                (i) => i.number,
+              ),
+            ).toEqual([23, 21, 22]);
+          }),
+        () => Effect.void,
+        {},
+        { list: gitea.list },
+      ).pipe(
+        Effect.provideService(DashboardService, {
+          refreshAfterWrite: Effect.sync(() => {
+            refreshed++;
+          }),
+        } as never),
+      );
+    },
+  );
+  it.effect(
+    "rejects ranked, cross-workstream, duplicate, or non-Brad batches before any writes",
+    () => {
+      const gitea = filingGitea();
+      return withLedger(
+        gitea,
+        () => Effect.void,
+        (ledger) =>
+          Effect.gen(function* () {
+            yield* ledger.create({ threadId: root, title: "A", kind: "task", partOf: 8 });
+            yield* ledger.create({ threadId: root, title: "B", kind: "task" });
+            for (const input of [
+              { references: ["21", "21"], actor: "brad" as const },
+              { references: ["21", "22"], actor: "brad" as const },
+              { references: ["8"], actor: "brad" as const },
+              { references: ["21"] },
+            ]) {
+              gitea.calls.length = 0;
+              yield* expectedFailure(ledger.orderBatch({ threadId: root, ...input }));
+              expect(gitea.calls.some((c) => c.startsWith("PATCH"))).toBe(false);
+            }
+          }),
+        () => Effect.void,
+        {},
+        { list: gitea.list },
+      );
+    },
+  );
+});
+
+it.effect(
+  "withdrawal retries a failed close or owner notification without duplicating its comment",
+  () => {
+    const gitea = filingGitea();
+    let rejectNotification = true;
+    const told: string[] = [];
+    return withLedger(
+      gitea,
+      (command) =>
+        rejectNotification
+          ? Effect.fail(new ProjectIssuesError({ message: "Owner unavailable" }))
+          : Effect.sync(() => {
+              told.push(command.threadId);
+            }),
+      (ledger) =>
+        Effect.gen(function* () {
+          yield* ledger.create({ threadId: root, title: "Mistake", kind: "task" });
+          const input = { threadId: root, reference: "21", actor: "brad" as const };
+          gitea.failing.add("PATCH /issues/21");
+          const closeFailed = yield* expectedFailure(ledger.withdraw(input));
+          expect(closeFailed.message).toContain("HTTP 500");
+          expect(gitea.records.get(21)?.state).toBe("open");
+          expect(told).toEqual([]);
+          gitea.failing.clear();
+          const notifyFailed = yield* expectedFailure(ledger.withdraw(input));
+          expect(notifyFailed.message).toContain("owner was not told");
+          expect(gitea.records.get(21)?.state).toBe("closed");
+          rejectNotification = false;
+          expect((yield* ledger.withdraw(input)).notifiedThreadId).toBe(root);
+          expect(told).toEqual([root]);
+          expect(gitea.comments).toEqual(["Filed by mistake. Withdrawn by Brad."]);
+        }),
+      () => Effect.void,
+      {},
+      { list: gitea.list },
+    );
+  },
+);

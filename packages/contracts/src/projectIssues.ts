@@ -421,6 +421,29 @@ export const ProjectRequestOrderResult = Schema.Struct({
   workstream: Schema.NullOr(PositiveInt),
 });
 export type ProjectRequestOrderResult = typeof ProjectRequestOrderResult.Type;
+/** Brad withdraws a mistaken filing; agents may not close it this way. */
+export const ProjectRequestWithdrawInput = Schema.Struct({
+  threadId: ThreadId,
+  reference: TrimmedNonEmptyString,
+  actor: Schema.optionalKey(Schema.Literal("brad")),
+});
+export type ProjectRequestWithdrawInput = typeof ProjectRequestWithdrawInput.Type;
+export const ProjectRequestWithdrawResult = Schema.Struct({
+  withdrawn: Schema.Boolean,
+  notifiedThreadId: Schema.NullOr(ThreadId),
+});
+export const ProjectRequestOrderBatchInput = Schema.Struct({
+  threadId: ThreadId,
+  references: Schema.Array(TrimmedNonEmptyString).check(Schema.isMaxLength(500)),
+  movedReference: Schema.optionalKey(TrimmedNonEmptyString),
+  actor: Schema.optionalKey(Schema.Literal("brad")),
+});
+export type ProjectRequestOrderBatchInput = typeof ProjectRequestOrderBatchInput.Type;
+export const ProjectRequestOrderBatchResult = Schema.Struct({
+  ranks: Schema.Array(Schema.Struct({ number: PositiveInt, rank: Schema.Number })),
+});
+export type ProjectRequestOrderBatchResult = typeof ProjectRequestOrderBatchResult.Type;
+
 export const ProjectRequestQueueInput = Schema.Struct({
   threadId: ThreadId,
   epic: Schema.optionalKey(PositiveInt),

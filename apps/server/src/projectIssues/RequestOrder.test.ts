@@ -203,3 +203,46 @@ it.effect("a failed renumber preserves the existing sibling order", () => {
     expect(parseRankTrailer(fake.rows.get(4)?.body)).toBeNull();
   }).pipe(Effect.provide(fake.layer));
 });
+
+it.effect(
+  "serializes concurrent batches against the same repository and refreshes once per batch",
+  () => {
+    const fake = fakeRepository();
+    fake.rows.set(4, { number: 4, partOf: 8, body: "Fourth" });
+    fake.rows.set(5, { number: 5, partOf: 8, body: "Fifth" });
+    return Effect.gen(function* () {
+      const service = yield* RequestOrder.RequestOrder;
+      yield* Effect.all(
+        [
+          service.batch({ threadId, references: ["4"], actor: "brad", movedReference: "4" }),
+          service.batch({ threadId, references: ["5"], actor: "brad" }),
+        ],
+        { concurrency: "unbounded" },
+      );
+      expect(parseRankTrailer(fake.rows.get(4)?.body)).toBe(2048 + RANK_GAP);
+      expect(parseRankTrailer(fake.rows.get(5)?.body)).toBe(2048 + 2 * RANK_GAP);
+      expect(parsePlacedByTrailer(fake.rows.get(4)?.body)).toEqual({ kind: "brad" });
+      expect(parsePlacedByTrailer(fake.rows.get(5)?.body)).toBeNull();
+      expect(fake.refreshes).toBe(2);
+      expect(fake.writes).toEqual([4, 5]);
+    }).pipe(Effect.provide(fake.layer));
+  },
+);
+
+it.effect("refreshes a partially written batch once and reports failure", () => {
+  const fake = fakeRepository();
+  fake.rows.set(4, { number: 4, partOf: 8, body: "Fourth" });
+  fake.rows.set(5, { number: 5, partOf: 8, body: "Fifth" });
+  fake.failures.add(5);
+  return Effect.gen(function* () {
+    const service = yield* RequestOrder.RequestOrder;
+    const failed = yield* Effect.flip(
+      service.batch({ threadId, references: ["4", "5"], actor: "brad", movedReference: "5" }),
+    );
+    expect(failed.message).toContain("HTTP 500");
+    expect(parseRankTrailer(fake.rows.get(4)?.body)).toBe(2048 + RANK_GAP);
+    expect(parseRankTrailer(fake.rows.get(5)?.body)).toBeNull();
+    expect(parsePlacedByTrailer(fake.rows.get(4)?.body)).toBeNull();
+    expect(fake.refreshes).toBe(1);
+  }).pipe(Effect.provide(fake.layer));
+});
