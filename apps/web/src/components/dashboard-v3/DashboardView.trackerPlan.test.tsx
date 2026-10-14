@@ -478,3 +478,69 @@ describe("two unmatched briefing files (amended server)", () => {
     expect(container.textContent).not.toMatch(/Unbound briefing file/);
   });
 });
+
+describe("a subproject waiting on its only epic", () => {
+  // The decision lives on the epic's own task, which the server keeps only for that reason.
+  const edit = (): DashboardSnapshot => {
+    const built = snapshotOf("constructed").projects[0]!;
+    const epicId = built.workstreams.find((w) => w.title === "Rebuild the update path")!.id;
+    const subproject = {
+      ...built,
+      parentId: "project:parent",
+      tasks: built.tasks.filter((t) => t.id === epicId),
+      workstreams: built.workstreams
+        .filter((w) => w.id === epicId)
+        .map((w) => ({ ...w, taskIds: [] })),
+      attention: built.attention.filter((a) => a.taskId === epicId),
+    };
+    const parent = {
+      ...snapshotOf("localController").projects[0]!,
+      id: "project:parent",
+      title: "Parent project",
+      tasks: [],
+      workstreams: [],
+      attention: [],
+    };
+    return { ...snapshotOf("constructed"), projects: [parent, subproject] };
+  };
+
+  it("keeps its parent out of Idle and keeps the waiting link on the subproject line", async () => {
+    state.data = mergeDashboardSnapshots([{ environmentId: ENV, snapshot: edit() }]);
+    state.now = Date.parse(BUILT_AT);
+    await act(() => root.render(<DashboardView scope={HOME} />));
+    expect(container.textContent).not.toMatch(/Idle:/);
+    const line = rowOf("Fixture project");
+    expect(line.textContent).toContain("waiting on you");
+    expect(line.textContent).not.toContain("no open work");
+    // The epic is a header, not an open task, so the line does not count it.
+    expect(line.textContent).not.toMatch(/more tasks?/);
+  });
+});
+
+describe("a long next action", () => {
+  const LONG = "next: rerun CI after the upstream sync, then deploy 09:30Z";
+
+  it("wraps to two lines instead of cutting to one, so a time at the end is not lost", async () => {
+    await show("constructed", BUILT_AT);
+    await expand("Unsorted");
+    const row = rowOf("Re-run CI after the upstream sync");
+    // The tooltip trigger is the clamped span; the whole text is also in its popup.
+    const clamped = [...row.querySelectorAll("span")].filter((el) => el.textContent === LONG);
+    expect(clamped.some((el) => el.className.includes("line-clamp-2"))).toBe(true);
+    expect(clamped.some((el) => /(^|\s)truncate(\s|$)/.test(el.className))).toBe(false);
+  });
+});
+
+describe("the same unbound file reported by two environments", () => {
+  it("is named once", async () => {
+    state.data = mergeDashboardSnapshots([
+      { environmentId: ENV, snapshot: snapshotOf("constructedUnbound") },
+      { environmentId: EnvironmentId.make("env-2"), snapshot: snapshotOf("constructedUnbound") },
+    ]);
+    state.now = Date.parse(BUILT_AT);
+    await act(() => root.render(<DashboardView scope={HOME} />));
+    expect(container.textContent?.match(/Unbound briefing file: t3-product\.json/g)).toHaveLength(
+      1,
+    );
+  });
+});

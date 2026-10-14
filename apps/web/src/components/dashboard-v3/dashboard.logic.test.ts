@@ -629,3 +629,44 @@ describe("project-level lines", () => {
     expect(rollup([task({ progress: null, forecast: eta })]).ownerEta).toBeNull();
   });
 });
+
+describe("a subproject whose only open item is an epic waiting on a decision", () => {
+  const epic = task({
+    id: "issue:git/o/r#9",
+    progress: null,
+    status: "blocked",
+    attentionIds: ["issue:git/o/r#9:attention"],
+  });
+  const project = (id: string, parentId: string | null, over: Record<string, unknown> = {}) =>
+    ({
+      key: `e:${id}`,
+      environmentId: ENV,
+      project: {
+        id,
+        parentId,
+        title: id,
+        utility: false,
+        omittedTaskCount: 0,
+        attention: [],
+        tasks: [],
+        workstreams: [],
+        ...over,
+      },
+    }) as unknown as ScopedProject;
+  const parent = project("project:p", null);
+  const sub = project("project:s", "project:p", {
+    planSource: "tracker",
+    tasks: [epic],
+    workstreams: [{ id: epic.id, title: "Epic", taskIds: [], url: "u" }],
+  });
+
+  it("still ranks its parent as needing a decision, not idle", () => {
+    const { ordered, idle } = orderProducts([parent], [parent, sub]);
+    expect(idle).toEqual([]);
+    expect(ordered).toEqual([parent]);
+  });
+
+  it("is not counted as an open task on the project line", () => {
+    expect(projectTasks([parent, sub], parent)).toEqual([]);
+  });
+});

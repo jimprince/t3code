@@ -3,6 +3,7 @@ import { CheckIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { cn } from "../../lib/utils";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { useDashboardUi } from "./context";
 import { isThreadPlanTaskId } from "./resumeFromPlan.logic";
 import { ThreadPlanLine } from "./ThreadPlanLine";
@@ -362,9 +363,14 @@ function TaskFigure({
   // latest note's next action (the contract's home for "deploy 09:30Z") shows in place of the words.
   if (task.progress && task.hasChecklist === false)
     return (
-      <span className="inline-block text-right text-muted-foreground/80 max-w-[12rem] @3xl/dash:max-w-[22rem]">
+      <span className="inline-block text-right text-muted-foreground/80 max-w-[16rem] @3xl/dash:max-w-[22rem]">
         {task.nextStep ? (
-          <span className="block truncate">next: {task.nextStep}</span>
+          <Tooltip>
+            <TooltipTrigger render={<span className="line-clamp-2 break-words" />}>
+              next: {task.nextStep}
+            </TooltipTrigger>
+            <TooltipPopup>{task.nextStep}</TooltipPopup>
+          </Tooltip>
         ) : (
           <span className="whitespace-nowrap">no checklist yet</span>
         )}

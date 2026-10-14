@@ -722,8 +722,9 @@ export function orderProducts(
 ): { readonly ordered: ScopedProject[]; readonly idle: ScopedProject[] } {
   const rank = (scoped: ScopedProject): number | null => {
     const tasks = projectTasks(all, scoped);
-    if (scoped.project.attention.length > 0 || tasks.some((t) => t.attentionIds.length > 0))
-      return 0;
+    // A decision counts wherever it sits, including on a tracker epic's own task, which
+    // `projectTasks` leaves out of the counts but the server keeps only because it carries one.
+    if (waitsOnBrad(all, scoped)) return 0;
     if (tasks.length === 0) return scoped.project.omittedTaskCount > 0 ? 2 : null;
     const open = tasks.filter((task) => task.status !== "done");
     if (
@@ -745,6 +746,13 @@ export function orderProducts(
       .map((entry) => entry.scoped),
     idle: ranked.filter((entry) => entry.rank === null).map((entry) => entry.scoped),
   };
+}
+
+/** Whether anything in a project or its subprojects is waiting on Brad, from the unfiltered tasks. */
+export function waitsOnBrad(projects: ReadonlyArray<ScopedProject>, of: ScopedProject): boolean {
+  return [of, ...subprojectsOf(projects, of)].some(
+    (p) => p.project.attention.length > 0 || p.project.tasks.some((t) => t.attentionIds.length > 0),
+  );
 }
 
 /** A project's tasks and those of its subprojects, for its own line on Home. */
