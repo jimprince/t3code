@@ -147,4 +147,68 @@ export function buildNotificationMessage(notification: SavedNotification): strin
   ]
     .filter(Boolean)
     .join(" ");
+  if (!includeOnboarding) return notice;
+  return `${notice}\n\n${[
+    "Thread communication quick start (shown once per subscriber):",
+    `This is an automatic watcher notice about worker ${sourceLabel}, routed by your subscription.`,
+    `Read its full output: \`t3-thread result ${sourceLabel}\`.`,
+    `Reply or assign work: \`t3-thread send ${sourceLabel} "message"\`; busy sends queue until its turn ends; \`t3-thread queue\` lists pending sends.`,
+    `Questions/approvals: \`t3-thread pending ${sourceLabel}\`, \`t3-thread answer ${sourceLabel} "answer"\`, \`t3-thread approve ${sourceLabel}\` or \`t3-thread deny ${sourceLabel}\`.`,
+    `Notification level: \`t3-thread agent subscribe --watch ${sourceLabel} --level all|attention|none\`; input, approval and error notices always pass these levels.`,
+    `Stop this subscription: \`t3-thread agent unsubscribe --watch ${sourceLabel}\`. Make your own turn quiet by ending your final response with \`T3_NOTIFY: quiet\`.`,
+    `Finished worker: \`t3-thread settle ${sourceLabel}\`; give it more work with send if needed.`,
+    "Full guide: apps/t3-thread/docs/THREAD_COMMUNICATION.md (in the t3-thread checkout).",
+  ].join("\n")}`;
+}
+
+/** Required escalation bypasses both subscription filtering and quiet completion. */
+export function shouldNotify(
+  subscription: SavedSubscription,
+  overview: AgentOverview,
+  thread: OrchestrationThread,
+): boolean {
+  return shouldDeliverNotification(subscription, {
+    sourceState: overview.state,
+    latestTurnId: thread.latestTurn?.turnId ?? null,
+    completionDisposition: turnResultDisposition(thread),
+  });
+}
+
+function turnResultDisposition(thread: OrchestrationThread): "quiet" | "attention" | null {
+  const text = getLatestTurnAssistantMessage(thread)?.text.trim() ?? "";
+  if (isNoChangeReply(text)) return "quiet";
+  const disposition = text.match(/(?:^|\n)T3_NOTIFY: (quiet|attention)$/)?.[1];
+  return disposition === "quiet" || disposition === "attention" ? disposition : null;
+}
+
+export function shouldDeliverNotification(
+  subscription: SavedSubscription,
+  notification: Pick<
+    SavedNotification,
+    "sourceState" | "latestTurnId" | "completionDisposition" | "initialCompletion"
+  >,
+): boolean {
+  if (["needs-input", "needs-approval", "needs-plan", "error"].includes(notification.sourceState))
+    return true;
+  const level = subscription.level ?? "all";
+  if (notification.sourceState === "inactive")
+    return level !== "none" && (subscription.inactivityMinutes ?? 0) > 0;
+  if (level === "none") return false;
+  if (notification.sourceState === "completed") {
+    const disposition = notification.completionDisposition;
+    if (disposition === "quiet") return false;
+    if (level === "all") return true;
+    if (
+      notification.latestTurnId != null &&
+      subscription.lastDirectMessageTurnId === notification.latestTurnId
+    )
+      return false;
+    return notification.initialCompletion === true || disposition === "attention";
+  }
+  return level === "all" || notification.sourceState === "interrupted";
+}
+
+export function parseNotificationLevel(value: string): NotificationLevel {
+  if (value === "all" || value === "attention" || value === "none") return value;
+  throw new Error("Notification level must be all, attention, or none.");
 }
