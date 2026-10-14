@@ -1,4 +1,4 @@
-// @effect-diagnostics nodeBuiltinImport:off globalTimers:off -- The rollback test waits in real time for real state files under TestClock.
+// @effect-diagnostics nodeBuiltinImport:off globalTimers:off globalDate:off -- The rollback test waits in real time for real state files under TestClock.
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import type { DesktopUpdateState } from "@t3tools/contracts";
@@ -7,6 +7,7 @@ import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as TestClock from "effect/testing/TestClock";
+import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -303,6 +304,12 @@ function makeKitHome(options: {
   readonly head: string;
   readonly tip: string;
   readonly failBuild?: boolean;
+  /** The kit worker never finishes: --status reports it running. */
+  readonly stuck?: boolean;
+  /** Report the build the way newer kits do, as `verified app revision:` instead of `checkout:`. */
+  readonly verified?: string;
+  /** The checkout catches up on this --status call, as when the app relaunches after an overrun. */
+  readonly catchUpAtStatusCall?: number;
 }) {
   const home = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-devkit-home-"));
   const kitDir = NodePath.join(home, "t3-mac-dev");
@@ -314,10 +321,12 @@ function makeKitHome(options: {
     `dir="$(cd "$(dirname "$0")" && pwd)"
 head="$(cat "$dir/head")"; tip="$(cat "$dir/tip")"
 if [ "$1" = "--status" ]; then
+  calls=$(( $(cat "$dir/calls" 2>/dev/null || echo 0) + 1 )); echo $calls >"$dir/calls"
+  ${options.catchUpAtStatusCall ? `[ $calls -ge ${options.catchUpAtStatusCall} ] && cp "$dir/tip" "$dir/head" && head="$tip"` : "true"}
   echo "branch followed: live   fetched: yes"
-  echo "checkout:        $head on live"
+  ${options.verified ? `echo "verified app revision: ${options.verified}"` : 'echo "checkout:        $head on live"'}
   echo "origin/live:  $tip"
-  echo "dev app running: yes   update worker: idle"
+  echo "dev app running: yes   update worker: ${options.stuck ? "running" : "idle"}"
   if [ "$head" = "$tip" ]; then echo "needs update:    no"; else echo "needs update:    yes (automatic updater will apply it)"; fi
 else
   echo requested >>"$dir/requests"
@@ -325,8 +334,13 @@ else
 fi
 `,
   );
+  const logDir = NodePath.join(home, ".t3-code-dev-kit");
   return {
     home,
+    appendLog: (text: string) => {
+      NodeFS.mkdirSync(logDir, { recursive: true });
+      NodeFS.appendFileSync(NodePath.join(logDir, "launch.log"), text);
+    },
     requests: () => {
       try {
         return NodeFS.readFileSync(NodePath.join(kitDir, "requests"), "utf8").trim().split("\n")
@@ -414,6 +428,82 @@ describe("DesktopUpdates in the Mac dev kit app", () => {
     );
   });
 
+  const settle = Effect.promise(() => new Promise((resolve) => setTimeout(resolve, 30)));
+
+  it.effect("shows the kit's step and progress, and says plainly when the log goes quiet", () => {
+    const kit = makeKitHome({ head: "abc1234", tip: "def5678", stuck: true });
+    kit.appendLog("==> Updating an earlier run\nProgress: resolved 99, reused 99\n");
+    const harness = devKitHarness(kit);
+    const realNow = Date.now();
+    const messages = () =>
+      harness.sentStates.flatMap((state) => (state.message === null ? [] : [state.message]));
+    return Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(realNow);
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+        yield* updates.check("test");
+        const fiber = yield* Effect.forkChild(updates.startUpdate);
+        for (let attempt = 0; attempt < 100 && kit.requests() === 0; attempt += 1) {
+          yield* settle;
+        }
+        kit.appendLog(
+          "\n==> Installing dependencies (vp i)\nProgress: resolved 12, reused 10, downloaded 0\n",
+        );
+        yield* TestClock.adjust("5 seconds");
+        yield* settle;
+        const live = messages().findLast((message) => message.includes("Installing dependencies"));
+        assert.include(live, "resolved 12, reused 10");
+        assert.include(live, "5s elapsed");
+        assert.include(live, "last activity");
+        assert.notInclude(live, "earlier run");
+        assert.notInclude(live, "may be stuck");
+
+        // The log stays silent: 25 more ticks is past the two quiet minutes.
+        for (let tick = 0; tick < 25; tick += 1) {
+          yield* TestClock.adjust("5 seconds");
+          yield* settle;
+        }
+        const stuck = messages().findLast((message) => message.includes("may be stuck"));
+        assert.include(stuck, "No log activity for");
+        assert.include(stuck, "launch.log");
+        yield* Fiber.interrupt(fiber);
+      }),
+    ).pipe(
+      Effect.provide(Layer.merge(TestClock.layer(), harness.layer)),
+      Effect.ensuring(Effect.sync(() => NodeFS.rmSync(kit.home, { recursive: true, force: true }))),
+    );
+  });
+
+  it.effect("does not turn the kit's deadline overrun into an error once the app caught up", () => {
+    const kit = makeKitHome({
+      head: "abc1234",
+      tip: "def5678",
+      failBuild: true,
+      catchUpAtStatusCall: 3,
+    });
+    kit.appendLog("==> Updating\n");
+    const harness = devKitHarness(kit);
+    const realNow = Date.now();
+    return Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(realNow);
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+        const result = yield* runUpdate(updates);
+        assert.equal(result.completed, true);
+        assert.equal(result.state.status, "up-to-date");
+        assert.equal(
+          harness.sentStates.some((state) => state.status === "error"),
+          false,
+        );
+      }),
+    ).pipe(
+      Effect.provide(Layer.merge(TestClock.layer(), harness.layer)),
+      Effect.ensuring(Effect.sync(() => NodeFS.rmSync(kit.home, { recursive: true, force: true }))),
+    );
+  });
+
   it.effect("reports a retryable error when the rebuild leaves the app behind", () => {
     const kit = makeKitHome({ head: "abc1234", tip: "def5678", failBuild: true });
     const harness = devKitHarness(kit);
@@ -468,4 +558,109 @@ describe("DesktopUpdates in the Mac dev kit app", () => {
       ),
     );
   });
+});
+
+// A git checkout where the app started on the first commit; origin's tip is the second, which
+// changes only `file`.
+function makeKitCheckout(home: string, file: string) {
+  const checkout = NodePath.join(home, "Developer", "t3code-dev");
+  NodeFS.mkdirSync(checkout, { recursive: true });
+  const git = (...args: string[]) =>
+    NodeChildProcess.execFileSync("git", args, { cwd: checkout, encoding: "utf8" }).trim();
+  git("init", "-q");
+  git("config", "user.email", "t@example.com");
+  git("config", "user.name", "t");
+  NodeFS.writeFileSync(NodePath.join(checkout, "README"), "a");
+  git("add", "-A");
+  git("commit", "-q", "-m", "a");
+  const started = git("rev-parse", "HEAD");
+  NodeFS.mkdirSync(NodePath.dirname(NodePath.join(checkout, file)), { recursive: true });
+  NodeFS.writeFileSync(NodePath.join(checkout, file), "b");
+  git("add", "-A");
+  git("commit", "-q", "-m", "b");
+  const tip = git("rev-parse", "--short=9", "HEAD");
+  git("checkout", "-q", "--detach", started);
+  return { started: started.slice(0, 9), tip };
+}
+
+const checkOnce = (harness: ReturnType<typeof devKitHarness>) =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const updates = yield* DesktopUpdates.DesktopUpdates;
+      yield* updates.configure;
+      return (yield* updates.check("test")).state;
+    }),
+  ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+
+describe("DesktopUpdates dev kit Check trusts the app's own commit", () => {
+  const withKit = (
+    file: string,
+    options: (c: { started: string; tip: string }) => Parameters<typeof makeKitHome>[0],
+    assertState: (state: DesktopUpdateState, c: { started: string; tip: string }) => void,
+  ) => {
+    const scratch = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-devkit-git-"));
+    const commits = makeKitCheckout(scratch, file);
+    const kit = makeKitHome(options(commits));
+    // The kit home is separate; move the checkout under it so the app finds its own HEAD.
+    NodeFS.cpSync(NodePath.join(scratch, "Developer"), NodePath.join(kit.home, "Developer"), {
+      recursive: true,
+    });
+    return checkOnce(devKitHarness(kit)).pipe(
+      Effect.map((state) => assertState(state, commits)),
+      Effect.ensuring(
+        Effect.sync(() => {
+          NodeFS.rmSync(kit.home, { recursive: true, force: true });
+          NodeFS.rmSync(scratch, { recursive: true, force: true });
+        }),
+      ),
+    );
+  };
+
+  it.effect(
+    "is up to date when the kit's verified revision is stale but the app is at origin",
+    () =>
+      withKit(
+        "apps/desktop/src/x.ts",
+        (c) => ({
+          head: "ffe290adc",
+          tip: c.started,
+          verified: "ffe290adc2629b42f4a9ca4d3a3c40e6a51f7e05",
+        }),
+        (state, c) => {
+          assert.equal(state.status, "up-to-date");
+          assert.include(state.message, c.started);
+          assert.notInclude(state.message, "ahead");
+        },
+      ),
+  );
+
+  it.effect("is behind, with both SHAs, when origin changed code the app was built without", () =>
+    withKit(
+      "apps/desktop/src/x.ts",
+      (c) => ({
+        head: "ffe290adc",
+        tip: c.tip,
+        verified: "ffe290adc2629b42f4a9ca4d3a3c40e6a51f7e05",
+      }),
+      (state, c) => {
+        assert.equal(state.status, "available");
+        assert.equal(
+          state.message,
+          `origin/live is at ${c.tip}, ahead of this build (${c.started}).`,
+        );
+      },
+    ),
+  );
+
+  it.effect("is up to date when origin only changed files the kit hot-reloads", () =>
+    withKit(
+      "apps/web/src/y.ts",
+      (c) => ({ head: "ffe290adc", tip: c.tip }),
+      (state, c) => {
+        assert.equal(state.status, "up-to-date");
+        assert.include(state.message, "hot-reloads");
+        assert.include(state.message, c.tip);
+      },
+    ),
+  );
 });

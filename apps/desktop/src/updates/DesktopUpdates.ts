@@ -8,6 +8,7 @@ import {
   type DesktopUpdateState,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -54,8 +55,9 @@ const AUTO_UPDATE_STARTUP_DELAY = "15 seconds";
 const AUTO_UPDATE_POLL_INTERVAL = "4 minutes";
 const PREPARED_INSTALL_CHECK_WAIT = Duration.seconds(90);
 // The kit's own update ceiling is 800 seconds.
-const DEV_KIT_REBUILD_POLL_INTERVAL = "10 seconds";
-const DEV_KIT_REBUILD_MAX_POLLS = 100;
+const DEV_KIT_REBUILD_TICK = "5 seconds";
+const DEV_KIT_REBUILD_MAX_TICKS = 200;
+const DEV_KIT_STATUS_EVERY_TICKS = 6;
 
 type UpdateAction = "check" | "download" | "install" | "install-recovery" | "channel";
 
@@ -435,10 +437,10 @@ export const make = Effect.gen(function* () {
 
   const isDevKitRebuilding = (state: DesktopUpdateState) => state.updatePhase === "installing";
 
-  const applyDevKitStatus = (status: DevKitUpdates.DevKitStatus) =>
+  const applyDevKitVerdict = (verdict: DevKitUpdates.DevKitVerdict) =>
     currentIsoTimestamp.pipe(
       Effect.flatMap((checkedAt) =>
-        updateState((state) => DevKitUpdates.reduceStateOnDevKitStatus(state, status, checkedAt)),
+        updateState((state) => DevKitUpdates.reduceStateOnDevKitVerdict(state, verdict, checkedAt)),
       ),
     );
 
@@ -456,7 +458,8 @@ export const make = Effect.gen(function* () {
   // Check for the Mac dev kit: its status script compares this build with origin.
   const checkDevKit = (kit: DevKitUpdates.DevKit) =>
     DevKitUpdates.readStatus(kit).pipe(
-      Effect.flatMap(applyDevKitStatus),
+      Effect.flatMap((status) => DevKitUpdates.evaluateStatus(kit, status)),
+      Effect.flatMap(applyDevKitVerdict),
       Effect.catchTags({ DevKitUpdateError: (error) => failDevKit(error, "check") }),
       Effect.as(true),
     );
@@ -464,33 +467,69 @@ export const make = Effect.gen(function* () {
   // Update for the Mac dev kit: its update LaunchAgent pulls, rebuilds and relaunches this app.
   // The call stays open while the kit works, so the update card and its Retry behave as for a
   // download. A rebuild that needs the app restarted ends this process; one that does not (a
-  // renderer-only change) or fails ends here, and the kit's own status says which.
+  // renderer-only change) or fails ends here, and the kit's own status says which. Every tick
+  // the card gets the kit's current step and how long the log has been quiet, so a long rebuild
+  // can be told from a stuck one; the kit's status is read less often because it fetches.
   const rebuildDevKit = (kit: DevKitUpdates.DevKit) =>
     Effect.gen(function* () {
       const { availableVersion } = yield* Ref.get(updateStateRef);
+      const pressedAt = yield* Clock.currentTimeMillis;
+      const logOffset = yield* DevKitUpdates.logSize(kit);
+      const describe = (
+        step: string | null,
+        progress: string | null,
+        idleMs: number,
+        now: number,
+      ) =>
+        DevKitUpdates.describeRebuild({
+          target: availableVersion,
+          step,
+          progress,
+          elapsedMs: now - pressedAt,
+          idleMs,
+          logPath: kit.logPath,
+        });
       yield* updateState((state) => ({
         ...state,
         updatePhase: "installing",
-        message: `Rebuilding T3 Code (Dev) at ${availableVersion}. It quits and relaunches within about 10 minutes.`,
+        message: describe(null, null, 0, pressedAt),
         errorContext: null,
         canRetry: false,
       }));
       yield* logUpdaterInfo("requesting a dev kit rebuild", { target: availableVersion });
       yield* DevKitUpdates.requestUpdate(kit);
-      for (let poll = 0; poll < DEV_KIT_REBUILD_MAX_POLLS; poll++) {
-        yield* Effect.sleep(DEV_KIT_REBUILD_POLL_INTERVAL);
+      let behindWhileIdle = 0;
+      for (let tick = 0; tick < DEV_KIT_REBUILD_MAX_TICKS; tick++) {
+        yield* Effect.sleep(DEV_KIT_REBUILD_TICK);
+        const now = yield* Clock.currentTimeMillis;
+        const log = Option.getOrNull(yield* DevKitUpdates.readLog(kit, logOffset));
+        const { step, progress } = DevKitUpdates.summarizeKitLog(log?.text ?? "");
+        const idleMs = now - Math.max(pressedAt, log?.mtimeMs ?? 0);
+        yield* updateState((state) => ({
+          ...state,
+          message: describe(step, progress, idleMs, now),
+        }));
+        if (tick % DEV_KIT_STATUS_EVERY_TICKS !== 1) continue;
         const status = Option.getOrNull(yield* DevKitUpdates.readStatus(kit).pipe(Effect.option));
-        if (status === null || status.workerRunning) continue;
-        if (status.needsUpdate) {
+        if (status === null || status.workerRunning) {
+          behindWhileIdle = 0;
+          continue;
+        }
+        const verdict = yield* DevKitUpdates.evaluateStatus(kit, status);
+        if (!verdict.behind) {
+          yield* applyDevKitVerdict(verdict);
+          return { accepted: true, completed: true, state: yield* Ref.get(updateStateRef) };
+        }
+        // The kit can report an overrun while the desktop it started is still coming up, and the
+        // relaunch then ends this call. Only a worker that stays idle and behind is a failure.
+        if (++behindWhileIdle >= 2) {
           return yield* new DevKitUpdates.DevKitUpdateError({
-            message: `The rebuild did not finish. Its log is ~/.t3-code-dev-kit/launch.log.`,
+            message: `The rebuild did not finish. Its log is ${kit.logPath}.`,
           });
         }
-        yield* applyDevKitStatus(status);
-        return { accepted: true, completed: true, state: yield* Ref.get(updateStateRef) };
       }
       return yield* new DevKitUpdates.DevKitUpdateError({
-        message: "The rebuild is taking too long. Its log is ~/.t3-code-dev-kit/launch.log.",
+        message: `The rebuild is taking too long. Its log is ${kit.logPath}.`,
       });
     }).pipe(
       Effect.catchTags({
