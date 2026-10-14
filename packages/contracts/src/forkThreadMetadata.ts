@@ -9,9 +9,13 @@ export type ForkRemoteParent = typeof ForkRemoteParent.Type;
 export const ThreadSubprojectMode = Schema.Literals(["auto", "on", "off"]);
 export type ThreadSubprojectMode = typeof ThreadSubprojectMode.Type;
 
+export const ThreadPurpose = Schema.Literals(["project", "harness"]);
+export type ThreadPurpose = typeof ThreadPurpose.Type;
+
 /** Organizational supervision is independent of provider execution lineage. */
 export const ForkThreadMetadata = Schema.Struct({
   threadId: ThreadId,
+  purpose: Schema.optionalKey(Schema.NullOr(ThreadPurpose)),
   subproject: Schema.optionalKey(Schema.NullOr(ThreadSubprojectMode)),
   parentThreadId: Schema.NullOr(ThreadId),
   scope: Schema.optionalKey(Schema.NullOr(Schema.String)),
@@ -22,6 +26,7 @@ export type ForkThreadMetadata = typeof ForkThreadMetadata.Type;
 export const ForkThreadMetadataUpdate = Schema.Struct({
   commandId: CommandId,
   threadId: ThreadId,
+  purpose: Schema.optionalKey(Schema.NullOr(ThreadPurpose)),
   subproject: Schema.optionalKey(Schema.NullOr(ThreadSubprojectMode)),
   parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
   scope: Schema.optional(Schema.NullOr(Schema.String)),
