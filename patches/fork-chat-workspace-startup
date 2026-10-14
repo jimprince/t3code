@@ -1,7 +1,7 @@
-Bottom: 03230ae33ee95c3e32a88d79a11eabcb3e3c0915
-Top:    761c8d4c105f7274d10f5316cdd4055ebd2f8152
+Bottom: bd36bf6dae95aa8377dc84272ab8dd38367d9592
+Top:    58e04c6a1763ab2f73cf23b3ba5b394772d06382
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 11:56:58 +0000
+Date:   2026-10-14 12:01:45 +0000
 
 fix(server): preserve chat workspaces across temporary directory changes
 
