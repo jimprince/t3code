@@ -134,3 +134,9 @@ id = "messages-timeline-cold-import-budget"
 date = "2026-10-14"
 decided = "Give only the MessagesTimeline test bootstrap 60 seconds to cold-import its module graph; retain every test assertion and test-case budget."
 rationale = "Two complete-tip web runs exhausted the explicit 30-second import hook, including a run with two workers, while the same 85 assertions passed in isolation. The setup budget covers test-runner transformation and initialization under shared verification load; it does not change production behavior or a runtime performance assertion."
+
+[[decision]]
+id = "operator-bounded-snapshot-fixture-budget"
+date = "2026-10-14"
+decided = "Give only the real-RPC 10,000-item operator snapshot regression 30 seconds to serialize and read its full-history fixture under concurrent CI; retain every bounded payload, metadata and full-history assertion."
+rationale = "Candidate CI38625897981 exhausted the generic five-second test deadline while four workspace suites ran concurrently. The test constructs, encodes and reads more than 10 MB of fixture history across three actual RPC requests; it asserts data bounds and compatibility, with no elapsed-time SLA assertion. Only its execution budget changes; production limits, fixture size, RPC paths and assertions are unchanged."
