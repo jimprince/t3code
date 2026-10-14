@@ -14,6 +14,7 @@ import {
   projectSidebarBucket,
   isThreadWorking,
   joinOrchestratorMetadata,
+  isUserOpenedThread,
   lastActivityAt,
   sortOrchestratorSummariesForSidebar,
   threadsVisibleInThreadsMode,
@@ -982,6 +983,46 @@ describe("user-created roots in Threads", () => {
   it("keeps harness-purpose user roots and their inherited-purpose children out", () => {
     const root = userRoot("root", { purpose: "harness" });
     expect(visibleIds([root, delegatedChild("child", "root")])).toEqual([]);
+  });
+
+  describe("user-opened threads (Discuss)", () => {
+    const withSource = (
+      item: EnvironmentThreadShell,
+      source: Partial<EnvironmentThreadShell["source"]>,
+    ) => ({ ...item, source: { ...item.source, ...source } });
+    // Real shape: the Discuss thread is nested under a harness-purpose inbox that is a web user root.
+    const inbox = userRoot("inbox", { purpose: "harness" });
+    const siblingWorker = withSource(delegatedChild("worker", "inbox"), {
+      createdBy: "user",
+      creationSource: "web",
+    });
+    const discuss = withSource(thread("discuss", "inbox"), {
+      createdBy: "user",
+      creationSource: "server",
+    });
+
+    it("shows a Discuss thread under a harness-purpose root with children", () => {
+      expect(visibleIds([inbox, siblingWorker, discuss])).toEqual(["discuss"]);
+      expect(isUserOpenedThread(discuss)).toBe(true);
+    });
+
+    it("keeps its own children under the existing rules", () => {
+      expect(visibleIds([inbox, discuss, thread("discuss-child", "discuss")])).toEqual(["discuss"]);
+    });
+
+    it.each([
+      ["fork child", { ...discuss, lineage: { ...discuss.lineage, relationshipToParent: "fork" } }],
+      [
+        "subagent",
+        { ...discuss, lineage: { ...discuss.lineage, relationshipToParent: "subagent" } },
+      ],
+      ["CLI worker", withSource(discuss, { creationSource: "web" })],
+      ["system thread", withSource(discuss, { createdBy: "system" })],
+      ["agent thread", withSource(discuss, { createdBy: "agent" })],
+      ["archived thread", { ...discuss, archivedAt: "2026-10-13T13:00:00.000Z" }],
+    ] as const)("keeps a %s out of Threads", (_name, candidate) => {
+      expect(visibleIds([inbox, siblingWorker, candidate as EnvironmentThreadShell])).toEqual([]);
+    });
   });
 
   it("does not turn archived children into projects", () => {
