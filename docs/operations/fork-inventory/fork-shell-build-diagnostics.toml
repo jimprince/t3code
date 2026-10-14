@@ -1,0 +1,8 @@
+name = "fork-shell-build-diagnostics"
+subject = "feat(server): expose per-caller shell build counters"
+class = "upstream-bound"
+purpose = "Attribute full shell snapshot construction to bounded static caller labels through existing server diagnostics, independently of trace sampling and retention."
+retire_when = "Upstream exposes equivalent per-caller actual-build and cache-hit diagnostics."
+depends_on = ["fork-shell-snapshot-cache", "fork-bounded-diagnostics"]
+roles = []
+note = "Counters are in-memory cumulative attempts since startup, scoped to the server's shared diagnostics service. Full builds count uncached row reads and full shell materialization after cached state changes, including failed attempts; warm filtered snapshot array assembly is not a full shell build. RPC method labels take precedence over named internal services; unattributed and bounded overflow buckets remain explicit. Existing trace diagnostics exposes counts even without retained trace files. No cache policy changes or new UI."
