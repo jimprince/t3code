@@ -12,12 +12,14 @@ import { useDashboardUi } from "./context";
 import {
   formatClock,
   freshnessSummary,
+  topLevelProjects,
   sourceHealth,
   sourceLabel,
   type SourceHealth,
   type SourceNames,
 } from "./dashboard.logic";
 import { UnknownValue, useSectionMarker } from "./parts";
+import { NoticeLine, RequestLine } from "./RequestLine";
 
 const COS_TITLE = /chief of staff/i;
 
@@ -147,9 +149,12 @@ export function OlderServerLines({ names }: { readonly names: ReadonlyArray<stri
 }
 
 /**
- * Ask first (R11): the existing request box, routed to the Chief of Staff on Home and to the page's
- * own project head on a project page. It reads the thread shells itself so a shell change
- * re-renders only this box, not the whole Dashboard.
+ * Ask first (R11). On a server that stores the order, the one-line request line files typed items
+ * straight into the project's tracker (the picked project on Home, the page's own project head on a
+ * project page); Home's picker also offers the Chief of Staff, which sends as the old box did. A
+ * project with no Gitea tracker, and an older server, keep the existing request box, routed to the
+ * Chief of Staff on Home. It reads the thread shells itself so a shell change re-renders only this box, not the
+ * whole Dashboard.
  */
 export function AskSection({
   projectHead,
@@ -164,6 +169,9 @@ export function AskSection({
   const marker = useSectionMarker("ask");
   const projects = useProjects();
   const threads = useOrchestratorThreadShells();
+  const fileable = projectHead
+    ? ui.root !== null && ui.order.canFile(ui.root)
+    : topLevelProjects(ui.data.projects).products.some((scoped) => ui.order.canFile(scoped));
   const summary = useMemo(() => {
     const summaries = buildOrchestratorSummaries(threads, projects);
     return projectHead
@@ -174,6 +182,16 @@ export function AskSection({
         ) ?? null)
       : (summaries.find((entry) => COS_TITLE.test(entry.root.title)) ?? null);
   }, [projectHead, projects, threads]);
+  if (fileable)
+    return (
+      <div {...marker}>
+        <RequestLine
+          projectHead={projectHead ? ui.root : null}
+          chief={projectHead ? null : summary}
+        />
+        <NoticeLine />
+      </div>
+    );
   if (!summary) return <div {...marker} hidden />;
   return (
     <div {...marker}>
