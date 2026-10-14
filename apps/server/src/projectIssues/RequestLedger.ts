@@ -1,3 +1,4 @@
+import { HttpClient } from "effect/http";
 import * as ShellSnapshotDiagnostics from "../diagnostics/ShellSnapshotDiagnostics.ts";
 import * as Crypto from "effect/Crypto";
 import { makeNestingService } from "../forkThreads/NestingService.ts";
@@ -14,6 +15,8 @@ import {
   type GiteaInstanceConfig,
   type ProjectIssuesListResult,
   type ProjectRequestCreateInput,
+  type ProjectRequestPlace,
+  type UploadedAttachmentRef,
   type ProjectRequestDecideInput,
   type ProjectRequestDiscussInput,
   type ProjectRequestRef,
@@ -24,6 +27,7 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
+import * as Deferred from "effect/Deferred";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -43,6 +47,16 @@ import * as ProjectService from "../project/ProjectService.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
 import * as GiteaApi from "../sourceControl/GiteaApi.ts";
 import { TextGeneration } from "../textGeneration/TextGeneration.ts";
+import * as RequestOrder from "./RequestOrder.ts";
+import * as Dashboard from "../dashboard/DashboardService.ts";
+import {
+  replacePartOf,
+  orderRecords,
+  orderedRequestList,
+  workstreamNumbers,
+} from "./requestOrder.logic.ts";
+import { uploadRequestAttachments } from "./requestAttachments.ts";
+import * as ProjectIssues from "./ProjectIssuesService.ts";
 import type { ProjectIssuesService } from "./ProjectIssuesService.ts";
 import type { RequestCandidate, RequestKind } from "../textGeneration/RequestItemsPrompt.ts";
 import {
@@ -138,8 +152,9 @@ const fail = (message: string) => new ProjectIssuesError({ message });
 /** One writer for the outbox file across every connection's ledger in this process. */
 const discussLock = Semaphore.makeUnsafe(1);
 const outboxLock = Semaphore.makeUnsafe(1);
+const filingLock = Semaphore.makeUnsafe(1);
 /** Outbox files with a drain loop already running. */
-const draining = new Set<string>();
+const draining = new Map<string, Deferred.Deferred<void>>();
 const MAX_ITEMS_PER_MESSAGE = 8;
 const encodeOutboxJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 
@@ -171,6 +186,7 @@ export const make = (deps: {
     // Optional so hosts without text generation (and narrow test layers) still file requests whole.
     const textGeneration = yield* Effect.serviceOption(TextGeneration);
     const api = yield* GiteaApi.make;
+    const httpClient = yield* HttpClient.HttpClient;
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const crypto = yield* Crypto.Crypto;
@@ -180,7 +196,29 @@ export const make = (deps: {
     const serverConfig = yield* ServerConfig.ServerConfig;
     const outboxPath = path.join(serverConfig.stateDir, "request-ledger-outbox.json");
 
+    const dashboard = yield* Effect.serviceOption(Dashboard.DashboardService);
+    const sharedIssues = yield* Effect.serviceOption(ProjectIssues.Service);
+    const invalidate = (target: GiteaRepositoryTarget) => {
+      deps.projectIssues.invalidate(target);
+      Option.getOrUndefined(sharedIssues)?.invalidate(target);
+    };
+    const refreshDashboard =
+      Option.getOrUndefined(dashboard)?.refreshAfterWrite ??
+      Option.getOrUndefined(dashboard)?.refresh ??
+      Effect.void;
+    const uploadAttachments = (
+      target: GiteaRepositoryTarget,
+      number: number,
+      attachments: readonly UploadedAttachmentRef[],
+      threadId: string,
+    ) =>
+      uploadRequestAttachments(target, number, attachments, threadId).pipe(
+        Effect.provideService(HttpClient.HttpClient, httpClient),
+        Effect.provideService(FileSystem.FileSystem, fileSystem),
+        Effect.provideService(ServerConfig.ServerConfig, serverConfig),
+      );
     const captured = new Set<string>();
+    const notifiedFilings = new Set<string>();
 
     /** Every thread with its orchestrator parent, which lives in the fork's sidecar. */
     const readThreads = Effect.gen(function* () {
@@ -316,6 +354,11 @@ export const make = (deps: {
         bug?: boolean | undefined;
         excerpt: string;
         parked?: boolean;
+        partOf?: number;
+        place?: ProjectRequestPlace;
+        actor?: "brad";
+        actorThreadId?: ThreadId;
+        attachments?: readonly UploadedAttachmentRef[];
       },
       messageId: string,
       itemIndex?: number,
@@ -334,19 +377,22 @@ export const make = (deps: {
           CreatedIssue,
           {
             title: clampTitle(item.title),
-            body: formatRequestIssueBody({
-              excerpt: item.excerpt,
-              kind: item.kind,
-              bug: item.bug,
-              threadTitle: thread.title,
-              rootTitle: root.id === thread.id ? null : root.title,
-              source: {
-                threadId: thread.id,
-                rootThreadId: root.id,
-                messageId,
-                ...(itemIndex === undefined ? {} : { item: itemIndex }),
-              },
-            }),
+            body: replacePartOf(
+              formatRequestIssueBody({
+                excerpt: item.excerpt,
+                kind: item.kind,
+                bug: item.bug,
+                threadTitle: thread.title,
+                rootTitle: root.id === thread.id ? null : root.title,
+                source: {
+                  threadId: thread.id,
+                  rootThreadId: root.id,
+                  messageId,
+                  ...(itemIndex === undefined ? {} : { item: itemIndex }),
+                },
+              }),
+              item.partOf ?? null,
+            ),
             labels,
           },
         );
@@ -363,7 +409,10 @@ export const make = (deps: {
             ),
           );
         }
-        deps.projectIssues.invalidate(target);
+        if (item.attachments?.length)
+          yield* uploadAttachments(target, issue.number, item.attachments, thread.id);
+        invalidate(target);
+        if (!item.place) yield* refreshDashboard;
         return {
           host: target.host,
           repository: target.repository,
@@ -418,7 +467,7 @@ export const make = (deps: {
         );
         const reference = `${target.instance.webOrigin.replace(/\/$/, "")}/${target.repository}/issues/${number}`;
         yield* deps.threadIssues.link({ threadId: thread.id, reference }).pipe(Effect.ignore);
-        deps.projectIssues.invalidate(target);
+        invalidate(target);
       });
 
     /**
@@ -429,83 +478,152 @@ export const make = (deps: {
      * Fails when Gitea cannot be reached, leaving the entry queued.
      */
     const fileEntry = (entry: OutboxEntry) =>
-      Effect.gen(function* () {
-        const threads = yield* readThreads;
-        if (!threads.some((thread) => thread.id === entry.threadId)) return "drop";
-        const resolved = yield* resolveThread(entry.threadId);
-        if (!resolved) return "drop";
+      filingLock.withPermit(
+        Effect.gen(function* () {
+          const threads = yield* readThreads;
+          if (!threads.some((thread) => thread.id === entry.threadId)) return "drop";
+          const resolved = yield* resolveThread(entry.threadId);
+          if (!resolved) return "drop";
 
-        // A fresh read of the tracker: the open issues a follow-up may continue, and
-        // the markers that keep a retry after a lost response from filing twice.
-        deps.projectIssues.invalidate(resolved.target);
-        const listing = yield* deps.projectIssues.list({ rootThreadId: entry.rootThreadId });
-        const repository = listing.repositories.find(
-          (candidate) => repositoryKey(candidate) === repositoryKey(resolved.target),
-        );
-        if (!repository || repository.error) {
-          return yield* fail(repository?.error ?? "Gitea is unreachable.");
-        }
-        const trackerIssues = listing.issues.filter(
-          (issue) => repositoryKey(issue) === repositoryKey(resolved.target),
-        );
-        const candidates = requestCandidates(trackerIssues, entry.threadId);
-
-        let items = entry.items;
-        if (items === null) {
-          const split = yield* splitMessage({
-            text: entry.text,
-            threadTitle: resolved.thread.title,
-            cwd: resolved.thread.worktreePath ?? resolved.project.workspaceRoot,
-            candidates: entry.explicit ? [] : candidates,
-          });
-          const splitItems = split.slice(0, MAX_ITEMS_PER_MESSAGE).map((item) => {
-            // Absent only for the unsplit fallback, which then follows the thread's issue.
-            const existing = (item as { existing?: number | null }).existing;
-            return {
-              kind: item.kind,
-              ...(item.bug ? { bug: true } : {}),
-              title: item.title.trim() || entry.text,
-              excerpt: item.excerpt.trim() || entry.text,
-              ...(existing === undefined ? {} : { existing }),
-            };
-          });
-          items = splitItems;
-          yield* modifyOutbox((outbox) =>
-            updateEntry(outbox, entry.messageId, (current) => ({ ...current, items: splitItems })),
+          // A fresh read of the tracker: the open issues a follow-up may continue, and
+          // the markers that keep a retry after a lost response from filing twice.
+          invalidate(resolved.target);
+          const listing = yield* deps.projectIssues.list(
+            { rootThreadId: entry.rootThreadId },
+            { complete: true, closedHistory: true },
           );
-        }
-        if (items.length === 0) return "done";
+          const repository = listing.repositories.find(
+            (candidate) => repositoryKey(candidate) === repositoryKey(resolved.target),
+          );
+          if (!repository || repository.error) {
+            return yield* fail(repository?.error ?? "Gitea is unreachable.");
+          }
+          const trackerIssues = listing.issues.filter(
+            (issue) => repositoryKey(issue) === repositoryKey(resolved.target),
+          );
+          const candidates = requestCandidates(trackerIssues, entry.threadId);
 
-        const filed = new Set(entry.filed);
-        for (const [index, item] of items.entries()) {
-          if (filed.has(index)) continue;
-          const plan = planRequestItem(item, {
-            explicit: entry.explicit === true,
-            candidates,
-            unsplit: item.existing === undefined,
-          });
-          if (plan.action === "comment") {
-            yield* commentFollowUp(resolved, plan.number, item, entry.messageId, index).pipe(
-              Effect.mapError((error) => fail(error.detail)),
-            );
-          } else if (
-            plan.action === "file" &&
-            !isAlreadyFiled(listing.issues, entry.messageId, index)
-          ) {
-            yield* fileRequest(resolved, item, entry.messageId, index).pipe(
-              Effect.mapError((error) => fail(error.detail)),
+          let items = entry.items;
+          if (items === null) {
+            const split = yield* splitMessage({
+              text: entry.text,
+              threadTitle: resolved.thread.title,
+              cwd: resolved.thread.worktreePath ?? resolved.project.workspaceRoot,
+              candidates: entry.explicit ? [] : candidates,
+            });
+            const splitItems = split.slice(0, MAX_ITEMS_PER_MESSAGE).map((item) => {
+              // Absent only for the unsplit fallback, which then follows the thread's issue.
+              const existing = (item as { existing?: number | null }).existing;
+              return {
+                kind: item.kind,
+                ...(item.bug ? { bug: true } : {}),
+                title: item.title.trim() || entry.text,
+                excerpt: item.excerpt.trim() || entry.text,
+                ...(existing === undefined ? {} : { existing }),
+              };
+            });
+            items = splitItems;
+            yield* modifyOutbox((outbox) =>
+              updateEntry(outbox, entry.messageId, (current) => ({
+                ...current,
+                items: splitItems,
+              })),
             );
           }
-          filed.add(index);
-          yield* modifyOutbox((outbox) =>
-            updateEntry(outbox, entry.messageId, (current) => ({
-              ...current,
-              filed: [...filed],
-            })),
-          );
-        }
-        return "done";
-      });
+          if (items.length === 0) return "done";
+
+          const filed = new Set(entry.filed);
+          for (const [index, item] of items.entries()) {
+            if (filed.has(index)) continue;
+            let filedRequest: ProjectRequestRef | null =
+              listing.issues.find(
+                (i) =>
+                  i.requestSource?.messageId === entry.messageId &&
+                  (i.requestSource.item ?? 0) === index,
+              ) ?? null;
+            const plan = planRequestItem(item, {
+              explicit: entry.explicit === true,
+              candidates,
+              unsplit: item.existing === undefined,
+            });
+            if (plan.action === "comment") {
+              yield* commentFollowUp(resolved, plan.number, item, entry.messageId, index).pipe(
+                Effect.mapError((error) => fail(error.detail)),
+              );
+            } else if (
+              plan.action === "file" &&
+              !isAlreadyFiled(listing.issues, entry.messageId, index)
+            ) {
+              if (
+                item.partOf !== undefined &&
+                !trackerIssues.some(
+                  (parent) =>
+                    parent.number === item.partOf &&
+                    parent.closedAt === null &&
+                    workstreamNumbers(trackerIssues).has(parent.number),
+                )
+              )
+                return yield* fail("Choose an open epic in this project's tracker.");
+              const request = yield* fileRequest(resolved, item, entry.messageId, index).pipe(
+                Effect.mapError(() => fail("Could not file the request.")),
+              );
+              filedRequest = request;
+              if (item.place)
+                yield* ordering.place({
+                  threadId: entry.threadId,
+                  reference: String(request.number),
+                  place: item.place,
+                  ...(item.actor ? { actor: item.actor } : {}),
+                  ...(item.actorThreadId ? { actorThreadId: item.actorThreadId } : {}),
+                });
+            }
+            if (
+              (item.place || item.attachments?.length) &&
+              isAlreadyFiled(listing.issues, entry.messageId, index)
+            ) {
+              const request = listing.issues.find(
+                (i) =>
+                  i.requestSource?.messageId === entry.messageId &&
+                  (i.requestSource.item ?? 0) === index,
+              )!;
+              if (item.attachments?.length)
+                yield* uploadAttachments(
+                  resolved.target,
+                  request.number,
+                  item.attachments,
+                  entry.threadId,
+                );
+              if (item.place && request.rank == null)
+                yield* ordering.place({
+                  threadId: entry.threadId,
+                  reference: String(request.number),
+                  place: item.place,
+                  ...(item.actor ? { actor: item.actor } : {}),
+                  ...(item.actorThreadId ? { actorThreadId: item.actorThreadId } : {}),
+                });
+            }
+            if (entry.notify && filedRequest)
+              yield* notifyFiling(
+                {
+                  threadId: entry.threadId,
+                  messageId: entry.messageId,
+                  title: item.title,
+                  kind: item.kind,
+                  detail: item.excerpt,
+                },
+                filedRequest,
+              );
+            filed.add(index);
+            yield* modifyOutbox((outbox) =>
+              updateEntry(outbox, entry.messageId, (current) => ({
+                ...current,
+                filed: [...filed],
+              })),
+            );
+          }
+          return "done";
+        }),
+      );
 
     /**
      * Files everything due in the outbox, then sleeps until the next retry, until
@@ -513,7 +631,8 @@ export const make = (deps: {
      */
     const drain: Effect.Effect<void> = Effect.gen(function* () {
       if (draining.has(outboxPath)) return;
-      draining.add(outboxPath);
+      const completed = Deferred.makeUnsafe<void>();
+      draining.set(outboxPath, completed);
       yield* Effect.gen(function* () {
         while (true) {
           const outbox = yield* readOutbox;
@@ -564,8 +683,18 @@ export const make = (deps: {
         Effect.catchCause((cause) =>
           Effect.logWarning("request ledger outbox drain stopped", { cause: String(cause) }),
         ),
-        Effect.ensuring(Effect.sync(() => draining.delete(outboxPath))),
+        Effect.ensuring(
+          Effect.sync(() => draining.delete(outboxPath)).pipe(
+            Effect.andThen(Deferred.succeed(completed, undefined)),
+            Effect.asVoid,
+          ),
+        ),
       );
+    });
+
+    const waitForDrain = Effect.suspend(() => {
+      const completion = draining.get(outboxPath);
+      return completion ? Deferred.await(completion) : Effect.void;
     });
 
     const startDrain = drain.pipe(Effect.forkDetach, Effect.asVoid);
@@ -668,54 +797,118 @@ export const make = (deps: {
      * request is queued in the outbox (shown as Pending filing) and filed later.
      */
     const create = (input: ProjectRequestCreateInput) =>
-      Effect.gen(function* () {
-        const item = {
-          title: input.title,
-          kind: input.kind,
-          ...(input.bug ? { bug: true } : {}),
-          excerpt: input.detail?.trim() || input.title,
-          ...(input.park ? { parked: true } : {}),
-        };
-        const stamp = yield* Clock.currentTimeMillis;
-        const messageId = `agent:${input.threadId}:${stamp}`;
-        type Attempt =
-          | { readonly kind: "filed"; readonly request: ProjectRequestRef }
-          | { readonly kind: "no-tracker" }
-          | { readonly kind: "unreachable" };
-        const attempt: Attempt = yield* resolveThread(input.threadId).pipe(
-          Effect.flatMap((resolved): Effect.Effect<Attempt, unknown> =>
-            resolved
-              ? fileRequest(resolved, item, messageId, 0).pipe(
-                  Effect.map((request): Attempt => ({ kind: "filed", request })),
-                )
-              : Effect.succeed({ kind: "no-tracker" }),
-          ),
-          Effect.catch(() => Effect.succeed<Attempt>({ kind: "unreachable" })),
-        );
-        if (attempt.kind === "filed") return { request: attempt.request, queued: false };
-        if (attempt.kind === "no-tracker") {
-          return yield* fail(
-            "This thread's project has no Gitea tracker repository. Set one with t3-thread project tracker set.",
-          );
-        }
-        const threads = yield* readThreads;
-        yield* modifyOutbox((outbox) =>
-          enqueue(outbox, {
-            messageId,
-            threadId: input.threadId,
-            rootThreadId: findProjectRootThreadId(threads, input.threadId),
-            text: item.excerpt,
-            capturedAt: DateTime.formatIso(DateTime.makeUnsafe(stamp)),
-            items: [item],
-            filed: [],
-            attempts: 0,
-            lastError: "Gitea is unreachable.",
-            nextAttemptAt: stamp + 30_000,
-          }),
-        ).pipe(Effect.mapError(() => fail("Could not queue the request.")));
-        yield* startDrain;
-        return { request: null, queued: true };
-      });
+      filingLock.withPermit(
+        Effect.gen(function* () {
+          const item = {
+            title: input.title.split(/\r?\n/, 1)[0]!.slice(0, 80),
+            kind: input.kind,
+            ...(input.bug ? { bug: true } : {}),
+            excerpt: input.detail ?? input.title,
+            ...(input.partOf === undefined ? {} : { partOf: input.partOf }),
+            ...(input.place === undefined ? {} : { place: input.place }),
+            ...(input.actor === undefined ? {} : { actor: input.actor }),
+            ...(input.actorThreadId ? { actorThreadId: input.actorThreadId } : {}),
+            ...(input.attachments === undefined ? {} : { attachments: input.attachments }),
+            ...(input.park ? { parked: true } : {}),
+          };
+          const stamp = yield* Clock.currentTimeMillis;
+          const messageId =
+            input.messageId ??
+            `agent:${input.threadId}:${yield* crypto.randomUUIDv4.pipe(Effect.mapError(() => fail("Could not create a filing id.")))}`;
+          captured.add(messageId);
+          const probe =
+            input.messageId === undefined
+              ? { request: null, available: true }
+              : yield* findFiled(input.threadId, messageId);
+          const existing = probe.request;
+          let unavailable = !probe.available;
+          if (existing) {
+            if (input.attachments?.length) {
+              const resolved = yield* resolveOrFail(input.threadId);
+              yield* uploadAttachments(
+                resolved.target,
+                existing.number,
+                input.attachments,
+                input.threadId,
+              );
+            }
+            if (input.place && existing.rank == null)
+              yield* ordering.place({
+                threadId: input.threadId,
+                reference: String(existing.number),
+                place: input.place,
+                ...(input.actor ? { actor: input.actor } : {}),
+                ...(input.actorThreadId ? { actorThreadId: input.actorThreadId } : {}),
+              });
+            const notifiedThreadId = yield* notifyFiling(input, existing);
+            return {
+              request: existing,
+              queued: false,
+              ...(input.messageId ? { notifiedThreadId } : {}),
+            };
+          }
+          if (!unavailable && input.partOf !== undefined)
+            unavailable = !(yield* validateEpic(input.threadId, input.partOf));
+          if (input.kind === "epic" && input.partOf !== undefined)
+            return yield* fail("An epic cannot be placed inside another epic.");
+          type Attempt =
+            | { readonly kind: "filed"; readonly request: ProjectRequestRef }
+            | { readonly kind: "no-tracker" }
+            | { readonly kind: "unreachable" };
+          const attempt: Attempt = unavailable
+            ? { kind: "unreachable" }
+            : yield* resolveThread(input.threadId).pipe(
+                Effect.flatMap((resolved): Effect.Effect<Attempt, unknown> =>
+                  resolved
+                    ? fileRequest(resolved, item, messageId, 0).pipe(
+                        Effect.map((request): Attempt => ({ kind: "filed", request })),
+                      )
+                    : Effect.succeed({ kind: "no-tracker" }),
+                ),
+                Effect.catch(() => Effect.succeed<Attempt>({ kind: "unreachable" })),
+              );
+          if (attempt.kind === "filed") {
+            if (input.place)
+              yield* ordering.place({
+                threadId: input.threadId,
+                reference: String(attempt.request.number),
+                place: input.place,
+                ...(input.actor ? { actor: input.actor } : {}),
+                ...(input.actorThreadId ? { actorThreadId: input.actorThreadId } : {}),
+              });
+            const notifiedThreadId = yield* notifyFiling(input, attempt.request);
+            return {
+              request: attempt.request,
+              queued: false,
+              ...(input.messageId ? { notifiedThreadId } : {}),
+            };
+          }
+          if (attempt.kind === "no-tracker") {
+            return yield* fail(
+              "This thread's project has no Gitea tracker repository. Set one with t3-thread project tracker set.",
+            );
+          }
+          const threads = yield* readThreads;
+          yield* modifyOutbox((outbox) =>
+            enqueue(outbox, {
+              messageId,
+              threadId: input.threadId,
+              rootThreadId: findProjectRootThreadId(threads, input.threadId),
+              text: item.excerpt,
+              capturedAt: DateTime.formatIso(DateTime.makeUnsafe(stamp)),
+              explicit: true,
+              notify: input.messageId !== undefined,
+              items: [item],
+              filed: [],
+              attempts: 0,
+              lastError: "Gitea is unreachable.",
+              nextAttemptAt: stamp + 30_000,
+            }),
+          ).pipe(Effect.mapError(() => fail("Could not queue the request.")));
+          yield* startDrain;
+          return { request: null, queued: true };
+        }),
+      );
 
     /**
      * An agent moves a request through its stages: in progress, ready for Brad,
@@ -757,7 +950,11 @@ export const make = (deps: {
         const names = new Set((issue.labels ?? []).map((label) => label.name.toLowerCase()));
         // Typing a task is the one change that applies to any tracker issue, open or closed.
         const typeOnly =
-          (input.kind !== undefined || input.bug !== undefined || input.title !== undefined) &&
+          (input.kind !== undefined ||
+            input.bug !== undefined ||
+            input.title !== undefined ||
+            input.partOf !== undefined ||
+            input.duplicateOf !== undefined) &&
           input.status === undefined &&
           input.comment === undefined &&
           input.release === undefined;
@@ -765,6 +962,51 @@ export const make = (deps: {
         // the issue a thread is linked to, not only on captured requests.
         if (!typeOnly && issue.state === "closed") {
           return yield* fail("That issue is already closed.");
+        }
+        if (input.partOf !== undefined) {
+          if (input.partOf === reference.number)
+            return yield* fail("An item cannot be its own epic.");
+          if (input.partOf !== null && !(yield* validateEpic(input.threadId, input.partOf)))
+            return yield* fail("Could not validate the workstream while Gitea is unavailable.");
+          if (names.has("ask:epic") && input.partOf !== null)
+            return yield* fail("An epic cannot be placed inside another epic.");
+          yield* api
+            .send(target.instance, "PATCH", path, {
+              body: replacePartOf(issue.body ?? "", input.partOf),
+            })
+            .pipe(Effect.mapError((e) => fail(e.detail)));
+        }
+        if (input.duplicateOf !== undefined) {
+          const duplicate = parseRequestReference(input.duplicateOf, target);
+          if (
+            !duplicate ||
+            duplicate.repository !== target.repository ||
+            duplicate.number === reference.number
+          )
+            return yield* fail("Choose another issue in this repository as the duplicate target.");
+          yield* api
+            .request(
+              target.instance,
+              `${GiteaApi.repositoryPath(target.repository)}/issues/${duplicate.number}`,
+              GiteaIssueLabels,
+            )
+            .pipe(Effect.mapError((e) => fail(e.detail)));
+          yield* api
+            .send(target.instance, "POST", `${path}/comments`, {
+              body: `Duplicate of #${duplicate.number}`,
+            })
+            .pipe(Effect.mapError((e) => fail(e.detail)));
+          yield* api
+            .send(
+              target.instance,
+              "POST",
+              `${GiteaApi.repositoryPath(target.repository)}/issues/${duplicate.number}/comments`,
+              { body: `Duplicate: #${reference.number}` },
+            )
+            .pipe(Effect.mapError((e) => fail(e.detail)));
+          yield* api
+            .send(target.instance, "PATCH", path, { state: "closed" })
+            .pipe(Effect.mapError((e) => fail(e.detail)));
         }
         if (input.title !== undefined) {
           yield* api
@@ -873,7 +1115,8 @@ export const make = (deps: {
             .link({ threadId: input.threadId, reference: url })
             .pipe(Effect.mapError((error) => fail(error.message)));
         }
-        deps.projectIssues.invalidate(target);
+        invalidate(target);
+        yield* refreshDashboard;
         return {
           host: target.host,
           repository: target.repository,
@@ -883,7 +1126,12 @@ export const make = (deps: {
       });
 
     /** One short user message to a thread; the server queues or steers it when a run is active. */
-    const tellThread = (recipient: { readonly id: ThreadId }, text: string, number: number) =>
+    const tellThread = (
+      recipient: { readonly id: ThreadId },
+      text: string,
+      number: number,
+      messageId?: string,
+    ) =>
       Effect.gen(function* () {
         const stamp = yield* Clock.currentTimeMillis;
         return yield* engine
@@ -891,15 +1139,37 @@ export const make = (deps: {
             type: "message.dispatch",
             createdBy: "user",
             creationSource: "server",
-            commandId: CommandId.make(`decision:${stamp}:${number}`),
+            commandId: CommandId.make(
+              messageId ? `request-filed:${messageId}` : `decision:${stamp}:${number}`,
+            ),
             threadId: recipient.id,
-            messageId: MessageId.make(`decision:${stamp}:${number}`),
+            messageId: MessageId.make(messageId ?? `decision:${stamp}:${number}`),
             text,
             attachments: [],
             deliveryIntent: "auto",
             dispatchMode: { type: "start_immediately" },
           })
           .pipe(Effect.as(recipient.id));
+      });
+
+    /** The original box message id also keys the owner notification and its eventual answer. */
+    const notifyFiling = (input: ProjectRequestCreateInput, request: ProjectRequestRef) =>
+      Effect.gen(function* () {
+        if (!input.messageId) return null;
+        const resolved = yield* resolveOrFail(input.threadId);
+        if (notifiedFilings.has(input.messageId)) return resolved.root.id;
+        const notified = yield* tellThread(
+          resolved.root,
+          `Filed ${request.repository}#${request.number}: ${input.title}. Brad's words are in the issue. Continue from that issue; do not file this message again.`,
+          request.number,
+          input.messageId,
+        ).pipe(Effect.orElseSucceed(() => null));
+        if (notified !== null) {
+          notifiedFilings.add(input.messageId);
+          if (notifiedFilings.size > RECENT_MESSAGE_LIMIT)
+            notifiedFilings.delete(notifiedFilings.values().next().value!);
+        }
+        return notified;
       });
 
     /**
@@ -954,7 +1224,7 @@ export const make = (deps: {
             ),
           );
         }
-        deps.projectIssues.invalidate(target);
+        invalidate(target);
 
         const threads = yield* readThreads.pipe(
           Effect.mapError(() => fail(`The answer is on ${ref}, but threads could not be read.`)),
@@ -1177,9 +1447,89 @@ export const make = (deps: {
       Effect.gen(function* () {
         const threads = yield* readThreads;
         const rootThreadId = findProjectRootThreadId(threads, input.threadId);
-        const result = yield* deps.projectIssues.list({ rootThreadId });
-        return { ...result, issues: result.issues.filter((issue) => issue.isRequest) };
+        const result = yield* deps.projectIssues.list({ rootThreadId }, { complete: true });
+        const resolved = yield* resolveOrFail(input.threadId);
+        const repository = result.repositories.find(
+          (r) => repositoryKey(r) === repositoryKey(resolved.target),
+        );
+        if (repository?.error) return yield* fail(repository.error);
+        return { ...result, issues: orderedRequestList(result.issues) };
       });
+
+    const validateEpic = (threadId: ThreadId, number: number) =>
+      Effect.gen(function* () {
+        const resolved = yield* resolveOrFail(threadId);
+        const result = yield* deps.projectIssues.list(
+          { rootThreadId: resolved.root.id },
+          { complete: true },
+        );
+        if (
+          result.repositories.find((r) => repositoryKey(r) === repositoryKey(resolved.target))
+            ?.error
+        )
+          return false;
+        const rows = result.issues.filter(
+          (i) => repositoryKey(i) === repositoryKey(resolved.target),
+        );
+        const epic = orderRecords(rows).find(
+          (i) =>
+            i.host === resolved.target.host &&
+            i.repository === resolved.target.repository &&
+            i.number === number,
+        );
+        if (!epic || epic.closedAt !== null || !workstreamNumbers(rows).has(number))
+          return yield* fail("Choose an open epic in this project's tracker.");
+        return true;
+      });
+    const findFiled = (threadId: ThreadId, messageId: string) =>
+      Effect.gen(function* () {
+        const resolved = yield* resolveOrFail(threadId);
+        invalidate(resolved.target);
+        const result = yield* deps.projectIssues.list(
+          { rootThreadId: resolved.root.id },
+          { complete: true, closedHistory: true },
+        );
+        const repository = result.repositories.find(
+          (r) => repositoryKey(r) === repositoryKey(resolved.target),
+        );
+        if (repository?.error) return { request: null, available: false };
+        return {
+          available: true,
+          request:
+            result.issues.find(
+              (i) =>
+                i.host === resolved.target.host &&
+                i.repository === resolved.target.repository &&
+                i.requestSource?.messageId === messageId,
+            ) ?? null,
+        };
+      });
+    const ordering = yield* RequestOrder.RequestOrder.pipe(
+      Effect.provide(RequestOrder.layer),
+      Effect.provideService(
+        RequestOrder.RepositoryResolver,
+        RequestOrder.RepositoryResolver.of({
+          actor: (threadId) =>
+            engine.getThreadShell(threadId).pipe(
+              Effect.orElseSucceed(() => null),
+              Effect.map((thread) => ({
+                kind: "agent" as const,
+                threadId,
+                ...(thread ? { name: thread.title } : {}),
+              })),
+            ),
+          resolve: (threadId) => resolveOrFail(threadId).pipe(Effect.map((r) => r.target)),
+          list: (threadId) =>
+            Effect.gen(function* () {
+              const resolved = yield* resolveOrFail(threadId);
+              invalidate(resolved.target);
+              return (yield* listForThread({ threadId })).issues;
+            }),
+          changed: (target) =>
+            Effect.sync(() => invalidate(target)).pipe(Effect.andThen(refreshDashboard)),
+        }),
+      ),
+    );
 
     /** Capture after a successful dispatch when the command is a message Brad typed. */
     const observeDispatch = (command: object, surface: string | undefined) => {
@@ -1202,7 +1552,7 @@ export const make = (deps: {
         yield* api
           .send(target.instance, "PATCH", path, { state: input.reopen ? "open" : "closed" })
           .pipe(Effect.mapError((error) => fail(error.detail)));
-        deps.projectIssues.invalidate(target);
+        invalidate(target);
         return { settled: !input.reopen };
       });
 
@@ -1346,6 +1696,7 @@ export const make = (deps: {
     yield* startDrain;
 
     return {
+      waitForDrain,
       observeDispatch,
       capture,
       settle,
@@ -1353,6 +1704,9 @@ export const make = (deps: {
       decorate,
       withAnswers,
       create,
+      order: ordering.place,
+      queue: ordering.queue,
+      next: ordering.next,
       update,
       decide,
       discuss,
