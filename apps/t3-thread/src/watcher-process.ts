@@ -1,4 +1,6 @@
 import * as NodeChildProcess from "node:child_process";
+import * as NodeFS from "node:fs";
+import { THREAD_ROUTING_LOCK_HELPER } from "@t3tools/shared/threadRoutingState";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import * as NodeUtil from "node:util";
@@ -31,6 +33,12 @@ interface WatcherLease {
 
 const execFile = NodeUtil.promisify(NodeChildProcess.execFile);
 
+export function parseDarwinBootId(raw: string): string {
+  const seconds = /\bsec\s*=\s*(\d+)\b/.exec(raw)?.[1];
+  if (!seconds) throw new Error("Invalid Darwin kern.boottime output.");
+  return seconds;
+}
+
 /** Process identity survives PID reuse, but never a reboot or process replacement. */
 export async function readProcessIdentity(pid: number): Promise<WatcherLease | null> {
   const platform = Effect.runSync(HostProcess.Platform);
@@ -52,7 +60,7 @@ export async function readProcessIdentity(pid: number): Promise<WatcherLease | n
     return { pid, bootId, startTime };
   }
   if (platform === "darwin") {
-    const bootId = (await execFile("sysctl", ["-n", "kern.boottime"])).stdout.trim();
+    const bootId = parseDarwinBootId((await execFile("sysctl", ["-n", "kern.boottime"])).stdout);
     let startTime: string;
     try {
       startTime = (await execFile("ps", ["-p", String(pid), "-o", "lstart="])).stdout.trim();
@@ -103,9 +111,52 @@ export function isProcessRunning(pid: number): boolean {
 }
 
 function sameIdentity(left: WatcherLease, right: WatcherLease): boolean {
+  // Accept older Darwin leases without comparing their drifting usec/date suffix.
+  const bootId = (raw: string) => /\bsec\s*=\s*(\d+)\b/.exec(raw)?.[1] ?? raw;
   return (
-    left.pid === right.pid && left.bootId === right.bootId && left.startTime === right.startTime
+    left.pid === right.pid &&
+    bootId(left.bootId) === bootId(right.bootId) &&
+    left.startTime === right.startTime
   );
+}
+
+const openLock = NodeUtil.promisify(NodeFS.open);
+const closeLock = NodeUtil.promisify(NodeFS.close);
+const truncateLock = NodeUtil.promisify(NodeFS.ftruncate);
+const writeLock = NodeUtil.promisify(NodeFS.writeFile);
+
+/** The raw FD holds flock for the watcher lifetime, even if the lease disappears. */
+async function acquireWatcherLock(pidFile: string): Promise<number | null> {
+  await NodeFSP.mkdir(NodePath.dirname(pidFile), { recursive: true });
+  const fd = await openLock(
+    `${pidFile}.lock`,
+    NodeFS.constants.O_CREAT | NodeFS.constants.O_RDWR,
+    0o600,
+  );
+  try {
+    const acquired = await new Promise<boolean>((resolve, reject) => {
+      const child = NodeChildProcess.spawn("/usr/bin/perl", ["-e", THREAD_ROUTING_LOCK_HELPER], {
+        stdio: ["ignore", "ignore", "pipe", fd],
+      });
+      let stderr = "";
+      child.stderr?.setEncoding("utf8");
+      child.stderr?.on("data", (chunk: string) => {
+        stderr += chunk;
+      });
+      child.once("error", reject);
+      child.once("close", (code, signal) => {
+        if (code === 0) resolve(true);
+        else if (code === 1) resolve(false);
+        else reject(new Error(`Watcher lock helper failed (${signal ?? code}): ${stderr.trim()}`));
+      });
+    });
+    if (acquired) return fd;
+    await closeLock(fd);
+    return null;
+  } catch (error) {
+    await closeLock(fd);
+    throw error;
+  }
 }
 
 /** Returns the matching live owner, or reclaims only a provably stale lease. */
@@ -128,24 +179,44 @@ async function liveWatcher(pidFile: string): Promise<WatcherLease | null> {
 
 export async function claimWatcherLease(): Promise<(() => Promise<void>) | null> {
   const pidFile = watcherPidFile();
-  // Reuse the routing-state lock to serialize checking, reclaiming and claiming.
-  const lease = await updateState(async (state) => {
-    if (await liveWatcher(pidFile)) return { state, result: null };
-    const identity = await readProcessIdentity(process.pid);
-    if (!identity) throw new Error("Cannot identify the current watcher process.");
-    await NodeFSP.writeFile(pidFile, `${JSON.stringify(identity)}\n`, "utf8");
-    return { state, result: identity };
-  });
-  if (!lease) return null;
-  return async () => {
-    await updateState(async (state) => {
-      const current = await readWatcherLease(pidFile);
-      if (current && typeof current !== "number" && sameIdentity(current, lease)) {
-        await NodeFSP.unlink(pidFile);
-      }
-      return { state, result: undefined };
+  let fd: number | null = null;
+  try {
+    // Serialize lock admission and owner recording so ensure never sees a partial owner.
+    const lease = await updateState(async (state) => {
+      fd = await acquireWatcherLock(pidFile);
+      if (fd === null) return { state, result: null };
+      await truncateLock(fd, 0);
+      await writeLock(fd, `${process.pid}\n`, "utf8");
+      if (await liveWatcher(pidFile)) return { state, result: null };
+      const identity = await readProcessIdentity(process.pid);
+      if (!identity) throw new Error("Cannot identify the current watcher process.");
+      await NodeFSP.writeFile(pidFile, `${JSON.stringify(identity)}\n`, "utf8");
+      return { state, result: identity };
     });
-  };
+    if (!lease || fd === null) {
+      if (fd !== null) await closeLock(fd);
+      return null;
+    }
+    const heldFd = fd;
+    fd = null;
+    return async () => {
+      try {
+        await updateState(async (state) => {
+          const current = await readWatcherLease(pidFile);
+          if (current && typeof current !== "number" && sameIdentity(current, lease)) {
+            await NodeFSP.unlink(pidFile);
+          }
+          return { state, result: undefined };
+        });
+      } finally {
+        // Keep the persistent lock inode; process exit also closes this descriptor.
+        await closeLock(heldFd);
+      }
+    };
+  } catch (error) {
+    if (fd !== null) await closeLock(fd);
+    throw error;
+  }
 }
 
 export async function ensureWatcherProcess(input: {
@@ -156,10 +227,20 @@ export async function ensureWatcherProcess(input: {
   deliver: boolean;
 }): Promise<WatcherEnsureResult> {
   const pidFile = watcherPidFile();
-  const existing = await updateState(async (state) => ({
-    state,
-    result: await liveWatcher(pidFile),
-  }));
+  const existing = await updateState(async (state) => {
+    const fd = await acquireWatcherLock(pidFile);
+    if (fd === null) {
+      const owner = Number((await NodeFSP.readFile(`${pidFile}.lock`, "utf8")).trim());
+      if (!Number.isInteger(owner) || owner <= 0)
+        throw new Error("Cannot identify watcher lock owner.");
+      return { state, result: { pid: owner } };
+    }
+    try {
+      return { state, result: await liveWatcher(pidFile) };
+    } finally {
+      await closeLock(fd);
+    }
+  });
   if (existing) return { status: "already-running", pid: existing.pid };
 
   const repoRoot = repoRootFromArgv();

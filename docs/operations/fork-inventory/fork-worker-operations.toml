@@ -48,3 +48,9 @@ id = "fork17-thread-result-tail"
 date = "2026-10-13"
 decided = "Port the published finite result timeline and human/assistant filters alongside r29 bounded snapshots."
 rationale = "Default result reads preserve real timeline items; full history remains an explicit transcript/final-message operation. Retain r29 history paging, page-agent filtering and bounded completion polling."
+
+[[decision]]
+id = "watcher-lifetime-singleton"
+date = "2026-10-13"
+decided = "repair-existing-concern"
+rationale = "Normalize Darwin boot identity to seconds, including older full-text leases, and hold the existing cross-platform inherited-FD flock helper for the watcher lifetime. Ensure treats the lifetime lock as authoritative even when the identity lease drifts or disappears. Linux boot UUID/start ticks and legacy lease reclamation remain unchanged."
