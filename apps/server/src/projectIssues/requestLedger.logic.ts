@@ -125,7 +125,7 @@ export function formatRequestIssueBody(input: {
   readonly source: ProjectIssueRequestSource;
 }): string {
   const quoted = input.excerpt
-    .trim()
+    .replace(/^(?:[ \t]*\r?\n)+|(?:\r?\n[ \t]*)+$/g, "")
     .split("\n")
     .map((line) => `> ${line}`)
     .join("\n");
@@ -322,7 +322,7 @@ export function formatFollowUpComment(input: {
   readonly item: number;
 }): string {
   const quoted = input.excerpt
-    .trim()
+    .replace(/^(?:[ \t]*\r?\n)+|(?:\r?\n[ \t]*)+$/g, "")
     .split("\n")
     .map((line) => `> ${line}`)
     .join("\n");
