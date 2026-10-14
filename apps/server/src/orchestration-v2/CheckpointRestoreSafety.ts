@@ -1,3 +1,4 @@
+import * as ShellSnapshotDiagnostics from "../diagnostics/ShellSnapshotDiagnostics.ts";
 import type { OrchestrationV2AppThread, OrchestrationV2CheckpointScope } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
@@ -37,7 +38,9 @@ export const isCheckpointRestoreIsolated = Effect.fn("orchestrationV2.isCheckpoi
       const worktreeCwd = yield* fileSystem.realPath(worktreePath);
       shared = cwd !== worktreeCwd;
       if (!shared) {
-        const shell = yield* projections.getShellSnapshot();
+        const shell = yield* projections
+          .getShellSnapshot()
+          .pipe(ShellSnapshotDiagnostics.withCaller("CheckpointRestoreSafety"));
         const checkedPaths = new Set<string>();
         for (const otherThread of [...shell.threads, ...shell.archivedThreads]) {
           if (otherThread.id === thread.id || otherThread.deletedAt !== null) continue;
