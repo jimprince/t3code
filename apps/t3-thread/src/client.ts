@@ -1650,6 +1650,9 @@ export class RemoteEnvironmentClient {
   /** Request ledger: requests are Gitea issues labeled `ask` in the project's tracker. */
   async projectRequest<T>(
     method:
+      | "projectRequestsOrder"
+      | "projectRequestsQueue"
+      | "projectRequestsNext"
       | "projectRequestsCreate"
       | "projectRequestsUpdate"
       | "projectRequestsList"
