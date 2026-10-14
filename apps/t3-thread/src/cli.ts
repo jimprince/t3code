@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import * as NodeCrypto from "node:crypto";
+import { epicNumber, filingPlace, registerRequestOrderCommands } from "./requestOrderCommands.js";
 import { registerRecoveryCommands } from "./recoveryCommands.js";
 import { ThreadId, MessageId } from "@t3tools/contracts";
 import { registerPlanCommands } from "./planCommands.js";
@@ -2036,6 +2038,11 @@ request
         repository: item.repository,
         title: item.title,
         status: item.status,
+        rank: item.rank ?? null,
+        position: item.position ?? null,
+        partOf: item.partOf ?? null,
+        placedBy: item.placedBy ?? null,
+        createdAt: item.createdAt,
         labels: item.labels,
         url: item.url,
         requestedIn: (item.requestSource as { threadId?: string } | null)?.threadId ?? null,
@@ -2047,22 +2054,66 @@ request
   .command("add")
   .argument("<thread>", "saved agent name or raw thread UUID that Brad asked")
   .argument("<title>", "the request in Brad's words")
-  .option("--kind <kind>", "question, task or epic", "task")
+  .option("--kind <kind>", "question, task, bug or epic", "task")
   .option("--bug", "tag a task as a bug")
   .option("--detail <text>", "Brad's exact words or extra context")
-  .action(async (reference, title, options: { kind: string; bug?: boolean; detail?: string }) => {
-    assertItemKind(options.kind);
-    const { agent: target, client } = await withAgent(reference);
-    const serverHasItemTypes = (await client.describe()).capabilities.projectItemTypes === true;
-    printJson(
-      await client.projectRequest("projectRequestsCreate", {
-        threadId: target.threadId,
-        title,
-        ...requestKindPayload(options.kind, options.bug === true, serverHasItemTypes),
-        ...(options.detail ? { detail: options.detail } : {}),
-      }),
-    );
-  });
+  .description(
+    "File an item: place it if you are sure of the workstream and position; leave it unplaced only when unsure",
+  )
+  .option("--epic <number>", "workstream epic (#N or N)")
+  .option("--next", "place first in the workstream")
+  .option("--last", "place last in the workstream")
+  .option("--after <number>", "place after an ordered sibling")
+  .option("--message-id <id>", "filing idempotency key (reuse it when retrying)")
+  .action(
+    async (
+      reference,
+      title,
+      options: {
+        kind: string;
+        bug?: boolean;
+        detail?: string;
+        epic?: string;
+        next?: boolean;
+        last?: boolean;
+        after?: string;
+        messageId?: string;
+      },
+    ) => {
+      if (options.kind === "bug") {
+        options.kind = "task";
+        options.bug = true;
+      }
+      assertItemKind(options.kind);
+      const place = filingPlace(options);
+      const partOf = options.epic === undefined ? undefined : epicNumber(options.epic);
+      const { agent: target, client } = await withAgent(reference);
+      const capabilities = (await client.describe()).capabilities;
+      const serverHasItemTypes = capabilities.projectItemTypes === true;
+      if ((place || partOf !== undefined) && !capabilities.projectRequestOrder)
+        throw new Error(
+          "This server does not support projectRequestOrder; upgrade it to place requests.",
+        );
+      printJson(
+        await client.projectRequest("projectRequestsCreate", {
+          messageId:
+            options.messageId ??
+            `cli:${NodeCrypto.createHash("sha256")
+              .update(JSON.stringify([target.threadId, process.env.T3_THREAD_ID, title, options]))
+              .digest("hex")}`,
+          threadId: target.threadId,
+          title,
+          ...requestKindPayload(options.kind, options.bug === true, serverHasItemTypes),
+          detail: options.detail ?? title,
+          ...(partOf === undefined ? {} : { partOf }),
+          ...(place === undefined ? {} : { place }),
+          ...(process.env.T3_THREAD_ID ? { actorThreadId: process.env.T3_THREAD_ID } : {}),
+        }),
+      );
+    },
+  );
+
+registerRequestOrderCommands(request, withAgent, printJson);
 
 for (const [name, status, description] of [
   ["start", "in-progress", "Mark a request as being worked on (links your thread to it)"],
