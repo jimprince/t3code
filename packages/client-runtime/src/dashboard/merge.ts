@@ -1,5 +1,14 @@
 import * as DateTime from "effect/DateTime";
-import type { DashboardSnapshot, DashboardSource, EnvironmentId } from "@t3tools/contracts";
+import type {
+  DashboardSnapshot,
+  DashboardSource,
+  EnvironmentId,
+  ThreadFilePlan,
+} from "@t3tools/contracts";
+
+/** The key of one thread's file plan in a merged dashboard. */
+export const filePlanKey = (environmentId: string, threadId: string) =>
+  `${environmentId}:${threadId}`;
 
 /** Environment-qualified source ids keep every task's age tied to its own server. */
 export function mergeDashboardSnapshots(
@@ -75,6 +84,15 @@ export function mergeDashboardSnapshots(
         release: { ...release, sourceId: sourceKey(environmentId, release.sourceId) },
       })),
     ),
+    // PLAN.md progress per thread, keyed by environment: the same thread id may exist on two servers.
+    filePlans: Object.fromEntries(
+      present.flatMap(({ environmentId, snapshot }) =>
+        Object.entries(snapshot.filePlans ?? {}).map(([threadId, plan]) => [
+          filePlanKey(environmentId, threadId),
+          plan,
+        ]),
+      ),
+    ) as Readonly<Record<string, ThreadFilePlan>>,
     sources: present.flatMap(({ environmentId, snapshot }) => {
       const used = new Set([
         ...snapshot.projects.flatMap((p) => p.sourceIds),
