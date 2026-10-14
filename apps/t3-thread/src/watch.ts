@@ -582,7 +582,8 @@ async function scanAttentionState(
       if (
         sourceThread.archivedAt ||
         sourceThread.deletedAt ||
-        sourceThread.settledOverride === "settled"
+        (sourceThread.settledOverride === "settled" &&
+          !finishedWithin(sourceThread, Date.parse(now()), SETTLED_COMPLETION_WINDOW_MS))
       )
         continue;
       if (
@@ -759,8 +760,9 @@ export async function hasActiveWork(
       const thread = await clientFactory(environment).findThread(agent.threadId);
       if (
         !thread.deletedAt &&
-        thread.settledOverride !== "settled" &&
-        IN_FLIGHT_SOURCE_STATES.has(classifyThread(thread).state)
+        (thread.settledOverride !== "settled"
+          ? IN_FLIGHT_SOURCE_STATES.has(classifyThread(thread).state)
+          : !thread.archivedAt && finishedWithin(thread, Date.now(), SETTLED_COMPLETION_GRACE_MS))
       ) {
         return true;
       }
