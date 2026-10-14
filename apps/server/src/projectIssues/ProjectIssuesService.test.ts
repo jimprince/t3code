@@ -72,7 +72,8 @@ describe("project issue metadata refresh", () => {
                   {
                     number: 73,
                     title: "Fixed title",
-                    body: "Part of #9\n\nDetails",
+                    body: "Part of #9\n\n- [x] First\n- [ ] Second\n> - [x] Quoted\n```md\n- [x] Fenced\n```",
+                    due_date: "2026-10-20T00:00:00Z",
                     state: "closed",
                     html_url: link.url,
                     created_at: now,
@@ -102,6 +103,10 @@ describe("project issue metadata refresh", () => {
       expect(result.issues).toMatchObject([
         { title: "Fixed title", status: "done", linkedThreadIds: [threadId], partOf: 9 },
       ]);
+      expect(result.issues[0]).toMatchObject({
+        dueDate: "2026-10-20",
+        plan: { done: 1, total: 2, hasChecklist: true, nextStep: "Second" },
+      });
       expect(commands).toMatchObject([
         {
           type: "thread.issue.sync",

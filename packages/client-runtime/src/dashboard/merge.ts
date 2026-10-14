@@ -42,7 +42,11 @@ export function mergeDashboardSnapshots(
       chosen.set(candidate.attention.id, candidate);
   }
   const sourceKey = (env: EnvironmentId, id: string) => `${env}:${id}`;
+  const planMigration = present.flatMap(({ environmentId, snapshot }) =>
+    (snapshot.planMigration ?? []).map((warning) => ({ ...warning, environmentId })),
+  );
   return {
+    ...(planMigration.length ? { planMigration } : {}),
     asOf: present.length
       ? DateTime.formatIso(
           DateTime.makeUnsafe(Math.max(...present.map((p) => Date.parse(p.snapshot.asOf)))),
@@ -64,6 +68,17 @@ export function mergeDashboardSnapshots(
             ...project,
             sourceIds: project.sourceIds.map((id) => sourceKey(environmentId, id)),
             attention,
+            workstreams: project.workstreams.map((workstream) => ({
+              ...workstream,
+              ...(workstream.progress
+                ? {
+                    progress: {
+                      ...workstream.progress,
+                      sourceId: sourceKey(environmentId, workstream.progress.sourceId),
+                    },
+                  }
+                : {}),
+            })),
             tasks: project.tasks.map((t) => ({
               ...t,
               sourceId: sourceKey(environmentId, t.sourceId),

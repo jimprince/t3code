@@ -20,6 +20,7 @@ export const DashboardProgress = Schema.Struct({
   planVersion: Schema.String,
   sourceId: Schema.String,
   confirmedAt: IsoDateTime,
+  confirmationKnown: Schema.optionalKey(Schema.Boolean),
 });
 export type DashboardProgress = typeof DashboardProgress.Type;
 export const DashboardMovement = Schema.Struct({
@@ -31,6 +32,7 @@ export const DashboardMovement = Schema.Struct({
 });
 export type DashboardMovement = typeof DashboardMovement.Type;
 export const DashboardTask = Schema.Struct({
+  membershipWarnings: Schema.optionalKey(Schema.Array(Schema.String)),
   id: Schema.String,
   sourceId: Schema.String,
   title: Schema.String,
@@ -46,10 +48,16 @@ export const DashboardTask = Schema.Struct({
   progress: Schema.NullOr(DashboardProgress),
   movement: DashboardMovement,
   forecast: Schema.NullOr(
-    Schema.Struct({ eta: IsoDateTime, basis: Schema.Literal("owner"), sourceId: Schema.String }),
+    Schema.Struct({
+      eta: IsoDateTime,
+      precision: Schema.optionalKey(Schema.Literals(["date", "instant"])),
+      basis: Schema.Literal("owner"),
+      sourceId: Schema.String,
+    }),
   ),
   nextStep: Schema.NullOr(Schema.String),
   attentionIds: Schema.Array(Schema.String),
+  hasChecklist: Schema.optionalKey(Schema.Boolean),
 });
 export type DashboardTask = typeof DashboardTask.Type;
 export const DashboardAttention = Schema.Struct({
@@ -71,6 +79,13 @@ export const DashboardAttention = Schema.Struct({
 });
 export type DashboardAttention = typeof DashboardAttention.Type;
 export const DashboardWorkstream = Schema.Struct({
+  membershipWarnings: Schema.optionalKey(Schema.Array(Schema.String)),
+  url: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  threadId: Schema.optionalKey(Schema.NullOr(ThreadId)),
+  progress: Schema.optionalKey(Schema.NullOr(DashboardProgress)),
+  childIssueIds: Schema.optionalKey(Schema.Array(Schema.String)),
+  unknownChildIds: Schema.optionalKey(Schema.Array(Schema.String)),
+  parentWorkstreamId: Schema.optionalKey(Schema.NullOr(Schema.String)),
   rank: Schema.optionalKey(Schema.NullOr(Schema.Number)),
   createdAt: Schema.optionalKey(IsoDateTime),
   placedBy: Schema.optionalKey(Schema.NullOr(ProjectRequestPlacer)),
@@ -80,12 +95,20 @@ export const DashboardWorkstream = Schema.Struct({
 });
 export type DashboardWorkstream = typeof DashboardWorkstream.Type;
 export const DashboardProject = Schema.Struct({
+  planSource: Schema.optionalKey(Schema.Literals(["tracker", "briefing"])),
+  planMigration: Schema.optionalKey(
+    Schema.Struct({
+      observedAt: IsoDateTime,
+      removedTaskIds: Schema.Array(Schema.String),
+    }),
+  ),
   id: Schema.String,
   rootThreadId: Schema.NullOr(ThreadId),
   parentId: Schema.NullOr(Schema.String),
   title: Schema.String,
   utility: Schema.Boolean,
   omittedTaskCount: NonNegativeInt,
+  omittedWorkstreamCount: Schema.optionalKey(NonNegativeInt),
   workstreams: Schema.Array(DashboardWorkstream),
   tasks: Schema.Array(DashboardTask),
   attention: Schema.Array(DashboardAttention),
@@ -108,6 +131,15 @@ export const DashboardRelease = Schema.Struct({
 export type DashboardRelease = typeof DashboardRelease.Type;
 /** One compact environment-local document. Environment identity comes from the authenticated connection. */
 export const DashboardSnapshot = Schema.Struct({
+  planMigration: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({
+        kind: Schema.Literal("unbound-briefing-file"),
+        fileName: Schema.String,
+        reason: Schema.String,
+      }),
+    ),
+  ),
   filePlans: Schema.optionalKey(Schema.Record(Schema.String, ThreadFilePlan)),
   revision: NonNegativeInt,
   asOf: IsoDateTime,

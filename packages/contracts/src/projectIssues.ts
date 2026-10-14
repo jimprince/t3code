@@ -59,15 +59,17 @@ export const ProjectMilestone = Schema.Struct({
 export type ProjectMilestone = typeof ProjectMilestone.Type;
 
 /**
- * How far an epic (an `ask:epic` issue, or an older `ask:plan`) has come: its
- * children are the issues its body checklist names plus those whose body starts
- * "Part of #N". A child is done when it is closed or ticked in the checklist.
+ * Unique child completion for an open epic or inferred workstream. Closed children,
+ * parent ticks and fully checked personal plans count as done; missing unticked
+ * child states remain unknown in the denominator.
  */
 export const ProjectEpicProgress = Schema.Struct({
   done: NonNegativeInt,
   total: NonNegativeInt,
   /** The children still open, in the epic's repository, for the phase word. */
   remaining: Schema.Array(PositiveInt),
+  children: Schema.optionalKey(Schema.Array(PositiveInt)),
+  unknown: Schema.optionalKey(Schema.Array(PositiveInt)),
 });
 export type ProjectEpicProgress = typeof ProjectEpicProgress.Type;
 
@@ -119,7 +121,22 @@ export const ProjectRequestPlacer = Schema.Struct({
 });
 export type ProjectRequestPlacer = typeof ProjectRequestPlacer.Type;
 
+export const ProjectIssuePlan = Schema.Struct({
+  truncated: Schema.optionalKey(Schema.Boolean),
+  done: NonNegativeInt,
+  total: NonNegativeInt,
+  hasChecklist: Schema.Boolean,
+  planVersion: Schema.String,
+  evidenceVersion: Schema.optionalKey(Schema.String),
+  confirmedAt: Schema.NullOr(IsoDateTime),
+  nextStep: Schema.NullOr(Schema.String),
+});
+export type ProjectIssuePlan = typeof ProjectIssuePlan.Type;
+
 export const ProjectIssue = Schema.Struct({
+  plan: Schema.optionalKey(ProjectIssuePlan),
+  dueDate: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  membershipWarnings: Schema.optionalKey(Schema.Array(Schema.String)),
   host: TrimmedNonEmptyString,
   repository: TrimmedNonEmptyString,
   number: PositiveInt,
@@ -127,7 +144,7 @@ export const ProjectIssue = Schema.Struct({
   url: TrimmedNonEmptyString,
   status: ProjectIssueStatus,
   labels: Schema.Array(Schema.String),
-  /** Labeled `ask`: a request Brad made, captured into the ledger. */
+  /** Captured asks, including legacy type-only ask labels. */
   isRequest: Schema.Boolean,
   requestSource: Schema.NullOr(ProjectIssueRequestSource),
   assignees: Schema.Array(Schema.String),
@@ -143,12 +160,16 @@ export const ProjectIssue = Schema.Struct({
   owner: Schema.optionalKey(ProjectIssueOwner),
   /** Set when Brad deferred the card. */
   deferral: Schema.optionalKey(ProjectIssueDeferral),
-  /** Set for requests (issues labeled ask). */
+  /** Set for asks, including legacy type-only labels. */
   stage: Schema.optionalKey(ProjectRequestStage),
   milestone: Schema.optionalKey(Schema.NullOr(ProjectMilestone)),
   /** Set for epics. */
   epic: Schema.optionalKey(ProjectEpicProgress),
-  /** The epic it is part of: its body starts "Part of #N", in the same repository. */
+  /** Legacy labelled-epic progress for roots that still read their briefing JSON. */
+  briefingEpic: Schema.optionalKey(ProjectEpicProgress),
+  /** Legacy canonical parent; null prevents inferred tracker membership on JSON roots. */
+  briefingPartOf: Schema.optionalKey(Schema.NullOr(PositiveInt)),
+  /** Primary same-repository workstream: canonical Part of wins over a unique checklist parent. */
   partOf: Schema.optionalKey(PositiveInt),
   rank: Schema.optionalKey(Schema.NullOr(Schema.Number)),
   placedBy: Schema.optionalKey(Schema.NullOr(ProjectRequestPlacer)),
@@ -173,6 +194,8 @@ export const ProjectIssue = Schema.Struct({
 export type ProjectIssue = typeof ProjectIssue.Type;
 
 export const ProjectIssueRepository = Schema.Struct({
+  noteCoverage: Schema.optionalKey(Schema.Literals(["complete", "bounded", "unavailable"])),
+  noteError: Schema.optionalKey(Schema.NullOr(Schema.String)),
   host: TrimmedNonEmptyString,
   repository: TrimmedNonEmptyString,
   /** Set when this repository could not be read; its issues are absent. */
