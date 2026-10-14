@@ -1,3 +1,4 @@
+import * as ShellSnapshotDiagnostics from "../diagnostics/ShellSnapshotDiagnostics.ts";
 import {
   ProjectRoadmapError,
   type ProjectRoadmap,
@@ -70,7 +71,7 @@ export const make = (deps: {
           })),
           items: roadmapItems(listing.issues, target, milestones),
         } satisfies ProjectRoadmap;
-      });
+      }).pipe(ShellSnapshotDiagnostics.withCaller("ProjectRoadmapService"));
 
     const move = (input: ProjectRoadmapMoveInput) =>
       Effect.gen(function* () {

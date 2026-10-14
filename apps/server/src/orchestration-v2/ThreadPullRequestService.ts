@@ -1,3 +1,4 @@
+import * as ShellSnapshotDiagnostics from "../diagnostics/ShellSnapshotDiagnostics.ts";
 import {
   canonicalRepositoryKey,
   sourceControlRepositorySelector,
@@ -127,10 +128,12 @@ export const make = Effect.gen(function* () {
    */
   const readThreadSnapshot = ({ threadId, backfill }: RefreshRequest) =>
     threadId === null
-      ? orchestrator.getShellSnapshot({
-          location: "active",
-          unsettledOnly: !(backfill || pendingBackfill.size > 0),
-        })
+      ? orchestrator
+          .getShellSnapshot({
+            location: "active",
+            unsettledOnly: !(backfill || pendingBackfill.size > 0),
+          })
+          .pipe(ShellSnapshotDiagnostics.withCaller("ThreadPullRequestService"))
       : Effect.gen(function* () {
           // Read the sequence first. The thread is then at least this new, so a
           // sync guarded by the sequence is rejected rather than missing a change.
