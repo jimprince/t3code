@@ -318,7 +318,7 @@ export function summarizeKitLog(text: string): { step: string | null; progress: 
   };
 }
 
-export const STUCK_AFTER_MS = 120_000;
+const STUCK_AFTER_MS = 120_000;
 
 const duration = (ms: number) => {
   const seconds = Math.max(0, Math.round(ms / 1000));
