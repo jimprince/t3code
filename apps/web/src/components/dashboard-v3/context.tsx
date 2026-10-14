@@ -9,6 +9,7 @@ import type {
   ScopedProject,
   SourceHealth,
 } from "./dashboard.logic";
+import type { DashboardNotice, OrderActions } from "./orderActions";
 import type { DecisionAnswers } from "./useDecisionAnswers";
 
 export interface DecisionRow {
@@ -53,10 +54,21 @@ export interface DashboardUi {
   /** Pre-fills the Ask box with an editable message to the owner; nothing is sent. */
   readonly prefill: { readonly text: string; readonly nonce: number } | null;
   readonly unstick: (title: string) => void;
+  /** Brad's writes to the order: place, retype, duplicate, Later. */
+  readonly order: OrderActions;
+  readonly report: (notice: Omit<DashboardNotice, "id">) => void;
+  readonly dismissNotice: () => void;
 }
 
 const DashboardUiContext = createContext<DashboardUi | null>(null);
 export const DashboardUiProvider = DashboardUiContext;
+
+/**
+ * The line under the request box: what the last filing or move did, and the way back. It has its
+ * own context so a new notice re-renders the lines that show it, not the whole Dashboard.
+ */
+export const NoticeContext = createContext<DashboardNotice | null>(null);
+export const useNotice = () => use(NoticeContext);
 
 export function useDashboardUi(): DashboardUi {
   const ui = use(DashboardUiContext);
