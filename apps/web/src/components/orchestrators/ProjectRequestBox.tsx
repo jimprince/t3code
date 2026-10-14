@@ -63,8 +63,9 @@ export const REQUEST_QUICK_ACTIONS: ReadonlyArray<RequestQuickAction> = [
  * to the project's intake thread, or its orchestrator, in the background,
  * through the normal send path where the request ledger captures it, and says
  * which request tracks it once filed. Save for later files it straight into the
- * roadmap's Later column without waking the orchestrator. One line until focused;
- * it folds back after sending, or on Escape when empty.
+ * roadmap's Later column without waking the orchestrator. One line until focused, when the
+ * composer and the quick actions open; it folds back after sending, and when it loses focus
+ * empty. Text that was typed keeps it open.
  */
 export function ProjectRequestBox({
   summary,
@@ -282,6 +283,7 @@ export function ProjectRequestBox({
         // One line until used; focusing it opens the composer in its place.
         <Input
           aria-label="New request"
+          size="compact"
           value=""
           readOnly
           placeholder={placeholder}
@@ -327,13 +329,15 @@ export function ProjectRequestBox({
           }}
         />
       ) : null}
-      {!open && quickActions && quickActions.length > 0 ? (
+      {open && cleared && quickActions && quickActions.length > 0 ? (
         <div className="flex flex-wrap gap-1.5">
           {quickActions.map((action) => (
             <Button
               key={action.label}
               size="xs"
               variant="outline"
+              // Keep the composer focused: a blur here would fold it before the click lands.
+              onMouseDown={(event) => event.preventDefault()}
               onClick={() => {
                 caretToEnd.current = true;
                 setText(action.text);
