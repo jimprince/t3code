@@ -1,3 +1,4 @@
+import * as ShellSnapshotDiagnostics from "../diagnostics/ShellSnapshotDiagnostics.ts";
 import packageJson from "../../package.json" with { type: "json" };
 import * as NodeOS from "node:os";
 import type {
@@ -75,7 +76,9 @@ const make = Effect.gen(function* () {
     .withPermit(
       Effect.gen(function* () {
         const now = DateTime.formatIso(yield* DateTime.now);
-        const shell = yield* engine.getShellSnapshot();
+        const shell = yield* engine
+          .getShellSnapshot()
+          .pipe(ShellSnapshotDiagnostics.withCaller("DashboardService"));
         const metadata = yield* listMetadata(sql);
         sources.set("local", {
           id: "local",
@@ -180,7 +183,9 @@ const make = Effect.gen(function* () {
     .pipe(Effect.catchCause(() => Effect.logWarning("Dashboard local refresh failed")));
   const refresh = singleFlight(
     Effect.gen(function* () {
-      const shell = yield* engine.getShellSnapshot();
+      const shell = yield* engine
+        .getShellSnapshot()
+        .pipe(ShellSnapshotDiagnostics.withCaller("DashboardService"));
       const metadata = yield* listMetadata(sql);
       const { roots } = dashboardRoots([...shell.threads, ...shell.archivedThreads], metadata);
       const activeRootIds = new Set(roots.map((r) => r.id));
