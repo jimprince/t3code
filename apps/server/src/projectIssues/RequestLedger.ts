@@ -1,3 +1,4 @@
+import * as ShellSnapshotDiagnostics from "../diagnostics/ShellSnapshotDiagnostics.ts";
 import * as Crypto from "effect/Crypto";
 import { makeNestingService } from "../forkThreads/NestingService.ts";
 import {
@@ -185,6 +186,7 @@ export const make = (deps: {
     const readThreads = Effect.gen(function* () {
       const snapshot = yield* engine
         .getShellSnapshot()
+        .pipe(ShellSnapshotDiagnostics.withCaller("RequestLedger"))
         .pipe(Effect.mapError(() => fail("Could not read threads.")));
       const parents = new Map(
         (yield* listMetadata(sql).pipe(
