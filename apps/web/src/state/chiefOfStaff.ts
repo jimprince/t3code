@@ -21,14 +21,11 @@ import { environmentThreadShells } from "./threads";
  * The front desk thread as a key string, so the layout re-renders only when the thread itself
  * changes and not on every shell update while agents run.
  */
-const chiefOfStaffKeyAtom = Atom.make((get) => {
-  let preferred: ScopedThreadRef | null = null;
+export const chiefOfStaffKeyAtom = Atom.make((get) => {
+  const preferred: ScopedThreadRef[] = [];
   for (const [environmentId, config] of get(environmentServerConfigsAtom)) {
     const threadId = config.settings?.chiefOfStaffThreadId;
-    if (threadId) {
-      preferred = { environmentId, threadId };
-      break;
-    }
+    if (threadId) preferred.push({ environmentId, threadId });
   }
   const found = selectScopedChiefOfStaffThread({
     threads: get(environmentThreadShells.threadShellsAtom),

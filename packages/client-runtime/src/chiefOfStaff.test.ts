@@ -78,6 +78,170 @@ const projection = {
   ],
 };
 
+describe("selectScopedChiefOfStaffThread across environments", () => {
+  const mac = EnvironmentId.make("mac");
+  const devVm = EnvironmentId.make("dev-vm");
+  const shell = (
+    environmentId: EnvironmentId,
+    id: string,
+    title: string,
+    overrides: {
+      archivedAt?: string | null;
+      updatedAt?: string;
+      pinnedAt?: string | null;
+      runtime?: { status: string } | null;
+    } = {},
+  ) => ({
+    environmentId,
+    id: ThreadId.make(id),
+    title,
+    archivedAt: null as string | null,
+    updatedAt: "2026-10-12T00:00:00Z",
+    ...overrides,
+  });
+  const ref = (environmentId: EnvironmentId, id: string) => ({
+    environmentId,
+    threadId: ThreadId.make(id),
+  });
+  // Brad's real shape: the Mac has no desk thread; the dev-vm has the desk and its inbox.
+  const macThread = shell(mac, "mac-other", "Some project");
+  const deskOnVm = shell(devVm, "e942f826", "Chief of Staff");
+  const inboxOnVm = shell(devVm, "82b73eb7", "Chief of Staff inbox");
+
+  it("finds the desk on a non-primary environment with no preference anywhere", () => {
+    expect(
+      selectScopedChiefOfStaffThread({
+        threads: [macThread, inboxOnVm, deskOnVm],
+        preferred: [],
+        primaryEnvironmentId: mac,
+      }),
+    ).toEqual(ref(devVm, "e942f826"));
+  });
+  it("never matches the inbox by title", () => {
+    expect(
+      selectScopedChiefOfStaffThread({
+        threads: [macThread, inboxOnVm],
+        preferred: [],
+        primaryEnvironmentId: mac,
+      }),
+    ).toBeNull();
+  });
+  it("lets a stale preference fall through to the next environment's preference", () => {
+    const real = shell(devVm, "real", "Whatever");
+    expect(
+      selectScopedChiefOfStaffThread({
+        threads: [macThread, real],
+        preferred: [ref(mac, "deleted"), ref(devVm, "real")],
+        primaryEnvironmentId: mac,
+      }),
+    ).toEqual(ref(devVm, "real"));
+  });
+  it("falls back to the title match when the only preference is stale", () => {
+    expect(
+      selectScopedChiefOfStaffThread({
+        threads: [macThread, deskOnVm],
+        preferred: [ref(mac, "deleted")],
+        primaryEnvironmentId: mac,
+      }),
+    ).toEqual(ref(devVm, "e942f826"));
+  });
+  it("keeps an existing explicit preference over a title match", () => {
+    const chosen = shell(devVm, "chosen", "Anything");
+    expect(
+      selectScopedChiefOfStaffThread({
+        threads: [shell(mac, "mac-desk", "Chief of Staff"), chosen],
+        preferred: [ref(devVm, "chosen")],
+        primaryEnvironmentId: mac,
+      }),
+    ).toEqual(ref(devVm, "chosen"));
+  });
+  it("skips an archived desk", () => {
+    expect(
+      selectScopedChiefOfStaffThread({
+        threads: [macThread, { ...deskOnVm, archivedAt: "2026-10-01T00:00:00Z" }],
+        preferred: [],
+        primaryEnvironmentId: mac,
+      }),
+    ).toBeNull();
+  });
+  describe("three threads titled Chief of Staff on the dev-vm", () => {
+    // Real shapes: the live desk replaced a failed, still pinned one and a failed empty one.
+    const pinned = "2026-10-10T00:00:00Z";
+    const live = (overrides: Parameters<typeof shell>[3] = {}) =>
+      shell(devVm, "2bf407ef-9db0-4b3f-bc7d-584d655c26a9", "Chief of Staff", {
+        runtime: { status: "running" },
+        updatedAt: "2026-10-13T20:00:00Z",
+        ...overrides,
+      });
+    const oldFailed = shell(devVm, "e942f826", "Chief of Staff", {
+      runtime: { status: "failed" },
+      pinnedAt: pinned,
+      updatedAt: "2026-10-13T22:00:00Z",
+    });
+    const emptyFailed = shell(devVm, "f61fa895", "Chief of Staff", {
+      runtime: { status: "failed" },
+      updatedAt: "2026-10-13T23:00:00Z",
+    });
+    const pick = (threads: ReturnType<typeof shell>[]) =>
+      selectScopedChiefOfStaffThread({ threads, preferred: [], primaryEnvironmentId: mac });
+    const liveRef = ref(devVm, "2bf407ef-9db0-4b3f-bc7d-584d655c26a9");
+
+    it.each([
+      ["pinned", live({ pinnedAt: pinned })],
+      ["unpinned, with an older pinned failed desk", live()],
+      ["idle", live({ runtime: { status: "idle" } })],
+      ["with no runtime yet", live({ runtime: null })],
+    ])("picks the live desk (%s)", (_name, desk) => {
+      expect(pick([oldFailed, emptyFailed, desk, inboxOnVm])).toEqual(liveRef);
+      expect(pick([desk, inboxOnVm, emptyFailed, oldFailed])).toEqual(liveRef);
+    });
+    it("prefers pinned among healthy desks, then recency, then id", () => {
+      const healthy = (id: string, overrides: Parameters<typeof shell>[3]) =>
+        shell(devVm, id, "Chief of Staff", { runtime: { status: "idle" }, ...overrides });
+      const old = healthy("a", { pinnedAt: pinned, updatedAt: "2026-10-01T00:00:00Z" });
+      const fresh = healthy("b", { updatedAt: "2026-10-05T00:00:00Z" });
+      expect(pick([fresh, old])).toEqual(ref(devVm, "a"));
+      const x = healthy("x", { updatedAt: "2026-10-05T00:00:00Z" });
+      const y = healthy("y", { updatedAt: "2026-10-05T00:00:00Z" });
+      expect(pick([x, y])).toEqual(ref(devVm, "y"));
+      expect(pick([y, x])).toEqual(ref(devVm, "y"));
+    });
+    it("still returns a failed desk when it is the only one, and an explicit preference wins", () => {
+      expect(pick([oldFailed, inboxOnVm])).toEqual(ref(devVm, "e942f826"));
+      expect(
+        selectScopedChiefOfStaffThread({
+          threads: [oldFailed, live(), inboxOnVm],
+          preferred: [ref(devVm, "e942f826")],
+          primaryEnvironmentId: mac,
+        }),
+      ).toEqual(ref(devVm, "e942f826"));
+    });
+  });
+  it("prefers the primary environment, then the most recently updated, among several matches", () => {
+    const macDesk = shell(mac, "mac-desk", "Front Desk", { updatedAt: "2026-10-01T00:00:00Z" });
+    const older = shell(devVm, "older", "Chief of Staff", {
+      updatedAt: "2026-10-02T00:00:00Z",
+    });
+    const newer = shell(devVm, "newer", "Chief of Staff", {
+      updatedAt: "2026-10-03T00:00:00Z",
+    });
+    expect(
+      selectScopedChiefOfStaffThread({
+        threads: [older, macDesk, newer],
+        preferred: [],
+        primaryEnvironmentId: mac,
+      }),
+    ).toEqual(ref(mac, "mac-desk"));
+    expect(
+      selectScopedChiefOfStaffThread({
+        threads: [older, newer],
+        preferred: [],
+        primaryEnvironmentId: mac,
+      }),
+    ).toEqual(ref(devVm, "newer"));
+  });
+});
+
 describe("Chief of Staff summary", () => {
   it("discovers the front desk, preserves an explicit choice, and hides unavailable targets", () => {
     expect(selectChiefOfStaffThread([operations, desk], null)).toBe(desk);
@@ -213,24 +377,6 @@ describe("Chief of Staff summary", () => {
       ).toBe(false);
     },
   );
-  it("resolves titles in the primary environment and preferences in their own environment", () => {
-    const primary = EnvironmentId.make("primary");
-    const remote = EnvironmentId.make("remote");
-    const threads = [
-      { ...desk, environmentId: remote },
-      { ...operations, environmentId: primary },
-    ];
-    expect(
-      selectScopedChiefOfStaffThread({ threads, preferred: null, primaryEnvironmentId: primary }),
-    ).toBeNull();
-    expect(
-      selectScopedChiefOfStaffThread({
-        threads,
-        preferred: { environmentId: remote, threadId: desk.id },
-        primaryEnvironmentId: primary,
-      }),
-    ).toEqual({ environmentId: remote, threadId: desk.id });
-  });
   it.each(["running", "failed", "interrupted"] as const)(
     "does not count a %s run with no assistant message as a reply",
     (status) => {

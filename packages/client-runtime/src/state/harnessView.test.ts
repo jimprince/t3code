@@ -652,8 +652,10 @@ describe("the three sidebar modes", () => {
     updatedAt: "2026-10-10T19:40:00.000Z",
     lastError: null,
   });
+  const agentRoot = shell("project-root", null);
   const threads = [
-    shell("project-root", null),
+    // UI-created user roots stay in Threads; a project is an agent-created root with workers.
+    { ...agentRoot, source: { ...agentRoot.source, createdBy: "agent" as const } },
     shell("project-worker", "project-root"),
     shell("harness-root", null, { purpose: "harness" }),
     shell("harness-worker", "harness-root", { hasPendingApprovals: true }),
