@@ -8,6 +8,7 @@ import {
   ThreadId,
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
+import { ChatAttachmentId } from "./chatAttachment.ts";
 import { ModelSelection } from "./modelSelection.ts";
 
 /**
@@ -111,6 +112,13 @@ export const ProjectIssueDeferral = Schema.Struct({
 });
 export type ProjectIssueDeferral = typeof ProjectIssueDeferral.Type;
 
+export const ProjectRequestPlacer = Schema.Struct({
+  kind: Schema.Literals(["brad", "agent"]),
+  threadId: Schema.optionalKey(ThreadId),
+  name: Schema.optionalKey(Schema.String),
+});
+export type ProjectRequestPlacer = typeof ProjectRequestPlacer.Type;
+
 export const ProjectIssue = Schema.Struct({
   host: TrimmedNonEmptyString,
   repository: TrimmedNonEmptyString,
@@ -142,6 +150,9 @@ export const ProjectIssue = Schema.Struct({
   epic: Schema.optionalKey(ProjectEpicProgress),
   /** The epic it is part of: its body starts "Part of #N", in the same repository. */
   partOf: Schema.optionalKey(PositiveInt),
+  rank: Schema.optionalKey(Schema.NullOr(Schema.Number)),
+  placedBy: Schema.optionalKey(Schema.NullOr(ProjectRequestPlacer)),
+  position: Schema.optionalKey(Schema.NullOr(PositiveInt)),
   /** Same-repository issue numbers its body or newest comment says it is "Blocked by". */
   blockedBy: Schema.optionalKey(Schema.Array(PositiveInt)),
   /** For a request waiting on Brad: the newest comment, usually the agent's answer or summary. */
@@ -366,6 +377,85 @@ export const ProjectRequestStartIntakeResult = Schema.Struct({
 });
 export type ProjectRequestStartIntakeResult = typeof ProjectRequestStartIntakeResult.Type;
 
+/** Placement is resolved from fresh tracker data; callers never supply a rank. */
+export const ProjectRequestPlace = Schema.Union([
+  Schema.Struct({ to: Schema.Literals(["top", "bottom", "none"]) }),
+  Schema.Struct({ to: Schema.Literals(["before", "after"]), reference: TrimmedNonEmptyString }),
+]);
+export type ProjectRequestPlace = typeof ProjectRequestPlace.Type;
+export const ProjectRequestOrderInput = Schema.Struct({
+  threadId: ThreadId,
+  reference: TrimmedNonEmptyString,
+  place: ProjectRequestPlace,
+  /** The interactive client identifies Brad; agents default to their calling thread. */
+  actor: Schema.optionalKey(Schema.Literal("brad")),
+  actorThreadId: Schema.optionalKey(ThreadId),
+});
+export type ProjectRequestOrderInput = typeof ProjectRequestOrderInput.Type;
+export const ProjectRequestOrderResult = Schema.Struct({
+  rank: Schema.NullOr(Schema.Number),
+  position: Schema.NullOr(PositiveInt),
+  workstream: Schema.NullOr(PositiveInt),
+});
+export type ProjectRequestOrderResult = typeof ProjectRequestOrderResult.Type;
+/** Brad withdraws a mistaken filing; agents may not close it this way. */
+export const ProjectRequestWithdrawInput = Schema.Struct({
+  threadId: ThreadId,
+  reference: TrimmedNonEmptyString,
+  actor: Schema.optionalKey(Schema.Literal("brad")),
+});
+export type ProjectRequestWithdrawInput = typeof ProjectRequestWithdrawInput.Type;
+export const ProjectRequestWithdrawResult = Schema.Struct({
+  withdrawn: Schema.Boolean,
+  notifiedThreadId: Schema.NullOr(ThreadId),
+});
+export const ProjectRequestOrderBatchInput = Schema.Struct({
+  threadId: ThreadId,
+  references: Schema.Array(TrimmedNonEmptyString).check(Schema.isMaxLength(500)),
+  movedReference: Schema.optionalKey(TrimmedNonEmptyString),
+  actor: Schema.optionalKey(Schema.Literal("brad")),
+});
+export type ProjectRequestOrderBatchInput = typeof ProjectRequestOrderBatchInput.Type;
+export const ProjectRequestOrderBatchResult = Schema.Struct({
+  ranks: Schema.Array(Schema.Struct({ number: PositiveInt, rank: Schema.Number })),
+});
+export type ProjectRequestOrderBatchResult = typeof ProjectRequestOrderBatchResult.Type;
+
+export const ProjectRequestQueueInput = Schema.Struct({
+  threadId: ThreadId,
+  epic: Schema.optionalKey(PositiveInt),
+  all: Schema.optionalKey(Schema.Boolean),
+});
+export type ProjectRequestQueueInput = typeof ProjectRequestQueueInput.Type;
+export const ProjectRequestQueueItem = Schema.Struct({
+  ...ProjectIssue.fields,
+  position: Schema.NullOr(PositiveInt),
+  kind: Schema.Literals(["task", "epic", "question"]),
+  bug: Schema.Boolean,
+});
+export const ProjectRequestQueueResult = Schema.Struct({
+  workstreams: Schema.Array(
+    Schema.Struct({
+      ws: Schema.NullOr(ProjectIssue),
+      now: Schema.Array(ProjectRequestQueueItem),
+      next: Schema.Array(ProjectRequestQueueItem),
+    }),
+  ),
+  new: Schema.Array(ProjectRequestQueueItem),
+});
+export type ProjectRequestQueueResult = typeof ProjectRequestQueueResult.Type;
+export const ProjectRequestNextResult = Schema.NullOr(ProjectRequestQueueItem);
+export type ProjectRequestNextResult = typeof ProjectRequestNextResult.Type;
+/** Reuses the validated attachment IDs produced by the app upload path. */
+export const UploadedAttachmentRef = Schema.Struct({
+  id: ChatAttachmentId,
+  type: Schema.Literals(["image", "file"]),
+  name: TrimmedNonEmptyString,
+  mimeType: TrimmedNonEmptyString,
+  sizeBytes: NonNegativeInt,
+});
+export type UploadedAttachmentRef = typeof UploadedAttachmentRef.Type;
+
 /** An agent files a request on Brad's behalf, in the tracker of its thread's project tree. */
 export const ProjectRequestCreateInput = Schema.Struct({
   threadId: ThreadId,
@@ -376,6 +466,12 @@ export const ProjectRequestCreateInput = Schema.Struct({
   detail: Schema.optionalKey(Schema.String),
   /** Save for later: filed parked, so it waits on the roadmap instead of the request list. */
   park: Schema.optionalKey(Schema.Boolean),
+  partOf: Schema.optionalKey(PositiveInt),
+  place: Schema.optionalKey(ProjectRequestPlace),
+  actor: Schema.optionalKey(Schema.Literal("brad")),
+  actorThreadId: Schema.optionalKey(ThreadId),
+  messageId: Schema.optionalKey(TrimmedNonEmptyString),
+  attachments: Schema.optionalKey(Schema.Array(UploadedAttachmentRef)),
 });
 export type ProjectRequestCreateInput = typeof ProjectRequestCreateInput.Type;
 
@@ -388,6 +484,10 @@ export const ProjectRequestUpdateInput = Schema.Struct({
   threadId: ThreadId,
   /** Issue number in the project's tracker repository, or a full issue URL. */
   reference: TrimmedNonEmptyString,
+  partOf: Schema.optionalKey(Schema.NullOr(PositiveInt)),
+  duplicateOf: Schema.optionalKey(TrimmedNonEmptyString),
+  /** Brad UI actions only; agents cannot settle or close duplicates. */
+  actor: Schema.optionalKey(Schema.Literals(["brad"])),
   /**
    * `needs-review`: ready for Brad to look at. `awaiting-release`: handed over,
    * waiting for the release batch. `needs-test`: shipped in `release`, waiting
@@ -424,6 +524,10 @@ export type ProjectRequestRef = typeof ProjectRequestRef.Type;
 export const ProjectRequestCreateResult = Schema.Struct({
   request: Schema.NullOr(ProjectRequestRef),
   queued: Schema.Boolean,
+  placeError: Schema.optionalKey(Schema.String),
+  attachmentError: Schema.optionalKey(Schema.String),
+  /** Present for direct UI filings: null when the issue was filed but notification failed. */
+  notifiedThreadId: Schema.optionalKey(Schema.NullOr(ThreadId)),
 });
 export type ProjectRequestCreateResult = typeof ProjectRequestCreateResult.Type;
 

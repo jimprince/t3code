@@ -1,3 +1,4 @@
+import * as IssueBody from "./issueBody.ts";
 import {
   ProjectIssuesError,
   type ProjectIssuesListResult,
@@ -108,6 +109,7 @@ export const make = (deps: {
   Effect.gen(function* () {
     const projectService = yield* ProjectService.ProjectService;
     const api = yield* GiteaApi.make;
+    const { editIssueBody } = yield* IssueBody.make;
     const sql = yield* SqlClient.SqlClient;
     const { ledger } = deps;
 
@@ -447,7 +449,8 @@ export const make = (deps: {
       deferLock.withPermit(
         Effect.gen(function* () {
           const found = yield* resolveIssue(input.threadId, input.reference);
-          const { target, path, issue } = found;
+          const { target, issue } = found;
+          const number = Number(found.path.split("/").at(-1));
           if (issue.state === "closed") return yield* fail("That issue is already closed.");
           const now = yield* Clock.currentTimeMillis;
           const nowIso = DateTime.formatIso(DateTime.makeUnsafe(now));
@@ -460,13 +463,12 @@ export const make = (deps: {
           } else {
             change = input.mode === "end" ? { mode: "end", now: nowIso } : { mode: "clear" };
           }
-          const next = applyDeferral(issue.body, change);
-          if (next.body !== (issue.body ?? "")) {
-            yield* api
-              .send(target.instance, "PATCH", path, { body: next.body })
-              .pipe(Effect.mapError((error) => fail(error.detail)));
-            deps.projectIssues.invalidate(target);
-          }
+          let next = applyDeferral(issue.body, change);
+          yield* editIssueBody(target, number, (body) => {
+            next = applyDeferral(body, change);
+            return next.body;
+          });
+          deps.projectIssues.invalidate(target);
           return {
             until: next.deferral?.until ?? null,
             movedToEndAt: next.deferral?.movedToEndAt ?? null,
