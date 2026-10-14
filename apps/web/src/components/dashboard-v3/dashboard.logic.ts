@@ -28,6 +28,13 @@ export interface DashboardData {
   readonly projects: ReadonlyArray<ScopedProject>;
   readonly releases: ReadonlyArray<ScopedRelease>;
   readonly sources: ReadonlyArray<DashboardSource>;
+  /** Briefing files the server could not bind to a project; absent from servers that predate it. */
+  readonly planMigration?: ReadonlyArray<{
+    readonly kind: "unbound-briefing-file";
+    readonly fileName: string;
+    readonly reason: string;
+    readonly environmentId?: EnvironmentId;
+  }>;
   /** PLAN.md progress by `filePlanKey(environmentId, threadId)`; absent from servers that predate it. */
   readonly filePlans?: Readonly<Record<string, ThreadFilePlan>>;
 }
@@ -63,6 +70,13 @@ export function mergeSnapshots(
       snapshot.releases.map((release) => ({ environmentId, release })),
     ),
     sources: present.flatMap(({ snapshot }) => snapshot.sources),
+    ...(present.some(({ snapshot }) => snapshot.planMigration?.length)
+      ? {
+          planMigration: present.flatMap(({ environmentId, snapshot }) =>
+            (snapshot.planMigration ?? []).map((warning) => ({ ...warning, environmentId })),
+          ),
+        }
+      : {}),
   };
 }
 
@@ -208,6 +222,11 @@ export type TaskForecast =
   | { readonly basis: "pace"; readonly expectedDone: number }
   | null;
 
+/** A tracker due date has day precision. A bare date is a date even from a server that omits it. */
+export function isDateOnlyEta(forecast: { readonly eta: string; readonly precision?: string }) {
+  return forecast.precision === "date" || /^\d{4}-\d{2}-\d{2}$/.test(forecast.eta);
+}
+
 /**
  * What a task is expected to do over the next window. An owner ETA is a commitment and wins. Pace
  * needs a measured delta (the server only measures with a sample about a window old), repeats it
@@ -236,10 +255,22 @@ export interface Rollup {
   readonly projectedDone: number | null;
   /** The latest owner ETA among the tasks. */
   readonly ownerEta: string | null;
+  /** The ETA is a calendar day (a tracker due date), so it is shown as a date, never a time. */
+  readonly ownerEtaDateOnly: boolean;
   readonly paceBasis: boolean;
   readonly closed: number;
   /** No steps in the window although the plan is open: the only stall the snapshot can prove. */
   readonly idle: number;
+}
+
+/**
+ * Whether a task has a real step list. A tracker task without a checklist carries a counting-only
+ * 0/1 (or 1/1 once closed); that is not a measured plan and never draws a bar or enters a total.
+ */
+export function hasStepList(task: DashboardTask): task is DashboardTask & {
+  readonly progress: NonNullable<DashboardTask["progress"]>;
+} {
+  return task.progress !== null && task.hasChecklist !== false;
 }
 
 /** Sums tasks into a workstream, project or release figure without inventing any missing part. */
@@ -254,13 +285,25 @@ export function rollup(tasks: ReadonlyArray<DashboardTask>): Rollup {
   let projectedAny = false;
   let replanned = false;
   let ownerEta: string | null = null;
+  let ownerEtaDateOnly = false;
   let paceBasis = false;
   let closed = 0;
   let idle = 0;
+  const noteOwnerEta = (task: DashboardTask) => {
+    const forecast = task.forecast;
+    if (!forecast || (ownerEta && forecast.eta <= ownerEta)) return;
+    ownerEta = forecast.eta;
+    ownerEtaDateOnly = isDateOnlyEta(forecast);
+  };
   for (const task of tasks) {
     if (task.status === "done") closed += 1;
-    if (!task.progress) {
-      if (task.status !== "done") unplanned += 1;
+    if (!hasStepList(task)) {
+      if (task.status !== "done") {
+        unplanned += 1;
+        // A tracker task's due date is a commitment even with no checklist to measure. A row that
+        // never had progress keeps its old behaviour and adds no ETA.
+        if (task.progress !== null) noteOwnerEta(task);
+      }
       continue;
     }
     planned += 1;
@@ -285,7 +328,7 @@ export function rollup(tasks: ReadonlyArray<DashboardTask>): Rollup {
       paceBasis = true;
     } else if (forecast?.basis === "owner") {
       projectedAny = true;
-      if (!ownerEta || forecast.eta > ownerEta) ownerEta = forecast.eta;
+      noteOwnerEta(task);
     }
   }
   return {
@@ -295,6 +338,7 @@ export function rollup(tasks: ReadonlyArray<DashboardTask>): Rollup {
     replanned,
     projectedDone: projectedAny && projected > done ? projected : null,
     ownerEta,
+    ownerEtaDateOnly,
     paceBasis,
     closed,
     idle,
@@ -380,8 +424,8 @@ export function takeBaseline(data: DashboardData, at: string): Baseline {
       tasks[`${key}|${task.id}`] = {
         title: task.title,
         status: task.status,
-        done: task.progress?.done ?? null,
-        total: task.progress?.total ?? null,
+        done: hasStepList(task) ? task.progress.done : null,
+        total: hasStepList(task) ? task.progress.total : null,
       };
     for (const item of project.attention) attention.push(`${key}|${item.id}`);
   }
@@ -422,7 +466,7 @@ export function diffAgainst(
         outcomes.push(change);
         continue;
       }
-      const now = task.progress;
+      const now = hasStepList(task) ? task.progress : null;
       if (!now || before.done === null || before.total === null) continue;
       if (now.total !== before.total) {
         changes.push({
@@ -547,24 +591,118 @@ function workstreamTasks(
   return project.tasks.filter((task) => wanted.has(task.id));
 }
 
+export type PlanWorkstream = DashboardProject["workstreams"][number];
+
+/** One workstream of the Plan: its listed tasks, and any child workstreams nested under it. */
+export interface PlanWorkstreamEntry {
+  readonly workstream: PlanWorkstream;
+  readonly tasks: DashboardTask[];
+  /**
+   * The epic's own task, when the snapshot keeps it (only to carry a waiting decision). It is a
+   * header's link target and never listed as a row.
+   */
+  readonly ownTask: DashboardTask | null;
+  readonly children: PlanWorkstreamEntry[];
+}
+
+/** A tracker epic header has its own issue; the Unsorted group and briefing bands do not. */
+export function isEpicHeader(workstream: PlanWorkstream): boolean {
+  return typeof workstream.url === "string";
+}
+
 /**
  * A project's workstreams with the tasks to list under each. An epic heads its own workstream (its
- * id is that workstream's id), so it is not repeated as a task row inside the workstream it sits in.
- * Workstreams left with no task are dropped.
+ * id is that workstream's id), so it is not repeated as a task row inside the workstream it sits
+ * in. A workstream left with no task is dropped, except a tracker epic header: an epic with no
+ * children, or whose finished children are not listed, is still a heading.
  */
-export function planWorkstreams(
-  project: DashboardProject,
-): Array<{ readonly workstream: DashboardProject["workstreams"][number]; tasks: DashboardTask[] }> {
+export function planWorkstreams(project: DashboardProject): PlanWorkstreamEntry[] {
   const entries = project.workstreams
-    .map((workstream) => ({ workstream, tasks: workstreamTasks(project, workstream) }))
-    .filter((entry) => entry.tasks.length > 0);
+    .map((workstream) => ({
+      workstream,
+      tasks: workstreamTasks(project, workstream),
+      ownTask: project.tasks.find((task) => task.id === workstream.id) ?? null,
+      children: [] as PlanWorkstreamEntry[],
+    }))
+    .filter((entry) => entry.tasks.length > 0 || isEpicHeader(entry.workstream));
   const epicIds = new Set(entries.map((entry) => entry.workstream.id));
   return entries
     .map((entry) => ({
-      workstream: entry.workstream,
+      ...entry,
       tasks: entry.tasks.filter((task) => !epicIds.has(task.id) || task.id === entry.workstream.id),
     }))
-    .filter((entry) => entry.tasks.length > 0);
+    .filter((entry) => entry.tasks.length > 0 || isEpicHeader(entry.workstream));
+}
+
+/**
+ * Nests each workstream under its parent epic when that parent is listed too. The parent counts the
+ * child once in its own children; nesting is only where the rows sit, so no figure is summed.
+ * Order stays the snapshot's.
+ */
+export function nestWorkstreams(
+  entries: ReadonlyArray<PlanWorkstreamEntry>,
+): PlanWorkstreamEntry[] {
+  const byId = new Map(entries.map((entry) => [entry.workstream.id, entry]));
+  const parentOf = (entry: PlanWorkstreamEntry) => {
+    const parent = entry.workstream.parentWorkstreamId;
+    return parent && parent !== entry.workstream.id ? (byId.get(parent) ?? null) : null;
+  };
+  // A parent chain that loops would leave every member without a root; list those at the top level.
+  const reachesRoot = (entry: PlanWorkstreamEntry): boolean => {
+    const seen = new Set<string>();
+    for (let at: PlanWorkstreamEntry | null = entry; at; at = parentOf(at)) {
+      if (seen.has(at.workstream.id)) return false;
+      seen.add(at.workstream.id);
+    }
+    return true;
+  };
+  const nested = entries.map((entry) => ({ ...entry, children: [] as PlanWorkstreamEntry[] }));
+  const nestedById = new Map(nested.map((entry) => [entry.workstream.id, entry]));
+  const roots: PlanWorkstreamEntry[] = [];
+  for (const entry of nested) {
+    const parent = parentOf(entry);
+    if (parent && reachesRoot(entry)) nestedById.get(parent.workstream.id)!.children.push(entry);
+    else roots.push(entry);
+  }
+  return roots;
+}
+
+/** Every task listed under a workstream, nested ones included, plus the epic's own kept task. */
+export function entryTasks(entry: PlanWorkstreamEntry): DashboardTask[] {
+  return [
+    ...(entry.ownTask ? [entry.ownTask] : []),
+    ...entry.tasks,
+    ...entry.children.flatMap(entryTasks),
+  ];
+}
+
+const MEMBERSHIP_WORDS: Readonly<Record<string, string>> = {
+  "conflicting-checklist-parents": "listed under several parent checklists",
+  "cyclic-membership": "its parents form a loop",
+  "malformed-parent": "its Part of line is malformed",
+  "self-reference": "it names itself as its parent",
+  "missing-or-closed-parent": "its parent is missing or closed",
+};
+
+/**
+ * The tracker's warnings on one issue, each as a short line. A truncated body is a read limit, not
+ * a membership problem, so it is never prefixed "Membership:".
+ */
+export function planNotes(warnings: ReadonlyArray<string> | undefined): string[] {
+  if (!warnings) return [];
+  const unique = [...new Set(warnings)];
+  const membership = unique
+    .filter((code) => code !== "truncated-body")
+    .map((code) => MEMBERSHIP_WORDS[code] ?? code.replaceAll("-", " "));
+  return [
+    ...(unique.includes("truncated-body") ? ["Plan body truncated"] : []),
+    ...(membership.length > 0 ? [`Membership: ${membership.join("; ")}`] : []),
+  ];
+}
+
+/** "Unbound briefing file: t3-product.json": a source:tracker file that matches no project. */
+export function unboundBriefingLabel(warning: { readonly fileName: string }): string {
+  return `Unbound briefing file: ${warning.fileName}`;
 }
 
 /**
@@ -584,8 +722,9 @@ export function orderProducts(
 ): { readonly ordered: ScopedProject[]; readonly idle: ScopedProject[] } {
   const rank = (scoped: ScopedProject): number | null => {
     const tasks = projectTasks(all, scoped);
-    if (scoped.project.attention.length > 0 || tasks.some((t) => t.attentionIds.length > 0))
-      return 0;
+    // A decision counts wherever it sits, including on a tracker epic's own task, which
+    // `projectTasks` leaves out of the counts but the server keeps only because it carries one.
+    if (waitsOnBrad(all, scoped)) return 0;
     if (tasks.length === 0) return scoped.project.omittedTaskCount > 0 ? 2 : null;
     const open = tasks.filter((task) => task.status !== "done");
     if (
@@ -609,12 +748,25 @@ export function orderProducts(
   };
 }
 
+/** Whether anything in a project or its subprojects is waiting on Brad, from the unfiltered tasks. */
+function waitsOnBrad(projects: ReadonlyArray<ScopedProject>, of: ScopedProject): boolean {
+  return [of, ...subprojectsOf(projects, of)].some(
+    (p) => p.project.attention.length > 0 || p.project.tasks.some((t) => t.attentionIds.length > 0),
+  );
+}
+
 /** A project's tasks and those of its subprojects, for its own line on Home. */
 export function projectTasks(
   projects: ReadonlyArray<ScopedProject>,
   of: ScopedProject,
 ): DashboardTask[] {
-  return [of, ...subprojectsOf(projects, of)].flatMap((p) => p.project.tasks);
+  return [of, ...subprojectsOf(projects, of)].flatMap((p) => {
+    // A tracker epic's own task is kept only to carry a waiting decision. The epic is a workstream
+    // header, already counted once as a child of its parent, so it is not another open task here.
+    if (p.project.planSource !== "tracker") return p.project.tasks;
+    const epics = new Set(p.project.workstreams.map((workstream) => workstream.id));
+    return p.project.tasks.filter((task) => !epics.has(task.id));
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -635,6 +787,31 @@ export function formatClock(iso: string, now: number): string {
   if (days === 0) return time;
   if (days > 0 && days < 7) return `${dayFormat.format(at)} ${time}`;
   return dateFormat.format(at);
+}
+
+const utcDayFormat = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  timeZone: "UTC",
+});
+
+/**
+ * A due date as "Oct 20": the calendar day as written. It is built and formatted in UTC, so no
+ * time zone can move it to a neighbouring day. The year follows only when it is not this one.
+ */
+export function formatEtaDay(eta: string, now: number): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(eta);
+  if (!match) return eta;
+  const year = Number(match[1]);
+  const text = utcDayFormat.format(
+    new Date(Date.UTC(year, Number(match[2]) - 1, Number(match[3]))),
+  );
+  return year === new Date(now).getFullYear() ? text : `${text}, ${year}`;
+}
+
+/** An owner ETA: a date for a tracker due date, a clock time for a source that sent an instant. */
+export function formatEta(eta: string, dateOnly: boolean, now: number): string {
+  return dateOnly ? formatEtaDay(eta, now) : formatClock(eta, now);
 }
 
 function startOfDay(ms: number): number {
@@ -662,10 +839,14 @@ export function ageLabel(iso: string, now: number): string {
   return `${Math.floor(minutes / (24 * 60))}d`;
 }
 
-/** The newest `confirmedAt` among tasks with a step list: how current a workstream's figures are. */
-export function newestConfirmation(tasks: ReadonlyArray<DashboardTask>): string | null {
-  const times = tasks.flatMap((task) => (task.progress ? [task.progress.confirmedAt] : []));
-  return times.length > 0 ? times.reduce((a, b) => (a > b ? a : b)) : null;
+/**
+ * When progress was last confirmed, or null when the snapshot does not know. The tracker sends an
+ * epoch placeholder with `confirmationKnown: false` for a first observation; it is not a date.
+ */
+export function knownConfirmation(
+  progress: { readonly confirmedAt: string; readonly confirmationKnown?: boolean } | null,
+): string | null {
+  return progress && progress.confirmationKnown !== false ? progress.confirmedAt : null;
 }
 
 /** Projects visible on a project's own page: it and everything nested under it. */
