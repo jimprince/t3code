@@ -15,7 +15,7 @@ import { buildThreadRouteParams } from "../../threadRoutes";
 import { Sheet, SheetPopup } from "../ui/sheet";
 import { OpenTaskContext } from "../orchestrators/TaskLink";
 import { ProjectTaskPanel } from "../orchestrators/ProjectTaskPanel";
-import { AskSection, FreshnessStamp, OlderServerLines, VariantSwitcher } from "./chrome";
+import { AskSection, FreshnessStamp, OlderServerLines } from "./chrome";
 import { DashboardUiProvider, type DashboardUi, type DecisionRow } from "./context";
 import {
   parseIssueTaskId,
@@ -25,13 +25,11 @@ import {
   type ScopedProject,
 } from "./dashboard.logic";
 import { DecisionDialog } from "./decisions";
-import { useCollapsedKeys, useDashboardVariant, useMinuteClock } from "./prefs";
+import { useCollapsedKeys, useMinuteClock } from "./prefs";
 import { sectionMarker } from "./parts";
 import { useDecisionAnswers } from "./useDecisionAnswers";
 import { useVisitBaseline } from "./useVisitBaseline";
 import { VariantA } from "./VariantA";
-import { VariantB } from "./VariantB";
-import { VariantC } from "./VariantC";
 
 export type DashboardScope =
   | { readonly kind: "home" }
@@ -51,12 +49,9 @@ export function DashboardView({
   leading,
 }: {
   readonly scope: DashboardScope;
-  /** Rendered above the Ask box and every section, in all variants (the project's What's next canvas). */
+  /** Rendered above the Ask box and every section (the project's What's next canvas). */
   readonly leading?: ReactNode;
 }) {
-  const [storedVariant] = useDashboardVariant();
-  // Home has no previous dashboard to fall back on.
-  const variant = storedVariant === "previous" ? "A" : storedVariant;
   const state = useDashboardData();
   const now = useMinuteClock();
   const navigate = useNavigate();
@@ -219,9 +214,7 @@ export function DashboardView({
         className="@container/dash flex flex-col gap-2"
       >
         <div {...sectionMarker("freshness", { ready, revision: state.revision })}>
-          {/* The switcher leads the row: toasts stack at the top right and must not cover it. */}
           <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1">
-            <VariantSwitcher withPrevious={scope.kind === "project"} />
             {scope.kind === "project" ? (
               <Link to="/dashboard" className="text-xs text-muted-foreground hover:text-foreground">
                 Home
@@ -232,7 +225,7 @@ export function DashboardView({
           <OlderServerLines names={state.olderEnvironments} />
         </div>
         {leading}
-        <AskSection projectHead={projectHead} compact={variant === "B"} />
+        <AskSection projectHead={projectHead} />
         {data.asOf === null ? (
           <div data-testid="dashboard-placeholder" className="py-3 text-muted-foreground/80">
             Not loaded yet
@@ -241,10 +234,6 @@ export function DashboardView({
           <div className="py-3 text-muted-foreground/80">
             Not in this environment&apos;s snapshot
           </div>
-        ) : variant === "B" ? (
-          <VariantB />
-        ) : variant === "C" ? (
-          <VariantC />
         ) : (
           <VariantA />
         )}
