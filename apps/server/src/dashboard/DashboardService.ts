@@ -1,3 +1,4 @@
+import { PlanFileService, enrichFilePlanShells } from "../orchestration-v2/PlanFileService.ts";
 import * as ShellSnapshotDiagnostics from "../diagnostics/ShellSnapshotDiagnostics.ts";
 import packageJson from "../../package.json" with { type: "json" };
 import * as NodeOS from "node:os";
@@ -41,12 +42,13 @@ export class DashboardService extends Context.Service<
     readonly invalidate: Effect.Effect<void>;
   }
 >()("t3/dashboard/DashboardService") {}
-const make = Effect.gen(function* () {
+export const make = Effect.gen(function* () {
   const engine = yield* ThreadManagement.ThreadManagementService;
   const sql = yield* SqlClient.SqlClient;
   const issues = yield* ProjectIssuesService.Service;
   const projects = yield* ProjectService.ProjectService;
   const store = yield* DashboardStore.DashboardStore;
+  const planFiles = yield* PlanFileService;
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const changes = yield* PubSub.sliding<DashboardSnapshot>(1);
@@ -103,21 +105,30 @@ const make = Effect.gen(function* () {
             ),
           { concurrency: 4 },
         )).flat();
-        const next = aggregate({
-          shells: [...shell.threads, ...shell.archivedThreads],
-          metadata,
-          issues: issueRows,
-          plans: [...plans.values()],
-          sources: [...sources.values()],
-          samples,
-          now,
-          pendingAsks,
-          previous: snapshot,
-          rootRepositories: new Map([
-            ...rootRepositories({ ...shell, projects: yield* projects.listShells() }),
-            ...ownRepositories,
-          ]),
-        });
+        const shells = enrichFilePlanShells(yield* planFiles.scan, [
+          ...shell.threads,
+          ...shell.archivedThreads,
+        ]);
+        const next = {
+          ...aggregate({
+            shells,
+            metadata,
+            issues: issueRows,
+            plans: [...plans.values()],
+            sources: [...sources.values()],
+            samples,
+            now,
+            pendingAsks,
+            previous: snapshot,
+            rootRepositories: new Map([
+              ...rootRepositories({ ...shell, projects: yield* projects.listShells() }),
+              ...ownRepositories,
+            ]),
+          }),
+          filePlans: Object.fromEntries(
+            shells.flatMap((t) => (t.filePlan ? [[t.id, t.filePlan]] : [])),
+          ),
+        };
         const releaseSource = {
           id: "release:server",
           kind: "release" as const,
@@ -154,6 +165,7 @@ const make = Effect.gen(function* () {
                 : { ...s, observedAt: "" },
             ),
             releases: value.releases,
+            filePlans: value.filePlans,
           });
         const nextSamples = sampleProgress(
           next.projects.flatMap((p) => p.tasks),
