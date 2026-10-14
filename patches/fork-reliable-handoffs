@@ -1,7 +1,7 @@
 Bottom: 52a8a48e81e5c5e8d0a4cd8f73dfa95ccb7fade0
-Top:    52a8a48e81e5c5e8d0a4cd8f73dfa95ccb7fade0
+Top:    ebd309ca8e8d919408900f749693d22c1f2b9542
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 11:31:37 +0000
+Date:   2026-10-14 11:32:24 +0000
 
 fix(threads): deliver reliable handoffs with durable receipts
 
