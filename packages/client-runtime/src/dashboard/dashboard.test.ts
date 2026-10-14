@@ -9,10 +9,11 @@ import {
 import { v2ThreadShell } from "../state/orchestrationV2TestFixtures.ts";
 import { aggregate, dashboardRoots } from "./aggregation.ts";
 import { composeOlderDashboard } from "./fallback.ts";
-import { compactSnapshot, sampleProgress } from "./progress.ts";
+import { compactSnapshot, emptySnapshot, sampleProgress } from "./progress.ts";
 import {
   compareDashboardVersions,
   createDashboardSnapshotMerger,
+  filePlanKey,
   mergeDashboardSnapshots,
   overlayAnswered,
 } from "./merge.ts";
@@ -48,6 +49,7 @@ const shell: OrchestrationV2ShellSnapshot = {
     id,
     archivedAt: null,
     updatedAt: DateTime.makeUnsafe(now),
+    status: "running" as const,
     todoProgress: { completed: 2, total: 4 },
   })),
 };
@@ -569,5 +571,364 @@ describe("retired dashboard heads", () => {
       settledAt: DateTime.makeUnsafe(now),
     }));
     expect(dashboardRoots(threads, metadata).roots.map((t) => t.id)).toEqual([root, other]);
+  });
+});
+
+it("fills issue and thread-plan next steps while preserving a supplied briefing next_step", () => {
+  const shells = shell.threads.map((thread) => ({
+    ...thread,
+    todoProgress: {
+      completed: 1,
+      total: 3,
+      currentStep: { id: "verify", text: "Verify stored changes", status: "running" as const },
+    },
+  }));
+  const base = { shells, metadata, issues: input.issues, sources: [], plans: [], samples: [], now };
+  const result = aggregate(base);
+  const tasks = result.projects.flatMap((project) => project.tasks);
+  expect(tasks.find((task) => task.url === issue.url)?.nextStep).toBe("Verify stored changes");
+  expect(tasks.find((task) => task.id === `thread-plan:${root}`)?.nextStep).toBe(
+    "Verify stored changes",
+  );
+  const enriched = aggregate({
+    ...base,
+    plans: [
+      {
+        head: "head",
+        title: "Plan",
+        updated_utc: now,
+        workstreams: [
+          {
+            id: "work",
+            title: "Work",
+            tasks: [
+              {
+                id: "issue",
+                title: "Choose",
+                kind: "issue",
+                link: issue.url,
+                steps_total: 3,
+                steps_done: 1,
+                eta_utc: null,
+                next_step: "Owner's next step",
+                updated_utc: now,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+  expect(
+    enriched.projects.flatMap((project) => project.tasks).find((task) => task.url === issue.url)
+      ?.nextStep,
+  ).toBe("Owner's next step");
+});
+
+describe("thread-plan rows", () => {
+  const planned = (
+    overrides: Partial<(typeof shell.threads)[number]> & { readonly id?: ThreadId },
+  ) => ({ ...shell.threads[0]!, ...overrides });
+  const stopped = {
+    latestRunStatus: "failed" as const,
+    hasLiveSession: false,
+    hasLiveTurn: false,
+    failedSession: true,
+  };
+  const rows = (threads: ReadonlyArray<ReturnType<typeof planned>>) =>
+    aggregate({
+      shells: threads,
+      metadata: [{ threadId: root, parentThreadId: null, subproject: "on" as const }],
+      issues: new Map(),
+      sources: [],
+      plans: [],
+      samples: [],
+      now,
+    }).projects.flatMap((project) => project.tasks);
+  const progress = {
+    completed: 2,
+    total: 5,
+    currentStep: { id: "s3", text: "Wire the store", status: "running" as const },
+  };
+
+  it("shows a running thread's steps and current step", () => {
+    const [task] = rows([planned({ id: root, status: "running", todoProgress: progress })]);
+    expect(task).toMatchObject({
+      id: `thread-plan:${root}`,
+      status: "working",
+      progress: { done: 2, total: 5 },
+      nextStep: "Wire the store",
+    });
+  });
+
+  it("keeps a thread that is waiting on someone", () => {
+    expect(
+      rows([planned({ id: root, status: "waiting", todoProgress: progress })]).map((t) => t.id),
+    ).toEqual([`thread-plan:${root}`]);
+  });
+
+  it("shows no row for a thread without a plan", () => {
+    expect(rows([planned({ id: root, status: "running", todoProgress: null })])).toEqual([]);
+  });
+
+  it("shows a stopped thread with steps left, frozen at its last step", () => {
+    const [task] = rows([
+      planned({ id: root, status: "failed", todoProgress: progress, planResumeState: stopped }),
+    ]);
+    expect(task).toMatchObject({
+      status: "blocked",
+      progress: { done: 2, total: 5 },
+      nextStep: "Wire the store",
+      movement: { state: "unknown", doneDelta: null },
+    });
+  });
+
+  it("drops a thread that went idle without failing, and a finished plan", () => {
+    expect(
+      rows([
+        planned({
+          id: root,
+          status: "idle",
+          todoProgress: progress,
+          planResumeState: { ...stopped, latestRunStatus: "completed", failedSession: false },
+        }),
+      ]),
+    ).toEqual([]);
+    expect(
+      rows([
+        planned({
+          id: root,
+          status: "running",
+          todoProgress: { completed: 5, total: 5, currentStep: null },
+        }),
+        planned({
+          id: child,
+          status: "failed",
+          todoProgress: { completed: 5, total: 5, currentStep: null },
+          planResumeState: stopped,
+        }),
+      ]),
+    ).toEqual([]);
+  });
+
+  it("keeps a stopped issue-linked thread on its issue row, with no second plan row", () => {
+    const tasks = aggregate({
+      shells: [
+        planned({ id: root, status: "running", todoProgress: null }),
+        planned({ id: child, status: "failed", todoProgress: progress, planResumeState: stopped }),
+      ],
+      metadata: [
+        { threadId: root, parentThreadId: null, subproject: "on" as const },
+        { threadId: child, parentThreadId: root },
+      ],
+      issues: new Map([[root, [{ ...issue, linkedThreadIds: [child] }]]]),
+      sources: [],
+      plans: [],
+      samples: [],
+      now,
+    }).projects.flatMap((project) => project.tasks);
+    expect(tasks.map((task) => task.id)).not.toContain(`thread-plan:${child}`);
+    expect(tasks.find((task) => task.url === issue.url)).toMatchObject({ threadId: child });
+  });
+
+  it("keeps a stopped linked thread that the issue row does not pick as its own plan row", () => {
+    const sibling = ThreadId.make("sibling");
+    const tasks = aggregate({
+      shells: [
+        planned({ id: root, status: "running", todoProgress: null }),
+        // The issue row resolves to the first linked thread with a plan: the live head's child.
+        planned({ id: child, status: "running", todoProgress: progress }),
+        planned({
+          id: sibling,
+          status: "failed",
+          todoProgress: progress,
+          planResumeState: stopped,
+        }),
+      ],
+      metadata: [
+        { threadId: root, parentThreadId: null, subproject: "on" as const },
+        { threadId: child, parentThreadId: root },
+        { threadId: sibling, parentThreadId: root },
+      ],
+      issues: new Map([[root, [{ ...issue, linkedThreadIds: [child, sibling] }]]]),
+      sources: [],
+      plans: [],
+      samples: [],
+      now,
+    }).projects.flatMap((project) => project.tasks);
+    expect(tasks.find((task) => task.url === issue.url)).toMatchObject({ threadId: child });
+    expect(tasks.map((task) => task.id)).not.toContain(`thread-plan:${child}`);
+    expect(tasks.find((task) => task.id === `thread-plan:${sibling}`)).toMatchObject({
+      status: "blocked",
+      threadId: sibling,
+    });
+  });
+
+  describe("an issue that waits on one thread but borrows another's steps", () => {
+    // The issue names the head as waiting, so its row points at the head, but its progress and next
+    // step come from the linked worker: the worker's steps are already on the issue row.
+    const worker = ThreadId.make("borrowed-worker");
+    const waitingIssue = {
+      ...issue,
+      linkedThreadIds: [worker],
+      decision: { ...issue.decision!, waiting: root },
+    };
+    const aggregateWith = (workerShell: ReturnType<typeof planned>) => {
+      const snapshot = aggregate({
+        shells: [planned({ id: root, status: "running", todoProgress: null }), workerShell],
+        metadata: [
+          { threadId: root, parentThreadId: null, subproject: "on" as const },
+          { threadId: worker, parentThreadId: root },
+        ],
+        issues: new Map([[root, [waitingIssue]]]),
+        sources: [],
+        plans: [],
+        samples: [],
+        now,
+      });
+      const tasks = snapshot.projects.flatMap((project) => project.tasks);
+      const steps = tasks.reduce(
+        (sum, task) => ({
+          done: sum.done + (task.progress?.done ?? 0),
+          total: sum.total + (task.progress?.total ?? 0),
+        }),
+        { done: 0, total: 0 },
+      );
+      return { tasks, steps };
+    };
+
+    it("counts a running worker's steps once, on the issue row only", () => {
+      const { tasks, steps } = aggregateWith(
+        planned({ id: worker, status: "running", todoProgress: progress }),
+      );
+      expect(tasks.find((task) => task.url === issue.url)).toMatchObject({
+        threadId: root,
+        progress: { done: 2, total: 5 },
+        nextStep: "Wire the store",
+      });
+      expect(tasks.map((task) => task.id)).not.toContain(`thread-plan:${worker}`);
+      expect(steps).toEqual({ done: 2, total: 5 });
+    });
+
+    it("gives a stopped worker its own resumable row without counting its steps again", () => {
+      const { tasks, steps } = aggregateWith(
+        planned({
+          id: worker,
+          status: "failed",
+          todoProgress: progress,
+          planResumeState: stopped,
+        }),
+      );
+      expect(tasks.find((task) => task.id === `thread-plan:${worker}`)).toMatchObject({
+        status: "blocked",
+        threadId: worker,
+        progress: null,
+      });
+      expect(steps).toEqual({ done: 2, total: 5 });
+    });
+  });
+
+  it("gives an in-flight linked thread that the issue row does not pick no extra row", () => {
+    const sibling = ThreadId.make("sibling");
+    const tasks = aggregate({
+      shells: [
+        planned({ id: root, status: "running", todoProgress: null }),
+        planned({ id: child, status: "running", todoProgress: progress }),
+        planned({ id: sibling, status: "running", todoProgress: progress }),
+      ],
+      metadata: [
+        { threadId: root, parentThreadId: null, subproject: "on" as const },
+        { threadId: child, parentThreadId: root },
+        { threadId: sibling, parentThreadId: root },
+      ],
+      issues: new Map([[root, [{ ...issue, linkedThreadIds: [child, sibling] }]]]),
+      sources: [],
+      plans: [],
+      samples: [],
+      now,
+    }).projects.flatMap((project) => project.tasks);
+    expect(tasks.filter((task) => task.id.startsWith("thread-plan:"))).toEqual([]);
+  });
+
+  it("keeps the row of a failed thread whose plan comes only from a PLAN.md", () => {
+    // The server enriches such a shell: filePlan plus the todo progress derived from it, and (with
+    // the planResumeState fix) the resume state, although the thread never wrote a native todo list.
+    const filePlan = {
+      planPath: "/plans/a/PLAN.md",
+      host: "dev-vm",
+      planTitle: "A",
+      status: "in progress",
+      done: 1,
+      total: 4,
+      currentStep: { id: "s2", text: "Write the exporter", status: "pending" as const },
+      hasResumePoint: true,
+    };
+    const [task] = rows([
+      planned({
+        id: root,
+        status: "failed",
+        filePlan,
+        todoProgress: { completed: 1, total: 4, currentStep: filePlan.currentStep },
+        planResumeState: stopped,
+      }),
+    ]);
+    expect(task).toMatchObject({
+      id: `thread-plan:${root}`,
+      status: "blocked",
+      progress: { done: 1, total: 4 },
+      nextStep: "Write the exporter",
+    });
+  });
+
+  it("drops a settled stopped thread", () => {
+    expect(
+      rows([
+        planned({
+          id: root,
+          status: "failed",
+          todoProgress: progress,
+          planResumeState: stopped,
+          settledOverride: "settled",
+        }),
+      ]),
+    ).toEqual([]);
+  });
+});
+
+describe("file plans in the merged dashboard", () => {
+  const plan = (done: number) => ({
+    planPath: "/plans/a/PLAN.md",
+    host: "dev-vm",
+    planTitle: "A",
+    status: "in progress",
+    done,
+    total: 4,
+    currentStep: { id: "s", text: "Step", status: "pending" as const },
+    hasResumePoint: true,
+  });
+  const one = EnvironmentId.make("one");
+  const two = EnvironmentId.make("two");
+
+  it("keys each environment's plans apart, so one thread id on two servers keeps both", () => {
+    const merged = mergeDashboardSnapshots([
+      { environmentId: one, snapshot: { ...emptySnapshot(now), filePlans: { t: plan(1) } } },
+      { environmentId: two, snapshot: { ...emptySnapshot(now), filePlans: { t: plan(3) } } },
+    ]);
+    expect(merged.filePlans[filePlanKey(one, "t")]?.done).toBe(1);
+    expect(merged.filePlans[filePlanKey(two, "t")]?.done).toBe(3);
+  });
+
+  it("is empty for a server that predates file plans", () => {
+    expect(
+      mergeDashboardSnapshots([{ environmentId: one, snapshot: emptySnapshot(now) }]).filePlans,
+    ).toEqual({});
+  });
+
+  it("survives compaction", () => {
+    expect(compactSnapshot({ ...emptySnapshot(now), filePlans: { t: plan(2) } }).filePlans).toEqual(
+      {
+        t: plan(2),
+      },
+    );
   });
 });
