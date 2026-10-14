@@ -1,0 +1,4 @@
+id = "order-ui"
+category = "feature"
+functionality = "dashboard"
+text = "File tasks, bugs and epics from the Dashboard's request line (Enter files last, Cmd or Ctrl+Enter files next), triage new items in a New block, and order work by drag, menu or keyboard. Items filed in the last four hours carry a new mark that says who placed them."

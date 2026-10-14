@@ -78,3 +78,34 @@ export const deferProjectRequest = createEnvironmentRpcCommand(connectionAtomRun
   label: "environment-data:project-requests:defer",
   tag: WS_METHODS.projectRequestsDefer,
 });
+
+/**
+ * Order, retype, re-parent and file calls for one project run one at a time: each reads fresh
+ * tracker data on the server, so two in flight from this client would only race each other.
+ */
+const requestWrites = {
+  mode: "serial",
+  key: ({ environmentId, input }: { environmentId: string; input: { threadId: string } }) =>
+    `project-requests:${environmentId}:${input.threadId}`,
+} as const;
+
+/** The Dashboard asks the server to place an item in its order (top, bottom, before, after, none). */
+export const orderProjectRequest = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "environment-data:project-requests:order",
+  tag: WS_METHODS.projectRequestsOrder,
+  concurrency: requestWrites,
+});
+
+/** Retypes, re-parents or closes a duplicate of an item (Brad's Dashboard actions). */
+export const updateProjectRequest = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "environment-data:project-requests:update",
+  tag: WS_METHODS.projectRequestsUpdate,
+  concurrency: requestWrites,
+});
+
+/** The Dashboard request line files a typed item directly in the tracker, placed or not. */
+export const fileProjectRequest = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "environment-data:project-requests:file",
+  tag: WS_METHODS.projectRequestsCreate,
+  concurrency: requestWrites,
+});

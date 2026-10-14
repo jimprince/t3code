@@ -9,6 +9,7 @@ import type {
   ScopedProject,
   SourceHealth,
 } from "./dashboard.logic";
+import type { DashboardNotice, OrderActions } from "./orderActions";
 import type { DecisionAnswers } from "./useDecisionAnswers";
 
 export interface DecisionRow {
@@ -53,6 +54,12 @@ export interface DashboardUi {
   /** Pre-fills the Ask box with an editable message to the owner; nothing is sent. */
   readonly prefill: { readonly text: string; readonly nonce: number } | null;
   readonly unstick: (title: string) => void;
+  /** Brad's writes to the order: place, retype, duplicate, Later. */
+  readonly order: OrderActions;
+  /** The line under the request box: what the last filing or move did, and the way back. */
+  readonly notice: DashboardNotice | null;
+  readonly report: (notice: Omit<DashboardNotice, "id">) => void;
+  readonly dismissNotice: () => void;
 }
 
 const DashboardUiContext = createContext<DashboardUi | null>(null);
