@@ -4,8 +4,8 @@ import * as DateTime from "effect/DateTime";
 import type { ProjectIssuePlan } from "@t3tools/contracts";
 
 /** Only source Markdown counts: quoted examples and matching fenced blocks are excluded. */
-export const TRACKER_BODY_LIMIT = 64 * 1024;
-export const TRACKER_TEXT_LIMIT = 500;
+const TRACKER_BODY_LIMIT = 64 * 1024;
+const TRACKER_TEXT_LIMIT = 500;
 export const trackerBodyTruncated = (body: string | null | undefined) =>
   (body?.length ?? 0) > TRACKER_BODY_LIMIT;
 const shortText = (text: string) =>

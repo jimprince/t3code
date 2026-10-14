@@ -749,7 +749,7 @@ export function orderProducts(
 }
 
 /** Whether anything in a project or its subprojects is waiting on Brad, from the unfiltered tasks. */
-export function waitsOnBrad(projects: ReadonlyArray<ScopedProject>, of: ScopedProject): boolean {
+function waitsOnBrad(projects: ReadonlyArray<ScopedProject>, of: ScopedProject): boolean {
   return [of, ...subprojectsOf(projects, of)].some(
     (p) => p.project.attention.length > 0 || p.project.tasks.some((t) => t.attentionIds.length > 0),
   );
@@ -847,15 +847,6 @@ export function knownConfirmation(
   progress: { readonly confirmedAt: string; readonly confirmationKnown?: boolean } | null,
 ): string | null {
   return progress && progress.confirmationKnown !== false ? progress.confirmedAt : null;
-}
-
-/** The newest known `confirmedAt` among tasks with a step list: how current a workstream's figures are. */
-export function newestConfirmation(tasks: ReadonlyArray<DashboardTask>): string | null {
-  const times = tasks.flatMap((task) => {
-    const at = hasStepList(task) ? knownConfirmation(task.progress) : null;
-    return at ? [at] : [];
-  });
-  return times.length > 0 ? times.reduce((a, b) => (a > b ? a : b)) : null;
 }
 
 /** Projects visible on a project's own page: it and everything nested under it. */
