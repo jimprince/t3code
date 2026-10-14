@@ -30,7 +30,7 @@ const at = (iso: string) => DateTime.makeUnsafe(iso);
 interface Options {
   readonly parent?: string;
   /** How the thread came to be, with the lineage and creation fields the server stores for it. */
-  readonly kind?: "native" | "delegate" | "worker" | "root";
+  readonly kind?: "native" | "delegate" | "worker" | "fork" | "root";
   readonly title?: string;
   readonly settled?: boolean;
   /** A real run in flight, as a delegate_task child has. */
@@ -39,6 +39,9 @@ interface Options {
   readonly pending?: OrchestrationV2ThreadShell["pendingBackgroundTasks"];
   readonly purpose?: "project" | "harness";
   readonly userCreated?: boolean;
+  /** The creator's own actor and source, for a thread the server opened for the user. */
+  readonly createdBy?: "user" | "agent" | "system";
+  readonly creationSource?: "web" | "server" | "mcp";
   readonly activity?: string;
 }
 
@@ -52,14 +55,16 @@ function shell(id: string, options: Options = {}): OrchestratorThreadShell {
     ...v2ThreadShell,
     id: ThreadId.make(id),
     title: options.title ?? id,
-    createdBy: options.userCreated ? "user" : "agent",
-    creationSource: options.userCreated ? "web" : kind === "native" ? "provider" : "mcp",
+    createdBy: options.createdBy ?? (options.userCreated ? "user" : "agent"),
+    creationSource:
+      options.creationSource ??
+      (options.userCreated ? "web" : kind === "native" ? "provider" : "mcp"),
     createdAt: activity,
     updatedAt: activity,
     lineage: {
       rootThreadId: parent ?? ThreadId.make(id),
-      parentThreadId: subagent ? parent : null,
-      relationshipToParent: subagent ? "subagent" : null,
+      parentThreadId: subagent || kind === "fork" ? parent : null,
+      relationshipToParent: subagent ? "subagent" : kind === "fork" ? "fork" : null,
     },
     // A native child is runless: the provider drives its turn, so no run is ever recorded.
     activeProviderThreadId: kind === "native" ? ProviderThreadId.make(`pt-${id}`) : null,
@@ -152,7 +157,7 @@ describe("subagent rows", () => {
     expect(row.readOnly).toBe(true);
   });
 
-  it("lists a delegate_task child as writable, and only provider-native ones as read-only", () => {
+  it("lists a delegate_task child and a worker as writable, and only provider-native ones as read-only", () => {
     const rows = summaryOf(forest()).subagentRows;
     const readOnly = Object.fromEntries(rows.map((row) => [row.thread.id, row.readOnly]));
     expect(readOnly).toEqual({
@@ -160,13 +165,100 @@ describe("subagent rows", () => {
       "codex-native": true,
       delegate: false,
       "delegate-done": false,
+      worker: false,
     });
   });
 
-  it("does not list plain workers or the root as subagents", () => {
+  it("does not list the root as a row", () => {
     const ids = summaryOf(forest()).subagentRows.map((row) => row.thread.id);
-    expect(ids).not.toContain("worker");
     expect(ids).not.toContain("orch");
+  });
+
+  it("lists a nested worker as a writable worker row, subagents keeping their kind", () => {
+    const rows = summaryOf(forest()).subagentRows;
+    expect(Object.fromEntries(rows.map((row) => [row.thread.id, row.kind]))).toEqual({
+      worker: "worker",
+      "claude-task": "subagent",
+      "codex-native": "subagent",
+      delegate: "subagent",
+      "delegate-done": "subagent",
+    });
+    expect(rows.find((row) => row.thread.id === "worker")).toMatchObject({
+      parentKey: "env:orch",
+      readOnly: false,
+      working: false,
+      settled: false,
+    });
+  });
+
+  it("lists a subthread the user nested under a head, the same as a CLI worker", () => {
+    const threads = [
+      shell("orch"),
+      shell("mine", { kind: "worker", parent: "orch", userCreated: true, title: "My subthread" }),
+    ];
+    expect(summaryOf(threads).subagentRows.map((row) => [row.thread.title, row.kind])).toEqual([
+      ["My subthread", "worker"],
+    ]);
+  });
+
+  it("leaves out forks, system threads and threads the user opened through a server action", () => {
+    const threads = [
+      shell("orch"),
+      shell("forked", { kind: "fork", parent: "orch" }),
+      shell("sys", { kind: "worker", parent: "orch", createdBy: "system" }),
+      shell("discuss", {
+        kind: "worker",
+        parent: "orch",
+        createdBy: "user",
+        creationSource: "server",
+      }),
+    ];
+    expect(summaryOf(threads).subagentRows).toEqual([]);
+    // The Discuss thread stays where it was: in Threads.
+    expect(threadsVisibleInThreadsMode(threads, true).map((thread) => thread.id)).toContain(
+      "discuss",
+    );
+  });
+
+  it("orders a working worker first and folds a settled one into Settled", () => {
+    const threads = [
+      shell("orch"),
+      shell("idle", { kind: "worker", parent: "orch", activity: "2026-10-13T11:00:00.000Z" }),
+      shell("busy", { kind: "worker", parent: "orch", running: true }),
+      shell("done", { kind: "worker", parent: "orch", settled: true }),
+    ];
+    const { active, settled } = splitSettledSubagents(summaryOf(threads).subagentRows);
+    expect(active.map((row) => row.thread.id)).toEqual(["busy", "idle"]);
+    expect(settled.map((row) => row.thread.id)).toEqual(["done"]);
+  });
+
+  it("lists every nested worker of a head with no cap", () => {
+    const threads = [
+      shell("orch"),
+      ...Array.from({ length: 35 }, (_, index) =>
+        shell(`w${index}`, { kind: "worker", parent: "orch", userCreated: true }),
+      ),
+    ];
+    expect(summaryOf(threads).subagentRows).toHaveLength(35);
+    expect(subagentCountLabel(summaryOf(threads).subagentRows)).toBe("35 agents");
+  });
+
+  it("leaves the rollup as it is with and without worker rows", () => {
+    const tree = (createdBy: "agent" | "system") => [
+      shell("orch"),
+      shell("busy", { kind: "worker", parent: "orch", running: true, createdBy }),
+      shell("idle", { kind: "worker", parent: "orch", createdBy }),
+    ];
+    // The system-created pair is the same tree with no worker rows.
+    const withRows = summaryOf(tree("agent"));
+    const withoutRows = summaryOf(tree("system"));
+    expect(withRows.subagentRows).toHaveLength(2);
+    expect(withoutRows.subagentRows).toHaveLength(0);
+    expect(withRows.rollup.working).toBe(1);
+    expect(withRows.rollup.needsYou).toBe(0);
+    expect(withRows.rollup).toEqual(withoutRows.rollup);
+    expect(withRows.activeWorkerCount).toBe(withoutRows.activeWorkerCount);
+    expect(withRows.descendants).toHaveLength(2);
   });
 
   it("orders running before recent before settled, settled by recency", () => {
@@ -184,6 +276,7 @@ describe("subagent rows", () => {
       // running: the delegate's own run and the Claude Task child via the parent's roster
       "Fix the flake",
       "Explore the cache layer",
+      "worker",
       "Finished, not settled",
       "Review Runner",
       "Old delegated task",
@@ -192,6 +285,7 @@ describe("subagent rows", () => {
     expect(titles(active)).toEqual([
       "Fix the flake",
       "Explore the cache layer",
+      "worker",
       "Finished, not settled",
     ]);
     expect(titles(settled)).toEqual(["Review Runner", "Old delegated task"]);
@@ -238,7 +332,7 @@ describe("subagent rows", () => {
       shell("deep", { kind: "native", parent: "sub-worker", title: "Subagent: Deep" }),
     ];
     expect(summaryOf(threads, "orch").subagentRows).toEqual([]);
-    expect(titles(summaryOf(threads, "sub").subagentRows)).toEqual(["Deep"]);
+    expect(titles(summaryOf(threads, "sub").subagentRows)).toEqual(["Deep", "sub-worker"]);
   });
 
   it("leaves every rollup count as it was", () => {
@@ -271,7 +365,7 @@ describe("subagent rows", () => {
 
   it("labels a folded card by its unsettled rows and merges settled ones into the Settled count", () => {
     const summary = summaryOf(withRunningTask(forest()));
-    expect(subagentCountLabel(summary.subagentRows)).toBe("2 agents");
+    expect(subagentCountLabel(summary.subagentRows)).toBe("3 agents");
     expect(subagentCountLabel([])).toBeNull();
     const group = settledGroupSummary(
       [],
@@ -286,6 +380,22 @@ describe("subagent rows", () => {
 });
 
 describe("subagent rows and purpose", () => {
+  it("drops a Harness-purpose worker from a Projects card", () => {
+    const threads = [
+      shell("orch", { purpose: "project" }),
+      shell("plain", { kind: "worker", parent: "orch", title: "Plain worker" }),
+      shell("harness-worker", {
+        kind: "worker",
+        parent: "orch",
+        title: "Harness worker",
+        purpose: "harness",
+      }),
+    ];
+    expect(titles(projectSubagentRows(summaryOf(threads), threadPurposes(threads)))).toEqual([
+      "Plain worker",
+    ]);
+  });
+
   it("keeps a Harness root's subagents out of Projects", () => {
     const threads = [
       shell("orch", { purpose: "harness" }),
