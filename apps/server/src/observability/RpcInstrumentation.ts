@@ -77,6 +77,8 @@ const RPC_AGGREGATES = {
   "projectDashboard.setTracker": "project-dashboard",
   "projectDashboard.setWidgets": "project-dashboard",
   "projectRequests.order": "project-issues",
+  "projectRequests.orderBatch": "project-issues",
+  "projectRequests.withdraw": "project-issues",
   "projectRequests.queue": "project-issues",
   "projectRequests.next": "project-issues",
   "projectRequests.create": "project-issues",

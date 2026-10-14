@@ -22,6 +22,7 @@ import {
   type ProjectRequestDiscussInput,
   type ProjectRequestRef,
   type ProjectRequestSettleInput,
+  type ProjectRequestWithdrawInput,
   type ProjectRequestSubmitInput,
   type ProjectRequestsListInput,
   type ProjectRequestUpdateInput,
@@ -70,6 +71,7 @@ import {
   NEEDS_TEST_LABEL,
   PARKED_LABEL,
   parseBlockedBy,
+  parseRequestMarker,
   type GiteaRepositoryTarget,
 } from "./projectIssues.logic.ts";
 import { ensureMilestone, setIssueMilestone } from "./giteaMilestones.ts";
@@ -935,13 +937,12 @@ export const make = (deps: {
             const attempt: Attempt = unavailable
               ? { kind: "unreachable" }
               : yield* resolveThread(input.threadId).pipe(
-                  Effect.flatMap(
-                    (resolved): Effect.Effect<Attempt, unknown> =>
-                      resolved
-                        ? fileRequest(resolved, item, messageId, 0).pipe(
-                            Effect.map((request): Attempt => ({ kind: "filed", request })),
-                          )
-                        : Effect.succeed({ kind: "no-tracker" }),
+                  Effect.flatMap((resolved): Effect.Effect<Attempt, unknown> =>
+                    resolved
+                      ? fileRequest(resolved, item, messageId, 0).pipe(
+                          Effect.map((request): Attempt => ({ kind: "filed", request })),
+                        )
+                      : Effect.succeed({ kind: "no-tracker" }),
                   ),
                   Effect.catch(() => Effect.succeed<Attempt>({ kind: "unreachable" })),
                 );
@@ -1544,7 +1545,16 @@ export const make = (deps: {
           (r) => repositoryKey(r) === repositoryKey(resolved.target),
         );
         if (repository?.error) return yield* fail(repository.error);
-        return { ...result, issues: orderedRequestList(result.issues) };
+        return {
+          ...result,
+          issues: orderedRequestList(
+            result.issues.filter(
+              (i) =>
+                i.closedAt === null ||
+                !i.labels.some((label) => label.toLowerCase() === "withdrawn"),
+            ),
+          ),
+        };
       });
 
     const validateEpic = (threadId: ThreadId, number: number) =>
@@ -1642,6 +1652,62 @@ export const make = (deps: {
       const message = capturableMessage(command, surface);
       return message ? capture(message).pipe(Effect.forkDetach, Effect.asVoid) : Effect.void;
     };
+
+    const withdraw = (input: ProjectRequestWithdrawInput) =>
+      Effect.gen(function* () {
+        if (input.actor !== "brad") return yield* fail("Only Brad can withdraw a filing.");
+        const resolved = yield* resolveOrFail(input.threadId);
+        const target = resolved.target;
+        const ref = parseRequestReference(input.reference, target);
+        if (!ref || ref.repository !== target.repository)
+          return yield* fail("Withdraw only filings in this project's tracker repository.");
+        const path = `${GiteaApi.repositoryPath(target.repository)}/issues/${ref.number}`;
+        const read = api
+          .request(target.instance, path, GiteaIssueLabels)
+          .pipe(Effect.mapError((e) => fail(e.detail)));
+        const issue = yield* read;
+        if (issue.pull_request != null || !parseRequestMarker(issue.body ?? ""))
+          return yield* fail("That issue is not a request filing.");
+        if (
+          issue.state === "closed" &&
+          !issue.labels?.some((l) => l.name.toLowerCase() === "withdrawn")
+        )
+          return yield* fail("That filing is already closed.");
+        const [label] = yield* ensureLabels(target.instance, target.repository, ["withdrawn"]).pipe(
+          Effect.mapError((e) => fail(e.detail)),
+        );
+        yield* api
+          .send(target.instance, "POST", `${path}/labels`, { labels: [label] })
+          .pipe(Effect.mapError((e) => fail(e.detail)));
+        if (!(yield* read).labels?.some((l) => l.name.toLowerCase() === "withdrawn"))
+          return yield* fail("The withdrawn label did not stick; the filing was left open.");
+        const comment = "Filed by mistake. Withdrawn by Brad.";
+        const comments = yield* api
+          .request(target.instance, `${path}/comments`, GiteaComments)
+          .pipe(Effect.mapError((e) => fail(e.detail)));
+        if (!comments.some((c) => c.body === comment))
+          yield* api
+            .send(target.instance, "POST", `${path}/comments`, { body: comment })
+            .pipe(Effect.mapError((e) => fail(e.detail)));
+        yield* api
+          .send(target.instance, "PATCH", path, { state: "closed" })
+          .pipe(Effect.mapError((e) => fail(e.detail)));
+        if ((yield* read).state !== "closed")
+          return yield* fail("The withdrawn filing did not close.");
+        invalidate(target);
+        yield* refreshDashboard;
+        const notifiedThreadId = yield* tellThread(
+          resolved.root,
+          `Brad withdrew ${target.repository}#${ref.number}: filed by mistake. Stop work on this filing.`,
+          ref.number,
+          `request-withdrawn:${target.host}/${target.repository}:${ref.number}`,
+        ).pipe(
+          Effect.mapError(() =>
+            fail("The filing was withdrawn, but its owner was not told. Retry withdrawal."),
+          ),
+        );
+        return { withdrawn: true, notifiedThreadId };
+      });
 
     const settle = (input: ProjectRequestSettleInput) =>
       Effect.gen(function* () {
@@ -1806,11 +1872,13 @@ export const make = (deps: {
       observeDispatch,
       capture,
       settle,
+      withdraw,
       submit,
       decorate,
       withAnswers,
       create,
       order: ordering.place,
+      orderBatch: ordering.batch,
       queue: ordering.queue,
       next: ordering.next,
       update,
