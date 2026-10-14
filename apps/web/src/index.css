@@ -2364,4 +2364,13 @@ code {
       );
     }
   }
+  /* The Chief of Staff tray is a narrow column inside a wide viewport: keep the phone gutter. */
+  [data-chat-view-presentation="tray"] .chat-composer-lane {
+    padding-inline-start: calc(env(safe-area-inset-left) + 0.75rem);
+    padding-inline-end: calc(env(safe-area-inset-right) + 0.75rem);
+  }
+  [data-chat-view-presentation="tray"] [data-chat-canvas] .messages-timeline-scroll {
+    padding-inline-start: calc(0.75rem - var(--chat-timeline-gutter, 0px));
+    padding-inline-end: calc(0.75rem - var(--chat-timeline-gutter, 0px));
+  }
 }
