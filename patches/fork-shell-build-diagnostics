@@ -1,0 +1,6 @@
+Bottom: b0623be95dacaf7d1a5e41318c3fc408f27f39c3
+Top:    b0623be95dacaf7d1a5e41318c3fc408f27f39c3
+Author: brad <bradprin@live.com>
+Date:   2026-10-14 11:27:05 +0000
+
+feat(server): expose per-caller shell build counters
