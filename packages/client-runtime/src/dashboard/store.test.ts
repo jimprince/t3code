@@ -26,7 +26,7 @@ import {
 import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
 import type { RpcSession } from "../rpc/session.ts";
 import { emptySnapshot } from "./progress.ts";
-import { createDashboardAtoms } from "./store.ts";
+import { createDashboardAtoms, mountedDashboardSnapshotAtom } from "./store.ts";
 import { v2ThreadShell } from "../state/orchestrationV2TestFixtures.ts";
 const environmentId = EnvironmentId.make("test");
 const target = new PrimaryConnectionTarget({
@@ -120,6 +120,9 @@ describe("dashboard subscription lifetime", () => {
           return shellAtom;
         },
       });
+      const passive = mountedDashboardSnapshotAtom(environmentId);
+      const unmountPassive = registry.mount(passive);
+      expect(registry.get(passive)).toBeNull();
       const atom = dashboard.snapshot(environmentId);
       const unsubscribe = registry.subscribe(
         atom,
@@ -130,8 +133,11 @@ describe("dashboard subscription lifetime", () => {
       );
       yield* Deferred.await(received);
       expect(shellReads).toBe(0);
+      expect(registry.get(passive)?.revision).toBe(7);
       unsubscribe();
       yield* Deferred.await(closed);
+      expect(registry.get(passive)).toBeNull();
+      unmountPassive();
       expect(registry.get(atom).snapshot?.revision).toBe(7);
       registry.dispose();
     }),
