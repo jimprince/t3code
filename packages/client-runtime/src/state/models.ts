@@ -110,6 +110,8 @@ export interface EnvironmentThreadShell {
   readonly hasActionableProposedPlan: boolean;
   /** Steps done and total in the latest to-do list; null or absent without one. */
   readonly todoProgress?: OrchestrationV2ThreadShell["todoProgress"];
+  /** Runtime evidence for resuming from the plan; absent on servers that predate it. */
+  readonly planResumeState?: OrchestrationV2ThreadShell["planResumeState"];
   readonly pendingBackgroundTasks: ReadonlyArray<
     NonNullable<OrchestrationV2ThreadShell["pendingBackgroundTasks"]>[number]
   >;
@@ -266,6 +268,7 @@ export function presentThreadShell(
     hasPendingUserInput: thread.pendingRuntimeRequest?.kind === "user_input",
     hasActionableProposedPlan: thread.hasActionableProposedPlan,
     todoProgress: thread.todoProgress ?? null,
+    ...(thread.planResumeState === undefined ? {} : { planResumeState: thread.planResumeState }),
     pendingBackgroundTasks: thread.pendingBackgroundTasks ?? [],
     providerInstanceHistory: thread.providerInstanceHistory ?? [],
     goal: thread.goal ?? null,

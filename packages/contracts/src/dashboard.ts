@@ -1,3 +1,4 @@
+import { ThreadFilePlan } from "./orchestrationV2.ts";
 import * as Schema from "effect/Schema";
 import { IsoDateTime, NonNegativeInt, ThreadId } from "./baseSchemas.ts";
 
@@ -99,6 +100,7 @@ export const DashboardRelease = Schema.Struct({
 export type DashboardRelease = typeof DashboardRelease.Type;
 /** One compact environment-local document. Environment identity comes from the authenticated connection. */
 export const DashboardSnapshot = Schema.Struct({
+  filePlans: Schema.optionalKey(Schema.Record(Schema.String, ThreadFilePlan)),
   revision: NonNegativeInt,
   asOf: IsoDateTime,
   projects: Schema.Array(DashboardProject),
