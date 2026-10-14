@@ -1,6 +1,6 @@
-Bottom: c1e1f8950b04c180e121898ce42d4958390559f9
-Top:    09662fbb0f05761355003823af7add67f9189856
+Bottom: 240cba34b606f752b47da03e1ffeab0590cf0a1f
+Top:    39ae77516335ca2ddea880412f696b4aac495569
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 12:37:12 +0000
+Date:   2026-10-14 12:56:33 +0000
 
 fix(web): the request box reads the issue list only after a send

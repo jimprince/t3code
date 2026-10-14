@@ -1,7 +1,7 @@
-Bottom: 2ef940404c80d19a4c1b15bf72d582885909578c
-Top:    fd9700f642365e1898b6e5fa3c92657a2d3cc54e
+Bottom: 577562482840312c5d0700654c310446a4f20a5b
+Top:    a345304e779fa10b9943e6008117c6aa8a3cc6b5
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 12:26:07 +0000
+Date:   2026-10-14 12:56:33 +0000
 
 fix(projects): each question keeps its own answer; requests stop flickering
 
