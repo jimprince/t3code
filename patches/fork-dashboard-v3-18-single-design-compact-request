@@ -1,6 +1,6 @@
-Bottom: d1ff165f1e4260cf91b019f79b6fbd1e7e38f19d
-Top:    af84a04e28ec4b293cda867e972437a5a9ff121f
+Bottom: 03acf6cd086abf09741dc53ae628e9840115d0fc
+Top:    4cbc0d6e4da756efde965ee8ff26a3ea284b283f
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 12:56:33 +0000
+Date:   2026-10-14 12:57:21 +0000
 
 feat(dashboard): one Dashboard design, a one-line request box and wider Plan titles
