@@ -26,6 +26,7 @@ vi.mock("../../state/entities", () => ({
   readProjects: () => [],
   readThreadShells: () => [],
   useProjects: () => [],
+  useServerConfigs: () => new Map(),
 }));
 vi.mock("../../state/environments", () => ({ useEnvironments: () => ({ environments: [] }) }));
 vi.mock("../../state/forkSupervision", () => ({ useSupervisionMetadata: () => [] }));

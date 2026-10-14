@@ -43,6 +43,12 @@ export const DashboardTask = Schema.Struct({
   createdAt: Schema.optionalKey(IsoDateTime),
   placedBy: Schema.optionalKey(Schema.NullOr(ProjectRequestPlacer)),
   partOf: Schema.optionalKey(Schema.NullOr(Schema.Number)),
+  /** Present only on asks: a question is answered, not ordered; any other ask is a task. */
+  kind: Schema.optionalKey(Schema.Literals(["task", "question"])),
+  /** The `bug` tag; absent when untagged. */
+  bug: Schema.optionalKey(Schema.Boolean),
+  /** Saved for Later: out of the order and out of New, counted on its own. */
+  parked: Schema.optionalKey(Schema.Boolean),
   closedAt: Schema.NullOr(IsoDateTime),
   status: Schema.Literals(["pending", "working", "blocked", "review", "done"]),
   progress: Schema.NullOr(DashboardProgress),
