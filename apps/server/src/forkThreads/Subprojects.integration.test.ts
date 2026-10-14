@@ -105,7 +105,7 @@ it.effect(
             }),
         },
         {
-          get: (threadId: ThreadId) =>
+          getForRoot: (threadId: ThreadId) =>
             Effect.succeed({ rootThreadId: threadId, revision: 0, tabs: [] }),
         } as never,
       ).pipe(
