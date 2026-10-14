@@ -1,3 +1,4 @@
+import * as ShellSnapshotDiagnostics from "./ShellSnapshotDiagnostics.ts";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
@@ -145,7 +146,9 @@ const make = Effect.gen(function* () {
   const providerSessions = yield* ProviderSessions.ProviderSessionManagerV2;
   const processes = yield* RecoveryProcesses.RecoveryProcessAccess;
   const listBindings = Effect.gen(function* () {
-    const shell = yield* projections.getShellSnapshot();
+    const shell = yield* projections
+      .getShellSnapshot()
+      .pipe(ShellSnapshotDiagnostics.withCaller("SystemRecovery"));
     return yield* Effect.forEach(
       shell.threads,
       (thread) =>

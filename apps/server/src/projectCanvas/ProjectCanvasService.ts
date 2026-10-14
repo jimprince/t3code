@@ -1,3 +1,4 @@
+import * as ShellSnapshotDiagnostics from "../diagnostics/ShellSnapshotDiagnostics.ts";
 import {
   ProjectCanvasError,
   ProjectCanvasManifest,
@@ -111,6 +112,7 @@ export const make = Effect.gen(function* () {
     Effect.gen(function* () {
       const snapshot = yield* engine
         .getShellSnapshot()
+        .pipe(ShellSnapshotDiagnostics.withCaller("ProjectCanvasService"))
         .pipe(Effect.mapError(() => fail("Could not read threads.")));
       const parents = new Map(
         (yield* listMetadata(sql).pipe(

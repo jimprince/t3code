@@ -1,3 +1,4 @@
+import * as ShellSnapshotDiagnostics from "../diagnostics/ShellSnapshotDiagnostics.ts";
 import {
   ProjectDashboardError,
   ProjectHealth,
@@ -49,6 +50,7 @@ export const make = (
       Effect.gen(function* () {
         const snapshot = yield* engine
           .getShellSnapshot()
+          .pipe(ShellSnapshotDiagnostics.withCaller("ProjectDashboardService"))
           .pipe(Effect.mapError(() => fail("Could not read threads.")));
         const parents = new Map(
           (yield* listMetadata(sql).pipe(
@@ -88,7 +90,7 @@ export const make = (
           tracker: resolveProjectTracker(file.trackers, threads, rootThreadId),
           health: Option.getOrNull(decodeHealth(file.health[rootThreadId])),
         } satisfies ProjectDashboard;
-      });
+      }).pipe(ShellSnapshotDiagnostics.withCaller("ProjectDashboardService"));
 
     const setWidgets = (input: ProjectDashboardSetWidgetsInput) =>
       Effect.gen(function* () {

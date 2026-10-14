@@ -18,6 +18,8 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
+import * as ShellSnapshotDiagnostics from "./ShellSnapshotDiagnostics.ts";
+
 interface TraceRecordLike {
   readonly name?: unknown;
   readonly traceId?: unknown;
@@ -476,7 +478,18 @@ export const make = Effect.gen(function* () {
     },
   );
 
-  return TraceDiagnostics.of({ read });
+  return TraceDiagnostics.of({
+    read: (options) =>
+      Effect.gen(function* () {
+        const result = yield* read(options);
+        const snapshots = yield* Effect.serviceOption(
+          ShellSnapshotDiagnostics.ShellSnapshotDiagnostics,
+        );
+        return Option.isSome(snapshots)
+          ? { ...result, shellSnapshotBuilds: yield* snapshots.value.read }
+          : result;
+      }),
+  });
 });
 
 export const layer = Layer.effect(TraceDiagnostics, make);
