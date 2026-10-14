@@ -1132,6 +1132,8 @@ export const ProcessLaunchWarningSettings = Schema.Struct({
 export type ProcessLaunchWarningSettings = typeof ProcessLaunchWarningSettings.Type;
 
 export const ServerSettings = Schema.Struct({
+  /** Host-local parent directory containing task/PLAN.md files; empty uses ~/maintenance-work. */
+  planRootDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   processLaunchWarnings: ProcessLaunchWarningSettings.pipe(
     Schema.withDecodingDefault(Effect.succeed(Schema.decodeSync(ProcessLaunchWarningSettings)({}))),
   ),
@@ -1497,6 +1499,7 @@ const ModelSelectionPatch = Schema.Struct({
 });
 
 export const ServerSettingsPatch = Schema.Struct({
+  planRootDirectory: Schema.optionalKey(TrimmedString),
   processLaunchWarnings: Schema.optionalKey(
     Schema.Struct({
       syspolicydRssMb: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThan(0))),
