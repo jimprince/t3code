@@ -97,8 +97,15 @@ export const fixture = <A, E, R>(run: (builds: () => number) => Effect.Effect<A,
       } as never),
     );
   }).pipe(
-    Effect.provide(Projections.layer),
-    Effect.provide(layerMemory),
+    Effect.provide(
+      Layer.mergeAll(
+        Projections.layer.pipe(Layer.provideMerge(layerMemory)),
+        ServerSettingsService.layerTest({ giteaInstances: [instance] }),
+        ServerConfig.layerTest(process.cwd(), { prefix: "t3-load-builds-" }).pipe(
+          Layer.provideMerge(NodeServices.layer),
+        ),
+      ),
+    ),
     Effect.provideService(
       ConfigProvider.ConfigProvider,
       ConfigProvider.fromUnknown({ T3CODE_SHELL_SNAPSHOT_CACHE: "0" }),
@@ -131,14 +138,6 @@ export const fixture = <A, E, R>(run: (builds: () => number) => Effect.Effect<A,
               ),
             ),
           ),
-        ),
-      ),
-    ),
-    Effect.provide(
-      Layer.mergeAll(
-        ServerSettingsService.layerTest({ giteaInstances: [instance] }),
-        ServerConfig.layerTest(process.cwd(), { prefix: "t3-load-builds-" }).pipe(
-          Layer.provideMerge(NodeServices.layer),
         ),
       ),
     ),
