@@ -1,6 +1,6 @@
-Bottom: d4d3beb44b3706b3bec8cd9e41f6da8858ff6ed4
-Top:    373b762ead22a35d5fa1dab70b77893e7ea1736d
+Bottom: 0b3587f93ce054cc69cb630cd6b583e5d5ddf3df
+Top:    a7f26df4a6a272f43819fff2cdaa1108d3ce853a
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 19:53:04 +0000
+Date:   2026-10-14 19:54:37 +0000
 
 feat(server): expose read-only Harness snapshots

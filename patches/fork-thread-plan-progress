@@ -1,6 +1,6 @@
-Bottom: 64afaca954031135d6befe8c9d43191ce964b017
-Top:    dff996b269a585567a2381673401d8c72ff7630a
+Bottom: a6c8b561ddbe7574a32d3f52f412577e178f7a36
+Top:    b52f9e84f024159e5dd83f88ab26291644e2dd68
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 19:53:04 +0000
+Date:   2026-10-14 19:54:37 +0000
 
 feat(threads): track plan progress and resume failed work
