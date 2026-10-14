@@ -340,6 +340,7 @@ import { useNowMinute } from "../hooks/useNowMinute";
 import { usePanelAnimationSettings, usePanelPresence } from "../panelAnimations";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import {
+  chooseNestedLaunch,
   readNestedDraftParent,
   useNestedDraftBannerItem,
   useThreadNestingActions,
@@ -8767,6 +8768,10 @@ export default function ChatView(props: ChatViewProps) {
     },
   ) => {
     e?.preventDefault();
+    // First, before anything clears the composer or waits on an upload: leaving the view empties the
+    // draft's nesting intent, and a thread sent after that would launch top-level.
+    const nestedParentId =
+      draftId !== null && isLocalDraftThread ? readNestedDraftParent(draftId, environmentId) : null;
     // Typed out in full rather than picked from the menu. Attachments or contexts
     // mean the user is sending a prompt, so those go through as usual.
     if (
@@ -9944,15 +9949,11 @@ export default function ChatView(props: ChatViewProps) {
           ? scopeThreadRef(environmentId, threadIdForSend)
           : null;
       if (backgroundThreadRef) beginBackgroundDraftSubmissionByRef(backgroundThreadRef);
-      // Read before the launch awaits: the view can unmount, and drop the draft's intent, before it answers.
-      const nestedParentId =
-        draftId !== null && isLocalDraftThread
-          ? readNestedDraftParent(draftId, environmentId)
-          : null;
-      const launchParentId =
-        nestedParentId !== null && readForkLaunchParentSupported(environmentId)
-          ? nestedParentId
-          : null;
+      // The parent was read at the start of the send; the capability is read now, at dispatch.
+      const nestedLaunch = chooseNestedLaunch(
+        nestedParentId,
+        readForkLaunchParentSupported(environmentId),
+      );
       const startPromise = startThreadTurn({
         environmentId,
         input: {
@@ -9995,7 +9996,9 @@ export default function ChatView(props: ChatViewProps) {
           interactionMode: sendInteractionMode,
           dispatchMode: turnDispatchMode,
           ...(bootstrap ? { bootstrap } : {}),
-          ...(launchParentId === null ? {} : { parentThreadId: launchParentId }),
+          ...(nestedLaunch.launchParentId === null
+            ? {}
+            : { parentThreadId: nestedLaunch.launchParentId }),
           createdAt: messageCreatedAt,
         },
       });
@@ -10033,7 +10036,7 @@ export default function ChatView(props: ChatViewProps) {
           void attachNestedDraft(
             draftId,
             scopeThreadRef(environmentId, threadIdForSend),
-            launchParentId === null ? nestedParentId : null,
+            nestedLaunch,
           );
         }
 

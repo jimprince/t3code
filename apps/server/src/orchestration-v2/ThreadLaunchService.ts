@@ -6,6 +6,7 @@ import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import {
   CommandId,
   type ChatAttachment,
+  type ForkThreadMetadataError,
   type MessageId,
   type ModelSelection,
   type OrchestrationV2Actor,
@@ -74,6 +75,13 @@ export interface ThreadLaunchInitialMessage {
 }
 
 export interface ThreadLaunchInput {
+  /**
+   * Runs once the thread exists, before its task issue starts or its first message is dispatched.
+   * A failure fails the launch there, so no turn has started. Must be idempotent: a retried launch
+   * runs it again. A named-agent project dispatches the first message only for a thread that is
+   * already nested, which is why nesting belongs here and not after the launch.
+   */
+  readonly afterClaim?: (threadId: ThreadId) => Effect.Effect<unknown, ForkThreadMetadataError>;
   readonly commandId: CommandId;
   readonly threadId?: ThreadId;
   readonly reuseExistingThread?: boolean;
@@ -132,6 +140,7 @@ export class ThreadLaunchError extends Schema.TaggedError<ThreadLaunchError>()(
       "provision-worktree",
       "run-setup-script",
       "create-thread",
+      "nest-thread",
       "update-thread",
       "dispatch-message",
       "release-run",
@@ -780,6 +789,12 @@ const make = Effect.gen(function* () {
             .threadId ?? candidateThreadId;
         if (project.id !== input.projectId) {
           return yield* mapError(input, "resolve-project", threadId)("Project identity changed.");
+        }
+
+        if (input.afterClaim !== undefined) {
+          yield* input
+            .afterClaim(threadId)
+            .pipe(Effect.mapError(mapError(input, "nest-thread", threadId)));
         }
 
         let runId: RunId | null = null;

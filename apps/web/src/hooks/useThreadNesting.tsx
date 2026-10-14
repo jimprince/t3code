@@ -77,15 +77,27 @@ function resolveNestedDraftParent(draftId: DraftId, environmentId: EnvironmentId
 }
 
 /**
- * The parent a nested draft's send should file its thread under. Read when the
- * send starts: the draft clears at send and the intent clears when the view
- * unmounts, which can happen before a slow launch answers.
+ * The parent a nested draft's send should file its thread under. Read first
+ * thing when the send starts: the draft clears at send and the intent clears
+ * when the view unmounts, which can happen during an attachment upload or
+ * before a slow launch answers.
  */
 export function readNestedDraftParent(
   draftId: DraftId,
   environmentId: EnvironmentId,
 ): ThreadId | null {
   return resolveNestedDraftParent(draftId, environmentId)?.id ?? null;
+}
+
+/**
+ * Where a nested draft's parent goes. A server that advertises `launchThreadParent` files the thread
+ * as part of the launch; an older one ignores the field, so the client files it after the launch.
+ */
+export function chooseNestedLaunch(parentThreadId: ThreadId | null, launchSupported: boolean) {
+  return {
+    launchParentId: launchSupported ? parentThreadId : null,
+    legacyParentId: launchSupported ? null : parentThreadId,
+  };
 }
 
 function failureToast(title: string, error: unknown) {
@@ -246,17 +258,36 @@ export function useThreadNestingActions() {
   );
 
   /**
-   * After a nested draft's first send creates its thread, ends the draft's intent. `legacyParentId` is the
-   * parent a server without `launchThreadParent` could not file the thread under at launch.
+   * After a nested draft's first send creates its thread, ends the draft's intent. A thread the launch
+   * filed (`launchParentId`) gets the Nested under notice with its Undo; `legacyParentId` is the parent
+   * a server without `launchThreadParent` could not file it under, so it is filed now.
    */
   const attachNestedDraft = useCallback(
     async (
       draftId: DraftId,
       threadRef: ScopedThreadRef,
-      legacyParentId: ThreadId | null,
+      nested: ReturnType<typeof chooseNestedLaunch>,
     ): Promise<void> => {
       setNestedDraftIntent(draftId, null);
-      if (legacyParentId !== null) await setThreadParent(threadRef, legacyParentId);
+      if (nested.legacyParentId !== null) {
+        await setThreadParent(threadRef, nested.legacyParentId);
+        return;
+      }
+      if (nested.launchParentId === null) return;
+      const parentTitle =
+        readThreadShell(scopeThreadRef(threadRef.environmentId, nested.launchParentId))?.title ??
+        "its parent";
+      const toastId = toastManager.add({
+        type: "success",
+        title: `Nested under ${parentTitle}`,
+        actionProps: {
+          children: "Undo",
+          onClick: () => {
+            toastManager.close(toastId);
+            void setThreadParent(threadRef, null);
+          },
+        },
+      });
     },
     [setThreadParent],
   );
