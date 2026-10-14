@@ -202,3 +202,34 @@ describe("MobileSubprojectRows subagents", () => {
     expect(rollup(running)).toBe(1);
   });
 });
+
+describe("MobileSubprojectRows workers", () => {
+  const withWorkers = [
+    shell("orchestrator", { purpose: "project" }),
+    shell("mine", { parent: "orchestrator", worker: true, activity: "2026-10-13T10:00:00.000Z" }),
+    shell("done", { parent: "orchestrator", worker: true, settled: true }),
+    shell("harness-chore", { parent: "orchestrator", worker: true, purpose: "harness" }),
+  ];
+  const orchestrator = buildOrchestratorSummaries(withWorkers, []).find(
+    (summary) => summary.root.id === "orchestrator",
+  )!;
+  const markup = renderToStaticMarkup(
+    <MobileSubprojectRows
+      summary={orchestrator}
+      purposes={threadPurposes(withWorkers)}
+      quietCutoff={0}
+      onSelectThread={vi.fn()}
+    />,
+  );
+
+  it("lists a nested worker as a tagged row, a settled one in Settled, a Harness one not at all", () => {
+    const opened = [...markup.matchAll(/aria-label="Open ([^"]+) worker"/g)].map((m) => m[1]);
+    expect(opened).toEqual(["mine"]);
+    const row = markup
+      .slice(markup.indexOf('aria-label="Open mine worker"'))
+      .split("</button>")[0]!;
+    expect(row).toContain(">worker<");
+    expect(markup).toContain("Settled (1)");
+    expect(markup).not.toContain("harness-chore");
+  });
+});
