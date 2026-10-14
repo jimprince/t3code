@@ -1,6 +1,6 @@
-Bottom: 0408e1cd981a9003c43d1a225e3f29247249bc09
-Top:    7f84808c28d13b231d1d6b9bbc6d7ad42e15c287
+Bottom: 96c6290ae8e11996614aecb0e30679b2cb7711c8
+Top:    b3576f13c5ead3d09ce137757ff71cefa847e79a
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 11:36:06 +0000
+Date:   2026-10-14 11:37:42 +0000
 
 fix(dashboard): tidy Home releases, wrapped decision options and idle ordering
