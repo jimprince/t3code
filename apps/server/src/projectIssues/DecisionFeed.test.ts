@@ -1,3 +1,8 @@
+import {
+  parseRankTrailer,
+  parsePlacedByTrailer,
+  replaceRankTrailer,
+} from "./requestOrder.logic.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
 import {
@@ -129,6 +134,7 @@ const makeHarness = (options: {
   readonly threads?: ReadonlyArray<ShellThread>;
   readonly pulls?: ReadonlyArray<FakePull>;
   readonly issueState?: "open" | "closed";
+  readonly decisionBody?: string;
   readonly mergeStatus?: number;
   /** Comments already on every issue, oldest first. */
   readonly comments?: ReadonlyArray<{ body: string; created_at: string }>;
@@ -143,7 +149,7 @@ const makeHarness = (options: {
       {
         number: 4,
         title: "Which tool changer set should be printed next?",
-        body: decisionBody,
+        body: options.decisionBody ?? decisionBody,
         state: "open",
         html_url: ISSUE_URL(4),
         labels: [{ id: 9, name: "needs-brad" }],
@@ -199,6 +205,10 @@ const makeHarness = (options: {
         if (request.method === "PATCH" && edited && typeof body?.state === "string") {
           const issue = issues.find((candidate) => candidate.number === Number(edited[1]));
           if (issue) issue.state = body.state;
+        }
+        if (request.method === "PATCH" && edited && typeof body?.body === "string") {
+          const issue = issues.find((candidate) => candidate.number === Number(edited[1]));
+          if (issue) issue.body = body.body;
         }
         if (path.endsWith("/merge")) {
           const merged = /\/pulls\/(\d+)\/merge$/.exec(path);
@@ -859,3 +869,16 @@ describe("pending asks", () => {
     }),
   );
 });
+
+it.effect("Later keeps order and attribution through the real deferral writer", () =>
+  Effect.gen(function* () {
+    const { feed, writes } = yield* makeHarness({
+      decisionBody: replaceRankTrailer(decisionBody, 123, { kind: "brad" }),
+    });
+    yield* feed.defer({ threadId: ROOT, reference: "4", mode: "end" });
+    const body = (writes.at(-1)!.body as { body: string }).body;
+    expect(parseRankTrailer(body)).toBe(123);
+    expect(parsePlacedByTrailer(body)).toEqual({ kind: "brad" });
+    expect(body.match(/t3:rank/g)).toHaveLength(1);
+  }),
+);

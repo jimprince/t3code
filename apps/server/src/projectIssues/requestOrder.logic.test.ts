@@ -2,6 +2,8 @@ import { describe, expect, it } from "vite-plus/test";
 import type { ProjectIssue } from "@t3tools/contracts";
 import {
   compareOrder,
+  RANK_GAP,
+  editBeforeOrderTrailers,
   parseRankTrailer,
   parsePlacedByTrailer,
   planPlacement,
@@ -67,14 +69,14 @@ describe("sparse workstream order", () => {
     const one = issue(1, 1024),
       two = issue(2, 2048),
       moving = issue(3, null);
-    expect(planPlacement([], moving, { to: "bottom" }).rank).toBe(1024);
-    expect(planPlacement([one], moving, { to: "bottom" }).rank).toBe(2048);
+    expect(planPlacement([], moving, { to: "bottom" }).rank).toBe(RANK_GAP);
+    expect(planPlacement([one], moving, { to: "bottom" }).rank).toBe(1024 + RANK_GAP);
     expect(planPlacement([one, two], moving, { to: "before", reference: "2" }, 2)).toEqual({
       writes: [{ number: 3, rank: 1536 }],
       rank: 1536,
       position: 2,
     });
-    expect(planPlacement([one, two], moving, { to: "top" }).rank).toBe(0);
+    expect(planPlacement([one, two], moving, { to: "top" }).rank).toBe(1024 - RANK_GAP);
   });
   it("renumbers only supplied siblings when the integer gap runs out", () => {
     expect(
@@ -86,11 +88,11 @@ describe("sparse workstream order", () => {
       ),
     ).toEqual({
       writes: [
-        { number: 1, rank: 1024 },
-        { number: 3, rank: 2048 },
-        { number: 2, rank: 3072 },
+        { number: 2, rank: 11 + 3 * RANK_GAP },
+        { number: 3, rank: 11 + 2 * RANK_GAP },
+        { number: 1, rank: 11 + RANK_GAP },
       ],
-      rank: 2048,
+      rank: 11 + 2 * RANK_GAP,
       position: 2,
     });
     expect(() =>
@@ -147,6 +149,7 @@ describe("sparse workstream order", () => {
       issue(9, 1024, { labels: ["ask", "ask:epic"] }),
       issue(1, 1024, { partOf: 8 }),
       issue(2, 1024, { partOf: 9, blockedBy: [20] }),
+      issue(20, null, { isRequest: false, labels: [] }),
       issue(3, 2048, { partOf: 9 }),
       issue(4, 0, { partOf: 9, stage: "in-progress" }),
       issue(5, null),
@@ -158,4 +161,43 @@ describe("sparse workstream order", () => {
     expect(pickNext(queue)?.number).toBe(3);
     expect(pickNext(requestQueue([issue(5, null)]))).toBeNull();
   });
+});
+
+it("removes and replaces every accepted parent line", () => {
+  for (const prefix of ["Part of #12 (UI)", " Part of #12 (UI)", "\n Part of #12"]) {
+    expect(replacePartOf(`${prefix}\n\nText`, null)).toBe("Text");
+    expect(replacePartOf(`${prefix}\n\nText`, 30)).toBe("Part of #30\n\nText");
+  }
+});
+it("recovers stranded duplicate trailer pairs and keeps only the newest pair last", () => {
+  const pair = replaceRankTrailer("Body", 10, { kind: "brad" });
+  const stranded = `${pair}\nDeferral\n<!-- t3:rank 20 -->\nMore text`;
+  const result = editBeforeOrderTrailers(stranded, (body) => `${body}\nAttachment`);
+  expect(parseRankTrailer(result)).toBe(20);
+  expect(result.match(/t3:rank/g)).toHaveLength(1);
+  expect(result.match(/t3:placed-by/g) ?? []).toHaveLength(0);
+  expect(result).toContain("More text\nAttachment");
+});
+it("includes unranked migrated children and ignores known closed blockers", () => {
+  const child = issue(2, null, { partOf: 8, isRequest: false, labels: [], blockedBy: [4] });
+  const queue = requestQueue([
+    issue(8, 1, { labels: ["ask:epic"] }),
+    child,
+    issue(4, null, { closedAt: "2026-10-14" }),
+  ]);
+  expect(queue.workstreams[0]?.next.map((i) => i.number)).toEqual([2]);
+  expect(pickNext(queue)?.number).toBe(2);
+});
+it("keeps the original sibling order after every partial renumber prefix", () => {
+  const originals = [issue(1, 10), issue(2, 11), issue(3, 12)];
+  const plan = planPlacement(originals, issue(4, null), { to: "after", reference: "1" }, 1);
+  for (let count = 0; count <= plan.writes.length; count++) {
+    const ranks = new Map(originals.map((i) => [i.number, i.rank]));
+    for (const write of plan.writes.slice(0, count)) ranks.set(write.number, write.rank);
+    expect(
+      originals
+        .toSorted((a, b) => ranks.get(a.number)! - ranks.get(b.number)!)
+        .map((i) => i.number),
+    ).toEqual([1, 2, 3]);
+  }
 });

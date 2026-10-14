@@ -1,3 +1,8 @@
+import {
+  replaceRankTrailer,
+  parseRankTrailer,
+  parsePlacedByTrailer,
+} from "./requestOrder.logic.ts";
 import { describe, expect, it } from "vite-plus/test";
 import { RuntimeRequestId, ThreadId } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
@@ -267,4 +272,14 @@ describe("pendingAsksOfThread", () => {
     );
     expect(ask?.canRespond).toBe(false);
   });
+});
+
+it("deferral preserves and normalizes rank and placer as the last lines", () => {
+  const ranked = replaceRankTrailer("Decision", 42, { kind: "brad" });
+  for (const body of [ranked, `${ranked}\n<!-- t3-deferral {"until":"2099-01-01"} -->`]) {
+    const next = applyDeferral(body, { mode: "end", now: "2026-10-14T00:00:00Z" });
+    expect(parseRankTrailer(next.body)).toBe(42);
+    expect(parsePlacedByTrailer(next.body)).toEqual({ kind: "brad" });
+    expect(next.body.match(/t3:rank/g)).toHaveLength(1);
+  }
 });

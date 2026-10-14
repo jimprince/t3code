@@ -1,0 +1,4 @@
+id = "request-order-review-fixes"
+category = "fix"
+functionality = "project requests"
+text = "Keep tracker order when deferring or editing a request, report placement and attachment warnings after filing without duplicate issues, and reserve duplicate closing for Brad."

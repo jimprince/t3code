@@ -29,9 +29,11 @@ export function parseEpicChecklist(
   return items;
 }
 
+export const PART_OF_LINE = /^\s*part of #(\d+)\b[^\n]*(?:\r?\n){0,2}/i;
+
 /** The epic a child issue belongs to: its body starts "Part of #N". */
 export function parsePartOf(body: string | null | undefined): number | null {
-  const match = /^\s*part of #(\d+)\b/i.exec(body ?? "");
+  const match = PART_OF_LINE.exec(body ?? "");
   return match ? Number(match[1]) : null;
 }
 

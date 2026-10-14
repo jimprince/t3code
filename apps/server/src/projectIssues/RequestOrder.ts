@@ -1,3 +1,4 @@
+import * as IssueBody from "./issueBody.ts";
 import {
   ProjectIssuesError,
   type ProjectRequestOrderInput,
@@ -12,16 +13,11 @@ import {
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Schema from "effect/Schema";
-import * as Semaphore from "effect/Semaphore";
-import * as GiteaApi from "../sourceControl/GiteaApi.ts";
 import type { GiteaRepositoryTarget } from "./projectIssues.logic.ts";
 import { parseRequestReference } from "./requestLedger.logic.ts";
 import {
   workstreamNumbers,
   isInProgress,
-  compareOrder,
-  compareRank,
   planPlacement,
   requestQueue,
   pickNext,
@@ -56,16 +52,10 @@ export class RequestOrder extends Context.Service<
     ) => Effect.Effect<ProjectRequestNextResult, ProjectIssuesError>;
   }
 >()("t3/projectIssues/RequestOrder") {}
-const locks = new Map<string, Semaphore.Semaphore>();
 const fail = (message: string) => new ProjectIssuesError({ message });
-const IssueBody = Schema.Struct({
-  body: Schema.optional(Schema.NullOr(Schema.String)),
-  state: Schema.String,
-  pull_request: Schema.optional(Schema.Unknown),
-});
 const make = Effect.gen(function* () {
+  const { withIssueBodyEditor } = yield* IssueBody.make;
   const resolver = yield* RepositoryResolver;
-  const api = yield* GiteaApi.make;
   const queue = (input: ProjectRequestQueueInput) =>
     Effect.gen(function* () {
       const target = yield* resolver.resolve(input.threadId);
@@ -82,14 +72,8 @@ const make = Effect.gen(function* () {
       const ref = parseRequestReference(input.reference, target);
       if (!ref || ref.repository !== target.repository)
         return yield* fail("Order only items in this project's tracker repository.");
-      const key = `${target.host}/${target.repository}`;
-      let lock = locks.get(key);
-      if (!lock) {
-        lock = Semaphore.makeUnsafe(1);
-        locks.set(key, lock);
-      }
       let wrote = false;
-      return yield* lock.withPermit(
+      return yield* withIssueBodyEditor(target, (editIssueBody) =>
         Effect.gen(function* () {
           // Invalidate before listing; another connection may have changed the queue.
           const listed = yield* resolver.list(input.threadId);
@@ -103,7 +87,10 @@ const make = Effect.gen(function* () {
           const epic = workstreams.has(moving.number);
           const openWorkstreams = new Set(
             items
-              .filter((i) => i.closedAt === null && workstreams.has(i.number))
+              .filter(
+                (i) =>
+                  i.closedAt === null && !i.labels.includes("parked") && workstreams.has(i.number),
+              )
               .map((i) => i.number),
           );
           const workstreamOf = (issue: ProjectIssue, open: ReadonlySet<number>) =>
@@ -137,68 +124,26 @@ const make = Effect.gen(function* () {
             catch: (error) => fail(error instanceof Error ? error.message : "Invalid placement."),
           });
           for (const write of plan.writes) {
-            const path = `${GiteaApi.repositoryPath(target.repository)}/issues/${write.number}`;
-            // Re-read immediately before PATCH so checklist edits since listing are preserved.
-            let before = yield* api
-              .request(target.instance, path, IssueBody)
-              .pipe(Effect.mapError((e) => fail(e.detail)));
-            if (before.state !== "open" || before.pull_request != null)
-              return yield* fail("Only open issues can be ordered.");
-            for (let attempt = 0; attempt < 2; attempt++) {
-              const body = replaceRankTrailer(
-                before.body ?? "",
+            wrote = true;
+            yield* editIssueBody(write.number, (body) =>
+              replaceRankTrailer(
+                body,
                 write.rank,
                 write.number === moving.number ? actor : undefined,
-              );
-              wrote = true;
-              yield* api
-                .send(target.instance, "PATCH", path, { body })
-                .pipe(Effect.mapError((e) => fail(e.detail)));
-              const after = yield* api
-                .request(target.instance, path, IssueBody)
-                .pipe(Effect.mapError((e) => fail(e.detail)));
-              if ((after.body ?? "") === body) break;
-              if (attempt === 1)
-                return yield* fail("The issue body changed while saving order; retry the move.");
-              before = after;
-            }
+              ),
+            );
           }
-          // Read back the actual total order, including a concurrent server's equal rank.
-          const saved = yield* resolver.list(input.threadId);
-          const moved = saved.find(
-            (i) =>
-              i.host === target.host &&
-              i.repository === target.repository &&
-              i.number === moving.number,
-          );
-          const savedWorkstreams = workstreamNumbers(saved);
-          const savedOpenWorkstreams = new Set(
-            saved
-              .filter((i) => i.closedAt === null && savedWorkstreams.has(i.number))
-              .map((i) => i.number),
-          );
-          const savedWorkstream = epic ? null : workstreamOf(moved ?? moving, savedOpenWorkstreams);
-          const ordered = saved
-            .filter(
-              (i) =>
-                i.host === target.host &&
-                i.repository === target.repository &&
-                i.closedAt === null &&
-                (epic || !isInProgress(i)) &&
-                !i.labels.includes("parked") &&
-                i.rank != null &&
-                savedWorkstreams.has(i.number) === epic &&
-                (epic || workstreamOf(i, savedOpenWorkstreams) === savedWorkstream),
-            )
-            .toSorted(epic ? compareRank : compareOrder);
-          const position = ordered.findIndex((i) => i.number === moving.number) + 1;
           return {
-            rank: moved?.rank ?? plan.rank,
-            position: plan.rank === null || position === 0 ? null : position,
-            workstream: savedWorkstream,
+            rank: plan.rank,
+            position: plan.position,
+            workstream,
           };
-        }).pipe(
-          Effect.ensuring(Effect.suspend(() => (wrote ? resolver.changed(target) : Effect.void))),
+        }),
+      ).pipe(
+        Effect.ensuring(
+          Effect.suspend(() =>
+            wrote ? resolver.changed(target).pipe(Effect.forkDetach, Effect.asVoid) : Effect.void,
+          ),
         ),
       );
     });

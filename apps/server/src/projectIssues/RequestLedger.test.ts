@@ -8,6 +8,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { HttpClient, HttpClientResponse } from "effect/http";
 import {
   ProjectIssuesError,
+  ChatAttachmentId,
   ThreadId,
   type GiteaInstanceConfig,
   ThreadIssueOperationError,
@@ -22,7 +23,7 @@ import * as SqlClient from "effect/sql/SqlClient";
 import { initializeMetadata } from "../forkThreads/MetadataStore.ts";
 import { ThreadManagementService } from "../orchestration-v2/ThreadManagementService.ts";
 import { ProjectService } from "../project/ProjectService.ts";
-import { parseRankTrailer, parsePlacedByTrailer } from "./requestOrder.logic.ts";
+import { RANK_GAP, parseRankTrailer, parsePlacedByTrailer } from "./requestOrder.logic.ts";
 import { parseRequestMarker } from "./projectIssues.logic.ts";
 import { DashboardService } from "../dashboard/DashboardService.ts";
 import { make } from "./RequestLedger.ts";
@@ -403,26 +404,28 @@ function filingGitea() {
     Effect.succeed({
       repositories: [{ host: target.host, repository: target.repository, error: null }],
       fetchedAt: "2026-10-14T00:00:00Z",
-      issues: [...records.entries()].map(([number, row]): ProjectIssue => ({
-        host: target.host,
-        repository: target.repository,
-        number,
-        title: row.title,
-        url: `http://git.home:3000/brad/chief-of-staff/issues/${number}`,
-        status: "pending",
-        labels: row.labels.map((id) => labels.find((l) => l.id === id)!.name),
-        isRequest: true,
-        requestSource: parseRequestMarker(row.body),
-        assignees: [],
-        comments: 0,
-        createdAt: "2026-10-14T00:00:00Z",
-        updatedAt: "2026-10-14T00:00:00Z",
-        closedAt: row.state === "closed" ? "2026-10-14T01:00:00Z" : null,
-        linkedThreadIds: [],
-        rank: parseRankTrailer(row.body),
-        placedBy: parsePlacedByTrailer(row.body),
-        ...(row.body.startsWith("Part of #8") ? { partOf: 8 } : {}),
-      })),
+      issues: [...records.entries()].map(
+        ([number, row]): ProjectIssue => ({
+          host: target.host,
+          repository: target.repository,
+          number,
+          title: row.title,
+          url: `http://git.home:3000/brad/chief-of-staff/issues/${number}`,
+          status: "pending",
+          labels: row.labels.map((id) => labels.find((l) => l.id === id)!.name),
+          isRequest: true,
+          requestSource: parseRequestMarker(row.body),
+          assignees: [],
+          comments: 0,
+          createdAt: "2026-10-14T00:00:00Z",
+          updatedAt: "2026-10-14T00:00:00Z",
+          closedAt: row.state === "closed" ? "2026-10-14T01:00:00Z" : null,
+          linkedThreadIds: [],
+          rank: parseRankTrailer(row.body),
+          placedBy: parsePlacedByTrailer(row.body),
+          ...(row.body.startsWith("Part of #8") ? { partOf: 8 } : {}),
+        }),
+      ),
     });
   return { client, records, comments, calls, list, failing };
 }
@@ -433,6 +436,7 @@ describe("typed request filing", () => {
       const gitea = filingGitea();
       const sent: string[] = [];
       let refreshed = 0;
+      const refreshedReceipt = Deferred.makeUnsafe<void>();
       const text = "  Fix the layout  \nKeep this line exactly.\n";
       return withLedger(
         gitea,
@@ -463,11 +467,12 @@ describe("typed request filing", () => {
             expect(gitea.calls.filter((c) => c === "POST /issues")).toHaveLength(1);
             const row = gitea.records.get(21)!;
             expect(row.body.startsWith("Part of #8\n\n## Brad's words")).toBe(true);
-            expect(row.body).toContain(">   Fix the layout  \n> Keep this line exactly.\n> ");
+            expect(row.body).toContain(">   Fix the layout  \n> Keep this line exactly.");
             expect(row.labels).toContain(4);
-            expect(parseRankTrailer(row.body)).toBe(1024);
+            expect(parseRankTrailer(row.body)).toBe(RANK_GAP);
             expect(parsePlacedByTrailer(row.body)).toEqual({ kind: "brad" });
             expect(sent).toEqual(["notified"]);
+            yield* Deferred.await(refreshedReceipt);
             expect(refreshed).toBeGreaterThan(0);
           }),
         () => Effect.void,
@@ -477,7 +482,7 @@ describe("typed request filing", () => {
         Effect.provideService(DashboardService, {
           refresh: Effect.sync(() => {
             refreshed++;
-          }),
+          }).pipe(Effect.andThen(Deferred.succeed(refreshedReceipt, undefined))),
         } as never),
       );
     },
@@ -530,7 +535,12 @@ describe("request duplicate and epic lifecycle", () => {
             kind: "task",
             detail: "Keep Brad's words",
           });
-          yield* ledger.update({ threadId: root, reference: "21", duplicateOf: "8" });
+          yield* ledger.update({
+            threadId: root,
+            reference: "21",
+            duplicateOf: "8",
+            actor: "brad",
+          });
           expect(gitea.records.get(21)?.state).toBe("closed");
           expect(gitea.comments).toEqual(["Duplicate of #8", "Duplicate: #21"]);
           expect(gitea.records.get(21)?.body).toContain("> Keep Brad's words");
@@ -601,7 +611,7 @@ it.effect("a queued direct filing retains epic, placement, words and notificatio
           expect(gitea.records.size).toBe(2);
           expect(gitea.records.get(21)?.body).toContain("> Brad's original words  ");
           expect(gitea.records.get(21)?.body).toMatch(/^Part of #8/);
-          expect(parseRankTrailer(gitea.records.get(21)?.body)).toBe(1024);
+          expect(parseRankTrailer(gitea.records.get(21)?.body)).toBe(RANK_GAP);
           expect(parsePlacedByTrailer(gitea.records.get(21)?.body)).toEqual({ kind: "brad" });
         }),
       () => Effect.void,
@@ -655,3 +665,135 @@ it.effect(
     );
   },
 );
+
+it.effect("reports failed placement as filed, notifies and retries without a second POST", () => {
+  const gitea = filingGitea();
+  let notifications = 0;
+  return withLedger(
+    gitea,
+    () =>
+      Effect.sync(() => {
+        notifications++;
+      }),
+    (ledger) =>
+      Effect.gen(function* () {
+        const input = {
+          threadId: root,
+          title: "File once",
+          kind: "task" as const,
+          messageId: "bad-placement",
+          partOf: 8,
+          place: { to: "after" as const, reference: "999" },
+        };
+        const first = yield* ledger.create(input);
+        const again = yield* ledger.create(input);
+        expect(first.request?.number).toBe(21);
+        expect(first.queued).toBe(false);
+        expect(first.placeError).toContain("ordered, queued sibling");
+        expect(again.placeError).toBe(first.placeError);
+        expect(gitea.calls.filter((call) => call === "POST /issues")).toHaveLength(1);
+        expect(parseRankTrailer(gitea.records.get(21)?.body)).toBeNull();
+        expect(notifications).toBe(1);
+      }),
+    () => Effect.void,
+    {},
+    { list: gitea.list },
+  );
+});
+it.effect("an outbox placement failure finishes filing instead of retrying forever", () =>
+  Effect.gen(function* () {
+    const gitea = filingGitea();
+    let available = false;
+    const notified = yield* Deferred.make<void>();
+    yield* withLedger(
+      gitea,
+      () => Deferred.succeed(notified, undefined),
+      (ledger) =>
+        Effect.gen(function* () {
+          yield* ledger.create({
+            threadId: root,
+            title: "Queued once",
+            kind: "task",
+            messageId: "queued-bad-place",
+            partOf: 8,
+            place: { to: "after", reference: "999" },
+          });
+          available = true;
+          yield* TestClock.adjust("31 seconds");
+          yield* Deferred.await(notified);
+          yield* ledger.waitForDrain;
+          expect(gitea.calls.filter((call) => call === "POST /issues")).toHaveLength(1);
+          expect(parseRankTrailer(gitea.records.get(21)?.body)).toBeNull();
+        }),
+      () => Effect.void,
+      {},
+      {
+        list: () =>
+          available
+            ? gitea.list()
+            : Effect.succeed({
+                repositories: [
+                  { host: target.host, repository: target.repository, error: "Offline" },
+                ],
+                issues: [],
+                fetchedAt: "2026-10-14T00:00:00Z",
+              }),
+      },
+    );
+  }),
+);
+
+it.effect("post-create attachment errors return the filed issue and do not queue a retry", () => {
+  const gitea = filingGitea();
+  return withLedger(
+    gitea,
+    () => Effect.void,
+    (ledger) =>
+      Effect.gen(function* () {
+        const input = {
+          threadId: root,
+          title: "Keep filed",
+          kind: "task" as const,
+          messageId: "bad-attachment",
+          detail: "   ",
+          attachments: [
+            {
+              id: ChatAttachmentId.make("missing"),
+              type: "image" as const,
+              name: "photo.png",
+              mimeType: "image/png",
+              sizeBytes: 10,
+            },
+          ],
+        };
+        const first = yield* ledger.create(input);
+        const again = yield* ledger.create(input);
+        expect(first.queued).toBe(false);
+        expect(first.request?.number).toBe(21);
+        expect(first.attachmentError).toBeTruthy();
+        expect(again.attachmentError).toBe(first.attachmentError);
+        expect(gitea.calls.filter((call) => call === "POST /issues")).toHaveLength(1);
+        expect(gitea.records.get(21)?.body).toContain("> Keep filed");
+      }),
+    () => Effect.void,
+    {},
+    { list: gitea.list },
+  );
+});
+
+it.effect("rejects an agent duplicate close before any tracker call", () => {
+  const gitea = filingGitea();
+  return withLedger(
+    gitea,
+    () => Effect.void,
+    (ledger) =>
+      Effect.gen(function* () {
+        const error = yield* ledger
+          .update({ threadId: root, reference: "8", duplicateOf: "21" })
+          .pipe(Effect.flip, Effect.orDie);
+        expect(error.message).toContain("Only Brad can close a duplicate");
+        expect(gitea.calls).toEqual([]);
+        expect(gitea.records.get(8)?.state).toBe("open");
+      }),
+  );
+});

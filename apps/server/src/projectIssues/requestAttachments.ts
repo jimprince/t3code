@@ -10,11 +10,8 @@ import {
   PENDING_ATTACHMENT_THREAD_SEGMENT,
 } from "../attachmentStore.ts";
 import type { GiteaRepositoryTarget } from "./projectIssues.logic.ts";
-import {
-  parseRankTrailer,
-  parsePlacedByTrailer,
-  replaceRankTrailer,
-} from "./requestOrder.logic.ts";
+import { editIssueBody } from "./issueBody.ts";
+import { editBeforeOrderTrailers } from "./requestOrder.logic.ts";
 import * as GiteaApi from "../sourceControl/GiteaApi.ts";
 const Asset = Schema.Struct({ name: Schema.String, browser_download_url: Schema.String });
 /** Upload only canonical app attachment IDs, never caller-supplied filesystem paths. */
@@ -94,22 +91,10 @@ export const uploadRequestAttachments = (
         `[${attachment.name.replaceAll("[", "").replaceAll("]", "")}](${asset.browser_download_url})`,
       );
     }
-    const issue = yield* api
-      .request(target.instance, issuePath, Schema.Struct({ body: Schema.NullOr(Schema.String) }))
-      .pipe(Effect.mapError((e) => new ProjectIssuesError({ message: e.detail })));
-    const missing = links.filter((l) => !(issue.body ?? "").includes(l));
-    const original = issue.body ?? "";
-    const rank = parseRankTrailer(original);
-    const placer = parsePlacedByTrailer(original);
-    const body = replaceRankTrailer(
-      `${replaceRankTrailer(original, null)}\n\n${missing.join("\n")}`,
-      rank,
-      placer ?? undefined,
+    yield* editIssueBody(target, number, (body) =>
+      editBeforeOrderTrailers(body, (base) => {
+        const missing = links.filter((link) => !base.includes(link));
+        return missing.length ? `${base}\n\n${missing.join("\n")}` : base;
+      }),
     );
-    if (missing.length)
-      yield* api
-        .send(target.instance, "PATCH", issuePath, {
-          body,
-        })
-        .pipe(Effect.mapError((e) => new ProjectIssuesError({ message: e.detail })));
   });
