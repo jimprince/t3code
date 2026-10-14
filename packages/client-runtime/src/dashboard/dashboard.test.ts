@@ -571,3 +571,54 @@ describe("retired dashboard heads", () => {
     expect(dashboardRoots(threads, metadata).roots.map((t) => t.id)).toEqual([root, other]);
   });
 });
+
+it("fills issue and thread-plan next steps while preserving a supplied briefing next_step", () => {
+  const shells = shell.threads.map((thread) => ({
+    ...thread,
+    todoProgress: {
+      completed: 1,
+      total: 3,
+      currentStep: { id: "verify", text: "Verify stored changes", status: "running" as const },
+    },
+  }));
+  const base = { shells, metadata, issues: input.issues, sources: [], plans: [], samples: [], now };
+  const result = aggregate(base);
+  const tasks = result.projects.flatMap((project) => project.tasks);
+  expect(tasks.find((task) => task.url === issue.url)?.nextStep).toBe("Verify stored changes");
+  expect(tasks.find((task) => task.id === `thread-plan:${root}`)?.nextStep).toBe(
+    "Verify stored changes",
+  );
+  const enriched = aggregate({
+    ...base,
+    plans: [
+      {
+        head: "head",
+        title: "Plan",
+        updated_utc: now,
+        workstreams: [
+          {
+            id: "work",
+            title: "Work",
+            tasks: [
+              {
+                id: "issue",
+                title: "Choose",
+                kind: "issue",
+                link: issue.url,
+                steps_total: 3,
+                steps_done: 1,
+                eta_utc: null,
+                next_step: "Owner's next step",
+                updated_utc: now,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+  expect(
+    enriched.projects.flatMap((project) => project.tasks).find((task) => task.url === issue.url)
+      ?.nextStep,
+  ).toBe("Owner's next step");
+});

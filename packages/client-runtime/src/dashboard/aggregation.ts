@@ -1,3 +1,4 @@
+export { isThreadResumable } from "../threadResume.ts";
 import type {
   DashboardAttention,
   DashboardProject,
@@ -310,7 +311,7 @@ export function aggregate(input: {
           progress,
           movement: movement(id, progress, history, input.now),
           forecast: null,
-          nextStep: null,
+          nextStep: linked?.todoProgress?.currentStep?.text ?? null,
           attentionIds,
         };
       });
@@ -343,7 +344,7 @@ export function aggregate(input: {
         progress,
         movement: movement(id, progress, history, input.now),
         forecast: null,
-        nextStep: null,
+        nextStep: thread.todoProgress.currentStep?.text ?? null,
         attentionIds: [],
       });
     }
