@@ -58,6 +58,11 @@ import {
   ProjectIssuesError,
   ProjectIssuesListResult,
   ProjectRequestCreateInput,
+  ProjectRequestOrderInput,
+  ProjectRequestOrderResult,
+  ProjectRequestQueueInput,
+  ProjectRequestQueueResult,
+  ProjectRequestNextResult,
   ProjectRequestKind,
   ProjectRequestCreateResult,
   ProjectRequestDecideInput,
@@ -391,6 +396,21 @@ export const WsRpcGroup = RpcGroup.make(
     success: schema.subscribeThread.output,
     stream: true,
     error: Schema.Union([OrchestrationV2GetThreadProjectionError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make(WS_METHODS.projectRequestsOrder, {
+    payload: ProjectRequestOrderInput,
+    success: ProjectRequestOrderResult,
+    error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make(WS_METHODS.projectRequestsQueue, {
+    payload: ProjectRequestQueueInput,
+    success: ProjectRequestQueueResult,
+    error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make(WS_METHODS.projectRequestsNext, {
+    payload: ProjectRequestQueueInput,
+    success: ProjectRequestNextResult,
+    error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
   }),
   // The kind goes out as the wire form so an earlier kind reaches a server that predates
   // question, task and epic; the typed form only admits the current three.
