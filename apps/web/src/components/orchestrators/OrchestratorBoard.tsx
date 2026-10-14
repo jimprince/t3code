@@ -1,6 +1,8 @@
 import {
   buildOrchestratorSummaries,
+  lastActivityAt,
   type OrchestratorSummary,
+  type SubagentRow,
 } from "@t3tools/client-runtime/state/orchestrators";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
@@ -87,8 +89,12 @@ import { resolveProjectTab, type ProjectTab } from "./projectTabs.logic";
 import { HEALTH_LABEL, isHealthStale, latestWorkChangeAt } from "./projectHealth.logic";
 import { deriveBlocked, type BlockedRow } from "./projectWork.logic";
 import { projectReturnState } from "./projectNavigation";
+import { threadPurposes } from "@t3tools/client-runtime/state/thread-purpose";
 import {
+  projectKeyOf,
+  projectSubagentRows,
   projectTrail,
+  splitSettledSubagents,
   subprojectBlocked,
   subprojectIsActive,
   subprojectNeedsYou,
@@ -429,6 +435,137 @@ function ProjectSubprojects({ summary }: { readonly summary: OrchestratorSummary
         })}
       </ul>
     </ProjectSection>
+  );
+}
+
+/**
+ * The project's subagents, one row each: running and waiting first, then recent, with the settled
+ * ones behind the same collapsed "Settled (N)" row the subprojects use. A provider-native subagent
+ * is tagged read-only; a row opens the subagent's own thread and "Back to project" returns here.
+ */
+function ProjectSubagents({ summary }: { readonly summary: OrchestratorSummary }) {
+  const navigate = useNavigate();
+  const settledExpansion = useSettledExpansion();
+  const threads = useOrchestratorThreadShells();
+  const purposes = useMemo(() => threadPurposes(threads), [threads]);
+  const rows = projectSubagentRows(summary, purposes);
+  if (rows.length === 0) return null;
+  const { active, settled } = splitSettledSubagents(rows);
+  const settledOpen = settledExpansion.expanded.includes(projectKeyOf(summary));
+  const renderRow = (row: SubagentRow) => {
+    const { thread } = row;
+    const state = row.needsYou ? "Needs you" : row.working ? "Working" : null;
+    return (
+      <ClickableRow
+        key={`${thread.environmentId}:${thread.id}`}
+        label={`Open ${thread.title} subagent`}
+        onOpen={() =>
+          void navigate({
+            to: "/$environmentId/$threadId",
+            params: buildThreadRouteParams(scopeThreadRef(thread.environmentId, thread.id)),
+            state: projectReturnState({
+              environmentId: summary.root.environmentId,
+              threadId: summary.root.id,
+            }),
+          })
+        }
+        className="items-baseline gap-x-3 py-1.5 text-sm"
+      >
+        <span className="min-w-0 flex-1 truncate font-medium">{thread.title}</span>
+        {row.parentKey !== projectKeyOf(summary) && row.parentTitle !== null ? (
+          <span className="hidden min-w-0 max-w-48 truncate text-xs text-muted-foreground sm:block">
+            via {row.parentTitle}
+          </span>
+        ) : null}
+        {row.readOnly ? (
+          <span className="shrink-0 text-xs text-muted-foreground">read-only</span>
+        ) : null}
+        <span
+          className={`w-20 shrink-0 text-right text-xs ${
+            row.needsYou ? "text-warning-foreground" : "text-muted-foreground"
+          }`}
+        >
+          {state}
+        </span>
+        <span className="w-20 shrink-0 text-right text-xs text-muted-foreground">
+          {formatRelativeTimeLabel(lastActivityAt(thread))}
+        </span>
+      </ClickableRow>
+    );
+  };
+  return (
+    <ProjectSection title="Subagents" count={active.length}>
+      <ul className="divide-y divide-border">
+        {active.map(renderRow)}
+        {settled.length > 0 ? (
+          <li>
+            <SettledSubprojectsToggle
+              settled={[]}
+              settledSubagents={settled.length}
+              expanded={settledOpen}
+              onToggle={() => settledExpansion.toggle(projectKeyOf(summary))}
+              className="py-1.5 text-xs text-muted-foreground"
+            />
+          </li>
+        ) : null}
+        {settledOpen ? settled.map(renderRow) : null}
+      </ul>
+    </ProjectSection>
+  );
+}
+
+function SubprojectTableRow({ sub }: { readonly sub: OrchestratorSummary }) {
+  const navigate = useNavigate();
+  const progress = taskProgress(sub);
+  const fraction = taskProgressFraction(progress);
+  const working =
+    sub.rollup.working > 0
+      ? String(sub.rollup.working)
+      : subprojectIsActive(sub)
+        ? "Working"
+        : null;
+  const needsYou = sub.rollup.needsYou > 0 ? `${sub.rollup.needsYou} need you` : null;
+  const blocked = sub.rollup.blocked > 0;
+  const openSubproject = () =>
+    void navigate({
+      to: "/orchestrators/$environmentId/$threadId",
+      params: { environmentId: sub.root.environmentId, threadId: sub.root.id },
+    });
+  return (
+    <ClickableRow
+      label={labelWithTaskProgress(`Open ${sub.root.title} subproject`, sub)}
+      onOpen={openSubproject}
+      className="flex-wrap items-baseline gap-x-3 gap-y-0.5 py-1.5 text-sm sm:flex-nowrap"
+    >
+      <span className={`min-w-0 flex-1 truncate font-medium ${SUBPROJECT_COLUMN.name}`}>
+        <span className="text-muted-foreground">/ </span>
+        {sub.root.title}
+      </span>
+      <span className="order-last flex min-w-0 basis-full items-baseline gap-2 sm:order-none sm:basis-auto sm:flex-1">
+        <SubprojectHealth summary={sub} />
+      </span>
+      <span className={SUBPROJECT_COLUMN.progress}>
+        <TaskFraction summary={sub} onActivate={openSubproject} />
+      </span>
+      <span className={`${SUBPROJECT_COLUMN.working} text-muted-foreground`}>{working}</span>
+      <span className={SUBPROJECT_COLUMN.needsYou}>
+        {blocked ? <span className="text-error">Blocked </span> : null}
+        {needsYou === null ? null : <span className="text-warning-foreground">{needsYou}</span>}
+      </span>
+      <span className={`${SUBPROJECT_COLUMN.activity} text-xs text-muted-foreground`}>
+        {formatRelativeTimeLabel(sub.rollup.latestActivityAt)}
+      </span>
+      <span className="order-last basis-full text-xs text-muted-foreground sm:hidden empty:hidden">
+        {[
+          blocked ? "Blocked" : null,
+          needsYou,
+          working === null ? null : working === "Working" ? working : `${working} working`,
+          fraction === null ? null : `${fraction} done`,
+        ]
+          .filter((part) => part !== null)
+          .join(" · ")}
+      </span>
+    </ClickableRow>
   );
 }
 
@@ -951,19 +1088,25 @@ export function OrchestratorBoard({
                   </span>
                 </div>
 
-                <ProjectHealthLine summary={summary} />
-                {tab === "dashboard" ? <ProjectSubprojects summary={summary} /> : null}
-                {tab === "dashboard" ? (
-                  <ProjectWorkstreams summary={summary} since={previousVisit} />
-                ) : null}
-                <ProjectReleaseLine
-                  summary={summary}
-                  runningVersion={
-                    serverConfigs.get(summary.root.environmentId)?.environment.serverVersion ?? null
-                  }
-                />
-                {/* On every tab, above the tabs: one line until it is used. */}
-                <ProjectRequestBox summary={summary} />
+                    <ProjectHealthLine summary={summary} />
+                    {tab === "dashboard" && !planInLayout ? (
+                      <ProjectSubprojects summary={summary} />
+                    ) : null}
+                    {tab === "dashboard" && !planInLayout ? (
+                      <ProjectSubagents summary={summary} />
+                    ) : null}
+                    {tab === "dashboard" && !planInLayout ? (
+                      <ProjectWorkstreams summary={summary} since={previousVisit} />
+                    ) : null}
+                    <ProjectReleaseLine
+                      summary={summary}
+                      runningVersion={
+                        serverConfigs.get(summary.root.environmentId)?.environment.serverVersion ??
+                        null
+                      }
+                    />
+                  </>
+                )}
                 <ProjectTabBar
                   tabs={layoutTabs}
                   tab={tab}

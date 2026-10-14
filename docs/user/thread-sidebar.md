@@ -314,6 +314,25 @@ to its parent, whose page lists its subprojects in a table with each one's healt
 task progress, working agents, needs-you count and last activity. A folded card keeps
 a count of the subprojects it hides, such as `1 sub`.
 
+A project's card and every subproject row show tasks done of tasks linked as a fraction,
+such as `24/36`; hover it for `24 of 36 tasks done`. It counts the project and its
+subprojects that are not settled, so it can reach complete, and then dims. A row with no
+tasks shows nothing, and a linked issue that has not synced yet is left out of both
+numbers. Settled subprojects are not listed inline: one collapsed **Settled (N)** row ends
+the list, in the card, on the project page and on mobile. Open it to see them; they
+still open like any subproject.
+
+### Subagents in a project
+
+Subagents of a project's agents, whether the provider started them or a delegated task
+did, also list under the project, below its subprojects, as `- Name` rows: working or
+waiting ones first, then recent ones, with the worker that started a subagent named
+when it is not the project itself. A subagent the provider runs on its own is tagged
+**read-only**. Finished subagents fold into the same **Settled (N)** row. Opening a row
+opens the subagent's thread, and **Back to project** returns. These rows do not change
+the project's counts, and subagents never appear in **Threads**. A thread you created
+in the app that delegates stays in **Threads** and also shows these rows in **Projects**.
+
 To turn a subproject back into a plain worker, choose **Show as worker** from its
 menu or from **Edit** on its page. Mobile lists a subproject as its own project,
 and its decisions show only there, not on the parent's card.
