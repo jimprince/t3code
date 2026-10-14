@@ -1,0 +1,4 @@
+id = "cos-tray-controls"
+category = "fix"
+functionality = "Chief of Staff tray"
+text = "Keep workspace buttons clear of the Chief of Staff tray and hide or reopen its decisions without answering them or losing your draft."
