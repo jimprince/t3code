@@ -1623,6 +1623,8 @@ export interface ChatComposerProps {
   pullRequestProjectId: ProjectId | null;
   pullRequestRepository: string | null;
   restingControlsHost: HTMLDivElement | null;
+  /** The tray conversation drops the model picker, traits and runtime-mode chips. */
+  hideModelControls?: boolean;
   restingControlsHaveLeadingContext: boolean;
   onRestingControlsVisibilityChange: (visible: boolean) => void;
   getTimelineScrollableNode: () => HTMLElement | null;
@@ -1768,6 +1770,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     pullRequestProjectId,
     pullRequestRepository,
     restingControlsHost,
+    hideModelControls = false,
     restingControlsHaveLeadingContext,
     onRestingControlsVisibilityChange,
     getTimelineScrollableNode,
@@ -5498,7 +5501,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const hiddenRestingBlockIds = restingBlockDefs
     .slice(restingBlockDefs.length - restingHiddenBlockCount)
     .map((def) => def.id);
-  const composerControls = showProviderUnavailable ? (
+  const allComposerControls = showProviderUnavailable ? (
     <ComposerControl
       type="button"
       disabled={!providerSetupInstanceId}
@@ -5662,6 +5665,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       </>
     </>
   );
+  const composerControls =
+    hideModelControls && !showProviderUnavailable ? null : allComposerControls;
   const showTasksTab =
     !hasBannerItems &&
     !showComposerTopDrawer &&

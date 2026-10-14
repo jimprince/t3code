@@ -1,0 +1,8 @@
+name = "fork-chief-of-staff-tray"
+subject = "feat(web): global Chief of Staff conversation tray"
+class = "product"
+purpose = "Keep the Chief of Staff desk reachable across web pages and connected environments through a shared summary, sidebar row, conversation tray and phone sheet."
+retire_when = "Upstream provides an equivalent cross-environment Chief of Staff desk and conversation tray."
+depends_on = ["fork-dashboard-v3-17-home-breakpoint", "fork-decision-discuss"]
+roles = []
+note = "Owns the dev tray series, its shared settings and summary resolver, isolated ChatView/composer presentation, Discuss behavior, and decision controls. The source dev commits carry no concern inventory; this file records their integration ownership. The page-agent tray remains a separate concern."
