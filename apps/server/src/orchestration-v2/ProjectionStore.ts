@@ -1,3 +1,8 @@
+import { OrchestrationV2PlanResumeState } from "@t3tools/contracts";
+import {
+  threadTodoProgress as latestTodoProgress,
+  threadPlanResumeState,
+} from "@t3tools/shared/threadPlan";
 import { projectTurnItemForWire } from "./WireProjection.ts";
 import * as Stream from "effect/Stream";
 import { makeThreadFind, findProjectedThreadItems } from "./ThreadFind.ts";
@@ -990,6 +995,7 @@ type ShellThreadRow = {
   readonly latest_user_authored_message_at: string | null;
   readonly has_actionable_proposed_plan: number;
   readonly todo_progress_json: string | null;
+  readonly resume_state_json: string;
   readonly item_count: number;
   readonly runless_item_count: number;
 };
@@ -1414,24 +1420,10 @@ function secretRequestAsPendingInput(
  * Latest means the newest run's list, then the highest plan id: the same rule as
  * the shell query, whose ordering must match this one.
  */
-function latestTodoProgress(
-  plans: OrchestrationV2ThreadProjection["plans"],
-  runs: OrchestrationV2ThreadProjection["runs"],
-): OrchestrationV2ThreadShell["todoProgress"] {
-  const ordinalOf = (runId: RunId | null) => runs.find((run) => run.id === runId)?.ordinal ?? -1;
-  const plan = plans
-    .filter((candidate) => candidate.kind === "todo_list")
-    .toSorted(
-      (left, right) =>
-        ordinalOf(right.runId) - ordinalOf(left.runId) ||
-        (left.id < right.id ? 1 : left.id > right.id ? -1 : 0),
-    )[0];
-  if (plan === undefined || plan.steps.length === 0) return null;
-  return {
-    completed: plan.steps.filter((step) => step.status === "completed").length,
-    total: plan.steps.length,
-  };
-}
+
+const decodePlanResumeStateJson = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(OrchestrationV2PlanResumeState),
+);
 
 const decodeTodoProgressJson = Schema.decodeUnknownSync(
   Schema.fromJsonString(OrchestrationV2TodoProgressSchema),
@@ -1447,6 +1439,7 @@ function decodeTodoProgress(json: string | null): OrchestrationV2ThreadShell["to
 export function threadShellFromProjection(
   projection: OrchestrationV2ThreadProjection,
 ): OrchestrationV2ThreadShell {
+  const todoProgress = latestTodoProgress(projection.plans, projection.runs);
   const providerSession =
     projection.providerSessions
       .filter((session) => session.providerInstanceId === projection.thread.providerInstanceId)
@@ -1585,7 +1578,8 @@ export function threadShellFromProjection(
     hasActionableProposedPlan: projection.plans.some(
       (plan) => plan.kind === "proposed_plan" && plan.status === "active",
     ),
-    todoProgress: latestTodoProgress(projection.plans, projection.runs),
+    todoProgress,
+    planResumeState: threadPlanResumeState(projection),
     pendingBackgroundTasks: [...pendingBackgroundTasks],
     providerInstanceHistory: providerInstanceHistoryForShell({
       threadId: projection.thread.id,
@@ -1687,6 +1681,7 @@ type ShellThreadState = {
   readonly latestUserAuthoredMessageAt: DateTime.Utc | null;
   readonly hasActionableProposedPlan: boolean;
   readonly todoProgress: OrchestrationV2ThreadShell["todoProgress"];
+  readonly planResumeState: OrchestrationV2ThreadShell["planResumeState"];
   readonly pendingBackgroundTasks: OrchestrationV2ThreadShell["pendingBackgroundTasks"];
   readonly providerInstanceHistory: OrchestrationV2ThreadShell["providerInstanceHistory"];
   readonly goal: OrchestrationV2ThreadShell["goal"];
@@ -1863,6 +1858,7 @@ function shellFromState(input: {
     latestUserAuthoredMessageAt: input.state.latestUserAuthoredMessageAt,
     hasActionableProposedPlan: input.state.hasActionableProposedPlan,
     todoProgress: input.state.todoProgress,
+    planResumeState: input.state.planResumeState,
     pendingBackgroundTasks: input.state.pendingBackgroundTasks,
     providerInstanceHistory: input.state.providerInstanceHistory,
     goal: input.state.goal,
@@ -5479,6 +5475,13 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                     SELECT COUNT(*) FROM json_each(plan.payload_json, '$.steps') AS step
                     WHERE json_extract(step.value, '$.status') = 'completed'
                   ),
+                   'currentStep', json((
+                    SELECT json_object('id', json_extract(step.value, '$.id'), 'text', json_extract(step.value, '$.text'), 'status', json_extract(step.value, '$.status'))
+                    FROM json_each(plan.payload_json, '$.steps') step
+                    WHERE json_extract(step.value, '$.status') IN ('running', 'pending')
+                    ORDER BY CASE json_extract(step.value, '$.status') WHEN 'running' THEN 0 ELSE 1 END, CAST(step.key AS INTEGER)
+                    LIMIT 1
+                  )),
                   'total', json_array_length(plan.payload_json, '$.steps')
                 )
                 FROM orchestration_v2_projection_plans plan
@@ -5489,6 +5492,20 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 ), -1) DESC, plan.plan_id DESC
                 LIMIT 1
               ) AS todo_progress_json,
+              json_object(
+                'latestRunStatus', (SELECT r.status FROM orchestration_v2_projection_runs r WHERE r.thread_id = t.thread_id ORDER BY r.ordinal DESC LIMIT 1),
+                'hasLiveSession', json('false'),
+                'hasLiveTurn', json(CASE WHEN EXISTS (
+                  SELECT 1 FROM orchestration_v2_projection_provider_turns pt WHERE pt.thread_id = t.thread_id AND pt.status = 'running'
+                ) OR EXISTS (
+                  SELECT 1 FROM orchestration_v2_projection_runs r WHERE r.thread_id = t.thread_id AND r.status IN ('preparing', 'starting', 'running', 'waiting')
+                ) THEN 'true' ELSE 'false' END),
+                'failedSession', json(CASE WHEN (
+                  SELECT s.status FROM orchestration_v2_projection_provider_sessions s
+                  JOIN orchestration_v2_projection_provider_session_bindings b ON b.provider_session_id = s.provider_session_id
+                  WHERE b.thread_id = t.thread_id ORDER BY s.updated_at DESC, s.provider_session_id DESC LIMIT 1
+                ) = 'error' AND COALESCE((SELECT r.status FROM orchestration_v2_projection_runs r WHERE r.thread_id = t.thread_id ORDER BY r.ordinal DESC LIMIT 1), '') <> 'completed' THEN 'true' ELSE 'false' END)
+              ) AS resume_state_json,
               -- Count per run on the covering (thread_id, run_id) index, then
               -- look up each run once, instead of one run lookup per item.
               (
@@ -5948,6 +5965,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               : DateTime.makeUnsafe(row.latest_user_authored_message_at),
           hasActionableProposedPlan: row.has_actionable_proposed_plan === 1,
           todoProgress: decodeTodoProgress(row.todo_progress_json),
+          planResumeState: yield* decodePlanResumeStateJson(row.resume_state_json),
           pendingBackgroundTasks,
           providerInstanceHistory: providerInstanceHistoryForShell({
             threadId: thread.id,

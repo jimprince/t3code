@@ -60,6 +60,7 @@ import * as RunFinalizationService from "./RunFinalizationService.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
 import * as RuntimeRequestService from "./RuntimeRequestService.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
+import * as ThreadResumeService from "./ThreadResumeService.ts";
 import * as ThreadLaunchService from "./ThreadLaunchService.ts";
 import * as ThreadLifecycleService from "./ThreadLifecycleService.ts";
 import * as ThreadForkService from "./ThreadForkService.ts";
@@ -283,6 +284,9 @@ const layerThreadLaunchProvided = ThreadLaunchService.layer.pipe(
     ),
   ),
 );
+const layerThreadResumeProvided = ThreadResumeService.layer.pipe(
+  Layer.provide(Layer.mergeAll(layerThreadManagementProvided, layerThreadLaunchProvided)),
+);
 const layerThreadLifecycleProvided = ThreadLifecycleService.layer.pipe(
   Layer.provide(layerThreadManagementProvided),
 );
@@ -432,6 +436,7 @@ export const layerProduction = Layer.mergeAll(
   layerProjectService,
   layerManagedProjectFoldersProvided,
   layerThreadLaunchProvided,
+  layerThreadResumeProvided,
   layerTaskIssueLaunchProvided,
   layerThreadLifecycleProvided,
   layerScheduledTaskProvided,

@@ -268,6 +268,23 @@ export class RemoteEnvironmentClient {
     };
   }
 
+  async resumePlan(
+    threadId: string,
+    preview = false,
+  ): Promise<import("@t3tools/contracts").ThreadResumeResult | { seed: string }> {
+    if ((await this.describe()).capabilities.threadResumeFromPlan !== true) {
+      throw new Error("This server does not support resume from plan.");
+    }
+    const rpc = await this.openRpc();
+    try {
+      return await rpc.request(preview ? "thread.previewResumePlan" : "thread.resumeFromPlan", {
+        threadId,
+      });
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
   async describe(): Promise<ExecutionEnvironmentDescriptor> {
     if (this.descriptorFactory) return this.descriptorFactory();
     await this.refreshEnvironment();
