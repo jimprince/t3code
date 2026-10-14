@@ -1,4 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off
+import * as DateTime from "effect/DateTime";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -738,7 +739,7 @@ printf '"}\\n'
 
 describe("active publication marker", () => {
   const markerPath = (repo: FixtureRepo) => NodePath.join(repo.dir, ".git/active-publication.json");
-  const marker = (head: string, startedAt = new Date().toISOString()) => ({
+  const marker = (head: string, startedAt = DateTime.formatIso(DateTime.nowUnsafe())) => ({
     schema: "t3code.active-publication/v1",
     owner: "test-publisher",
     token: "test-token",
@@ -862,7 +863,12 @@ exit ${exit}
       const path = markerPath(fixture.repo);
       NodeFS.writeFileSync(
         path,
-        JSON.stringify(marker(fixture.head, new Date(Date.now() - 7201_000).toISOString())),
+        JSON.stringify(
+          marker(
+            fixture.head,
+            DateTime.formatIso(DateTime.subtract(DateTime.nowUnsafe(), { seconds: 7201 })),
+          ),
+        ),
       );
       const result = run(fixture.repo, "--push");
       assert.equal(result.status, 0, result.stderr);
