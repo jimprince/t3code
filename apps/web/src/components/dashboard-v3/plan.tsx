@@ -164,14 +164,7 @@ function WorkstreamRow({
   const tone = allDone ? "done" : keys.length > 0 || roll.idle > 0 ? "warning" : "default";
   return (
     <div>
-      <div
-        className={cn(
-          "grid grid-cols-[14px_minmax(0,1fr)_auto] items-center gap-x-2.5 py-0.75",
-          onOpen
-            ? "@xl/dash:grid-cols-[14px_minmax(220px,1.4fr)_minmax(90px,1fr)_minmax(170px,auto)]"
-            : "@xl/dash:grid-cols-[14px_minmax(150px,1.25fr)_minmax(110px,1.6fr)_minmax(170px,auto)]",
-        )}
-      >
+      <div className="grid grid-cols-[14px_minmax(0,1fr)_auto] items-center gap-x-2.5 py-0.75 @xl/dash:grid-cols-[14px_minmax(120px,1fr)_96px_minmax(110px,auto)]">
         <button
           type="button"
           aria-label={collapsed ? "Expand" : "Collapse"}
@@ -188,7 +181,7 @@ function WorkstreamRow({
         <button
           type="button"
           className={cn(
-            "min-w-0 truncate text-left hover:underline",
+            "line-clamp-3 min-w-0 break-words text-left hover:underline",
             onOpen ? "font-semibold" : "font-medium",
           )}
           onClick={onOpen ?? (() => ui.toggleCollapsed(key))}
@@ -237,11 +230,14 @@ function SubprojectRow({
   const roll = rollup(tasks);
   const keys = blockingKeys(ui.decisionKeysFor, scoped, scoped.project.tasks);
   return (
-    <div className="grid grid-cols-[14px_minmax(0,1fr)_auto] items-center gap-x-2.5 py-0.75 @xl/dash:grid-cols-[14px_minmax(150px,1.25fr)_minmax(110px,1.6fr)_minmax(170px,auto)]">
+    <div className="grid grid-cols-[14px_minmax(0,1fr)_auto] items-center gap-x-2.5 py-0.75 @xl/dash:grid-cols-[14px_minmax(120px,1fr)_96px_minmax(110px,auto)]">
       <span />
       <button
         type="button"
-        className={cn("min-w-0 truncate text-left hover:underline", dim && "text-muted-foreground")}
+        className={cn(
+          "line-clamp-3 min-w-0 break-words text-left hover:underline",
+          dim && "text-muted-foreground",
+        )}
         onClick={() => ui.openProject(scoped)}
       >
         {scoped.project.title}
