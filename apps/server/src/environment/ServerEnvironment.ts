@@ -263,6 +263,7 @@ export const make = Effect.gen(function* () {
       projectIssues: true,
       projectIssueDetail: true,
       projectItemTypes: true,
+      threadResumeFromPlan: true,
       environmentIcon: true,
       projectCloneTracking: true,
       projectLayout: true,
