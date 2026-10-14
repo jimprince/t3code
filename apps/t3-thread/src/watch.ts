@@ -4,6 +4,8 @@ import {
   matchesCurrentParent,
   mapRouteEnvironment,
   parentInputRoute,
+  reconcileDerivedRoute,
+  sourceRouteExpiry,
 } from "./parentRouting.js";
 import * as NodeCrypto from "node:crypto";
 
@@ -69,6 +71,213 @@ export type WatchClientFactory = (environment: SavedEnvironment) => WatchClient;
 
 function createWatchClient(environment: SavedEnvironment): WatchClient {
   return new RemoteEnvironmentClient(environment);
+}
+
+/**
+ * What a full read of a quiet thread could add beyond its shell. Undefined while a run is
+ * live: inactivity and progress come from the full thread, so those are always read.
+ */
+function quietShellSignature(shell: OrchestrationThreadShell): string | undefined {
+  if (shell.activeRunId || ["running", "queued", "starting"].includes(shell.status ?? "")) {
+    return undefined;
+  }
+  return JSON.stringify([
+    shell.updatedAt,
+    shell.status ?? null,
+    shell.lastError ?? null,
+    shell.settledOverride ?? null,
+    shell.settledAt ?? null,
+    shell.unsettledAt ?? null,
+    shell.archivedAt,
+    shell.latestTurn?.turnId ?? null,
+    shell.latestTurn?.state ?? null,
+    shell.latestTurn?.completedAt ?? null,
+    shell.latestUserMessageAt,
+    shell.hasPendingApprovals,
+    shell.hasPendingUserInput,
+    shell.hasActionableProposedPlan,
+    shell.parentThreadId ?? null,
+    shell.remoteParent ?? null,
+  ]);
+}
+
+/** A full read without metadata, given the nesting fields its listed shell carries. */
+function withListedNesting(
+  thread: OrchestrationThread,
+  shell: OrchestrationThreadShell,
+): OrchestrationThread {
+  return {
+    ...thread,
+    ...("parentThreadId" in shell ? { parentThreadId: shell.parentThreadId } : {}),
+    ...("remoteParent" in shell ? { remoteParent: shell.remoteParent } : {}),
+    ...("scope" in shell ? { scope: shell.scope } : {}),
+    ...("subproject" in shell ? { subproject: shell.subproject } : {}),
+  };
+}
+
+/** What makes a live source worth reading again before LIVE_SOURCE_REREAD_MS passes. */
+function liveShellSignature(shell: OrchestrationThreadShell): string {
+  return JSON.stringify([
+    shell.status ?? null,
+    shell.activeRunId ?? null,
+    shell.latestTurn?.turnId ?? null,
+    shell.hasPendingApprovals,
+    shell.hasPendingUserInput,
+    shell.hasActionableProposedPlan,
+  ]);
+}
+// Passes are seconds apart once settled and unchanged sources cost nothing. A live run's
+// inactivity thresholds are minutes, and its requests and completion show in the shell, so
+// its full read and the shell list itself are refreshed on these slower clocks.
+const LIVE_SOURCE_REREAD_MS = 30_000;
+const SHELL_LIST_TTL_MS = 15_000;
+
+/** Per-watcher cache: share reads within a pass, park terminal mappings for its lifetime.
+ * Settled sources re-check each minute so remote unsettle remains observable. A source
+ * whose shell is unchanged since its last full read reuses that read (a live one for at most
+ * LIVE_SOURCE_REREAD_MS): each full read is a connection and a thread snapshot.
+ */
+export function createWatchPoller(factory: WatchClientFactory = createWatchClient, now = Date.now) {
+  const reads = new Map<string, Promise<OrchestrationThread>>();
+  // One shell list per environment per pass: the attention scan and the liveness check both
+  // discover routes from it.
+  const lists = new Map<string, { at: number; list: Promise<OrchestrationThreadShell[]> }>();
+  // This pass's quiet-shell signatures, and the full read each source last had under one.
+  const signatures = new Map<string, { signature: string; live: boolean }>();
+  // The current list's shells, which already carry nesting fields from one metadata read.
+  const listedShells = new Map<string, OrchestrationThreadShell>();
+  const signedReads = new Map<
+    string,
+    { signature: string; at: number; read: Promise<OrchestrationThread> }
+  >();
+  const parked = new Map<
+    string,
+    { until: number; read: Promise<OrchestrationThread>; reason: string }
+  >();
+  const clientFactory: WatchClientFactory = (environment) => ({
+    listThreads() {
+      const cached = lists.get(environment.name);
+      if (cached && now() - cached.at < SHELL_LIST_TTL_MS) return cached.list;
+      const forget = () => {
+        for (const key of signatures.keys())
+          if (key.startsWith(`${environment.name}:`)) signatures.delete(key);
+        for (const key of listedShells.keys())
+          if (key.startsWith(`${environment.name}:`)) listedShells.delete(key);
+      };
+      const list = (factory(environment).listThreads?.() ?? Promise.resolve([])).then((shells) => {
+        forget();
+        for (const shell of shells) {
+          const key = `${environment.name}:${shell.id}`;
+          const cached = parked.get(key);
+          if (
+            (cached?.reason === "archived" && !shell.archivedAt) ||
+            (cached?.reason === "settled" && shell.settledOverride !== "settled")
+          ) {
+            parked.delete(key);
+            signedReads.delete(key);
+            reads.delete(key);
+          }
+          listedShells.set(`${environment.name}:${shell.id}`, shell);
+          const quiet = quietShellSignature(shell);
+          signatures.set(
+            `${environment.name}:${shell.id}`,
+            quiet === undefined
+              ? { signature: liveShellSignature(shell), live: true }
+              : { signature: quiet, live: false },
+          );
+        }
+        return shells;
+      });
+      // A failed list is retried by the next caller rather than reused.
+      list.catch(() => {
+        lists.delete(environment.name);
+        forget();
+      });
+      lists.set(environment.name, { at: now(), list });
+      return list;
+    },
+    findThread(threadId) {
+      const key = `${environment.name}:${threadId}`;
+      const skipped = parked.get(key);
+      if (skipped && now() < skipped.until) return skipped.read;
+      const signed = signatures.get(key);
+      const previous = signedReads.get(key);
+      if (
+        !reads.has(key) &&
+        signed !== undefined &&
+        previous?.signature === signed.signature &&
+        (!signed.live || now() - previous.at < LIVE_SOURCE_REREAD_MS)
+      ) {
+        return previous.read;
+      }
+      if (!reads.has(key)) {
+        const shell = listedShells.get(key);
+        // Listed: take nesting from the shell instead of re-reading every thread's metadata.
+        const read: Promise<OrchestrationThread> = (
+          shell
+            ? factory(environment)
+                .findThread(threadId, { nesting: false })
+                .then((thread) => withListedNesting(thread, shell))
+            : factory(environment).findThread(threadId)
+        )
+          .then((thread) => {
+            if (signed !== undefined)
+              signedReads.set(key, {
+                signature: signed.signature,
+                at: now(),
+                read: Promise.resolve(thread),
+              });
+            else signedReads.delete(key);
+            const reason =
+              thread.archivedAt || thread.deletedAt
+                ? "archived"
+                : thread.settledOverride === "settled"
+                  ? "settled"
+                  : null;
+            if (reason)
+              parked.set(key, {
+                until: reason === "settled" ? now() + 60_000 : Infinity,
+                read: Promise.resolve(thread),
+                reason,
+              });
+            else parked.delete(key);
+            return thread;
+          })
+          .catch((error: unknown) => {
+            if (isMissingThread(error)) {
+              // Keep the rejected read to flag the mapping without hitting RPC every pass.
+              parked.set(key, { until: Infinity, read, reason: "missing" });
+            }
+            throw error;
+          });
+        reads.set(key, read);
+      }
+      return reads.get(key)!;
+    },
+    sendMessage(input) {
+      return factory(environment).sendMessage(input);
+    },
+    supportsReliableHandoffs: () =>
+      factory(environment).supportsReliableHandoffs?.() ?? Promise.resolve(false),
+    lookupSendReceipt: (input) =>
+      factory(environment).lookupSendReceipt?.(input) ??
+      Promise.resolve({ state: "unknown", receipts: [], retentionDays: 30 }),
+  });
+  return {
+    clientFactory,
+    beginPoll: () => reads.clear(),
+    skippedMappings: () =>
+      [...parked].map(([mapping, value]) => ({ mapping, reason: value.reason })),
+  };
+}
+
+export function isMissingThread(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /Thread .* was not found/i.test(message);
+}
+
+export function nextWatchInterval(intervalMs: number, workRemaining: boolean): number {
+  return workRemaining ? intervalMs : Math.max(intervalMs, 60_000);
 }
 
 function nowIso(): string {
@@ -156,9 +365,37 @@ async function discoverParentRoutes(state: StateFile, options: AttentionScanOpti
     const client = factory(environment);
     let shells: OrchestrationThreadShell[];
     try {
-      shells = (await client.listThreads?.()) ?? [];
+      shells = [...((await client.listThreads?.()) ?? [])];
     } catch {
       continue;
+    }
+    // Archived sources leave the active shell list. Read only retained live derived
+    // sources missing from that list; a failed read is unknown, never expiry evidence.
+    const listedIds = new Set(shells.map((shell) => shell.id));
+    const missingIds = new Set(
+      subscriptions
+        .filter(
+          (route) =>
+            route.nestingDerived &&
+            !route.expiryReason &&
+            route.sourceEnvironment === environment.name &&
+            !listedIds.has(route.sourceThreadId),
+        )
+        .map((route) => route.sourceThreadId),
+    );
+    for (const id of missingIds) {
+      try {
+        const detail = await client.findThread(id);
+        shells.push({
+          ...detail,
+          latestUserMessageAt: null,
+          hasPendingApprovals: classifyThread(detail).state === "needs-approval",
+          hasPendingUserInput: classifyThread(detail).state === "needs-input",
+          hasActionableProposedPlan: classifyThread(detail).state === "needs-plan",
+        });
+      } catch {
+        /* Retain the last known state during an outage. */
+      }
     }
     for (const shell of shells) {
       const key = JSON.stringify([environment.name, shell.id]);
@@ -178,13 +415,20 @@ async function discoverParentRoutes(state: StateFile, options: AttentionScanOpti
         };
         agents.push(source);
       }
-      subscriptions = subscriptions.filter(
-        (route) =>
-          !route.nestingDerived ||
-          route.sourceEnvironment !== environment.name ||
-          route.sourceThreadId !== shell.id ||
-          matchesCurrentParent(shell, route, state),
-      );
+      subscriptions = subscriptions
+        .filter(
+          (route) =>
+            !route.nestingDerived ||
+            route.expiryReason === "unsubscribed" ||
+            route.sourceEnvironment !== environment.name ||
+            route.sourceThreadId !== shell.id ||
+            matchesCurrentParent(shell, route, state),
+        )
+        .map((route) =>
+          route.sourceEnvironment === environment.name && route.sourceThreadId === shell.id
+            ? reconcileDerivedRoute(route, shell, (options.now ?? nowIso)())
+            : route,
+        );
       if (!source) continue;
       const parent = parentInputRoute(state, source, shell, (options.now ?? nowIso)());
       if (parent && !subscriptions.some((route) => sameNotificationRoute(route, parent, state)))
@@ -250,9 +494,12 @@ async function scanKnownRoutes(
 
     const subscriptions = state.subscriptions.filter(
       (subscription) =>
+        !subscription.expiryReason &&
         subscription.sourceThreadId === sourceAgent.threadId &&
         subscription.sourceEnvironment === sourceAgent.environment &&
-        (!subscription.nestingDerived || matchesCurrentParent(sourceThread, subscription, state)),
+        (!subscription.nestingDerived ||
+          (!sourceRouteExpiry(sourceThread) &&
+            matchesCurrentParent(sourceThread, subscription, state))),
     );
     if (subscriptions.length === 0) {
       continue;
@@ -385,9 +632,11 @@ export async function hasActiveWork(
 
   state = (await discoverParentRoutes(state, options)).state;
   const subscribedSourceThreadIds = new Set(
-    state.subscriptions.map((subscription) =>
-      JSON.stringify([subscription.sourceEnvironment, subscription.sourceThreadId]),
-    ),
+    state.subscriptions
+      .filter((subscription) => !subscription.expiryReason)
+      .map((subscription) =>
+        JSON.stringify([subscription.sourceEnvironment, subscription.sourceThreadId]),
+      ),
   );
   if (subscribedSourceThreadIds.size === 0) {
     return false;
@@ -428,8 +677,80 @@ export async function detectAttentionEvents(
   return updateState(async (currentState) => {
     const persisted: SavedNotification[] = [];
     let notifications = currentState.notifications;
+    const subscriptions = [
+      ...currentState.subscriptions.filter(
+        (route) =>
+          !route.nestingDerived ||
+          !discovered.observedSources.has(
+            JSON.stringify([route.sourceEnvironment, route.sourceThreadId]),
+          ) ||
+          discovered.state.subscriptions.some((observed) =>
+            sameNotificationRoute(route, observed, currentState),
+          ),
+      ),
+      ...discovered.state.subscriptions.filter(
+        (route) =>
+          route.nestingDerived &&
+          !currentState.subscriptions.some((existing) =>
+            sameNotificationRoute(route, existing, currentState),
+          ),
+      ),
+    ].map((route) => {
+      if (!route.nestingDerived || route.expiryReason === "unsubscribed") return route;
+      const source = discovered.shellsBySource.get(
+        JSON.stringify([route.sourceEnvironment, route.sourceThreadId]),
+      );
+      return source ? reconcileDerivedRoute(route, source, (options.now ?? nowIso)()) : route;
+    });
+    notifications = notifications.map((notification) => {
+      const expired = subscriptions.find(
+        (route) => route.expiryReason && sameNotificationRoute(route, notification, currentState),
+      );
+      return expired &&
+        !TERMINAL_NOTIFICATION_STATUSES.has(notification.status) &&
+        notification.status !== "delivering"
+        ? {
+            ...notification,
+            status: "superseded" as const,
+            nextAttemptAt: null,
+            updatedAt: (options.now ?? nowIso)(),
+            lastError: `Derived route expired: ${expired.expiryReason}.`,
+          }
+        : notification;
+    });
 
-    for (const notification of scanned) {
+    for (let notification of scanned) {
+      if (
+        subscriptions.some(
+          (route) => route.expiryReason && sameNotificationRoute(route, notification, currentState),
+        )
+      )
+        continue;
+      // Another detector may have established this episode while our source
+      // snapshot was in flight. Select its key and count under the state lock.
+      if (notification.sourceState === "error") {
+        const route = currentState.subscriptions.find((subscription) =>
+          sameNotificationRoute(subscription, notification, currentState),
+        );
+        if (
+          route?.observedState === "error" &&
+          route.observedReason === notification.reason &&
+          route.errorEventKey
+        ) {
+          notification = { ...notification, eventKey: route.errorEventKey };
+          const observed = observedSubscriptions.find((subscription) =>
+            sameNotificationRoute(subscription, notification, currentState),
+          );
+          if (observed) observed.errorEventKey = route.errorEventKey;
+        }
+      }
+      notification = withInputReminder(
+        notification,
+        notifications,
+        currentState.subscriptions.find((route) =>
+          sameNotificationRoute(route, notification, currentState),
+        ),
+      );
       const existing =
         notifications.find((candidate) => candidate.eventKey === notification.eventKey) ?? null;
       const merged = mergeDetectedNotification(existing, notification);
@@ -447,25 +768,32 @@ export async function detectAttentionEvents(
       state: {
         ...currentState,
         notifications,
-        subscriptions: [
-          ...currentState.subscriptions.filter(
-            (route) =>
-              !route.nestingDerived ||
-              !discovered.observedSources.has(
-                JSON.stringify([route.sourceEnvironment, route.sourceThreadId]),
-              ) ||
-              discovered.state.subscriptions.some((observed) =>
-                sameNotificationRoute(route, observed, currentState),
-              ),
-          ),
-          ...discovered.state.subscriptions.filter(
-            (route) =>
-              route.nestingDerived &&
-              !currentState.subscriptions.some((existing) =>
-                sameNotificationRoute(route, existing, currentState),
-              ),
-          ),
-        ].map((route) => mapRouteEnvironment(currentState, route)),
+        subscriptions: subscriptions.map((route) => {
+          const observed = observedSubscriptions.find((candidate) =>
+            sameNotificationRoute(candidate, route, currentState),
+          );
+          if (!route.nestingDerived && !observed) return route;
+          return mapRouteEnvironment(
+            currentState,
+            observed
+              ? {
+                  ...route,
+                  inactivityObservation:
+                    observed.updatedAt === route.updatedAt &&
+                    observed.inactivityMinutes === route.inactivityMinutes &&
+                    (!route.inactivityObservation ||
+                      !observed.inactivityObservation ||
+                      Date.parse(observed.inactivityObservation.observedAt) >=
+                        Date.parse(route.inactivityObservation.observedAt))
+                      ? observed.inactivityObservation
+                      : route.inactivityObservation,
+                  observedState: observed.observedState,
+                  observedReason: observed.observedReason,
+                  errorEventKey: observed.errorEventKey,
+                }
+              : route,
+          );
+        }),
       },
       result: persisted,
     };
@@ -623,7 +951,49 @@ export async function deliverPendingNotifications(
           ) ?? null)
         : null;
 
-      if (!subscriptionStillExists) {
+      // A process crash does not authorize another delivery. Resolve its exact
+      // identity first; an absent/expired receipt is honestly uncertain.
+      if (notification.receiptRecovery) {
+        let receipt: HandoffLookupResult | null = null;
+        try {
+          if (subscriberEnvironment && notification.sendId)
+            receipt =
+              (await clientFactory(subscriberEnvironment).lookupSendReceipt?.({
+                type: "exact",
+                sendId: notification.sendId,
+              })) ?? null;
+        } catch {
+          /* No automatic resend after an uncertain lookup. */
+        }
+        const known = receipt?.state === "found" ? receipt.receipts[0] : null;
+        const status =
+          known && ["started", "steered", "queued"].includes(known.status)
+            ? "delivered"
+            : known && ["refused", "superseded", "cancelled"].includes(known.status)
+              ? "undeliverable"
+              : "uncertain";
+        const persisted = await finalizeNotificationAttempt({
+          notification: {
+            ...notification,
+            status,
+            updatedAt: attemptedAt,
+            nextAttemptAt: null,
+            lastError: known?.cause ?? (status === "uncertain" ? "TRANSPORT_ERROR" : null),
+          },
+          claimId: notification.deliveryClaimId ?? null,
+        });
+        if (persisted) delivered.push(persisted);
+        continue;
+      }
+      if (subscription?.expiryReason) {
+        result = {
+          ...notification,
+          status: "superseded",
+          updatedAt: attemptedAt,
+          nextAttemptAt: null,
+          lastError: `Derived route expired: ${subscription.expiryReason}.`,
+        };
+      } else if (!subscriptionStillExists) {
         result = notification.isChildInput
           ? {
               ...notification,
@@ -663,7 +1033,7 @@ export async function deliverPendingNotifications(
           ).findThread(notification.sourceThreadId);
           if (
             !matchesCurrentParent(source, notification, state) ||
-            source.archivedAt ||
+            sourceRouteExpiry(source) ||
             source.deletedAt ||
             source.settledOverride === "settled" ||
             !["needs-input", "needs-approval"].includes(classifyThread(source).state)
@@ -730,8 +1100,8 @@ export async function deliverPendingNotifications(
           // Snapshot reads can be slow; an unsubscribe during that read wins.
           const latest = await loadState();
           if (
-            !latest.subscriptions.some((route) =>
-              sameNotificationRoute(route, notification, latest),
+            !latest.subscriptions.some(
+              (route) => !route.expiryReason && sameNotificationRoute(route, notification, latest),
             ) ||
             latest.notifications.find((event) => event.id === notification.id)?.status !==
               "delivering"

@@ -221,6 +221,8 @@ export interface SavedAgent {
 export interface SavedSubscription {
   /** Implicit attention route maintained from organizational metadata. */
   nestingDerived?: boolean;
+  expiredAt?: string | null;
+  expiryReason?: "settled" | "archived" | "completed" | "unsubscribed" | null;
   subscriberEnvironmentId?: string;
   events?: "all" | "attention";
   subscriberThreadId: string;

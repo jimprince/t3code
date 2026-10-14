@@ -107,12 +107,22 @@ export function removeSubscription(
   subscriptions: SavedSubscription[],
   input: { subscriberThreadId: string; sourceThreadId: string },
 ): SavedSubscription[] {
-  return subscriptions.filter(
-    (subscription) =>
-      !(
-        subscription.subscriberThreadId === input.subscriberThreadId &&
-        subscription.sourceThreadId === input.sourceThreadId
-      ),
+  return subscriptions.flatMap((subscription) =>
+    !(
+      subscription.subscriberThreadId === input.subscriberThreadId &&
+      subscription.sourceThreadId === input.sourceThreadId
+    )
+      ? [subscription]
+      : subscription.nestingDerived
+        ? [
+            {
+              ...subscription,
+              expiryReason: "unsubscribed" as const,
+              expiredAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+          ]
+        : [],
   );
 }
 
@@ -139,7 +149,10 @@ export function resolveSubscriptionThreadId(state: StateFile, reference: string)
 /** Subscriptions that notify `subscriberThreadId`, each with the command that removes it. */
 export function describeSubscriptionsOf(state: StateFile, subscriberThreadId: string) {
   return state.subscriptions
-    .filter((subscription) => subscription.subscriberThreadId === subscriberThreadId)
+    .filter(
+      (subscription) =>
+        subscription.subscriberThreadId === subscriberThreadId && !subscription.expiryReason,
+    )
     .map((subscription) => ({
       source: subscription.sourceAgentName ?? subscription.sourceThreadId,
       sourceThreadId: subscription.sourceThreadId,
@@ -293,7 +306,18 @@ export function buildSubscriptionRecord(
   options: { baselineTurnId?: string | null; events?: "all" | "attention" } = {},
 ): SavedSubscription {
   return {
-    events: options.events ?? existing?.events ?? "all",
+    ...existing,
+    ...(existing?.nestingDerived
+      ? { nestingDerived: false, expiryReason: null, expiredAt: null }
+      : {}),
+    inactivityMinutes: options.inactivityMinutes ?? existing?.inactivityMinutes ?? 0,
+    inactivityObservation:
+      options.inactivityMinutes !== undefined &&
+      options.inactivityMinutes !== existing?.inactivityMinutes
+        ? null
+        : existing?.inactivityObservation,
+    level: options.level ?? existing?.level ?? "all",
+    inputReminderMinutes: options.inputReminderMinutes ?? existing?.inputReminderMinutes ?? 45,
     subscriberThreadId: caller.threadId,
     subscriberAgentName: caller.name,
     subscriberEnvironment: caller.environment,
