@@ -339,8 +339,9 @@ still open like any subproject.
 Subagents of a project's agents, whether the provider started them or a delegated task
 did, also list under the project, below its subprojects, as `- Name` rows: working or
 waiting ones first, then recent ones, with the worker that started a subagent named
-when it is not the project itself. A subagent the provider runs on its own is tagged
-**read-only**. Finished subagents fold into the same **Settled (N)** row. Opening a row
+when it is not the project itself. Threads nested under the project, whether you started
+them with **New thread under this one** or an agent did, list the same way and are tagged
+**worker**. A subagent the provider runs on its own is tagged **read-only**. Finished subagents fold into the same **Settled (N)** row. Opening a row
 opens the subagent's thread, and **Back to project** returns. These rows do not change
 the project's counts, and subagents never appear in **Threads**. A thread you created
 in the app that delegates stays in **Threads** and also shows these rows in **Projects**.

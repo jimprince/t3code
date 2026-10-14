@@ -57,7 +57,7 @@ export function MobileSubprojectRows({
     <Pressable
       key={`${row.thread.environmentId}:${row.thread.id}`}
       accessibilityRole="button"
-      accessibilityLabel={`Open ${row.thread.title} subagent`}
+      accessibilityLabel={`Open ${row.thread.title} ${row.kind}`}
       className="min-h-9 flex-row items-center gap-1.5 pr-1 active:bg-card"
       style={{ paddingLeft: 8 + depth * 12 }}
       onPress={() => onSelectThread(row.thread)}
@@ -79,6 +79,7 @@ export function MobileSubprojectRows({
           ? ` · ${row.parentTitle}`
           : ""}
       </Text>
+      {row.kind === "worker" ? <Text className="text-xs text-foreground-muted">worker</Text> : null}
       {row.readOnly ? <Text className="text-xs text-foreground-muted">read-only</Text> : null}
       <Text className="text-xs text-foreground-muted">
         {relativeTime(lastActivityAt(row.thread))}

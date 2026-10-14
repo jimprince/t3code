@@ -161,6 +161,10 @@ const opensAgents = (markup: string) =>
   [...markup.matchAll(/aria-label="Open ([^"]+) subagent"/g)].map((match) => match[1]);
 const agentRow = (markup: string, title: string) =>
   markup.slice(markup.indexOf(`aria-label="Open ${title} subagent"`)).split("</button>")[0]!;
+const opensWorkers = (markup: string) =>
+  [...markup.matchAll(/aria-label="Open ([^"]+) worker"/g)].map((match) => match[1]);
+const workerRow = (markup: string, title: string) =>
+  markup.slice(markup.indexOf(`aria-label="Open ${title} worker"`)).split("</button>")[0]!;
 
 describe("Projects sidebar card subagents", () => {
   beforeEach(() => {
@@ -234,5 +238,47 @@ describe("Projects sidebar card subagents", () => {
     expect(
       subprojectCountLabel(summaries.find((summary) => summary.root.id === "orchestrator")!),
     ).toBe("4 subs");
+  });
+});
+
+describe("Projects sidebar card workers", () => {
+  it("lists a nested subthread as a worker row under its head, tagged worker and clickable", () => {
+    shells.current = [
+      ...liveShape(),
+      shell("mine", {
+        title: "T3 Code Performance Bottlenecks",
+        parent: "orchestrator",
+        worker: true,
+      }),
+    ];
+    const markup = render();
+    expect(opensWorkers(markup)).toContain("T3 Code Performance Bottlenecks");
+    expect(workerRow(markup, "T3 Code Performance Bottlenecks")).toContain(">worker<");
+    // A worker row is not a subagent row, and the card has a chevron to fold it.
+    expect(opensAgents(markup)).not.toContain("T3 Code Performance Bottlenecks");
+    expect(markup).toContain("Hide subprojects of T3 Orchestrator");
+  });
+
+  it("lists a head whose only children are workers with a fold control", () => {
+    shells.current = [
+      shell("head", { title: "Lone head", purpose: "project" }),
+      shell("kid", { title: "Only child", parent: "head", worker: true }),
+    ];
+    const markup = render();
+    expect(opensWorkers(markup)).toEqual(["Only child"]);
+    expect(markup).toContain("Hide agents of Lone head");
+  });
+
+  it("keeps a Harness-purpose worker off the Projects card", () => {
+    shells.current = [
+      ...liveShape(),
+      shell("h", {
+        title: "Harness chore",
+        parent: "orchestrator",
+        worker: true,
+        purpose: "harness",
+      }),
+    ];
+    expect(opensWorkers(render())).not.toContain("Harness chore");
   });
 });

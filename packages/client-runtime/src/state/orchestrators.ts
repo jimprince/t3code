@@ -203,12 +203,15 @@ export interface OrchestratorSummary {
 }
 
 /**
- * A subagent beneath a project: any worker in the project's own tree whose lineage says
+ * A row beneath a project. A subagent is any thread in the project's own tree whose lineage says
  * "subagent", whether the provider spawned it (Claude Task, Codex or Cursor native, read-only)
- * or `delegate_task` did (takes messages). A row, not a project: it never joins `subprojects`,
- * and the rollup counts are not derived from it.
+ * or `delegate_task` did (takes messages). A worker is a nested thread with no lineage
+ * relationship that a user or agent created: a subthread opened under the project or a
+ * `t3-thread` worker. A row, not a project: it never joins `subprojects`, and the rollup counts
+ * are not derived from it.
  */
 export interface SubagentRow {
+  readonly kind: "subagent" | "worker";
   readonly thread: OrchestratorThreadShell;
   /** The organizational parent: the project root, or the worker that spawned this subagent. */
   readonly parentKey: string | null;
@@ -446,28 +449,47 @@ function collectOwnDescendants(
   return descendants;
 }
 
-/** The subagent rows of one project's own workers; see `SubagentRow`. */
+/**
+ * A nested user or agent thread that is not a subagent or fork. A thread the user opened through a
+ * server action (Discuss, resume) is not one: it stays in Threads, not on the card.
+ */
+function isNestedWorker(thread: OrchestratorThreadShell): boolean {
+  return (
+    parentKey(thread) != null &&
+    thread.lineage.relationshipToParent === null &&
+    (thread.source.createdBy === "user" || thread.source.createdBy === "agent") &&
+    !isUserOpenedThread(thread)
+  );
+}
+
+/** The subagent and worker rows of one project's own tree; see `SubagentRow`. */
 function buildSubagentRows(
   descendants: ReadonlyArray<OrchestratorThreadShell>,
   byKey: ReadonlyMap<string, OrchestratorThreadShell>,
   runningChildKeys: ReadonlySet<string>,
 ): ReadonlyArray<SubagentRow> {
   const rows = descendants
-    .filter((thread) => thread.lineage.relationshipToParent === "subagent")
+    .filter(
+      (thread) => thread.lineage.relationshipToParent === "subagent" || isNestedWorker(thread),
+    )
     .map((thread): SubagentRow => {
       const key = parentKey(thread);
       const working = isThreadWorking(thread) || runningChildKeys.has(threadActivityKey(thread));
       const needsYou = thread.hasPendingApprovals || thread.hasPendingUserInput;
+      const subagent = thread.lineage.relationshipToParent === "subagent";
       return {
+        kind: subagent ? "subagent" : "worker",
         thread,
         parentKey: key,
         parentTitle: key === null ? null : (byKey.get(key)?.title ?? null),
         working,
         needsYou,
-        readOnly: isProviderNativeSubagentThread({
-          lineage: thread.lineage,
-          creationSource: thread.source.creationSource,
-        }),
+        readOnly:
+          subagent &&
+          isProviderNativeSubagentThread({
+            lineage: thread.lineage,
+            creationSource: thread.source.creationSource,
+          }),
         settled: thread.settledOverride === "settled" && !working && !needsYou,
       };
     });

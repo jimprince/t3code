@@ -3272,6 +3272,8 @@ export type OrchestrationV2ArchivedShellStreamItem =
 
 export const OrchestrationV2ThreadLaunchInput = Schema.Struct({
   creatorThreadId: Schema.optional(ThreadId),
+  /** Files the new thread under this thread in the supervision tree as part of the launch (`launchThreadParent`). */
+  parentThreadId: Schema.optional(ThreadId),
   purposeSeed: Schema.optional(ThreadPurpose),
   issue: Schema.optional(TrimmedNonEmptyString),
   commandId: CommandId,

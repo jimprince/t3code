@@ -374,9 +374,10 @@ function ProjectSubprojects({ summary }: { readonly summary: OrchestratorSummary
 }
 
 /**
- * The project's subagents, one row each: running and waiting first, then recent, with the settled
- * ones behind the same collapsed "Settled (N)" row the subprojects use. A provider-native subagent
- * is tagged read-only; a row opens the subagent's own thread and "Back to project" returns here.
+ * The project's subagents and nested workers, one row each: running and waiting first, then recent, with the settled
+ * ones behind the same collapsed "Settled (N)" row the subprojects use. A nested worker is tagged
+ * worker and a provider-native subagent read-only; a row opens its own thread and "Back to project"
+ * returns here.
  */
 function ProjectSubagents({ summary }: { readonly summary: OrchestratorSummary }) {
   const navigate = useNavigate();
@@ -393,7 +394,7 @@ function ProjectSubagents({ summary }: { readonly summary: OrchestratorSummary }
     return (
       <ClickableRow
         key={`${thread.environmentId}:${thread.id}`}
-        label={`Open ${thread.title} subagent`}
+        label={`Open ${thread.title} ${row.kind}`}
         onOpen={() =>
           void navigate({
             to: "/$environmentId/$threadId",
@@ -412,6 +413,9 @@ function ProjectSubagents({ summary }: { readonly summary: OrchestratorSummary }
             via {row.parentTitle}
           </span>
         ) : null}
+        {row.kind === "worker" ? (
+          <span className="shrink-0 text-xs text-muted-foreground">worker</span>
+        ) : null}
         {row.readOnly ? (
           <span className="shrink-0 text-xs text-muted-foreground">read-only</span>
         ) : null}
@@ -429,7 +433,7 @@ function ProjectSubagents({ summary }: { readonly summary: OrchestratorSummary }
     );
   };
   return (
-    <ProjectSection title="Subagents" count={active.length}>
+    <ProjectSection title="Subagents and workers" count={active.length}>
       <ul className="divide-y divide-border">
         {active.map(renderRow)}
         {settled.length > 0 ? (

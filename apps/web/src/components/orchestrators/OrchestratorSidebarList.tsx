@@ -185,9 +185,10 @@ function SubprojectRows({
 }
 
 /**
- * One subagent of the project: a dot for working or waiting on you, its title, a "read-only" tag
- * when the provider owns the conversation, the worker that spawned it when that is not the
- * project itself, and when it last moved. A click opens the subagent's own thread.
+ * One subagent or nested worker of the project: a dot for working or waiting on you, its title, a
+ * "worker" tag for a nested thread or "read-only" when the provider owns the conversation, the
+ * thread it hangs from when that is not the project itself, and when it last moved. A click opens
+ * its own thread.
  */
 function SubagentListRow({
   row,
@@ -206,7 +207,7 @@ function SubagentListRow({
   return (
     <button
       type="button"
-      aria-label={`Open ${thread.title} subagent`}
+      aria-label={`Open ${thread.title} ${row.kind}`}
       aria-current={selected ? "page" : undefined}
       style={{ paddingLeft: `${0.625 + depth * 0.75}rem` }}
       className={`pointer-events-auto flex h-6 w-full cursor-pointer items-center gap-1.5 rounded pr-1.5 text-left text-3xs hover:bg-sidebar-row-hover ${
@@ -230,6 +231,7 @@ function SubagentListRow({
         {thread.title}
         {showParent && row.parentTitle !== null ? ` · ${row.parentTitle}` : ""}
       </span>
+      {row.kind === "worker" ? <span className="shrink-0">worker</span> : null}
       {row.readOnly ? <span className="shrink-0">read-only</span> : null}
       <span className="shrink-0 tabular-nums">
         {formatRelativeTimeLabel(lastActivityAt(thread))}
