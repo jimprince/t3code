@@ -300,7 +300,7 @@ export const make = (deps: {
           config.giteaInstances,
           yield* deps.projectIssues.trackerForRoot(threads, root.id),
         );
-        return target ? { config, thread, root, project, target } : null;
+        return target ? { config, thread, root, project, target, threads } : null;
       });
 
     type Resolved = NonNullable<Effect.Success<ReturnType<typeof resolveThread>>>;
