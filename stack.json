@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "b715414b8da9e73102094757f5968dc947a5aef6",
-  "head": "c57bc0b821db8671a14fa0dd77eaabaf1f58ca11",
+  "prev": "3b18ffd3615e6bc2be0891c5a1439f071fce12f9",
+  "head": "6de2774701ad335a65c41bff3a308ca8bbc582c6",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -187,7 +187,8 @@
     "fork-dashboard-v3-17-home-breakpoint",
     "fork-shell-build-diagnostics",
     "fork-chief-of-staff-tray",
-    "fork-dashboard-v3-18-single-design-compact-request"
+    "fork-dashboard-v3-18-single-design-compact-request",
+    "refresh-temp"
   ],
   "unapplied": [],
   "hidden": [],
@@ -746,6 +747,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "07bacad8d3a0f00fbf7f2985ee31b3112f5c0fa6"
+    },
+    "refresh-temp": {
+      "oid": "6de2774701ad335a65c41bff3a308ca8bbc582c6"
     }
   }
 }
