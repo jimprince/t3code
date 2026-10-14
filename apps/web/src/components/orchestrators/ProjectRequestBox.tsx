@@ -1,7 +1,15 @@
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
 import type { MessageId, ProjectRequestStartIntakeResult } from "@t3tools/contracts";
 import { XIcon } from "lucide-react";
-import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type DragEvent,
+  type FocusEvent,
+} from "react";
 
 import type { ComposerImageAttachment } from "../../composerDraftStore";
 import { randomUUID } from "../../lib/utils";
@@ -83,8 +91,9 @@ export function ProjectRequestBox({
 }) {
   const [text, setText] = useState("");
   const [expanded, setExpanded] = useState(false);
-  // Set by a quick action so the box opens with the caret after its text.
+  // Set by a quick action or a prefill so the caret lands after the text it puts in the box.
   const caretToEnd = useRef(false);
+  const boxRef = useRef<HTMLDivElement>(null);
   const submit = useAtomCommand(submitProjectRequest, { reportFailure: false });
   const startIntake = useAtomCommand(startRequestIntake, { reportFailure: false });
   const archiveThread = useAtomCommand(threadEnvironment.archive, { reportFailure: false });
@@ -153,6 +162,15 @@ export function ProjectRequestBox({
     setImages([]);
   };
   const open = expanded || text.length > 0 || images.length > 0;
+  // Runs after every commit but acts only while the flag is set: it puts the caret after the new
+  // text once the composer shows it, then clears the flag so it cannot pull the caret to the end
+  // on a later focus.
+  useLayoutEffect(() => {
+    const field = boxRef.current?.querySelector("textarea");
+    if (!caretToEnd.current || !field) return;
+    caretToEnd.current = false;
+    field.setSelectionRange(field.value.length, field.value.length);
+  });
   const appliedPrefill = useRef(prefill?.nonce ?? 0);
   useEffect(() => {
     if (!prefill || prefill.nonce === appliedPrefill.current) return;
@@ -268,7 +286,14 @@ export function ProjectRequestBox({
 
   return (
     <div
+      ref={boxRef}
       className="flex flex-col gap-2"
+      // Fold only when focus leaves the whole box, so Tab can reach the quick actions and buttons.
+      onBlur={(event: FocusEvent<HTMLDivElement>) => {
+        if (event.target instanceof HTMLInputElement) return;
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+        setExpanded(false);
+      }}
       onDragOver={(event: DragEvent) => {
         if (event.dataTransfer.types.includes("Files")) event.preventDefault();
       }}
@@ -304,13 +329,6 @@ export function ProjectRequestBox({
           disabled={busy}
           autoFocus
           placeholder={placeholder}
-          onFocus={(event) => {
-            if (!caretToEnd.current) return;
-            caretToEnd.current = false;
-            const end = event.currentTarget.value.length;
-            event.currentTarget.setSelectionRange(end, end);
-          }}
-          onBlur={() => setExpanded(false)}
           onChange={(event) => setText(event.target.value)}
           onPaste={(event: ClipboardEvent) => {
             const files = imageFiles(event.clipboardData.files);
