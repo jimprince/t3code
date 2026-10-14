@@ -143,3 +143,17 @@ export function useDashboardData(): DashboardState {
     };
   }, [entries, environments, retry]);
 }
+
+const NO_DASHBOARD_SNAPSHOT = Atom.make<DashboardSnapshot | null>(null);
+const environmentDashboardSnapshot = Atom.family((environmentId: EnvironmentId) =>
+  Atom.make((get) => get(dashboard.snapshot(environmentId)).snapshot).pipe(Atom.setIdleTTL(0)),
+);
+
+/** One environment's last live snapshot; the Chief of Staff tray counts its decisions from it. */
+export function useEnvironmentDashboardSnapshot(
+  environmentId: EnvironmentId | null,
+): DashboardSnapshot | null {
+  return useAtomValue(
+    environmentId === null ? NO_DASHBOARD_SNAPSHOT : environmentDashboardSnapshot(environmentId),
+  );
+}
