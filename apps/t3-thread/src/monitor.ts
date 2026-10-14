@@ -44,6 +44,8 @@ export function getLatestTurnAssistantMessage(
 ): OrchestrationMessage | null {
   const turnId = thread.latestTurn?.turnId ?? null;
   if (turnId) {
+    const summaryMessage = getLatestAssistantMessage(thread);
+    if (thread.operatorSummary && summaryMessage?.turnId === turnId) return summaryMessage;
     for (let index = thread.messages.length - 1; index >= 0; index -= 1) {
       const candidate = thread.messages[index];
       if (candidate.role === "assistant" && candidate.turnId === turnId) {

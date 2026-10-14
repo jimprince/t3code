@@ -261,6 +261,8 @@ export interface SavedSubscription {
   level?: NotificationLevel;
   /** Minutes between unanswered nested-child reminders; zero disables reminders. */
   inputReminderMinutes?: number;
+  /** First completed turn observed after subscribing; prevents replay of initial results. */
+  firstCompletionTurnId?: string | null;
   lastDirectMessageTurnId?: string | null;
   errorEventKey?: string | null;
   observedState?: AgentState;
@@ -314,6 +316,8 @@ export interface SavedNotification {
   pendingQuestion?: string | null;
   pendingInputRequestKey?: string | null;
   reminderOfEventKey?: string | null;
+  /** First awaited completion, eligible without an explicit attention marker. */
+  initialCompletion?: boolean;
   completionDisposition?: "quiet" | "attention" | null;
   occurrences?: number;
   lastOccurrenceKey?: string;

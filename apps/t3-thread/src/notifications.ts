@@ -240,7 +240,10 @@ function turnResultDisposition(thread: OrchestrationThread): "quiet" | "attentio
 
 export function shouldDeliverNotification(
   subscription: SavedSubscription,
-  notification: Pick<SavedNotification, "sourceState" | "latestTurnId" | "completionDisposition">,
+  notification: Pick<
+    SavedNotification,
+    "sourceState" | "latestTurnId" | "completionDisposition" | "initialCompletion"
+  >,
 ): boolean {
   if (["needs-input", "needs-approval", "needs-plan", "error"].includes(notification.sourceState))
     return true;
@@ -257,7 +260,7 @@ export function shouldDeliverNotification(
       subscription.lastDirectMessageTurnId === notification.latestTurnId
     )
       return false;
-    return disposition === "attention";
+    return notification.initialCompletion === true || disposition === "attention";
   }
   return level === "all" || notification.sourceState === "interrupted";
 }

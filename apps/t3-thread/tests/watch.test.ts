@@ -1,10 +1,10 @@
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
+import { DateTime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { projection, item } from "./v2-fixture.js";
-import { RemoteEnvironmentClient } from "../src/client.js";
 import { loadState, saveState } from "../src/state.js";
 import { buildSubscriptionRecord } from "../src/state.js";
 import { sendDirectResult } from "../src/directResult.js";
@@ -68,6 +68,7 @@ function makeSubscription(overrides: Partial<SavedSubscription> = {}): SavedSubs
     sourceEnvironment: "dev-vm",
     createdAt: "2026-04-17T00:00:00.000Z",
     updatedAt: "2026-04-17T00:00:00.000Z",
+    firstCompletionTurnId: "prior-turn",
     ...overrides,
   };
 }
@@ -225,6 +226,163 @@ async function withTempState(test: () => Promise<void>): Promise<void> {
     await NodeFSP.rm(tempDir, { recursive: true, force: true });
   }
 }
+
+describe("first awaited completion", () => {
+  const now = () => "2026-04-17T00:10:00.000Z";
+
+  async function subscribe(level: SavedSubscription["level"] = "attention") {
+    const state = await loadState();
+    state.subscriptions = [
+      buildSubscriptionRecord(
+        { threadId: "thread-coordinator-a", name: "coordinator-a", environment: "dev-vm" },
+        { threadId: "thread-worker-a", name: "worker-a", environment: "dev-vm" },
+        "2026-04-17T00:00:00.000Z",
+        null,
+        { level, baselineTurnId: null },
+      ),
+    ];
+    await saveState(state);
+  }
+
+  it.each(["no turn", "running", "missed polls"])(
+    "delivers a fresh first turn exactly once after %s at subscribe time",
+    async (phase) => {
+      await withTempState(async () => {
+        await subscribe();
+        const source = makeThread({ latestTurn: null, messages: [] });
+        const { clientFactory, sentMessages } = createClientFactory({ sourceThread: source });
+        if (phase !== "missed polls") {
+          if (phase === "running")
+            source.latestTurn = {
+              ...makeThread().latestTurn!,
+              state: "running",
+              completedAt: null,
+            };
+          expect(await detectAttentionEvents({ clientFactory, now })).toEqual([]);
+        }
+        source.latestTurn = makeThread().latestTurn;
+        source.messages = makeThread().messages;
+        expect(await detectAttentionEvents({ clientFactory, now })).toHaveLength(1);
+        await deliverPendingNotifications({ clientFactory, now });
+        // A new detector reads only persisted state, as it would after restart.
+        expect(await detectAttentionEvents({ clientFactory, now })).toEqual([]);
+        await deliverPendingNotifications({ clientFactory, now });
+        expect(sentMessages).toHaveLength(1);
+        expect((await loadState()).notifications).toHaveLength(1);
+        expect((await loadState()).notifications[0]!.status).toBe("delivered");
+        source.latestTurn!.turnId = "turn-2";
+        source.messages[0]!.turnId = "turn-2";
+        source.messages[0]!.id = "assistant-2";
+        source.messages[0]!.text = "Later ordinary result.";
+        expect(await detectAttentionEvents({ clientFactory, now })).toEqual([]);
+        source.messages[0]!.text = "Later result.\nT3_NOTIFY: attention";
+        expect(await detectAttentionEvents({ clientFactory, now })).toHaveLength(1);
+        await deliverPendingNotifications({ clientFactory, now });
+        expect(sentMessages).toHaveLength(2);
+      });
+    },
+  );
+
+  it("waits for the current final message before consuming a completion", async () => {
+    await withTempState(async () => {
+      await subscribe();
+      const source = makeThread({ messages: [] });
+      const { clientFactory, sentMessages } = createClientFactory({ sourceThread: source });
+      expect(await detectAttentionEvents({ clientFactory, now })).toEqual([]);
+      source.messages = makeThread().messages;
+      expect(await detectAttentionEvents({ clientFactory, now })).toHaveLength(1);
+      await deliverPendingNotifications({ clientFactory, now });
+      expect(sentMessages).toHaveLength(1);
+    });
+  });
+
+  it("does not replay a completed baseline and still delivers a later attention turn", async () => {
+    await withTempState(async () => {
+      await subscribe();
+      const state = await loadState();
+      state.subscriptions[0]!.baselineTurnId = "turn-1";
+      await saveState(state);
+      const source = makeThread();
+      source.messages[0]!.text = "Finished.\nT3_NOTIFY: attention";
+      const { clientFactory, sentMessages } = createClientFactory({ sourceThread: source });
+      expect(await detectAttentionEvents({ clientFactory, now })).toEqual([]);
+      source.latestTurn!.turnId = "turn-2";
+      source.messages[0]!.turnId = "turn-2";
+      source.messages[0]!.id = "assistant-2";
+      expect(await detectAttentionEvents({ clientFactory, now })).toHaveLength(1);
+      await deliverPendingNotifications({ clientFactory, now });
+      expect(sentMessages).toHaveLength(1);
+    });
+  });
+
+  it.each(["stale", "seen", "before subscription", "quiet", "direct", "none"])(
+    "consumes a legacy initial completion without notifying when %s",
+    async (reason) => {
+      await withTempState(async () => {
+        await subscribe(reason === "none" ? "none" : "attention");
+        const state = await loadState();
+        state.subscriptions[0]!.observedState = "completed";
+        state.subscriptions[0]!.observedReason = "latest turn completed";
+        const source = makeThread();
+        if (reason === "seen") state.agents[0]!.lastSeenAssistantMessageId = "assistant-1";
+        if (reason === "before subscription")
+          state.subscriptions[0]!.createdAt = "2026-04-17T00:01:00.000Z";
+        if (reason === "quiet") source.messages[0]!.text = "Done.\nT3_NOTIFY: quiet";
+        if (reason === "direct") state.subscriptions[0]!.lastDirectMessageTurnId = "turn-1";
+        await saveState(state);
+        const clock = reason === "stale" ? () => "2026-04-17T02:00:00.000Z" : now;
+        const { clientFactory, sentMessages } = createClientFactory({ sourceThread: source });
+        expect(await detectAttentionEvents({ clientFactory, now: clock })).toEqual([]);
+        expect(await detectAttentionEvents({ clientFactory, now: clock })).toEqual([]);
+        await deliverPendingNotifications({ clientFactory, now: clock });
+        expect(sentMessages).toHaveLength(0);
+        // Suppression of the initial result must not swallow a later escalation.
+        source.latestTurn!.turnId = "turn-2";
+        source.messages[0]!.turnId = "turn-2";
+        source.messages[0]!.id = "assistant-2";
+        source.messages[0]!.text = "Later result.\nT3_NOTIFY: attention";
+        expect(await detectAttentionEvents({ clientFactory, now: clock })).toHaveLength(
+          reason === "none" ? 0 : 1,
+        );
+        await deliverPendingNotifications({ clientFactory, now: clock });
+        expect(sentMessages).toHaveLength(reason === "none" ? 0 : 1);
+      });
+    },
+  );
+
+  it("recovers a fresh unread legacy completion while honoring bounded summary quiet markers", async () => {
+    await withTempState(async () => {
+      await subscribe();
+      const state = await loadState();
+      state.subscriptions[0]!.observedState = "completed";
+      await saveState(state);
+      const source = makeThread();
+      const message = source.messages[0]!;
+      source.messages = [];
+      source.operatorSummary = {
+        messageCount: 1,
+        proposedPlanCount: 0,
+        latestAssistantMessage: {
+          ...message,
+          runId: "turn-1",
+          text: "Done.\nT3_NOTIFY: quiet",
+          createdAt: DateTime.makeUnsafe(message.createdAt),
+          updatedAt: DateTime.makeUnsafe(message.updatedAt),
+        } as NonNullable<OrchestrationThread["operatorSummary"]>["latestAssistantMessage"],
+      };
+      const { clientFactory, sentMessages } = createClientFactory({ sourceThread: source });
+      expect(await detectAttentionEvents({ clientFactory, now })).toEqual([]);
+      // A separate legacy route with an ordinary fresh result recovers once.
+      await subscribe();
+      source.operatorSummary.latestAssistantMessage!.text = "First task finished.";
+      expect(await detectAttentionEvents({ clientFactory, now })).toHaveLength(1);
+      await deliverPendingNotifications({ clientFactory, now });
+      expect(await detectAttentionEvents({ clientFactory, now })).toEqual([]);
+      await deliverPendingNotifications({ clientFactory, now });
+      expect(sentMessages).toHaveLength(1);
+    });
+  });
+});
 
 describe("watch flows", () => {
   it("reports the final completion of a worker that settled itself right after its turn", async () => {

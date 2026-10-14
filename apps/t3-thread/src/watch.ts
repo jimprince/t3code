@@ -20,13 +20,12 @@ import {
 import type { HandoffLookupInput, HandoffLookupResult } from "@t3tools/contracts";
 
 import { RemoteEnvironmentClient } from "./client.js";
-import { buildAgentOverview, needsAttention } from "./monitor.js";
+import { buildAgentOverview, getLatestTurnAssistantMessage, needsAttention } from "./monitor.js";
 import {
   buildNotificationMessage,
   buildNotificationRecord,
   MAX_DELIVERY_ATTEMPTS,
   mergeDetectedNotification,
-  shouldNotify,
   shouldDeliverNotification,
   nextAttemptAt,
   TERMINAL_NOTIFICATION_STATUSES,
@@ -57,6 +56,8 @@ const SETTLED_RECIPIENT_RECHECK_MS = 60_000;
  * reports a turn that finished this recently; older settled threads stay skipped.
  */
 const SETTLED_COMPLETION_WINDOW_MS = 60 * 60_000;
+/** Bound legacy first-completion catch-up after a watcher upgrade or outage. */
+const INITIAL_COMPLETION_WINDOW_MS = 60 * 60_000;
 /** Keeps the watcher awake just long enough to record a completion that settled before the next pass. */
 const SETTLED_COMPLETION_GRACE_MS = 2 * 60_000;
 
@@ -611,8 +612,29 @@ async function scanAttentionState(
         isNotificationReply(sourceThread)
       )
         continue;
-      if (!needsAttention(overview) || !shouldNotify(subscription, overview, sourceThread))
-        continue;
+      let initialCompletion = false;
+      const completedTurn = overview.state === "completed" ? sourceThread.latestTurn : null;
+      if (completedTurn && subscription.level === "attention" && !subscription.baselineTurnId) {
+        if (subscription.firstCompletionTurnId === completedTurn.turnId) continue;
+        if (!subscription.firstCompletionTurnId) {
+          if (!getLatestTurnAssistantMessage(sourceThread)) continue;
+          // Older routes have no observation marker. Consume their initial result
+          // even when stale/seen, so an upgrade cannot replay a backlog later.
+          subscription.firstCompletionTurnId = completedTurn.turnId;
+          const completedAt = Date.parse(completedTurn.completedAt ?? "");
+          const age = Date.parse(now()) - completedAt;
+          if (
+            !overview.hasNewOutput ||
+            !Number.isFinite(age) ||
+            age < 0 ||
+            age > INITIAL_COMPLETION_WINDOW_MS ||
+            completedAt < Date.parse(subscription.createdAt)
+          )
+            continue;
+          initialCompletion = true;
+        }
+      }
+      if (!needsAttention(overview)) continue;
       // Attention for the turn that was already current when the subscriber
       // signed up is old news to it; only a later turn is a new transition.
       if (
@@ -629,6 +651,8 @@ async function scanAttentionState(
         thread: sourceThread,
         now: now(),
       });
+      detected.initialCompletion = initialCompletion;
+      if (!shouldDeliverNotification(subscription, detected)) continue;
       if (overview.state === "error") {
         const episode = state.notifications.find(
           (notification) => notification.eventKey === subscription.errorEventKey,
@@ -938,6 +962,8 @@ export async function detectAttentionEvents(
                         Date.parse(route.inactivityObservation.observedAt))
                       ? observed.inactivityObservation
                       : route.inactivityObservation,
+                  firstCompletionTurnId:
+                    route.firstCompletionTurnId ?? observed.firstCompletionTurnId,
                   observedState: observed.observedState,
                   observedReason: observed.observedReason,
                   errorEventKey: observed.errorEventKey,

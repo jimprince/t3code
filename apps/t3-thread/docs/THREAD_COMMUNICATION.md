@@ -27,8 +27,10 @@ existing subscription from your own thread, run
 - `all` is the default, including for existing subscriptions. It includes ordinary
   completion notices even when the worker sent you a direct result during that turn.
 - `attention` is recommended for supervisors receiving direct results. It delivers
-  interruptions and escalations. A completion needs the worker's explicit
-  `T3_NOTIFY: attention` final line and is suppressed if it already sent you a
+  interruptions and escalations. The first awaited completion also delivers once
+  if unread, completed after subscribing, and no more than an hour old. Quiet
+  replies and direct results still suppress it. Later completions need the worker's
+  explicit `T3_NOTIFY: attention` final line and are suppressed if it already sent you a
   direct message during the same turn.
 - `none` suppresses ordinary completions and interruptions.
 
