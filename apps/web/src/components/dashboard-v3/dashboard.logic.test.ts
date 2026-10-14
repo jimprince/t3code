@@ -17,7 +17,12 @@ import {
   firstVisitChanges,
   outcomesSince,
   freshnessSummary,
+  formatEta,
+  formatEtaDay,
+  planNotes,
+  projectTasks,
   mergeSnapshots,
+  nestWorkstreams,
   orderProducts,
   parseIssueTaskId,
   planWorkstreams,
@@ -483,5 +488,185 @@ describe("planWorkstreams", () => {
       ),
     );
     expect(plan.map((entry) => entry.workstream.title)).toEqual(["Epic"]);
+  });
+});
+
+describe("tracker tasks without a checklist", () => {
+  const bare = (overrides: Partial<DashboardTask> = {}) =>
+    task({
+      hasChecklist: false,
+      progress: {
+        done: 0,
+        total: 1,
+        planVersion: "v",
+        sourceId: "s",
+        confirmedAt: "2026-10-11T13:40:00.000Z",
+      },
+      movement: { ...task().movement, state: "unknown", doneDelta: null },
+      ...overrides,
+    });
+
+  it("counts them as open tasks, never as a 0/1 step total", () => {
+    const roll = rollup([bare(), bare({ id: "issue:git/o/r#2" }), task({ id: "issue:git/o/r#3" })]);
+    expect(roll.steps).toEqual({ done: 3, total: 6 });
+    expect(roll.unplanned).toBe(2);
+  });
+
+  it("keeps a due date even though there is nothing to measure", () => {
+    const roll = rollup([
+      bare({ forecast: { eta: "2026-10-20", precision: "date", basis: "owner", sourceId: "s" } }),
+    ]);
+    expect(roll).toMatchObject({ steps: null, ownerEta: "2026-10-20", ownerEtaDateOnly: true });
+  });
+
+  it("does not report gaining a checklist as a replan", () => {
+    const data = { asOf: "x", projects: [], releases: [], sources: [] };
+    const before = takeBaseline(
+      {
+        ...data,
+        projects: [
+          { key: "p", environmentId: ENV, project: { tasks: [bare()], attention: [] } } as never,
+        ],
+      },
+      "2026-10-11T13:00:00.000Z",
+    );
+    const after = {
+      ...data,
+      projects: [
+        {
+          key: "p",
+          environmentId: ENV,
+          project: {
+            tasks: [task({ progress: { ...task().progress!, done: 0, total: 4 } })],
+            attention: [],
+          },
+        } as never,
+      ],
+    };
+    expect(diffAgainst(after, before).changes).toEqual([]);
+  });
+});
+
+describe("an owner ETA", () => {
+  const now = Date.parse("2026-10-14T10:00:00.000Z");
+
+  it("is the calendar day for a due date, in any time zone, with no time", () => {
+    expect(formatEtaDay("2026-10-20", now)).toBe("Oct 20");
+    expect(formatEtaDay("2026-10-20T00:00:00Z", now)).toBe("Oct 20");
+    expect(formatEtaDay("2027-01-05", now)).toBe("Jan 5, 2027");
+    expect(formatEta("2026-10-20", true, now)).not.toMatch(/\d:\d\d/);
+  });
+
+  it("stays a clock time for a source that sent an instant", () => {
+    expect(formatEta("2026-10-14T17:30:00.000Z", false, now)).toMatch(/\d:\d\d/);
+  });
+});
+
+describe("workstream nesting and membership notes", () => {
+  const entry = (id: string, parent: string | null) => ({
+    workstream: { id, title: id, taskIds: [], parentWorkstreamId: parent, url: `u/${id}` },
+    tasks: [],
+    ownTask: null,
+    children: [],
+  });
+
+  it("lists a child epic under its parent and everything else at the top", () => {
+    const roots = nestWorkstreams([entry("a", null), entry("b", "a"), entry("c", "missing")]);
+    expect(roots.map((r) => [r.workstream.id, r.children.map((c) => c.workstream.id)])).toEqual([
+      ["a", ["b"]],
+      ["c", []],
+    ]);
+  });
+
+  it("does not lose members of a parent loop", () => {
+    const roots = nestWorkstreams([entry("a", "b"), entry("b", "a")]);
+    expect(roots.map((r) => r.workstream.id)).toEqual(["a", "b"]);
+  });
+
+  it("says what a warning means and nothing when there is none", () => {
+    expect(planNotes(["conflicting-checklist-parents", "x-y"])).toEqual([
+      "Membership: listed under several parent checklists; x y",
+    ]);
+    expect(planNotes(undefined)).toEqual([]);
+    expect(planNotes([])).toEqual([]);
+  });
+
+  it("calls a truncated body a truncated body, never a membership problem", () => {
+    expect(planNotes(["truncated-body", "cyclic-membership"])).toEqual([
+      "Plan body truncated",
+      "Membership: its parents form a loop",
+    ]);
+  });
+});
+
+describe("project-level lines", () => {
+  const scoped = (planSource: "tracker" | "briefing", tasks: DashboardTask[]) =>
+    ({
+      key: "e:p",
+      environmentId: ENV,
+      project: {
+        id: "project:p",
+        planSource,
+        workstreams: [{ id: "issue:git/o/r#9", title: "Epic", taskIds: [] }],
+        tasks,
+      },
+    }) as unknown as ScopedProject;
+  const epicTask = task({ id: "issue:git/o/r#9", progress: null, status: "blocked" });
+  const plain = task({ id: "issue:git/o/r#10", progress: null, status: "pending" });
+
+  it("leaves a tracker epic's own task out of a project's open tasks", () => {
+    const tracker = scoped("tracker", [epicTask, plain]);
+    expect(projectTasks([tracker], tracker).map((t) => t.id)).toEqual([plain.id]);
+  });
+
+  it("leaves a briefing project's tasks exactly as they were", () => {
+    const briefing = scoped("briefing", [epicTask, plain]);
+    expect(projectTasks([briefing], briefing)).toHaveLength(2);
+  });
+
+  it("adds no ETA from a task that never had progress (briefing rows)", () => {
+    const eta = { eta: "2026-10-12T17:00:00.000Z", basis: "owner" as const, sourceId: "s" };
+    expect(rollup([task({ progress: null, forecast: eta })]).ownerEta).toBeNull();
+  });
+});
+
+describe("a subproject whose only open item is an epic waiting on a decision", () => {
+  const epic = task({
+    id: "issue:git/o/r#9",
+    progress: null,
+    status: "blocked",
+    attentionIds: ["issue:git/o/r#9:attention"],
+  });
+  const project = (id: string, parentId: string | null, over: Record<string, unknown> = {}) =>
+    ({
+      key: `e:${id}`,
+      environmentId: ENV,
+      project: {
+        id,
+        parentId,
+        title: id,
+        utility: false,
+        omittedTaskCount: 0,
+        attention: [],
+        tasks: [],
+        workstreams: [],
+        ...over,
+      },
+    }) as unknown as ScopedProject;
+  const parent = project("project:p", null);
+  const sub = project("project:s", "project:p", {
+    planSource: "tracker",
+    tasks: [epic],
+    workstreams: [{ id: epic.id, title: "Epic", taskIds: [], url: "u" }],
+  });
+
+  it("still ranks its parent as needing a decision, not idle", () => {
+    const { ordered, idle } = orderProducts([parent], [parent, sub]);
+    expect(idle).toEqual([]);
+    expect(ordered).toEqual([parent]);
+  });
+
+  it("is not counted as an open task on the project line", () => {
+    expect(projectTasks([parent, sub], parent)).toEqual([]);
   });
 });
