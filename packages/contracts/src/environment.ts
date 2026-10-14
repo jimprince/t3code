@@ -198,6 +198,8 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
       which only know the earlier kinds, so the CLI files a request under one of those. */
   projectItemTypes: Schema.optionalKey(Schema.Boolean),
   threadResumeFromPlan: Schema.optionalKey(Schema.Boolean),
+  /** Server supports placing tracker requests within workstreams. */
+  projectRequestOrder: Schema.optionalKey(Schema.Boolean),
   pullRequestStackActions: Schema.optionalKey(Schema.Boolean),
   /** The update path clients should offer for this server. Absent on
       servers that must be relaunched manually (dev checkouts, Windows
