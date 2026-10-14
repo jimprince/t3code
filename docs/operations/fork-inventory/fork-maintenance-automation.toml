@@ -94,3 +94,9 @@ id = "catchup-2908-inventory-and-source-gates"
 date = "2026-10-10"
 decided = "narrow+adapt"
 rationale = "Split the inventory to schema 3: fork-inventory.toml is header-only, each applied concern alone creates/edits fork-inventory/<name>.toml, and stack.json.applied defines order. Preserve every original key, value, comment and historical decision. Readers/writers and fixtures enforce exact files, names, subjects, backward dependencies and exclusive ownership; remove aggregate-stanza union code. Retain hosted Ubuntu fork evidence policy after upstream #16178, including the transfer-report five-minute timeout. Move upstream Chromium prerequisite (#16515) into verify-source test-server so candidate CI and release fallback share it. All 143 history positions and a production checker fixture were statically verified; composed exact-source CI remains required."
+
+[[decision]]
+id = "active-publication-marker"
+date = "2026-10-13"
+decided = "repair-existing-concern"
+rationale = "Push mode claims a host-local active-publication marker containing owner, UTC start time and target main. Serialized marker admission refuses overlapping publishers; token-checked exit cleanup preserves replacement ownership. A two-hour stale warning/expiry bounds dead-publisher blocking. CI Repair Bot reads the same marker beside its independent manual pause flag; preparation-time Git leases remain untouched and authoritative across machines."
