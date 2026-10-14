@@ -252,18 +252,23 @@ export function useDecide(summary: OrchestratorSummary, refresh: () => void) {
   };
 }
 
+/** The project a request belongs to, as far as opening and discussing its threads needs. */
+export interface ProjectRootRef {
+  readonly root: Pick<OrchestratorSummary["root"], "environmentId" | "id">;
+}
+
 /**
  * Discuss on a decision: opens a thread nested under the thread waiting on it (or the
  * live one already discussing it) and goes there. `pending` names the decision whose
  * thread is being opened, so its Discuss reads Opening and ignores a second click.
  */
-export function useDiscuss(summary: OrchestratorSummary) {
+export function useDiscuss(summary: ProjectRootRef) {
   const discuss = useAtomCommand(discussProjectRequest, "Discuss");
   const openThread = useOpenThread(summary);
   const [pending, setPending] = useState<string | null>(null);
   // A ref, not `pending`: a second click in the same frame still sees the old state.
   const inFlight = useRef(false);
-  const start = async (issue: ProjectIssue) => {
+  const start = async (issue: Pick<ProjectIssue, "repository" | "number">) => {
     const key = issueKey(issue);
     if (inFlight.current) return;
     inFlight.current = true;
@@ -294,7 +299,7 @@ export function useDiscuss(summary: OrchestratorSummary) {
 }
 
 /** Opens a thread of the project, coming back to the project page afterwards. */
-export function useOpenThread(summary: OrchestratorSummary) {
+export function useOpenThread(summary: ProjectRootRef) {
   const navigate = useNavigate();
   return (threadId: string) =>
     void navigate({
