@@ -43,7 +43,7 @@ function useOutcomes() {
 }
 
 /** Each outcome at the level it is known to have reached; the snapshot only knows closed. */
-export function OutcomeList({ limit }: { readonly limit?: number | undefined }) {
+function OutcomeList({ limit }: { readonly limit?: number | undefined }) {
   const { data, now } = useDashboardUi();
   const { since, firstVisit, items } = useOutcomes();
   if (items.length === 0)
@@ -70,7 +70,7 @@ export function OutcomeList({ limit }: { readonly limit?: number | undefined }) 
   );
 }
 
-export function DoneHeading() {
+function DoneHeading() {
   const { now } = useDashboardUi();
   const { since, firstVisit, items } = useOutcomes();
   return (

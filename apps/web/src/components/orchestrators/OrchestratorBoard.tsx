@@ -67,10 +67,8 @@ import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { OrchestratorStatus } from "./OrchestratorStatus";
 import { useOrchestratorThreadShells } from "./useOrchestratorThreads";
 import { readOrchestratorLastVisit, recordOrchestratorVisit } from "./orchestratorVisit";
-import { VariantSwitcher } from "../dashboard-v3/chrome";
 import { DashboardView } from "../dashboard-v3/DashboardView";
 import { NEXT_CANVAS_ID, NextCanvas } from "../dashboard-v3/nextCanvas";
-import { useDashboardVariant } from "../dashboard-v3/prefs";
 import { ProjectAutomationsSlot } from "../projects/ProjectAutomationsSlot";
 import { ProjectDecisionFeed, useDecisionFeedCount } from "./ProjectDecisionFeed";
 import { ProjectIssuesBoard } from "./ProjectIssuesBoard";
@@ -764,10 +762,8 @@ export function OrchestratorBoard({
     rememberedTab,
     layoutTabs.map((item) => item.id),
   );
-  // The new Dashboard is the default; "Previous" keeps the one that shipped before it reachable.
-  const [dashboardVariant] = useDashboardVariant();
   // Editing the layout shows the layout itself, so widgets can still be moved and removed.
-  const newDashboard = tab === "dashboard" && dashboardVariant !== "previous" && !editingLayout;
+  const newDashboard = tab === "dashboard" && !editingLayout;
   const changeLayout = (ops: ProjectLayoutOp[]) => {
     if (!layoutState.live) {
       toastManager.add({
@@ -1105,11 +1101,6 @@ export function OrchestratorBoard({
                     ) : null
                   }
                 />
-                {tab === "dashboard" && dashboardVariant === "previous" ? (
-                  <div className="flex justify-end">
-                    <VariantSwitcher />
-                  </div>
-                ) : null}
                 {newDashboard ? (
                   <DashboardView
                     scope={{ kind: "project", environmentId, threadId }}
