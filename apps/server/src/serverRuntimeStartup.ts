@@ -57,6 +57,7 @@ import {
   formatHostForUrl,
   isWildcardHost,
   issueHeadlessServeAccessInfo,
+  ShowStartupCredentials,
 } from "./startupAccess.ts";
 
 export class ServerRuntimeStartupError extends Schema.TaggedError<ServerRuntimeStartupError>()(
@@ -348,6 +349,29 @@ const maybeOpenBrowser = (target: string) =>
       ),
     );
   });
+
+export const presentStartupAccess = Effect.gen(function* () {
+  const serverConfig = yield* ServerConfig.ServerConfig;
+  const showCredentials = yield* ShowStartupCredentials;
+  if (
+    serverConfig.startupPresentation === "headless" ||
+    (serverConfig.mode !== "desktop" && !showCredentials)
+  ) {
+    const accessInfo = yield* issueHeadlessServeAccessInfo();
+    yield* runStartupPhase(
+      "headless.output",
+      Console.log(formatHeadlessServeOutput(accessInfo, showCredentials)),
+    );
+  } else {
+    const startupBrowserTarget = yield* resolveStartupBrowserTarget;
+    if (serverConfig.mode !== "desktop") {
+      yield* Effect.logInfo("Authentication required. Open T3 Code using the pairing URL.").pipe(
+        Effect.annotateLogs({ pairingUrl: startupBrowserTarget }),
+      );
+    }
+    yield* runStartupPhase("browser.open", maybeOpenBrowser(startupBrowserTarget));
+  }
+});
 
 const runStartupPhase = <A, E, R>(phase: string, effect: Effect.Effect<A, E, R>) =>
   effect.pipe(
@@ -652,23 +676,7 @@ const make = (options?: StartupOptions) =>
             Effect.withSpan("server.startup.heartbeat.record"),
             Effect.ignoreCause({ log: true }),
           );
-          if (serverConfig.startupPresentation === "headless") {
-            yield* Effect.logDebug("startup phase: headless access info");
-            const accessInfo = yield* issueHeadlessServeAccessInfo();
-            yield* runStartupPhase(
-              "headless.output",
-              Console.log(formatHeadlessServeOutput(accessInfo)),
-            );
-          } else {
-            yield* Effect.logDebug("startup phase: browser open check");
-            const startupBrowserTarget = yield* resolveStartupBrowserTarget;
-            if (serverConfig.mode !== "desktop") {
-              yield* Effect.logInfo(
-                "Authentication required. Open T3 Code using the pairing URL.",
-              ).pipe(Effect.annotateLogs({ pairingUrl: startupBrowserTarget }));
-            }
-            yield* runStartupPhase("browser.open", maybeOpenBrowser(startupBrowserTarget));
-          }
+          yield* presentStartupAccess;
         }),
       );
 

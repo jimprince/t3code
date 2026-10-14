@@ -49,7 +49,9 @@ address:
 t3 serve --host <private-ip>
 ```
 
-If a server is already running, generate a fresh link without restarting it:
+Interactive `t3 serve` starts show a pairing link and QR code. Service starts and
+starts with redirected standard streams show only the server address and pairing
+instructions. Generate a fresh link without restarting a running server:
 
 ```bash
 t3 pair
