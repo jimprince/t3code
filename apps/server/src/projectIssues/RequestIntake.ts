@@ -1,3 +1,4 @@
+import * as ShellSnapshotDiagnostics from "../diagnostics/ShellSnapshotDiagnostics.ts";
 import {
   CommandId,
   ProjectIssuesError,
@@ -42,6 +43,7 @@ export const make = (deps: { readonly providers: ProviderRegistry["Service"] }) 
       Effect.gen(function* () {
         const snapshot = yield* engine
           .getShellSnapshot()
+          .pipe(ShellSnapshotDiagnostics.withCaller("RequestIntake"))
           .pipe(Effect.mapError(() => fail("Could not read threads.")));
         const parents = new Map(
           (yield* listMetadata(sql).pipe(
