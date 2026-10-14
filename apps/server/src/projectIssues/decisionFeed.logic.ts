@@ -1,3 +1,4 @@
+import { editBeforeOrderTrailers } from "./requestOrder.logic.ts";
 import type {
   ProjectIssueDeferral,
   ProjectIssueOwner,
@@ -107,10 +108,17 @@ export function applyDeferral(
       : change.mode === "until"
         ? { until: change.until, movedToEndAt: current?.movedToEndAt ?? null }
         : { until: current?.until ?? null, movedToEndAt: change.now };
-  const stripped = text.replace(DEFERRAL_MARKER, "").trimEnd();
-  if (next === null) return { body: stripped, deferral: null };
+  if (next === null)
+    return {
+      body: editBeforeOrderTrailers(text, (base) => base.replace(DEFERRAL_MARKER, "").trimEnd()),
+      deferral: null,
+    };
   return {
-    body: `${stripped}\n\n<!-- t3-deferral ${JSON.stringify(next)} -->`,
+    body: editBeforeOrderTrailers(
+      text,
+      (base) =>
+        `${base.replace(DEFERRAL_MARKER, "").trimEnd()}\n\n<!-- t3-deferral ${JSON.stringify(next)} -->`,
+    ),
     deferral: next,
   };
 }

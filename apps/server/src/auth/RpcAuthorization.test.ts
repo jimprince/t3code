@@ -467,3 +467,62 @@ it.effect("rejects a handoff RPC before acceptance under a read-only authenticat
     }),
   ),
 );
+
+it.effect(
+  "denies withdrawal and batch ranking before their handlers for read-only clients, and allows operate clients",
+  () =>
+    Effect.gen(function* () {
+      const group = WsRpcGroup.omit(
+        ...[...WsRpcGroup.requests.keys()].filter(
+          (
+            tag,
+          ): tag is Exclude<
+            keyof typeof RPC_REQUIRED_SCOPES,
+            typeof WS_METHODS.projectRequestsWithdraw | typeof WS_METHODS.projectRequestsOrderBatch
+          > =>
+            tag !== WS_METHODS.projectRequestsWithdraw &&
+            tag !== WS_METHODS.projectRequestsOrderBatch,
+        ),
+      );
+      let handled = 0;
+      const handlers = Layer.mergeAll(
+        group.toLayerHandler(WS_METHODS.projectRequestsWithdraw, () =>
+          Effect.sync(() => {
+            handled++;
+            return { withdrawn: true, notifiedThreadId: null };
+          }),
+        ),
+        group.toLayerHandler(WS_METHODS.projectRequestsOrderBatch, () =>
+          Effect.sync(() => {
+            handled++;
+            return { ranks: [] };
+          }),
+        ),
+      );
+      const readOnly = yield* RpcTest.makeClient(group).pipe(
+        Effect.provide(
+          Layer.mergeAll(handlers, RpcAuthorization.layer([AuthOrchestrationReadScope])),
+        ),
+      );
+      const withdraw = { threadId: ThreadId.make("root"), reference: "21", actor: "brad" as const };
+      const batch = { threadId: ThreadId.make("root"), references: ["21"], actor: "brad" as const };
+      expect(
+        yield* readOnly[WS_METHODS.projectRequestsWithdraw](withdraw).pipe(Effect.flip),
+      ).toMatchObject({ requiredPermission: AuthOrchestrationOperateScope });
+      expect(
+        yield* readOnly[WS_METHODS.projectRequestsOrderBatch](batch).pipe(Effect.flip),
+      ).toMatchObject({ requiredPermission: AuthOrchestrationOperateScope });
+      expect(handled).toBe(0);
+      const writer = yield* RpcTest.makeClient(group).pipe(
+        Effect.provide(
+          Layer.mergeAll(handlers, RpcAuthorization.layer([AuthOrchestrationOperateScope])),
+        ),
+      );
+      expect(yield* writer[WS_METHODS.projectRequestsWithdraw](withdraw)).toEqual({
+        withdrawn: true,
+        notifiedThreadId: null,
+      });
+      expect(yield* writer[WS_METHODS.projectRequestsOrderBatch](batch)).toEqual({ ranks: [] });
+      expect(handled).toBe(2);
+    }).pipe(Effect.scoped),
+);
