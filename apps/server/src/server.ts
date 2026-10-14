@@ -1,4 +1,5 @@
 import * as ProjectIssuesService from "./projectIssues/ProjectIssuesService.ts";
+import * as PlanFileService from "./orchestration-v2/PlanFileService.ts";
 import * as DashboardService from "./dashboard/DashboardService.ts";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
 import * as HarnessPin from "./harness/HarnessPinService.ts";
@@ -621,6 +622,8 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
 ).pipe(
   // Core Services
   Layer.provideMerge(layerOrchestrationApplication),
+  // Export one host plan reader to both recovery and dashboard consumers.
+  Layer.provideMerge(PlanFileService.layer),
   Layer.provideMerge(RuntimeLayer.layerEventInfrastructure),
   Layer.provideMerge(Layer.merge(ProjectStore.layer, ThreadSearch.layer)),
   Layer.provideMerge(layerServerSettings),
