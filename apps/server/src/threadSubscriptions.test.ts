@@ -32,6 +32,49 @@ async function fixture(test: () => Promise<void>) {
 }
 
 describe("thread subscription storage", () => {
+  it("exposes active counts and expiry reasons, preserves derived unsubscribe, and restores without duplicates", async () =>
+    fixture(async () => {
+      const derived = { ...route("chosen", "child"), nestingDerived: true };
+      const explicit = route("chosen", "explicit");
+      const expired = {
+        ...route("chosen", "old"),
+        nestingDerived: true,
+        expiryReason: "settled" as const,
+        expiredAt: "2026-10-13T00:00:00Z",
+      };
+      await saveState({ subscriptions: [derived, explicit, expired] });
+      expect(await listThreadSubscriptions("chosen")).toMatchObject({
+        activeCount: 2,
+        expiredCount: 1,
+        routes: [derived, explicit],
+        expiredRoutes: [expired],
+      });
+      const removed = await updateThreadSubscriptions({
+        threadId: ThreadId.make("chosen"),
+        action: "remove",
+        routes: [derived],
+      });
+      expect(await listThreadSubscriptions("chosen")).toMatchObject({
+        activeCount: 1,
+        expiredCount: 2,
+        routes: [explicit],
+        expiredRoutes: [{ expiryReason: "unsubscribed" }, { expiryReason: "settled" }],
+      });
+      await updateThreadSubscriptions({
+        threadId: ThreadId.make("chosen"),
+        action: "restore",
+        routes: removed.routes,
+      });
+      await updateThreadSubscriptions({
+        threadId: ThreadId.make("chosen"),
+        action: "restore",
+        routes: removed.routes,
+      });
+      expect(await listThreadSubscriptions("chosen")).toMatchObject({
+        activeCount: 2,
+        expiredCount: 1,
+      });
+    }));
   it("lists, removes, restores, and preserves other supervisors, credentials, queue and audit", async () =>
     fixture(async () => {
       const selected = {

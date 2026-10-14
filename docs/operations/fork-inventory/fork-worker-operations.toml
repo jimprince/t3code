@@ -54,3 +54,9 @@ id = "watcher-lifetime-singleton"
 date = "2026-10-13"
 decided = "repair-existing-concern"
 rationale = "Normalize Darwin boot identity to seconds, including older full-text leases, and hold the existing cross-platform inherited-FD flock helper for the watcher lifetime. Ensure treats the lifetime lock as authoritative even when the identity lease drifts or disappears. Linux boot UUID/start ticks and legacy lease reclamation remain unchanged."
+
+[[decision]]
+id = "derived-route-expiry-263"
+date = "2026-10-13"
+decided = "repair-existing-concern"
+rationale = "Nesting-derived routes retain inactive expiry metadata in the existing operator routing file when their source settles, archives, or completes. Reopening restores lifecycle expiry, while unsubscribe stays inactive for the parent/source pair. Explicit subscriptions remain independent. CLI and RPC inspection expose active counts and expired reasons; pending expired notices are superseded and delivery checks the current source."
