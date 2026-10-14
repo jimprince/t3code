@@ -1,0 +1,4 @@
+id = "thread-plan-progress"
+category = "feature"
+functionality = "threads"
+text = "Show host-local PLAN.md progress and recover failed or interrupted work into a fresh supervised conversation. File-based recovery passes owned steps, the last Next line and absolute plan/result paths, then asks the agent to read those files locally; it never copies plan, action-log or result bodies into the seed. Native todo progress remains a fallback. Recovery preserves supervision and settles the original thread. The read-only plan root is configurable through server settings. The dashboard shows the current step on active threads and a Resume from plan action on stopped ones."
