@@ -221,6 +221,8 @@ export interface SavedAgent {
   lastSeenAssistantMessageId?: string | null;
 }
 
+export type NotificationLevel = "all" | "attention" | "none";
+
 export interface SavedSubscription {
   /** Implicit attention route maintained from organizational metadata. */
   nestingDerived?: boolean;
@@ -311,6 +313,8 @@ export interface SavedNotification {
   latestTurnId: string | null;
   preview: string | null;
   status: SavedNotificationStatus;
+  /** Confirmed first-delivery guide; retained across routes and watcher restarts. */
+  onboardingDelivered?: boolean;
   createdAt: string;
   updatedAt: string;
   deliveredAt?: string | null;
