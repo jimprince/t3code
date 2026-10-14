@@ -573,6 +573,9 @@ import {
   waitForStartedServerThread,
   shouldRefocusComposerOnWindowFocus,
   shouldShowTimelineMinimap,
+  type ChatViewPresentation,
+  CHAT_VIEW_ROOT_ATTRIBUTE,
+  chatViewOwnsEvent,
 } from "./ChatView.logic";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useComposerHandleContext } from "../composerHandleContext";
@@ -844,7 +847,7 @@ function isCompactCommandMessage(message: ChatMessage): boolean {
 }
 
 type ChatViewPresentationProps = {
-  readonly presentation?: "full" | "project-panel" | "project-request";
+  readonly presentation?: ChatViewPresentation;
   readonly revealMessageId?: MessageId | null;
   readonly onMessageSent?: ((messageId: MessageId) => void) | undefined;
 };
@@ -1977,7 +1980,17 @@ export default function ChatView(props: ChatViewProps) {
     useState<Record<string, number>>({});
   const shouldUsePlanSidebarSheet = useMediaQuery(RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY);
   const isMobileViewport = useMediaQuery("max-sm");
-  const [workspaceLayoutRef, workspaceLayoutWidth] = useElementWidth<HTMLDivElement>();
+  const [setWorkspaceLayoutElement, workspaceLayoutWidth] = useElementWidth<HTMLDivElement>();
+  // The root element, so global key and paste handlers can tell which of several mounted
+  // ChatViews an event is for.
+  const chatViewRootRef = useRef<HTMLDivElement | null>(null);
+  const workspaceLayoutRef = useCallback(
+    (element: HTMLDivElement | null) => {
+      chatViewRootRef.current = element;
+      setWorkspaceLayoutElement(element);
+    },
+    [setWorkspaceLayoutElement],
+  );
   const threadPanelPopoverAnchorRef = useRef<HTMLElement | null>(null);
   // Tracks whether the user explicitly dismissed the sidebar for the active turn.
   // When set, the thread-change reset effect will open the sidebar instead of closing it.
@@ -4094,6 +4107,17 @@ export default function ChatView(props: ChatViewProps) {
     nextEntries: timelineEntries,
     rememberedForActive: peekRememberedThreadTimeline<typeof timelineEntries>(activeThreadKey),
   });
+  // The tray reads like a flat conversation: no tool, work-log or "Worked for" rows between
+  // the messages. Dropping the work entries also leaves nothing for a turn to fold.
+  const visibleTimelineEntries = useMemo(
+    () =>
+      presentation === "tray"
+        ? displayedTimeline.entries.filter(
+            (entry) => entry.kind !== "work" && entry.kind !== "event",
+          )
+        : displayedTimeline.entries,
+    [displayedTimeline.entries, presentation],
+  );
   const displayedTimelineKey = displayedTimeline.displayThreadKey ?? routeThreadKey;
   const paintOnlyDisplayedTimeline = isPaintOnlyThreadTimeline(
     displayedTimeline.displayThreadKey,
@@ -6728,6 +6752,11 @@ export default function ChatView(props: ChatViewProps) {
             (!scrollNode.contains(event.target) &&
               event.target !== document.body &&
               event.target !== document.documentElement) ||
+            !chatViewOwnsEvent({
+              presentation,
+              root: chatViewRootRef.current,
+              target: event.target,
+            }) ||
             event.defaultPrevented ||
             event.isComposing ||
             event.altKey ||
@@ -6799,7 +6828,12 @@ export default function ChatView(props: ChatViewProps) {
       }
       removeListeners?.();
     };
-  }, [activeThread?.id, isTimelineAtLogicalEnd, timelineRealContentOverflowsViewport]);
+  }, [
+    activeThread?.id,
+    isTimelineAtLogicalEnd,
+    presentation,
+    timelineRealContentOverflowsViewport,
+  ]);
 
   const onTimelineAnchorReady = useCallback((messageId: MessageId, anchorIndex: number) => {
     if (pendingTimelineAnchorRef.current === messageId) {
@@ -8104,6 +8138,11 @@ export default function ChatView(props: ChatViewProps) {
 
   useEffect(() => {
     const handler = (event: globalThis.KeyboardEvent) => {
+      if (
+        !chatViewOwnsEvent({ presentation, root: chatViewRootRef.current, target: event.target })
+      ) {
+        return;
+      }
       if (preventRepeatedTerminalCloseShortcut(event, keybindings)) {
         event.stopPropagation();
         return;
@@ -8470,21 +8509,29 @@ export default function ChatView(props: ChatViewProps) {
     hasMultipleEnvironments,
     logicalProjectEnvironments,
     onEnvironmentChange,
+    presentation,
   ]);
 
-  // A focused desktop browser page forwards these chords as menu actions.
+  // A focused desktop browser page forwards these chords as menu actions; only the page's own
+  // ChatView answers, never a tray's.
   useEffect(() => {
+    if (presentation !== "full") return;
     return window.desktopBridge?.onMenuAction((action) => {
       if (action === "rightPanel.toggle") toggleRightPanel();
       else if (action === "rightPanel.toggleMaximized") toggleRightPanelMaximized();
     });
-  }, [toggleRightPanel, toggleRightPanelMaximized]);
+  }, [presentation, toggleRightPanel, toggleRightPanelMaximized]);
 
   // Paste-to-focus: the resting composer blurs on a click into the timeline,
   // so a paste that follows has no editable target and would be dropped.
   // Route it to the composer like a typed key, which also expands it.
   useEffect(() => {
     const keyHandler = (event: KeyboardEvent) => {
+      if (
+        !chatViewOwnsEvent({ presentation, root: chatViewRootRef.current, target: event.target })
+      ) {
+        return;
+      }
       if (
         shouldRedirectInputToComposer(event) &&
         isPasteAsTextShortcut(event, isMacPlatform(navigator.platform))
@@ -8493,6 +8540,11 @@ export default function ChatView(props: ChatViewProps) {
       }
     };
     const handler = (event: ClipboardEvent) => {
+      if (
+        !chatViewOwnsEvent({ presentation, root: chatViewRootRef.current, target: event.target })
+      ) {
+        return;
+      }
       if (!activeThreadId || isCommandPaletteOpen()) return;
       if (getTerminalFocusOwner() !== null) return;
       if (composerRef.current?.isModelPickerOpen()) return;
@@ -8516,7 +8568,7 @@ export default function ChatView(props: ChatViewProps) {
       window.removeEventListener("keydown", keyHandler, true);
       window.removeEventListener("paste", handler, true);
     };
-  }, [activeThreadId, composerRef]);
+  }, [activeThreadId, composerRef, presentation]);
 
   const [pendingRevert, setPendingRevert] = useState<{
     turnCount: number;
@@ -11610,6 +11662,8 @@ export default function ChatView(props: ChatViewProps) {
   return (
     <div
       ref={workspaceLayoutRef}
+      {...{ [CHAT_VIEW_ROOT_ATTRIBUTE]: "" }}
+      data-chat-view-presentation={presentation}
       className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background"
     >
       <Dialog
@@ -11760,6 +11814,7 @@ export default function ChatView(props: ChatViewProps) {
               {presentation !== "project-request" ? (
                 <MessagesTimeline
                   showMinimap={shouldShowTimelineMinimap(presentation)}
+                  hideTurnFolds={presentation === "tray"}
                   citationRequest={paintOnlyDisplayedTimeline ? null : citationRequest}
                   citationHistoryLoading={threadDetailLoading}
                   {...(!paintOnlyDisplayedTimeline
@@ -11792,7 +11847,7 @@ export default function ChatView(props: ChatViewProps) {
                   isPreparingWorktree={!paintOnlyDisplayedTimeline && isPreparingWorktree}
                   footer={paintOnlyDisplayedTimeline ? null : threadStatusLine}
                   listRef={legendListRef}
-                  timelineEntries={displayedTimeline.entries}
+                  timelineEntries={visibleTimelineEntries}
                   providerStatuses={
                     environmentById.get(
                       displayedThreadRef?.environmentId ?? activeThread.environmentId,
@@ -12103,6 +12158,7 @@ export default function ChatView(props: ChatViewProps) {
                                 supportsPullRequests ? activeProjectRepository : null
                               }
                               restingControlsHost={restingComposerControlsHost}
+                              hideModelControls={presentation === "tray"}
                               restingControlsHaveLeadingContext={
                                 mountComposerContextStrip &&
                                 (isGitRepo || showComposerEnvironmentIndicator)
