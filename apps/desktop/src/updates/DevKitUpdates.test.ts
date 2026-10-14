@@ -1,13 +1,30 @@
 import { assert, describe, it } from "@effect/vitest";
+import * as NodePath from "node:path";
 
 import {
   decideVerdict,
   describeRebuild,
+  isManagedDevKitCheckout,
   parseDevKitStatus,
   reduceStateOnDevKitVerdict,
   summarizeKitLog,
 } from "./DevKitUpdates.ts";
 import { createInitialDesktopUpdateState } from "./updateMachine.ts";
+
+describe("managed dev kit checkouts", () => {
+  it("recognizes both kit slots and rejects unrelated checkouts", () => {
+    const home = "/Users/brad";
+    assert.isTrue(isManagedDevKitCheckout(`${home}/Developer/t3code-dev`, home, NodePath));
+    assert.isTrue(
+      isManagedDevKitCheckout(`${home}/Developer/.t3-code-dev-prepared/t3code-dev`, home, NodePath),
+    );
+    assert.isFalse(isManagedDevKitCheckout(`${home}/Programming/t3code-dev`, home, NodePath));
+    assert.isFalse(
+      isManagedDevKitCheckout(`${home}/Developer/.t3-code-dev-prepared/other`, home, NodePath),
+    );
+    assert.isFalse(isManagedDevKitCheckout("/Users/other/Developer/t3code-dev", home, NodePath));
+  });
+});
 
 const status = (fetched: string, tip: string) => `branch followed: live   fetched: ${fetched}
 checkout:        abc1234 on live
