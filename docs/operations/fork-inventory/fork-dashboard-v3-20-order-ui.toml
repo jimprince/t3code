@@ -1,0 +1,28 @@
+name = "fork-dashboard-v3-20-order-ui"
+subject = "feat(dashboard): file, triage and order work from the Dashboard (#300)"
+class = "product"
+purpose = "Let Brad file typed items, place unordered items, and reorder workstreams and tasks from the one Dashboard view, with the order stored in the tracker through the request-order service."
+retire_when = "Upstream provides an equivalent tracker-backed filing and ordering surface in its Dashboard."
+depends_on = ["fork-request-order", "fork-dashboard-v3-19-tracker-plan"]
+roles = []
+note = "UI half of #300. The order is the server's stored rank; the client sorts and plans moves with packages/client-runtime/src/dashboard/order.ts and never sends a rank. Controls show only when the server advertises projectRequestOrder. The new mark expires by created time and writes nothing."
+files = [
+  "apps/web/src/components/dashboard-v3/DashboardView.order.test.tsx",
+  "apps/web/src/components/dashboard-v3/NewBlock.tsx",
+  "apps/web/src/components/dashboard-v3/RequestLine.tsx",
+  "apps/web/src/components/dashboard-v3/orderActions.ts",
+  "apps/web/src/components/dashboard-v3/orderRows.tsx",
+  "apps/web/src/components/dashboard-v3/pendingMoves.ts",
+  "apps/web/src/components/dashboard-v3/requestLine.logic.test.ts",
+  "apps/web/src/components/dashboard-v3/requestLine.logic.ts",
+  "apps/web/src/state/projectIssues.ts",
+  "packages/client-runtime/src/dashboard/order.test.ts",
+  "packages/client-runtime/src/dashboard/order.ts",
+  "docs/release-notes/entries/order-ui.toml",
+]
+
+[[decision]]
+id = "order-is-the-servers-rank"
+date = "2026-10-14"
+decided = "The tracker's stored rank is the order. A move shows at once through a short-lived pending overlay, which clears when the snapshot shows the same order and drops on failure or after 15 s; first moves in an unranked workstream go as one batch call."
+rationale = "A client-only order could disagree with what agents read through the queue; the overlay only bridges the one refresh after a write."
