@@ -49,15 +49,11 @@ const layerEnvironment = Layer.mock(Environment.ServerEnvironment)({
   }),
 });
 
-it.effect("updates preferences for a thread caller through the /mcp registration", () =>
+it.effect("round-trips the Chief of Staff preference through the /mcp registration", () =>
   Effect.gen(function* () {
     const server = yield* McpServer.McpServer;
-    const result = yield* server
-      .callTool({
-        name: "t3_environment_preferences_update",
-        arguments: { newWorktreesStartFromOrigin: true },
-      })
-      .pipe(
+    const call = (name: string, args: Record<string, unknown>) =>
+      server.callTool({ name, arguments: args }).pipe(
         Effect.provideService(McpInvocationContext.McpInvocationContext, caller),
         Effect.provideService(
           McpSchema.McpServerClient,
@@ -75,8 +71,27 @@ it.effect("updates preferences for a thread caller through the /mcp registration
           }),
         ),
       );
+    const result = yield* call("t3_environment_preferences_update", {
+      chiefOfStaffThreadId: "e942f826-445e-4cee-a045-0091707e67c7",
+    });
     expect(result.isError).toBe(false);
-    expect(result.structuredContent).toMatchObject({ newWorktreesStartFromOrigin: true });
+    expect(result.structuredContent).toMatchObject({
+      chiefOfStaffThreadId: "e942f826-445e-4cee-a045-0091707e67c7",
+    });
+    const read = yield* call("t3_environment_read", {});
+    expect(read.isError).toBe(false);
+    expect(read.structuredContent).toMatchObject({
+      preferences: { chiefOfStaffThreadId: "e942f826-445e-4cee-a045-0091707e67c7" },
+    });
+    const omitted = yield* call("t3_environment_preferences_update", {
+      newWorktreesStartFromOrigin: false,
+    });
+    expect(omitted.structuredContent).toMatchObject({
+      chiefOfStaffThreadId: "e942f826-445e-4cee-a045-0091707e67c7",
+    });
+    const clear = yield* call("t3_environment_preferences_update", { chiefOfStaffThreadId: null });
+    expect(clear.isError).toBe(false);
+    expect(clear.structuredContent).toMatchObject({ chiefOfStaffThreadId: null });
   }).pipe(
     Effect.provide(
       McpHttpServer.layerEnvironmentToolkit.pipe(
