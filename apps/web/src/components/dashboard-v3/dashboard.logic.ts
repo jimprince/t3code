@@ -9,6 +9,7 @@ import type {
   ThreadFilePlan,
 } from "@t3tools/contracts";
 import { compareDashboardVersions } from "@t3tools/client-runtime/dashboard/merge";
+import { orderPlan, type OrderedPlan } from "@t3tools/client-runtime/dashboard/order";
 
 /** The Dashboard's client-side model: snapshots of every connected environment, merged. */
 
@@ -596,7 +597,12 @@ export type PlanWorkstream = DashboardProject["workstreams"][number];
 /** One workstream of the Plan: its listed tasks, and any child workstreams nested under it. */
 export interface PlanWorkstreamEntry {
   readonly workstream: PlanWorkstream;
+  /** Every listed task, in the order the rows show: started, queued, then recently finished. */
   readonly tasks: DashboardTask[];
+  /** The same tasks sectioned for a tracker Plan whose order is stored; empty for a briefing plan. */
+  readonly now: DashboardTask[];
+  readonly next: DashboardTask[];
+  readonly done: DashboardTask[];
   /**
    * The epic's own task, when the snapshot keeps it (only to carry a waiting decision). It is a
    * header's link target and never listed as a row.
@@ -616,20 +622,33 @@ export function isEpicHeader(workstream: PlanWorkstream): boolean {
  * in. A workstream left with no task is dropped, except a tracker epic header: an epic with no
  * children, or whose finished children are not listed, is still a heading.
  */
-export function planWorkstreams(project: DashboardProject): PlanWorkstreamEntry[] {
-  const entries = project.workstreams
-    .map((workstream) => ({
-      workstream,
-      tasks: workstreamTasks(project, workstream),
-      ownTask: project.tasks.find((task) => task.id === workstream.id) ?? null,
+export function planWorkstreams(
+  project: DashboardProject,
+  plan: OrderedPlan = orderPlan(project),
+): PlanWorkstreamEntry[] {
+  const entries = plan.workstreams
+    .map((section) => ({
+      workstream: section.workstream,
+      tasks: plan.ordered
+        ? [...section.now, ...section.next, ...section.done]
+        : workstreamTasks(project, section.workstream),
+      now: plan.ordered ? section.now : [],
+      next: plan.ordered ? section.next : [],
+      done: plan.ordered ? section.done : [],
+      ownTask: project.tasks.find((task) => task.id === section.workstream.id) ?? null,
       children: [] as PlanWorkstreamEntry[],
     }))
     .filter((entry) => entry.tasks.length > 0 || isEpicHeader(entry.workstream));
   const epicIds = new Set(entries.map((entry) => entry.workstream.id));
+  const listed = (entry: PlanWorkstreamEntry) => (task: DashboardTask) =>
+    !epicIds.has(task.id) || task.id === entry.workstream.id;
   return entries
     .map((entry) => ({
       ...entry,
-      tasks: entry.tasks.filter((task) => !epicIds.has(task.id) || task.id === entry.workstream.id),
+      tasks: entry.tasks.filter(listed(entry)),
+      now: entry.now.filter(listed(entry)),
+      next: entry.next.filter(listed(entry)),
+      done: entry.done.filter(listed(entry)),
     }))
     .filter((entry) => entry.tasks.length > 0 || isEpicHeader(entry.workstream));
 }

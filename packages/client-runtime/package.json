@@ -532,6 +532,10 @@
       "types": "./src/dashboard/fallback.ts",
       "default": "./src/dashboard/fallback.ts"
     },
+    "./dashboard/order": {
+      "types": "./src/dashboard/order.ts",
+      "default": "./src/dashboard/order.ts"
+    },
     "./dashboard/merge": {
       "types": "./src/dashboard/merge.ts",
       "default": "./src/dashboard/merge.ts"

@@ -566,6 +566,9 @@ describe("workstream nesting and membership notes", () => {
   const entry = (id: string, parent: string | null) => ({
     workstream: { id, title: id, taskIds: [], parentWorkstreamId: parent, url: `u/${id}` },
     tasks: [],
+    now: [],
+    next: [],
+    done: [],
     ownTask: null,
     children: [],
   });
