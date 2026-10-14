@@ -248,6 +248,37 @@ describe("single-flight refresh", () => {
       expect(yield* refresh).toBe(2);
     }),
   );
+  it.effect("a write during a read waits for a fresh pass, coalescing simultaneous writes", () =>
+    Effect.gen(function* () {
+      const started = yield* Deferred.make<void>();
+      const release = yield* Deferred.make<void>();
+      let revision = 0;
+      let calls = 0;
+      const refresh = singleFlight(
+        Effect.gen(function* () {
+          const captured = revision;
+          calls++;
+          if (calls === 1) {
+            yield* Deferred.succeed(started, undefined);
+            yield* Deferred.await(release);
+          }
+          return captured;
+        }),
+        () => revision,
+      );
+      const first = yield* Effect.forkChild(refresh);
+      yield* Deferred.await(started);
+      revision = 1;
+      const second = yield* Effect.forkChild(refresh);
+      const third = yield* Effect.forkChild(refresh);
+      yield* Effect.yieldNow;
+      yield* Deferred.succeed(release, undefined);
+      expect(yield* Fiber.join(first)).toBe(0);
+      expect(yield* Fiber.join(second)).toBe(1);
+      expect(yield* Fiber.join(third)).toBe(1);
+      expect(calls).toBe(2);
+    }),
+  );
   it.effect("does not poison subsequent refreshes after failure", () =>
     Effect.gen(function* () {
       let calls = 0;

@@ -101,6 +101,11 @@ import {
   ProjectIssuesGetResult,
   ProjectIssuesListInput,
   ProjectIssuesListResult,
+  ProjectRequestOrderInput,
+  ProjectRequestOrderResult,
+  ProjectRequestQueueInput,
+  ProjectRequestQueueResult,
+  ProjectRequestNextResult,
   ProjectRequestCreateInput,
   ProjectRequestCreateResult,
   ProjectRequestDecideInput,
@@ -696,6 +701,9 @@ export const WS_METHODS = {
   projectRequestsDefer: "projectRequests.defer",
   projectRequestsSubmit: "projectRequests.submit",
   projectRequestsStartIntake: "projectRequests.startIntake",
+  projectRequestsOrder: "projectRequests.order",
+  projectRequestsQueue: "projectRequests.queue",
+  projectRequestsNext: "projectRequests.next",
   projectRequestsCreate: "projectRequests.create",
   projectRequestsUpdate: "projectRequests.update",
   projectRequestsList: "projectRequests.list",
@@ -1180,6 +1188,24 @@ const WsProjectRequestsSubmitRpc = Rpc.make(WS_METHODS.projectRequestsSubmit, {
 const WsProjectRequestsStartIntakeRpc = Rpc.make(WS_METHODS.projectRequestsStartIntake, {
   payload: ProjectRequestStartIntakeInput,
   success: ProjectRequestStartIntakeResult,
+  error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectRequestsOrderRpc = Rpc.make(WS_METHODS.projectRequestsOrder, {
+  payload: ProjectRequestOrderInput,
+  success: ProjectRequestOrderResult,
+  error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectRequestsQueueRpc = Rpc.make(WS_METHODS.projectRequestsQueue, {
+  payload: ProjectRequestQueueInput,
+  success: ProjectRequestQueueResult,
+  error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectRequestsNextRpc = Rpc.make(WS_METHODS.projectRequestsNext, {
+  payload: ProjectRequestQueueInput,
+  success: ProjectRequestNextResult,
   error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
 });
 
@@ -2490,6 +2516,9 @@ export const WsForkRpcGroup = RpcGroup.make(
   WsThreadIssuesUnlinkRpc,
   WsProjectIssuesListRpc,
   WsProjectRequestsSettleRpc,
+  WsProjectRequestsOrderRpc,
+  WsProjectRequestsQueueRpc,
+  WsProjectRequestsNextRpc,
   WsProjectRequestsCreateRpc,
   WsProjectRequestsUpdateRpc,
   WsProjectRequestsListRpc,

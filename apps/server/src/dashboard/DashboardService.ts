@@ -38,6 +38,7 @@ export class DashboardService extends Context.Service<
     readonly getSnapshot: Effect.Effect<DashboardSnapshot>;
     readonly stream: (afterRevision?: number) => Stream.Stream<DashboardSnapshot>;
     readonly refresh: Effect.Effect<void>;
+    readonly refreshAfterWrite: Effect.Effect<void>;
     readonly invalidate: Effect.Effect<void>;
   }
 >()("t3/dashboard/DashboardService") {}
@@ -190,6 +191,7 @@ export const make = Effect.gen(function* () {
       }),
     )
     .pipe(Effect.catchCause(() => Effect.logWarning("Dashboard local refresh failed")));
+  let writeRevision = 0;
   const refresh = singleFlight(
     Effect.gen(function* () {
       const shell = yield* engine.getShellSnapshot();
@@ -425,6 +427,7 @@ export const make = Effect.gen(function* () {
       for (const id of sources.keys()) if (!seenSources.has(id)) sources.delete(id);
       yield* publishLocal;
     }).pipe(Effect.catchCause(() => Effect.logWarning("Dashboard background refresh failed"))),
+    () => writeRevision,
   );
   const stream = (afterRevision?: number) =>
     Stream.callback<DashboardSnapshot>(
@@ -478,6 +481,9 @@ export const make = Effect.gen(function* () {
     getSnapshot: Effect.sync(() => snapshot),
     stream,
     refresh,
+    refreshAfterWrite: Effect.sync(() => {
+      writeRevision++;
+    }).pipe(Effect.andThen(refresh)),
     invalidate: Queue.offer(refreshRequests, undefined).pipe(Effect.asVoid),
   });
 });

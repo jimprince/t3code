@@ -1,4 +1,5 @@
 import { ThreadFilePlan } from "./orchestrationV2.ts";
+import { ProjectRequestPlacer } from "./projectIssues.ts";
 import * as Schema from "effect/Schema";
 import { IsoDateTime, NonNegativeInt, ThreadId } from "./baseSchemas.ts";
 
@@ -36,6 +37,10 @@ export const DashboardTask = Schema.Struct({
   url: Schema.NullOr(Schema.String),
   threadId: Schema.NullOr(ThreadId),
   workstreamId: Schema.String,
+  rank: Schema.optionalKey(Schema.NullOr(Schema.Number)),
+  createdAt: Schema.optionalKey(IsoDateTime),
+  placedBy: Schema.optionalKey(Schema.NullOr(ProjectRequestPlacer)),
+  partOf: Schema.optionalKey(Schema.NullOr(Schema.Number)),
   closedAt: Schema.NullOr(IsoDateTime),
   status: Schema.Literals(["pending", "working", "blocked", "review", "done"]),
   progress: Schema.NullOr(DashboardProgress),
@@ -66,6 +71,9 @@ export const DashboardAttention = Schema.Struct({
 });
 export type DashboardAttention = typeof DashboardAttention.Type;
 export const DashboardWorkstream = Schema.Struct({
+  rank: Schema.optionalKey(Schema.NullOr(Schema.Number)),
+  createdAt: Schema.optionalKey(IsoDateTime),
+  placedBy: Schema.optionalKey(Schema.NullOr(ProjectRequestPlacer)),
   id: Schema.String,
   title: Schema.String,
   taskIds: Schema.Array(Schema.String),

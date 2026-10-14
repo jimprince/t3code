@@ -1,3 +1,5 @@
+import { RequestsToolkitHandlersLive } from "./toolkits/requests/handlers.ts";
+import { RequestsToolkit } from "./toolkits/requests/tools.ts";
 import { HarnessToolkit } from "./toolkits/harness/tools.ts";
 import { HarnessHandlersLive } from "./toolkits/harness/handlers.ts";
 import { RecoveryToolkit, RecoveryHandlersLive } from "./toolkits/recovery/tools.ts";
@@ -838,6 +840,7 @@ const layerPreviewControlsRegistration = toolkitRegistration(
   PreviewControlsHandlers.layer,
 );
 
+const layerRequestsToolkit = toolkitRegistration(RequestsToolkit, RequestsToolkitHandlersLive);
 const layerPlansToolkit = toolkitRegistration(PlansToolkit, PlansToolkitHandlersLive);
 
 export const layerHarnessToolkit = toolkitRegistration(HarnessToolkit, HarnessHandlersLive);
@@ -910,6 +913,7 @@ export const layer = Layer.mergeAll(
   layerThreadIssuesToolkit,
   layerDecisionsToolkit,
   layerPlansToolkit,
+  layerRequestsToolkit,
   layerProjectLayoutToolkit,
   layerDeviceToolkit,
   layerHtmlToolkit,

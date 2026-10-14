@@ -3307,9 +3307,11 @@ const layerWsRpc = (
           ),
         [WS_METHODS.projectRequestsSettle]: (input) =>
           requestLedger.settle(input).pipe(Effect.tap(() => dashboard.invalidate)),
+        [WS_METHODS.projectRequestsOrder]: (input) => requestLedger.order(input),
+        [WS_METHODS.projectRequestsQueue]: (input) => requestLedger.queue(input),
+        [WS_METHODS.projectRequestsNext]: (input) => requestLedger.next(input),
         [WS_METHODS.projectRequestsCreate]: (input) => requestLedger.create(input),
-        [WS_METHODS.projectRequestsUpdate]: (input) =>
-          requestLedger.update(input).pipe(Effect.tap(() => dashboard.invalidate)),
+        [WS_METHODS.projectRequestsUpdate]: (input) => requestLedger.update(input),
         [WS_METHODS.projectCanvasRead]: (input) => projectCanvas.read(input),
         [WS_METHODS.projectCanvasAction]: (input) => projectCanvas.logAction(input),
         [WS_METHODS.projectRoadmapGet]: (input) => projectRoadmap.get(input),
