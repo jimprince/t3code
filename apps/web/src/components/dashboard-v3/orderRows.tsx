@@ -74,7 +74,7 @@ export function destinationOf(entry: PlanWorkstreamEntry): PlanDestination {
 }
 
 /** The destinations of a project's Plan, in the order shown, with Other work always last. */
-export function planDestinations(entries: ReadonlyArray<PlanWorkstreamEntry>): PlanDestination[] {
+function planDestinations(entries: ReadonlyArray<PlanWorkstreamEntry>): PlanDestination[] {
   const flat = entries.flatMap(function walk(entry): PlanWorkstreamEntry[] {
     return [entry, ...entry.children.flatMap(walk)];
   });

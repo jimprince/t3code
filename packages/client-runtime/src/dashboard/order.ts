@@ -29,7 +29,7 @@ export function isNewlyFiled(createdAt: string | undefined, now: number): boolea
 }
 
 /** "Brad" or the agent's name; null when nobody is recorded. */
-export function placerName(placer: ProjectRequestPlacer | null | undefined): string | null {
+function placerName(placer: ProjectRequestPlacer | null | undefined): string | null {
   if (!placer) return null;
   return placer.kind === "brad" ? "Brad" : placer.name?.trim() || "an agent";
 }
