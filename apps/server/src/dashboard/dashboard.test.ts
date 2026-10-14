@@ -4,6 +4,11 @@ import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { ServerConfig } from "../config.ts";
+import { makeTrackerNoteStore } from "./DashboardStore.ts";
 import { ThreadId, type DashboardProgress, type ProjectIssue } from "@t3tools/contracts";
 import { aggregate } from "./aggregation.ts";
 import { compactSnapshot, movement, sampleProgress } from "./dashboard.logic.ts";
@@ -360,3 +365,41 @@ describe("durable dashboard cache", () => {
     expect(restored.issues?.[second]?.[0]?.title).toBe("Choose");
   });
 });
+
+it.effect("does not rewrite unchanged persisted repository notes (#297 R2-N5)", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    let writes = 0;
+    const store = yield* makeTrackerNoteStore.pipe(
+      Effect.provideService(FileSystem.FileSystem, {
+        ...fs,
+        rename: (from, to) =>
+          fs.rename(from, to).pipe(
+            Effect.tap(() =>
+              Effect.sync(() => {
+                if (to.endsWith("dashboard-tracker-notes.json")) writes++;
+              }),
+            ),
+          ),
+      }),
+    );
+    const state = {
+      cursor: now,
+      maxUpdatedAt: now,
+      page: 1,
+      notes: { "1": { id: 1, body: "Progress: next: Keep", createdAt: now } },
+      pending: {},
+      scanStartedAt: null,
+    };
+    yield* store.write("git.test/brad/repo", state);
+    yield* store.write("git.test/brad/repo", JSON.parse(JSON.stringify(state)));
+    expect(writes).toBe(1);
+    expect((yield* store.read)["git.test/brad/repo"]).toEqual(state);
+  }).pipe(
+    Effect.provide(
+      ServerConfig.layerTest(process.cwd(), { prefix: "notes-unchanged-" }).pipe(
+        Layer.provideMerge(NodeServices.layer),
+      ),
+    ),
+  ),
+);

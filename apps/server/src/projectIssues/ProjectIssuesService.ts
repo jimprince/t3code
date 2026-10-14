@@ -31,6 +31,8 @@ import { resolveTrackerSetting } from "../projectDashboard/projectDashboard.logi
 import { parseRankTrailer, parsePlacedByTrailer } from "./requestOrder.logic.ts";
 import {
   epicProgress,
+  briefingEpicProgress,
+  parseBriefingPartOf,
   trackerMembership,
   parseEpicChecklist,
   parsePartOf,
@@ -464,15 +466,21 @@ export const make = Effect.gen(function* () {
     noteCache.set(key, { at: now, value });
     return value;
   });
-  const noteFlights = new Map<string, Effect.Effect<RepositoryNotes>>();
+  const noteFlights = new Map<
+    string,
+    { target: GiteaRepositoryTarget; read: Effect.Effect<RepositoryNotes> }
+  >();
   const fetchRepositoryNotes = (target: GiteaRepositoryTarget) => {
     const key = repositoryKey(target);
-    let read = noteFlights.get(key);
-    if (!read) {
-      read = singleFlight(readRepositoryNotes(target));
-      noteFlights.set(key, read);
+    let flight = noteFlights.get(key);
+    if (!flight) {
+      const latest = { target };
+      const read = singleFlight(Effect.suspend(() => readRepositoryNotes(latest.target)));
+      flight = Object.assign(latest, { read });
+      noteFlights.set(key, flight);
     }
-    return read;
+    flight.target = target;
+    return flight.read;
   };
 
   /** Drop cached issue lists so a write shows on the next read. */
@@ -589,6 +597,7 @@ export const make = Effect.gen(function* () {
         }));
         const membership = trackerMembership(sourceItems);
         const epics = epicProgress(sourceItems, membership);
+        const briefingEpics = briefingEpicProgress(sourceItems);
         for (const issue of items) {
           const issueKey = `${repositoryKey(target)}#${issue.number}`;
 
@@ -649,6 +658,10 @@ export const make = Effect.gen(function* () {
           const { partOf: _partOf, ...base } = projected;
           issues.push({
             ...base,
+            briefingPartOf: parseBriefingPartOf(issue.body),
+            ...(briefingEpics.has(issue.number)
+              ? { briefingEpic: briefingEpics.get(issue.number)! }
+              : {}),
             ...(membership.parents.has(issue.number)
               ? { partOf: membership.parents.get(issue.number)! }
               : membership.warnings.get(issue.number)?.includes("missing-or-closed-parent") &&

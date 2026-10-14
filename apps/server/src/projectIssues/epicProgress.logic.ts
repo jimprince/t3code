@@ -1,9 +1,5 @@
 import type { ProjectEpicProgress } from "@t3tools/contracts";
-import {
-  parseTrackerSteps,
-  trackerBodyTruncated,
-  TRACKER_BODY_LIMIT,
-} from "./trackerPlan.logic.ts";
+import { parseTrackerSteps, trackerBodyTruncated, trackerBodyPrefix } from "./trackerPlan.logic.ts";
 
 /** The slice of a tracker issue epic progress reads. */
 export interface EpicSourceIssue {
@@ -38,7 +34,7 @@ export const PART_OF_LINE = /^\s*part of #(\d+)\b[^\n]*(?:\r?\n){0,2}/i;
 
 /** The epic a child issue belongs to: its body starts "Part of #N". */
 export function membershipContentStart(body: string): number {
-  const text = body.slice(0, TRACKER_BODY_LIMIT);
+  const text = trackerBodyPrefix(body);
   const leading = text.trimStart();
   const start = text.length - leading.length;
   const newline = leading.indexOf("\n");
@@ -48,7 +44,7 @@ export function membershipContentStart(body: string): number {
     : 0;
 }
 function firstMembershipLine(body: string | null | undefined): string {
-  const text = (body ?? "").slice(0, TRACKER_BODY_LIMIT);
+  const text = trackerBodyPrefix(body);
   const leading = text.slice(membershipContentStart(text)).trimStart();
   const newline = leading.indexOf("\n");
   return leading.slice(0, newline < 0 ? leading.length : newline);
@@ -161,4 +157,43 @@ export function epicProgress(
       ];
     }),
   );
+}
+
+/** Briefing roots retain the labelled-epic rule, independently of tracker membership. */
+export function parseBriefingPartOf(body: string | null | undefined): number | null {
+  const match = PART_OF_LINE.exec(trackerBodyPrefix(body));
+  return match ? Number(match[1]) : null;
+}
+export function briefingEpicProgress(
+  issues: ReadonlyArray<EpicSourceIssue>,
+): Map<number, ProjectEpicProgress> {
+  const byNumber = new Map(issues.map((issue) => [issue.number, issue]));
+  const partOf = new Map<number, number[]>();
+  for (const issue of issues) {
+    const parent = parseBriefingPartOf(issue.body);
+    if (parent !== null && parent !== issue.number)
+      partOf.set(parent, [...(partOf.get(parent) ?? []), issue.number]);
+  }
+  const result = new Map<number, ProjectEpicProgress>();
+  for (const epic of issues) {
+    if (!isEpic(epic.labels)) continue;
+    const children = new Map<number, boolean>();
+    for (const match of trackerBodyPrefix(epic.body).matchAll(
+      /^[ \t]*[-*][ \t]+\[([ xX])\][ \t]+#(\d+)\b/gm,
+    )) {
+      const number = Number(match[2]);
+      if (number !== epic.number) children.set(number, match[1] !== " ");
+    }
+    for (const number of partOf.get(epic.number) ?? [])
+      if (!children.has(number)) children.set(number, false);
+    const remaining = [...children]
+      .filter(([number, checked]) => !checked && !byNumber.get(number)?.closed)
+      .map(([number]) => number);
+    result.set(epic.number, {
+      done: children.size - remaining.length,
+      total: children.size,
+      remaining,
+    });
+  }
+  return result;
 }

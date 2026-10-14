@@ -74,6 +74,7 @@ describe("durable root-scoped tracker cutover (#297)", () => {
       Effect.gen(function* () {
         let stored: Effect.Success<DashboardStore.DashboardStore["Service"]["read"]> = null;
         let failed = false;
+        let noteFailed = false;
         let missingTarget = false;
         let rows = [row(1), row(2)];
         let flaggedReads = 0;
@@ -189,6 +190,14 @@ describe("durable root-scoped tracker cutover (#297)", () => {
               (yield* dashboard.getSnapshot).projects.find((p) => p.rootThreadId === a)?.tasks[0]
                 ?.progress?.confirmationKnown,
             ).toBe(true);
+            noteFailed = true;
+            yield* dashboard.refreshAfterWrite;
+            const partialNotes = yield* dashboard.getSnapshot;
+            expect(partialNotes.sources.find((s) => s.kind === "gitea")?.failed).toBe(false);
+            expect(partialNotes.sources.find((s) => s.kind === "gitea")?.detail).toBe(
+              "Progress notes unavailable",
+            );
+            noteFailed = false;
             missingTarget = true;
             yield* dashboard.refreshAfterWrite;
             expect(
@@ -229,6 +238,8 @@ describe("durable root-scoped tracker cutover (#297)", () => {
                         host: "git.test",
                         repository: "brad/repo",
                         error: failed ? "Unavailable" : null,
+                        noteCoverage: noteFailed ? "unavailable" : "complete",
+                        noteError: noteFailed ? "Could not read tracker progress notes." : null,
                       },
                     ],
                 issues: failed || missingTarget ? [] : rows,

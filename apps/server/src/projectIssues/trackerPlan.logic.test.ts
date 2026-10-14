@@ -78,10 +78,17 @@ it("parses padded checkbox text in linear time (#297 B2)", () => {
 });
 
 it("bounds bodies and actions without losing a useful checkbox (#297 B2/S4)", () => {
-  const plan = trackerPlan({ ...row, body: "- [ ] " + "x".repeat(200_000) });
+  const plan = trackerPlan({
+    ...row,
+    body: "- [ ] " + "x".repeat(50_000) + "\n" + "tail".repeat(50_000),
+  });
   expect(plan.truncated).toBe(true);
   expect(plan.nextStep?.length).toBeLessThanOrEqual(500);
   expect(plan.nextStep?.startsWith("xxx")).toBe(true);
+  const partial = trackerPlan({ ...row, body: "- [ ] " + "x".repeat(200_000) });
+  expect(partial.nextStep).toBeNull();
+  expect(partial.hasChecklist).toBe(false);
+  expect(partial.total).toBe(1);
 });
 
 it("bounds every tracker regex path for pathological 256KiB and 1MiB inputs (#297 B2)", () => {

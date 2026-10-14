@@ -161,3 +161,10 @@ it("bounds membership regex paths for pathological bodies (#297 B2)", () => {
       expect(performance.now() - start).toBeLessThan(100);
     }
 });
+
+it("drops a truncated partial checklist reference instead of inventing #12 (#297 R2-N7)", () => {
+  const prefix = "padding\n".repeat(8180);
+  const padding = " ".repeat(65536 - prefix.length - "- [ ] #12".length);
+  expect(parseEpicChecklist(prefix + padding + "- [ ] #12345 title")).toEqual([]);
+  expect(parsePartOf(" ".repeat(65536 - "Part of #12".length) + "Part of #12345")).toBeNull();
+});

@@ -10,10 +10,17 @@ export const trackerBodyTruncated = (body: string | null | undefined) =>
   (body?.length ?? 0) > TRACKER_BODY_LIMIT;
 const shortText = (text: string) =>
   text.length > TRACKER_TEXT_LIMIT ? `${text.slice(0, TRACKER_TEXT_LIMIT - 1)}…` : text;
+/** A bounded source prefix never ends in a partial line that could invent a reference. */
+export function trackerBodyPrefix(body: string | null | undefined): string {
+  const text = body ?? "";
+  if (!trackerBodyTruncated(text)) return text;
+  const prefix = text.slice(0, TRACKER_BODY_LIMIT);
+  return prefix.slice(0, prefix.lastIndexOf("\n") + 1);
+}
 function trackerContentLines(body: string | null | undefined): string[] {
   const lines: string[] = [];
   let fence: { character: string; length: number } | null = null;
-  for (const line of (body ?? "").slice(0, TRACKER_BODY_LIMIT).split(/\r?\n/)) {
+  for (const line of trackerBodyPrefix(body).split(/\r?\n/)) {
     if (!line.trim()) continue;
     if (/^\s*>/.test(line)) continue;
     const marker = /^\s{0,3}(`{3,}|~{3,})(.*)$/.exec(line);

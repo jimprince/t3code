@@ -12,7 +12,9 @@ bind only when their title uniquely matches an active root. Sharing
 one repository does not combine two heads. A missing or unmatched file never selects the tracker. A flagged unbound file
 produces a migration warning and no duplicate project. An unflagged unbound file
 keeps its own head project without a warning. JSON roots retain linked
-issue and thread progress; a cross-root JSON row stays with its JSON owner. The dashboard persists cutover with its snapshot; a tracker outage,
+issue and thread progress, using the legacy labelled-epic and canonical-parent
+rules. Inferred checklist workstreams apply after tracker cutover; a cross-root
+JSON row stays with its JSON owner. The dashboard persists cutover with its snapshot; a tracker outage,
 file disappearance or last-epic closure does not restore the old JSON. A flagged
 file supplies only its binding and flag, never linked overrides or orphan rows.
 Once that binding is cached, refresh does not read its task payload again.

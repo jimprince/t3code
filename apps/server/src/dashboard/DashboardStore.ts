@@ -184,6 +184,11 @@ export const makeTrackerNoteStore = Effect.gen(function* () {
     noteLock.withPermit(
       Effect.gen(function* () {
         const stored = yield* read;
+        if (
+          stored[key] &&
+          encodeTrackerNotes({ [key]: stored[key] }) === encodeTrackerNotes({ [key]: value })
+        )
+          return;
         yield* writeFileStringAtomically({
           filePath,
           contents: encodeTrackerNotes({ ...stored, [key]: value }),

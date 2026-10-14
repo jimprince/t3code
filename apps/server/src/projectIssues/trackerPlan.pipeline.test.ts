@@ -5,6 +5,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as HttpClient from "effect/http/HttpClient";
@@ -69,6 +70,7 @@ const runPipeline = (
   restart = false,
   concurrent = false,
   afterFirstNotes?: () => Effect.Effect<void>,
+  rotateToken = false,
 ) =>
   Effect.gen(function* () {
     if ((yield* DateTime.now).epochMilliseconds === 0) yield* TestClock.setTime(Date.parse(now));
@@ -104,8 +106,14 @@ const runPipeline = (
           );
           const result = reads[0]!;
           const callsAfterFirst = calls.length;
-          if (notesFailOnSecond || beforeSecondRead)
+          if (notesFailOnSecond || beforeSecondRead || rotateToken)
             service.invalidate({ host: "git.test", repository });
+          if (rotateToken) {
+            const settings = yield* ServerSettingsService;
+            yield* settings.setGiteaToken(
+              Redacted.make({ instanceId: instance.id, token: "rotated-fixture" }),
+            );
+          }
           beforeSecondRead?.();
           firstReadComplete = true;
           const nextService = restart ? yield* ProjectIssuesService.make : service;
@@ -130,6 +138,14 @@ const runPipeline = (
           const url = new URL(request.url);
           const page = Number(url.searchParams.get("page") ?? 1);
           const isComments = url.pathname.endsWith("/comments");
+          if (
+            rotateToken &&
+            firstReadComplete &&
+            request.headers.authorization !== "token rotated-fixture"
+          )
+            return Effect.succeed(
+              HttpClientResponse.fromWeb(request, new Response("Revoked", { status: 401 })),
+            );
           if (isComments && (failNotes || (notesFailOnSecond && firstReadComplete)))
             return Effect.succeed(
               HttpClientResponse.fromWeb(request, new Response("Unavailable", { status: 503 })),
@@ -527,7 +543,7 @@ it.effect(
 it.effect("keeps a huge action task in the wire snapshot with truncation evidence (#297 S4)", () =>
   Effect.gen(function* () {
     const result = yield* runPipeline(
-      [rawIssue(1, "- [ ] " + "x".repeat(200_000))],
+      [rawIssue(1, "- [ ] " + "x".repeat(50_000) + "\n" + "tail".repeat(50_000))],
       [],
       "brad/repo",
       true,
@@ -570,5 +586,55 @@ it.effect("fetches an older note edited during pagination after restart (#297 B1
     );
     expect(result.result.issues[0]?.plan?.nextStep).toBe("Before edit");
     expect(result.cached.issues[0]?.plan?.nextStep).toBe("Edited during scan");
+  }),
+);
+
+it.effect("refreshes issue and repository note credentials after rotation (#297 R2-S2)", () =>
+  Effect.gen(function* () {
+    const result = yield* runPipeline(
+      [rawIssue(1)],
+      [
+        {
+          id: 1,
+          issue_url: "https://git.test/brad/repo/issues/1",
+          created_at: now,
+          body: "Progress: next: Current credentials",
+        },
+      ],
+      "brad/repo",
+      true,
+      false,
+      false,
+      undefined,
+      false,
+      false,
+      undefined,
+      true,
+    );
+    expect(result.cached.repositories[0]?.error).toBeNull();
+    expect(result.cached.repositories[0]?.noteError).toBeNull();
+    expect(result.cached.repositories[0]?.noteCoverage).toBe("complete");
+    expect(result.cached.issues[0]?.plan?.nextStep).toBe("Current credentials");
+  }),
+);
+
+it.effect("keeps legacy labelled-epic counting separate from tracker membership (#297 R2-S1)", () =>
+  Effect.gen(function* () {
+    const result = yield* runPipeline(
+      [
+        rawIssue(1, "- [x] #3\n- [ ] #4", ["ask:epic"]),
+        rawIssue(2, "", ["ask:epic"]),
+        rawIssue(3, "Part of #2"),
+        { ...rawIssue(4), state: "closed", closed_at: now },
+        { ...rawIssue(5, "- [ ] #3", ["ask:epic"]), state: "closed", closed_at: now },
+      ],
+      [],
+    );
+    const rows = result.result.issues;
+    expect(rows.find((i) => i.number === 1)?.briefingEpic).toMatchObject({ done: 2, total: 2 });
+    expect(rows.find((i) => i.number === 1)?.plan).toMatchObject({ done: 1, total: 1 });
+    expect(rows.find((i) => i.number === 5)?.briefingEpic).toMatchObject({ done: 0, total: 1 });
+    expect(rows.find((i) => i.number === 3)?.briefingPartOf).toBe(2);
+    expect(rows.find((i) => i.number === 4)?.briefingPartOf).toBeNull();
   }),
 );

@@ -236,6 +236,7 @@ it("keeps an unflagged root on briefing even with a tracker epic", () => {
     input(
       [
         makeIssue(172, {
+          labels: ["ask", "ask:epic"],
           epic: { done: 0, total: 0, remaining: [] },
           plan: { ...summary, done: 0, total: 0 },
         }),
@@ -499,4 +500,70 @@ it("exposes structured unbound-file warnings through wire and merge without a du
   expect(merged.planMigration).toEqual([{ ...wire.planMigration![0], environmentId: "dev" }]);
   const { planMigration: _migration, ...old } = wire;
   expect(decodeSnapshot(old).planMigration).toBeUndefined();
+});
+
+it.each([2, 9])("keeps %i unmatched JSON heads distinct (#297 R2-B1)", (count) => {
+  const { rootThreadId: _root, ...legacy } = fallbackPlan;
+  const plans = Array.from({ length: count }, (_, i) => ({
+    ...legacy,
+    head: `unmatched-${i}`,
+    title: `Unmatched head ${i}`,
+    workstreams: [
+      {
+        ...legacy.workstreams[0]!,
+        tasks: [{ ...legacy.workstreams[0]!.tasks[0]!, title: `Task ${i}` }],
+      },
+    ],
+  }));
+  const snapshot = aggregate(input([], plans));
+  expect(snapshot.planMigration).toBeUndefined();
+  expect(snapshot.projects.filter((p) => p.id.startsWith("head:"))).toHaveLength(count);
+  for (let i = 0; i < count; i++) {
+    const project = snapshot.projects.find((p) => p.id === `head:unmatched-${i}`);
+    expect(project?.title).toBe(`Unmatched head ${i}`);
+    expect(project?.tasks.map((t) => t.title)).toEqual([`Task ${i}`]);
+  }
+});
+
+it("uses linked todo for an inferred epic only on JSON roots (#297 R2-S1)", () => {
+  const issue = makeIssue(1, {
+    linkedThreadIds: [root],
+    epic: { done: 1, total: 2, remaining: [3], children: [2, 3] },
+    plan: { ...summary, done: 1, total: 2 },
+  });
+  const args = input([issue], [fallbackPlan]);
+  const shells = args.shells.map((s) => ({ ...s, todoProgress: { completed: 4, total: 7 } }));
+  const legacy = aggregate({ ...args, shells }).projects[0]!;
+  expect(legacy.tasks.find((t) => t.url === issue.url)?.progress).toMatchObject({
+    done: 4,
+    total: 7,
+  });
+  expect(legacy.tasks.filter((t) => t.id.startsWith("thread-plan:"))).toHaveLength(0);
+  const tracker = aggregate({ ...args, shells, plans: [plan] }).projects[0]!;
+  expect(tracker.workstreams.find((w) => w.url === issue.url)?.progress).toMatchObject({
+    done: 1,
+    total: 2,
+  });
+});
+
+it("uses the separately preserved labelled-epic and canonical parent on JSON roots (#297 R2-S1)", () => {
+  const issue = makeIssue(1, {
+    labels: ["ask:epic"],
+    epic: { done: 1, total: 1, remaining: [] },
+    briefingEpic: { done: 2, total: 2, remaining: [] },
+    partOf: 8,
+    briefingPartOf: null,
+    plan: { ...summary, done: 1, total: 1 },
+  });
+  const snapshot = aggregate(input([issue], [fallbackPlan]));
+  const wire = decodeSnapshot(JSON.parse(JSON.stringify(snapshot)));
+  expect(wire.projects[0]?.tasks.find((t) => t.url === issue.url)?.progress).toMatchObject({
+    done: 2,
+    total: 2,
+  });
+  expect(wire.projects[0]?.tasks.find((t) => t.url === issue.url)?.partOf).toBeUndefined();
+  const { briefingEpic: _epic, briefingPartOf: _parent, ...oldIssue } = issue;
+  expect(
+    aggregate(input([oldIssue], [fallbackPlan])).projects[0]?.tasks[0]?.progress,
+  ).toMatchObject({ done: 1, total: 1 });
 });

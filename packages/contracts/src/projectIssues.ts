@@ -165,6 +165,10 @@ export const ProjectIssue = Schema.Struct({
   milestone: Schema.optionalKey(Schema.NullOr(ProjectMilestone)),
   /** Set for epics. */
   epic: Schema.optionalKey(ProjectEpicProgress),
+  /** Legacy labelled-epic progress for roots that still read their briefing JSON. */
+  briefingEpic: Schema.optionalKey(ProjectEpicProgress),
+  /** Legacy canonical parent; null prevents inferred tracker membership on JSON roots. */
+  briefingPartOf: Schema.optionalKey(Schema.NullOr(PositiveInt)),
   /** Primary same-repository workstream: canonical Part of wins over a unique checklist parent. */
   partOf: Schema.optionalKey(PositiveInt),
   rank: Schema.optionalKey(Schema.NullOr(Schema.Number)),

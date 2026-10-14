@@ -312,7 +312,7 @@ export const make = Effect.gen(function* () {
               : current.fetchedAt,
             staleAfterMs: 120_000,
             coverage: repo.error ? "unavailable" : "bounded",
-            failed: repo.error !== null || repo.noteError != null,
+            failed: repo.error !== null,
             ...(repo.noteCoverage && repo.noteCoverage !== "complete"
               ? {
                   detail:

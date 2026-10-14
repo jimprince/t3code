@@ -303,6 +303,20 @@ export function aggregate(input: {
         const linked = tree.find(
           (t) => issue.linkedThreadIds.includes(t.id) && t.todoProgress && t.todoProgress.total > 0,
         );
+        const labels = new Set(issue.labels.map((label) => label.toLowerCase()));
+        const labelledEpic =
+          labels.has("ask:epic") ||
+          (labels.has("ask:plan") && !labels.has("ask:task") && !labels.has("ask:question"));
+        const epic = tracker
+          ? issue.epic
+          : labelledEpic
+            ? (issue.briefingEpic ?? issue.epic)
+            : undefined;
+        const parent = tracker
+          ? issue.partOf
+          : issue.briefingPartOf === undefined
+            ? issue.partOf
+            : issue.briefingPartOf;
         const progress =
           tracker && issue.plan
             ? {
@@ -313,11 +327,11 @@ export function aggregate(input: {
                 confirmedAt: issue.plan.confirmedAt ?? UNCONFIRMED_AT,
                 confirmationKnown: issue.plan.confirmedAt !== null,
               }
-            : issue.epic
+            : epic
               ? {
-                  done: issue.epic.done,
-                  total: issue.epic.total,
-                  planVersion: `epic:${issue.epic.total}`,
+                  done: epic.done,
+                  total: epic.total,
+                  planVersion: `epic:${epic.total}`,
                   sourceId,
                   confirmedAt: issue.updatedAt,
                 }
@@ -330,7 +344,7 @@ export function aggregate(input: {
                     confirmedAt: DateTime.formatIso(linked.updatedAt),
                   }
                 : null;
-        if (!issue.epic && linked?.todoProgress) progressSources.add(linked.id);
+        if (!epic && linked?.todoProgress) progressSources.add(linked.id);
         const attentionIds: string[] = [];
         if (
           issue.status !== "done" &&
@@ -392,14 +406,14 @@ export function aggregate(input: {
           ...(issue.rank !== undefined ? { rank: issue.rank } : {}),
           createdAt: issue.createdAt,
           ...(issue.placedBy !== undefined ? { placedBy: issue.placedBy } : {}),
-          ...(issue.partOf !== undefined ? { partOf: issue.partOf } : {}),
+          ...(parent != null ? { partOf: parent } : {}),
           ...(tracker && issue.plan ? { hasChecklist: issue.plan.hasChecklist } : {}),
           ...(issue.membershipWarnings ? { membershipWarnings: issue.membershipWarnings } : {}),
           title: issue.title,
           url: issue.url,
           threadId: waitingThreads.get(id) ?? linked?.id ?? issue.linkedThreadIds[0] ?? null,
-          workstreamId: issue.partOf
-            ? issueId(issue.host, issue.repository, issue.partOf)
+          workstreamId: parent
+            ? issueId(issue.host, issue.repository, parent)
             : `project:${root.id}:work`,
           status:
             issue.status === "done"
@@ -719,7 +733,10 @@ export function aggregate(input: {
             attentionIds: [],
           });
       }
-    const boundProject = projects.find((project) => project.rootThreadId === boundPlans.get(plan));
+    const boundRoot = boundPlans.get(plan);
+    const boundProject = boundRoot
+      ? projects.find((project) => project.rootThreadId === boundRoot)
+      : undefined;
     if (orphan.length && boundProject) {
       Object.assign(boundProject, { tasks: [...boundProject.tasks, ...orphan] });
       Object.assign(boundProject, {
