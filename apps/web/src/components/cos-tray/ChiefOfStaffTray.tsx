@@ -8,7 +8,7 @@ import {
   Minimize2Icon,
   XIcon,
 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { useIsMobile, useMediaQuery } from "../../hooks/useMediaQuery";
 import { cn } from "../../lib/utils";
@@ -83,6 +83,13 @@ function TrayActions({ cos, expandable }: { readonly cos: Cos; readonly expandab
 }
 
 function TrayBody({ cos, expandable }: { readonly cos: Cos; readonly expandable: boolean }) {
+  const [decisionsOpen, setDecisionsOpen] = useState(true);
+  const decisionsId = useId();
+  const decisionsToggle = useRef<HTMLButtonElement>(null);
+  const hideDecisions = () => {
+    setDecisionsOpen(false);
+    decisionsToggle.current?.focus();
+  };
   return (
     <>
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border pr-1 pl-3">
@@ -91,9 +98,23 @@ function TrayBody({ cos, expandable }: { readonly cos: Cos; readonly expandable:
         <TrayActions cos={cos} expandable={expandable} />
       </div>
       <div className="shrink-0 border-b border-border px-3 py-1.5">
-        <CosSummaryLine waiting={cos.waiting} lastReplyAt={cos.lastReplyAt} />
+        <CosSummaryLine
+          waiting={cos.waiting}
+          lastReplyAt={cos.lastReplyAt}
+          decisionsOpen={decisionsOpen}
+          decisionsId={decisionsId}
+          toggleRef={decisionsToggle}
+          onToggleDecisions={() => setDecisionsOpen((open) => !open)}
+        />
       </div>
-      {cos.waiting > 0 ? <CosDecisionPin environmentId={cos.ref.environmentId} /> : null}
+      {cos.waiting > 0 ? (
+        <CosDecisionPin
+          environmentId={cos.ref.environmentId}
+          id={decisionsId}
+          open={decisionsOpen}
+          onClose={hideDecisions}
+        />
+      ) : null}
       <ChatView
         routeKind="server"
         environmentId={cos.ref.environmentId}
