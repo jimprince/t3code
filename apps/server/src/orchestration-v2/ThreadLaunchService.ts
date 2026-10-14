@@ -89,6 +89,8 @@ export interface ThreadLaunchInput {
   readonly commandId: CommandId;
   readonly threadId?: ThreadId;
   readonly reuseExistingThread?: boolean;
+  /** Recovery reuses the source workspace without allocating folders or rerunning setup. */
+  readonly reusePreparedWorkspace?: boolean;
   readonly projectId: ProjectId;
   readonly title: string;
   readonly issue?: string;
@@ -113,7 +115,7 @@ export interface ThreadLaunchInput {
 /** What workspace preparation reads from a launch; a retry rebuilds it from the run. */
 type PreparationInput = Pick<
   ThreadLaunchInput,
-  "commandId" | "projectId" | "workspaceStrategy" | "initialMessage"
+  "commandId" | "projectId" | "workspaceStrategy" | "initialMessage" | "reusePreparedWorkspace"
 > & {
   /**
    * Set when a retry reuses the worktree its failed attempt created and
@@ -464,27 +466,30 @@ const make = Effect.gen(function* () {
           .pipe(Effect.mapError(mapError(input, "update-thread", threadId)));
       }
       yield* setupTracker.stageStatus(threadId, "setup-script", "running");
-      const setup = yield* setupScripts
-        .runForThread({
-          threadId,
-          projectId: input.projectId,
-          projectCwd: project.workspaceRoot,
-          worktreePath: cwd,
-          ...(tracked
-            ? {
-                observeCompletion: {
-                  onOutputLine: (line: string) =>
-                    setupTracker.appendTail(threadId, "setup-script", line),
+      const setup =
+        input.reusePreparedWorkspace === true
+          ? { status: "no-script" as const }
+          : yield* setupScripts
+              .runForThread({
+                threadId,
+                projectId: input.projectId,
+                projectCwd: project.workspaceRoot,
+                worktreePath: cwd,
+                ...(tracked
+                  ? {
+                      observeCompletion: {
+                        onOutputLine: (line: string) =>
+                          setupTracker.appendTail(threadId, "setup-script", line),
+                      },
+                    }
+                  : {}),
+                project: {
+                  id: project.id,
+                  workspaceRoot: project.workspaceRoot,
+                  scripts: project.scripts,
                 },
-              }
-            : {}),
-          project: {
-            id: project.id,
-            workspaceRoot: project.workspaceRoot,
-            scripts: project.scripts,
-          },
-        })
-        .pipe(Effect.mapError(mapError(input, "run-setup-script", threadId)));
+              })
+              .pipe(Effect.mapError(mapError(input, "run-setup-script", threadId)));
 
       let awaitAsyncSetup = Effect.void;
       if (setup.status === "started") {
@@ -739,7 +744,9 @@ const make = Effect.gen(function* () {
         // A Scratch thread launched at the project root runs in a folder of its
         // own. Only the first attempt claims one; a retry replays its create.
         const workspaceStrategy: ThreadLaunchWorkspaceStrategy =
-          input.workspaceStrategy.type === "root" && Option.isNone(launchReceipt)
+          input.workspaceStrategy.type === "root" &&
+          input.reusePreparedWorkspace !== true &&
+          Option.isNone(launchReceipt)
             ? Option.match(
                 yield* managedFolders
                   .folderForThread({

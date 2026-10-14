@@ -17,6 +17,8 @@ type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
  * prefix. Adding an RPC to `WsRpcGroup` without a label is a type error.
  */
 const RPC_AGGREGATES = {
+  "thread.resumeFromPlan": "thread-recovery",
+  "thread.previewResumePlan": "thread-recovery",
   "thread.handover.commit": "thread-recovery",
   "thread.handover.prepare": "thread-recovery",
   "thread.handover.routes": "thread-recovery",
