@@ -1,6 +1,7 @@
+import { orderPlan } from "@t3tools/client-runtime/dashboard/order";
 import type { DashboardTask } from "@t3tools/contracts";
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 
 import { cn } from "../../lib/utils";
 import { useDashboardUi } from "./context";
@@ -23,7 +24,9 @@ import {
   type PlanWorkstreamEntry,
   type ScopedProject,
 } from "./dashboard.logic";
+import { ActiveRow, PlanOrderProvider, QueuedRow, WorkstreamOrder } from "./orderRows";
 import {
+  NewMark,
   ProgressBar,
   ProgressFigure,
   releaseTask,
@@ -166,6 +169,8 @@ function WorkstreamRow({
   openByDefault,
   onOpen,
   childOpenByDefault,
+  ordering = false,
+  number = null,
 }: {
   readonly scoped: ScopedProject;
   readonly entry: PlanWorkstreamEntry;
@@ -175,6 +180,10 @@ function WorkstreamRow({
   readonly onOpen?: (() => void) | undefined;
   /** Whether a nested workstream starts open. */
   readonly childOpenByDefault?: ((child: PlanWorkstreamEntry) => boolean) | undefined;
+  /** The Plan's order is stored and editable: rows get handles, positions and a menu. */
+  readonly ordering?: boolean | undefined;
+  /** This workstream's place among the epics, shown beside its handle; null for any other group. */
+  readonly number?: number | null | undefined;
 }) {
   const ui = useDashboardUi();
   const { workstream, tasks, children, ownTask } = entry;
@@ -229,110 +238,121 @@ function WorkstreamRow({
         {title}
       </button>
     );
+  const wrap = (header: ReactNode) =>
+    ordering ? (
+      <WorkstreamOrder entry={entry} number={number}>
+        {header}
+      </WorkstreamOrder>
+    ) : (
+      header
+    );
   return (
     <div>
-      <div className="grid grid-cols-[14px_minmax(0,1fr)_auto] items-center gap-x-2.5 py-0.75 @xl/dash:grid-cols-[14px_minmax(120px,1fr)_96px_minmax(110px,auto)]">
-        {expandable ? (
-          <button
-            type="button"
-            aria-label={collapsed ? "Expand" : "Collapse"}
-            aria-expanded={!collapsed}
-            className="text-muted-foreground/70"
-            onClick={() => ui.toggleCollapsed(key)}
-          >
-            {collapsed ? (
-              <ChevronRightIcon className="size-3" />
-            ) : (
-              <ChevronDownIcon className="size-3" />
-            )}
-          </button>
-        ) : (
-          <span />
-        )}
-        {ref ? (
-          <span className="flex min-w-0 items-baseline gap-1.5">
-            {titleButton}
+      {wrap(
+        <div className="grid grid-cols-[14px_minmax(0,1fr)_auto] items-center gap-x-2.5 py-0.75 @xl/dash:grid-cols-[14px_minmax(120px,1fr)_96px_minmax(110px,auto)]">
+          {expandable ? (
             <button
               type="button"
-              aria-label={`Open issue #${ref}`}
-              className="shrink-0 text-xs text-muted-foreground/70 hover:underline"
-              onClick={() =>
-                ui.openTask(scoped, {
-                  id: workstream.id,
-                  url: workstream.url ?? null,
-                  threadId: workstream.threadId ?? null,
-                })
-              }
+              aria-label={collapsed ? "Expand" : "Collapse"}
+              aria-expanded={!collapsed}
+              className="text-muted-foreground/70"
+              onClick={() => ui.toggleCollapsed(key)}
             >
-              #{ref}
+              {collapsed ? (
+                <ChevronRightIcon className="size-3" />
+              ) : (
+                <ChevronDownIcon className="size-3" />
+              )}
             </button>
-          </span>
-        ) : (
-          titleButton
-        )}
-        <span className="order-last col-span-3 @xl/dash:order-none @xl/dash:col-span-1">
-          {units ? (
-            <ProgressBar
-              steps={{ done: units.done, total: units.total }}
-              gained={null}
-              projectedDone={null}
-              tone={tone}
-              unknown={stale}
-              unit="tasks"
-            />
-          ) : epic ? null : (
-            <ProgressBar
-              steps={roll.steps}
-              gained={roll.gained}
-              projectedDone={roll.projectedDone}
-              tone={tone}
-              unknown={stale}
-            />
+          ) : (
+            <span />
           )}
-        </span>
-        <span className="text-right">
-          {stale ? (
-            <span className={HEADER_FIGURE}>
-              <UnknownValue since={since}>progress unknown</UnknownValue>{" "}
-              <WaitingOnYou keys={keys} />
-            </span>
-          ) : units ? (
-            <span className={HEADER_FIGURE}>
-              <span className="tabular-nums whitespace-nowrap">
-                {units.done}/{units.total} tasks
-                {unknownChildren > 0 ? (
-                  <span className="text-muted-foreground"> · {unknownChildren} unknown</span>
-                ) : null}
-              </span>
-              {ownEtaText ? (
-                <span className="whitespace-nowrap text-muted-foreground">
-                  {" "}
-                  · owner ETA {ownEtaText}
-                </span>
-              ) : null}
-              {keys.length > 0 ? (
-                <>
-                  {" "}
-                  <WaitingOnYou keys={keys} />
-                </>
-              ) : null}
-            </span>
-          ) : epic ? (
-            <span className={HEADER_FIGURE}>
-              <span className="whitespace-nowrap text-muted-foreground/80">no tasks yet</span>
-              {ownEtaText ? (
-                <span className="whitespace-nowrap text-muted-foreground/80">
-                  {" "}
-                  · owner ETA {ownEtaText}
-                </span>
-              ) : null}{" "}
-              <WaitingOnYou keys={keys} />
+          {ref ? (
+            <span className="flex min-w-0 items-baseline gap-1.5">
+              {titleButton}
+              <button
+                type="button"
+                aria-label={`Open issue #${ref}`}
+                className="shrink-0 text-xs text-muted-foreground/70 hover:underline"
+                onClick={() =>
+                  ui.openTask(scoped, {
+                    id: workstream.id,
+                    url: workstream.url ?? null,
+                    threadId: workstream.threadId ?? null,
+                  })
+                }
+              >
+                #{ref}
+              </button>
+              <NewMark item={workstream} />
             </span>
           ) : (
-            <ProgressFigure roll={roll} keys={keys} />
+            titleButton
           )}
-        </span>
-      </div>
+          <span className="order-last col-span-3 @xl/dash:order-none @xl/dash:col-span-1">
+            {units ? (
+              <ProgressBar
+                steps={{ done: units.done, total: units.total }}
+                gained={null}
+                projectedDone={null}
+                tone={tone}
+                unknown={stale}
+                unit="tasks"
+              />
+            ) : epic ? null : (
+              <ProgressBar
+                steps={roll.steps}
+                gained={roll.gained}
+                projectedDone={roll.projectedDone}
+                tone={tone}
+                unknown={stale}
+              />
+            )}
+          </span>
+          <span className="text-right">
+            {stale ? (
+              <span className={HEADER_FIGURE}>
+                <UnknownValue since={since}>progress unknown</UnknownValue>{" "}
+                <WaitingOnYou keys={keys} />
+              </span>
+            ) : units ? (
+              <span className={HEADER_FIGURE}>
+                <span className="tabular-nums whitespace-nowrap">
+                  {units.done}/{units.total} tasks
+                  {unknownChildren > 0 ? (
+                    <span className="text-muted-foreground"> · {unknownChildren} unknown</span>
+                  ) : null}
+                </span>
+                {ownEtaText ? (
+                  <span className="whitespace-nowrap text-muted-foreground">
+                    {" "}
+                    · owner ETA {ownEtaText}
+                  </span>
+                ) : null}
+                {keys.length > 0 ? (
+                  <>
+                    {" "}
+                    <WaitingOnYou keys={keys} />
+                  </>
+                ) : null}
+              </span>
+            ) : epic ? (
+              <span className={HEADER_FIGURE}>
+                <span className="whitespace-nowrap text-muted-foreground/80">no tasks yet</span>
+                {ownEtaText ? (
+                  <span className="whitespace-nowrap text-muted-foreground/80">
+                    {" "}
+                    · owner ETA {ownEtaText}
+                  </span>
+                ) : null}{" "}
+                <WaitingOnYou keys={keys} />
+              </span>
+            ) : (
+              <ProgressFigure roll={roll} keys={keys} />
+            )}
+          </span>
+        </div>,
+      )}
       {notes.map((line) => (
         <div key={line} className="py-0.5 pl-6 text-xs text-muted-foreground">
           {line}
@@ -340,9 +360,26 @@ function WorkstreamRow({
       ))}
       {collapsed ? null : (
         <>
-          {tasks.map((task) => (
-            <TaskRow key={task.id} scoped={scoped} task={task} />
-          ))}
+          {ordering ? (
+            <>
+              {entry.now.map((task) => (
+                <ActiveRow key={task.id} task={task} />
+              ))}
+              {entry.now.length > 0 && entry.next.length > 0 ? (
+                <div className="py-0.5 pl-9 text-xs text-muted-foreground">Next, in order</div>
+              ) : null}
+              {entry.next.map((task, index) => (
+                <QueuedRow key={task.id} task={task} entry={entry} position={index + 1} />
+              ))}
+              {entry.done.map((task) => (
+                <div key={task.id} className="pl-6.5">
+                  <TaskRow scoped={scoped} task={task} />
+                </div>
+              ))}
+            </>
+          ) : (
+            tasks.map((task) => <TaskRow key={task.id} scoped={scoped} task={task} />)
+          )}
           {children.length > 0 ? (
             <div className="pl-3.5">
               {children.map((child) => (
@@ -353,6 +390,7 @@ function WorkstreamRow({
                   title={child.workstream.title}
                   openByDefault={childOpenByDefault?.(child) ?? false}
                   childOpenByDefault={childOpenByDefault}
+                  ordering={ordering}
                 />
               ))}
             </div>
@@ -452,6 +490,8 @@ export function ProjectGroup({
 }) {
   const ui = useDashboardUi();
   const { project } = scoped;
+  if (ui.order.canOrder(scoped))
+    return <OrderedProjectGroup scoped={scoped} all={all} showName={showName} eager={eager} />;
   const subs = subprojectsOf(all, scoped).filter((sub) => sub.project.parentId === project.id);
   const workstreams = nestWorkstreams(planWorkstreams(project));
   // "Work" is the server's placeholder when a workstream has no name of its own, and "Unsorted"
@@ -537,6 +577,128 @@ export function ProjectGroup({
     </div>
   );
 }
+
+/**
+ * A tracker project whose order is stored, in the one view. On a project page it lists the
+ * numbered workstreams with their started and queued tasks; on Home it is compact: what is
+ * moving, the first three queued, and how many new items wait to be ordered.
+ */
+function OrderedProjectGroup({
+  scoped,
+  all,
+  showName,
+  eager,
+}: {
+  readonly scoped: ScopedProject;
+  readonly all: ReadonlyArray<ScopedProject>;
+  readonly showName: boolean;
+  readonly eager: boolean;
+}) {
+  const ui = useDashboardUi();
+  const { project } = scoped;
+  const plan = useMemo(() => orderPlan(project), [project]);
+  const workstreams = useMemo(
+    () => nestWorkstreams(planWorkstreams(project, plan)),
+    [project, plan],
+  );
+  const subs = subprojectsOf(all, scoped).filter((sub) => sub.project.parentId === project.id);
+  const omittedWorkstreams = project.omittedWorkstreamCount ?? 0;
+  const epicNumbers = new Map(
+    workstreams
+      .filter((entry) => isEpicHeader(entry.workstream))
+      .map((entry, index) => [entry.workstream.id, index + 1] as const),
+  );
+  const flat = workstreams.flatMap(function walk(entry): PlanWorkstreamEntry[] {
+    return [entry, ...entry.children.flatMap(walk)];
+  });
+  const keys = blockingKeys(ui.decisionKeysFor, scoped, project.tasks);
+  const note = (text: ReactNode) => (
+    <div className="py-0.5 pl-6 text-muted-foreground/80">{text}</div>
+  );
+  return (
+    <PlanOrderProvider scoped={scoped} entries={workstreams}>
+      <div className="border-t border-border py-1.5 first:border-t-0">
+        {showName ? (
+          <div className="flex flex-wrap items-baseline gap-x-3 pb-1">
+            <button
+              type="button"
+              className="font-semibold hover:underline"
+              onClick={() => ui.openProject(scoped)}
+            >
+              {project.title}
+            </button>
+            {plan.fresh.length > 0 ? (
+              <button
+                type="button"
+                className="text-xs text-muted-foreground hover:underline"
+                onClick={() => ui.openProject(scoped)}
+              >
+                {plan.fresh.length} new to order
+              </button>
+            ) : null}
+            <WaitingOnYou keys={keys} />
+          </div>
+        ) : null}
+        {showName ? (
+          <>
+            {flat.flatMap((entry) =>
+              entry.now.map((task) => <ActiveRow key={task.id} task={task} />),
+            )}
+            {flat
+              .flatMap((entry) => entry.next.map((task) => ({ entry, task })))
+              .slice(0, HOME_QUEUED)
+              .map(({ entry, task }, shown) => (
+                <QueuedRow key={task.id} task={task} entry={entry} position={shown + 1} />
+              ))}
+            {flat.every((entry) => entry.now.length + entry.next.length === 0)
+              ? note(
+                  project.omittedTaskCount > 0
+                    ? `${project.omittedTaskCount} tasks not in this snapshot`
+                    : "No open work",
+                )
+              : null}
+          </>
+        ) : (
+          <>
+            {workstreams.map((entry) => (
+              <WorkstreamRow
+                key={entry.workstream.id}
+                scoped={scoped}
+                entry={entry}
+                title={isEpicHeader(entry.workstream) ? entry.workstream.title : "Other work"}
+                openByDefault={eager}
+                childOpenByDefault={() => eager}
+                ordering
+                number={epicNumbers.get(entry.workstream.id) ?? null}
+              />
+            ))}
+            {workstreams.length === 0 && subs.length === 0 && omittedWorkstreams === 0
+              ? note(
+                  project.omittedTaskCount > 0
+                    ? `${project.omittedTaskCount} tasks not in this snapshot`
+                    : "No open work",
+                )
+              : null}
+            {omittedWorkstreams > 0
+              ? note(
+                  `+${omittedWorkstreams} more ${pluralize(omittedWorkstreams, "workstream", "workstreams")} not in this snapshot`,
+                )
+              : null}
+            {project.omittedTaskCount > 0 && workstreams.length > 0
+              ? note(`+${project.omittedTaskCount} more tasks not in this snapshot`)
+              : null}
+          </>
+        )}
+        {subs.map((sub) => (
+          <SubprojectRow key={sub.key} scoped={sub} all={all} dim />
+        ))}
+      </div>
+    </PlanOrderProvider>
+  );
+}
+
+/** How many queued rows a project shows on Home. */
+const HOME_QUEUED = 3;
 
 /** Utilities, apart from product work and collapsed on phone width until opened. */
 export function UtilityGroup({
