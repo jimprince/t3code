@@ -1,6 +1,6 @@
-Bottom: fcaac0385e61dea7309175f737e5eb6390ec8e5e
-Top:    c8079bd2ea43dd8b067560c078eb52a9afd5b9b9
+Bottom: 2c083b4722c14c3b951faca9c51ecc0e01f886b3
+Top:    d2bd333a85bdcc26db3958900cc1552b5309a1b8
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 11:33:10 +0000
+Date:   2026-10-14 11:33:36 +0000
 
 feat(web): Plan widget with task progress bars and Ask first on project pages
