@@ -125,6 +125,8 @@ function resolveParentThreadId(
 import type { ProjectLayout } from "@t3tools/contracts";
 import { decisionAnswerPayload, type DecisionAnswerFlags } from "./decisions.js";
 
+import { runResumePlan } from "./resumePlan.js";
+
 function printJson(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
@@ -3122,6 +3124,18 @@ program.hook("postAction", async (_command, action) => {
     // Reviving the watcher is best effort and must never fail the command itself.
   }
 });
+
+program
+  .command("resume-plan")
+  .description("Start a fresh thread from a failed or interrupted thread's unfinished plan")
+  .argument("<thread>", "saved name or thread ID")
+  .option("--preview", "print the seed without creating a thread")
+  .action(async (name: string, options: { preview?: boolean }) => {
+    const { client, agent } = await withAgent(name);
+    await runResumePlan(client, agent.threadId, options.preview === true, (text) =>
+      process.stdout.write(text),
+    );
+  });
 
 program.parseAsync(process.argv).catch((error) => {
   if (sensitiveTokenCommand) {
