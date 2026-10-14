@@ -9,6 +9,9 @@ import {
   type OrchestratorSummary,
 } from "@t3tools/client-runtime/state/orchestrators";
 import {
+  labelWithTaskProgress,
+  projectSubagentRows,
+  subagentCountLabel,
   subprojectCountLabel,
   subprojectWorkingLabel,
   toggleProjectKey,
@@ -105,6 +108,11 @@ import { useMaterialFabScroll } from "./MaterialFabScrollContext";
 interface HomeScreenProps {
   readonly projects: ReadonlyArray<EnvironmentProject>;
   readonly threads: ReadonlyArray<EnvironmentThreadShell>;
+  /**
+   * Every live shell, provider-native subagents included. `threads` leaves those out of the
+   * flat lists; Projects and Harness need them as rows and in their counts, as on web.
+   */
+  readonly forestThreads: ReadonlyArray<EnvironmentThreadShell>;
   readonly pendingTasks: ReadonlyArray<PendingNewTask>;
   readonly catalogState: WorkspaceState;
   readonly savedConnectionsById: Readonly<Record<string, SavedRemoteConnection>>;
@@ -326,7 +334,12 @@ function MobileOrchestratorList({
           candidate.id === summary.root.projectId,
       ) ?? summary.projects[0];
     const workingInSubprojects = subprojectWorkingLabel(summary);
-    const foldHint = subprojectCountLabel(summary);
+    const agentRows = projectSubagentRows(summary, purposes);
+    const hasChildren = summary.subprojects.length > 0 || agentRows.length > 0;
+    const foldHint =
+      [subprojectCountLabel(summary), subagentCountLabel(agentRows)]
+        .filter((hint) => hint !== null)
+        .join(" · ") || null;
     const folded = foldedProjects.includes(projectKeyOf(summary));
     return (
       <Pressable
@@ -399,11 +412,11 @@ function MobileOrchestratorList({
           // thread may not be in this list yet.
           onOpenThread={(threadId) => onSelectThread({ ...summary.root, id: threadId })}
         />
-        {foldHint !== null ? (
+        {hasChildren ? (
           <View className="mt-2 border-t border-border">
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`${folded ? "Show" : "Hide"} subprojects of ${summary.root.title}`}
+              accessibilityLabel={`${folded ? "Show" : "Hide"} ${summary.subprojects.length > 0 ? "subprojects" : "agents"} of ${summary.root.title}`}
               accessibilityState={{ expanded: !folded }}
               className="min-h-9 justify-center active:bg-card"
               onPress={() =>
@@ -411,7 +424,9 @@ function MobileOrchestratorList({
               }
             >
               <Text className="text-xs text-foreground-muted">
-                {folded ? `Show ${foldHint}` : "Hide subprojects"}
+                {folded
+                  ? `Show ${foldHint ?? "subprojects"}`
+                  : `Hide ${summary.subprojects.length > 0 ? "subprojects" : "agents"}`}
               </Text>
             </Pressable>
             {folded ? null : (
@@ -485,9 +500,26 @@ export function HomeScreen(props: HomeScreenProps) {
 
   const [homeMode, setHomeMode] = useState<"threads" | "orchestrators">("threads");
   const supervisionMetadata = useSupervisionMetadata();
-  const orchestrators = useMemo(
-    () => buildOrchestratorSummaries(props.threads, props.projects, supervisionMetadata),
-    [props.projects, props.threads, supervisionMetadata],
+  // Join the sidecar once: Projects and Harness partition the same forest by purpose.
+  const joinedThreads = useMemo(
+    () => joinOrchestratorMetadata(props.threads, supervisionMetadata),
+    [props.threads, supervisionMetadata],
+  );
+  const joinedForest = useMemo(
+    () => joinOrchestratorMetadata(props.forestThreads, supervisionMetadata),
+    [props.forestThreads, supervisionMetadata],
+  );
+  const {
+    projects: orchestrators,
+    harness: harnessRoots,
+    purposes,
+  } = useMemo(
+    () =>
+      partitionThreadPurposes(
+        joinedForest,
+        buildOrchestratorSummaries(joinedForest, props.projects),
+      ),
+    [joinedForest, props.projects],
   );
   const queuedThreadKeys = useQueuedThreadKeys();
   const openSwipeableRef = useRef<SwipeableMethods | null>(null);
