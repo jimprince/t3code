@@ -123,6 +123,47 @@ describe("ProjectRequestBox", () => {
     expect(line()).not.toBeNull();
   });
 
+  it("keeps the box open and the quick actions present when focus moves to a quick action (Tab)", async () => {
+    await render();
+    await act(() => line()!.focus());
+    // Tab from the empty composer lands on the first chip: focus leaves the textarea but not the box.
+    await act(() => chip("Bug report")!.focus());
+    expect(composer()).not.toBeNull();
+    expect(chips()).toHaveLength(REQUEST_QUICK_ACTIONS.length);
+    expect(document.activeElement).toBe(chip("Bug report"));
+    // And on to the next chip.
+    await act(() => chip("Feature request")!.focus());
+    expect(chips()).toHaveLength(REQUEST_QUICK_ACTIONS.length);
+  });
+
+  it("folds an empty box when focus leaves it for something outside, from the composer or a chip", async () => {
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    await render();
+    await act(() => line()!.focus());
+    await act(() => outside.focus());
+    expect(composer()).toBeNull();
+    expect(line()).not.toBeNull();
+    await act(() => line()!.focus());
+    await act(() => chip("Bug report")!.focus());
+    await act(() => outside.focus());
+    expect(composer()).toBeNull();
+    expect(chips()).toHaveLength(0);
+    outside.remove();
+  });
+
+  it("a quick action puts the caret at the end once and does not move it on a later focus", async () => {
+    await render();
+    await act(() => line()!.focus());
+    await act(() => chip("Bug report")!.click());
+    expect(composer()!.selectionStart).toBe("Bug: ".length);
+    // The user clicks back into the middle of the text: nothing may pull the caret to the end.
+    await act(() => composer()!.blur());
+    composer()!.setSelectionRange(2, 2);
+    await act(() => composer()!.focus());
+    expect(composer()!.selectionStart).toBe(2);
+  });
+
   it("a quick action fills the box and holds focus, so the click cannot fold it", async () => {
     await render();
     await act(() => line()!.focus());
