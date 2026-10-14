@@ -166,12 +166,11 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
   // fixture's captured process so finally also runs on a missing receipt.
   const deadline = setTimeout(() => server.kill("SIGTERM"), 150_000);
   try {
-    const pairingUrl = await new Promise<string>((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       let output = "";
       const receive = (chunk: Buffer) => {
         output += chunk.toString();
-        const match = /Pairing URL: (\S+)/.exec(output);
-        if (match) resolve(match[1]!);
+        if (output.includes("T3 Code server is ready.")) resolve();
       };
       server.stdout.on("data", receive);
       server.stderr.on("data", receive);
@@ -182,6 +181,27 @@ it("pairs with an isolated V2 server, launches a custom instance, reads and cont
             `Isolated server exited ${code}: ${output.replace(/(?:https?|wss?):\/\/\S+/g, "<url>").slice(-3000)}`,
           ),
         ),
+      );
+    });
+
+    // Unattended startup omits credentials; request pairing explicitly.
+    const pairingUrl = await new Promise<string>((resolve, reject) => {
+      NodeChildProcess.execFile(
+        process.execPath,
+        [bin, "pair", "--base-dir", home],
+        { cwd: repo, env: { ...process.env, T3CODE_HOME: home }, timeout: 30_000 },
+        (error, stdout) => {
+          if (error) {
+            reject(new Error("Explicit isolated-server pairing failed"));
+            return;
+          }
+          const match = /Pairing URL: (\S+)/.exec(stdout);
+          if (!match) {
+            reject(new Error("Explicit isolated-server pairing returned no URL"));
+            return;
+          }
+          resolve(match[1]!);
+        },
       );
     });
 

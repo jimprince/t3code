@@ -60,3 +60,9 @@ id = "derived-route-expiry-263"
 date = "2026-10-13"
 decided = "repair-existing-concern"
 rationale = "Nesting-derived routes retain inactive expiry metadata in the existing operator routing file when their source settles, archives, or completes. Reopening restores lifecycle expiry, while unsubscribe stays inactive for the parent/source pair. Explicit subscriptions remain independent. CLI and RPC inspection expose active counts and expired reasons; pending expired notices are superseded and delivery checks the current source."
+
+[[decision]]
+id = "explicit-isolated-server-pairing-334"
+date = "2026-10-14"
+decided = "adapt"
+rationale = "The CLI V2 integration fixture now waits for unattended readiness and invokes the explicit pair command against its temporary base directory. #334 intentionally suppresses startup credentials on redirected output. Preserve all real pairing, launch, worktree, run, request and notification assertions without exposing captured credentials in diagnostics."
