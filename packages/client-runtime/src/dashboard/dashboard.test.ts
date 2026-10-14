@@ -325,8 +325,8 @@ describe("older-server dashboard", () => {
     const task = snapshot.projects.flatMap((p) => p.tasks).find((t) => t.progress)!;
     expect(sampleProgress([task, task], [], now)).toHaveLength(1);
     const release = aggregate({
-      shells: [],
-      metadata: [],
+      shells: shell.threads,
+      metadata,
       issues: new Map(),
       sources: [],
       samples: [],
@@ -334,6 +334,7 @@ describe("older-server dashboard", () => {
       plans: [
         {
           head: "t3",
+          rootThreadId: root,
           title: "T3",
           updated_utc: now,
           workstreams: [
@@ -370,7 +371,9 @@ describe("older-server dashboard", () => {
       ],
     });
     expect(release.releases.map((r) => r.title)).toEqual(["Fresh finish"]);
-    expect(release.projects[0]?.tasks[0]?.closedAt).toBe(now);
+    expect(
+      release.projects.flatMap((p) => p.tasks).find((t) => t.title === "Fresh finish")?.closedAt,
+    ).toBe(now);
   });
   it("leaves a first-ever empty snapshot truthful", () =>
     expect(
@@ -595,6 +598,7 @@ it("fills issue and thread-plan next steps while preserving a supplied briefing 
     plans: [
       {
         head: "head",
+        rootThreadId: root,
         title: "Plan",
         updated_utc: now,
         workstreams: [
