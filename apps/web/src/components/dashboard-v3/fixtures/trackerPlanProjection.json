@@ -4,7 +4,7 @@
     "capturedAt": "2026-10-14T06:51:01.148256+00:00",
     "pipeline": "raw Gitea responses -> ProjectIssuesService -> client-runtime aggregate -> DashboardSnapshot schema encode/decode -> mergeDashboardSnapshots",
     "trim": "real run: only the workstreams of the epics 109,153,155,167,171,271,74 with their tasks, plus personal-checklist tasks 223/255 and four other unsorted tasks; all other tasks dropped after projection; counts in headers are those of the complete projection",
-    "generator": "T2b/gen/v3.ts (server vitest harness; not committed)",
+    "generator": "T2b/gen/v4.ts (server vitest harness; not committed)",
     "real": "t3 = brad/t3code-fork, localController = brad/local-controller, captured read-only 2026-10-14T06:51Z (T2a fixtures)",
     "constructed": "constructed raw Gitea issues through the same pipeline at 2026-10-14T10:00Z: epic with children, nested epic, personal checklist, no checklist, no checklist with a next: note, empty epic, date ETA 2026-10-20, epic with its own due date 2026-10-18 waiting for review, needs-review, conflicting checklist parents, truncated body (>64 KiB); constructedOmitted = compactSnapshot(3000 bytes); constructedUnbound = two issues plus a source:tracker briefing file bound to no root; constructedUnmatched = two unflagged briefing files that match no root (they keep separate head projects)",
     "amended": "Regenerated 2026-10-14 from the amended server feature/tracker-plan-server 16cba72b (contract v1.4); same T2a real captures (2026-10-14T06:51Z)"
@@ -1300,6 +1300,7 @@
               "issue:git.test/brad/repo#13",
               "issue:git.test/brad/repo#14",
               "issue:git.test/brad/repo#15",
+              "issue:git.test/brad/repo#18",
               "issue:git.test/brad/repo#17"
             ]
           }
@@ -1668,6 +1669,38 @@
             "hasChecklist": true
           },
           {
+            "id": "issue:git.test/brad/repo#18",
+            "sourceId": "gitea:git.test/brad/repo",
+            "title": "Re-run CI after the upstream sync",
+            "url": "https://git.test/brad/repo/issues/18",
+            "threadId": null,
+            "workstreamId": "project:pipeline-root:work",
+            "rank": null,
+            "createdAt": "2026-10-14T10:00:00.000Z",
+            "placedBy": null,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 0,
+              "total": 1,
+              "planVersion": "b52e58eef296145113bc77602f71482b08d95b41c8e8fea85b609805695cf3ab",
+              "sourceId": "gitea:git.test/brad/repo",
+              "confirmedAt": "2026-10-14T10:00:00.000Z",
+              "confirmationKnown": true
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T10:00:00.000Z"
+            },
+            "forecast": null,
+            "nextStep": "rerun CI after the upstream sync, then deploy 09:30Z",
+            "attentionIds": [],
+            "hasChecklist": false
+          },
+          {
             "membershipWarnings": ["truncated-body"],
             "id": "issue:git.test/brad/repo#17",
             "sourceId": "gitea:git.test/brad/repo",
@@ -1754,7 +1787,7 @@
         "parentId": null,
         "title": "Fixture project",
         "utility": false,
-        "omittedTaskCount": 11,
+        "omittedTaskCount": 12,
         "omittedWorkstreamCount": 5,
         "workstreams": [
           {

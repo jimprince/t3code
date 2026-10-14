@@ -400,8 +400,10 @@ function SubprojectRow({
         />
       </span>
       <span className="text-right">
-        {tasks.length === 0 ? (
+        {tasks.length === 0 && keys.length === 0 ? (
           <span className="text-muted-foreground/80">no open work</span>
+        ) : tasks.length === 0 ? (
+          <WaitingOnYou keys={keys} />
         ) : (
           <ProgressFigure roll={roll} keys={keys} />
         )}
@@ -416,15 +418,15 @@ function SubprojectRow({
  */
 export function PlanWarnings() {
   const { data } = useDashboardUi();
-  const warnings = data.planMigration ?? [];
+  // The same file read by two environments is one file.
+  const warnings = [
+    ...new Map((data.planMigration ?? []).map((warning) => [warning.fileName, warning])).values(),
+  ];
   if (warnings.length === 0) return null;
   return (
     <div className="pb-1">
       {warnings.map((warning) => (
-        <div
-          key={`${warning.environmentId ?? ""}|${warning.fileName}`}
-          className="py-0.5 text-muted-foreground"
-        >
+        <div key={warning.fileName} className="py-0.5 text-muted-foreground">
           {unboundBriefingLabel(warning)}
         </div>
       ))}
