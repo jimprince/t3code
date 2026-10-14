@@ -1,3 +1,4 @@
+import * as ShellSnapshotDiagnostics from "../diagnostics/ShellSnapshotDiagnostics.ts";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as SqlClient from "effect/sql/SqlClient";
 import { initializeMetadata, listMetadata } from "./MetadataStore.ts";
@@ -47,7 +48,9 @@ const make = Effect.gen(function* () {
         yield* Fiber.interrupt(timer);
         timer = undefined;
       }
-      const active = yield* threads.getShellSnapshot();
+      const active = yield* threads
+        .getShellSnapshot()
+        .pipe(ShellSnapshotDiagnostics.withCaller("WorkerLifecycle"));
       const all = [...active.threads, ...active.archivedThreads];
       const metadata = new Map((yield* listMetadata(sql)).map((row) => [row.threadId, row]));
       const children = Map.groupBy(all, (child) => metadata.get(child.id)?.parentThreadId ?? null);
