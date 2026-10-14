@@ -1,6 +1,6 @@
-Bottom: c6564424bc7aea550ba05a1a5cf05378f0ac9321
-Top:    2975c865b5e2bf3095080ad0c6fe2250e8268cbe
+Bottom: 4397af45bdeabc9705a0534f1bb6e6e4d8adcd4c
+Top:    462c4ef7b3d3a54f043ae118b984e638447105b0
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 11:45:34 +0000
+Date:   2026-10-14 11:50:59 +0000
 
 feat(threads): persist and inherit Harness purpose
