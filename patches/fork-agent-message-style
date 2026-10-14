@@ -1,6 +1,6 @@
-Bottom: 6e4505b0495a46fd985613652b4726acbd35fb53
-Top:    b07f5cd5e5b53247c6dfa201cdc7155609d89c74
+Bottom: b06ca1107ef1d1522398b826cb649a3f1133efa9
+Top:    8c4f30d3be101f62326566abebf346ecd955e9bd
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 11:56:05 +0000
+Date:   2026-10-14 11:56:58 +0000
 
 feat(ui): distinguish agent-sent messages with left-rule rows

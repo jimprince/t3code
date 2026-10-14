@@ -1,6 +1,6 @@
-Bottom: d4a2b0ae25fdb8b84cf1d5ec0fe0e9347d63467c
-Top:    47552696133e6fa9b81b1410a26a596698236596
+Bottom: 3b6943a25460517a2cfbf8ba68692d880d2c7004
+Top:    c0f44182dc8a9d3bd2d257dda4ca00847c27fdfc
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 11:56:05 +0000
+Date:   2026-10-14 11:56:58 +0000
 
 fix(web): Home design toggle shows A when the stored choice was Previous

@@ -1,7 +1,7 @@
-Bottom: 8729d6ed61fd5c61306e3879b3b7b232765a0848
-Top:    fd196e411c46ee6613bbc23f83424d00abe6bb47
+Bottom: a175852cc361a3d612b0c1efdb7b4ffa716c2a0c
+Top:    34dfce12c558dc8ec2b3ba328bd34242ba562373
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 11:42:25 +0000
+Date:   2026-10-14 11:56:58 +0000
 
 fix(server): guard starting-session reconcile with causal ownership
 
