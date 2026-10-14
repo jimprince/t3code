@@ -7,6 +7,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import * as ServerConfig from "../config.ts";
 
 import { issueId } from "./dashboard.logic.ts";
@@ -24,6 +25,7 @@ const StoredDashboard = Schema.Struct({
   samples: Schema.Array(ProgressSample),
   issues: Schema.optionalKey(Schema.Record(Schema.String, Schema.Array(ProjectIssue))),
   plans: Schema.optionalKey(Schema.Array(BriefingPlan)),
+  trackerRoots: Schema.optionalKey(Schema.Array(Schema.String)),
   rootRepositories: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
 });
 type StoredDashboard = typeof StoredDashboard.Type;
@@ -35,6 +37,7 @@ const CompactStoredDashboard = Schema.Struct({
   issueRepositories: Schema.Record(Schema.String, Schema.Array(ProjectIssue)),
   issueRoots: Schema.Record(Schema.String, Schema.Array(Schema.String)),
   plans: Schema.Array(BriefingPlan),
+  trackerRoots: Schema.optionalKey(Schema.Array(Schema.String)),
   rootRepositories: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
 });
 /** Keep one slim issue per repository and numeric progress tuples on disk. Old caches still read. */
@@ -48,9 +51,18 @@ export function compactStoredDashboard(value: StoredDashboard): typeof CompactSt
       const id = issueId(issue.host, issue.repository, issue.number);
       const old = rows.get(id);
       const { answer: _answer, ...summary } = issue;
+      const priorPlan = old?.plan;
+      const plan =
+        issue.plan &&
+        priorPlan &&
+        priorPlan.evidenceVersion === issue.plan.evidenceVersion &&
+        priorPlan.confirmedAt &&
+        Date.parse(priorPlan.confirmedAt) > Date.parse(issue.plan.confirmedAt ?? "1970-01-01")
+          ? { ...issue.plan, confirmedAt: priorPlan.confirmedAt }
+          : issue.plan;
       rows.set(id, {
         ...summary,
-        requestSource: null,
+        ...(plan ? { plan } : {}),
         assignees: [],
         comments: 0,
         latestComment: null,
@@ -71,6 +83,7 @@ export function compactStoredDashboard(value: StoredDashboard): typeof CompactSt
     issueRepositories: repositories,
     issueRoots: roots,
     plans: value.plans ?? [],
+    trackerRoots: value.trackerRoots ?? [],
     rootRepositories: value.rootRepositories ?? {},
   };
 }
@@ -96,6 +109,7 @@ export function expandStoredDashboard(value: typeof CompactStoredDashboard.Type)
       ]),
     ),
     plans: value.plans,
+    trackerRoots: value.trackerRoots ?? [],
     rootRepositories: value.rootRepositories ?? {},
   };
 }
@@ -138,3 +152,51 @@ const make = Effect.gen(function* () {
   return DashboardStore.of({ read, write });
 });
 export const layer = Layer.effect(DashboardStore, make);
+
+const StoredTrackerComment = Schema.Struct({
+  id: Schema.Number,
+  body: Schema.String,
+  createdAt: Schema.String,
+});
+const StoredRepositoryNotes = Schema.Struct({
+  scanStartedAt: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  cursor: Schema.NullOr(Schema.String),
+  maxUpdatedAt: Schema.NullOr(Schema.String),
+  page: Schema.Number,
+  notes: Schema.Record(Schema.String, StoredTrackerComment),
+  pending: Schema.Record(Schema.String, StoredTrackerComment),
+});
+export type StoredRepositoryNotes = typeof StoredRepositoryNotes.Type;
+const TrackerNotes = Schema.Record(Schema.String, StoredRepositoryNotes);
+const encodeTrackerNotes = Schema.encodeSync(Schema.fromJsonString(TrackerNotes));
+const noteLock = Semaphore.makeUnsafe(1);
+/** Progress notes have an independent cursor and survive dashboard refreshes and server restarts. */
+export const makeTrackerNoteStore = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const config = yield* ServerConfig.ServerConfig;
+  const filePath = path.join(config.stateDir, "dashboard-tracker-notes.json");
+  const read = fs.readFileString(filePath).pipe(
+    Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(TrackerNotes))),
+    Effect.orElseSucceed(() => ({}) as typeof TrackerNotes.Type),
+  );
+  const write = (key: string, value: StoredRepositoryNotes) =>
+    noteLock.withPermit(
+      Effect.gen(function* () {
+        const stored = yield* read;
+        if (
+          stored[key] &&
+          encodeTrackerNotes({ [key]: stored[key] }) === encodeTrackerNotes({ [key]: value })
+        )
+          return;
+        yield* writeFileStringAtomically({
+          filePath,
+          contents: encodeTrackerNotes({ ...stored, [key]: value }),
+        }).pipe(
+          Effect.provideService(FileSystem.FileSystem, fs),
+          Effect.provideService(Path.Path, path),
+        );
+      }),
+    );
+  return { read, write };
+});
