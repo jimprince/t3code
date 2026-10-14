@@ -1,3 +1,4 @@
+import * as ShellSnapshotDiagnostics from "../diagnostics/ShellSnapshotDiagnostics.ts";
 import {
   evaluateNotification,
   threadNotificationEvent,
@@ -781,7 +782,7 @@ export const make = Effect.gen(function* () {
     const environmentId = yield* serverEnvironment.getEnvironmentId;
     const [projectSnapshot, shellSnapshot] = yield* Effect.all([
       projects.snapshot,
-      threads.getShellSnapshot(),
+      threads.getShellSnapshot().pipe(ShellSnapshotDiagnostics.withCaller("AgentAwarenessRelay")),
     ]);
     const activeThreadIds = resolveAgentAwarenessRelayActiveThreadIds({
       environmentId,
