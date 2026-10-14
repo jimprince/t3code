@@ -1,6 +1,6 @@
-Bottom: d08922897ee9831af6ddfc91b51247a06770062d
-Top:    b2b0e50fec5bffac94c5392b8681bd2c87a295e6
+Bottom: a9812cec1d84ccb4a59a0469f23ccf2d377a08fc
+Top:    1c9527bcc974d93313be5db0e5146915a39bb4f8
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 12:21:03 +0000
+Date:   2026-10-14 12:26:07 +0000
 
 feat(server): pin Harness checks to the top of the checks list
