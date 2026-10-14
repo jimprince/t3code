@@ -1,3 +1,4 @@
+import * as ShellSnapshotDiagnostics from "../diagnostics/ShellSnapshotDiagnostics.ts";
 import {
   type OrchestrationV2ThreadShell,
   type ThreadSubprojectMode,
@@ -223,6 +224,7 @@ export const make = Effect.gen(function* () {
         (yield* Effect.gen(function* () {
           const snapshot = yield* engine
             .getShellSnapshot()
+            .pipe(ShellSnapshotDiagnostics.withCaller("ProjectIssuesService"))
             .pipe(Effect.mapError(() => fail("Could not read threads.")));
           const parents = new Map(
             (yield* listMetadata(sql).pipe(
