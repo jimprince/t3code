@@ -23,7 +23,7 @@ export class ShellSnapshotDiagnostics extends Context.Service<
   }
 >()("t3/diagnostics/ShellSnapshotDiagnostics") {}
 
-export const make = Effect.sync(() => {
+const make = Effect.sync(() => {
   const counters = new Map<string, ShellSnapshotCounts>();
   const record = (kind: keyof ShellSnapshotCounts) =>
     Effect.gen(function* () {
