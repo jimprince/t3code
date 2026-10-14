@@ -9,6 +9,10 @@ import { ThreadPlanLine } from "./ThreadPlanLine";
 import {
   barSegments,
   formatClock,
+  formatEta,
+  hasStepList,
+  knownConfirmation,
+  planNotes,
   rollup,
   type Rollup,
   type ScopedProject,
@@ -35,6 +39,7 @@ export function ProgressBar({
   tone = "default",
   unknown = false,
   small = false,
+  unit = "steps",
 }: {
   readonly steps: { readonly done: number; readonly total: number } | null;
   readonly gained: number | null;
@@ -42,6 +47,8 @@ export function ProgressBar({
   readonly tone?: BarTone;
   readonly unknown?: boolean;
   readonly small?: boolean;
+  /** What the bar counts: a task's steps, or a workstream's child tasks. */
+  readonly unit?: "steps" | "tasks";
 }) {
   const height = small ? "h-[5px]" : "h-[7px]";
   if (unknown)
@@ -63,7 +70,7 @@ export function ProgressBar({
   return (
     <span
       role="img"
-      aria-label={`${steps.done} of ${steps.total} steps`}
+      aria-label={`${steps.done} of ${steps.total} ${unit}`}
       className={cn("flex min-w-[60px] overflow-hidden rounded-full bg-muted", height)}
     >
       <i className={cn("block h-full", solid)} style={{ width: `${bar.done}%` }} />
@@ -170,11 +177,14 @@ export function ProgressFigure({
   total,
   keys = NO_KEYS,
   extra,
+  unit,
 }: {
   readonly roll: Rollup;
   readonly total?: number | undefined;
   readonly keys?: ReadonlyArray<string>;
   readonly extra?: ReactNode;
+  /** Names the unit after the figure ("10/20 tasks") when it is not the task steps. */
+  readonly unit?: string;
 }) {
   const { data, now } = useDashboardUi();
   const steps = roll.steps;
@@ -188,13 +198,14 @@ export function ProgressFigure({
       {steps ? (
         <>
           {steps.done}/{total ?? steps.total}
+          {unit ? ` ${unit}` : ""}
           {roll.gained ? <span className="text-info"> +{roll.gained}</span> : null}
         </>
       ) : null}
       {roll.ownerEta ? (
         <span className="text-muted-foreground">
           {" "}
-          · owner ETA {formatClock(roll.ownerEta, now)}
+          · owner ETA {formatEta(roll.ownerEta, roll.ownerEtaDateOnly, now)}
         </span>
       ) : roll.projectedDone !== null && steps && roll.paceBasis ? (
         <span className="text-muted-foreground">
@@ -246,7 +257,7 @@ export function TaskRow({
   readonly task: DashboardTask;
 }) {
   const ui = useDashboardUi();
-  const stale = useTaskSourceStale(task);
+  const stale = useTaskSourceStale(task) && hasStepList(task);
   const keys = ui.decisionKeysFor(scoped, task);
   const roll = rollup([task]);
   const idle = roll.idle > 0;
@@ -283,7 +294,7 @@ export function TaskRow({
         {ref ? <span className="ml-1 text-muted-foreground/70">#{ref}</span> : null}
       </button>
       <span className="order-last col-span-3 pl-6 @xl/dash:order-none @xl/dash:col-span-1 @xl/dash:pl-0">
-        {task.progress && !stale ? (
+        {hasStepList(task) && !stale ? (
           <ProgressBar
             small
             steps={{ done: task.progress.done, total: task.progress.total }}
@@ -291,13 +302,21 @@ export function TaskRow({
             projectedDone={roll.projectedDone}
             tone={tone}
           />
-        ) : stale ? (
+        ) : stale && hasStepList(task) ? (
           <ProgressBar small steps={null} gained={null} projectedDone={null} unknown />
         ) : null}
       </span>
       <span className="text-right @xl/dash:col-auto">
         <TaskFigure scoped={scoped} task={task} roll={roll} keys={keys} stale={stale} idle={idle} />
       </span>
+      {planNotes(task.membershipWarnings).map((line) => (
+        <span
+          key={line}
+          className="order-last col-span-3 min-w-0 pl-6 text-muted-foreground @xl/dash:order-none @xl/dash:col-span-3 @xl/dash:col-start-2 @xl/dash:pl-0"
+        >
+          {line}
+        </span>
+      ))}
       {task.threadId && !done ? (
         <ThreadPlanLine
           environmentId={scoped.environmentId}
@@ -325,14 +344,44 @@ function TaskFigure({
   readonly idle: boolean;
 }) {
   const { now } = useDashboardUi();
-  if (task.status === "done")
+  if (task.status === "done") {
+    const at = task.closedAt ?? knownConfirmation(task.progress);
     return (
       <span className="text-success whitespace-nowrap">
-        done{task.progress ? ` ${formatClock(task.progress.confirmedAt, now)}` : ""}
+        done{at ? ` ${formatClock(at, now)}` : ""}
       </span>
     );
+  }
   if (stale && task.progress)
-    return <UnknownValue since={task.progress.confirmedAt}>progress unknown</UnknownValue>;
+    return (
+      <span className="inline-block text-right @max-[90rem]/dash:max-w-[14rem]">
+        <UnknownValue since={knownConfirmation(task.progress)}>progress unknown</UnknownValue>
+      </span>
+    );
+  // A tracker task with no checklist has nothing to measure: say so rather than draw 0 of 1. Its
+  // latest note's next action (the contract's home for "deploy 09:30Z") shows in place of the words.
+  if (task.progress && task.hasChecklist === false)
+    return (
+      <span className="inline-block text-right text-muted-foreground/80 max-w-[12rem] @3xl/dash:max-w-[22rem]">
+        {task.nextStep ? (
+          <span className="block truncate">next: {task.nextStep}</span>
+        ) : (
+          <span className="whitespace-nowrap">no checklist yet</span>
+        )}
+        {roll.ownerEta ? (
+          <span className="whitespace-nowrap">
+            {" "}
+            · owner ETA {formatEta(roll.ownerEta, roll.ownerEtaDateOnly, now)}
+          </span>
+        ) : null}
+        {keys.length > 0 ? (
+          <>
+            {" "}
+            <WaitingOnYou keys={keys} />
+          </>
+        ) : null}
+      </span>
+    );
   if (!task.progress)
     return (
       <span className="whitespace-nowrap text-muted-foreground/80">

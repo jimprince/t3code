@@ -1,0 +1,2149 @@
+{
+  "provenance": {
+    "source": "T2a real tracker fixtures (read-only API capture)",
+    "capturedAt": "2026-10-14T06:51:01.148256+00:00",
+    "pipeline": "raw Gitea responses -> ProjectIssuesService -> client-runtime aggregate -> DashboardSnapshot schema encode/decode -> mergeDashboardSnapshots",
+    "trim": "real run: only the workstreams of the epics 109,153,155,167,171,271,74 with their tasks, plus personal-checklist tasks 223/255 and four other unsorted tasks; all other tasks dropped after projection; counts in headers are those of the complete projection",
+    "generator": "T2b/gen/v3.ts (server vitest harness; not committed)",
+    "real": "t3 = brad/t3code-fork, localController = brad/local-controller, captured read-only 2026-10-14T06:51Z (T2a fixtures)",
+    "constructed": "constructed raw Gitea issues through the same pipeline at 2026-10-14T10:00Z: epic with children, nested epic, personal checklist, no checklist, no checklist with a next: note, empty epic, date ETA 2026-10-20, epic with its own due date 2026-10-18 waiting for review, needs-review, conflicting checklist parents, truncated body (>64 KiB); constructedOmitted = compactSnapshot(3000 bytes); constructedUnbound = two issues plus a source:tracker briefing file bound to no root; constructedUnmatched = two unflagged briefing files that match no root (they keep separate head projects)",
+    "amended": "Regenerated 2026-10-14 from the amended server feature/tracker-plan-server 16cba72b (contract v1.4); same T2a real captures (2026-10-14T06:51Z)"
+  },
+  "t3": {
+    "revision": 0,
+    "asOf": "2026-10-14T06:51:01.148Z",
+    "projects": [
+      {
+        "planSource": "tracker",
+        "id": "project:pipeline-root",
+        "rootThreadId": "pipeline-root",
+        "parentId": null,
+        "title": "T3 Orchestrator",
+        "utility": false,
+        "omittedTaskCount": 169,
+        "workstreams": [
+          {
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/271",
+            "threadId": null,
+            "progress": {
+              "done": 0,
+              "total": 2,
+              "planVersion": "08fc91881376a3566429a41740501649b47f8b94108bf319a6bd4cea97f576f7",
+              "sourceId": "gitea:git.test/brad/t3code-fork",
+              "confirmedAt": "2026-10-13T23:29:06-07:00",
+              "confirmationKnown": true
+            },
+            "childIssueIds": [
+              "issue:git.test/brad/t3code-fork#309",
+              "issue:git.test/brad/t3code-fork#308"
+            ],
+            "unknownChildIds": [],
+            "parentWorkstreamId": null,
+            "rank": null,
+            "createdAt": "2026-10-12T21:11:57-07:00",
+            "placedBy": null,
+            "id": "issue:git.test/brad/t3code-fork#271",
+            "title": "Make the dev fork update button rebuild and relaunch the app",
+            "taskIds": [
+              "issue:git.test/brad/t3code-fork#309",
+              "issue:git.test/brad/t3code-fork#308"
+            ]
+          },
+          {
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/171",
+            "threadId": null,
+            "progress": {
+              "done": 5,
+              "total": 6,
+              "planVersion": "66f444399a1f3af1f4cc3823dbf567628ff980a1a473321836f4a8e41038eae0",
+              "sourceId": "gitea:git.test/brad/t3code-fork",
+              "confirmedAt": "2026-10-13T23:26:25-07:00",
+              "confirmationKnown": true
+            },
+            "childIssueIds": [
+              "issue:git.test/brad/t3code-fork#210",
+              "issue:git.test/brad/t3code-fork#192",
+              "issue:git.test/brad/t3code-fork#180",
+              "issue:git.test/brad/t3code-fork#174",
+              "issue:git.test/brad/t3code-fork#169",
+              "issue:git.test/brad/t3code-fork#166"
+            ],
+            "unknownChildIds": [],
+            "parentWorkstreamId": "issue:git.test/brad/t3code-fork#155",
+            "rank": null,
+            "createdAt": "2026-10-06T09:59:38-07:00",
+            "placedBy": null,
+            "id": "issue:git.test/brad/t3code-fork#171",
+            "title": "Decisions: everything that needs Brad becomes a decision card (For review, thread questions, approvals)",
+            "taskIds": ["issue:git.test/brad/t3code-fork#210"]
+          },
+          {
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/155",
+            "threadId": null,
+            "progress": {
+              "done": 10,
+              "total": 20,
+              "planVersion": "5cedbb84d9b01c38dfd30156009870e8dac9ab538a4f594bc80434a53205c59c",
+              "sourceId": "gitea:git.test/brad/t3code-fork",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "childIssueIds": [
+              "issue:git.test/brad/t3code-fork#319",
+              "issue:git.test/brad/t3code-fork#294",
+              "issue:git.test/brad/t3code-fork#258",
+              "issue:git.test/brad/t3code-fork#242",
+              "issue:git.test/brad/t3code-fork#226",
+              "issue:git.test/brad/t3code-fork#179",
+              "issue:git.test/brad/t3code-fork#171",
+              "issue:git.test/brad/t3code-fork#170",
+              "issue:git.test/brad/t3code-fork#153",
+              "issue:git.test/brad/t3code-fork#114",
+              "issue:git.test/brad/t3code-fork#193",
+              "issue:git.test/brad/t3code-fork#190",
+              "issue:git.test/brad/t3code-fork#184",
+              "issue:git.test/brad/t3code-fork#183",
+              "issue:git.test/brad/t3code-fork#165",
+              "issue:git.test/brad/t3code-fork#151",
+              "issue:git.test/brad/t3code-fork#149",
+              "issue:git.test/brad/t3code-fork#148",
+              "issue:git.test/brad/t3code-fork#147",
+              "issue:git.test/brad/t3code-fork#145"
+            ],
+            "unknownChildIds": [],
+            "parentWorkstreamId": null,
+            "rank": null,
+            "createdAt": "2026-10-05T20:28:52-07:00",
+            "placedBy": null,
+            "id": "issue:git.test/brad/t3code-fork#155",
+            "title": "Dashboard roadmap",
+            "taskIds": [
+              "issue:git.test/brad/t3code-fork#242",
+              "issue:git.test/brad/t3code-fork#171",
+              "issue:git.test/brad/t3code-fork#319",
+              "issue:git.test/brad/t3code-fork#294",
+              "issue:git.test/brad/t3code-fork#258",
+              "issue:git.test/brad/t3code-fork#226",
+              "issue:git.test/brad/t3code-fork#114",
+              "issue:git.test/brad/t3code-fork#179",
+              "issue:git.test/brad/t3code-fork#170"
+            ]
+          },
+          {
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/153",
+            "threadId": null,
+            "progress": {
+              "done": 4,
+              "total": 5,
+              "planVersion": "aa613d9102517cfc29828d6fd0ff5a3911939448fa309cf0bc24e757aabdcd97",
+              "sourceId": "gitea:git.test/brad/t3code-fork",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "childIssueIds": [
+              "issue:git.test/brad/t3code-fork#306",
+              "issue:git.test/brad/t3code-fork#159",
+              "issue:git.test/brad/t3code-fork#158",
+              "issue:git.test/brad/t3code-fork#157",
+              "issue:git.test/brad/t3code-fork#156"
+            ],
+            "unknownChildIds": [],
+            "parentWorkstreamId": "issue:git.test/brad/t3code-fork#155",
+            "rank": null,
+            "createdAt": "2026-10-05T20:09:29-07:00",
+            "placedBy": null,
+            "id": "issue:git.test/brad/t3code-fork#153",
+            "title": "Let projects have subprojects",
+            "taskIds": ["issue:git.test/brad/t3code-fork#306"]
+          },
+          {
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/109",
+            "threadId": null,
+            "progress": {
+              "done": 6,
+              "total": 6,
+              "planVersion": "04c0adce98fdb47cea6f8ec6afd2682e424b8829ba2b0630474ee8f23fec3a69",
+              "sourceId": "gitea:git.test/brad/t3code-fork",
+              "confirmedAt": "2026-10-06T18:04:37-07:00",
+              "confirmationKnown": true
+            },
+            "childIssueIds": [
+              "issue:git.test/brad/t3code-fork#132",
+              "issue:git.test/brad/t3code-fork#131",
+              "issue:git.test/brad/t3code-fork#130",
+              "issue:git.test/brad/t3code-fork#129",
+              "issue:git.test/brad/t3code-fork#128",
+              "issue:git.test/brad/t3code-fork#127"
+            ],
+            "unknownChildIds": [],
+            "parentWorkstreamId": null,
+            "rank": null,
+            "createdAt": "2026-10-04T23:38:41-07:00",
+            "placedBy": null,
+            "id": "issue:git.test/brad/t3code-fork#109",
+            "title": "Port fork to upstream V2",
+            "taskIds": []
+          },
+          {
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/74",
+            "threadId": null,
+            "progress": {
+              "done": 0,
+              "total": 1,
+              "planVersion": "74ec7269d81a4d05a7e3ddc2d9693a1d8e7b9c1c2189aff9ee8f737aeabed4e9",
+              "sourceId": "gitea:git.test/brad/t3code-fork",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "childIssueIds": ["issue:git.test/brad/t3code-fork#189"],
+            "unknownChildIds": [],
+            "parentWorkstreamId": null,
+            "rank": null,
+            "createdAt": "2026-10-04T22:13:00-07:00",
+            "placedBy": null,
+            "id": "issue:git.test/brad/t3code-fork#74",
+            "title": "Configure dev-VM T3 Gitea connection and verify live issue linking",
+            "taskIds": ["issue:git.test/brad/t3code-fork#189"]
+          },
+          {
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/167",
+            "threadId": null,
+            "progress": {
+              "done": 8,
+              "total": 9,
+              "planVersion": "7537ffda9e319e8bcc2274f25a1298b2a67e0c36ce911cb8dc03e0a685abe38f",
+              "sourceId": "gitea:git.test/brad/t3code-fork",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "childIssueIds": [
+              "issue:git.test/brad/t3code-fork#188",
+              "issue:git.test/brad/t3code-fork#187",
+              "issue:git.test/brad/t3code-fork#186",
+              "issue:git.test/brad/t3code-fork#185",
+              "issue:git.test/brad/t3code-fork#182",
+              "issue:git.test/brad/t3code-fork#178",
+              "issue:git.test/brad/t3code-fork#175",
+              "issue:git.test/brad/t3code-fork#173",
+              "issue:git.test/brad/t3code-fork#172"
+            ],
+            "unknownChildIds": [],
+            "parentWorkstreamId": null,
+            "rank": null,
+            "createdAt": "2026-10-06T08:57:54-07:00",
+            "placedBy": null,
+            "id": "issue:git.test/brad/t3code-fork#167",
+            "title": "Workstreams: collapsible, agents per part, and progress that keeps up",
+            "taskIds": ["issue:git.test/brad/t3code-fork#188"]
+          },
+          {
+            "url": null,
+            "threadId": null,
+            "progress": null,
+            "childIssueIds": [],
+            "unknownChildIds": [],
+            "parentWorkstreamId": null,
+            "rank": null,
+            "createdAt": "2026-06-20T00:00:00.000Z",
+            "placedBy": null,
+            "id": "project:pipeline-root:work",
+            "title": "Unsorted",
+            "taskIds": [
+              "issue:git.test/brad/t3code-fork#271",
+              "issue:git.test/brad/t3code-fork#255",
+              "issue:git.test/brad/t3code-fork#284",
+              "issue:git.test/brad/t3code-fork#310",
+              "issue:git.test/brad/t3code-fork#223"
+            ]
+          }
+        ],
+        "tasks": [
+          {
+            "id": "issue:git.test/brad/t3code-fork#271",
+            "sourceId": "gitea:git.test/brad/t3code-fork",
+            "title": "Make the dev fork update button rebuild and relaunch the app",
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/271",
+            "threadId": null,
+            "workstreamId": "project:pipeline-root:work",
+            "rank": null,
+            "createdAt": "2026-10-12T21:11:57-07:00",
+            "placedBy": null,
+            "closedAt": null,
+            "status": "blocked",
+            "progress": null,
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T06:51:01.148Z"
+            },
+            "forecast": {
+              "eta": "2026-10-14",
+              "precision": "date",
+              "basis": "owner",
+              "sourceId": "gitea:git.test/brad/t3code-fork"
+            },
+            "nextStep": "Brad can click Update: normal rebuild to dev 7dd5 (CoS row + Discuss). Background pre-build failed on the Mac (slow install in the spare slot); one recovery install authorized; fast-switch claim still unproven",
+            "attentionIds": ["issue:git.test/brad/t3code-fork#271:attention"],
+            "hasChecklist": false
+          },
+          {
+            "id": "issue:git.test/brad/t3code-fork#242",
+            "sourceId": "gitea:git.test/brad/t3code-fork",
+            "title": "Fix duplicate instances in the projects view",
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/242",
+            "threadId": null,
+            "workstreamId": "issue:git.test/brad/t3code-fork#155",
+            "rank": null,
+            "createdAt": "2026-10-09T20:13:49-07:00",
+            "placedBy": null,
+            "partOf": 155,
+            "closedAt": null,
+            "status": "blocked",
+            "progress": {
+              "done": 2,
+              "total": 3,
+              "planVersion": "8b7cc44492beb1d0cc40c7637978ae803b3b1ad42e0679f062ea3616e04b388c",
+              "sourceId": "gitea:git.test/brad/t3code-fork",
+              "confirmedAt": "2026-10-13T23:26:22-07:00",
+              "confirmationKnown": true
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T06:51:01.148Z"
+            },
+            "forecast": null,
+            "nextStep": "Waiting for Brad to try it on his live app",
+            "attentionIds": ["issue:git.test/brad/t3code-fork#242:attention"],
+            "hasChecklist": true
+          },
+          {
+            "id": "issue:git.test/brad/t3code-fork#171",
+            "sourceId": "gitea:git.test/brad/t3code-fork",
+            "title": "Decisions: everything that needs Brad becomes a decision card (For review, thread questions, approvals)",
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/171",
+            "threadId": null,
+            "workstreamId": "issue:git.test/brad/t3code-fork#155",
+            "rank": null,
+            "createdAt": "2026-10-06T09:59:38-07:00",
+            "placedBy": null,
+            "partOf": 155,
+            "closedAt": null,
+            "status": "blocked",
+            "progress": null,
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T06:51:01.148Z"
+            },
+            "forecast": null,
+            "nextStep": "Waiting for Brad to try it on his live app",
+            "attentionIds": ["issue:git.test/brad/t3code-fork#171:attention"],
+            "hasChecklist": true
+          },
+          {
+            "id": "issue:git.test/brad/t3code-fork#255",
+            "sourceId": "gitea:git.test/brad/t3code-fork",
+            "title": "Physical hosting migration of a thread between hosts (follow-up of #236)",
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/255",
+            "threadId": null,
+            "workstreamId": "project:pipeline-root:work",
+            "rank": null,
+            "createdAt": "2026-10-10T09:28:02-07:00",
+            "placedBy": null,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 0,
+              "total": 4,
+              "planVersion": "3ad1a707068e8a61a1025e2562957bd4a9331189cdf0759c94600dde39f42d2d",
+              "sourceId": "gitea:git.test/brad/t3code-fork",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T06:51:01.148Z"
+            },
+            "forecast": null,
+            "nextStep": "A thread\u2019s work continues on another host (VM to Mac and Mac to VM).",
+            "attentionIds": [],
+            "hasChecklist": true
+          },
+          {
+            "id": "issue:git.test/brad/t3code-fork#319",
+            "sourceId": "gitea:git.test/brad/t3code-fork",
+            "title": "Chief of Staff navigation and conversation tray",
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/319",
+            "threadId": null,
+            "workstreamId": "issue:git.test/brad/t3code-fork#155",
+            "rank": null,
+            "createdAt": "2026-10-13T23:26:19-07:00",
+            "placedBy": null,
+            "partOf": 155,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 0,
+              "total": 4,
+              "planVersion": "b95e6ec4bb3fc608ceaba80228c9ca6f4b4432cf7bcea672a734241b2a0b8abf",
+              "sourceId": "gitea:git.test/brad/t3code-fork",
+              "confirmedAt": "2026-10-13T23:26:20-07:00",
+              "confirmationKnown": true
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T06:51:01.148Z"
+            },
+            "forecast": null,
+            "nextStep": "Design mocks for Brad to pick",
+            "attentionIds": [],
+            "hasChecklist": true
+          },
+          {
+            "id": "issue:git.test/brad/t3code-fork#294",
+            "sourceId": "gitea:git.test/brad/t3code-fork",
+            "title": "Remove the A/B/C/Previous dashboard picker",
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/294",
+            "threadId": null,
+            "workstreamId": "issue:git.test/brad/t3code-fork#155",
+            "rank": null,
+            "createdAt": "2026-10-13T19:30:36-07:00",
+            "placedBy": null,
+            "partOf": 155,
+            "closedAt": null,
+            "status": "blocked",
+            "progress": {
+              "done": 0,
+              "total": 3,
+              "planVersion": "6f79d7b5b3432200cfd8f6abe5122e558e82eae9ec4a58eefac9d96cf4c2ee84",
+              "sourceId": "gitea:git.test/brad/t3code-fork",
+              "confirmedAt": "2026-10-13T23:26:27-07:00",
+              "confirmationKnown": true
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T06:51:01.148Z"
+            },
+            "forecast": null,
+            "nextStep": "Product c7da3448 building one commit on dev eba969f9; then dev ff and Brad clicks Update",
+            "attentionIds": ["issue:git.test/brad/t3code-fork#294:attention"],
+            "hasChecklist": true
+          },
+          {
+            "id": "issue:git.test/brad/t3code-fork#258",
+            "sourceId": "gitea:git.test/brad/t3code-fork",
+            "title": "feat(web): Harness tab beside Projects",
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/258",
+            "threadId": null,
+            "workstreamId": "issue:git.test/brad/t3code-fork#155",
+            "rank": null,
+            "createdAt": "2026-10-10T13:14:34-07:00",
+            "placedBy": null,
+            "partOf": 155,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 4,
+              "total": 5,
+              "planVersion": "38199ca177e45778baaceac96bdf9dc2b1c73ae3b3fd60a1d300eb684419e80e",
+              "sourceId": "gitea:git.test/brad/t3code-fork",
+              "confirmedAt": "2026-10-13T23:26:14-07:00",
+              "confirmationKnown": true
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T06:51:01.148Z"
+            },
+            "forecast": {
+              "eta": "2026-10-14",
+              "precision": "date",
+              "basis": "owner",
+              "sourceId": "gitea:git.test/brad/t3code-fork"
+            },
+            "nextStep": "All Harness improvements on live (check page, feeds group, filter, pins, routine kind, Projects fix); installed with the Oct 14 09:00Z catch-up publish; auditor pin after install",
+            "attentionIds": [],
+            "hasChecklist": true
+          },
+          {
+            "id": "issue:git.test/brad/t3code-fork#226",
+            "sourceId": "gitea:git.test/brad/t3code-fork",
+            "title": "Projects view lists every delegate_task worker as a top-level row (should nest under the parent project; mock B #153)",
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/226",
+            "threadId": null,
+            "workstreamId": "issue:git.test/brad/t3code-fork#155",
+            "rank": null,
+            "createdAt": "2026-10-08T18:22:02-07:00",
+            "placedBy": null,
+            "partOf": 155,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 0,
+              "total": 1,
+              "planVersion": "9ca6a5c91d678fee7484dda25a5631ee1e790f6e9ba349f622aa711e14a37e9d",
+              "sourceId": "gitea:git.test/brad/t3code-fork",
+              "confirmedAt": "2026-10-13T23:26:16-07:00",
+              "confirmationKnown": true
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T06:51:01.148Z"
+            },
+            "forecast": null,
+            "nextStep": "Built by Product: eba969f9 on dev (ff 01:4xZ Oct 14). Real-app check on Brad's Mac after his manual Update (kit owner 0ae36cf1, CDP read-only); fold into fork-subprojects-ui + fork-subprojects-mobile-main in the Oct 15 integration",
+            "attentionIds": [],
+            "hasChecklist": true
+          },
+          {
+            "id": "issue:git.test/brad/t3code-fork#284",
+            "sourceId": "gitea:git.test/brad/t3code-fork",
+            "title": "Dashboard: active threads' plan progress and resume from plan",
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/284",
+            "threadId": null,
+            "workstreamId": "project:pipeline-root:work",
+            "rank": null,
+            "createdAt": "2026-10-13T12:18:42-07:00",
+            "placedBy": null,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 0,
+              "total": 1,
+              "planVersion": "b52e58eef296145113bc77602f71482b08d95b41c8e8fea85b609805695cf3ab",
+              "sourceId": "gitea:git.test/brad/t3code-fork",
+              "confirmedAt": "2026-10-13T22:34:03-07:00",
+              "confirmationKnown": true
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T06:51:01.148Z"
+            },
+            "forecast": null,
+            "nextStep": null,
+            "attentionIds": [],
+            "hasChecklist": false
+          },
+          {
+            "id": "issue:git.test/brad/t3code-fork#310",
+            "sourceId": "gitea:git.test/brad/t3code-fork",
+            "title": "Follow-ups from the plan-progress (#284) and launch-nesting (#301) reviews",
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/310",
+            "threadId": null,
+            "workstreamId": "project:pipeline-root:work",
+            "rank": null,
+            "createdAt": "2026-10-13T22:21:09-07:00",
+            "placedBy": null,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 0,
+              "total": 1,
+              "planVersion": "b52e58eef296145113bc77602f71482b08d95b41c8e8fea85b609805695cf3ab",
+              "sourceId": "gitea:git.test/brad/t3code-fork",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T06:51:01.148Z"
+            },
+            "forecast": null,
+            "nextStep": null,
+            "attentionIds": [],
+            "hasChecklist": false
+          },
+          {
+            "id": "issue:git.test/brad/t3code-fork#309",
+            "sourceId": "gitea:git.test/brad/t3code-fork",
+            "title": "Update switches to an already-prepared build instead of building on click",
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/309",
+            "threadId": null,
+            "workstreamId": "issue:git.test/brad/t3code-fork#271",
+            "rank": null,
+            "createdAt": "2026-10-13T20:24:45-07:00",
+            "placedBy": null,
+            "partOf": 271,
+            "closedAt": null,
+            "status": "working",
+            "progress": {
+              "done": 0,
+              "total": 1,
+              "planVersion": "b52e58eef296145113bc77602f71482b08d95b41c8e8fea85b609805695cf3ab",
+              "sourceId": "gitea:git.test/brad/t3code-fork",
+              "confirmedAt": "2026-10-13T20:24:57-07:00",
+              "confirmationKnown": true
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T06:51:01.148Z"
+            },
+            "forecast": null,
+            "nextStep": null,
+            "attentionIds": [],
+            "hasChecklist": false
+          },
+          {
+            "id": "issue:git.test/brad/t3code-fork#308",
+            "sourceId": "gitea:git.test/brad/t3code-fork",
+            "title": "Show live status while Update builds, so building is distinguishable from frozen",
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/308",
+            "threadId": null,
+            "workstreamId": "issue:git.test/brad/t3code-fork#271",
+            "rank": null,
+            "createdAt": "2026-10-13T20:24:39-07:00",
+            "placedBy": null,
+            "partOf": 271,
+            "closedAt": null,
+            "status": "working",
+            "progress": {
+              "done": 0,
+              "total": 1,
+              "planVersion": "b52e58eef296145113bc77602f71482b08d95b41c8e8fea85b609805695cf3ab",
+              "sourceId": "gitea:git.test/brad/t3code-fork",
+              "confirmedAt": "2026-10-13T20:24:53-07:00",
+              "confirmationKnown": true
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T06:51:01.148Z"
+            },
+            "forecast": null,
+            "nextStep": null,
+            "attentionIds": [],
+            "hasChecklist": false
+          },
+          {
+            "id": "issue:git.test/brad/t3code-fork#306",
+            "sourceId": "gitea:git.test/brad/t3code-fork",
+            "title": "Finish and prove the archive of 11 empty workspaces and old caf05bbc",
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/306",
+            "threadId": null,
+            "workstreamId": "issue:git.test/brad/t3code-fork#153",
+            "rank": null,
+            "createdAt": "2026-10-13T20:24:29-07:00",
+            "placedBy": null,
+            "partOf": 153,
+            "closedAt": null,
+            "status": "working",
+            "progress": {
+              "done": 0,
+              "total": 1,
+              "planVersion": "b52e58eef296145113bc77602f71482b08d95b41c8e8fea85b609805695cf3ab",
+              "sourceId": "gitea:git.test/brad/t3code-fork",
+              "confirmedAt": "2026-10-13T20:24:49-07:00",
+              "confirmationKnown": true
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T06:51:01.148Z"
+            },
+            "forecast": null,
+            "nextStep": null,
+            "attentionIds": [],
+            "hasChecklist": false
+          },
+          {
+            "id": "issue:git.test/brad/t3code-fork#114",
+            "sourceId": "gitea:git.test/brad/t3code-fork",
+            "title": "Project page photo log: versioned screenshots per release with a comparison page",
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/114",
+            "threadId": null,
+            "workstreamId": "issue:git.test/brad/t3code-fork#155",
+            "rank": null,
+            "createdAt": "2026-10-04T23:38:47-07:00",
+            "placedBy": null,
+            "partOf": 155,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 0,
+              "total": 1,
+              "planVersion": "b52e58eef296145113bc77602f71482b08d95b41c8e8fea85b609805695cf3ab",
+              "sourceId": "gitea:git.test/brad/t3code-fork",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T06:51:01.148Z"
+            },
+            "forecast": null,
+            "nextStep": null,
+            "attentionIds": [],
+            "hasChecklist": false
+          },
+          {
+            "id": "issue:git.test/brad/t3code-fork#223",
+            "sourceId": "gitea:git.test/brad/t3code-fork",
+            "title": "fork.7: update/reconnect and held-queue follow-up from fork.6",
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/223",
+            "threadId": null,
+            "workstreamId": "project:pipeline-root:work",
+            "rank": null,
+            "createdAt": "2026-10-08T17:42:37-07:00",
+            "placedBy": null,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 1,
+              "total": 13,
+              "planVersion": "72da2c67d77f0f161eee7fb0a18959bbbc81c277ad49e2514606a748dfe1557d",
+              "sourceId": "gitea:git.test/brad/t3code-fork",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T06:51:01.148Z"
+            },
+            "forecast": null,
+            "nextStep": "S1: reflect rolled-back/failed ready.updateOutcome as update failure, retain recovery guidance, and do not auto-clear as success.",
+            "attentionIds": [],
+            "hasChecklist": true
+          },
+          {
+            "id": "issue:git.test/brad/t3code-fork#210",
+            "sourceId": "gitea:git.test/brad/t3code-fork",
+            "title": "Decisions feed: drop or tooltip the grey helper lines under card actions",
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/210",
+            "threadId": null,
+            "workstreamId": "issue:git.test/brad/t3code-fork#171",
+            "rank": null,
+            "createdAt": "2026-10-08T00:58:39-07:00",
+            "placedBy": null,
+            "partOf": 171,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 0,
+              "total": 1,
+              "planVersion": "b52e58eef296145113bc77602f71482b08d95b41c8e8fea85b609805695cf3ab",
+              "sourceId": "gitea:git.test/brad/t3code-fork",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T06:51:01.148Z"
+            },
+            "forecast": null,
+            "nextStep": null,
+            "attentionIds": [],
+            "hasChecklist": false
+          },
+          {
+            "id": "issue:git.test/brad/t3code-fork#188",
+            "sourceId": "gitea:git.test/brad/t3code-fork",
+            "title": "Agent kinds: role (hire a fresh thread per job) vs standing (one ongoing instance), plus t3-thread hire",
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/188",
+            "threadId": null,
+            "workstreamId": "issue:git.test/brad/t3code-fork#167",
+            "rank": null,
+            "createdAt": "2026-10-06T12:24:48-07:00",
+            "placedBy": null,
+            "partOf": 167,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 0,
+              "total": 1,
+              "planVersion": "b52e58eef296145113bc77602f71482b08d95b41c8e8fea85b609805695cf3ab",
+              "sourceId": "gitea:git.test/brad/t3code-fork",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T06:51:01.148Z"
+            },
+            "forecast": null,
+            "nextStep": null,
+            "attentionIds": [],
+            "hasChecklist": false
+          },
+          {
+            "id": "issue:git.test/brad/t3code-fork#179",
+            "sourceId": "gitea:git.test/brad/t3code-fork",
+            "title": "Composer (mobile): can't queue while a turn runs; send button spins instead",
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/179",
+            "threadId": null,
+            "workstreamId": "issue:git.test/brad/t3code-fork#155",
+            "rank": null,
+            "createdAt": "2026-10-06T11:36:43-07:00",
+            "placedBy": null,
+            "partOf": 155,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 0,
+              "total": 1,
+              "planVersion": "b52e58eef296145113bc77602f71482b08d95b41c8e8fea85b609805695cf3ab",
+              "sourceId": "gitea:git.test/brad/t3code-fork",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T06:51:01.148Z"
+            },
+            "forecast": null,
+            "nextStep": null,
+            "attentionIds": [],
+            "hasChecklist": false
+          },
+          {
+            "id": "issue:git.test/brad/t3code-fork#170",
+            "sourceId": "gitea:git.test/brad/t3code-fork",
+            "title": "Forward a message (text plus attachments) to another thread, from agents and from the app",
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/170",
+            "threadId": null,
+            "workstreamId": "issue:git.test/brad/t3code-fork#155",
+            "rank": null,
+            "createdAt": "2026-10-06T09:32:52-07:00",
+            "placedBy": null,
+            "partOf": 155,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 0,
+              "total": 1,
+              "planVersion": "b52e58eef296145113bc77602f71482b08d95b41c8e8fea85b609805695cf3ab",
+              "sourceId": "gitea:git.test/brad/t3code-fork",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T06:51:01.148Z"
+            },
+            "forecast": null,
+            "nextStep": null,
+            "attentionIds": [],
+            "hasChecklist": false
+          },
+          {
+            "id": "issue:git.test/brad/t3code-fork#189",
+            "sourceId": "gitea:git.test/brad/t3code-fork",
+            "title": "Atomic token-only update for an existing Gitea instance, plus a stdin-only CLI (ID3 rotation)",
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/189",
+            "threadId": null,
+            "workstreamId": "issue:git.test/brad/t3code-fork#74",
+            "rank": null,
+            "createdAt": "2026-10-06T12:56:22-07:00",
+            "placedBy": null,
+            "partOf": 74,
+            "closedAt": null,
+            "status": "blocked",
+            "progress": {
+              "done": 0,
+              "total": 1,
+              "planVersion": "b52e58eef296145113bc77602f71482b08d95b41c8e8fea85b609805695cf3ab",
+              "sourceId": "gitea:git.test/brad/t3code-fork",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T06:51:01.148Z"
+            },
+            "forecast": null,
+            "nextStep": null,
+            "attentionIds": ["issue:git.test/brad/t3code-fork#189:attention"],
+            "hasChecklist": false
+          }
+        ],
+        "attention": [
+          {
+            "id": "issue:git.test/brad/t3code-fork#271:attention",
+            "taskId": "issue:git.test/brad/t3code-fork#271",
+            "blockingTaskIds": [],
+            "requestId": null,
+            "title": "Make the dev fork update button rebuild and relaunch the app",
+            "kind": "test",
+            "canRespond": true,
+            "options": [],
+            "priority": 3,
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/271",
+            "threadId": null,
+            "updatedAt": "2026-10-13T23:34:38-07:00",
+            "deadline": null,
+            "question": "Make the dev fork update button rebuild and relaunch the app",
+            "sourceId": "gitea:git.test/brad/t3code-fork"
+          },
+          {
+            "id": "issue:git.test/brad/t3code-fork#242:attention",
+            "taskId": "issue:git.test/brad/t3code-fork#242",
+            "blockingTaskIds": [],
+            "requestId": null,
+            "title": "Fix duplicate instances in the projects view",
+            "kind": "test",
+            "canRespond": true,
+            "options": [],
+            "priority": 3,
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/242",
+            "threadId": null,
+            "updatedAt": "2026-10-13T23:34:38-07:00",
+            "deadline": null,
+            "question": "Fix duplicate instances in the projects view",
+            "sourceId": "gitea:git.test/brad/t3code-fork"
+          },
+          {
+            "id": "issue:git.test/brad/t3code-fork#171:attention",
+            "taskId": "issue:git.test/brad/t3code-fork#171",
+            "blockingTaskIds": [],
+            "requestId": null,
+            "title": "Decisions: everything that needs Brad becomes a decision card (For review, thread questions, approvals)",
+            "kind": "test",
+            "canRespond": true,
+            "options": [],
+            "priority": 3,
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/171",
+            "threadId": null,
+            "updatedAt": "2026-10-13T23:34:38-07:00",
+            "deadline": null,
+            "question": "Decisions: everything that needs Brad becomes a decision card (For review, thread questions, approvals)",
+            "sourceId": "gitea:git.test/brad/t3code-fork"
+          },
+          {
+            "id": "issue:git.test/brad/t3code-fork#294:attention",
+            "taskId": "issue:git.test/brad/t3code-fork#294",
+            "blockingTaskIds": [],
+            "requestId": null,
+            "title": "Remove the A/B/C/Previous dashboard picker",
+            "kind": "review",
+            "canRespond": true,
+            "options": [],
+            "priority": 3,
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/294",
+            "threadId": null,
+            "updatedAt": "2026-10-13T23:26:27-07:00",
+            "deadline": null,
+            "question": "Remove the A/B/C/Previous dashboard picker",
+            "sourceId": "gitea:git.test/brad/t3code-fork"
+          },
+          {
+            "id": "issue:git.test/brad/t3code-fork#189:attention",
+            "taskId": "issue:git.test/brad/t3code-fork#189",
+            "blockingTaskIds": [],
+            "requestId": null,
+            "title": "Atomic token-only update for an existing Gitea instance, plus a stdin-only CLI (ID3 rotation)",
+            "kind": "test",
+            "canRespond": true,
+            "options": [],
+            "priority": 3,
+            "url": "https://git.bradleyprince.com/brad/t3code-fork/issues/189",
+            "threadId": null,
+            "updatedAt": "2026-10-08T09:49:53-07:00",
+            "deadline": null,
+            "question": "Atomic token-only update for an existing Gitea instance, plus a stdin-only CLI (ID3 rotation)",
+            "sourceId": "gitea:git.test/brad/t3code-fork"
+          }
+        ],
+        "sourceIds": ["local", "gitea:git.test/brad/t3code-fork"]
+      }
+    ],
+    "releases": [],
+    "sources": []
+  },
+  "localController": {
+    "revision": 0,
+    "asOf": "2026-10-14T06:51:01.148Z",
+    "projects": [
+      {
+        "planSource": "tracker",
+        "id": "project:pipeline-root",
+        "rootThreadId": "pipeline-root",
+        "parentId": null,
+        "title": "Local Controller",
+        "utility": false,
+        "omittedTaskCount": 0,
+        "workstreams": [
+          {
+            "url": "https://git.bradleyprince.com/brad/local-controller/issues/172",
+            "threadId": null,
+            "progress": null,
+            "childIssueIds": [],
+            "unknownChildIds": [],
+            "parentWorkstreamId": null,
+            "rank": null,
+            "createdAt": "2026-10-10T12:08:24-07:00",
+            "placedBy": null,
+            "id": "issue:git.test/brad/local-controller#172",
+            "title": "Deploy hardware utilization monitoring and error detection",
+            "taskIds": []
+          },
+          {
+            "url": null,
+            "threadId": null,
+            "progress": null,
+            "childIssueIds": [],
+            "unknownChildIds": [],
+            "parentWorkstreamId": null,
+            "rank": null,
+            "createdAt": "2026-06-20T00:00:00.000Z",
+            "placedBy": null,
+            "id": "project:pipeline-root:work",
+            "title": "Unsorted",
+            "taskIds": [
+              "issue:git.test/brad/local-controller#150",
+              "issue:git.test/brad/local-controller#153",
+              "issue:git.test/brad/local-controller#165"
+            ]
+          }
+        ],
+        "tasks": [
+          {
+            "id": "issue:git.test/brad/local-controller#150",
+            "sourceId": "gitea:git.test/brad/local-controller",
+            "title": "ops: track October 4\u20135 Unraid outage and verified recovery",
+            "url": "https://git.bradleyprince.com/brad/local-controller/issues/150",
+            "threadId": null,
+            "workstreamId": "project:pipeline-root:work",
+            "rank": null,
+            "createdAt": "2026-10-04T22:15:33-07:00",
+            "placedBy": null,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 0,
+              "total": 1,
+              "planVersion": "b52e58eef296145113bc77602f71482b08d95b41c8e8fea85b609805695cf3ab",
+              "sourceId": "gitea:git.test/brad/local-controller",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T06:51:01.148Z"
+            },
+            "forecast": null,
+            "nextStep": null,
+            "attentionIds": [],
+            "hasChecklist": false
+          },
+          {
+            "id": "issue:git.test/brad/local-controller#153",
+            "sourceId": "gitea:git.test/brad/local-controller",
+            "title": "Can we stop SABnxbd for now?",
+            "url": "https://git.bradleyprince.com/brad/local-controller/issues/153",
+            "threadId": null,
+            "workstreamId": "project:pipeline-root:work",
+            "rank": null,
+            "createdAt": "2026-10-04T23:00:57-07:00",
+            "placedBy": null,
+            "closedAt": "2026-10-12T23:52:53-07:00",
+            "status": "done",
+            "progress": {
+              "done": 1,
+              "total": 1,
+              "planVersion": "b52e58eef296145113bc77602f71482b08d95b41c8e8fea85b609805695cf3ab",
+              "sourceId": "gitea:git.test/brad/local-controller",
+              "confirmedAt": "2026-10-12T23:52:53-07:00",
+              "confirmationKnown": true
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T06:51:01.148Z"
+            },
+            "forecast": null,
+            "nextStep": null,
+            "attentionIds": [],
+            "hasChecklist": false
+          },
+          {
+            "membershipWarnings": ["malformed-parent"],
+            "id": "issue:git.test/brad/local-controller#165",
+            "sourceId": "gitea:git.test/brad/local-controller",
+            "title": "fix(ops): report disk pressure and retained agent leftovers",
+            "url": "https://git.bradleyprince.com/brad/local-controller/issues/165",
+            "threadId": null,
+            "workstreamId": "project:pipeline-root:work",
+            "rank": null,
+            "createdAt": "2026-10-06T12:27:11-07:00",
+            "placedBy": null,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 0,
+              "total": 1,
+              "planVersion": "b52e58eef296145113bc77602f71482b08d95b41c8e8fea85b609805695cf3ab",
+              "sourceId": "gitea:git.test/brad/local-controller",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T06:51:01.148Z"
+            },
+            "forecast": null,
+            "nextStep": null,
+            "attentionIds": [],
+            "hasChecklist": false
+          }
+        ],
+        "attention": [],
+        "sourceIds": ["local", "gitea:git.test/brad/local-controller"]
+      }
+    ],
+    "releases": [],
+    "sources": []
+  },
+  "constructed": {
+    "revision": 0,
+    "asOf": "2026-10-14T10:00:00.000Z",
+    "projects": [
+      {
+        "planSource": "tracker",
+        "id": "project:pipeline-root",
+        "rootThreadId": "pipeline-root",
+        "parentId": null,
+        "title": "Fixture project",
+        "utility": false,
+        "omittedTaskCount": 0,
+        "workstreams": [
+          {
+            "url": "https://git.test/brad/repo/issues/1",
+            "threadId": null,
+            "progress": {
+              "done": 1,
+              "total": 4,
+              "planVersion": "5463febf84bd959f8b6526172c38ac7a88da55e07a07ae642f17e605feed0c5f",
+              "sourceId": "gitea:git.test/brad/repo",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "childIssueIds": [
+              "issue:git.test/brad/repo#2",
+              "issue:git.test/brad/repo#3",
+              "issue:git.test/brad/repo#4",
+              "issue:git.test/brad/repo#5"
+            ],
+            "unknownChildIds": [],
+            "parentWorkstreamId": null,
+            "rank": null,
+            "createdAt": "2026-10-14T10:00:00.000Z",
+            "placedBy": null,
+            "id": "issue:git.test/brad/repo#1",
+            "title": "Shipping the ledger",
+            "taskIds": [
+              "issue:git.test/brad/repo#2",
+              "issue:git.test/brad/repo#3",
+              "issue:git.test/brad/repo#4"
+            ]
+          },
+          {
+            "url": "https://git.test/brad/repo/issues/5",
+            "threadId": null,
+            "progress": {
+              "done": 1,
+              "total": 2,
+              "planVersion": "2a6f37b5fe19e36cd83dce7c9029ddd06d8cbb3f2440e714a2db8214026f63d6",
+              "sourceId": "gitea:git.test/brad/repo",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "childIssueIds": ["issue:git.test/brad/repo#6", "issue:git.test/brad/repo#7"],
+            "unknownChildIds": [],
+            "parentWorkstreamId": "issue:git.test/brad/repo#1",
+            "rank": null,
+            "createdAt": "2026-10-14T10:00:00.000Z",
+            "placedBy": null,
+            "id": "issue:git.test/brad/repo#5",
+            "title": "Nested rollout",
+            "taskIds": ["issue:git.test/brad/repo#6", "issue:git.test/brad/repo#7"]
+          },
+          {
+            "url": "https://git.test/brad/repo/issues/8",
+            "threadId": null,
+            "progress": null,
+            "childIssueIds": [],
+            "unknownChildIds": [],
+            "parentWorkstreamId": null,
+            "rank": null,
+            "createdAt": "2026-10-14T10:00:00.000Z",
+            "placedBy": null,
+            "id": "issue:git.test/brad/repo#8",
+            "title": "Not started yet",
+            "taskIds": []
+          },
+          {
+            "url": "https://git.test/brad/repo/issues/9",
+            "threadId": null,
+            "progress": null,
+            "childIssueIds": [],
+            "unknownChildIds": [],
+            "parentWorkstreamId": null,
+            "rank": null,
+            "createdAt": "2026-10-14T10:00:00.000Z",
+            "placedBy": null,
+            "id": "issue:git.test/brad/repo#9",
+            "title": "Contested parents",
+            "taskIds": []
+          },
+          {
+            "url": "https://git.test/brad/repo/issues/10",
+            "threadId": null,
+            "progress": null,
+            "childIssueIds": [],
+            "unknownChildIds": [],
+            "parentWorkstreamId": null,
+            "rank": null,
+            "createdAt": "2026-10-14T10:00:00.000Z",
+            "placedBy": null,
+            "id": "issue:git.test/brad/repo#10",
+            "title": "Other contested parent",
+            "taskIds": []
+          },
+          {
+            "url": "https://git.test/brad/repo/issues/15",
+            "threadId": null,
+            "progress": {
+              "done": 0,
+              "total": 1,
+              "planVersion": "0a8b65097982b7474e50212c93ed22eb1e7da1f1f0b7617659a20d459da07e8a",
+              "sourceId": "gitea:git.test/brad/repo",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "childIssueIds": ["issue:git.test/brad/repo#16"],
+            "unknownChildIds": [],
+            "parentWorkstreamId": null,
+            "rank": null,
+            "createdAt": "2026-10-14T10:00:00.000Z",
+            "placedBy": null,
+            "id": "issue:git.test/brad/repo#15",
+            "title": "Rebuild the update path",
+            "taskIds": ["issue:git.test/brad/repo#16"]
+          },
+          {
+            "url": null,
+            "threadId": null,
+            "progress": null,
+            "childIssueIds": [],
+            "unknownChildIds": [],
+            "parentWorkstreamId": null,
+            "rank": null,
+            "createdAt": "2026-06-20T00:00:00.000Z",
+            "placedBy": null,
+            "id": "project:pipeline-root:work",
+            "title": "Unsorted",
+            "taskIds": [
+              "issue:git.test/brad/repo#11",
+              "issue:git.test/brad/repo#12",
+              "issue:git.test/brad/repo#13",
+              "issue:git.test/brad/repo#14",
+              "issue:git.test/brad/repo#15",
+              "issue:git.test/brad/repo#17"
+            ]
+          }
+        ],
+        "tasks": [
+          {
+            "id": "issue:git.test/brad/repo#2",
+            "sourceId": "gitea:git.test/brad/repo",
+            "title": "Write the export",
+            "url": "https://git.test/brad/repo/issues/2",
+            "threadId": null,
+            "workstreamId": "issue:git.test/brad/repo#1",
+            "rank": null,
+            "createdAt": "2026-10-14T10:00:00.000Z",
+            "placedBy": null,
+            "partOf": 1,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 2,
+              "total": 4,
+              "planVersion": "3699a373f386daccf40c9e37a9fe333ad13a64895a2d13cdaf394e55e48a141a",
+              "sourceId": "gitea:git.test/brad/repo",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T10:00:00.000Z"
+            },
+            "forecast": {
+              "eta": "2026-10-20",
+              "precision": "date",
+              "basis": "owner",
+              "sourceId": "gitea:git.test/brad/repo"
+            },
+            "nextStep": "Three",
+            "attentionIds": [],
+            "hasChecklist": true
+          },
+          {
+            "id": "issue:git.test/brad/repo#3",
+            "sourceId": "gitea:git.test/brad/repo",
+            "title": "Decide the retention window and migrate every existing ledger row to the new schema before the next nightly cut",
+            "url": "https://git.test/brad/repo/issues/3",
+            "threadId": null,
+            "workstreamId": "issue:git.test/brad/repo#1",
+            "rank": null,
+            "createdAt": "2026-10-14T10:00:00.000Z",
+            "placedBy": null,
+            "partOf": 1,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 0,
+              "total": 1,
+              "planVersion": "b52e58eef296145113bc77602f71482b08d95b41c8e8fea85b609805695cf3ab",
+              "sourceId": "gitea:git.test/brad/repo",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T10:00:00.000Z"
+            },
+            "forecast": null,
+            "nextStep": null,
+            "attentionIds": [],
+            "hasChecklist": false
+          },
+          {
+            "id": "issue:git.test/brad/repo#4",
+            "sourceId": "gitea:git.test/brad/repo",
+            "title": "Review the export",
+            "url": "https://git.test/brad/repo/issues/4",
+            "threadId": null,
+            "workstreamId": "issue:git.test/brad/repo#1",
+            "rank": null,
+            "createdAt": "2026-10-14T10:00:00.000Z",
+            "placedBy": null,
+            "partOf": 1,
+            "closedAt": null,
+            "status": "blocked",
+            "progress": {
+              "done": 0,
+              "total": 1,
+              "planVersion": "b52e58eef296145113bc77602f71482b08d95b41c8e8fea85b609805695cf3ab",
+              "sourceId": "gitea:git.test/brad/repo",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T10:00:00.000Z"
+            },
+            "forecast": null,
+            "nextStep": null,
+            "attentionIds": ["issue:git.test/brad/repo#4:attention"],
+            "hasChecklist": false
+          },
+          {
+            "id": "issue:git.test/brad/repo#6",
+            "sourceId": "gitea:git.test/brad/repo",
+            "title": "Rollout first host",
+            "url": "https://git.test/brad/repo/issues/6",
+            "threadId": null,
+            "workstreamId": "issue:git.test/brad/repo#5",
+            "rank": null,
+            "createdAt": "2026-10-14T10:00:00.000Z",
+            "placedBy": null,
+            "partOf": 5,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 1,
+              "total": 1,
+              "planVersion": "176cabe076a271f2aa99950056830d05e692fbbe13cf15aec3a1161283523080",
+              "sourceId": "gitea:git.test/brad/repo",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T10:00:00.000Z"
+            },
+            "forecast": null,
+            "nextStep": null,
+            "attentionIds": [],
+            "hasChecklist": true
+          },
+          {
+            "id": "issue:git.test/brad/repo#7",
+            "sourceId": "gitea:git.test/brad/repo",
+            "title": "Rollout second host",
+            "url": "https://git.test/brad/repo/issues/7",
+            "threadId": null,
+            "workstreamId": "issue:git.test/brad/repo#5",
+            "rank": null,
+            "createdAt": "2026-10-14T10:00:00.000Z",
+            "placedBy": null,
+            "partOf": 5,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 1,
+              "total": 2,
+              "planVersion": "25153d7ccd350aefbcfb80c18197d95aca7cb03a5b76a76ac7a8a3fb923214de",
+              "sourceId": "gitea:git.test/brad/repo",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T10:00:00.000Z"
+            },
+            "forecast": null,
+            "nextStep": "Roll",
+            "attentionIds": [],
+            "hasChecklist": true
+          },
+          {
+            "membershipWarnings": ["conflicting-checklist-parents"],
+            "id": "issue:git.test/brad/repo#11",
+            "sourceId": "gitea:git.test/brad/repo",
+            "title": "Child with two checklist parents",
+            "url": "https://git.test/brad/repo/issues/11",
+            "threadId": null,
+            "workstreamId": "project:pipeline-root:work",
+            "rank": null,
+            "createdAt": "2026-10-14T10:00:00.000Z",
+            "placedBy": null,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 0,
+              "total": 1,
+              "planVersion": "b52e58eef296145113bc77602f71482b08d95b41c8e8fea85b609805695cf3ab",
+              "sourceId": "gitea:git.test/brad/repo",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T10:00:00.000Z"
+            },
+            "forecast": null,
+            "nextStep": null,
+            "attentionIds": [],
+            "hasChecklist": false
+          },
+          {
+            "id": "issue:git.test/brad/repo#12",
+            "sourceId": "gitea:git.test/brad/repo",
+            "title": "A loose ask with a personal checklist",
+            "url": "https://git.test/brad/repo/issues/12",
+            "threadId": null,
+            "workstreamId": "project:pipeline-root:work",
+            "rank": null,
+            "createdAt": "2026-10-14T10:00:00.000Z",
+            "placedBy": null,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 1,
+              "total": 2,
+              "planVersion": "870d4cbe683a035ff95a8eee915af602b36feb6c178c8dd9754dda7936f0c502",
+              "sourceId": "gitea:git.test/brad/repo",
+              "confirmedAt": "2026-10-14T10:00:00.000Z",
+              "confirmationKnown": true
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T10:00:00.000Z"
+            },
+            "forecast": null,
+            "nextStep": "Send the draft to the owner",
+            "attentionIds": [],
+            "hasChecklist": true
+          },
+          {
+            "id": "issue:git.test/brad/repo#13",
+            "sourceId": "gitea:git.test/brad/repo",
+            "title": "A loose ask with no checklist",
+            "url": "https://git.test/brad/repo/issues/13",
+            "threadId": null,
+            "workstreamId": "project:pipeline-root:work",
+            "rank": null,
+            "createdAt": "2026-10-14T10:00:00.000Z",
+            "placedBy": null,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 0,
+              "total": 1,
+              "planVersion": "b52e58eef296145113bc77602f71482b08d95b41c8e8fea85b609805695cf3ab",
+              "sourceId": "gitea:git.test/brad/repo",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T10:00:00.000Z"
+            },
+            "forecast": null,
+            "nextStep": null,
+            "attentionIds": [],
+            "hasChecklist": false
+          },
+          {
+            "id": "issue:git.test/brad/repo#14",
+            "sourceId": "gitea:git.test/brad/repo",
+            "title": "Show live status while Update builds",
+            "url": "https://git.test/brad/repo/issues/14",
+            "threadId": null,
+            "workstreamId": "project:pipeline-root:work",
+            "rank": null,
+            "createdAt": "2026-10-14T10:00:00.000Z",
+            "placedBy": null,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 0,
+              "total": 1,
+              "planVersion": "b52e58eef296145113bc77602f71482b08d95b41c8e8fea85b609805695cf3ab",
+              "sourceId": "gitea:git.test/brad/repo",
+              "confirmedAt": "2026-10-14T10:00:00.000Z",
+              "confirmationKnown": true
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T10:00:00.000Z"
+            },
+            "forecast": null,
+            "nextStep": "deploy 09:30Z",
+            "attentionIds": [],
+            "hasChecklist": false
+          },
+          {
+            "id": "issue:git.test/brad/repo#15",
+            "sourceId": "gitea:git.test/brad/repo",
+            "title": "Rebuild the update path",
+            "url": "https://git.test/brad/repo/issues/15",
+            "threadId": null,
+            "workstreamId": "project:pipeline-root:work",
+            "rank": null,
+            "createdAt": "2026-10-14T10:00:00.000Z",
+            "placedBy": null,
+            "closedAt": null,
+            "status": "blocked",
+            "progress": null,
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T10:00:00.000Z"
+            },
+            "forecast": {
+              "eta": "2026-10-18",
+              "precision": "date",
+              "basis": "owner",
+              "sourceId": "gitea:git.test/brad/repo"
+            },
+            "nextStep": null,
+            "attentionIds": ["issue:git.test/brad/repo#15:attention"],
+            "hasChecklist": false
+          },
+          {
+            "id": "issue:git.test/brad/repo#16",
+            "sourceId": "gitea:git.test/brad/repo",
+            "title": "Switch to the prepared build",
+            "url": "https://git.test/brad/repo/issues/16",
+            "threadId": null,
+            "workstreamId": "issue:git.test/brad/repo#15",
+            "rank": null,
+            "createdAt": "2026-10-14T10:00:00.000Z",
+            "placedBy": null,
+            "partOf": 15,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 0,
+              "total": 2,
+              "planVersion": "339b8e89a076a93779b877d03ce476f500ad371381200f82af37a589b97ad12d",
+              "sourceId": "gitea:git.test/brad/repo",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T10:00:00.000Z"
+            },
+            "forecast": null,
+            "nextStep": "Switch",
+            "attentionIds": [],
+            "hasChecklist": true
+          },
+          {
+            "membershipWarnings": ["truncated-body"],
+            "id": "issue:git.test/brad/repo#17",
+            "sourceId": "gitea:git.test/brad/repo",
+            "title": "A task whose body is far too long",
+            "url": "https://git.test/brad/repo/issues/17",
+            "threadId": null,
+            "workstreamId": "project:pipeline-root:work",
+            "rank": null,
+            "createdAt": "2026-10-14T10:00:00.000Z",
+            "placedBy": null,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 1,
+              "total": 2,
+              "planVersion": "cab0fa626416f66ec7e0af158107ed03d3d0accbd63a9329fea8168a9e1d0835",
+              "sourceId": "gitea:git.test/brad/repo",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T10:00:00.000Z"
+            },
+            "forecast": null,
+            "nextStep": "Second",
+            "attentionIds": [],
+            "hasChecklist": true
+          }
+        ],
+        "attention": [
+          {
+            "id": "issue:git.test/brad/repo#4:attention",
+            "taskId": "issue:git.test/brad/repo#4",
+            "blockingTaskIds": [],
+            "requestId": null,
+            "title": "Review the export",
+            "kind": "review",
+            "canRespond": true,
+            "options": [],
+            "priority": 3,
+            "url": "https://git.test/brad/repo/issues/4",
+            "threadId": null,
+            "updatedAt": "2026-10-14T10:00:00.000Z",
+            "deadline": null,
+            "question": "Review the export",
+            "sourceId": "gitea:git.test/brad/repo"
+          },
+          {
+            "id": "issue:git.test/brad/repo#15:attention",
+            "taskId": "issue:git.test/brad/repo#15",
+            "blockingTaskIds": [],
+            "requestId": null,
+            "title": "Rebuild the update path",
+            "kind": "review",
+            "canRespond": true,
+            "options": [],
+            "priority": 3,
+            "url": "https://git.test/brad/repo/issues/15",
+            "threadId": null,
+            "updatedAt": "2026-10-14T10:00:00.000Z",
+            "deadline": null,
+            "question": "Rebuild the update path",
+            "sourceId": "gitea:git.test/brad/repo"
+          }
+        ],
+        "sourceIds": ["local", "gitea:git.test/brad/repo"]
+      }
+    ],
+    "releases": [],
+    "sources": []
+  },
+  "constructedOmitted": {
+    "revision": 0,
+    "asOf": "2026-10-14T10:00:00.000Z",
+    "projects": [
+      {
+        "planSource": "tracker",
+        "id": "project:pipeline-root",
+        "rootThreadId": "pipeline-root",
+        "parentId": null,
+        "title": "Fixture project",
+        "utility": false,
+        "omittedTaskCount": 11,
+        "omittedWorkstreamCount": 5,
+        "workstreams": [
+          {
+            "url": "https://git.test/brad/repo/issues/1",
+            "threadId": null,
+            "progress": {
+              "done": 1,
+              "total": 4,
+              "planVersion": "5463febf84bd959f8b6526172c38ac7a88da55e07a07ae642f17e605feed0c5f",
+              "sourceId": "gitea:git.test/brad/repo",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "childIssueIds": [
+              "issue:git.test/brad/repo#2",
+              "issue:git.test/brad/repo#3",
+              "issue:git.test/brad/repo#4",
+              "issue:git.test/brad/repo#5"
+            ],
+            "unknownChildIds": [],
+            "parentWorkstreamId": null,
+            "rank": null,
+            "createdAt": "2026-10-14T10:00:00.000Z",
+            "placedBy": null,
+            "id": "issue:git.test/brad/repo#1",
+            "title": "Shipping the ledger",
+            "taskIds": ["issue:git.test/brad/repo#4"]
+          },
+          {
+            "url": "https://git.test/brad/repo/issues/5",
+            "threadId": null,
+            "progress": {
+              "done": 1,
+              "total": 2,
+              "planVersion": "2a6f37b5fe19e36cd83dce7c9029ddd06d8cbb3f2440e714a2db8214026f63d6",
+              "sourceId": "gitea:git.test/brad/repo",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "childIssueIds": ["issue:git.test/brad/repo#6", "issue:git.test/brad/repo#7"],
+            "unknownChildIds": [],
+            "parentWorkstreamId": "issue:git.test/brad/repo#1",
+            "rank": null,
+            "createdAt": "2026-10-14T10:00:00.000Z",
+            "placedBy": null,
+            "id": "issue:git.test/brad/repo#5",
+            "title": "Nested rollout",
+            "taskIds": []
+          }
+        ],
+        "tasks": [
+          {
+            "id": "issue:git.test/brad/repo#4",
+            "sourceId": "gitea:git.test/brad/repo",
+            "title": "Review the export",
+            "url": "https://git.test/brad/repo/issues/4",
+            "threadId": null,
+            "workstreamId": "issue:git.test/brad/repo#1",
+            "rank": null,
+            "createdAt": "2026-10-14T10:00:00.000Z",
+            "placedBy": null,
+            "partOf": 1,
+            "closedAt": null,
+            "status": "blocked",
+            "progress": {
+              "done": 0,
+              "total": 1,
+              "planVersion": "b52e58eef296145113bc77602f71482b08d95b41c8e8fea85b609805695cf3ab",
+              "sourceId": "gitea:git.test/brad/repo",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T10:00:00.000Z"
+            },
+            "forecast": null,
+            "nextStep": null,
+            "attentionIds": ["issue:git.test/brad/repo#4:attention"],
+            "hasChecklist": false
+          }
+        ],
+        "attention": [
+          {
+            "id": "issue:git.test/brad/repo#4:attention",
+            "taskId": "issue:git.test/brad/repo#4",
+            "blockingTaskIds": [],
+            "requestId": null,
+            "title": "Review the export",
+            "kind": "review",
+            "canRespond": true,
+            "options": [],
+            "priority": 3,
+            "url": "https://git.test/brad/repo/issues/4",
+            "threadId": null,
+            "updatedAt": "2026-10-14T10:00:00.000Z",
+            "deadline": null,
+            "question": "Review the export",
+            "sourceId": "gitea:git.test/brad/repo"
+          }
+        ],
+        "sourceIds": ["local", "gitea:git.test/brad/repo"]
+      }
+    ],
+    "releases": [],
+    "sources": []
+  },
+  "constructedUnbound": {
+    "planMigration": [
+      {
+        "kind": "unbound-briefing-file",
+        "fileName": "t3-product.json",
+        "reason": "No unique exact-title binding"
+      }
+    ],
+    "revision": 0,
+    "asOf": "2026-10-14T10:00:00.000Z",
+    "projects": [
+      {
+        "planSource": "tracker",
+        "id": "project:pipeline-root",
+        "rootThreadId": "pipeline-root",
+        "parentId": null,
+        "title": "Fixture project",
+        "utility": false,
+        "omittedTaskCount": 0,
+        "workstreams": [
+          {
+            "url": "https://git.test/brad/repo/issues/1",
+            "threadId": null,
+            "progress": {
+              "done": 1,
+              "total": 4,
+              "planVersion": "5463febf84bd959f8b6526172c38ac7a88da55e07a07ae642f17e605feed0c5f",
+              "sourceId": "gitea:git.test/brad/repo",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "childIssueIds": [
+              "issue:git.test/brad/repo#2",
+              "issue:git.test/brad/repo#3",
+              "issue:git.test/brad/repo#4",
+              "issue:git.test/brad/repo#5"
+            ],
+            "unknownChildIds": [
+              "issue:git.test/brad/repo#3",
+              "issue:git.test/brad/repo#4",
+              "issue:git.test/brad/repo#5"
+            ],
+            "parentWorkstreamId": null,
+            "rank": null,
+            "createdAt": "2026-10-14T10:00:00.000Z",
+            "placedBy": null,
+            "id": "issue:git.test/brad/repo#1",
+            "title": "Shipping the ledger",
+            "taskIds": ["issue:git.test/brad/repo#2"]
+          }
+        ],
+        "tasks": [
+          {
+            "id": "issue:git.test/brad/repo#2",
+            "sourceId": "gitea:git.test/brad/repo",
+            "title": "Write the export",
+            "url": "https://git.test/brad/repo/issues/2",
+            "threadId": null,
+            "workstreamId": "issue:git.test/brad/repo#1",
+            "rank": null,
+            "createdAt": "2026-10-14T10:00:00.000Z",
+            "placedBy": null,
+            "partOf": 1,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 2,
+              "total": 4,
+              "planVersion": "3699a373f386daccf40c9e37a9fe333ad13a64895a2d13cdaf394e55e48a141a",
+              "sourceId": "gitea:git.test/brad/repo",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T10:00:00.000Z"
+            },
+            "forecast": {
+              "eta": "2026-10-20",
+              "precision": "date",
+              "basis": "owner",
+              "sourceId": "gitea:git.test/brad/repo"
+            },
+            "nextStep": "Three",
+            "attentionIds": [],
+            "hasChecklist": true
+          }
+        ],
+        "attention": [],
+        "sourceIds": ["local", "gitea:git.test/brad/repo"]
+      }
+    ],
+    "releases": [],
+    "sources": []
+  },
+  "constructedUnmatched": {
+    "revision": 0,
+    "asOf": "2026-10-14T10:00:00.000Z",
+    "projects": [
+      {
+        "planSource": "tracker",
+        "id": "project:pipeline-root",
+        "rootThreadId": "pipeline-root",
+        "parentId": null,
+        "title": "Fixture project",
+        "utility": false,
+        "omittedTaskCount": 0,
+        "workstreams": [
+          {
+            "url": "https://git.test/brad/repo/issues/1",
+            "threadId": null,
+            "progress": {
+              "done": 1,
+              "total": 4,
+              "planVersion": "5463febf84bd959f8b6526172c38ac7a88da55e07a07ae642f17e605feed0c5f",
+              "sourceId": "gitea:git.test/brad/repo",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "childIssueIds": [
+              "issue:git.test/brad/repo#2",
+              "issue:git.test/brad/repo#3",
+              "issue:git.test/brad/repo#4",
+              "issue:git.test/brad/repo#5"
+            ],
+            "unknownChildIds": [
+              "issue:git.test/brad/repo#3",
+              "issue:git.test/brad/repo#4",
+              "issue:git.test/brad/repo#5"
+            ],
+            "parentWorkstreamId": null,
+            "rank": null,
+            "createdAt": "2026-10-14T10:00:00.000Z",
+            "placedBy": null,
+            "id": "issue:git.test/brad/repo#1",
+            "title": "Shipping the ledger",
+            "taskIds": ["issue:git.test/brad/repo#2"]
+          }
+        ],
+        "tasks": [
+          {
+            "id": "issue:git.test/brad/repo#2",
+            "sourceId": "gitea:git.test/brad/repo",
+            "title": "Write the export",
+            "url": "https://git.test/brad/repo/issues/2",
+            "threadId": null,
+            "workstreamId": "issue:git.test/brad/repo#1",
+            "rank": null,
+            "createdAt": "2026-10-14T10:00:00.000Z",
+            "placedBy": null,
+            "partOf": 1,
+            "closedAt": null,
+            "status": "pending",
+            "progress": {
+              "done": 2,
+              "total": 4,
+              "planVersion": "3699a373f386daccf40c9e37a9fe333ad13a64895a2d13cdaf394e55e48a141a",
+              "sourceId": "gitea:git.test/brad/repo",
+              "confirmedAt": "1970-01-01T00:00:00.000Z",
+              "confirmationKnown": false
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T10:00:00.000Z"
+            },
+            "forecast": {
+              "eta": "2026-10-20",
+              "precision": "date",
+              "basis": "owner",
+              "sourceId": "gitea:git.test/brad/repo"
+            },
+            "nextStep": "Three",
+            "attentionIds": [],
+            "hasChecklist": true
+          }
+        ],
+        "attention": [],
+        "sourceIds": ["local", "gitea:git.test/brad/repo"]
+      },
+      {
+        "id": "head:day-planner",
+        "rootThreadId": null,
+        "parentId": null,
+        "title": "Day Planner",
+        "utility": false,
+        "omittedTaskCount": 0,
+        "workstreams": [
+          {
+            "id": "plan:day-planner:w1",
+            "title": "Day Planner workstream",
+            "taskIds": ["plan:day-planner:t1"]
+          }
+        ],
+        "tasks": [
+          {
+            "id": "plan:day-planner:t1",
+            "sourceId": "plan:day-planner",
+            "title": "Plan the week in the briefing file",
+            "url": null,
+            "threadId": null,
+            "workstreamId": "plan:day-planner:w1",
+            "closedAt": null,
+            "status": "working",
+            "progress": {
+              "done": 1,
+              "total": 4,
+              "planVersion": "plan:day-planner:t1:4",
+              "sourceId": "plan:day-planner",
+              "confirmedAt": "2026-10-14T10:00:00.000Z"
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T10:00:00.000Z"
+            },
+            "forecast": null,
+            "nextStep": "",
+            "attentionIds": []
+          }
+        ],
+        "attention": [],
+        "sourceIds": ["plan:day-planner"]
+      },
+      {
+        "id": "head:printcell",
+        "rootThreadId": null,
+        "parentId": null,
+        "title": "Print Cell",
+        "utility": false,
+        "omittedTaskCount": 0,
+        "workstreams": [
+          {
+            "id": "plan:printcell:w1",
+            "title": "Print Cell workstream",
+            "taskIds": ["plan:printcell:t1"]
+          }
+        ],
+        "tasks": [
+          {
+            "id": "plan:printcell:t1",
+            "sourceId": "plan:printcell",
+            "title": "Calibrate the second printer bed",
+            "url": null,
+            "threadId": null,
+            "workstreamId": "plan:printcell:w1",
+            "closedAt": null,
+            "status": "working",
+            "progress": {
+              "done": 1,
+              "total": 4,
+              "planVersion": "plan:printcell:t1:4",
+              "sourceId": "plan:printcell",
+              "confirmedAt": "2026-10-14T10:00:00.000Z"
+            },
+            "movement": {
+              "state": "unknown",
+              "doneDelta": null,
+              "windowMs": 3600000,
+              "fromAt": null,
+              "toAt": "2026-10-14T10:00:00.000Z"
+            },
+            "forecast": null,
+            "nextStep": "",
+            "attentionIds": []
+          }
+        ],
+        "attention": [],
+        "sourceIds": ["plan:printcell"]
+      }
+    ],
+    "releases": [],
+    "sources": []
+  }
+}
