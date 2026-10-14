@@ -1,3 +1,4 @@
+import * as ShellSnapshotDiagnostics from "./diagnostics/ShellSnapshotDiagnostics.ts";
 import { recoverLegacyBackgroundWork } from "./fork/recovery/LegacyBackgroundWorkImport.ts";
 import * as StartupResumePolicy from "./fork/recovery/StartupResumePolicy.ts";
 import * as Option from "effect/Option";
@@ -155,7 +156,9 @@ const recordStartupHeartbeat = Effect.gen(function* () {
 
   const { threadCount, projectCount } = yield* Effect.all({
     projects: projects.snapshot,
-    threads: threads.getShellSnapshot(),
+    threads: threads
+      .getShellSnapshot()
+      .pipe(ShellSnapshotDiagnostics.withCaller("ServerRuntimeStartup")),
   }).pipe(
     Effect.map(({ projects: projectSnapshot, threads: shellSnapshot }) => ({
       projectCount: projectSnapshot.projects.length,
@@ -282,7 +285,9 @@ const resolveAutoBootstrapWelcomeTargets = Effect.gen(function* () {
       title: path.basename(serverConfig.cwd) || "project",
       workspaceRoot: serverConfig.cwd,
     });
-    const shell = yield* threads.getShellSnapshot();
+    const shell = yield* threads
+      .getShellSnapshot()
+      .pipe(ShellSnapshotDiagnostics.withCaller("ServerRuntimeStartup"));
     const existingThread = shell.threads.find(
       (thread) =>
         thread.projectId === project.id && thread.lineage.relationshipToParent !== "subagent",
