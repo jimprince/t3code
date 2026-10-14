@@ -88,6 +88,8 @@ import { useAtomValue } from "@effect/atom-react";
 import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
 import { useDesktopLocalBootstraps } from "../connection/useDesktopLocalBootstraps";
 import { useThreadNestingPaletteItems } from "../hooks/useThreadNesting";
+import { useChiefOfStaffRef } from "../state/chiefOfStaff";
+import { useCosTrayStore } from "./cos-tray/cosTrayStore";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
@@ -1901,6 +1903,7 @@ function OpenCommandPaletteDialog(props: {
     });
   }, [clearOpenIntent, browseNavigation, openIntent, projectThreadItems, pushPaletteView]);
 
+  const chiefOfStaffRef = useChiefOfStaffRef();
   const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
 
   const primaryChatProject = selectChatProjectForEnvironment(chatProjects, primaryEnvironmentId);
@@ -2281,6 +2284,20 @@ function OpenCommandPaletteDialog(props: {
       await navigate({ to: "/dashboard" });
     },
   });
+
+  if (chiefOfStaffRef !== null) {
+    actionItems.push({
+      kind: "action",
+      value: "action:chief-of-staff-tray",
+      searchTerms: ["chief of staff", "front desk", "tray", "decisions", "waiting"],
+      title: "Chief of Staff: toggle tray",
+      shortcutCommand: "chiefOfStaff.toggleTray",
+      icon: <MessageSquareIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        useCosTrayStore.getState().toggle();
+      },
+    });
+  }
 
   if (
     environments.some(
