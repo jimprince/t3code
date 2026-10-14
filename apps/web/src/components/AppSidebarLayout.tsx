@@ -39,6 +39,8 @@ import { SidebarBrandWidthProbe, SidebarChromeHeader } from "./sidebar/SidebarCh
 import { MainAppLocationTracker } from "./sidebar/mainAppLocation";
 import { DisconnectedSendFlusher } from "./DisconnectedSendFlusher";
 import { ServerRestartBanner } from "./ServerRestartBanner";
+import { ChiefOfStaffShortcut } from "./cos-tray/ChiefOfStaffShortcut";
+import { ChiefOfStaffTray } from "./cos-tray/ChiefOfStaffTray";
 import { useSidebarStageBackdropVariant } from "./SidebarStageBackdrop";
 import { useProjects } from "../state/entities";
 import {
@@ -312,7 +314,12 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
         className="h-dvh! min-h-0!"
         data-panel-animations={routePanelAnimationsActive ? "true" : "false"}
         defaultOpen
-        style={{ ...sidebarProviderStyle, paddingTop: "var(--server-restart-banner-height, 0px)" }}
+        style={{
+          ...sidebarProviderStyle,
+          paddingTop: "var(--server-restart-banner-height, 0px)",
+          // The Chief of Staff peek bar sets this on a phone so it never covers the composer.
+          paddingBottom: "var(--cos-peek-height, 0px)",
+        }}
       >
         <SidebarBrandWidthProbe onWidthChange={setBrandWidth} />
         <ProjectProjectionRetention />
@@ -347,6 +354,8 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
           <SidebarRail onDoubleClick={resetSidebarWidth} />
         </Sidebar>
         {children}
+        <ChiefOfStaffTray />
+        <ChiefOfStaffShortcut />
         <SidebarControl />
         <NavigationHistoryShortcuts />
         <MainAppLocationTracker />
