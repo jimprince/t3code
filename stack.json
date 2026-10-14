@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "6ac2359916331aab6dde0e729784e0b689521f39",
-  "head": "b8a496841187da62396d7938ecb02b37475d1e41",
+  "prev": "4d23e5be820fe58743a5fa2f8cbdc4d14d8f7a79",
+  "head": "645ccb4342e6e562e9c5b828b53a2cba8e22509d",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -111,7 +111,8 @@
     "fork-decision-discuss",
     "fork-decision-context-media",
     "fork-subprojects-server",
-    "fork-reliable-handoffs"
+    "fork-reliable-handoffs",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-starting-reconcile-causal-guard",
@@ -739,6 +740,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "53523a58a919e8beb7b6fe8c10f8b158427effb2"
+    },
+    "refresh-temp": {
+      "oid": "645ccb4342e6e562e9c5b828b53a2cba8e22509d"
     }
   }
 }
