@@ -11,7 +11,7 @@ import {
 } from "./dashboard.logic";
 import { DecisionList } from "./decisions";
 import { BarLegend, OutcomeRow, SectionHeading, SectionMarker, UnknownValue } from "./parts";
-import { IdleProjects, ProjectGroup, ReleaseLines, UtilityGroup } from "./plan";
+import { IdleProjects, PlanWarnings, ProjectGroup, ReleaseLines, UtilityGroup } from "./plan";
 
 /** "last hour 13 steps · 2 stalled · 1 replanned": the Plan's totals, only from what was measured. */
 function PlanTotals() {
@@ -112,6 +112,7 @@ export function VariantA() {
           >
             <PlanTotals />
           </SectionHeading>
+          {root ? null : <PlanWarnings />}
           {groups.length === 0 && idle.length === 0 && utilities.length === 0 ? (
             <div className="py-1 text-muted-foreground/80">No open work</div>
           ) : null}

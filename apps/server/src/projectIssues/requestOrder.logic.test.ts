@@ -201,3 +201,13 @@ it("keeps the original sibling order after every partial renumber prefix", () =>
     ).toEqual([1, 2, 3]);
   }
 });
+
+it("moves and removes marker-first published membership (#297 S2)", () => {
+  const body = "<!-- t3-plan:thread -->\nPart of #5\n\n- [ ] Work\n<!-- t3:rank 100 -->";
+  expect(replacePartOf(body, null)).toBe(
+    "<!-- t3-plan:thread -->\n- [ ] Work\n<!-- t3:rank 100 -->",
+  );
+  const moved = replacePartOf(body, 7);
+  expect(moved).toContain("<!-- t3-plan:thread -->\nPart of #7");
+  expect(moved).not.toContain("Part of #5");
+});
