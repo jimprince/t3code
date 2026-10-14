@@ -1,3 +1,4 @@
+import { ThreadResumeService } from "../orchestration-v2/ThreadResumeService.ts";
 import * as ServerConfig from "../config.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import { listMetadata } from "../forkThreads/MetadataStore.ts";
@@ -689,6 +690,7 @@ describe("orchestrator MCP toolkit", () => {
             Layer.provide(layerProviderRegistry),
             Layer.provide(layerScheduledTaskStub),
             Layer.provide(Layer.mock(ThreadSearch.ThreadSearch)({})),
+            Layer.provide(Layer.mock(ThreadResumeService)({})),
             Layer.provideMerge(SqlitePersistence.layerMemory),
             Layer.provide(
               Layer.mock(ProjectService.ProjectService)({

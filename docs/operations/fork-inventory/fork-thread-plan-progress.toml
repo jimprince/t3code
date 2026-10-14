@@ -1,0 +1,82 @@
+name = "fork-thread-plan-progress"
+subject = "feat(threads): track plan progress and resume failed work"
+class = "product"
+purpose = "Expose host-local file plan progress with native todo fallback and deterministic explicit recovery of failed threads into fresh conversations in their source workspace."
+retire_when = "Upstream ships equivalent step progress and explicit idempotent resume from unfinished plans across RPC, MCP and CLI."
+depends_on = [
+  "fork-dash-187-todo-progress",
+  "fork-dashboard-v3-04-snapshot-service",
+  "fork-harness-purpose",
+]
+roles = []
+note = "Server/data concern only; UI integration is separately owned. Deterministic durable recovery reuses the workspace, settles the source and preserves supervision lineage. File seeds contain bounded owned rows, last Next, title/status and absolute PLAN/newest-five result paths in one adaptive fence; no file/action-log/result bodies. Result bodies are never read or cached. Small linear known-credential filtering replaces generic opaque-token/evidence heuristics. One required shared reader retains outcome eligibility, current-owner/unfinished/newest mapping and native fallback without changing the wire shape."
+
+
+files = [
+  "apps/server/src/dashboard/DashboardService.ts",
+  "apps/server/src/orchestration-v2/PlanFileService.ts",
+  "apps/server/src/orchestration-v2/PlanFileService.test.ts",
+  "apps/server/src/server.ts",
+  "packages/contracts/src/dashboard.ts",
+  "packages/contracts/src/settings.ts",
+
+  "apps/server/src/auth/RpcAuthorization.ts",
+  "apps/server/src/environment/ServerEnvironment.ts",
+  "apps/server/src/forkThreads/MessageForwardService.test.ts",
+  "apps/server/src/mcp/OrchestratorMcpToolkit.integration.test.ts",
+  "apps/server/src/mcp/toolkits/core.test.ts",
+  "apps/server/src/mcp/toolkits/thread/handlers.ts",
+  "apps/server/src/mcp/toolkits/thread/tools.ts",
+  "apps/server/src/mcp/toolkits/worktree/registration.test.ts",
+  "apps/server/src/observability/RpcInstrumentation.ts",
+  "apps/server/src/orchestration-v2/ProjectionStore.test.ts",
+  "apps/server/src/orchestration-v2/ProjectionStore.ts",
+  "apps/server/src/orchestration-v2/ThreadLaunchService.test.ts",
+  "apps/server/src/orchestration-v2/ThreadLaunchService.ts",
+  "apps/server/src/orchestration-v2/ThreadResumeSeed.ts",
+  "apps/server/src/orchestration-v2/ThreadResumeService.ts",
+  "apps/server/src/orchestration-v2/runtimeLayer.ts",
+  "apps/server/src/orchestration-v2/threadResumeRpcHandlers.ts",
+  "apps/server/src/ws.ts",
+  "apps/t3-thread/README.md",
+  "apps/t3-thread/docs/AGENT_OPERATIONS.md",
+  "apps/t3-thread/src/cli.ts",
+  "apps/t3-thread/src/client.ts",
+  "apps/t3-thread/src/contracts.ts",
+  "apps/t3-thread/src/resumePlan.ts",
+  "apps/t3-thread/src/rpc.ts",
+  "apps/t3-thread/src/types.ts",
+  "apps/t3-thread/tests/resume-plan.test.ts",
+  "apps/web/src/components/dashboard-v3/TaskRow.threadPlan.test.tsx",
+  "apps/web/src/components/dashboard-v3/ThreadPlanLine.tsx",
+  "apps/web/src/components/dashboard-v3/dashboard.logic.ts",
+  "apps/web/src/components/dashboard-v3/parts.tsx",
+  "apps/web/src/components/dashboard-v3/resumeFromPlan.logic.ts",
+  "apps/web/src/state/threadResume.ts",
+  "docs/release-notes/entries/thread-plan-progress.toml",
+  "packages/client-runtime/package.json",
+  "packages/client-runtime/src/dashboard/aggregation.ts",
+  "packages/client-runtime/src/dashboard/dashboard.test.ts",
+  "packages/client-runtime/src/dashboard/merge.ts",
+  "packages/client-runtime/src/state/models.ts",
+  "packages/client-runtime/src/threadResume.test.ts",
+  "packages/client-runtime/src/threadResume.ts",
+  "packages/contracts/src/clientRpcPermissions.ts",
+  "packages/contracts/src/environment.ts",
+  "packages/contracts/src/forkThreadMetadata.ts",
+  "packages/contracts/src/index.ts",
+  "packages/contracts/src/orchestrationV2.ts",
+  "packages/contracts/src/rpc.ts",
+  "packages/contracts/src/threadResume.ts",
+  "packages/provider-core/package.json",
+  "packages/shared/package.json",
+  "packages/shared/src/t3McpToolPresentation.ts",
+  "packages/shared/src/threadPlan.ts",
+]
+
+
+[[decision]]
+id = "resume-existing-workspace"
+date = "2026-10-13"
+decided = "Fresh deterministic thread identity and durable ThreadLaunchService receipts; existing metadata stores resumedFrom."
+rationale = "Preserves workspace identity and prevents duplicate recovery after retries or a process exit without copying conversation history."
