@@ -1,6 +1,6 @@
-Bottom: fbcc903f5d85a2ae7e8e83033b1885c399de8e95
-Top:    3c3ef1dbfc4fa73c5e6cfe8b3065f9a221378bc0
+Bottom: 14e61d6ddf249cedbe6abb4e9754d115fb2d291a
+Top:    3c5914e99b20e8dfa5b250af3f1ef67325290fc9
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 20:08:29 +0000
+Date:   2026-10-14 20:31:00 +0000
 
 feat(requests): file and order tracker work from CLI and MCP
