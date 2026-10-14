@@ -196,7 +196,11 @@ export function settledGroupSummary(
       ? [`${settled.length} settled ${settled.length === 1 ? "subproject" : "subprojects"}`]
       : []),
     ...(settledSubagents > 0
-      ? [`${settledSubagents} settled ${settledSubagents === 1 ? "subagent" : "subagents"}`]
+      ? [
+          `${settledSubagents} settled ${
+            settledSubagents === 1 ? "subagent or worker" : "subagents and workers"
+          }`,
+        ]
       : []),
   ];
   return {

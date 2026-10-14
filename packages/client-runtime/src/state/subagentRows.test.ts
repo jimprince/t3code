@@ -372,7 +372,7 @@ describe("subagent rows", () => {
       splitSettledSubagents(summary.subagentRows).settled.length,
     );
     expect(group.label).toBe("Settled (2)");
-    expect(group.description).toBe("2 settled subagents");
+    expect(group.description).toBe("2 settled subagents and workers");
     // Without subagents the label is what it was.
     expect(settledGroupSummary([summary]).label).toBe("Settled (1)");
     expect(settledGroupSummary([summary]).description).toBe("1 settled subproject");
