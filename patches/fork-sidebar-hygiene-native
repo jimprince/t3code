@@ -1,6 +1,6 @@
-Bottom: 0f106cbae07ef23c46653faf6b2dc2c2d4b8c4af
-Top:    f04181812b3810ffaf389b37e2f9796fd85ea083
+Bottom: 92e22c0f9abab344fd2b7dc437cf7c78c38bd7f4
+Top:    1ff2455a78e40f4307992ec3f4d7ca9df6c65178
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 11:56:58 +0000
+Date:   2026-10-14 12:02:24 +0000
 
 feat(server): nest and settle completed native subagents
