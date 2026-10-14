@@ -1,0 +1,4 @@
+id = "noninteractive-startup-pairing"
+category = "fix"
+functionality = "headless server"
+text = "Keep pairing tokens, links and QR codes out of unattended server startup logs; run t3 pair explicitly to connect a device."

@@ -1,4 +1,5 @@
 import { assert, it } from "@effect/vitest";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   DEFAULT_SERVER_SETTINGS,
   DEFAULT_MODEL,
@@ -10,12 +11,128 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Ref from "effect/Ref";
+import * as DateTime from "effect/DateTime";
+import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
+import * as References from "effect/References";
+import * as TestConsole from "effect/testing/TestConsole";
+import { HttpServer } from "effect/http";
+import * as NetAddress from "effect/net/NetAddress";
 import * as TestClock from "effect/testing/TestClock";
 
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 
 import * as ServerConfig from "./config.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
+import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
+import * as ExternalLauncher from "./process/externalLauncher.ts";
+import { buildPairingUrl, renderTerminalQrCode, ShowStartupCredentials } from "./startupAccess.ts";
+
+for (const startupPresentation of ["headless", "browser"] as const) {
+  for (const interactive of [undefined, false, true]) {
+    it.effect(
+      `keeps ${startupPresentation} startup credentials ${interactive ? "visible on a TTY" : interactive === false ? "out of noninteractive output" : "out of redirected output by default"}`,
+      () =>
+        Effect.gen(function* () {
+          const config = yield* ServerConfig.ServerConfig;
+          const token = "TEST credential+/=?&";
+          const connectionString = "http://127.0.0.1:3773";
+          const pairingUrl = buildPairingUrl(connectionString, token);
+          const logs: string[] = [];
+          const browserTargets: string[] = [];
+          const logger = Logger.make(({ fiber, message }) => {
+            logs.push(
+              JSON.stringify({
+                message,
+                annotations: fiber.getRef(References.CurrentLogAnnotations),
+              }),
+            );
+          });
+          const presentation =
+            interactive === undefined
+              ? ServerRuntimeStartup.presentStartupAccess
+              : ServerRuntimeStartup.presentStartupAccess.pipe(
+                  Effect.provideService(ShowStartupCredentials, interactive),
+                );
+          yield* presentation.pipe(
+            Effect.provide(
+              Layer.mergeAll(
+                Layer.succeed(ServerConfig.ServerConfig, {
+                  ...config,
+                  mode: "web",
+                  startupPresentation,
+                  host: "127.0.0.1",
+                  port: 3773,
+                  noBrowser: false,
+                  devUrl: undefined,
+                }),
+                Layer.mock(EnvironmentAuth.EnvironmentAuth)({
+                  issueStartupPairingCredential: () =>
+                    Effect.succeed({
+                      id: "test-startup",
+                      credential: token,
+                      expiresAt: DateTime.makeUnsafe("2026-10-14T23:59:00Z"),
+                    }),
+                  issueStartupPairingUrl: () => Effect.succeed(pairingUrl),
+                }),
+                Layer.mock(HttpServer.HttpServer)({
+                  address: NetAddress.inetAddressFromIpStringUnsafe("127.0.0.1", 3773),
+                }),
+                Layer.mock(ExternalLauncher.ExternalLauncher)({
+                  launchBrowser: (target) =>
+                    Effect.sync(() => {
+                      browserTargets.push(target);
+                    }).pipe(
+                      Effect.andThen(
+                        Effect.fail(
+                          new ExternalLauncher.ExternalLauncherBrowserSpawnError({
+                            target,
+                            command: "test-browser",
+                            args: [target],
+                            cause: "test failure",
+                          }),
+                        ),
+                      ),
+                    ),
+                }),
+                Logger.layer([logger], { mergeWithExisting: false }),
+              ),
+            ),
+          );
+          const output = [...(yield* TestConsole.logLines), ...logs].join("\n");
+          if (interactive) {
+            assert.include(output, pairingUrl);
+            if (startupPresentation === "headless") {
+              assert.include(output, `Token: ${token}`);
+              assert.include(output, renderTerminalQrCode(pairingUrl));
+            } else {
+              assert.deepEqual(browserTargets, [pairingUrl]);
+              assert.include(output, "browser auto-open unavailable");
+            }
+          } else {
+            assert.notInclude(output, token);
+            assert.notInclude(output, encodeURIComponent(token));
+            assert.notInclude(output, new URLSearchParams({ token }).toString());
+            assert.notInclude(output, pairingUrl);
+            assert.notInclude(output, renderTerminalQrCode(pairingUrl));
+            assert.notMatch(output, /[█▀▄]/);
+            assert.notInclude(output, "pairingUrl");
+            assert.deepEqual(browserTargets, []);
+            assert.include(output, "T3 Code server is ready.");
+            assert.include(output, `Connection string: ${connectionString}`);
+            assert.include(output, "Pairing is available. Run t3 pair on this server");
+          }
+        }).pipe(
+          Effect.scoped,
+          Effect.provide(
+            ServerConfig.layerTest("/tmp", { prefix: "t3-startup-output-" }).pipe(
+              Layer.provideMerge(Layer.mergeAll(NodeServices.layer, TestConsole.layer)),
+            ),
+          ),
+        ),
+    );
+  }
+}
 
 it("uses the canonical Codex model for auto-bootstrap", () => {
   assert.deepEqual(ServerRuntimeStartup.getAutoBootstrapThreadModelSelection(), {
