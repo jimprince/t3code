@@ -10117,6 +10117,11 @@ export default function ChatView(props: ChatViewProps) {
         nestedParentId,
         readForkLaunchParentSupported(environmentId),
       );
+      const taskIssue = isLocalDraftThread
+        ? useComposerDraftStore
+            .getState()
+            .getDraftThreadByRef(scopeThreadRef(environmentId, threadIdForSend))?.issue
+        : undefined;
       const startPromise = startThreadTurn({
         environmentId,
         input: {
@@ -10159,6 +10164,7 @@ export default function ChatView(props: ChatViewProps) {
           interactionMode: sendInteractionMode,
           dispatchMode: turnDispatchMode,
           ...(bootstrap ? { bootstrap } : {}),
+          ...(taskIssue === undefined ? {} : { issue: taskIssue }),
           ...(nestedLaunch.launchParentId === null
             ? {}
             : { parentThreadId: nestedLaunch.launchParentId }),

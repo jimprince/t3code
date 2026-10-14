@@ -21,7 +21,7 @@ const environment: SavedEnvironment = {
 const decodeMetadataUpdate = Schema.decodeUnknownSync(ForkThreadMetadataUpdate);
 const decodeLaunch = Schema.decodeUnknownSync(OrchestrationV2ThreadLaunchInput);
 const decodeCommand = Schema.decodeUnknownSync(OrchestrationV2Command);
-function harness() {
+function harness(options: { failStart?: boolean } = {}) {
   let title = "Original";
   let scope: string | null = null;
   let parentThreadId: string | null = null;
@@ -34,7 +34,7 @@ function harness() {
       label: environment.label,
       platform: { os: "linux", arch: "x64" },
       serverVersion: "test",
-      capabilities: { threadNesting: true },
+      capabilities: { threadNesting: true, taskIssueLaunch: true },
     }),
     rpcFactory: () => ({
       request: async <T>(method: string, input: unknown): Promise<T> => {
@@ -51,6 +51,7 @@ function harness() {
           const value = decodeLaunch(input);
           launches.push(value);
           operations.push(value.initialMessage ? "start" : "claim");
+          if (value.initialMessage && options.failStart) throw new Error("Gitea unavailable");
           return { threadId: value.threadId } as T;
         }
         const command = decodeCommand(input);
@@ -92,11 +93,14 @@ describe("V2 worker titles", () => {
       title: "Chosen",
       initialMessage: "Work",
       parentThreadId: "parent",
+      issue: "brad/tasks#7",
     });
     expect(h.operations).toEqual(["claim", "nest", "start"]);
     expect(h.launches[0]?.initialMessage).toBeUndefined();
+    expect(h.launches[0]?.issue).toBeUndefined();
     expect(h.launches[1]).toMatchObject({
       reuseExistingThread: true,
+      issue: "brad/tasks#7",
       generateTitle: false,
       initialMessage: { text: "Work" },
     });
@@ -135,4 +139,22 @@ describe("V2 worker titles", () => {
     await h.client.setThreadParent("thread", null);
     expect((await h.client.findThread("thread")).parentThreadId).toBeNull();
   });
+});
+
+it("includes the empty worker and launch identities when task-linked creation fails", async () => {
+  const h = harness({ failStart: true });
+  const cause = await h.client
+    .createAgentThread({
+      projectId: "project",
+      title: "Worker",
+      initialMessage: "Build it",
+      issue: "brad/tasks#7",
+      parentThreadId: "parent",
+    })
+    .catch((error: Error) => error);
+  expect(cause).toBeInstanceOf(Error);
+  expect((cause as Error).message).toContain(h.launches[0]!.threadId);
+  expect((cause as Error).message).toContain(h.launches[1]!.commandId);
+  expect((cause as Error).message).toContain("Gitea unavailable");
+  expect(h.operations).toEqual(["claim", "nest", "start"]);
 });
