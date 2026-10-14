@@ -12,6 +12,7 @@ files = [
   "apps/web/src/components/dashboard-v3/RequestLine.tsx",
   "apps/web/src/components/dashboard-v3/orderActions.ts",
   "apps/web/src/components/dashboard-v3/orderRows.tsx",
+  "apps/web/src/components/dashboard-v3/pendingMoves.ts",
   "apps/web/src/components/dashboard-v3/requestLine.logic.test.ts",
   "apps/web/src/components/dashboard-v3/requestLine.logic.ts",
   "apps/web/src/state/projectIssues.ts",
@@ -23,5 +24,5 @@ files = [
 [[decision]]
 id = "order-is-the-servers-rank"
 date = "2026-10-14"
-decided = "The Dashboard shows no order the tracker has not accepted. Every move is one server call, and the view updates from the immediate snapshot refresh."
-rationale = "A client-only order could disagree with what agents read through the queue."
+decided = "The tracker's stored rank is the order. A move shows at once through a short-lived pending overlay, which clears when the snapshot shows the same order and drops on failure or after 15 s; first moves in an unranked workstream go as one batch call."
+rationale = "A client-only order could disagree with what agents read through the queue; the overlay only bridges the one refresh after a write."
