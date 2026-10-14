@@ -66,3 +66,20 @@ and remove only the root id from trackerRoots in that snapshot before restarting
 Keep the issue samples and other roots. Removing a flag alone does not roll back
 a cached tracker root. This procedure is operator-owned; workers never edit live
 state as part of verification.
+
+## Dashboard rendering
+
+Task rows show personal steps (done/total with a bar). A task without a
+checklist shows "no checklist yet": no bar, no 0/1, and it counts as an open
+task, not as a step. A workstream header shows done/total child tasks with its
+own bar; nested epics sit under their parent and are counted once there. A
+header whose epic has no children is a heading with "no tasks yet". Child counts
+and task steps are never added together. A due date shows as a calendar date
+("Oct 20"), never a time. Membership warnings, workstreams left out of the
+snapshot and rows dropped from a retired plan file each get one short line.
+A first observation whose confirmation time is unknown is never dated.
+A `source: tracker` briefing file that binds to no root shows once on Home as
+"Unbound briefing file: <file>" (it never switches a root). A truncated plan body
+shows "Plan body truncated" under its row. A checklist-less task shows its latest
+note's `next:` text in place of "no checklist yet". An epic's own due date shows on
+its header when the snapshot keeps the epic's task.

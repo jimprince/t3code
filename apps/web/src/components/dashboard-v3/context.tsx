@@ -30,7 +30,11 @@ export interface DashboardUi {
   /** The decisions blocking a task, as keys; empty when none or already answered. */
   readonly decisionKeysFor: (scoped: ScopedProject, task: DashboardTask) => ReadonlyArray<string>;
   readonly openDecisions: (keys: ReadonlyArray<string>) => void;
-  readonly openTask: (scoped: ScopedProject, task: DashboardTask) => void;
+  /** Opens an issue's panel; a workstream header passes its epic the same way a task row does. */
+  readonly openTask: (
+    scoped: ScopedProject,
+    task: Pick<DashboardTask, "id" | "url" | "threadId">,
+  ) => void;
   readonly openProject: (scoped: ScopedProject) => void;
   readonly summaryFor: (scoped: ScopedProject) => OrchestratorSummary | null;
   readonly sourceHealth: (sourceId: string) => SourceHealth | null;
