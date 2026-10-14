@@ -1518,7 +1518,18 @@ agent
     await cancelDeferredSettlement(savedAgent.environment, savedAgent.threadId);
     const result = await client.unsettleThread(savedAgent.threadId);
     const released = await releaseHeldNotifications(savedAgent.threadId);
-    if (released.length > 0) {
+    await detectAttentionEvents({ env: savedAgent.environment });
+    const state = await loadState();
+    if (
+      released.length > 0 ||
+      state.subscriptions.some(
+        (route) =>
+          route.nestingDerived &&
+          !route.expiryReason &&
+          route.sourceEnvironment === savedAgent.environment &&
+          route.sourceThreadId === savedAgent.threadId,
+      )
+    ) {
       await ensureNotificationWatcher();
     }
     printJson({ ...result, releasedNotifications: released.length });
@@ -1606,6 +1617,8 @@ agent
   .description("List saved attention-routing subscriptions")
   .option("--subscriber <name>", "filter by subscriber agent name or thread UUID")
   .option("--source <name>", "filter by source agent name or thread UUID")
+  .option("--include-expired", "include inactive derived routes and their expiry reason")
+  .option("--summary", "show active and expired route counts alongside the routes")
   .action(async (options) => {
     const state = await loadState();
     const subscriptions = state.subscriptions.filter((subscription) => {
@@ -1625,7 +1638,13 @@ agent
       }
       return true;
     });
-    printJson(subscriptions);
+    const active = subscriptions.filter((route) => !route.expiryReason);
+    const routes = options.includeExpired ? subscriptions : active;
+    printJson(
+      options.summary
+        ? { activeCount: active.length, expiredCount: subscriptions.length - active.length, routes }
+        : routes,
+    );
   });
 
 agent

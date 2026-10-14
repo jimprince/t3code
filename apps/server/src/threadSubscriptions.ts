@@ -15,10 +15,16 @@ function routesOf(state: RoutingState) {
 
 /** Only public route metadata leaves the host; the credential-bearing state stays here. */
 export async function listThreadSubscriptions(threadId: string) {
+  const routes = routesOf(await loadState(empty)).filter(
+    (route) => route.subscriberThreadId === threadId,
+  );
+  const active = routes.filter((route) => !route.expiryReason);
+  const expired = routes.filter((route) => route.expiryReason);
   return {
-    routes: routesOf(await loadState(empty)).filter(
-      (route) => route.subscriberThreadId === threadId,
-    ),
+    routes: active,
+    activeCount: active.length,
+    expiredCount: expired.length,
+    expiredRoutes: expired,
   };
 }
 
@@ -34,11 +40,22 @@ export async function updateThreadSubscriptions(input: typeof UpdateThreadSubscr
       route.subscriberThreadId === input.threadId && sources.has(route.sourceThreadId);
     const removed = routes.filter(matches);
     const stored = Array.isArray(state.subscriptions) ? state.subscriptions : [];
+    const now = DateTime.formatIso(DateTime.nowUnsafe());
     const subscriptions =
       input.action === "remove"
-        ? stored.filter((route) => !matches(decodeRoute(route)))
+        ? stored.flatMap((route) =>
+            !matches(decodeRoute(route))
+              ? [route]
+              : decodeRoute(route).nestingDerived
+                ? [{ ...route, expiryReason: "unsubscribed", expiredAt: now, updatedAt: now }]
+                : [],
+          )
         : [
-            ...stored,
+            ...stored.map((route) =>
+              matches(decodeRoute(route)) && decodeRoute(route).expiryReason === "unsubscribed"
+                ? { ...route, expiryReason: null, expiredAt: null, updatedAt: now }
+                : route,
+            ),
             ...input.routes.filter(
               (route) =>
                 !routes.some(

@@ -64,6 +64,15 @@ it. On unsettle, the thread receives only the newest held notification from
 each source. `t3-thread unsettle` releases them at once; after unsettling in the
 app, they go out on the watcher's next pass while it is running.
 
+Organizationally derived attention routes expire on source settlement, archival,
+or completion. The watcher restores them when the source is unsettled, reopened,
+or starts new work. Explicit subscriptions keep their existing behavior.
+`subscriptions` lists active routes; add `--summary` for active and expired counts
+and `--include-expired` to inspect expiry reasons. Derived `unsubscribe` stays
+inactive for that parent/source pair; explicit `subscribe` restores your interest.
+New children derive their own routes. Expired records remain as inspection history
+in the existing routing file and cannot deliver pending notifications.
+
 When a worker reaches **Plan Ready**, use `t3-thread implement <agent-or-thread-id>`
 to perform the same-thread equivalent of the UI's **Implement** button. The CLI
 selects the current unimplemented proposal, switches the thread from plan mode

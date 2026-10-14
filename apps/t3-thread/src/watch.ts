@@ -4,6 +4,8 @@ import {
   matchesCurrentParent,
   mapRouteEnvironment,
   parentInputRoute,
+  reconcileDerivedRoute,
+  sourceRouteExpiry,
 } from "./parentRouting.js";
 import { observeInactivity, inactivityStillCurrent } from "./inactivity.js";
 import { withInputReminder, inputNotificationStillCurrent } from "./inputReminders.js";
@@ -218,6 +220,16 @@ export function createWatchPoller(factory: WatchClientFactory = createWatchClien
       const list = (factory(environment).listThreads?.() ?? Promise.resolve([])).then((shells) => {
         forget();
         for (const shell of shells) {
+          const key = `${environment.name}:${shell.id}`;
+          const cached = parked.get(key);
+          if (
+            (cached?.reason === "archived" && !shell.archivedAt) ||
+            (cached?.reason === "settled" && shell.settledOverride !== "settled")
+          ) {
+            parked.delete(key);
+            signedReads.delete(key);
+            reads.delete(key);
+          }
           listedShells.set(`${environment.name}:${shell.id}`, shell);
           const quiet = quietShellSignature(shell);
           signatures.set(
@@ -407,9 +419,37 @@ async function discoverParentRoutes(state: StateFile, options: AttentionScanOpti
     const client = factory(environment);
     let shells: OrchestrationThreadShell[];
     try {
-      shells = (await client.listThreads?.()) ?? [];
+      shells = [...((await client.listThreads?.()) ?? [])];
     } catch {
       continue;
+    }
+    // Archived sources leave the active shell list. Read only retained live derived
+    // sources missing from that list; a failed read is unknown, never expiry evidence.
+    const listedIds = new Set(shells.map((shell) => shell.id));
+    const missingIds = new Set(
+      subscriptions
+        .filter(
+          (route) =>
+            route.nestingDerived &&
+            !route.expiryReason &&
+            route.sourceEnvironment === environment.name &&
+            !listedIds.has(route.sourceThreadId),
+        )
+        .map((route) => route.sourceThreadId),
+    );
+    for (const id of missingIds) {
+      try {
+        const detail = await client.findThread(id);
+        shells.push({
+          ...detail,
+          latestUserMessageAt: null,
+          hasPendingApprovals: classifyThread(detail).state === "needs-approval",
+          hasPendingUserInput: classifyThread(detail).state === "needs-input",
+          hasActionableProposedPlan: classifyThread(detail).state === "needs-plan",
+        });
+      } catch {
+        /* Retain the last known state during an outage. */
+      }
     }
     for (const shell of shells) {
       const key = JSON.stringify([environment.name, shell.id]);
@@ -430,13 +470,20 @@ async function discoverParentRoutes(state: StateFile, options: AttentionScanOpti
         };
         agents.push(source);
       }
-      subscriptions = subscriptions.filter(
-        (route) =>
-          !route.nestingDerived ||
-          route.sourceEnvironment !== environment.name ||
-          route.sourceThreadId !== shell.id ||
-          matchesCurrentParent(shell, route, state),
-      );
+      subscriptions = subscriptions
+        .filter(
+          (route) =>
+            !route.nestingDerived ||
+            route.expiryReason === "unsubscribed" ||
+            route.sourceEnvironment !== environment.name ||
+            route.sourceThreadId !== shell.id ||
+            matchesCurrentParent(shell, route, state),
+        )
+        .map((route) =>
+          route.sourceEnvironment === environment.name && route.sourceThreadId === shell.id
+            ? reconcileDerivedRoute(route, shell, (options.now ?? nowIso)())
+            : route,
+        );
       if (!source) continue;
       const parent = parentInputRoute(state, source, shell, (options.now ?? nowIso)());
       if (parent && !subscriptions.some((route) => sameNotificationRoute(route, parent, state)))
@@ -511,9 +558,12 @@ async function scanAttentionState(
 
     const subscriptions = state.subscriptions.filter(
       (subscription) =>
+        !subscription.expiryReason &&
         subscription.sourceThreadId === sourceAgent.threadId &&
         subscription.sourceEnvironment === sourceAgent.environment &&
-        (!subscription.nestingDerived || matchesCurrentParent(sourceThread, subscription, state)),
+        (!subscription.nestingDerived ||
+          (!sourceRouteExpiry(sourceThread) &&
+            matchesCurrentParent(sourceThread, subscription, state))),
     );
     if (subscriptions.length === 0) {
       continue;
@@ -686,9 +736,11 @@ export async function hasActiveWork(
   const discovered = await discoverParentRoutes(state, options);
   state = discovered.state;
   const subscribedSourceThreadIds = new Set(
-    state.subscriptions.map((subscription) =>
-      JSON.stringify([subscription.sourceEnvironment, subscription.sourceThreadId]),
-    ),
+    state.subscriptions
+      .filter((subscription) => !subscription.expiryReason)
+      .map((subscription) =>
+        JSON.stringify([subscription.sourceEnvironment, subscription.sourceThreadId]),
+      ),
   );
   if (subscribedSourceThreadIds.size === 0) {
     return false;
@@ -756,8 +808,55 @@ export async function detectAttentionEvents(
   return updateState(async (currentState) => {
     const persisted: SavedNotification[] = [];
     let notifications = currentState.notifications;
+    const subscriptions = [
+      ...currentState.subscriptions.filter(
+        (route) =>
+          !route.nestingDerived ||
+          !discovered.observedSources.has(
+            JSON.stringify([route.sourceEnvironment, route.sourceThreadId]),
+          ) ||
+          discovered.state.subscriptions.some((observed) =>
+            sameNotificationRoute(route, observed, currentState),
+          ),
+      ),
+      ...discovered.state.subscriptions.filter(
+        (route) =>
+          route.nestingDerived &&
+          !currentState.subscriptions.some((existing) =>
+            sameNotificationRoute(route, existing, currentState),
+          ),
+      ),
+    ].map((route) => {
+      if (!route.nestingDerived || route.expiryReason === "unsubscribed") return route;
+      const source = discovered.shellsBySource.get(
+        JSON.stringify([route.sourceEnvironment, route.sourceThreadId]),
+      );
+      return source ? reconcileDerivedRoute(route, source, (options.now ?? nowIso)()) : route;
+    });
+    notifications = notifications.map((notification) => {
+      const expired = subscriptions.find(
+        (route) => route.expiryReason && sameNotificationRoute(route, notification, currentState),
+      );
+      return expired &&
+        !TERMINAL_NOTIFICATION_STATUSES.has(notification.status) &&
+        notification.status !== "delivering"
+        ? {
+            ...notification,
+            status: "superseded" as const,
+            nextAttemptAt: null,
+            updatedAt: (options.now ?? nowIso)(),
+            lastError: `Derived route expired: ${expired.expiryReason}.`,
+          }
+        : notification;
+    });
 
     for (let notification of scanned) {
+      if (
+        subscriptions.some(
+          (route) => route.expiryReason && sameNotificationRoute(route, notification, currentState),
+        )
+      )
+        continue;
       // Another detector may have established this episode while our source
       // snapshot was in flight. Select its key and count under the state lock.
       if (notification.sourceState === "error") {
@@ -820,28 +919,11 @@ export async function detectAttentionEvents(
       state: {
         ...currentState,
         notifications,
-        subscriptions: [
-          ...currentState.subscriptions.filter(
-            (route) =>
-              !route.nestingDerived ||
-              !discovered.observedSources.has(
-                JSON.stringify([route.sourceEnvironment, route.sourceThreadId]),
-              ) ||
-              discovered.state.subscriptions.some((observed) =>
-                sameNotificationRoute(route, observed, currentState),
-              ),
-          ),
-          ...discovered.state.subscriptions.filter(
-            (route) =>
-              route.nestingDerived &&
-              !currentState.subscriptions.some((existing) =>
-                sameNotificationRoute(route, existing, currentState),
-              ),
-          ),
-        ].map((route) => {
+        subscriptions: subscriptions.map((route) => {
           const observed = observedSubscriptions.find((candidate) =>
             sameNotificationRoute(candidate, route, currentState),
           );
+          if (!route.nestingDerived && !observed) return route;
           return mapRouteEnvironment(
             currentState,
             observed
@@ -1082,7 +1164,15 @@ export async function deliverPendingNotifications(
         if (persisted) delivered.push(persisted);
         continue;
       }
-      if (!subscriptionStillExists) {
+      if (subscription?.expiryReason) {
+        result = {
+          ...notification,
+          status: "superseded",
+          updatedAt: attemptedAt,
+          nextAttemptAt: null,
+          lastError: `Derived route expired: ${subscription.expiryReason}.`,
+        };
+      } else if (!subscriptionStillExists) {
         result = notification.isChildInput
           ? {
               ...notification,
@@ -1122,7 +1212,7 @@ export async function deliverPendingNotifications(
           ).findThread(notification.sourceThreadId);
           if (
             !matchesCurrentParent(source, notification, state) ||
-            source.archivedAt ||
+            sourceRouteExpiry(source) ||
             source.deletedAt ||
             source.settledOverride === "settled" ||
             !["needs-input", "needs-approval"].includes(classifyThread(source).state)
@@ -1250,8 +1340,8 @@ export async function deliverPendingNotifications(
           // Snapshot reads can be slow; an unsubscribe during that read wins.
           const latest = await loadState();
           if (
-            !latest.subscriptions.some((route) =>
-              sameNotificationRoute(route, notification, latest),
+            !latest.subscriptions.some(
+              (route) => !route.expiryReason && sameNotificationRoute(route, notification, latest),
             ) ||
             latest.notifications.find((event) => event.id === notification.id)?.status !==
               "delivering"

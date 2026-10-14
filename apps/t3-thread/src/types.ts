@@ -245,6 +245,8 @@ export type NotificationLevel = "all" | "attention" | "none";
 export interface SavedSubscription {
   /** Implicit attention route maintained from organizational metadata. */
   nestingDerived?: boolean;
+  expiredAt?: string | null;
+  expiryReason?: "settled" | "archived" | "completed" | "unsubscribed" | null;
   subscriberEnvironmentId?: string;
   events?: "all" | "attention";
   /** Opt-in inactivity monitoring; zero or absent disables it. */

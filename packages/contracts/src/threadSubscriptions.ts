@@ -13,6 +13,11 @@ export const ThreadSubscription = Schema.Struct({
   sourceEnvironment: Schema.String,
   createdAt: Schema.String,
   updatedAt: Schema.String,
+  nestingDerived: Schema.optionalKey(Schema.Boolean),
+  expiredAt: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  expiryReason: Schema.optionalKey(
+    Schema.NullOr(Schema.Literals(["settled", "archived", "completed", "unsubscribed"])),
+  ),
   baselineTurnId: Schema.optionalKey(Schema.NullOr(Schema.String)),
   level: Schema.optionalKey(Schema.Literals(["all", "attention", "none"])),
   inputReminderMinutes: Schema.optionalKey(Schema.Number),
@@ -25,6 +30,9 @@ export type ThreadSubscription = typeof ThreadSubscription.Type;
 export const ThreadSubscriptionsInput = Schema.Struct({ threadId: ThreadId });
 export const ThreadSubscriptionsResult = Schema.Struct({
   routes: Schema.Array(ThreadSubscription),
+  activeCount: Schema.optionalKey(Schema.Number),
+  expiredCount: Schema.optionalKey(Schema.Number),
+  expiredRoutes: Schema.optionalKey(Schema.Array(ThreadSubscription)),
 });
 export const UpdateThreadSubscriptionsInput = Schema.Struct({
   threadId: ThreadId,
