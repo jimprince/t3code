@@ -1,0 +1,4 @@
+id = "nested-thread-launch-order"
+category = "fix"
+functionality = "thread nesting"
+text = "A thread started with New thread under this one is nested before its first message is sent, so it works under a permanent-agent project, a parent that has gone is reported before anything starts, and the Nested under notice with Undo is back."
