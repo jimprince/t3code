@@ -407,6 +407,11 @@ export function aggregate(input: {
           createdAt: issue.createdAt,
           ...(issue.placedBy !== undefined ? { placedBy: issue.placedBy } : {}),
           ...(parent != null ? { partOf: parent } : {}),
+          ...(issue.isRequest
+            ? { kind: labels.has("ask:question") && !labels.has("ask:task") ? "question" : "task" }
+            : {}),
+          ...(labels.has("bug") ? { bug: true } : {}),
+          ...(labels.has("parked") ? { parked: true } : {}),
           ...(tracker && issue.plan ? { hasChecklist: issue.plan.hasChecklist } : {}),
           ...(issue.membershipWarnings ? { membershipWarnings: issue.membershipWarnings } : {}),
           title: issue.title,
