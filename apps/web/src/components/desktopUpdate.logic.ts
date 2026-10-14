@@ -83,6 +83,14 @@ export function getArm64IntelBuildWarningDescription(state: DesktopUpdateState):
 }
 
 export function getDesktopUpdateButtonTooltip(state: DesktopUpdateState): string {
+  // The Mac dev build compares its commit with origin and says so; updater states carry no message.
+  if (
+    (state.status === "available" || state.status === "up-to-date") &&
+    state.errorContext === null &&
+    state.message !== null
+  ) {
+    return state.message;
+  }
   if (state.status === "available") {
     return `Update ${state.availableVersion ?? "available"} ready to download`;
   }
