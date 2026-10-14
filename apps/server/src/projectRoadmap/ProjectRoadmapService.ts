@@ -51,7 +51,7 @@ export const make = (deps: {
         if (!resolved) return { tracker: null, versions: [], items: [] } satisfies ProjectRoadmap;
         const { target, root } = resolved;
         const listing = yield* deps.projectIssues
-          .list({ rootThreadId: root.id }, resolved.threads)
+          .list({ rootThreadId: root.id }, {}, resolved.threads)
           .pipe(Effect.mapError((error) => fail(error.message)));
         const milestones = yield* listMilestones(
           api,
