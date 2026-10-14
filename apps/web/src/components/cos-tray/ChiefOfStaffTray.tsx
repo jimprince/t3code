@@ -115,7 +115,7 @@ function DesktopTray({ cos }: { readonly cos: Cos }) {
         data-testid="cos-rail"
         aria-label="Open the Chief of Staff tray"
         style={{ width: COS_TRAY_RAIL_WIDTH }}
-        className="flex min-h-0 shrink-0 cursor-pointer flex-col items-center gap-3 border-l border-border bg-sidebar py-3 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:outline-none"
+        className="flex min-h-0 shrink-0 cursor-pointer flex-col items-center gap-3 border-l border-border bg-sidebar py-3 hover:bg-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 focus-visible:outline-none"
         onClick={() => setMode("open")}
       >
         <CosDot waiting={cos.waiting} replying={cos.replying} />
@@ -167,8 +167,8 @@ function PhoneTray({ cos }: { readonly cos: Cos }) {
           type="button"
           data-testid="cos-peek"
           aria-label="Open the Chief of Staff sheet"
-          style={{ minHeight: COS_TRAY_PEEK_HEIGHT }}
-          className="fixed inset-x-0 bottom-0 z-30 flex cursor-pointer items-center gap-2 border-t border-border bg-sidebar px-4 pb-[env(safe-area-inset-bottom)] text-left"
+          style={{ minHeight: COS_TRAY_PEEK_HEIGHT, paddingBottom: "env(safe-area-inset-bottom)" }}
+          className="fixed inset-x-0 bottom-0 z-30 flex cursor-pointer items-center gap-2 border-t border-border bg-sidebar px-4 text-left"
           onClick={() => setMode("open")}
         >
           <CosDot waiting={cos.waiting} replying={cos.replying} />
