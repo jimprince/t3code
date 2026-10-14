@@ -339,7 +339,11 @@ import {
 import { useNowMinute } from "../hooks/useNowMinute";
 import { usePanelAnimationSettings, usePanelPresence } from "../panelAnimations";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
-import { useNestedDraftBannerItem, useThreadNestingActions } from "../hooks/useThreadNesting";
+import {
+  readNestedDraftParent,
+  useNestedDraftBannerItem,
+  useThreadNestingActions,
+} from "../hooks/useThreadNesting";
 import { useRemoveClonedProject } from "../hooks/useRemoveClonedProject";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
 import { resolveAppModelSelectionForInstance } from "../modelSelection";
@@ -441,6 +445,7 @@ import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import type { AssistantCitationRequest } from "./chat/AssistantCitationSource";
 import { MessagesTimeline, type MessagesTimelineHistoryControls } from "./chat/MessagesTimeline";
+import { readForkLaunchParentSupported } from "./chat/forkThreadCommands";
 import { ProviderSubagentBar } from "./chat/ProviderSubagentBar";
 import { getTriggerDisplayModelName } from "./chat/providerIconUtils";
 import { resolveTimelineIsAtEnd, worktreeSetupAgentStarted } from "./chat/MessagesTimeline.logic";
@@ -9939,6 +9944,15 @@ export default function ChatView(props: ChatViewProps) {
           ? scopeThreadRef(environmentId, threadIdForSend)
           : null;
       if (backgroundThreadRef) beginBackgroundDraftSubmissionByRef(backgroundThreadRef);
+      // Read before the launch awaits: the view can unmount, and drop the draft's intent, before it answers.
+      const nestedParentId =
+        draftId !== null && isLocalDraftThread
+          ? readNestedDraftParent(draftId, environmentId)
+          : null;
+      const launchParentId =
+        nestedParentId !== null && readForkLaunchParentSupported(environmentId)
+          ? nestedParentId
+          : null;
       const startPromise = startThreadTurn({
         environmentId,
         input: {
@@ -9981,6 +9995,7 @@ export default function ChatView(props: ChatViewProps) {
           interactionMode: sendInteractionMode,
           dispatchMode: turnDispatchMode,
           ...(bootstrap ? { bootstrap } : {}),
+          ...(launchParentId === null ? {} : { parentThreadId: launchParentId }),
           createdAt: messageCreatedAt,
         },
       });
@@ -10015,7 +10030,11 @@ export default function ChatView(props: ChatViewProps) {
         turnStartSucceeded = true;
         setKeepFullHistory(routeThreadKey, false);
         if (draftId !== null && isLocalDraftThread) {
-          void attachNestedDraft(draftId, scopeThreadRef(environmentId, threadIdForSend));
+          void attachNestedDraft(
+            draftId,
+            scopeThreadRef(environmentId, threadIdForSend),
+            launchParentId === null ? nestedParentId : null,
+          );
         }
 
         // The turn is under way and will spend quota, so that thread's limits

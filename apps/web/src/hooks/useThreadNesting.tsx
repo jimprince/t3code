@@ -76,6 +76,18 @@ function resolveNestedDraftParent(draftId: DraftId, environmentId: EnvironmentId
   );
 }
 
+/**
+ * The parent a nested draft's send should file its thread under. Read when the
+ * send starts: the draft clears at send and the intent clears when the view
+ * unmounts, which can happen before a slow launch answers.
+ */
+export function readNestedDraftParent(
+  draftId: DraftId,
+  environmentId: EnvironmentId,
+): ThreadId | null {
+  return resolveNestedDraftParent(draftId, environmentId)?.id ?? null;
+}
+
 function failureToast(title: string, error: unknown) {
   toastManager.add(
     stackedThreadToast({
@@ -233,12 +245,18 @@ export function useThreadNestingActions() {
     [setThreadParent, startNestedThread],
   );
 
-  /** After a nested draft's first send creates its thread, files the new thread under the draft's parent. */
+  /**
+   * After a nested draft's first send creates its thread, ends the draft's intent. `legacyParentId` is the
+   * parent a server without `launchThreadParent` could not file the thread under at launch.
+   */
   const attachNestedDraft = useCallback(
-    async (draftId: DraftId, threadRef: ScopedThreadRef): Promise<void> => {
-      const parent = resolveNestedDraftParent(draftId, threadRef.environmentId);
+    async (
+      draftId: DraftId,
+      threadRef: ScopedThreadRef,
+      legacyParentId: ThreadId | null,
+    ): Promise<void> => {
       setNestedDraftIntent(draftId, null);
-      if (parent !== null) await setThreadParent(threadRef, parent.id);
+      if (legacyParentId !== null) await setThreadParent(threadRef, legacyParentId);
     },
     [setThreadParent],
   );
