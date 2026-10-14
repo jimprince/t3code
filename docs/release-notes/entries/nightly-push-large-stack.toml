@@ -1,0 +1,4 @@
+id = "nightly-push-large-stack"
+category = "fix"
+functionality = "release delivery"
+text = "Run the packaged-source release check after large fork updates so source changes beyond GitHub's path-filter window still reach the nightly feed."

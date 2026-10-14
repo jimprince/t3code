@@ -9,20 +9,8 @@ on:
   push:
     branches:
       - main
-    # Keep this allowlist narrow. Helper-script/docs/workflow maintenance should
-    # not publish an updater-visible desktop release.
-    paths:
-      - "apps/desktop/**"
-      - "apps/server/**"
-      - "apps/web/**"
-      - "assets/**"
-      - "packages/**"
-      - "scripts/build-desktop-artifact.ts"
-      - "scripts/build-headless-artifact.ts"
-      - "scripts/lib/brand-assets.ts"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
+    # GitHub evaluates only the first 300 changed paths. Large stack rewrites
+    # must reach the complete-tree packaged-source gate in the changes job.
   workflow_dispatch:
     inputs:
       expected_main:
