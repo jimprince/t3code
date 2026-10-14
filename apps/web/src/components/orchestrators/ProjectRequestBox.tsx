@@ -33,7 +33,7 @@ type IntakeThread = ProjectRequestStartIntakeResult;
 const SENT_LINE_MS = 120_000;
 const FILING_CHECKS_MS = [3_000, 10_000, 30_000, 60_000];
 
-function imageAttachment(file: File): ComposerImageAttachment {
+export function imageAttachment(file: File): ComposerImageAttachment {
   return {
     type: "image",
     id: randomUUID(),
@@ -45,7 +45,7 @@ function imageAttachment(file: File): ComposerImageAttachment {
   };
 }
 
-const imageFiles = (files: FileList | null | undefined) =>
+export const imageFiles = (files: FileList | null | undefined) =>
   [...(files ?? [])].filter((file) => file.type.startsWith("image/"));
 
 /** A request Brad starts often: the chip's label and the text it puts in the box. */
