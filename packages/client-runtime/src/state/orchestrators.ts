@@ -261,9 +261,9 @@ export function sortOrchestratorSummariesForSidebar(
 }
 
 /**
- * Projects mode owns complete orchestrator trees, root included, so a project and
- * its orchestrator never also occupy the Threads list (Brad, 2026-10-10). Threads
- * keeps standalone roots.
+ * Projects owns descendants and agent-created roots. UI-created user roots stay
+ * in Threads after delegation unless explicitly marked as projects. Harness owns
+ * every thread whose effective purpose is harness, including childless roots.
  */
 export function threadsVisibleInThreadsMode(
   threads: ReadonlyArray<OrchestratorThreadShell>,
@@ -288,7 +288,13 @@ export function threadsVisibleInThreadsMode(
     ) {
       continue;
     }
-    projectThreadKeys.add(rootKey);
+    if (
+      root.subproject === "on" ||
+      root.source.createdBy !== "user" ||
+      (root.source.creationSource !== "web" && root.source.creationSource !== "mobile")
+    ) {
+      projectThreadKeys.add(rootKey);
+    }
     for (const descendant of collectDescendants(root, childrenByParent)) {
       projectThreadKeys.add(threadActivityKey(descendant));
     }

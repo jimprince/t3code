@@ -5,6 +5,10 @@ need a separate branch and working directory.
 
 ## Start a thread
 
+Threads you create in the app stay in **Threads** when they delegate work. Their
+workers stay under them in **Projects**. Choosing **Show in Projects** or moving
+a thread to **Harness** keeps it in that view.
+
 On web and desktop, a new thread keeps the current project and carries your model
 and mode selections, unless the destination project has its own model default.
 With no thread open, it starts in the project you last messaged.
