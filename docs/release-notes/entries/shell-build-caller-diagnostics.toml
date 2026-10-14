@@ -1,0 +1,4 @@
+id = "shell-build-caller-diagnostics"
+category = "feature"
+functionality = "server diagnostics"
+text = "Expose per-caller shell snapshot build counts in server trace diagnostics."
