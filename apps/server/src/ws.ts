@@ -1,3 +1,4 @@
+import * as ThreadResumeRpc from "./orchestration-v2/threadResumeRpcHandlers.ts";
 import * as HarnessPinRpc from "./harness/rpcHandlers.ts";
 import { RoutineKindService } from "./harness/RoutineKindService.ts";
 import { HarnessReadService } from "./harness/HarnessReadService.ts";
@@ -3272,6 +3273,7 @@ const layerWsRpc = (
         [WS_METHODS.harnessSnapshot]: (input) =>
           Effect.flatMap(HarnessReadService, (service) => service.snapshot(input)),
         ...HarnessPinRpc.handlers,
+        ...ThreadResumeRpc.handlers,
         ...threadSubscriptionHandlers(threadManagement),
         [WS_METHODS.automationsList]: (input) =>
           automations.list(input.projectId).pipe(Effect.map((list) => ({ automations: list }))),

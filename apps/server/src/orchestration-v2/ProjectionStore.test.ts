@@ -11,6 +11,7 @@ import {
   type ModelSelection,
   type OrchestrationV2ProviderThread,
   type OrchestrationV2ThreadShellSnapshot,
+  OrchestrationV2ThreadShell,
   NodeId,
   PlanId,
   ProjectId,
@@ -55,6 +56,8 @@ const modelSelection = {
 const driver = ProviderDriverKind.make("codex");
 const providerInstanceId = modelSelection.instanceId;
 const encodeUnknownJsonString = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
+const encodeThreadShell = Schema.encodeSync(OrchestrationV2ThreadShell);
+const decodeThreadShell = Schema.decodeUnknownSync(OrchestrationV2ThreadShell);
 
 const traceSqlStatements = () => {
   const statements: Array<string> = [];
@@ -1955,118 +1958,157 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
     }),
   );
 
-  it.effect("reports the newest run's to-do list in SQL and memory shells", () =>
-    Effect.gen(function* () {
-      const projectionStore = yield* ProjectionStore.ProjectionStoreV2;
-      const createdAt = yield* DateTime.now;
-      const threadId = ThreadId.make("thread:projection-todo-progress");
-      const nodeId = NodeId.make("node:projection-todo-progress");
-      yield* projectionStore.apply({
-        id: EventId.make("event:projection-todo-progress:created"),
-        type: "thread.created",
-        threadId,
-        occurredAt: createdAt,
-        payload: {
-          createdBy: "user",
-          creationSource: "web",
-          id: threadId,
-          projectId: ProjectId.make("project:projection-todo-progress"),
-          title: "Todo progress",
-          providerInstanceId,
-          modelSelection,
-          runtimeMode: "full-access",
-          interactionMode: "default",
-          branch: null,
-          worktreePath: null,
-          activeProviderThreadId: null,
-          lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
-          forkedFrom: null,
-          createdAt,
-          updatedAt: createdAt,
-          archivedAt: null,
-          settledOverride: null,
-          settledAt: null,
-          lastVisitedAt: null,
-          deletedAt: null,
-        },
-      });
-      const runIds = [1, 2].map((ordinal) => RunId.make(`run:projection-todo-progress:${ordinal}`));
-      for (const [index, runId] of runIds.entries()) {
+  it.effect(
+    "reports resume state without native todos and the newest run's to-do list in SQL and memory shells",
+    () =>
+      Effect.gen(function* () {
+        const projectionStore = yield* ProjectionStore.ProjectionStoreV2;
+        const createdAt = yield* DateTime.now;
+        const threadId = ThreadId.make("thread:projection-todo-progress");
+        const nodeId = NodeId.make("node:projection-todo-progress");
         yield* projectionStore.apply({
-          id: EventId.make(`event:projection-todo-progress:${runId}`),
-          type: "run.created",
+          id: EventId.make("event:projection-todo-progress:created"),
+          type: "thread.created",
           threadId,
-          runId,
-          nodeId,
-          driver,
           occurredAt: createdAt,
           payload: {
-            id: runId,
-            threadId,
-            ordinal: index + 1,
+            createdBy: "user",
+            creationSource: "web",
+            id: threadId,
+            projectId: ProjectId.make("project:projection-todo-progress"),
+            title: "Todo progress",
             providerInstanceId,
             modelSelection,
-            providerThreadId: null,
-            userMessageId: MessageId.make(`message:projection-todo-progress:${index}`),
-            rootNodeId: nodeId,
-            activeAttemptId: null,
-            status: "completed",
-            requestedAt: createdAt,
-            startedAt: createdAt,
-            completedAt: createdAt,
-            checkpointId: null,
-            contextHandoffId: null,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            branch: null,
+            worktreePath: null,
+            activeProviderThreadId: null,
+            lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
+            forkedFrom: null,
+            createdAt,
+            updatedAt: createdAt,
+            archivedAt: null,
+            settledOverride: null,
+            settledAt: null,
+            lastVisitedAt: null,
+            deletedAt: null,
           },
         });
-      }
-      const progressOf = Effect.gen(function* () {
-        const sqlShell = (yield* projectionStore.getShellSnapshot()).threads.find(
-          (row) => row.id === threadId,
-        )!;
-        const memoryShell = ProjectionStore.threadShellFromProjection(
-          yield* projectionStore.getThreadProjection(threadId),
+        const runIds = [1, 2].map((ordinal) =>
+          RunId.make(`run:projection-todo-progress:${ordinal}`),
         );
-        assert.deepEqual(sqlShell.todoProgress, memoryShell.todoProgress);
-        return sqlShell.todoProgress;
-      });
-      const todoList = (
-        planId: string,
-        runId: RunId,
-        statuses: ReadonlyArray<"pending" | "running" | "completed">,
-      ) =>
-        projectionStore.apply({
-          id: EventId.make(`event:projection-todo-progress:${planId}:${statuses.join("-")}`),
-          type: "plan.updated",
-          threadId,
-          occurredAt: createdAt,
-          payload: {
-            id: PlanId.make(planId),
+        for (const [index, runId] of runIds.entries()) {
+          yield* projectionStore.apply({
+            id: EventId.make(`event:projection-todo-progress:${runId}`),
+            type: "run.created",
             threadId,
             runId,
             nodeId,
-            kind: "todo_list",
-            status: "active",
-            steps: statuses.map((status, index) => ({
-              id: `step-${index}`,
-              text: `Step ${index}`,
-              status,
-            })),
-          },
+            driver,
+            occurredAt: createdAt,
+            payload: {
+              id: runId,
+              threadId,
+              ordinal: index + 1,
+              providerInstanceId,
+              modelSelection,
+              providerThreadId: null,
+              userMessageId: MessageId.make(`message:projection-todo-progress:${index}`),
+              rootNodeId: nodeId,
+              activeAttemptId: null,
+              status: index === 1 ? "failed" : "completed",
+              requestedAt: createdAt,
+              startedAt: createdAt,
+              completedAt: createdAt,
+              checkpointId: null,
+              contextHandoffId: null,
+            },
+          });
+        }
+        const progressOf = Effect.gen(function* () {
+          const sqlShell = (yield* projectionStore.getShellSnapshot()).threads.find(
+            (row) => row.id === threadId,
+          )!;
+          const memoryShell = ProjectionStore.threadShellFromProjection(
+            yield* projectionStore.getThreadProjection(threadId),
+          );
+          assert.deepEqual(sqlShell.todoProgress, memoryShell.todoProgress);
+          assert.deepEqual(sqlShell.planResumeState, memoryShell.planResumeState);
+          assert.equal(sqlShell.planResumeState?.latestRunStatus, "failed");
+          const legacyWire = { ...encodeThreadShell(sqlShell) };
+          delete legacyWire.planResumeState;
+          assert.isUndefined(decodeThreadShell(legacyWire).planResumeState);
+          return sqlShell.todoProgress;
         });
+        const todoList = (
+          planId: string,
+          runId: RunId,
+          statuses: ReadonlyArray<"pending" | "running" | "completed">,
+        ) =>
+          projectionStore.apply({
+            id: EventId.make(`event:projection-todo-progress:${planId}:${statuses.join("-")}`),
+            type: "plan.updated",
+            threadId,
+            occurredAt: createdAt,
+            payload: {
+              id: PlanId.make(planId),
+              threadId,
+              runId,
+              nodeId,
+              kind: "todo_list",
+              status: "active",
+              steps: statuses.map((status, index) => ({
+                id: `step-${index}`,
+                text: `Step ${index}`,
+                status,
+              })),
+            },
+          });
 
-      assert.isNull(yield* progressOf);
-      yield* todoList("plan:todo:m", runIds[0]!, ["completed", "running", "pending"]);
-      assert.deepEqual(yield* progressOf, { completed: 1, total: 3 });
-      // The same list updating in place moves the count rather than adding to it.
-      yield* todoList("plan:todo:m", runIds[0]!, ["completed", "completed", "running"]);
-      assert.deepEqual(yield* progressOf, { completed: 2, total: 3 });
-      // The newer run's list wins, even when shorter and with an id that sorts first.
-      yield* todoList("plan:todo:a", runIds[1]!, ["running"]);
-      assert.deepEqual(yield* progressOf, { completed: 0, total: 1 });
-      // An older run's list written later, with an id that sorts last, does not take over.
-      yield* todoList("plan:todo:z", runIds[0]!, ["completed"]);
-      assert.deepEqual(yield* progressOf, { completed: 0, total: 1 });
-    }),
+        assert.isNull(yield* progressOf);
+        assert.equal(
+          ProjectionStore.threadShellFromProjection(
+            yield* projectionStore.getThreadProjection(threadId),
+          ).planResumeState?.latestRunStatus,
+          "failed",
+        );
+        yield* todoList("plan:todo:m", runIds[0]!, ["completed", "running", "pending"]);
+        assert.deepEqual(yield* progressOf, {
+          completed: 1,
+          total: 3,
+          currentStep: { id: "step-1", text: "Step 1", status: "running" },
+        });
+        // The same list updating in place moves the count rather than adding to it.
+        yield* todoList("plan:todo:m", runIds[0]!, ["completed", "completed", "running"]);
+        assert.deepEqual(yield* progressOf, {
+          completed: 2,
+          total: 3,
+          currentStep: { id: "step-2", text: "Step 2", status: "running" },
+        });
+        // The newer run's list wins, even when shorter and with an id that sorts first.
+        yield* todoList("plan:todo:a", runIds[1]!, ["running"]);
+        assert.deepEqual(yield* progressOf, {
+          completed: 0,
+          total: 1,
+          currentStep: { id: "step-0", text: "Step 0", status: "running" },
+        });
+        // An older run's list written later, with an id that sorts last, does not take over.
+        yield* todoList("plan:todo:z", runIds[0]!, ["completed"]);
+        assert.deepEqual(yield* progressOf, {
+          completed: 0,
+          total: 1,
+          currentStep: { id: "step-0", text: "Step 0", status: "running" },
+        });
+        yield* todoList("plan:todo:a", runIds[1]!, ["pending", "completed"]);
+        assert.deepEqual(yield* progressOf, {
+          completed: 1,
+          total: 2,
+          currentStep: { id: "step-0", text: "Step 0", status: "pending" },
+        });
+        yield* todoList("plan:todo:a", runIds[1]!, ["completed", "completed"]);
+        assert.deepEqual(yield* progressOf, { completed: 2, total: 2, currentStep: null });
+      }),
   );
 
   it.effect("preserves delegated completion ownership across stale run and task updates", () =>
