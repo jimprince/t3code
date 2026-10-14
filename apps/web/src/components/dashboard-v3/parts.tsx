@@ -1,4 +1,5 @@
-import type { DashboardRelease, DashboardTask } from "@t3tools/contracts";
+import { isNewlyFiled, newMarkTitle } from "@t3tools/client-runtime/dashboard/order";
+import type { DashboardRelease, DashboardTask, ProjectRequestPlacer } from "@t3tools/contracts";
 import { CheckIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -249,13 +250,46 @@ function useTaskSourceStale(task: DashboardTask): boolean {
   return health === "stale" || health === "failed";
 }
 
+/**
+ * "new" beside an item filed in the last four hours, wherever it shows; hovering says who placed
+ * it, or that nobody has. It expires by the item's created time and nothing is written to clear it.
+ */
+export function NewMark({
+  item,
+}: {
+  readonly item: {
+    readonly createdAt?: string | undefined;
+    readonly rank?: number | null | undefined;
+    readonly placedBy?: ProjectRequestPlacer | null | undefined;
+  };
+}) {
+  const { now } = useDashboardUi();
+  if (!isNewlyFiled(item.createdAt, now)) return null;
+  const title = newMarkTitle(item);
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span aria-label={title} data-testid="new-mark" className="ml-1.5 text-info">
+            new
+          </span>
+        }
+      />
+      <TooltipPopup>{title}</TooltipPopup>
+    </Tooltip>
+  );
+}
+
 /** One task: status mark, title, its own bar when it has a real step list, and its figure. */
 export function TaskRow({
   scoped,
   task,
+  flush = false,
 }: {
   readonly scoped: ScopedProject;
   readonly task: DashboardTask;
+  /** Sits beside order controls that already indent the row. */
+  readonly flush?: boolean;
 }) {
   const ui = useDashboardUi();
   const stale = useTaskSourceStale(task) && hasStepList(task);
@@ -281,7 +315,12 @@ export function TaskRow({
     </span>
   );
   return (
-    <div className="grid grid-cols-[14px_minmax(0,1fr)_auto] items-center gap-x-2.5 py-0.5 pl-3.5 text-xs @xl/dash:grid-cols-[14px_minmax(120px,1fr)_96px_minmax(110px,auto)]">
+    <div
+      className={cn(
+        "grid grid-cols-[14px_minmax(0,1fr)_auto] items-center gap-x-2.5 py-0.5 text-xs @xl/dash:grid-cols-[14px_minmax(120px,1fr)_96px_minmax(110px,auto)]",
+        !flush && "pl-3.5",
+      )}
+    >
       <span className="text-center">{mark}</span>
       <button
         type="button"
@@ -293,6 +332,8 @@ export function TaskRow({
       >
         {task.title}
         {ref ? <span className="ml-1 text-muted-foreground/70">#{ref}</span> : null}
+        {task.bug ? <span className="ml-1.5 text-destructive-foreground">bug</span> : null}
+        <NewMark item={task} />
       </button>
       <span className="order-last col-span-3 pl-6 @xl/dash:order-none @xl/dash:col-span-1 @xl/dash:pl-0">
         {hasStepList(task) && !stale ? (
