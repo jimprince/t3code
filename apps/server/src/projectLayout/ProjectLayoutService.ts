@@ -1,3 +1,4 @@
+import * as ShellSnapshotDiagnostics from "../diagnostics/ShellSnapshotDiagnostics.ts";
 import {
   applyLayoutOps,
   defaultProjectLayoutTabs,
@@ -83,6 +84,7 @@ const make = Effect.gen(function* () {
     Effect.gen(function* () {
       const snapshot = yield* engine
         .getShellSnapshot()
+        .pipe(ShellSnapshotDiagnostics.withCaller("ProjectLayoutService"))
         .pipe(Effect.mapError(() => fail("Could not read threads.")));
       const parents = new Map(
         (yield* listMetadata(sql).pipe(

@@ -1,3 +1,4 @@
+import * as ShellSnapshotDiagnostics from "../diagnostics/ShellSnapshotDiagnostics.ts";
 import type {
   OrchestrationV2SearchThreadInput,
   OrchestrationV2SearchThreadResult,
@@ -11560,11 +11561,17 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         .getThreadSnapshotWindow(threadId, options)
         .pipe(Effect.mapError((cause) => new OrchestratorProjectionError({ threadId, cause }))),
     getShellSnapshot: (options) =>
-      projectionStore.getShellSnapshot(options).pipe(Effect.mapError(shellProjectionError)),
+      projectionStore
+        .getShellSnapshot(options)
+        .pipe(
+          ShellSnapshotDiagnostics.withCaller("Orchestrator.getShellSnapshot"),
+          Effect.mapError(shellProjectionError),
+        ),
     readShellSnapshot: (options) =>
       projectionStore
         .readShellSnapshot(options)
         .pipe(
+          ShellSnapshotDiagnostics.withCaller("Orchestrator.readShellSnapshot"),
           Effect.mapError(shellProjectionError),
           Effect.map(Effect.mapError(shellProjectionError)),
         ),

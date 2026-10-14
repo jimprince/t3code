@@ -165,6 +165,7 @@ import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
 import * as HostResources from "./resourceTelemetry/HostResources.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
 import * as SystemRecovery from "./diagnostics/SystemRecovery.ts";
+import * as ShellSnapshotDiagnostics from "./diagnostics/ShellSnapshotDiagnostics.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import * as DesktopTelemetryReceiver from "./resourceTelemetry/DesktopTelemetryReceiver.ts";
 import * as NativeTelemetryClient from "./resourceTelemetry/NativeTelemetryClient.ts";
@@ -724,6 +725,7 @@ const layerRuntimeDependencies = SystemRecovery.layer.pipe(
   Layer.provideMerge(DirectEndpoints.layer),
   Layer.provideMerge(ServerLifecycleEvents.layer),
   Layer.provide(NetService.layer),
+  Layer.provideMerge(ShellSnapshotDiagnostics.layer),
 );
 
 const layerCommandReadiness = HttpRouter.middleware(
