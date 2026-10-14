@@ -266,23 +266,19 @@ export function pendingAsksOfThread(
   });
   const { approvals, userInputs } = derivePendingThreadRequests(projection);
   return [
-    ...userInputs.map(
-      (input): ProjectPendingAsk => ({
-        ...base({ ...input, canRespond: input.responseCapability !== "not_resumable" }),
-        kind: "question",
-        questions: input.questions,
-        messageResponse: input.responseMode === "message",
-      }),
-    ),
-    ...approvals.map(
-      (approval): ProjectPendingAsk => ({
-        ...base({ ...approval, canRespond: approval.responseCapability === "live" }),
-        kind: "approval",
-        requestKind: approval.requestKind,
-        ...(approval.detail === undefined ? {} : { detail: approval.detail }),
-        ...(approval.appName === undefined ? {} : { appName: approval.appName }),
-        ...(approval.options === undefined ? {} : { options: approval.options }),
-      }),
-    ),
+    ...userInputs.map((input): ProjectPendingAsk => ({
+      ...base({ ...input, canRespond: input.responseCapability !== "not_resumable" }),
+      kind: "question",
+      questions: input.questions,
+      messageResponse: input.responseMode === "message",
+    })),
+    ...approvals.map((approval): ProjectPendingAsk => ({
+      ...base({ ...approval, canRespond: approval.responseCapability === "live" }),
+      kind: "approval",
+      requestKind: approval.requestKind,
+      ...(approval.detail === undefined ? {} : { detail: approval.detail }),
+      ...(approval.appName === undefined ? {} : { appName: approval.appName }),
+      ...(approval.options === undefined ? {} : { options: approval.options }),
+    })),
   ].toSorted((a, b) => a.createdAt.localeCompare(b.createdAt));
 }

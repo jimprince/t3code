@@ -77,7 +77,7 @@ export function replacePartOf(body: string, partOf: number | null): string {
   });
 }
 export const RANK_GAP = 2 ** 20;
-export const isEpic = (issue: ProjectIssue) =>
+const isEpic = (issue: ProjectIssue) =>
   issue.labels.includes("ask:epic") ||
   (issue.labels.includes("ask:plan") &&
     !issue.labels.includes("ask:task") &&
@@ -94,7 +94,7 @@ export function orderRecords(issues: readonly ProjectIssue[]) {
   const workstreams = workstreamNumbers(issues);
   return issues.filter((i) => i.isRequest || i.partOf !== undefined || workstreams.has(i.number));
 }
-export function compareRank(
+function compareRank(
   a: Pick<ProjectIssue, "number" | "rank">,
   b: Pick<ProjectIssue, "number" | "rank">,
 ) {

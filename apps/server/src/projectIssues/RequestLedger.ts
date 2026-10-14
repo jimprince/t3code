@@ -937,13 +937,12 @@ export const make = (deps: {
             const attempt: Attempt = unavailable
               ? { kind: "unreachable" }
               : yield* resolveThread(input.threadId).pipe(
-                  Effect.flatMap(
-                    (resolved): Effect.Effect<Attempt, unknown> =>
-                      resolved
-                        ? fileRequest(resolved, item, messageId, 0).pipe(
-                            Effect.map((request): Attempt => ({ kind: "filed", request })),
-                          )
-                        : Effect.succeed({ kind: "no-tracker" }),
+                  Effect.flatMap((resolved): Effect.Effect<Attempt, unknown> =>
+                    resolved
+                      ? fileRequest(resolved, item, messageId, 0).pipe(
+                          Effect.map((request): Attempt => ({ kind: "filed", request })),
+                        )
+                      : Effect.succeed({ kind: "no-tracker" }),
                   ),
                   Effect.catch(() => Effect.succeed<Attempt>({ kind: "unreachable" })),
                 );
