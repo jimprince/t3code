@@ -1,7 +1,7 @@
-Bottom: 112271862a83346dc11b95c6cf3afb73be453a7b
-Top:    df09b09232407e27471ff552cd20e358a8d632ab
+Bottom: 16fe0629bef9b9685f16902eb92efd7c6b3996cf
+Top:    52f1bc5b240e0f10de410c9b0e6b789a1970fb7d
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 11:41:42 +0000
+Date:   2026-10-14 11:42:25 +0000
 
 feat(server): report a thread's to-do progress on its shell
 
