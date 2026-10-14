@@ -1,0 +1,4 @@
+id = "dashboard-single-design-compact-request"
+category = "fix"
+functionality = "dashboard"
+text = "The Dashboard drops the A/B/C/Previous design picker and keeps the Plan board, the new request box is one line until you click into it, and Plan task titles wrap onto up to three lines instead of ending in an ellipsis after a few words."
