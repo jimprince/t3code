@@ -154,6 +154,7 @@ describe("orchestration V2 wire projection", () => {
       ],
       providerSessions: [],
       providerThreads: [],
+      providerTurns: [],
       turnItems: [],
       visibleTurnItems: [],
       plans: [],
