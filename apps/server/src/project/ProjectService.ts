@@ -1,3 +1,4 @@
+import * as ShellSnapshotDiagnostics from "../diagnostics/ShellSnapshotDiagnostics.ts";
 import * as CommandReceipts from "../orchestration-v2/CommandReceiptStore.ts";
 import * as SqlClient from "effect/sql/SqlClient";
 import { validateNaming, withOwnershipLock } from "../forkThreads/NamedAgentPolicy.ts";
@@ -503,6 +504,7 @@ export const make = Effect.gen(function* () {
     // The V2 shell is the only record of which threads are live.
     const snapshot = yield* threadProjections
       .getShellSnapshot()
+      .pipe(ShellSnapshotDiagnostics.withCaller("ProjectService"))
       .pipe(
         Effect.mapError(
           (cause) => new ProjectOperationError({ operation: "list-threads", projectId, cause }),
