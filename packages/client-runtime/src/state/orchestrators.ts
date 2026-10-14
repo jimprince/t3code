@@ -261,9 +261,27 @@ export function sortOrchestratorSummariesForSidebar(
 }
 
 /**
+ * A thread the user opened through a server action (Discuss on an issue, resume from a plan):
+ * `createdBy` user, `creationSource` server, and no fork or subagent lineage. The server nests it
+ * under the project head, so the descendant and harness rules would hide the one thread the user
+ * just asked for. CLI-created workers (`user`/`web`), agents and system threads do not match, and
+ * a parentless root keeps the root rules above.
+ */
+export function isUserOpenedThread(thread: OrchestratorThreadShell): boolean {
+  return (
+    thread.archivedAt === null &&
+    parentKey(thread) != null &&
+    thread.source.createdBy === "user" &&
+    thread.source.creationSource === "server" &&
+    thread.lineage.relationshipToParent === null
+  );
+}
+
+/**
  * Projects owns descendants and agent-created roots. UI-created user roots stay
  * in Threads after delegation unless explicitly marked as projects. Harness owns
  * every thread whose effective purpose is harness, including childless roots.
+ * User-opened threads (see `isUserOpenedThread`) stay in Threads regardless.
  */
 export function threadsVisibleInThreadsMode(
   threads: ReadonlyArray<OrchestratorThreadShell>,
@@ -299,7 +317,13 @@ export function threadsVisibleInThreadsMode(
       projectThreadKeys.add(threadActivityKey(descendant));
     }
   }
-  return threads.filter((thread) => !projectThreadKeys.has(threadActivityKey(thread)));
+  const purposes = threadPurposes(threads);
+  return threads.filter((thread) => {
+    const key = threadActivityKey(thread);
+    return (
+      isUserOpenedThread(thread) || (!projectThreadKeys.has(key) && purposes.get(key) !== "harness")
+    );
+  });
 }
 
 function hasPlanReady(thread: OrchestratorThreadShell): boolean {
