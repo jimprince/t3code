@@ -35,6 +35,7 @@ import {
   OrchestrationV2RpcSchemas,
   OrchestrationV2ShellSnapshot,
   OrchestrationV2SubscribeThreadInput,
+  OrchestrationV2ThreadLaunchInput,
   OrchestrationV2Subagent,
   OrchestrationV2ThreadHistoryPage,
   OrchestrationV2ThreadProjection,
@@ -135,6 +136,20 @@ const decodeOrchestrationV2SubscribeThreadInput = Schema.decodeUnknownSync(
 );
 
 describe("orchestration V2 contracts", () => {
+  it("keeps the parent on a thread launch so the server can nest the new thread", () => {
+    const launch = Schema.decodeSync(OrchestrationV2ThreadLaunchInput)({
+      commandId: "command-1",
+      parentThreadId: "thread-head",
+      projectId: "project-1",
+      title: "Subthread",
+      modelSelection: { instanceId: "codex", model: "gpt-5-codex" },
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      workspaceStrategy: { type: "root" },
+    });
+    expect(launch.parentThreadId).toBe("thread-head");
+  });
+
   it("carries command failure metadata through runtime and JSON schemas without output text", () => {
     const base = {
       id: "command-item",
