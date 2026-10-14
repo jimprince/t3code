@@ -1,0 +1,8 @@
+name = "fork-dashboard-v3-18-single-design-compact-request"
+subject = "feat(dashboard): one Dashboard design, a one-line request box and wider Plan titles"
+class = "product"
+purpose = "The Dashboard is the Plan board only, with no A/B/C/Previous picker and no stored design preference read; the request box is one line until focused, when the composer and quick actions open; Plan task titles wrap to up to three lines in a wider title column instead of clipping at about 25 characters"
+retire_when = "The dashboard-v3 series is intentionally dropped or replaced by equivalent upstream behavior."
+depends_on = ["fork-dashboard-v3-17-home-breakpoint"]
+roles = []
+note = "Extends the dashboard-v3 series; the removed Since you looked and Executive grid variants and the design toggle of fork-dashboard-v3-07-design-toggle no longer exist."
