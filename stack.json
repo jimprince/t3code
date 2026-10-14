@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "4e6acf74bbcbc7998d105e684dfda1142e127048",
-  "head": "89522102c41fee16cac9e2b472aa60a4fcfa9c36",
+  "prev": "593da84db8d15d56c86625e11f6a4f8b69677a8e",
+  "head": "e1ca2ea46e2bebb01be0882bbb319531379a7304",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -186,8 +186,7 @@
     "fork-dashboard-v3-16-container-width",
     "fork-dashboard-v3-17-home-breakpoint",
     "fork-shell-build-diagnostics",
-    "fork-chief-of-staff-tray",
-    "refresh-temp"
+    "fork-chief-of-staff-tray"
   ],
   "unapplied": [],
   "hidden": [],
@@ -238,7 +237,7 @@
       "oid": "257387dff77caa3c967ea196efd6175fc22e87ca"
     },
     "fork-chief-of-staff-tray": {
-      "oid": "1da989c647506994787e1bad50e2010654e1c32d"
+      "oid": "e1ca2ea46e2bebb01be0882bbb319531379a7304"
     },
     "fork-child-input-attention": {
       "oid": "a2e3656b3748a4990ea036ccb0fd5b488c3aae46"
@@ -295,52 +294,52 @@
       "oid": "c1000025bc496abb530579459b57fb52be64edf5"
     },
     "fork-dashboard-v3-02-subprojects-table": {
-      "oid": "0d5260920159f1eed7f403e03f6894c3a73792a6"
+      "oid": "e851d9b6f7c5dba60f3b7f61722d76c1afb59b49"
     },
     "fork-dashboard-v3-03-projects-dnd": {
-      "oid": "b030ab93c69981f0d25bae8cea7516d251144b35"
+      "oid": "ea075f63b4f3ade4ca1cd0c412f02c967a453c85"
     },
     "fork-dashboard-v3-04-snapshot-service": {
-      "oid": "856d99e77b1952f5504d5ce1dae7dc71981aba92"
+      "oid": "0664bca3cd262fb0c541a296fe0c9530d4d4c9ab"
     },
     "fork-dashboard-v3-05-views": {
-      "oid": "6f98ec4314ad8083becf0fa9843909f0fc1fac43"
+      "oid": "b08727ebc1b841d4e0573a975c9d923b89242233"
     },
     "fork-dashboard-v3-06-review-one": {
-      "oid": "0fe9deba1be5eddee2482bed50072b0a73dba104"
+      "oid": "dd5e03f202333b01d5b2fe9b3681a39405a90d2d"
     },
     "fork-dashboard-v3-07-design-toggle": {
-      "oid": "20777d4c247969be2aa7cbf2b58f540bfcd4d32d"
+      "oid": "8fd4e585b233b11ab7baf42f2b478a74abdfd829"
     },
     "fork-dashboard-v3-08-decision-release-facts": {
-      "oid": "1655e10e55e60368b37b84b76ee1ac7640603155"
+      "oid": "18e7247ca8a75de90d6da73691420fd06fdf5261"
     },
     "fork-dashboard-v3-09-older-hosts": {
-      "oid": "55e19cf141f56d982a86c61bdee43c3ccdb3e524"
+      "oid": "6d5d3af46221955db770e94ee27fde395009faa4"
     },
     "fork-dashboard-v3-10-older-host-publication": {
-      "oid": "b0917627c8ce84e8d31143679d15aac56bd4fa0a"
+      "oid": "e2d84f87312e29acfbe47097a4fa2c636e3f7173"
     },
     "fork-dashboard-v3-11-tracker-read-timeout": {
-      "oid": "0fd3c36b27f7574e53af6d34ea4bfd41ea483433"
+      "oid": "d3616e84a61c8c94b960cc802e485f74390f8f71"
     },
     "fork-dashboard-v3-12-home-polish": {
-      "oid": "6af062a0b2341181d6dd77e736f178ca7181e995"
+      "oid": "e425276a8a3621f0c9ab83e4421eb01df7b4a70c"
     },
     "fork-dashboard-v3-13-older-host-cache": {
-      "oid": "9435ba502f67b4b23643a5245fa6ab7d82ca2fc6"
+      "oid": "8c1de1bbaa6b90f8c204b6d4101c57ea91758416"
     },
     "fork-dashboard-v3-14-connected-decisions": {
-      "oid": "bde08659b8432691f7861a7b35653648f89000ff"
+      "oid": "516cc4e2ff851a231944b341c664525afe4b8dd7"
     },
     "fork-dashboard-v3-15-request-read-budget": {
-      "oid": "f7e43d471a9d73931d542ca5c2334870a7d7f775"
+      "oid": "ebd8fa506284ef14d2bf35f60adfc057e01065cf"
     },
     "fork-dashboard-v3-16-container-width": {
-      "oid": "830e84122e9e9894e149bd6a96ba4482f8eeb4e0"
+      "oid": "f6b461ae9a8ba6d08f8c3d33272aa2a8c15a7c29"
     },
     "fork-dashboard-v3-17-home-breakpoint": {
-      "oid": "4015a7aa5e79acaf73054901da78f1930fa23445"
+      "oid": "c9f97799bd105dd8d66fdea00ac7652858a02d16"
     },
     "fork-decision-context-media": {
       "oid": "5d12b112606d7748dece178d1f75f28b4b4aa0b0"
@@ -643,7 +642,7 @@
       "oid": "dadd612e14535d2d52d065ef72f98c2c79148e3d"
     },
     "fork-shell-build-diagnostics": {
-      "oid": "c1e7f9bc5729f59a8a3bbf47761f9d2ad12eee32"
+      "oid": "91aed8058a39ed6430d7ebce46c227dbeae4a52c"
     },
     "fork-shell-snapshot-cache": {
       "oid": "eb1b849cd7ccb84b0069841885c44e95acfec2d0"
@@ -743,9 +742,6 @@
     },
     "fork-worktree-cleanup": {
       "oid": "07bacad8d3a0f00fbf7f2985ee31b3112f5c0fa6"
-    },
-    "refresh-temp": {
-      "oid": "89522102c41fee16cac9e2b472aa60a4fcfa9c36"
     }
   }
 }
