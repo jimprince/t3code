@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "2405b990d7aa0abaf8b2f22901bad7a566eeeca6",
-  "head": "639d0293ee5b83d9c4ef5133fe6552fb69abd878",
+  "prev": "0f2a7496a28bd7279f981278bc60fe59c5575fcd",
+  "head": "c24c37a0149535c266e5837d45ccfb8e946e21de",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -142,7 +142,8 @@
     "fork-backport-upstream-17348-scroll-follow",
     "fork-timeline-end-restore-settles",
     "fork-mobile-manual-production",
-    "fork-lifecycle-deadlines"
+    "fork-lifecycle-deadlines",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-admin-thread-recovery",
@@ -763,6 +764,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "b25d7429f4fa4b58bc83048cc3013648c93d0963"
+    },
+    "refresh-temp": {
+      "oid": "c24c37a0149535c266e5837d45ccfb8e946e21de"
     }
   }
 }
