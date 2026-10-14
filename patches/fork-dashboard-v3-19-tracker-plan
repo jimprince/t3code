@@ -1,0 +1,6 @@
+Bottom: 42dc46d37ed44afdf7dbc9134696ecef90326b9f
+Top:    42dc46d37ed44afdf7dbc9134696ecef90326b9f
+Author: brad <bradprin@live.com>
+Date:   2026-10-14 12:29:39 +0000
+
+feat(dashboard): derive Plan from tracker (#297)
