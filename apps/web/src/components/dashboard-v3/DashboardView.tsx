@@ -6,7 +6,7 @@ import {
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { DashboardTask, EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { use, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { readProjects, readThreadShells } from "../../state/entities";
 import { useDashboardData } from "../../state/dashboard";
@@ -27,9 +27,12 @@ import {
 import { DecisionDialog } from "./decisions";
 import { useCollapsedKeys, useMinuteClock } from "./prefs";
 import { sectionMarker } from "./parts";
+import { useOrderActions, type DashboardNotice } from "./orderActions";
 import { useDecisionAnswers } from "./useDecisionAnswers";
 import { useVisitBaseline } from "./useVisitBaseline";
 import { VariantA } from "./VariantA";
+
+const NOTICE_MS = 10 * 60_000;
 
 export type DashboardScope =
   | { readonly kind: "home" }
@@ -67,6 +70,21 @@ export function DashboardView({
   const [prefill, setPrefill] = useState<{ text: string; nonce: number } | null>(null);
   // Captured once per instance for the cold-load trace.
   const [mountedAt] = useState(() => performance.now());
+  const [notice, setNotice] = useState<DashboardNotice | null>(null);
+  const noticeSeq = useRef(0);
+  const report = useCallback((next: Omit<DashboardNotice, "id">) => {
+    noticeSeq.current += 1;
+    setNotice({ ...next, id: noticeSeq.current });
+  }, []);
+  const dismissNotice = useCallback(() => setNotice(null), []);
+  const order = useOrderActions(report);
+  // A note about a filing or a move folds away after ten minutes; Undo is not offered past that.
+  const noticeId = notice?.id;
+  useEffect(() => {
+    if (noticeId === undefined) return;
+    const timer = setTimeout(() => setNotice(null), NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [noticeId]);
 
   const environmentId = scope.kind === "project" ? scope.environmentId : null;
   const threadId = scope.kind === "project" ? scope.threadId : null;
@@ -177,6 +195,10 @@ export function DashboardView({
       sinceLooked,
       root,
       prefill,
+      order,
+      notice,
+      report,
+      dismissNotice,
       unstick: (title) =>
         setPrefill((current) => ({
           text: `${title} has had no steps in the last hour. Check it and restart or reassign.`,
@@ -190,10 +212,14 @@ export function DashboardView({
       data,
       decisions,
       navigate,
+      notice,
       now,
       openKeys,
+      order,
       openTask,
       prefill,
+      report,
+      dismissNotice,
       root,
       sinceLooked,
       state.revision,

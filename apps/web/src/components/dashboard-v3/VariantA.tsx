@@ -11,6 +11,7 @@ import {
 } from "./dashboard.logic";
 import { DecisionList } from "./decisions";
 import { BarLegend, OutcomeRow, SectionHeading, SectionMarker, UnknownValue } from "./parts";
+import { NewBlock } from "./NewBlock";
 import { IdleProjects, PlanWarnings, ProjectGroup, ReleaseLines, UtilityGroup } from "./plan";
 
 /** "last hour 13 steps · 2 stalled · 1 replanned": the Plan's totals, only from what was measured. */
@@ -105,6 +106,7 @@ export function VariantA() {
             </>
           ) : null}
         </SectionMarker>
+        {root ? <NewBlock scoped={root} /> : null}
         <SectionMarker name="plan">
           <SectionHeading
             title="Plan"
