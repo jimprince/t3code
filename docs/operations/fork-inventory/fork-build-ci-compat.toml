@@ -128,3 +128,9 @@ id = "catchup-2908-obsolete-editor-budget"
 date = "2026-10-10"
 decided = "narrow"
 rationale = "Upstream #16644 removes the old fileEditorHighlight implementation/test after upgrading @pierre/diffs. Omit only the obsolete thirty-second timeout hunk on that removed test; retain image-compression and OpenVSX budgets. No product behavior is removed. Build catalog keeps upstream stable Effect 4.0.2/new dependencies and fork tsdown (#16138, #17571); lockfile resolution belongs to the composed source graph. Deleted-path/pending-diff review passed; composed CI remains required."
+
+[[decision]]
+id = "messages-timeline-cold-import-budget"
+date = "2026-10-14"
+decided = "Give only the MessagesTimeline test bootstrap 60 seconds to cold-import its module graph; retain every test assertion and test-case budget."
+rationale = "Two complete-tip web runs exhausted the explicit 30-second import hook, including a run with two workers, while the same 85 assertions passed in isolation. The setup budget covers test-runner transformation and initialization under shared verification load; it does not change production behavior or a runtime performance assertion."
