@@ -1,4 +1,5 @@
 import {
+  applyMove,
   issueNumber,
   planMove,
   type MoveTo,
@@ -12,10 +13,11 @@ import type {
   ProjectRequestPlace,
   ThreadId,
 } from "@t3tools/contracts";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 
 import { useServerConfigs } from "../../state/entities";
 import {
+  orderBatchProjectRequest,
   orderProjectRequest,
   settleProjectRequest,
   updateProjectRequest,
@@ -24,6 +26,7 @@ import { moveRoadmapItem } from "../../state/projectRoadmap";
 import { useAtomCommand } from "../../state/use-atom-command";
 import type { ScopedProject } from "./dashboard.logic";
 import { parseIssueTaskId } from "./dashboard.logic";
+import type { PendingMove } from "./pendingMoves";
 
 /** The one line under the request box: what just happened, and the way back from it. */
 export interface DashboardNotice {
@@ -31,6 +34,8 @@ export interface DashboardNotice {
   readonly tone: "ok" | "warn" | "error";
   readonly text: string;
   readonly actions: ReadonlyArray<{ readonly label: string; readonly run: () => void }>;
+  /** The row a failed write belongs to, so its error shows by the row and not only at the top. */
+  readonly rowId?: string;
 }
 export type ReportNotice = (notice: Omit<DashboardNotice, "id">) => void;
 
@@ -56,6 +61,17 @@ export interface Destination {
   /** The epic the item belongs to, or null for Other work. */
   readonly partOf: number | null;
   readonly title: string;
+  /** The destination workstream's id in the snapshot; absent when no list is shown for it. */
+  readonly key?: string;
+}
+
+/**
+ * Where the page shows a move before the snapshot has it. `add` renumbers the list at once and
+ * returns the handle the write reports to: `written` once the server has taken it, `drop` when
+ * the write failed and the row must return to where it was.
+ */
+export interface PendingMoves {
+  readonly add: (move: PendingMove) => { readonly written: () => void; readonly drop: () => void };
 }
 
 export interface PlaceRequest {
@@ -72,7 +88,7 @@ export interface PlaceRequest {
 export interface OrderActions {
   /** Order controls show for a tracker project on a server that stores the order. */
   readonly canOrder: (scoped: ScopedProject) => boolean;
-  /** The request line files into a project with a thread of its own on such a server. */
+  /** The request line files into a project with a tracker and a thread of its own on such a server. */
   readonly canFile: (scoped: ScopedProject) => boolean;
   readonly place: (scoped: ScopedProject, subject: Subject, request: PlaceRequest) => Promise<void>;
   readonly backToNew: (
@@ -99,6 +115,11 @@ export interface OrderActions {
   ) => Promise<void>;
 }
 
+/** Whether a project has a Gitea tracker repository to file into. */
+export const hasTracker = (scoped: ScopedProject) =>
+  scoped.project.planSource === "tracker" ||
+  scoped.project.sourceIds.some((id) => id.startsWith("gitea:"));
+
 const numberOf = (task: Pick<Subject, "id">) => issueNumber(task.id);
 const reference = (task: Pick<Subject, "id">) => String(numberOf(task) ?? "");
 const label = (task: Pick<Subject, "id">) => `#${numberOf(task) ?? "?"}`;
@@ -119,9 +140,20 @@ export const toProjectPlace = (place: PlaceTarget): ProjectRequestPlace =>
  * snapshot at once; nothing is shown that the tracker has not accepted, and each action says what
  * it did on the notice line with the way back.
  */
-export function useOrderActions(report: ReportNotice): OrderActions {
+export function useOrderActions(report: ReportNotice, pending: PendingMoves): OrderActions {
   const configs = useServerConfigs();
   const order = useAtomCommand(orderProjectRequest, { reportFailure: false });
+  const orderBatch = useAtomCommand(orderBatchProjectRequest, { reportFailure: false });
+  // One project's actions run one after another: a move reads the list the move before it made.
+  const tails = useRef(new Map<string, Promise<unknown>>());
+  const inTurn = useCallback(<T>(projectKey: string, run: () => Promise<T>): Promise<T> => {
+    const turn = (tails.current.get(projectKey) ?? Promise.resolve()).then(run, run);
+    tails.current.set(
+      projectKey,
+      turn.catch(() => undefined),
+    );
+    return turn;
+  }, []);
   const update = useAtomCommand(updateProjectRequest, { reportFailure: false });
   const settle = useAtomCommand(settleProjectRequest, { reportFailure: false });
   const roadmapMove = useAtomCommand(moveRoadmapItem, { reportFailure: false });
@@ -133,7 +165,7 @@ export function useOrderActions(report: ReportNotice): OrderActions {
   );
   const canFile = useCallback(
     (scoped: ScopedProject) =>
-      scoped.project.rootThreadId !== null && supported(scoped.environmentId),
+      scoped.project.rootThreadId !== null && hasTracker(scoped) && supported(scoped.environmentId),
     [supported],
   );
   const canOrder = useCallback(
@@ -151,6 +183,19 @@ export function useOrderActions(report: ReportNotice): OrderActions {
     ) => {
       let position: number | null = null;
       for (const step of steps) {
+        if ("rank" in step) {
+          const result = await orderBatch({
+            environmentId: scoped.environmentId,
+            input: {
+              threadId: threadOf(scoped),
+              references: step.rank.map((id) => reference({ id })),
+              ...(step.moved ? { movedReference: reference({ id: step.moved }) } : {}),
+              actor: "brad",
+            },
+          });
+          if (result._tag !== "Success") throw new Error(failureText(result));
+          continue;
+        }
         const target = step.id === task.id ? task : { id: step.id };
         const result = await order({
           environmentId: scoped.environmentId,
@@ -198,9 +243,9 @@ export function useOrderActions(report: ReportNotice): OrderActions {
     const fail = (error: unknown) =>
       error instanceof Error && error.message ? error.message : "Could not save.";
 
-    const undoNotice = async (undo: () => Promise<void>) => {
+    const undoNotice = async (projectKey: string, undo: () => Promise<void>) => {
       try {
-        await undo();
+        await inTurn(projectKey, undo);
         report({ tone: "ok", text: "Undone.", actions: [] });
       } catch (error) {
         report({ tone: "error", text: `Could not undo: ${fail(error)}`, actions: [] });
@@ -208,22 +253,25 @@ export function useOrderActions(report: ReportNotice): OrderActions {
     };
 
     const guarded = async (
+      scoped: ScopedProject,
+      rowId: string,
       attempt: () => Promise<{ text: string; undo?: () => Promise<void> }>,
       retry: () => Promise<void>,
     ) => {
       try {
-        const done = await attempt();
+        const done = await inTurn(scoped.key, attempt);
         const undo = done.undo;
         report({
           tone: "ok",
           text: done.text,
-          actions: undo ? [{ label: "Undo", run: () => void undoNotice(undo) }] : [],
+          actions: undo ? [{ label: "Undo", run: () => void undoNotice(scoped.key, undo) }] : [],
         });
       } catch (error) {
         report({
           tone: "error",
           text: `Could not save: ${fail(error)}`,
           actions: [{ label: "Retry", run: () => void retry() }],
+          rowId,
         });
       }
     };
@@ -234,28 +282,69 @@ export function useOrderActions(report: ReportNotice): OrderActions {
       place: async (scoped, task, request) => {
         const moved = (task.partOf ?? null) !== request.destination.partOf;
         const retry = () => actions.place(scoped, task, request);
-        await guarded(async () => {
-          if (moved) await setPartOf(scoped, task, request.destination.partOf);
-          const position = await runSteps(
-            scoped,
-            task,
-            planMove(request.list, task.id, request.move),
-          );
-          const where = request.destination.title;
-          return {
-            text: request.workstream
-              ? position === null
-                ? `${request.workstream} is placed.`
-                : `Saved: ${request.workstream} is workstream ${position}.`
-              : position === null
-                ? `${label(task)} is in ${where}.`
-                : `Saved: ${label(task)} is ${ordinal(position)} in ${where}.`,
-            undo: () => restore(scoped, task, request.origin, moved),
-          };
-        }, retry);
+        const after = applyMove(request.list, task.id, request.move);
+        const shown = request.workstream
+          ? ({ kind: "workstreams" } as const)
+          : request.destination.key === undefined
+            ? null
+            : ({
+                kind: "tasks",
+                workstreamId: request.destination.key,
+                partOf: request.destination.partOf,
+              } as const);
+        // The page renumbers now; the snapshot catches up on its own refresh.
+        const overlay = shown
+          ? pending.add({ projectKey: scoped.key, list: shown, order: after, moved: task.id })
+          : null;
+        await guarded(
+          scoped,
+          task.id,
+          async () => {
+            const where = request.destination.title;
+            try {
+              if (moved) await setPartOf(scoped, task, request.destination.partOf);
+              let position: number | null;
+              try {
+                position = await runSteps(
+                  scoped,
+                  task,
+                  planMove(request.list, task.id, request.move),
+                );
+              } catch (error) {
+                // Never leave an item in a new workstream with no place in it.
+                if (moved) {
+                  try {
+                    await setPartOf(scoped, task, task.partOf ?? null);
+                  } catch {
+                    throw new Error(`${label(task)} moved to ${where} but is not ordered`);
+                  }
+                }
+                throw error;
+              }
+              overlay?.written();
+              const at = position ?? (after.includes(task.id) ? after.indexOf(task.id) + 1 : null);
+              return {
+                text: request.workstream
+                  ? at === null
+                    ? `${request.workstream} is placed.`
+                    : `Saved: ${request.workstream} is workstream ${at}.`
+                  : at === null
+                    ? `${label(task)} is in ${where}.`
+                    : `Saved: ${label(task)} is ${ordinal(at)} in ${where}.`,
+                undo: () => restore(scoped, task, request.origin, moved),
+              };
+            } catch (error) {
+              overlay?.drop();
+              throw error;
+            }
+          },
+          retry,
+        );
       },
       keepNew: async (scoped, task, destination) => {
         await guarded(
+          scoped,
+          task.id,
           async () => {
             await setPartOf(scoped, task, destination.partOf);
             return {
@@ -268,6 +357,8 @@ export function useOrderActions(report: ReportNotice): OrderActions {
       },
       backToNew: async (scoped, task, origin) => {
         await guarded(
+          scoped,
+          task.id,
           async () => {
             await runSteps(scoped, task, [{ id: task.id, place: { to: "none" } }]);
             return {
@@ -280,6 +371,8 @@ export function useOrderActions(report: ReportNotice): OrderActions {
       },
       setType: async (scoped, task, type) => {
         await guarded(
+          scoped,
+          task.id,
           async () => {
             const result = await update({
               environmentId: scoped.environmentId,
@@ -292,7 +385,7 @@ export function useOrderActions(report: ReportNotice): OrderActions {
               },
             });
             if (result._tag !== "Success") throw new Error(failureText(result));
-            const was = task.bug ? "bug" : "task";
+            const was = { kind: task.kind ?? "task", bug: task.bug === true };
             return {
               text: `${label(task)} is now ${type === "bug" ? "a bug" : type === "epic" ? "an epic" : "a task"}.`,
               undo: async () => {
@@ -301,8 +394,8 @@ export function useOrderActions(report: ReportNotice): OrderActions {
                   input: {
                     threadId: threadOf(scoped),
                     reference: reference(task),
-                    kind: "task",
-                    bug: was === "bug",
+                    kind: was.kind,
+                    bug: was.bug,
                     actor: "brad",
                   },
                 });
@@ -315,6 +408,8 @@ export function useOrderActions(report: ReportNotice): OrderActions {
       },
       duplicateOf: async (scoped, task, target) => {
         await guarded(
+          scoped,
+          task.id,
           async () => {
             const result = await update({
               environmentId: scoped.environmentId,
@@ -350,6 +445,8 @@ export function useOrderActions(report: ReportNotice): OrderActions {
       },
       later: async (scoped, task) => {
         await guarded(
+          scoped,
+          task.id,
           async () => {
             const result = await roadmapMove({
               environmentId: scoped.environmentId,
@@ -377,5 +474,5 @@ export function useOrderActions(report: ReportNotice): OrderActions {
       },
     };
     return actions;
-  }, [canFile, canOrder, order, report, roadmapMove, settle, update]);
+  }, [canFile, canOrder, inTurn, order, orderBatch, pending, report, roadmapMove, settle, update]);
 }

@@ -56,14 +56,19 @@ export interface DashboardUi {
   readonly unstick: (title: string) => void;
   /** Brad's writes to the order: place, retype, duplicate, Later. */
   readonly order: OrderActions;
-  /** The line under the request box: what the last filing or move did, and the way back. */
-  readonly notice: DashboardNotice | null;
   readonly report: (notice: Omit<DashboardNotice, "id">) => void;
   readonly dismissNotice: () => void;
 }
 
 const DashboardUiContext = createContext<DashboardUi | null>(null);
 export const DashboardUiProvider = DashboardUiContext;
+
+/**
+ * The line under the request box: what the last filing or move did, and the way back. It has its
+ * own context so a new notice re-renders the lines that show it, not the whole Dashboard.
+ */
+export const NoticeContext = createContext<DashboardNotice | null>(null);
+export const useNotice = () => use(NoticeContext);
 
 export function useDashboardUi(): DashboardUi {
   const ui = use(DashboardUiContext);

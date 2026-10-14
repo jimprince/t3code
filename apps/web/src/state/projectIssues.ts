@@ -89,6 +89,20 @@ const requestWrites = {
     `project-requests:${environmentId}:${input.threadId}`,
 } as const;
 
+/** The Dashboard ranks a list's unranked rows in one write, so a first move is not one write per row. */
+export const orderBatchProjectRequest = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "environment-data:project-requests:order-batch",
+  tag: WS_METHODS.projectRequestsOrderBatch,
+  concurrency: requestWrites,
+});
+
+/** Brad withdraws a filing made by mistake: closed with a label and a note to the owner. */
+export const withdrawProjectRequest = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "environment-data:project-requests:withdraw",
+  tag: WS_METHODS.projectRequestsWithdraw,
+  concurrency: requestWrites,
+});
+
 /** The Dashboard asks the server to place an item in its order (top, bottom, before, after, none). */
 export const orderProjectRequest = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "environment-data:project-requests:order",

@@ -493,7 +493,9 @@ export function ProjectGroup({
   if (ui.order.canOrder(scoped))
     return <OrderedProjectGroup scoped={scoped} all={all} showName={showName} eager={eager} />;
   const subs = subprojectsOf(all, scoped).filter((sub) => sub.project.parentId === project.id);
-  const workstreams = nestWorkstreams(planWorkstreams(project));
+  // This server does not store the order here: the plan reads as the snapshot lists it, with
+  // every ask still in view.
+  const workstreams = nestWorkstreams(planWorkstreams(project, orderPlan(project, false)));
   // "Work" is the server's placeholder when a workstream has no name of its own, and "Unsorted"
   // the tracker's group for asks with no epic. Neither gets a heading row when alone: a project
   // with nothing else shows its summary on the project row, otherwise the tasks list straight
@@ -647,8 +649,14 @@ function OrderedProjectGroup({
             {flat
               .flatMap((entry) => entry.next.map((task) => ({ entry, task })))
               .slice(0, HOME_QUEUED)
-              .map(({ entry, task }, shown) => (
-                <QueuedRow key={task.id} task={task} entry={entry} position={shown + 1} />
+              .map(({ entry, task }) => (
+                <QueuedRow
+                  key={task.id}
+                  task={task}
+                  entry={entry}
+                  position={entry.next.indexOf(task) + 1}
+                  compact
+                />
               ))}
             {flat.every((entry) => entry.now.length + entry.next.length === 0)
               ? note(
