@@ -407,6 +407,17 @@ export const ServerTraceDiagnosticsLogEvent = Schema.Struct({
 export type ServerTraceDiagnosticsLogEvent = typeof ServerTraceDiagnosticsLogEvent.Type;
 
 export const ServerTraceDiagnosticsResult = Schema.Struct({
+  /** In-memory cumulative counters since startup, independent of trace-file retention. */
+  shellSnapshotBuilds: Schema.optionalKey(
+    Schema.Record(
+      TrimmedNonEmptyString,
+      Schema.Struct({
+        requests: NonNegativeInt,
+        fullBuilds: NonNegativeInt,
+        cacheHits: NonNegativeInt,
+      }),
+    ),
+  ),
   traceFilePath: TrimmedNonEmptyString,
   scannedFilePaths: Schema.Array(TrimmedNonEmptyString),
   readAt: Schema.DateTimeUtc,
