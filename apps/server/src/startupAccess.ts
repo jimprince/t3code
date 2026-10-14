@@ -1,5 +1,5 @@
 import * as NodeOS from "node:os";
-import * as NodeTTY from "node:tty";
+import * as NodeTty from "node:tty";
 
 import { QrCode } from "@t3tools/shared/qrCode";
 import * as Effect from "effect/Effect";
@@ -18,7 +18,7 @@ export interface HeadlessServeAccessInfo {
 // Require a terminal on every standard stream: redirected output may be a service
 // journal even when the process inherited a terminal on another descriptor.
 export const ShowStartupCredentials = Context.Reference<boolean>("t3/ShowStartupCredentials", {
-  defaultValue: () => [0, 1, 2].every(NodeTTY.isatty),
+  defaultValue: () => [0, 1, 2].every(NodeTty.isatty),
 });
 
 type NetworkInterfacesMap = ReturnType<typeof NodeOS.networkInterfaces>;
