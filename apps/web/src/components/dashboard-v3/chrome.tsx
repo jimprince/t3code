@@ -6,8 +6,6 @@ import { useEnvironments } from "../../state/environments";
 import { useProjects } from "../../state/entities";
 import { InlineButton } from "../ui/button";
 import { Dialog, DialogHeader, DialogPopup, DialogTitle } from "../ui/dialog";
-import { Toggle, ToggleGroup } from "../ui/toggle-group";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { ProjectRequestBox, REQUEST_QUICK_ACTIONS } from "../orchestrators/ProjectRequestBox";
 import { useOrchestratorThreadShells } from "../orchestrators/useOrchestratorThreads";
 import { useDashboardUi } from "./context";
@@ -19,12 +17,6 @@ import {
   type SourceHealth,
   type SourceNames,
 } from "./dashboard.logic";
-import {
-  DASHBOARD_VARIANTS,
-  VARIANT_TITLE,
-  useDashboardVariant,
-  type DashboardVariant,
-} from "./prefs";
 import { UnknownValue, useSectionMarker } from "./parts";
 
 const COS_TITLE = /chief of staff/i;
@@ -155,51 +147,18 @@ export function OlderServerLines({ names }: { readonly names: ReadonlyArray<stri
 }
 
 /**
- * A three-segment control (plus the previous dashboard on project pages, the only place it exists)
- * for the review: it is removed with the losing variants once Brad picks. One preference for Home
- * and every project page.
- */
-export function VariantSwitcher({ withPrevious = true }: { readonly withPrevious?: boolean }) {
-  const [stored, setVariant] = useDashboardVariant();
-  // Home has no previous dashboard, so a stored "previous" reads as A there, as the page renders it.
-  const variant = !withPrevious && stored === "previous" ? "A" : stored;
-  return (
-    <ToggleGroup
-      aria-label="Dashboard design"
-      value={[variant]}
-      onValueChange={(next) => {
-        const value = next[0];
-        if (DASHBOARD_VARIANTS.includes(value as DashboardVariant))
-          setVariant(value as DashboardVariant);
-      }}
-    >
-      {DASHBOARD_VARIANTS.filter((value) => withPrevious || value !== "previous").map((value) => (
-        <Tooltip key={value}>
-          <TooltipTrigger
-            render={<Toggle value={value}>{value === "previous" ? "Previous" : value}</Toggle>}
-          />
-          <TooltipPopup>{VARIANT_TITLE[value]}</TooltipPopup>
-        </Tooltip>
-      ))}
-    </ToggleGroup>
-  );
-}
-
-/**
  * Ask first (R11): the existing request box, routed to the Chief of Staff on Home and to the page's
  * own project head on a project page. It reads the thread shells itself so a shell change
  * re-renders only this box, not the whole Dashboard.
  */
 export function AskSection({
   projectHead,
-  compact = false,
 }: {
   /** The project page's head thread; null on Home. */
   readonly projectHead: {
     readonly environmentId: EnvironmentId;
     readonly threadId: ThreadId;
   } | null;
-  readonly compact?: boolean;
 }) {
   const ui = useDashboardUi();
   const marker = useSectionMarker("ask");
@@ -220,7 +179,7 @@ export function AskSection({
     <div {...marker}>
       <ProjectRequestBox
         summary={summary}
-        quickActions={compact ? undefined : REQUEST_QUICK_ACTIONS}
+        quickActions={REQUEST_QUICK_ACTIONS}
         prefill={ui.prefill}
         placeholder={`New request to ${summary.root.title}`}
       />

@@ -267,12 +267,12 @@ export function TaskRow({
     </span>
   );
   return (
-    <div className="grid grid-cols-[14px_minmax(0,1fr)_auto] items-center gap-x-2.5 py-0.5 pl-3.5 text-xs @xl/dash:grid-cols-[14px_minmax(150px,1.25fr)_minmax(100px,1.6fr)_minmax(170px,auto)]">
+    <div className="grid grid-cols-[14px_minmax(0,1fr)_auto] items-center gap-x-2.5 py-0.5 pl-3.5 text-xs @xl/dash:grid-cols-[14px_minmax(120px,1fr)_96px_minmax(110px,auto)]">
       <span className="text-center">{mark}</span>
       <button
         type="button"
         className={cn(
-          "min-w-0 truncate text-left hover:underline",
+          "line-clamp-3 min-w-0 break-words text-left hover:underline",
           task.status === "pending" && "text-muted-foreground",
         )}
         onClick={() => ui.openTask(scoped, task)}
