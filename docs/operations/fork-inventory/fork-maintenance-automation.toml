@@ -5,7 +5,14 @@ purpose = "Route maintainers and agents through the StGit policy, validate and p
 retire_when = "Upstream or maintained shared tooling provides equivalent maintained-fork automation, or the fork intentionally stops requiring this concern."
 depends_on = ["fork-release-publication", "fork-build-ci-compat"]
 roles = ["agent-docs-owner"]
+
 note = "Inactive by default: verified successful pushes can make one fixed-argv, bounded, non-fatal host-local post-release disk observation with notification and durable receipts; activation remains separately Deployment-gated. Requires authored release entries for user-visible changes and validates them before publication. CI owns the shared verify-source checks including Knip; verify-stgit-replay stages immutable source/metadata inputs and waits for exact candidate CI. Main and release dereference that evidence instead of rerunning source verification, retaining published-stack policy, transfer-report baselines and artifact checks. Server verification stops scheduling tests after the first failure; passing candidates still run the full suite. Independent verification stages collect failures in one pass without weakening the publication gate. Nightly release-tag discovery uses a constant number of Git processes and aborts on lookup failure. Removed unused subject-based metadata reconstruction and obsolete maintenance plans; leased publication remains authoritative. Retiring persisted functionality requires an explicit data transition, immutable shipped migration IDs and frozen historical upgrade coverage. Product-bug instructions require evidence for each reported symptom, including cross-project PR routing and existing saved links/snapshots. Review also checked snapshot plumbing, diagnostics and obsolete mobile controller removals: these did not remove persisted orchestration event types. Retry limits remain unchanged pending genuine unattended observations."
+
+[[decision]]
+id = "dev-main-handoff"
+date = "2026-10-14"
+decided = "adapt"
+rationale = "Accepted fork changes tested locally or on dev include handoff to the existing T3 Orchestrator and tracked integration into canonical main without a repeat request from Brad. Explicit preview-only scope and holds remain binding; owner acceptance, exact candidate evidence and verified main publication remain distinct. The root instruction router links the Dev-to-main procedure."
 
 [[decision]]
 id = "v2-candidate-packaged-smokes"

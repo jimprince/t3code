@@ -203,6 +203,44 @@ for audit and recovery.
 This path is for a genuinely new concern. Existing-purpose work still refreshes
 its owning patch directly. Rebase repair still never creates a patch.
 
+### Dev-to-main handoff
+
+A tested local or `dev` change is not yet part of canonical `main`. Integration
+is part of accepted fork work by default, without another request from Brad.
+Respect an explicit preview/dev-only scope, integration hold, or release gate;
+record its owner and condition instead of treating elapsed time as approval.
+
+1. Preserve a reviewable candidate in an isolated branch/worktree. Record its
+   repository, full candidate and base SHAs, exact changed paths, intended
+   behavior, focused checks and actual results, and remaining UAT. Include the
+   owning StGit concern (or justified new concern) and existing issue/task-plan
+   links. Do not manufacture passing evidence or rewrite the canonical stack
+   just to prepare a handoff.
+2. Resolve the existing T3 Orchestrator through the current thread registry
+   (`/t3-threads`); the active alias can differ from `t3-orchestrator`. Send it
+   the candidate and evidence through that route, with an explicit request to
+   integrate into the owning concern and publish through the normal gates.
+   Reuse the owner; do not launch a competing publisher. Verify delivery and
+   the owner's acceptance of responsibility, not merely a successful send.
+3. The receiving owner records the candidate in its existing integration queue
+   and tracks it through [batched integration](#batched-integration), exact
+   candidate CI, and [publication](#publication). The worker can finish its
+   handoff once ownership is confirmed, but must report integration as pending.
+   If the owner is unreachable or the candidate is skipped, preserve the
+   candidate and report the concrete blocker through the existing reporting
+   line; do not silently drop it or ask Brad to repeat the original request.
+4. Close the integration obligation only after reading back published remote
+   `main` and verifying it contains the intended change. StGit refresh/replay
+   rewrites commits, so use the owning patch/source diff and publication receipt
+   when the original candidate SHA is no longer an ancestor. Record the
+   published main SHA and evidence in the existing task record. A dev update,
+   scheduled batch, accepted message, or green CI alone is not publication.
+
+This handoff does not authorize a worker to push `main`, restart a daily driver,
+or bypass the release routing in `LLM_INSTRUCTIONS.md`. Keep code integration,
+release publication, and installed/live verification as separate reported
+states; satisfy any deployment or UAT included in the original task.
+
 ### Batched integration
 
 When several reviewed candidates are ready, integrate them under one lease claim
