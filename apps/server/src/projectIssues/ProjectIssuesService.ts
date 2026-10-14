@@ -29,6 +29,7 @@ import { ServerSettingsService } from "../serverSettings.ts";
 import * as GiteaApi from "../sourceControl/GiteaApi.ts";
 import * as ProjectDashboardStore from "../projectDashboard/ProjectDashboardStore.ts";
 import { resolveTrackerSetting } from "../projectDashboard/projectDashboard.logic.ts";
+import { parseRankTrailer, parsePlacedByTrailer } from "./requestOrder.logic.ts";
 import { epicProgress, parseEpicChecklist, parsePartOf } from "./epicProgress.logic.ts";
 import {
   collectThreadTree,
@@ -87,6 +88,7 @@ const ISSUE_CACHE_TTL_MS = 30_000;
 const REPO_LOOKUP_TTL_MS = 10 * 60_000;
 
 const fail = (message: string) => new ProjectIssuesError({ message });
+const isProjectIssuesError = Schema.is(ProjectIssuesError);
 
 export interface ProjectRepositories {
   readonly primaryRepository?: { readonly host: string; readonly repository: string } | null;
@@ -283,15 +285,19 @@ export const make = Effect.gen(function* () {
       } satisfies ProjectRepositories;
     });
 
-  const fetchRepositoryIssues = (target: GiteaRepositoryTarget) =>
+  const fetchRepositoryIssues = (
+    target: GiteaRepositoryTarget,
+    complete = false,
+    closedHistory = false,
+  ) =>
     Effect.gen(function* () {
       const key = repositoryKey(target);
       const now = yield* Clock.currentTimeMillis;
       const cached = issueCache.get(key);
-      if (cached && now - cached.at < ISSUE_CACHE_TTL_MS) return cached.issues;
+      if (!complete && cached && now - cached.at < ISSUE_CACHE_TTL_MS) return cached.issues;
       const base = `${GiteaApi.repositoryPath(target.repository)}/issues?type=issues`;
       const issues: GiteaIssue[] = [];
-      for (let page = 1; page <= OPEN_MAX_PAGES; page++) {
+      for (let page = 1; page <= (complete ? 100 : OPEN_MAX_PAGES); page++) {
         const batch = yield* api.request(
           target.instance,
           `${base}&state=open&limit=${OPEN_PAGE_LIMIT}&page=${page}`,
@@ -299,17 +305,32 @@ export const make = Effect.gen(function* () {
         );
         issues.push(...batch);
         if (batch.length < OPEN_PAGE_LIMIT) break;
+        if (complete && page === 100)
+          return yield* fail("The tracker is too large to order safely.");
       }
       const since = DateTime.formatIso(DateTime.makeUnsafe(now - CLOSED_WINDOW_DAYS * 86_400_000));
-      issues.push(
-        ...(yield* api.request(
-          target.instance,
-          `${base}&state=closed&limit=${OPEN_PAGE_LIMIT}&since=${encodeURIComponent(since)}`,
-          GiteaIssues,
-        )),
-      );
+      if (closedHistory) {
+        for (let page = 1; page <= 100; page++) {
+          const batch = yield* api.request(
+            target.instance,
+            `${base}&state=closed&limit=${OPEN_PAGE_LIMIT}&page=${page}`,
+            GiteaIssues,
+          );
+          issues.push(...batch);
+          if (batch.length < OPEN_PAGE_LIMIT) break;
+          if (page === 100)
+            return yield* fail("The tracker history is too large to verify filing safely.");
+        }
+      } else
+        issues.push(
+          ...(yield* api.request(
+            target.instance,
+            `${base}&state=closed&limit=${OPEN_PAGE_LIMIT}&since=${encodeURIComponent(since)}`,
+            GiteaIssues,
+          )),
+        );
       const withoutPullRequests = issues.filter((issue) => issue.pull_request == null);
-      issueCache.set(key, { at: now, issues: withoutPullRequests });
+      if (!complete) issueCache.set(key, { at: now, issues: withoutPullRequests });
       return withoutPullRequests;
     });
 
@@ -335,6 +356,7 @@ export const make = Effect.gen(function* () {
     const labels = (issue.labels ?? []).map((label) => label.name);
     const isRequest = labels.some((label) => label.toLowerCase() === REQUEST_LABEL);
     const blockedBy = parseBlockedBy(issue.body);
+    const parent = parsePartOf(issue.body);
     const asksBrad =
       issue.state === "open" && labels.some((label) => label.toLowerCase() === NEEDS_BRAD_LABEL);
     const deferral = issue.state === "open" ? parseDeferral(issue.body) : null;
@@ -347,6 +369,9 @@ export const make = Effect.gen(function* () {
       status: deriveProjectIssueStatus(issue.state, labels),
       labels,
       isRequest,
+      rank: parseRankTrailer(issue.body),
+      placedBy: parsePlacedByTrailer(issue.body),
+      ...(parent !== null && parent !== issue.number ? { partOf: parent } : {}),
       ...(isRequest ? { stage: deriveRequestStage(issue.state, labels) } : {}),
       ...(blockedBy.length > 0 ? { blockedBy } : {}),
       ...(asksBrad
@@ -369,6 +394,7 @@ export const make = Effect.gen(function* () {
 
   const list = (
     input: ProjectIssuesListInput,
+    options: { complete?: boolean; closedHistory?: boolean } = {},
     resolvedThreads?: Parameters<typeof resolveProject>[1],
   ) =>
     Effect.gen(function* () {
@@ -378,10 +404,14 @@ export const make = Effect.gen(function* () {
       const results = yield* Effect.forEach(
         project.targets,
         (target) =>
-          fetchRepositoryIssues(target).pipe(
+          fetchRepositoryIssues(target, options.complete, options.closedHistory).pipe(
             Effect.map((items) => ({ target, items, error: null as string | null })),
             Effect.catch((error) =>
-              Effect.succeed({ target, items: [] as GiteaIssue[], error: error.detail }),
+              Effect.succeed({
+                target,
+                items: [] as GiteaIssue[],
+                error: isProjectIssuesError(error) ? error.message : error.detail,
+              }),
             ),
           ),
         { concurrency: 4 },
@@ -398,7 +428,7 @@ export const make = Effect.gen(function* () {
         );
         for (const issue of items) {
           const issueKey = `${repositoryKey(target)}#${issue.number}`;
-          const parent = parsePartOf(issue.body);
+
           // Refresh persisted badge snapshots from the board's existing API read.
           // sync checks that the link still exists, so unlink races cannot resurrect it.
           for (const threadId of project.linkedThreads.get(issueKey) ?? []) {
@@ -436,7 +466,6 @@ export const make = Effect.gen(function* () {
           issues.push({
             ...toProjectIssue(target, issue, project.linkedThreads.get(issueKey) ?? []),
             ...(epics.has(issue.number) ? { epic: epics.get(issue.number)! } : {}),
-            ...(parent !== null && parent !== issue.number ? { partOf: parent } : {}),
           });
         }
       }
@@ -464,7 +493,11 @@ export const make = Effect.gen(function* () {
           fetchRepositoryIssues(target),
         ],
         { concurrency: 3 },
-      ).pipe(Effect.mapError((error) => fail(error.detail)));
+      ).pipe(
+        Effect.mapError((error) =>
+          fail(isProjectIssuesError(error) ? error.message : error.detail),
+        ),
+      );
       if (raw.pull_request != null) return yield* fail("That is a pull request, not an issue.");
       const issueKey = `${repositoryKey(target)}#${raw.number}`;
       return {
