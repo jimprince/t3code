@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "f86175bfb11ded814733ab82dc5e441876c20e6a",
-  "head": "cc21660105626dbb9dde0c55fbca5aa096ec32bc",
+  "prev": "7ded8018db76c95c6101cceb9b896b03772cc531",
+  "head": "e77d44810bec29e99e5cc3820f8d1df7f7914c7c",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -190,7 +190,8 @@
     "fork-dashboard-v3-18-single-design-compact-request",
     "fork-thread-plan-progress",
     "fork-request-order",
-    "fork-dashboard-v3-19-tracker-plan"
+    "fork-dashboard-v3-19-tracker-plan",
+    "refresh-temp"
   ],
   "unapplied": [],
   "hidden": [],
@@ -758,6 +759,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "9fa95bace64a194ddf1372c37c04c0e5324115fc"
+    },
+    "refresh-temp": {
+      "oid": "e77d44810bec29e99e5cc3820f8d1df7f7914c7c"
     }
   }
 }
