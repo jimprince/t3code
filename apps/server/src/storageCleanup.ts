@@ -1,3 +1,4 @@
+import * as ShellSnapshotDiagnostics from "./diagnostics/ShellSnapshotDiagnostics.ts";
 import {
   OrchestrationV2AppThreadJson,
   OrchestrationV2ProviderSessionJson,
@@ -182,7 +183,9 @@ export const make = Effect.gen(function* () {
       });
 
   const readThreads = Effect.fn("StorageCleanup.readThreads")(function* () {
-    const snapshot = yield* projections.getShellSnapshot();
+    const snapshot = yield* projections
+      .getShellSnapshot()
+      .pipe(ShellSnapshotDiagnostics.withCaller("StorageCleanup"));
     const projects = yield* projectStore.listShells();
     return { projects, threads: [...snapshot.threads, ...snapshot.archivedThreads] };
   });
