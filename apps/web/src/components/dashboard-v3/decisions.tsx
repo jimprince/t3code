@@ -7,8 +7,10 @@ import { Button, InlineButton } from "../ui/button";
 import { Dialog, DialogHeader, DialogPopup, DialogTitle } from "../ui/dialog";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "../ui/tooltip";
 import { DecisionMarkdown } from "../orchestrators/DecisionMarkdown";
+import { useDiscuss } from "../orchestrators/ProjectRequestsSection";
+import { issueKey } from "../orchestrators/projectRequests.logic";
 import { useDashboardUi, type DecisionRow } from "./context";
-import { formatDeadline } from "./dashboard.logic";
+import { formatDeadline, parseIssueTaskId } from "./dashboard.logic";
 import { answerMode } from "./useDecisionAnswers";
 
 const KIND_WORD = {
@@ -56,6 +58,40 @@ function useOpenDecisionSource() {
         params: buildThreadRouteParams(scopeThreadRef(row.scoped.environmentId, threadId)),
       });
   };
+}
+
+/**
+ * Opens a thread to talk the decision through with the project, through the same Discuss the
+ * Decisions feed uses. Only an issue-backed decision in a project with a head thread has one.
+ */
+function DiscussButton({ row }: { readonly row: DecisionRow }) {
+  const issue = parseIssueTaskId(row.attention.taskId);
+  const rootId = row.scoped.project.rootThreadId;
+  if (!issue || !rootId) return null;
+  return <DiscussIssue environmentId={row.scoped.environmentId} rootId={rootId} issue={issue} />;
+}
+
+function DiscussIssue({
+  environmentId,
+  rootId,
+  issue,
+}: {
+  readonly environmentId: DecisionRow["scoped"]["environmentId"];
+  readonly rootId: NonNullable<DecisionRow["scoped"]["project"]["rootThreadId"]>;
+  readonly issue: NonNullable<ReturnType<typeof parseIssueTaskId>>;
+}) {
+  const discuss = useDiscuss({ root: { environmentId, id: rootId } });
+  const pending = discuss.pending === issueKey(issue);
+  return (
+    <Button
+      size="xs"
+      variant="ghost-muted"
+      disabled={pending}
+      onClick={() => void discuss.start(issue)}
+    >
+      {pending ? "Opening" : "Discuss"}
+    </Button>
+  );
 }
 
 /**
@@ -167,6 +203,7 @@ export function DecisionCard({
             </Button>
           </>
         ) : null}
+        <DiscussButton row={row} />
         <Button size="xs" variant="ghost-muted" onClick={() => openSource(row)}>
           {mode === "open" ? "Open" : "Open task"}
         </Button>
