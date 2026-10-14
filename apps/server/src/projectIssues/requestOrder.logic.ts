@@ -4,7 +4,7 @@
  * Last-line trailer; in-progress first, rank then issue number, unranked last.
  * Rank changes never represent progress. #297 imports parseRankTrailer for Plan mapping.
  */
-import { PART_OF_LINE } from "./epicProgress.logic.ts";
+import { PART_OF_LINE, membershipContentStart } from "./epicProgress.logic.ts";
 import type {
   ProjectIssue,
   ProjectRequestPlacer,
@@ -70,8 +70,10 @@ export function replaceRankTrailer(
 }
 export function replacePartOf(body: string, partOf: number | null): string {
   return editBeforeOrderTrailers(body, (text) => {
-    const base = text.replace(PART_OF_LINE, "");
-    return partOf === null ? base : `Part of #${partOf}\n\n${base}`;
+    const start = membershipContentStart(text);
+    const prefix = text.slice(0, start);
+    const base = text.slice(start).replace(PART_OF_LINE, "");
+    return `${prefix}${partOf === null ? base : `Part of #${partOf}\n\n${base}`}`;
   });
 }
 export const RANK_GAP = 2 ** 20;

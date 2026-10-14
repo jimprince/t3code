@@ -11,6 +11,19 @@ import { singleFlight } from "./DashboardRefresh.ts";
 
 const now = "2026-10-11T10:00:00.000Z";
 const before = "2026-10-11T09:00:00.000Z";
+const briefingRoot = ThreadId.make("briefing-root");
+const briefingShells = [
+  {
+    id: briefingRoot,
+    title: "T3",
+    archivedAt: null,
+    todoProgress: null,
+    updatedAt: DateTime.makeUnsafe(now),
+  },
+];
+const briefingMetadata = [
+  { threadId: briefingRoot, parentThreadId: null, subproject: "on" as const },
+];
 const progress: DashboardProgress = {
   done: 5,
   total: 10,
@@ -52,8 +65,8 @@ describe("aggregation", () => {
   it("keeps real plan steps, owner forecast and source confirmation instead of invented percentages", () => {
     const snapshot = aggregate({
       now,
-      shells: [],
-      metadata: [],
+      shells: briefingShells,
+      metadata: briefingMetadata,
       issues: new Map(),
       sources: [],
       samples: [],
@@ -160,8 +173,8 @@ describe("aggregation freshness and summary size", () => {
   it("keeps last-good steps but makes movement and forecast unknown after a source failure", () => {
     const snapshot = aggregate({
       now,
-      shells: [],
-      metadata: [],
+      shells: briefingShells,
+      metadata: briefingMetadata,
       issues: new Map(),
       plans: [plan()],
       sources: [
@@ -192,8 +205,8 @@ describe("aggregation freshness and summary size", () => {
   it("bounds a large summary and reports omitted tasks without dangling workstream references", () => {
     const full = aggregate({
       now,
-      shells: [],
-      metadata: [],
+      shells: briefingShells,
+      metadata: briefingMetadata,
       issues: new Map(),
       plans: [plan(300)],
       sources: [],
@@ -210,8 +223,8 @@ describe("aggregation freshness and summary size", () => {
   it("samples unchanged plans once a minute instead of recording chat activity as movement", () => {
     const snapshot = aggregate({
       now,
-      shells: [],
-      metadata: [],
+      shells: briefingShells,
+      metadata: briefingMetadata,
       issues: new Map(),
       plans: [plan()],
       sources: [],
@@ -305,7 +318,16 @@ describe("durable dashboard cache", () => {
       status: "pending",
       labels: [],
       isRequest: false,
-      requestSource: null,
+      requestSource: { threadId: root, rootThreadId: root, messageId: "source" },
+      plan: {
+        done: 1,
+        total: 2,
+        hasChecklist: true,
+        planVersion: "v1",
+        evidenceVersion: "e1",
+        confirmedAt: now,
+        nextStep: null,
+      },
       assignees: [],
       comments: 0,
       createdAt: now,
@@ -317,14 +339,23 @@ describe("durable dashboard cache", () => {
     const snapshot = { revision: 1, asOf: now, projects: [], releases: [], sources: [] };
     const stored = compactStoredDashboard({
       snapshot,
+      trackerRoots: [root],
       samples: history,
-      issues: { [root]: [issue], [second]: [{ ...issue, linkedThreadIds: [second] }] },
+      issues: {
+        [root]: [issue],
+        [second]: [
+          { ...issue, linkedThreadIds: [second], plan: { ...issue.plan!, confirmedAt: null } },
+        ],
+      },
     });
     expect(Object.values(stored.issueRepositories).flat()).toHaveLength(1);
     expect(stored.samples[0]).toEqual(["task", Date.parse(before), 2, 10, "v1"]);
     expect(JSON.stringify(stored)).not.toContain("Large detail");
     const restored = expandStoredDashboard(stored);
     expect(restored.samples).toEqual(history);
+    expect(restored.trackerRoots).toEqual([root]);
+    expect(restored.issues?.[second]?.[0]?.plan?.confirmedAt).toBe(now);
+    expect(restored.issues?.[root]?.[0]?.requestSource?.rootThreadId).toBe(root);
     expect(restored.issues?.[root]?.[0]?.linkedThreadIds).toEqual([root, second]);
     expect(restored.issues?.[second]?.[0]?.title).toBe("Choose");
   });
