@@ -35,6 +35,11 @@ export const readForkNestingSupported = (environmentId: EnvironmentId) =>
   appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
     .threadNesting === true;
 
+/** The launch request itself files the new thread under its parent; older servers ignore the field. */
+export const readForkLaunchParentSupported = (environmentId: EnvironmentId) =>
+  appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
+    .launchThreadParent === true;
+
 /** Subproject mode needs the capability and a loaded sidecar, like nesting. */
 export const readForkSubprojectsSupported = (environmentId: EnvironmentId) =>
   appAtomRegistry.get(supervision.readyHosts).has(environmentId) &&

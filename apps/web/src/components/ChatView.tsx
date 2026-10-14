@@ -353,7 +353,11 @@ import {
 import { useNowMinute } from "../hooks/useNowMinute";
 import { usePanelAnimationSettings, usePanelPresence } from "../panelAnimations";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
-import { useNestedDraftBannerItem, useThreadNestingActions } from "../hooks/useThreadNesting";
+import {
+  readNestedDraftParent,
+  useNestedDraftBannerItem,
+  useThreadNestingActions,
+} from "../hooks/useThreadNesting";
 import { useRemoveClonedProject } from "../hooks/useRemoveClonedProject";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
 import { resolveAppModelSelectionForInstance } from "../modelSelection";
@@ -455,7 +459,11 @@ import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import type { AssistantCitationRequest } from "./chat/AssistantCitationSource";
 import { MessagesTimeline, type MessagesTimelineHistoryControls } from "./chat/MessagesTimeline";
-import { forkConversation, newForkCommandId } from "./chat/forkThreadCommands";
+import {
+  forkConversation,
+  newForkCommandId,
+  readForkLaunchParentSupported,
+} from "./chat/forkThreadCommands";
 import {
   resolveMessageForkPlan,
   createMessageForkMenuResolver,
@@ -10315,6 +10323,15 @@ export default function ChatView(props: ChatViewProps) {
           ? scopeThreadRef(environmentId, threadIdForSend)
           : null;
       if (backgroundThreadRef) beginBackgroundDraftSubmissionByRef(backgroundThreadRef);
+      // Read before the launch awaits: the view can unmount, and drop the draft's intent, before it answers.
+      const nestedParentId =
+        draftId !== null && isLocalDraftThread
+          ? readNestedDraftParent(draftId, environmentId)
+          : null;
+      const launchParentId =
+        nestedParentId !== null && readForkLaunchParentSupported(environmentId)
+          ? nestedParentId
+          : null;
       const taskIssue = isLocalDraftThread
         ? useComposerDraftStore
             .getState()
@@ -10363,6 +10380,7 @@ export default function ChatView(props: ChatViewProps) {
           dispatchMode: turnDispatchMode,
           ...(bootstrap ? { bootstrap } : {}),
           ...(taskIssue === undefined ? {} : { issue: taskIssue }),
+          ...(launchParentId === null ? {} : { parentThreadId: launchParentId }),
           createdAt: messageCreatedAt,
         },
       });
@@ -10399,7 +10417,11 @@ export default function ChatView(props: ChatViewProps) {
         onMessageSent?.(messageIdForSend);
 
         if (draftId !== null && isLocalDraftThread) {
-          void attachNestedDraft(draftId, scopeThreadRef(environmentId, threadIdForSend));
+          void attachNestedDraft(
+            draftId,
+            scopeThreadRef(environmentId, threadIdForSend),
+            launchParentId === null ? nestedParentId : null,
+          );
         }
 
         // The turn is under way and will spend quota, so that thread's limits

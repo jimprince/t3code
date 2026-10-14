@@ -151,6 +151,7 @@ import * as ThreadManagementService from "./orchestration-v2/ThreadManagementSer
 import * as McpAppRequests from "./mcpApps/McpAppRequests.ts";
 import * as ProviderSessionManager from "./orchestration-v2/ProviderSessionManager.ts";
 import * as ThreadLaunchService from "./orchestration-v2/ThreadLaunchService.ts";
+import { makeNestingService } from "./forkThreads/NestingService.ts";
 import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
@@ -1287,6 +1288,11 @@ const layerWsRpc = (
         }
       };
       const threadLaunch = yield* ThreadLaunchService.ThreadLaunchService;
+      const launchNesting = yield* makeNestingService(
+        sql,
+        threadManagement.getThreadShell,
+        threadManagement.dispatch,
+      ).pipe(Effect.orDie);
       const providerSessionManager = yield* ProviderSessionManager.ProviderSessionManagerV2;
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
       const secretRequests = yield* SecretRequests.SecretRequests;
@@ -2081,6 +2087,29 @@ const layerWsRpc = (
                   ),
                 )
                 .pipe(
+                  // Nest in the same request, so the thread never depends on the client staying open to be filed.
+                  Effect.tap((result) =>
+                    input.parentThreadId === undefined
+                      ? Effect.void
+                      : launchNesting
+                          .update({
+                            commandId: CommandId.make(`${input.commandId}:parent`),
+                            threadId: result.threadId,
+                            parentThreadId: input.parentThreadId,
+                            remoteParent: null,
+                          })
+                          .pipe(
+                            Effect.mapError(
+                              (cause) =>
+                                new OrchestrationV2ThreadLaunchError({
+                                  commandId: input.commandId,
+                                  projectId: input.projectId,
+                                  message: "Thread launched but could not be nested",
+                                  cause,
+                                }),
+                            ),
+                          ),
+                  ),
                   Effect.tap(() =>
                     analytics
                       .record("client.thread.started", originProps)

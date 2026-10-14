@@ -159,6 +159,8 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   threadActiveReorder: Schema.optionalKey(Schema.Boolean),
   threadOrderReset: Schema.optionalKey(Schema.Boolean),
   threadNesting: Schema.optionalKey(Schema.Boolean),
+  /** Server nests a thread under `parentThreadId` when `orchestration.launchThread` creates it. Absent on older servers, which ignore the field, so clients nest after the launch instead. */
+  launchThreadParent: Schema.optionalKey(Schema.Boolean),
   reliableHandoffs: Schema.optionalKey(Schema.Boolean),
   threadSubprojects: Schema.optionalKey(Schema.Boolean),
   /** Server persists thread purpose and serves harness.snapshot. Absent on older servers, so clients hide Move to Harness and skip the snapshot query. */
