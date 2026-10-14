@@ -1,0 +1,4 @@
+id = "request-order"
+category = "feature"
+functionality = "project requests"
+text = "File tasks, bugs and epics into workstreams, save their order, and let agents read the queue and pick the next unblocked task."
