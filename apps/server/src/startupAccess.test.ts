@@ -65,15 +65,38 @@ it("renders terminal QR codes as a multi-line unicode block grid", () => {
   assert.isTrue(qrCode.split("\n").length > 10);
 });
 
-it("formats headless serve output with the connection string, token, pairing url, and qr code", () => {
-  const output = formatHeadlessServeOutput({
-    connectionString: "http://192.168.1.42:3773",
-    token: "PAIRCODE",
-    pairingUrl: "http://192.168.1.42:3773/pair#token=PAIRCODE",
-  });
+it("formats interactive headless output with the connection string, token, pairing url, and qr code", () => {
+  const output = formatHeadlessServeOutput(
+    {
+      connectionString: "http://192.168.1.42:3773",
+      token: "PAIRCODE",
+      pairingUrl: "http://192.168.1.42:3773/pair#token=PAIRCODE",
+    },
+    true,
+  );
 
   expect(output).toContain("Connection string: http://192.168.1.42:3773");
   expect(output).toContain("Token: PAIRCODE");
   expect(output).toContain("Pairing URL: http://192.168.1.42:3773/pair#token=PAIRCODE");
   assert.isTrue(output.includes("█") || output.includes("▀") || output.includes("▄"));
+});
+
+it("defaults to readiness and address output without raw, encoded, or QR credentials", () => {
+  const token = "TEST credential+/=?&";
+  const pairingUrl = buildPairingUrl("http://192.168.1.42:3773", token);
+  const output = formatHeadlessServeOutput({
+    connectionString: "http://192.168.1.42:3773",
+    token,
+    pairingUrl,
+  });
+
+  expect(output).not.toContain(token);
+  expect(output).not.toContain(encodeURIComponent(token));
+  expect(output).not.toContain(new URLSearchParams({ token }).toString());
+  expect(output).not.toContain(pairingUrl);
+  expect(output).not.toContain(renderTerminalQrCode(pairingUrl));
+  expect(output).not.toMatch(/[█▀▄]/);
+  expect(output).toContain("T3 Code server is ready.");
+  expect(output).toContain("Connection string: http://192.168.1.42:3773");
+  expect(output).toContain("Pairing is available. Run t3 pair on this server");
 });
