@@ -252,6 +252,7 @@ const runSweepFixture = (input: {
   merged?: boolean;
   event?: "session" | "delete" | "burst";
   liveSession?: boolean;
+  archived?: boolean;
 }) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -342,6 +343,7 @@ const runSweepFixture = (input: {
             projectId,
             branch,
             worktreePath,
+            archivedAt: input.archived ? at(-10 * DAY_MS) : null,
             createdAt: input.recent ? yield* DateTime.now : at(-30 * DAY_MS),
           }),
         );
@@ -371,6 +373,7 @@ const runSweepFixture = (input: {
       ),
     );
     let reads = 0;
+    let archiveReads = 0;
     let eventPhase = false;
     const cleanup = yield* make.pipe(
       Effect.provideService(Git.GitVcsDriver, driver),
@@ -380,12 +383,13 @@ const runSweepFixture = (input: {
           getShellSnapshot: (options) =>
             Effect.gen(function* () {
               reads++;
+              if (options?.location === "archive") archiveReads++;
               yield* Deferred.succeed(firstRead, undefined);
               if (eventPhase && input.event === "burst" && options?.location !== "archive") {
                 yield* Deferred.succeed(eventRead, undefined);
                 yield* Deferred.await(releaseEventRead);
               }
-              if (input.dirtyBeforeRemoval && reads === 3) {
+              if (input.dirtyBeforeRemoval && reads === 2) {
                 yield* fs
                   .writeFileString(`${threads[0]!.worktreePath}/keep.txt`, "new local work")
                   .pipe(Effect.orDie);
@@ -393,8 +397,14 @@ const runSweepFixture = (input: {
               return {
                 schemaVersion: 1,
                 snapshotSequence: 0,
-                archivedThreads: [],
-                threads: options?.location === "archive" ? [] : threads,
+                archivedThreads:
+                  options?.location === "active"
+                    ? []
+                    : threads.filter((thread) => thread.archivedAt !== null),
+                threads:
+                  options?.location === "archive"
+                    ? []
+                    : threads.filter((thread) => thread.archivedAt === null),
               };
             }),
         }),
@@ -447,7 +457,7 @@ const runSweepFixture = (input: {
         const retained = yield* Effect.forEach(threads, (thread) =>
           fs.exists(thread.worktreePath!),
         );
-        return { counts, retained, reads, contexts };
+        return { counts, retained, reads, archiveReads, contexts };
       }
     }
     if (input.event) {
@@ -532,7 +542,7 @@ const runSweepFixture = (input: {
         [...threads, ...(input.event === "delete" || input.event === "burst" ? [target] : [])],
         (thread) => fs.exists(thread.worktreePath!),
       );
-      return { counts, retained, reads, contexts };
+      return { counts, retained, reads, archiveReads, contexts };
     }
     for (let sweep = 0; sweep < (input.sweeps ?? 1); sweep++) {
       launches = 0;
@@ -542,7 +552,7 @@ const runSweepFixture = (input: {
       counts.push(launches);
     }
     const retained = yield* Effect.forEach(threads, (thread) => fs.exists(thread.worktreePath!));
-    return { counts, retained, reads, contexts };
+    return { counts, retained, reads, archiveReads, contexts };
   }).pipe(Effect.scoped, Effect.provide(fixtureLayer));
 
 describe("storage cleanup sweeps", () => {
@@ -556,6 +566,22 @@ describe("storage cleanup sweeps", () => {
       });
       expect(result.counts).toEqual([0]);
       expect(result.retained).toEqual(Array(6).fill(true));
+      expect(result.archiveReads).toBe(0);
+      expect(result.reads).toBe(1);
+    }),
+  );
+
+  effectIt.live("cleans eligible archived worktrees from the single all-location snapshot", () =>
+    Effect.gen(function* () {
+      const result = yield* runSweepFixture({
+        rules: { worktreeAfterDays: 7 },
+        repositories: 1,
+        worktreesPerRepository: 1,
+        archived: true,
+      });
+      expect(result.retained).toEqual([false]);
+      expect(result.archiveReads).toBe(0);
+      expect(result.reads).toBe(2); // Initial decision and fresh check before removal.
     }),
   );
 
@@ -652,7 +678,7 @@ describe("storage cleanup event scope", () => {
       });
       expect(result.counts[0]).toBeGreaterThan(0);
       expect(result.retained).toEqual(Array(6).fill(true));
-      expect(result.reads).toBe(4); // Current pass plus one trailing pass, two shell reads each.
+      expect(result.reads).toBe(2); // Current pass plus one trailing pass.
     }),
   );
 

@@ -16,3 +16,9 @@ rationale = "Retain guarded local worktree retirement; the CLI adapter uses the 
 id = "v2-port-2689-m2"
 decision = "keep-on-top"
 note = "GC reads archived V2 shells and all live execution resources, preserving non-forced Git removal and environment identity validation."
+
+[[decision]]
+id = "cleanup-all-location-shell-read"
+date = "2026-10-13"
+decided = "narrow"
+rationale = "One all-location snapshot contains active and archived threads. Include both fields instead of issuing a redundant archive-only read and using its empty active threads field. Keep the fresh safety read before each removal."

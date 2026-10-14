@@ -182,10 +182,9 @@ export const make = Effect.gen(function* () {
       });
 
   const readThreads = Effect.fn("StorageCleanup.readThreads")(function* () {
-    const active = yield* projections.getShellSnapshot();
-    const archived = yield* projections.getShellSnapshot({ location: "archive" });
+    const snapshot = yield* projections.getShellSnapshot();
     const projects = yield* projectStore.listShells();
-    return { projects, threads: [...active.threads, ...archived.threads] };
+    return { projects, threads: [...snapshot.threads, ...snapshot.archivedThreads] };
   });
 
   // Local threads under another project need not have a worktreePath of their own.
