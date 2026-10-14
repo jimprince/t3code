@@ -1,3 +1,4 @@
+import { editBeforeOrderTrailers } from "./requestOrder.logic.ts";
 import type {
   ProjectIssueDeferral,
   ProjectIssueOwner,
@@ -107,10 +108,17 @@ export function applyDeferral(
       : change.mode === "until"
         ? { until: change.until, movedToEndAt: current?.movedToEndAt ?? null }
         : { until: current?.until ?? null, movedToEndAt: change.now };
-  const stripped = text.replace(DEFERRAL_MARKER, "").trimEnd();
-  if (next === null) return { body: stripped, deferral: null };
+  if (next === null)
+    return {
+      body: editBeforeOrderTrailers(text, (base) => base.replace(DEFERRAL_MARKER, "").trimEnd()),
+      deferral: null,
+    };
   return {
-    body: `${stripped}\n\n<!-- t3-deferral ${JSON.stringify(next)} -->`,
+    body: editBeforeOrderTrailers(
+      text,
+      (base) =>
+        `${base.replace(DEFERRAL_MARKER, "").trimEnd()}\n\n<!-- t3-deferral ${JSON.stringify(next)} -->`,
+    ),
     deferral: next,
   };
 }
@@ -258,19 +266,23 @@ export function pendingAsksOfThread(
   });
   const { approvals, userInputs } = derivePendingThreadRequests(projection);
   return [
-    ...userInputs.map((input): ProjectPendingAsk => ({
-      ...base({ ...input, canRespond: input.responseCapability !== "not_resumable" }),
-      kind: "question",
-      questions: input.questions,
-      messageResponse: input.responseMode === "message",
-    })),
-    ...approvals.map((approval): ProjectPendingAsk => ({
-      ...base({ ...approval, canRespond: approval.responseCapability === "live" }),
-      kind: "approval",
-      requestKind: approval.requestKind,
-      ...(approval.detail === undefined ? {} : { detail: approval.detail }),
-      ...(approval.appName === undefined ? {} : { appName: approval.appName }),
-      ...(approval.options === undefined ? {} : { options: approval.options }),
-    })),
+    ...userInputs.map(
+      (input): ProjectPendingAsk => ({
+        ...base({ ...input, canRespond: input.responseCapability !== "not_resumable" }),
+        kind: "question",
+        questions: input.questions,
+        messageResponse: input.responseMode === "message",
+      }),
+    ),
+    ...approvals.map(
+      (approval): ProjectPendingAsk => ({
+        ...base({ ...approval, canRespond: approval.responseCapability === "live" }),
+        kind: "approval",
+        requestKind: approval.requestKind,
+        ...(approval.detail === undefined ? {} : { detail: approval.detail }),
+        ...(approval.appName === undefined ? {} : { appName: approval.appName }),
+        ...(approval.options === undefined ? {} : { options: approval.options }),
+      }),
+    ),
   ].toSorted((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
