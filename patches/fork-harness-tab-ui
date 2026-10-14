@@ -1,6 +1,6 @@
-Bottom: e3c96f450daca4260392c2f0bf9f3a18a541e27f
-Top:    eb0828c3f03feb5879f92d97f84941bf0efa1e8e
+Bottom: 4c79e5d87aff23b109edba730f5a0ef14b83266a
+Top:    4c79e5d87aff23b109edba730f5a0ef14b83266a
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 11:51:50 +0000
+Date:   2026-10-14 11:55:10 +0000
 
 feat(web): add Harness tab beside Threads and Projects
