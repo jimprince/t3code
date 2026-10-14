@@ -1395,3 +1395,57 @@ Keep `--key` stable and unique within the tracker repository when editing a mark
 Add `--threads` to start a nested worker for each open task using the workstream owner's project, workspace, and model. Each worker's owner metadata and in-progress linked issue are recorded before its first message. Repeating the command recovers the same worker and first-message receipt; it does not start a second job. Closed tasks are left complete. Partial publication or a launch failure can be recovered by running the same command again.
 
 The MCP tool `t3_plan_publish` exposes the same `title`, `owner`, `source` (`markdown` with `key` and `markdown`, or `proposed_plan` with `threadId` and `planId`) and optional `createThreads` fields. Omit `threadId` to use the calling T3 thread. Starting workers requires a full-access/default caller. No provider run is needed merely to publish issues.
+
+## Resume from an unfinished plan
+
+`t3-thread resume-plan <name-or-thread-id> [--preview]` uses
+`thread.resumeFromPlan` with orchestration operate scope. MCP callers use
+`t3_thread_resume_from_plan` and require full access even for preview. Preview
+returns the seed and creates nothing, and labels the source as file plan or
+native todo_list fallback. A thread-owned unfinished step is required, using
+host-local PLAN.md first and native todo_list only when no file plan maps;
+a running provider turn or in-flight run prevents recovery. An idle ready session
+after failure does not block it. A failed or
+interrupted latest run permits it. A completed run with a stopped session does
+not qualify, including when its session is ready. Settled sources without an existing recovery are refused; repeated
+recovery returns the existing destination even after source settlement. A reused
+destination leaves the source unchanged if the user explicitly unsettled it. Refusals use `no_plan`, `plan_complete`, `still_running` or
+`not_failed`. The optional `threadResumeFromPlan` environment capability gates
+clients on older servers.
+
+Server setting `planRootDirectory` defaults to `~/maintenance-work`. Only
+depth-one task folders with the compact PLAN.md template and allowed
+`*-RESULT.md` paths are inspected. Symlink escapes and oversized PLAN.md files are excluded.
+The optional dashboard `filePlans` map and shell `filePlan` identify plan path,
+host, title and thread-owned progress; the plan Owner sees every step. Only the
+first thread ID on the Owner line is the current owner. Write the current owner
+ID first, then any replaced/from/handed-over history; handover references do
+not confer ownership. IDs compare case-insensitively. If several plans map to a
+thread, unfinished owned steps take priority, then the newest PLAN.md mtime.
+File seeds contain the original thread ID, title/status, its owned rows (at most
+100 steps, 500 characters per outcome), the LAST Next: line (500 characters),
+and absolute host-local paths for PLAN.md and up to five newest sibling result
+files. PLAN bodies, action logs and result bodies stay out of the seed. Result
+files are inspected for path/mtime only; their bodies are never read or cached.
+Instructions outside one adaptive fence require reading the listed files first,
+continuing from the LAST Next:, verifying prior effects, creating no new plan
+file, and editing PLAN.md only as its Owner. Workers record evidence in their
+own RESULT file. Small known credential filters apply to the capped embedded
+lines; generic opaque-token guessing and hex/UUID/path exemptions are removed.
+The native fallback retains its prior-record summaries with known credential
+filtering. Files remain host-local; remote servers do not copy plans.
+
+The service creates one fresh thread in the original project, branch and
+workspace with the original provider/model. The native fallback includes a stateful
+plan, bounded action log and the last assistant message tail. The previous-thread record is redacted
+and fenced as data; at most 100 plan steps of 500 characters, a 300-character
+title, 30 action summaries of 500 characters and 1500 assistant characters are
+included, with visible omission markers. Seed-only filtering also removes bare
+AWS, GitHub, Slack and sk-style keys and private key blocks. It copies no conversation history and does not rerun workspace setup scripts. Recovery
+is keyed by source thread and latest run, with provenance in existing thread
+metadata; repeating it returns the same destination. Successful recovery settles
+the source and preserves its parent, purpose, subproject and completion policy.
+If the destination was deleted, recovery reports `unavailable`. Verify a partly completed
+step before repeating side effects. The action log includes command first
+lines, changed filenames, tool names and error summaries, not command output,
+tool arguments/results or file-change contents.

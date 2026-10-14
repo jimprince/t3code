@@ -455,3 +455,13 @@ This port connects with orchestration protocol 2 and launches threads through th
 Use `t3-thread threads --env dev-vm --json` for a JSON array of thread state and server queue counts. Queue reads run in bounded batches on one connection; a failed or timed-out queue read produces null queue fields and a `queueError` on that thread. This command does not refresh credentials or change the routing file.
 
 `--active-only` skips queue reads without an active run or a queued shell status. Skipped fields are null with an explanatory `queueError`; this option cannot discover idle queues that the shell does not advertise. Omit it for a complete queue scan.
+
+Recover an interrupted or failed thread with an unfinished file plan using
+`t3-thread resume-plan <name-or-thread-id>`. Add `--preview` to print the seed
+without creating anything. This requires the server's `threadResumeFromPlan`
+capability. Recovery creates a fresh conversation in the source project and
+workspace. Preview identifies its source: a host-local PLAN.md and newest worker
+result paths, or the native todo_list fallback when no file plan maps to the thread.
+The server setting planRootDirectory defaults to ~/maintenance-work. File access
+is read-only; a worker records evidence in its own result file and creates no new plan. Repeating recovery for the same source run returns the same
+new thread. Verify an unfinished step before repeating a side effect.
