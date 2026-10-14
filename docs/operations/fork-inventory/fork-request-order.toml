@@ -1,0 +1,8 @@
+name = "fork-request-order"
+subject = "feat(requests): file and order tracker work from CLI and MCP"
+class = "product"
+purpose = "Persist sparse per-workstream order and placement attribution in tracker issue trailers, and expose typed filing and queue selection through one server service, RPC, CLI and MCP."
+retire_when = "Upstream supports typed tracker filing and persisted per-workstream queues across all agent and client surfaces."
+depends_on = ["fork-request-ledger", "fork-dashboard-v3-04-snapshot-service"]
+roles = []
+note = "Plan mapping and client ordering selectors belong to #297 and the UI half of #300. Rank writes do not represent progress."
