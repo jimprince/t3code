@@ -6,6 +6,7 @@ import type {
   DashboardSource,
   DashboardTask,
   EnvironmentId,
+  ThreadFilePlan,
 } from "@t3tools/contracts";
 import { compareDashboardVersions } from "@t3tools/client-runtime/dashboard/merge";
 
@@ -27,6 +28,8 @@ export interface DashboardData {
   readonly projects: ReadonlyArray<ScopedProject>;
   readonly releases: ReadonlyArray<ScopedRelease>;
   readonly sources: ReadonlyArray<DashboardSource>;
+  /** PLAN.md progress by `filePlanKey(environmentId, threadId)`; absent from servers that predate it. */
+  readonly filePlans?: Readonly<Record<string, ThreadFilePlan>>;
 }
 
 const EMPTY_DASHBOARD: DashboardData = {

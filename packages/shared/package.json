@@ -494,6 +494,10 @@
     "./messageOrigin": {
       "types": "./src/messageOrigin.ts",
       "default": "./src/messageOrigin.ts"
+    },
+    "./threadPlan": {
+      "types": "./src/threadPlan.ts",
+      "import": "./src/threadPlan.ts"
     }
   },
   "scripts": {
