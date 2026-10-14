@@ -1,7 +1,7 @@
-Bottom: 030f885881bef8abea1f74a1cae143a589fd7788
-Top:    d957d0dd10742aa3f1dc518f14c91ec6301207c7
+Bottom: cb6a7d94941a66fe6e493ed2c23c8810d546f59d
+Top:    9799d876606aee4bbaf1e73cdf62e9e30a5d1bbd
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 16:22:48 +0000
+Date:   2026-10-14 19:51:18 +0000
 
 feat(projects): orchestrator-configurable project layout
 
