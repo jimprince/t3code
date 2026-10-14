@@ -1,6 +1,6 @@
-Bottom: 82a75010f7b571aa7520d564452f030f0f84ddc2
-Top:    30b2e37c5e7cec6db196d473effc58c79d0ce3f3
+Bottom: 70cfdb71fcdba1253ec46ed2857591db1d0a652c
+Top:    ead71c9164f8dbb1d494e2f252bd7b911daf3cdc
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 12:01:45 +0000
+Date:   2026-10-14 12:03:48 +0000
 
 fix(server): seed delegated ownership from creation lineage
