@@ -1,3 +1,10 @@
+import { ThreadResumeService } from "../../../orchestration-v2/ThreadResumeService.ts";
+import {
+  ThreadResumeFromPlanInput,
+  ThreadResumeResult,
+  ThreadResumePreview,
+  ThreadResumeError,
+} from "@t3tools/contracts";
 import {
   ForkThreadMetadata,
   ThreadPurpose,
@@ -336,7 +343,25 @@ const ThreadForwardTool = Tool.make("t3_thread_forward", {
   .annotate(Tool.Destructive, true)
   .annotate(Tool.OpenWorld, true);
 
+const ThreadResumeTool = Tool.make("t3_thread_resume_from_plan", {
+  description:
+    "Resume a failed or interrupted thread with unfinished owned steps in a host-local PLAN.md (or native todo_list fallback) in a fresh thread in its same workspace. preview returns the deterministic seed without creating a thread. Requires full access. Repeated calls for the same source run reuse the same thread.",
+  parameters: Schema.Struct({
+    ...ThreadResumeFromPlanInput.fields,
+    preview: Schema.optional(Schema.Boolean),
+  }),
+  success: Schema.Union([ThreadResumeResult, ThreadResumePreview]),
+  failure: Schema.Union([OrchestratorMcpFailure, ThreadResumeError]),
+  failureMode: "return",
+  dependencies: [
+    McpInvocationContext.McpInvocationContext,
+    ThreadManagementService.ThreadManagementService,
+    ThreadResumeService,
+  ],
+}).annotate(Tool.Destructive, true);
+
 export const ThreadToolkit = Toolkit.make(
+  ThreadResumeTool,
   ThreadForwardPrepareTool,
   ThreadForwardTool,
   ScheduledTaskRunTool,
