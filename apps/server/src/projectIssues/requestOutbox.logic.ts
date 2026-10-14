@@ -1,4 +1,10 @@
-import { normalizeRequestKind, type ProjectIssue, type ThreadId } from "@t3tools/contracts";
+import {
+  normalizeRequestKind,
+  type ProjectIssue,
+  type ProjectRequestPlace,
+  type UploadedAttachmentRef,
+  type ThreadId,
+} from "@t3tools/contracts";
 
 import type { RequestKind } from "../textGeneration/RequestItemsPrompt.ts";
 
@@ -22,6 +28,11 @@ export interface OutboxEntry {
     excerpt: string;
     /** Saved for later: filed with the parked label, off the active request list. */
     parked?: boolean;
+    partOf?: number;
+    place?: ProjectRequestPlace;
+    actor?: "brad";
+    actorThreadId?: ThreadId;
+    attachments?: readonly UploadedAttachmentRef[];
     /** The open issue this item continues, when the split named one. */
     existing?: number | null;
   }> | null;
@@ -30,6 +41,8 @@ export interface OutboxEntry {
    * item is filed. Ordinary chat messages attach to existing issues instead.
    */
   readonly explicit?: boolean;
+  /** A direct box filing notifies its owner only after the issue exists. */
+  readonly notify?: boolean;
   /** Indexes of `items` already filed as issues. */
   readonly filed: ReadonlyArray<number>;
   readonly attempts: number;
