@@ -10,7 +10,7 @@ depends_on = [
   "fork-dashboard-v3-18-single-design-compact-request",
 ]
 roles = []
-note = "Includes the minimal marker-aware Part of writer alignment in #300. Server and shared-client half of #297. File plans and deterministic Resume remain owned by fork-thread-plan-progress. Reuses request-order trailer parsing; no ordering UI. Web rendering and integrated acceptance follow in the product owner's next candidate."
+note = "Includes the minimal marker-aware Part of writer alignment in #300. Server and shared-client half of #297. File plans and deterministic Resume remain owned by fork-thread-plan-progress. Reuses request-order trailer parsing; no ordering UI. Web rendering (plan.tsx, parts.tsx, dashboard.logic.ts) is in the stacked web candidate: task rows show personal steps, workstream headers show child tasks, never summed together."
 files = [
   "apps/server/src/dashboard/aggregation.ts",
   "apps/server/src/dashboard/DashboardService.ts",
@@ -33,6 +33,16 @@ files = [
   "packages/client-runtime/src/dashboard/progress.ts",
   "packages/client-runtime/src/dashboard/trackerPlan.test.ts",
   "packages/client-runtime/src/dashboard/dashboard.test.ts",
+  "apps/web/src/components/dashboard-v3/DashboardView.tsx",
+  "apps/web/src/components/dashboard-v3/DashboardView.trackerPlan.test.tsx",
+  "apps/web/src/components/dashboard-v3/VariantA.tsx",
+  "apps/web/src/components/dashboard-v3/context.tsx",
+  "apps/web/src/components/dashboard-v3/dashboard.logic.eta.test.ts",
+  "apps/web/src/components/dashboard-v3/dashboard.logic.test.ts",
+  "apps/web/src/components/dashboard-v3/dashboard.logic.ts",
+  "apps/web/src/components/dashboard-v3/fixtures/trackerPlanProjection.json",
+  "apps/web/src/components/dashboard-v3/parts.tsx",
+  "apps/web/src/components/dashboard-v3/plan.tsx",
   "docs/operations/tracker-plan.md",
   "docs/release-notes/entries/tracker-plan.toml",
 ]
@@ -48,3 +58,9 @@ id = "distinct-progress-units"
 date = "2026-10-14"
 decided = "Task rows count personal steps; workstream headers count unique child issues. Open completed checklists do not settle asks."
 rationale = "Nested workstreams must not inflate project task totals or imply delivery from question settlement."
+
+[[decision]]
+id = "web-no-bar-without-checklist"
+date = "2026-10-14"
+decided = "A task without a checklist shows 'no checklist yet', no bar and no 0/1; it is counted as an open task, never as a step. A workstream header shows done/total child tasks; an empty epic is a heading. An ETA is a calendar date, never a time."
+rationale = "The 0/1 is counting only (contract v1.2); drawing it would show a binary bar as measured progress, and a due date has day precision only."

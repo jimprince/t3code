@@ -1,4 +1,4 @@
 id = "tracker-plan"
 category = "feature"
 functionality = "dashboard"
-text = "Read Plan progress from tracker checklists and child issues after each project migrates, with explicit next actions, date-only due dates and retained tracker results during outages."
+text = "Read Plan progress from tracker checklists and child issues after each project migrates, with explicit next actions, date-only due dates and retained tracker results during outages. Task rows show their own steps, workstream headers show done and total child tasks, and a task without a checklist says so instead of drawing a bar."
