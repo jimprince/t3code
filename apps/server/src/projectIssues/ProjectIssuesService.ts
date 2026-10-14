@@ -28,9 +28,18 @@ import * as ProjectService from "../project/ProjectService.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
 import * as GiteaApi from "../sourceControl/GiteaApi.ts";
 import * as ProjectDashboardStore from "../projectDashboard/ProjectDashboardStore.ts";
+import { makeTrackerNoteStore, type StoredRepositoryNotes } from "../dashboard/DashboardStore.ts";
+import { singleFlight } from "../dashboard/DashboardRefresh.ts";
 import { resolveTrackerSetting } from "../projectDashboard/projectDashboard.logic.ts";
 import { parseRankTrailer, parsePlacedByTrailer } from "./requestOrder.logic.ts";
-import { epicProgress, parseEpicChecklist, parsePartOf } from "./epicProgress.logic.ts";
+import {
+  epicProgress,
+  briefingEpicProgress,
+  parseBriefingPartOf,
+  trackerMembership,
+  parseEpicChecklist,
+  parsePartOf,
+} from "./epicProgress.logic.ts";
 import {
   collectThreadTree,
   resolveProjectTracker,
@@ -46,6 +55,14 @@ import {
   workspaceRepositoryName,
   type GiteaRepositoryTarget,
 } from "./projectIssues.logic.ts";
+import {
+  trackerPlan,
+  latestProgressNote,
+  trackerDueDate,
+  trackerBodyTruncated,
+  trackerCommentIssueNumber,
+  type TrackerComment,
+} from "./trackerPlan.logic.ts";
 import { NEEDS_BRAD_LABEL, parseDecisionIssue } from "./decisions.logic.ts";
 import { parseDecisionDeadline, parseDeferral } from "./decisionFeed.logic.ts";
 
@@ -65,6 +82,7 @@ const GiteaIssue = Schema.Struct({
   milestone: Schema.optional(
     Schema.NullOr(Schema.Struct({ id: Schema.Number, title: Schema.String })),
   ),
+  due_date: Schema.optional(Schema.NullOr(Schema.String)),
   pull_request: Schema.optional(Schema.Unknown),
 });
 type GiteaIssue = typeof GiteaIssue.Type;
@@ -73,14 +91,32 @@ const GiteaComments = Schema.Array(
   Schema.Struct({
     body: Schema.String,
     created_at: Schema.String,
+    updated_at: Schema.optionalKey(Schema.String),
     user: Schema.optional(Schema.NullOr(Schema.Struct({ login: Schema.String }))),
   }),
 );
+const RepositoryComments = Schema.Array(
+  Schema.Struct({
+    id: Schema.Number,
+    body: Schema.String,
+    created_at: Schema.String,
+    updated_at: Schema.optionalKey(Schema.String),
+    issue_url: Schema.String,
+  }),
+);
+const NOTE_BACKFILL_MAX_PAGES = 40;
+const NOTE_INCREMENTAL_MAX_PAGES = 4;
+interface RepositoryNotes {
+  readonly notes: ReadonlyMap<number, ReturnType<typeof latestProgressNote>>;
+  readonly coverage: "complete" | "bounded" | "unavailable";
+  readonly error: string | null;
+  readonly state?: StoredRepositoryNotes;
+}
 const GiteaUser = Schema.Struct({ login: Schema.String });
 const GiteaRepo = Schema.Struct({ full_name: Schema.String });
 
 const OPEN_PAGE_LIMIT = 50;
-const OPEN_MAX_PAGES = 4;
+const OPEN_MAX_PAGES = 100;
 const CLOSED_WINDOW_DAYS = 14;
 const COMMENT_LIMIT = 10;
 const COMMENT_CHARS = 4_000;
@@ -115,6 +151,24 @@ export const make = Effect.gen(function* () {
   const dashboardStore = yield* ProjectDashboardStore.make;
 
   const issueCache = new Map<string, { at: number; issues: ReadonlyArray<GiteaIssue> }>();
+  const noteCache = new Map<string, { at: number; value: RepositoryNotes }>();
+  const noteStore = yield* makeTrackerNoteStore;
+  for (const [key, state] of Object.entries(yield* noteStore.read)) {
+    noteCache.set(key, {
+      at: Number.NEGATIVE_INFINITY,
+      value: {
+        notes: new Map(
+          Object.entries(state.notes).map(([number, note]) => [
+            Number(number),
+            latestProgressNote([note]),
+          ]),
+        ),
+        coverage: state.page === 1 ? "complete" : "bounded",
+        error: null,
+        state,
+      },
+    });
+  }
   const ownerCache = new Map<string, { at: number; login: string | null }>();
   const repoCache = new Map<string, { at: number; exists: boolean }>();
 
@@ -305,8 +359,7 @@ export const make = Effect.gen(function* () {
         );
         issues.push(...batch);
         if (batch.length < OPEN_PAGE_LIMIT) break;
-        if (complete && page === 100)
-          return yield* fail("The tracker is too large to order safely.");
+        if (page === 100) return yield* fail("The tracker is too large to order safely.");
       }
       const since = DateTime.formatIso(DateTime.makeUnsafe(now - CLOSED_WINDOW_DAYS * 86_400_000));
       if (closedHistory) {
@@ -334,9 +387,124 @@ export const make = Effect.gen(function* () {
       return withoutPullRequests;
     });
 
+  const readRepositoryNotes = Effect.fnUntraced(function* (target: GiteaRepositoryTarget) {
+    const key = repositoryKey(target);
+    const now = yield* Clock.currentTimeMillis;
+    const cached = noteCache.get(key);
+    if (cached && now - cached.at < ISSUE_CACHE_TTL_MS) return cached.value;
+    const read = Effect.gen(function* () {
+      const state = cached?.value.state ?? {
+        cursor: null,
+        maxUpdatedAt: null,
+        page: 1,
+        notes: {},
+        pending: {},
+        scanStartedAt: null,
+      };
+      const scanStartedAt = state.scanStartedAt ?? DateTime.formatIso(DateTime.makeUnsafe(now));
+      const pending: Record<string, TrackerComment> = { ...state.notes, ...state.pending };
+      let maxUpdatedAt = state.maxUpdatedAt;
+      let complete = false;
+      let page = state.page;
+      const budget = state.cursor === null ? NOTE_BACKFILL_MAX_PAGES : NOTE_INCREMENTAL_MAX_PAGES;
+      const since =
+        state.cursor === null
+          ? ""
+          : `&since=${encodeURIComponent(DateTime.formatIso(DateTime.makeUnsafe(Date.parse(state.cursor) - 3000)))}`;
+      for (let read = 0; read < budget; read++, page++) {
+        const batch = yield* api.request(
+          target.instance,
+          `${GiteaApi.repositoryPath(target.repository)}/issues/comments?limit=50&page=${page}${since}`,
+          RepositoryComments,
+        );
+        for (const comment of batch) {
+          const updatedAt = comment.updated_at ?? comment.created_at;
+          if (
+            Number.isFinite(Date.parse(updatedAt)) &&
+            (!maxUpdatedAt || Date.parse(updatedAt) > Date.parse(maxUpdatedAt))
+          )
+            maxUpdatedAt = updatedAt;
+          const number = trackerCommentIssueNumber(comment.issue_url);
+          if (number === null || !comment.body.startsWith("Progress: ")) continue;
+          const note = {
+            id: comment.id,
+            body: comment.body.slice(0, COMMENT_CHARS),
+            createdAt: comment.created_at,
+          };
+          const previous = pending[number];
+          pending[number] =
+            latestProgressNote(previous && previous.id !== note.id ? [previous, note] : [note]) ??
+            note;
+        }
+        if (batch.length < 50) {
+          complete = true;
+          break;
+        }
+      }
+      const nextState: StoredRepositoryNotes = {
+        // An edit to an earlier page during this scan must remain inside the next since range.
+        cursor: complete
+          ? DateTime.formatIso(
+              DateTime.makeUnsafe(
+                Math.min(Date.parse(maxUpdatedAt ?? scanStartedAt), Date.parse(scanStartedAt)),
+              ),
+            )
+          : state.cursor,
+        scanStartedAt: complete ? null : scanStartedAt,
+        maxUpdatedAt,
+        page: complete ? 1 : page,
+        notes: complete ? pending : state.notes,
+        pending: complete ? {} : pending,
+      };
+      yield* noteStore.write(key, nextState);
+      return {
+        // Partial ranges retain the last complete evidence while persisting backfill continuation.
+        notes: new Map(
+          Object.entries(nextState.notes).map(([number, note]) => [
+            Number(number),
+            latestProgressNote([note]),
+          ]),
+        ),
+        coverage: complete ? ("complete" as const) : ("bounded" as const),
+        error: null,
+        state: nextState,
+      };
+    });
+    const value: RepositoryNotes = yield* read.pipe(
+      Effect.catch(() =>
+        Effect.succeed({
+          notes: cached?.value.notes ?? new Map(),
+          coverage: "unavailable" as const,
+          error: "Could not read tracker progress notes.",
+          ...(cached?.value.state ? { state: cached.value.state } : {}),
+        }),
+      ),
+    );
+    noteCache.set(key, { at: now, value });
+    return value;
+  });
+  const noteFlights = new Map<
+    string,
+    { target: GiteaRepositoryTarget; read: Effect.Effect<RepositoryNotes> }
+  >();
+  const fetchRepositoryNotes = (target: GiteaRepositoryTarget) => {
+    const key = repositoryKey(target);
+    let flight = noteFlights.get(key);
+    if (!flight) {
+      const latest = { target };
+      const read = singleFlight(Effect.suspend(() => readRepositoryNotes(latest.target)));
+      flight = Object.assign(latest, { read });
+      noteFlights.set(key, flight);
+    }
+    flight.target = target;
+    return flight.read;
+  };
+
   /** Drop cached issue lists so a write shows on the next read. */
   const invalidate = (target: { host: string; repository: string }) => {
     issueCache.delete(repositoryKey(target));
+    const notes = noteCache.get(repositoryKey(target));
+    if (notes) noteCache.set(repositoryKey(target), { ...notes, at: Number.NEGATIVE_INFINITY });
   };
 
   /** The decision with the deadline its context names, when it names one. */
@@ -352,9 +520,12 @@ export const make = Effect.gen(function* () {
     target: GiteaRepositoryTarget,
     issue: GiteaIssue,
     linkedThreadIds: ThreadId[],
+    plan?: ProjectIssue["plan"],
   ): ProjectIssue => {
     const labels = (issue.labels ?? []).map((label) => label.name);
-    const isRequest = labels.some((label) => label.toLowerCase() === REQUEST_LABEL);
+    const isRequest = labels.some(
+      (label) => label.toLowerCase() === REQUEST_LABEL || label.toLowerCase().startsWith("ask:"),
+    );
     const blockedBy = parseBlockedBy(issue.body);
     const parent = parsePartOf(issue.body);
     const asksBrad =
@@ -369,6 +540,15 @@ export const make = Effect.gen(function* () {
       status: deriveProjectIssueStatus(issue.state, labels),
       labels,
       isRequest,
+      dueDate: trackerDueDate(issue.due_date),
+      plan:
+        plan ??
+        trackerPlan({
+          body: issue.body,
+          closed: issue.state === "closed",
+          closedAt: issue.closed_at ?? null,
+          stage: deriveRequestStage(issue.state, labels),
+        }),
       rank: parseRankTrailer(issue.body),
       placedBy: parsePlacedByTrailer(issue.body),
       ...(parent !== null && parent !== issue.number ? { partOf: parent } : {}),
@@ -417,15 +597,25 @@ export const make = Effect.gen(function* () {
         { concurrency: 4 },
       );
       for (const { target, items, error } of results) {
-        repositories.push({ host: target.host, repository: target.repository, error });
-        const epics = epicProgress(
-          items.map((issue) => ({
-            number: issue.number,
-            body: issue.body,
-            labels: (issue.labels ?? []).map((label) => label.name),
-            closed: issue.state === "closed",
-          })),
-        );
+        const notes: RepositoryNotes = error
+          ? { notes: new Map(), coverage: "unavailable" as const, error: null }
+          : yield* fetchRepositoryNotes(target);
+        repositories.push({
+          host: target.host,
+          repository: target.repository,
+          error,
+          noteCoverage: notes.coverage,
+          noteError: notes.error,
+        });
+        const sourceItems = items.map((issue) => ({
+          number: issue.number,
+          body: issue.body,
+          labels: (issue.labels ?? []).map((label) => label.name),
+          closed: issue.state === "closed",
+        }));
+        const membership = trackerMembership(sourceItems);
+        const epics = epicProgress(sourceItems, membership);
+        const briefingEpics = briefingEpicProgress(sourceItems);
         for (const issue of items) {
           const issueKey = `${repositoryKey(target)}#${issue.number}`;
 
@@ -463,9 +653,57 @@ export const make = Effect.gen(function* () {
                 .pipe(Effect.ignore);
             }
           }
+          const children = membership.workstreams.has(issue.number)
+            ? (membership.children.get(issue.number) ?? [])
+            : undefined;
+          const plan = trackerPlan({
+            body: issue.body,
+            closed: issue.state === "closed",
+            closedAt: issue.closed_at ?? null,
+            stage: deriveRequestStage(
+              issue.state,
+              (issue.labels ?? []).map((label) => label.name),
+            ),
+            note: notes.notes.get(issue.number),
+            children,
+          });
+          const projected = toProjectIssue(
+            target,
+            issue,
+            project.linkedThreads.get(issueKey) ?? [],
+            plan,
+          );
+          const { partOf: _partOf, ...base } = projected;
           issues.push({
-            ...toProjectIssue(target, issue, project.linkedThreads.get(issueKey) ?? []),
-            ...(epics.has(issue.number) ? { epic: epics.get(issue.number)! } : {}),
+            ...base,
+            briefingPartOf: parseBriefingPartOf(issue.body),
+            ...(briefingEpics.has(issue.number)
+              ? { briefingEpic: briefingEpics.get(issue.number)! }
+              : {}),
+            ...(membership.parents.has(issue.number)
+              ? { partOf: membership.parents.get(issue.number)! }
+              : membership.warnings.get(issue.number)?.includes("missing-or-closed-parent") &&
+                  _partOf
+                ? { partOf: _partOf }
+                : {}),
+            ...(membership.warnings.has(issue.number) || trackerBodyTruncated(issue.body)
+              ? {
+                  membershipWarnings: [
+                    ...(membership.warnings.get(issue.number) ?? []),
+                    ...(trackerBodyTruncated(issue.body) ? ["truncated-body"] : []),
+                  ],
+                }
+              : {}),
+            plan,
+            ...(epics.has(issue.number)
+              ? {
+                  epic: {
+                    ...epics.get(issue.number)!,
+                    children: children?.map((c) => c.number) ?? [],
+                    unknown: children?.filter((c) => c.unknown).map((c) => c.number) ?? [],
+                  },
+                }
+              : {}),
           });
         }
       }

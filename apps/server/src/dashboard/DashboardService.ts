@@ -2,6 +2,7 @@ import { PlanFileService, enrichFilePlanShells } from "../orchestration-v2/PlanF
 import * as ShellSnapshotDiagnostics from "../diagnostics/ShellSnapshotDiagnostics.ts";
 import packageJson from "../../package.json" with { type: "json" };
 import * as NodeOS from "node:os";
+import { ThreadId as ThreadIdSchema } from "@t3tools/contracts";
 import type {
   DashboardSnapshot,
   DashboardSource,
@@ -29,10 +30,27 @@ import * as DashboardStore from "./DashboardStore.ts";
 import { pendingAsksOfThread } from "../projectIssues/decisionFeed.logic.ts";
 import { readPendingRequests } from "../projectIssues/pendingAsks.query.ts";
 import { ReleaseHealth } from "./ReleaseSource.ts";
-import { aggregate, BriefingPlan, dashboardRoots, rootRepositories } from "./aggregation.ts";
+import {
+  aggregate,
+  BriefingPlan,
+  briefingPlanRoot,
+  dashboardRoots,
+  rootRepositories,
+} from "./aggregation.ts";
 import { compactSnapshot, emptySnapshot, sampleProgress } from "./dashboard.logic.ts";
+import { confirmTrackerPlan } from "../projectIssues/trackerPlan.logic.ts";
 import { singleFlight } from "./DashboardRefresh.ts";
 
+const decodeTrackerHeader = Schema.decodeUnknownOption(
+  Schema.Struct({
+    source: Schema.Literal("tracker"),
+    head: Schema.String,
+    title: Schema.String,
+    updated_utc: Schema.String,
+    rootThreadId: ThreadIdSchema,
+  }),
+);
+const decodeBriefingPlan = Schema.decodeUnknownEffect(BriefingPlan);
 export class DashboardService extends Context.Service<
   DashboardService,
   {
@@ -68,10 +86,11 @@ export const make = Effect.gen(function* () {
   );
   const sources = new Map<string, DashboardSource>(snapshot.sources.map((s) => [s.id, s]));
   const plans = new Map<string, BriefingPlan>(
-    (saved?.plans ?? []).map((plan) => [`${plan.head}.json`, plan]),
+    (saved?.plans ?? []).map((plan) => [plan.fileName ?? `${plan.head}.json`, plan]),
   );
+  const trackerRoots = new Set<ThreadId>((saved?.trackerRoots ?? []).map((id) => id as ThreadId));
   let subscribers = 0;
-  let lastWriteAt = 0;
+  let lastWriteAt = Number.NEGATIVE_INFINITY;
   const refreshRequests = yield* Queue.sliding<void>(1);
   let releases: readonly DashboardRelease[] =
     saved?.snapshot.releases.filter((r) => r.id !== "server") ?? [];
@@ -121,6 +140,7 @@ export const make = Effect.gen(function* () {
             now,
             pendingAsks,
             previous: snapshot,
+            trackerRoots,
             rootRepositories: new Map([
               ...rootRepositories({ ...shell, projects: yield* projects.listShells() }),
               ...ownRepositories,
@@ -187,6 +207,7 @@ export const make = Effect.gen(function* () {
             issues: Object.fromEntries(issueRows),
             plans: [...plans.values()],
             rootRepositories: Object.fromEntries(ownRepositories),
+            trackerRoots: [...trackerRoots],
           });
           lastWriteAt = Date.parse(now);
         }
@@ -213,7 +234,17 @@ export const make = Effect.gen(function* () {
       for (const root of roots) {
         const now = DateTime.formatIso(yield* DateTime.now);
         const result = yield* issues.list({ rootThreadId: root.id }).pipe(Effect.option);
-        if (result._tag === "None") {
+        if (
+          result._tag === "None" ||
+          (result.value.repositories.length === 0 && ownRepositories.has(root.id))
+        ) {
+          const repository = ownRepositories.get(root.id);
+          if (repository) {
+            const id = `gitea:${repository}`;
+            seenSources.add(id);
+            const previous = sources.get(id);
+            if (previous) sources.set(id, { ...previous, failed: true, observedAt: now });
+          }
           for (const issue of issueRows.get(root.id) ?? []) {
             const id = `gitea:${issue.host}/${issue.repository}`;
             seenSources.add(id);
@@ -235,8 +266,43 @@ export const make = Effect.gen(function* () {
             .map((r) => `${r.host}/${r.repository}`),
         );
         const previous = issueRows.get(root.id) ?? [];
+        if (
+          current.issues.some((issue) => {
+            const prior = previous.find(
+              (old) =>
+                old.host === issue.host &&
+                old.repository === issue.repository &&
+                old.number === issue.number,
+            );
+            return (
+              issue.plan &&
+              (!prior?.plan ||
+                issue.plan.evidenceVersion !== prior.plan.evidenceVersion ||
+                (issue.plan.confirmedAt != null &&
+                  Date.parse(issue.plan.confirmedAt) >
+                    Date.parse(prior.plan.confirmedAt ?? "1970-01-01")))
+            );
+          })
+        )
+          lastWriteAt = Number.NEGATIVE_INFINITY;
         issueRows.set(root.id, [
-          ...current.issues,
+          ...current.issues.map((issue) => ({
+            ...issue,
+            ...(issue.plan
+              ? {
+                  plan: confirmTrackerPlan(
+                    issue.plan,
+                    previous.find(
+                      (old) =>
+                        old.host === issue.host &&
+                        old.repository === issue.repository &&
+                        old.number === issue.number,
+                    )?.plan ?? null,
+                    current.fetchedAt,
+                  ),
+                }
+              : {}),
+          })),
           ...previous.filter((i) => failed.has(`${i.host}/${i.repository}`)),
         ]);
         for (const repo of current.repositories) {
@@ -252,6 +318,14 @@ export const make = Effect.gen(function* () {
             staleAfterMs: 120_000,
             coverage: repo.error ? "unavailable" : "bounded",
             failed: repo.error !== null,
+            ...(repo.noteCoverage && repo.noteCoverage !== "complete"
+              ? {
+                  detail:
+                    repo.noteCoverage === "bounded"
+                      ? "Progress notes have partial coverage"
+                      : "Progress notes unavailable",
+                }
+              : {}),
           });
         }
       }
@@ -289,6 +363,13 @@ export const make = Effect.gen(function* () {
       }
       for (const filename of filenames.filter((f) => f.endsWith(".json")).slice(0, 64)) {
         const id = `plan:${filename.slice(0, -5)}`;
+        const cachedPlan = plans.get(filename);
+        if (
+          cachedPlan?.source === "tracker" &&
+          cachedPlan.rootThreadId &&
+          trackerRoots.has(cachedPlan.rootThreadId)
+        )
+          continue;
         seenSources.add(id);
         const now = DateTime.formatIso(yield* DateTime.now);
         const plan = yield* fs.readFileString(path.join(directory!, filename)).pipe(
@@ -296,11 +377,33 @@ export const make = Effect.gen(function* () {
             (contents) => contents.length <= 256_000,
             () => new Error("Plan exceeds size limit"),
           ),
-          Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(BriefingPlan))),
+          Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown))),
+          Effect.flatMap((value) => {
+            const header = decodeTrackerHeader(value);
+            if (header._tag === "Some") return Effect.succeed({ ...header.value, workstreams: [] });
+            return decodeBriefingPlan(value);
+          }),
           Effect.option,
         );
         if (plan._tag === "Some" && Number.isFinite(Date.parse(plan.value.updated_utc))) {
-          plans.set(filename, plan.value);
+          const rootId = briefingPlanRoot(plan.value, roots);
+          // Never turn a title match into the explicit id required for tracker cutover.
+          const bound =
+            rootId && plan.value.source !== "tracker"
+              ? { ...plan.value, rootThreadId: rootId }
+              : plan.value;
+          if (
+            rootId &&
+            plan.value.rootThreadId &&
+            plan.value.source === "tracker" &&
+            !trackerRoots.has(rootId)
+          ) {
+            trackerRoots.add(rootId);
+            lastWriteAt = Number.NEGATIVE_INFINITY;
+          }
+          if (!rootId || !trackerRoots.has(rootId) || plan.value.source === "tracker")
+            plans.set(filename, { ...bound, fileName: filename });
+          else plans.delete(filename);
           sources.set(id, {
             id,
             kind: "plan",
@@ -308,7 +411,10 @@ export const make = Effect.gen(function* () {
             lastSuccessAt: plan.value.updated_utc,
             staleAfterMs: 2 * 60 * 60_000,
             coverage: "complete",
-            failed: false,
+            failed: plan.value.source === "tracker" && !rootId,
+            ...(plan.value.source === "tracker" && !rootId
+              ? { detail: `Unbound briefing file: ${filename}` }
+              : {}),
           });
         } else
           sources.set(id, {

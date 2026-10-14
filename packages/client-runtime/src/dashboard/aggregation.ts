@@ -1,3 +1,4 @@
+import { ThreadId as ThreadIdSchema } from "@t3tools/contracts";
 import { isThreadResumable } from "../threadResume.ts";
 import type {
   DashboardAttention,
@@ -33,6 +34,9 @@ function collectThreadTree<T extends { id: ThreadId; parentThreadId: ThreadId | 
 import { emptySnapshot, issueId, movement, indexSamples, type ProgressSample } from "./progress.ts";
 
 export const BriefingPlan = Schema.Struct({
+  fileName: Schema.optionalKey(Schema.String),
+  rootThreadId: Schema.optionalKey(ThreadIdSchema),
+  source: Schema.optionalKey(Schema.Literal("tracker")),
   head: Schema.String,
   title: Schema.String,
   updated_utc: Schema.String,
@@ -57,6 +61,19 @@ export const BriefingPlan = Schema.Struct({
   ),
 });
 export type BriefingPlan = typeof BriefingPlan.Type;
+/** Unflagged legacy heads bind on a unique exact title; new files carry rootThreadId explicitly. */
+export function briefingPlanRoot(
+  plan: Pick<BriefingPlan, "rootThreadId" | "head" | "title">,
+  roots: readonly { id: ThreadId; title: string }[],
+): ThreadId | null {
+  if (plan.rootThreadId)
+    return roots.some((root) => root.id === plan.rootThreadId) ? plan.rootThreadId : null;
+  const matches = roots.filter(
+    (root) => root.title.trim().toLowerCase() === plan.title.trim().toLowerCase(),
+  );
+  return matches.length === 1 ? matches[0]!.id : null;
+}
+const UNCONFIRMED_AT = "1970-01-01T00:00:00.000Z";
 const utility = (title: string) =>
   /^(reliability|quota|quality|security|maintenance|deployment)(\b|$)/i.test(title);
 type DashboardShell = Pick<
@@ -127,6 +144,7 @@ export function aggregate(input: {
   readonly pendingAsks?: readonly ProjectPendingAsk[];
   readonly remoteParentThreadIds?: readonly ThreadId[];
   readonly previous?: DashboardSnapshot;
+  readonly trackerRoots?: ReadonlySet<ThreadId>;
   readonly rootRepositories?: ReadonlyMap<ThreadId, string>;
 }): DashboardSnapshot {
   const { threads, roots } = dashboardRoots(
@@ -134,6 +152,17 @@ export function aggregate(input: {
     input.metadata,
     input.remoteParentThreadIds,
   );
+  const boundPlans = new Map(input.plans.map((plan) => [plan, briefingPlanRoot(plan, roots)]));
+  const trackerRoots = new Set(input.trackerRoots ?? []);
+  for (const root of roots) {
+    const plans = input.plans.filter((plan) => boundPlans.get(plan) === root.id);
+    if (plans.some((plan) => plan.source === "tracker" && plan.rootThreadId === root.id))
+      trackerRoots.add(root.id);
+  }
+  const fallbackPlans = input.plans.filter((plan) => {
+    const root = boundPlans.get(plan);
+    return root ? !trackerRoots.has(root) : plan.source !== "tracker";
+  });
   const projects: DashboardProject[] = [];
   const history = indexSamples(input.samples);
   const trees = new Map(roots.map((root) => [root.id, collectThreadTree(threads, root.id)]));
@@ -152,11 +181,27 @@ export function aggregate(input: {
         continue;
       const key = issueId(issue.host, issue.repository, issue.number);
       const prior = rows.get(key);
+      const selected =
+        prior && Date.parse(prior.updatedAt) > Date.parse(issue.updatedAt) ? prior : issue;
+      const selectedPlan = selected.plan;
+      const otherPlan = selected === issue ? prior?.plan : issue.plan;
+      const plan =
+        selectedPlan &&
+        otherPlan &&
+        selectedPlan.planVersion === otherPlan.planVersion &&
+        selectedPlan.evidenceVersion === otherPlan.evidenceVersion &&
+        selectedPlan.done === otherPlan.done &&
+        selectedPlan.total === otherPlan.total &&
+        otherPlan.confirmedAt &&
+        Date.parse(otherPlan.confirmedAt) > Date.parse(selectedPlan.confirmedAt ?? "1970-01-01")
+          ? { ...selectedPlan, confirmedAt: otherPlan.confirmedAt }
+          : selectedPlan;
       rows.set(
         key,
         prior
           ? {
-              ...(Date.parse(prior.updatedAt) > Date.parse(issue.updatedAt) ? prior : issue),
+              ...selected,
+              ...(plan ? { plan } : {}),
               linkedThreadIds: [...new Set([...prior.linkedThreadIds, ...issue.linkedThreadIds])],
             }
           : issue,
@@ -191,6 +236,17 @@ export function aggregate(input: {
       .sort(
         (a, b) => trees.get(a.id)!.length - trees.get(b.id)!.length || a.id.localeCompare(b.id),
       );
+    const provenance = issue.requestSource
+      ? candidates
+          .filter(
+            (root) =>
+              root.id === issue.requestSource!.rootThreadId ||
+              trees.get(root.id)!.some((thread) => thread.id === issue.requestSource!.threadId),
+          )
+          .sort(
+            (a, b) => trees.get(a.id)!.length - trees.get(b.id)!.length || a.id.localeCompare(b.id),
+          )[0]
+      : undefined;
     const ownRepo = candidates
       .filter(
         (root) => input.rootRepositories?.get(root.id) === `${issue.host}/${issue.repository}`,
@@ -204,10 +260,17 @@ export function aggregate(input: {
     const owner =
       waitingOwner ??
       linked[0] ??
+      provenance ??
       ownRepo ??
       [...candidates].sort((a, b) => a.id.localeCompare(b.id))[0];
     if (owner) owners.set(key, owner.id);
   }
+  const issueUrlOwners = new Map(
+    [...rows].flatMap(([id, issue]) => {
+      const owner = owners.get(id);
+      return owner ? [[issue.url, owner] as const] : [];
+    }),
+  );
   const localOwners = new Map<ThreadId, ThreadId>();
   for (const root of [...roots].sort(
     (a, b) => trees.get(a.id)!.length - trees.get(b.id)!.length || a.id.localeCompare(b.id),
@@ -220,6 +283,7 @@ export function aggregate(input: {
     const issues = [...rows.entries()]
       .filter(([key]) => owners.get(key) === root.id)
       .map(([, issue]) => issue);
+    const tracker = trackerRoots.has(root.id);
     const attention: DashboardAttention[] = [];
     // Threads whose steps an issue row already counts as its own progress.
     const progressSources = new Set<ThreadId>();
@@ -238,28 +302,57 @@ export function aggregate(input: {
         const linked = tree.find(
           (t) => issue.linkedThreadIds.includes(t.id) && t.todoProgress && t.todoProgress.total > 0,
         );
-        const progress = issue.epic
-          ? {
-              done: issue.epic.done,
-              total: issue.epic.total,
-              planVersion: `epic:${issue.epic.total}`,
-              sourceId,
-              confirmedAt: issue.updatedAt,
-            }
-          : linked?.todoProgress
+        const labels = new Set(issue.labels.map((label) => label.toLowerCase()));
+        const labelledEpic =
+          labels.has("ask:epic") ||
+          (labels.has("ask:plan") && !labels.has("ask:task") && !labels.has("ask:question"));
+        const epic = tracker
+          ? issue.epic
+          : labelledEpic
+            ? (issue.briefingEpic ?? issue.epic)
+            : undefined;
+        const parent = tracker
+          ? issue.partOf
+          : issue.briefingPartOf === undefined
+            ? issue.partOf
+            : issue.briefingPartOf;
+        const progress =
+          tracker && issue.plan
             ? {
-                done: linked.todoProgress.completed,
-                total: linked.todoProgress.total,
-                planVersion: `todo:${linked.id}:${linked.todoProgress.total}`,
-                sourceId: "local",
-                confirmedAt: DateTime.formatIso(linked.updatedAt),
+                done: issue.plan.done,
+                total: issue.plan.total,
+                planVersion: issue.plan.planVersion,
+                sourceId,
+                confirmedAt: issue.plan.confirmedAt ?? UNCONFIRMED_AT,
+                confirmationKnown: issue.plan.confirmedAt !== null,
               }
-            : null;
-        if (!issue.epic && linked?.todoProgress) progressSources.add(linked.id);
+            : epic
+              ? {
+                  done: epic.done,
+                  total: epic.total,
+                  planVersion: `epic:${epic.total}`,
+                  sourceId,
+                  confirmedAt: issue.updatedAt,
+                }
+              : linked?.todoProgress
+                ? {
+                    done: linked.todoProgress.completed,
+                    total: linked.todoProgress.total,
+                    planVersion: `todo:${linked.id}:${linked.todoProgress.total}`,
+                    sourceId: "local",
+                    confirmedAt: DateTime.formatIso(linked.updatedAt),
+                  }
+                : null;
+        if (!epic && linked?.todoProgress) progressSources.add(linked.id);
         const attentionIds: string[] = [];
         if (
           issue.status !== "done" &&
-          (issue.decision || issue.stage === "ready" || issue.stage === "needs-test") &&
+          issue.stage !== "awaiting-release" &&
+          (issue.decision ||
+            issue.stage === "ready" ||
+            issue.stage === "needs-test" ||
+            issue.labels.includes("needs-review") ||
+            issue.labels.includes("needs-test")) &&
           (!issue.deferral?.until || issue.deferral.until <= input.now)
         ) {
           const attentionId = `${id}:attention`;
@@ -291,7 +384,11 @@ export function aggregate(input: {
               )
               .map((blocked) => issueId(blocked.host, blocked.repository, blocked.number)),
             title: issue.title,
-            kind: issue.decision ? "decision" : issue.stage === "needs-test" ? "test" : "review",
+            kind: issue.decision
+              ? "decision"
+              : issue.stage === "needs-test" || issue.labels.includes("needs-test")
+                ? "test"
+                : "review",
             url: issue.url,
             threadId:
               waitingThreads.get(id) ?? issue.owner?.threadId ?? issue.linkedThreadIds[0] ?? null,
@@ -305,11 +402,17 @@ export function aggregate(input: {
           id,
           sourceId,
           closedAt: issue.closedAt,
+          ...(issue.rank !== undefined ? { rank: issue.rank } : {}),
+          createdAt: issue.createdAt,
+          ...(issue.placedBy !== undefined ? { placedBy: issue.placedBy } : {}),
+          ...(parent != null ? { partOf: parent } : {}),
+          ...(tracker && issue.plan ? { hasChecklist: issue.plan.hasChecklist } : {}),
+          ...(issue.membershipWarnings ? { membershipWarnings: issue.membershipWarnings } : {}),
           title: issue.title,
           url: issue.url,
           threadId: waitingThreads.get(id) ?? linked?.id ?? issue.linkedThreadIds[0] ?? null,
-          workstreamId: issue.partOf
-            ? issueId(issue.host, issue.repository, issue.partOf)
+          workstreamId: parent
+            ? issueId(issue.host, issue.repository, parent)
             : `project:${root.id}:work`,
           status:
             issue.status === "done"
@@ -323,8 +426,19 @@ export function aggregate(input: {
                     : "pending",
           progress,
           movement: movement(id, progress, history, input.now),
-          forecast: null,
-          nextStep: linked?.todoProgress?.currentStep?.text ?? null,
+          forecast:
+            tracker && issue.dueDate
+              ? {
+                  eta: issue.dueDate,
+                  precision: "date" as const,
+                  basis: "owner" as const,
+                  sourceId,
+                }
+              : null,
+          nextStep:
+            tracker && issue.plan
+              ? issue.plan.nextStep
+              : (linked?.todoProgress?.currentStep?.text ?? null),
           attentionIds,
         };
       });
@@ -430,22 +544,109 @@ export function aggregate(input: {
           attentionIds: [...new Set([...task.attentionIds, ...blocking.map((a) => a.id)])],
         });
     }
+    const headers = tracker
+      ? issues.filter((issue) => issue.epic && issue.plan && issue.status !== "done")
+      : [];
+    const headerIds = new Set(
+      headers.map((issue) => issueId(issue.host, issue.repository, issue.number)),
+    );
+    const planTasks = tasks
+      .filter((task) => !headerIds.has(task.id) || task.attentionIds.length > 0)
+      .map((task) => (headerIds.has(task.id) ? { ...task, progress: null } : task));
+    const workstreams = headers.map<DashboardProject["workstreams"][number]>((issue) => {
+      const id = issueId(issue.host, issue.repository, issue.number);
+      return {
+        id,
+        title: issue.title,
+        url: issue.url,
+        threadId:
+          issue.linkedThreadIds.find((id) => tree.some((thread) => thread.id === id)) ?? null,
+        rank: issue.rank ?? null,
+        ...(issue.membershipWarnings ? { membershipWarnings: issue.membershipWarnings } : {}),
+        createdAt: issue.createdAt,
+        placedBy: issue.placedBy ?? null,
+        parentWorkstreamId: issue.partOf
+          ? issueId(issue.host, issue.repository, issue.partOf)
+          : null,
+        progress:
+          issue.epic!.total > 0
+            ? {
+                done: issue.epic!.done,
+                total: issue.epic!.total,
+                planVersion: issue.plan!.planVersion,
+                confirmedAt: issue.plan!.confirmedAt ?? UNCONFIRMED_AT,
+                confirmationKnown: issue.plan!.confirmedAt !== null,
+                sourceId: `gitea:${issue.host}/${issue.repository}`,
+              }
+            : null,
+        childIssueIds: (issue.epic!.children ?? []).map((number) =>
+          issueId(issue.host, issue.repository, number),
+        ),
+        unknownChildIds: (issue.epic!.unknown ?? []).map((number) =>
+          issueId(issue.host, issue.repository, number),
+        ),
+        taskIds: planTasks.filter((task) => task.workstreamId === id).map((task) => task.id),
+      };
+    });
+    for (const id of new Set(planTasks.map((task) => task.workstreamId)))
+      if (!workstreams.some((w) => w.id === id))
+        workstreams.push({
+          id,
+          title: id === `project:${root.id}:work` ? "Unsorted" : "Work",
+          url: null,
+          threadId: null,
+          rank: null,
+          createdAt: root.updatedAt ? DateTime.formatIso(root.updatedAt) : input.now,
+          placedBy: null,
+          parentWorkstreamId: null,
+          progress: null,
+          childIssueIds: [],
+          unknownChildIds: [],
+          taskIds: planTasks.filter((task) => task.workstreamId === id).map((task) => task.id),
+        });
     let parent = root.parentThreadId;
     const seen = new Set<ThreadId>();
     while (parent && !roots.some((r) => r.id === parent) && !seen.has(parent)) {
       seen.add(parent);
       parent = threads.find((t) => t.id === parent)?.parentThreadId ?? null;
     }
+    const priorProject = input.previous?.projects.find(
+      (project) => project.rootThreadId === root.id,
+    );
+    const priorHeads = input.plans
+      .filter((plan) => boundPlans.get(plan) === root.id)
+      .flatMap(
+        (plan) =>
+          input.previous?.projects.filter((project) => project.id === `head:${plan.head}`) ?? [],
+      );
+    const removedPlanTaskIds = [
+      ...new Set(
+        [...(priorProject?.tasks ?? []), ...priorHeads.flatMap((project) => project.tasks)]
+          .filter(
+            (task) =>
+              task.id.startsWith("plan:") && !planTasks.some((current) => current.id === task.id),
+          )
+          .map((task) => task.id),
+      ),
+    ];
+    const planMigration = tracker
+      ? (priorProject?.planMigration ??
+        (removedPlanTaskIds.length > 0
+          ? { observedAt: input.now, removedTaskIds: removedPlanTaskIds }
+          : undefined))
+      : undefined;
     projects.push({
+      planSource: tracker ? "tracker" : "briefing",
+      ...(planMigration ? { planMigration } : {}),
       id: `project:${root.id}`,
       rootThreadId: root.id,
       parentId: parent ? `project:${parent}` : null,
       title: root.title,
       utility: utility(root.title),
       omittedTaskCount: 0,
-      tasks,
+      tasks: planTasks,
       attention,
-      workstreams: [],
+      workstreams,
       sourceIds: [
         ...new Set([
           "local",
@@ -454,7 +655,7 @@ export function aggregate(input: {
       ],
     });
   }
-  for (const plan of input.plans) {
+  for (const plan of fallbackPlans) {
     const sourceId = `plan:${plan.head}`;
     const orphan: DashboardTask[] = [];
     const ids = new Set<string>();
@@ -481,9 +682,15 @@ export function aggregate(input: {
           !Number.isFinite(Date.parse(task.updated_utc))
         )
           continue;
-        const existing = task.link
-          ? projects.flatMap((p) => p.tasks).find((t) => t.url === task.link)
-          : undefined;
+        const linkedRoot = task.link ? issueUrlOwners.get(task.link) : undefined;
+        const boundRoot = boundPlans.get(plan);
+        // A legacy or cross-project link cannot change another root's selected Plan source.
+        const foreign =
+          linkedRoot && (trackerRoots.has(linkedRoot) || (boundRoot && boundRoot !== linkedRoot));
+        const existing =
+          task.link && !foreign
+            ? projects.flatMap((p) => p.tasks).find((t) => t.url === task.link)
+            : undefined;
         const id = existing?.id ?? `plan:${plan.head}:${task.id}`;
         const progress = {
           done: task.steps_done,
@@ -525,7 +732,25 @@ export function aggregate(input: {
             attentionIds: [],
           });
       }
-    if (orphan.length)
+    const boundRoot = boundPlans.get(plan);
+    const boundProject = boundRoot
+      ? projects.find((project) => project.rootThreadId === boundRoot)
+      : undefined;
+    if (orphan.length && boundProject) {
+      Object.assign(boundProject, { tasks: [...boundProject.tasks, ...orphan] });
+      Object.assign(boundProject, {
+        workstreams: [
+          ...boundProject.workstreams,
+          ...plan.workstreams.map((band) => ({
+            id: `plan:${plan.head}:${band.id}`,
+            title: band.title,
+            taskIds: orphan
+              .filter((task) => task.workstreamId === `plan:${plan.head}:${band.id}`)
+              .map((task) => task.id),
+          })),
+        ],
+      });
+    } else if (orphan.length)
       projects.push({
         id: `head:${plan.head}`,
         rootThreadId: null,
@@ -606,12 +831,17 @@ export function aggregate(input: {
         forecast: null,
       });
   }
-  const releases = input.plans.flatMap((plan) =>
+  const releases = fallbackPlans.flatMap((plan) =>
     plan.workstreams.flatMap((band) =>
       band.tasks
         .filter(
           (t) =>
             t.kind === "release" &&
+            !(
+              t.link &&
+              issueUrlOwners.has(t.link) &&
+              trackerRoots.has(issueUrlOwners.get(t.link)!)
+            ) &&
             !(
               t.steps_done === t.steps_total &&
               Date.parse(input.now) - Date.parse(t.updated_utc) > 24 * 60 * 60_000
@@ -632,7 +862,22 @@ export function aggregate(input: {
         }),
     ),
   );
-  return { ...emptySnapshot(input.now), projects, releases, sources: [...input.sources] };
+  const planMigration = input.plans
+    .filter((plan) => plan.source === "tracker" && !boundPlans.get(plan))
+    .map((plan) => ({
+      kind: "unbound-briefing-file" as const,
+      fileName: plan.fileName ?? `${plan.head}.json`,
+      reason: plan.rootThreadId
+        ? "Root ID does not match an active project"
+        : "No unique exact-title binding",
+    }));
+  return {
+    ...emptySnapshot(input.now),
+    projects,
+    releases,
+    sources: [...input.sources],
+    ...(planMigration.length ? { planMigration } : {}),
+  };
 }
 
 export function rootRepositories(
