@@ -16,7 +16,7 @@ import { Sheet, SheetPopup } from "../ui/sheet";
 import { OpenTaskContext } from "../orchestrators/TaskLink";
 import { ProjectTaskPanel } from "../orchestrators/ProjectTaskPanel";
 import { AskSection, FreshnessStamp, OlderServerLines } from "./chrome";
-import { DashboardUiProvider, type DashboardUi, type DecisionRow } from "./context";
+import { DashboardUiProvider, NoticeContext, type DashboardUi, type DecisionRow } from "./context";
 import {
   parseIssueTaskId,
   rankDecisions,
@@ -27,12 +27,15 @@ import {
 import { DecisionDialog } from "./decisions";
 import { useCollapsedKeys, useMinuteClock } from "./prefs";
 import { sectionMarker } from "./parts";
-import { useOrderActions, type DashboardNotice } from "./orderActions";
+import { useOrderActions, type DashboardNotice, type PendingMoves } from "./orderActions";
+import { applyPendingMoves, snapshotHasCaughtUp, type PendingMove } from "./pendingMoves";
 import { useDecisionAnswers } from "./useDecisionAnswers";
 import { useVisitBaseline } from "./useVisitBaseline";
 import { VariantA } from "./VariantA";
 
 const NOTICE_MS = 10 * 60_000;
+/** A move shown ahead of the snapshot is dropped after this long even if the snapshot never agrees. */
+const PENDING_MOVE_MS = 15_000;
 
 export type DashboardScope =
   | { readonly kind: "home" }
@@ -77,7 +80,34 @@ export function DashboardView({
     setNotice({ ...next, id: noticeSeq.current });
   }, []);
   const dismissNotice = useCallback(() => setNotice(null), []);
-  const order = useOrderActions(report);
+  // Moves the page shows before the snapshot has them; see pendingMoves.ts.
+  const [pendingMoves, setPendingMoves] = useState<
+    ReadonlyArray<{ readonly id: number; readonly move: PendingMove; readonly written: boolean }>
+  >([]);
+  const pendingSeq = useRef(0);
+  const pending = useMemo<PendingMoves>(
+    () => ({
+      add: (move) => {
+        pendingSeq.current += 1;
+        const id = pendingSeq.current;
+        const drop = () => setPendingMoves((current) => current.filter((entry) => entry.id !== id));
+        setPendingMoves((current) => [...current, { id, move, written: false }]);
+        const timer = setTimeout(drop, PENDING_MOVE_MS);
+        return {
+          written: () =>
+            setPendingMoves((current) =>
+              current.map((entry) => (entry.id === id ? { ...entry, written: true } : entry)),
+            ),
+          drop: () => {
+            clearTimeout(timer);
+            drop();
+          },
+        };
+      },
+    }),
+    [],
+  );
+  const order = useOrderActions(report, pending);
   // A note about a filing or a move folds away after ten minutes; Undo is not offered past that.
   const noticeId = notice?.id;
   useEffect(() => {
@@ -94,12 +124,44 @@ export function DashboardView({
     [environmentId, threadId],
   );
 
+  const shown = useMemo(
+    () =>
+      pendingMoves.length === 0
+        ? state.data
+        : {
+            ...state.data,
+            projects: applyPendingMoves(
+              state.data.projects,
+              pendingMoves.map((entry) => entry.move),
+            ),
+          },
+    [state.data, pendingMoves],
+  );
+  // A project's pending moves end once the server has them and the snapshot shows their order.
+  useEffect(() => {
+    const caughtUp = new Set<number>();
+    for (const key of new Set(pendingMoves.map((entry) => entry.move.projectKey))) {
+      const mine = pendingMoves.filter((entry) => entry.move.projectKey === key);
+      const project = state.data.projects.find((entry) => entry.key === key)?.project;
+      if (
+        mine.every((entry) => entry.written) &&
+        (!project ||
+          snapshotHasCaughtUp(
+            project,
+            mine.map((entry) => entry.move),
+          ))
+      )
+        for (const entry of mine) caughtUp.add(entry.id);
+    }
+    if (caughtUp.size > 0)
+      setPendingMoves((current) => current.filter((entry) => !caughtUp.has(entry.id)));
+  }, [state.data, pendingMoves]);
   const scoped = useMemo(
     () =>
       environmentId && threadId
-        ? scopeToProject(state.data, environmentId, threadId)
-        : { data: state.data, root: null },
-    [environmentId, threadId, state.data],
+        ? scopeToProject(shown, environmentId, threadId)
+        : { data: shown, root: null },
+    [environmentId, threadId, shown],
   );
   const { data, root } = scoped;
 
@@ -196,7 +258,6 @@ export function DashboardView({
       root,
       prefill,
       order,
-      notice,
       report,
       dismissNotice,
       unstick: (title) =>
@@ -212,7 +273,6 @@ export function DashboardView({
       data,
       decisions,
       navigate,
-      notice,
       now,
       openKeys,
       order,
@@ -231,39 +291,44 @@ export function DashboardView({
   const ready = data.asOf !== null;
   return (
     <DashboardUiProvider value={ui}>
-      <div
-        data-testid="dashboard-root"
-        data-ready={ready ? "true" : "false"}
-        data-revision={state.revision}
-        data-mounted-at={mountedAt}
-        data-snapshot-source={state.snapshotSource}
-        className="@container/dash flex flex-col gap-2"
-      >
-        <div {...sectionMarker("freshness", { ready, revision: state.revision })}>
-          <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1">
-            {scope.kind === "project" ? (
-              <Link to="/dashboard" className="text-xs text-muted-foreground hover:text-foreground">
-                Home
-              </Link>
-            ) : null}
-            <FreshnessStamp failed={state.failed} onRetry={state.retry} />
+      <NoticeContext value={notice}>
+        <div
+          data-testid="dashboard-root"
+          data-ready={ready ? "true" : "false"}
+          data-revision={state.revision}
+          data-mounted-at={mountedAt}
+          data-snapshot-source={state.snapshotSource}
+          className="@container/dash flex flex-col gap-2"
+        >
+          <div {...sectionMarker("freshness", { ready, revision: state.revision })}>
+            <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1">
+              {scope.kind === "project" ? (
+                <Link
+                  to="/dashboard"
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Home
+                </Link>
+              ) : null}
+              <FreshnessStamp failed={state.failed} onRetry={state.retry} />
+            </div>
+            <OlderServerLines names={state.olderEnvironments} />
           </div>
-          <OlderServerLines names={state.olderEnvironments} />
+          {leading}
+          <AskSection projectHead={projectHead} />
+          {data.asOf === null ? (
+            <div data-testid="dashboard-placeholder" className="py-3 text-muted-foreground/80">
+              Not loaded yet
+            </div>
+          ) : scope.kind === "project" && root === null ? (
+            <div className="py-3 text-muted-foreground/80">
+              Not in this environment&apos;s snapshot
+            </div>
+          ) : (
+            <VariantA />
+          )}
         </div>
-        {leading}
-        <AskSection projectHead={projectHead} />
-        {data.asOf === null ? (
-          <div data-testid="dashboard-placeholder" className="py-3 text-muted-foreground/80">
-            Not loaded yet
-          </div>
-        ) : scope.kind === "project" && root === null ? (
-          <div className="py-3 text-muted-foreground/80">
-            Not in this environment&apos;s snapshot
-          </div>
-        ) : (
-          <VariantA />
-        )}
-      </div>
+      </NoticeContext>
       <DecisionDialog keys={dialogKeys} onClose={() => setDialogKeys([])} />
       <Sheet open={sheet !== null} onOpenChange={(open) => (open ? undefined : setSheet(null))}>
         <SheetPopup showCloseButton={false}>

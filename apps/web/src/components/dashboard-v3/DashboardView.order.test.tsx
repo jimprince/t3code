@@ -19,6 +19,8 @@ const state = vi.hoisted(() => ({
   now: 0,
   capable: true,
   failNext: false,
+  /** Fails the next call of this command, whatever else is called before it. */
+  failCommand: null as string | null,
   calls: [] as Array<{ command: string; value: Record<string, unknown> }>,
 }));
 
@@ -65,16 +67,36 @@ vi.mock("./prefs", async (importOriginal) => ({
 // Every command records what the page asked the server and succeeds.
 vi.mock("../../state/projectIssues", () => ({
   orderProjectRequest: { label: "order" },
+  orderBatchProjectRequest: { label: "batch" },
+  withdrawProjectRequest: { label: "withdraw" },
   updateProjectRequest: { label: "update" },
   fileProjectRequest: { label: "file" },
   settleProjectRequest: { label: "settle" },
 }));
-vi.mock("../../state/projectRoadmap", () => ({ moveRoadmapItem: { label: "later" } }));
+vi.mock("../../state/projectRoadmap", () => ({
+  moveRoadmapItem: { label: "later" },
+  saveRequestForLater: { label: "save-later" },
+}));
+// Uploads finish at once; each pasted image becomes the attachment "up-<its name>".
+vi.mock("../../lib/attachmentUploadQueue", () => ({
+  startAttachmentUpload: vi.fn(),
+  releaseDraftAttachment: vi.fn(),
+  awaitAttachmentUploads: () => Promise.resolve(),
+  getUploadedAttachments: ({ images }: { images: ReadonlyArray<{ name: string; type: string }> }) =>
+    images.map((image) => ({
+      id: `up-${image.name}`,
+      type: image.type,
+      name: image.name,
+      mimeType: "image/png",
+      sizeBytes: 3,
+    })),
+}));
 vi.mock("../../state/use-atom-command", () => ({
   useAtomCommand: (command: { label: string }) => (value: { input: Record<string, unknown> }) => {
     state.calls.push({ command: command.label, value: value.input });
-    if (state.failNext) {
+    if (state.failNext || state.failCommand === command.label) {
       state.failNext = false;
+      state.failCommand = null;
       return Promise.resolve(AsyncResult.failure(Cause.fail(new Error("Gitea is down"))));
     }
     return Promise.resolve({
@@ -86,7 +108,9 @@ vi.mock("../../state/use-atom-command", () => ({
               queued: false,
               notifiedThreadId: null,
             }
-          : { position: 1, rank: 1, workstream: null },
+          : command.label === "withdraw"
+            ? { withdrawn: true, notifiedThreadId: null }
+            : { position: 1, rank: 1, workstream: null },
     });
   },
 }));
@@ -197,6 +221,9 @@ beforeEach(() => {
   state.calls = [];
   state.capable = true;
   state.failNext = false;
+  state.failCommand = null;
+  URL.createObjectURL = () => "blob:preview";
+  URL.revokeObjectURL = () => undefined;
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -351,5 +378,215 @@ describe("the request line", () => {
     const [first, second] = state.calls.filter((call) => call.command === "file");
     expect(second!.value.messageId).toBe(first!.value.messageId);
     expect(field().value).toBe("");
+  });
+});
+
+/** The snapshot with two more queued rows in Other work, 283 then 284 after 282. */
+function withQueuedOther() {
+  const base = snapshot();
+  return {
+    ...base,
+    projects: base.projects.map((project) => ({
+      ...project,
+      tasks: [...project.tasks, task(283, { rank: 60 }), task(284, { rank: 70 })],
+      workstreams: project.workstreams.map((workstream) =>
+        workstream.id === "project:root:work"
+          ? { ...workstream, taskIds: [...workstream.taskIds, id(283), id(284)] }
+          : workstream,
+      ),
+    })),
+  };
+}
+async function showSnapshot(
+  data: ReturnType<typeof snapshot>,
+  scope: Parameters<typeof DashboardView>[0]["scope"] = {
+    kind: "project",
+    environmentId: ENV,
+    threadId: HEAD,
+  },
+) {
+  state.data = mergeDashboardSnapshots([{ environmentId: ENV, snapshot: data }]);
+  state.now = Date.parse(NOW);
+  await act(() => root.render(<DashboardView scope={scope} />));
+}
+const queuedLabels = () =>
+  [...container.querySelectorAll('[data-testid="queued-row"]')].map((row) =>
+    row.getAttribute("aria-label"),
+  );
+const rowOf = (title: string) =>
+  [...container.querySelectorAll('[data-testid="queued-row"]')].find((row) =>
+    row.getAttribute("aria-label")?.endsWith(title),
+  )!;
+
+describe("a move made before the snapshot catches up", () => {
+  it("renumbers at once, so a second Alt+Up reads the list the first one made", async () => {
+    await showSnapshot(withQueuedOther());
+    await press(rowOf("Task 284"), { key: "ArrowUp", altKey: true });
+    expect(queuedLabels().slice(2)).toEqual(["1. Task 282", "2. Task 284", "3. Task 283"]);
+    await press(rowOf("Task 284"), { key: "ArrowUp", altKey: true });
+    // The snapshot never changed here, as when the refresh is still on its way.
+    expect(queuedLabels().slice(2)).toEqual(["1. Task 284", "2. Task 282", "3. Task 283"]);
+    expect(state.calls.map((call) => call.value.place)).toEqual([
+      { to: "before", reference: "283" },
+      { to: "before", reference: "282" },
+    ]);
+  });
+
+  it("returns the row to where it was when the write fails, and says so by the row", async () => {
+    await showSnapshot(withQueuedOther());
+    state.failCommand = "order";
+    await press(rowOf("Task 284"), { key: "ArrowUp", altKey: true });
+    expect(queuedLabels().slice(2)).toEqual(["1. Task 282", "2. Task 283", "3. Task 284"]);
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("Could not save: Gitea is down");
+  });
+
+  it("puts the epic back when ordering fails after the epic changed", async () => {
+    await showSnapshot(withQueuedOther());
+    state.failCommand = "order";
+    await dragTask("Task 282", "Task 295");
+    expect(state.calls.map((call) => call.command)).toEqual(["update", "order", "update"]);
+    expect(state.calls[0]!.value).toMatchObject({ reference: "282", partOf: 300 });
+    expect(state.calls[2]!.value).toMatchObject({ reference: "282", partOf: null });
+  });
+});
+
+/** Drives the row handlers with the events a drag fires, one render apart. */
+async function dragTask(from: string, to: string) {
+  const data = { setData: () => undefined, setDragImage: () => undefined, effectAllowed: "" };
+  const handle = rowOf(from).querySelector('[draggable="true"]')!;
+  const target = rowOf(to);
+  const send = async (el: Element, type: string) => {
+    const event = new Event(type, { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "dataTransfer", { value: { ...data, types: [] } });
+    Object.defineProperty(event, "clientY", { value: 0 });
+    await act(async () => {
+      el.dispatchEvent(event);
+    });
+    return event.defaultPrevented;
+  };
+  await send(handle, "dragstart");
+  const accepted = await send(target, "dragover");
+  if (accepted) await send(target, "drop");
+  return accepted;
+}
+
+describe("Home", () => {
+  it("numbers rows by their place in their own workstream", async () => {
+    await showSnapshot(withQueuedOther(), { kind: "home" });
+    expect(queuedLabels()).toEqual(["1. Task 295", "2. Task 296", "1. Task 282"]);
+  });
+
+  it("refuses a drop into another workstream, and accepts one inside the same", async () => {
+    await showSnapshot(withQueuedOther(), { kind: "home" });
+    expect(await dragTask("Task 282", "Task 295")).toBe(false);
+    expect(state.calls).toEqual([]);
+    expect(await dragTask("Task 295", "Task 296")).toBe(true);
+    expect(state.calls.map((call) => call.command)).toEqual(["order"]);
+  });
+});
+
+describe("a project with no tracker", () => {
+  it("keeps the old request box instead of a line that cannot file", async () => {
+    const base = snapshot();
+    await showSnapshot({
+      ...base,
+      projects: base.projects.map((project) => ({ ...project, planSource: "briefing" as const })),
+    });
+    expect(container.querySelector('[data-testid="dashboard-request-line"]')).toBeNull();
+    expect(container.querySelector('[data-testid="new-block"]')).toBeNull();
+  });
+});
+
+describe("images on the request line", () => {
+  const png = (name: string) => new File([new Uint8Array([1, 2, 3])], name, { type: "image/png" });
+  const paste = (...files: File[]) =>
+    act(async () => {
+      const event = new Event("paste", { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "clipboardData", { value: { files } });
+      field().dispatchEvent(event);
+    });
+
+  it("files a pasted image with the words, and again as an image-only filing", async () => {
+    await show();
+    await paste(png("a.png"));
+    expect(container.querySelector('img[alt="a.png"]')).not.toBeNull();
+    await type("See the screenshot");
+    await press(field(), { key: "Enter" });
+    expect(state.calls[0]!.value.attachments).toEqual([
+      { id: "up-a.png", type: "image", name: "a.png", mimeType: "image/png", sizeBytes: 3 },
+    ]);
+    expect(container.querySelector("img")).toBeNull();
+
+    await paste(png("b.png"));
+    await press(field(), { key: "Enter" });
+    expect(state.calls[1]!.value).toMatchObject({
+      title: "Request with images",
+      attachments: [{ id: "up-b.png" }],
+    });
+  });
+
+  it("removes a thumbnail, and a changed set of images is a new filing", async () => {
+    await show();
+    await type("Two shots");
+    await paste(png("a.png"));
+    state.failNext = true;
+    await press(field(), { key: "Enter" });
+    expect(text()).toContain("Not filed: Gitea is down");
+    await paste(png("b.png"));
+    await press(field(), { key: "Enter" });
+    const [failed, retried] = state.calls.filter((call) => call.command === "file");
+    expect(retried!.value.messageId).not.toBe(failed!.value.messageId);
+    expect(retried!.value.attachments).toHaveLength(2);
+    expect(container.querySelector("img")).toBeNull();
+
+    await paste(png("c.png"));
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('button[aria-label="Remove c.png"]')!.click(),
+    );
+    expect(container.querySelector("img")).toBeNull();
+  });
+});
+
+describe("the request line keeps what the old box had", () => {
+  it("shows the starters on focus and puts one in the line", async () => {
+    await show();
+    expect(text()).not.toContain("Bug report");
+    await act(async () => field().focus());
+    await act(async () => button("Bug report").click());
+    expect(field().value).toBe("Bug: ");
+    expect(container.querySelector('button[aria-pressed="true"]')?.textContent).toBe("Bug");
+  });
+
+  it("saves the words for later without filing them", async () => {
+    await show();
+    await type("Maybe someday");
+    await act(async () => button("Save for later").click());
+    expect(state.calls).toEqual([
+      {
+        command: "save-later",
+        value: {
+          threadId: HEAD,
+          title: "Maybe someday",
+          kind: "task",
+          detail: "Maybe someday",
+          park: true,
+        },
+      },
+    ]);
+    expect(field().value).toBe("");
+  });
+
+  it("withdraws a filing on Undo and puts the words back", async () => {
+    await show();
+    await type("Typo in my request");
+    await press(field(), { key: "Enter" });
+    expect(field().value).toBe("");
+    await act(async () => button("Undo").click());
+    expect(state.calls.at(-1)).toEqual({
+      command: "withdraw",
+      value: { threadId: HEAD, reference: "312", actor: "brad" },
+    });
+    expect(field().value).toBe("Typo in my request");
   });
 });

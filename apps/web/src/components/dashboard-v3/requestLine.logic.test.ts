@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
 import { ThreadId } from "@t3tools/contracts";
-import { defaultEpic, filingInput, kindFromText, placementOf } from "./requestLine.logic";
+import {
+  defaultEpic,
+  filingInput,
+  IMAGE_ONLY_TITLE,
+  kindFromText,
+  nextKeyHint,
+  placementOf,
+} from "./requestLine.logic";
 
 const key = (extra: Partial<Parameters<typeof placementOf>[0]> = {}) => ({
   key: "Enter",
@@ -39,6 +46,13 @@ describe("defaultEpic", () => {
     expect(defaultEpic([300, 297], 297)).toBe(297);
     expect(defaultEpic([300], 297)).toBeNull();
     expect(defaultEpic([300], undefined)).toBeNull();
+  });
+});
+
+describe("nextKeyHint", () => {
+  it("names the chord for the platform", () => {
+    expect(nextKeyHint("MacIntel")).toBe("⌘Enter");
+    expect(nextKeyHint("Linux x86_64")).toBe("Ctrl+Enter");
   });
 });
 
@@ -84,5 +98,20 @@ describe("filingInput", () => {
     const input = filingInput({ ...base, text: "Mobile order", kind: "epic", epic: 300 });
     expect(input.kind).toBe("epic");
     expect(input).not.toHaveProperty("partOf");
+  });
+
+  it("carries uploaded images, and files images alone under the old box's title", () => {
+    const image = {
+      id: "a1",
+      type: "image" as const,
+      name: "shot.png",
+      mimeType: "image/png",
+      sizeBytes: 12,
+    };
+    const input = filingInput({ ...base, text: "  ", attachments: [image] });
+    expect(input.title).toBe(IMAGE_ONLY_TITLE);
+    expect(input).not.toHaveProperty("detail");
+    expect(input.attachments).toEqual([image]);
+    expect(filingInput({ ...base, text: "Words" })).not.toHaveProperty("attachments");
   });
 });

@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { InlineButton } from "../ui/button";
 import { useDashboardUi } from "./context";
 import { ageLabel, nestWorkstreams, planWorkstreams, type ScopedProject } from "./dashboard.logic";
-import { PlanOrderProvider, RowMenu, usePlanDestinations } from "./orderRows";
+import { PlanOrderProvider, RowError, RowMenu, usePlanDestinations } from "./orderRows";
 import { NewMark, SectionHeading } from "./parts";
 
 /** How many New rows show before "N older". */
@@ -54,27 +54,30 @@ function NewRow({
   const { destinationFor } = usePlanDestinations();
   const number = issueNumber(task.id);
   return (
-    <div data-testid="new-row" className="flex items-baseline gap-x-2.5 py-0.5 pl-1 text-xs">
-      <button
-        type="button"
-        className="line-clamp-2 min-w-0 flex-1 break-words text-left hover:underline"
-        onClick={() => ui.openTask(scoped, task)}
-      >
-        {task.title}
-        {number ? <span className="ml-1 text-muted-foreground/70">#{number}</span> : null}
-        {task.bug ? <span className="ml-1.5 text-destructive-foreground">bug</span> : null}
-        <NewMark item={task} />
-      </button>
-      <span className="hidden shrink-0 text-muted-foreground @xl/dash:inline">
-        {task.partOf ? `${destinationFor(task).title} · ` : ""}
-        {task.createdAt ? ageLabel(task.createdAt, ui.now) : ""}
-      </span>
-      <span className="flex shrink-0 items-center gap-2">
-        <PlaceNew scoped={scoped} task={task} to="top" label="Do next" />
-        <PlaceNew scoped={scoped} task={task} to="bottom" label="Last" />
-        <RowMenu task={task} entry={null} where="new" />
-      </span>
-    </div>
+    <>
+      <div data-testid="new-row" className="flex items-baseline gap-x-2.5 py-0.5 pl-1 text-xs">
+        <button
+          type="button"
+          className="line-clamp-2 min-w-0 flex-1 break-words text-left hover:underline"
+          onClick={() => ui.openTask(scoped, task)}
+        >
+          {task.title}
+          {number ? <span className="ml-1 text-muted-foreground/70">#{number}</span> : null}
+          {task.bug ? <span className="ml-1.5 text-destructive-foreground">bug</span> : null}
+          <NewMark item={task} />
+        </button>
+        <span className="hidden shrink-0 text-muted-foreground @xl/dash:inline">
+          {task.partOf ? `${destinationFor(task).title} · ` : ""}
+          {task.createdAt ? ageLabel(task.createdAt, ui.now) : ""}
+        </span>
+        <span className="flex shrink-0 items-center gap-2">
+          <PlaceNew scoped={scoped} task={task} to="top" label="Do next" />
+          <PlaceNew scoped={scoped} task={task} to="bottom" label="Last" />
+          <RowMenu task={task} entry={null} where="new" />
+        </span>
+      </div>
+      <RowError id={task.id} />
+    </>
   );
 }
 

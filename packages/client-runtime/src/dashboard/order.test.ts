@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { DashboardProject, DashboardTask, DashboardWorkstream } from "@t3tools/contracts";
 import {
+  applyMove,
   NEW_MARK_MS,
   isNewlyFiled,
   newMarkTitle,
   orderPlan,
   planMove,
   type PlaceStep,
+  type PlaceTarget,
 } from "./order.ts";
 
 const id = (n: number) => `issue:git.test/brad/repo#${n}`;
@@ -98,6 +100,48 @@ describe("orderPlan", () => {
     expect(numbers(group!.next)).toEqual([1]);
   });
 
+  it("keeps a question out of New and the numbered queue, ranked or not", () => {
+    const tasks = [task(1, { kind: "question" }), task(2, { kind: "question", rank: 10 }), task(3)];
+    const [group] = orderPlan(
+      project(tasks, [
+        workstream(
+          null,
+          tasks.map((t) => t.id),
+        ),
+      ]),
+    ).workstreams;
+    expect(
+      numbers(
+        orderPlan(
+          project(tasks, [
+            workstream(
+              null,
+              tasks.map((t) => t.id),
+            ),
+          ]),
+        ).fresh,
+      ),
+    ).toEqual([3]);
+    expect(numbers(group!.now)).toEqual([2, 1]);
+    expect(numbers(group!.next)).toEqual([]);
+  });
+
+  it("leaves the snapshot's own order when the server does not store it", () => {
+    const tasks = [task(2, { rank: 5 }), task(1, { rank: 9 }), task(3)];
+    const plan = orderPlan(
+      project(tasks, [
+        workstream(
+          null,
+          tasks.map((t) => t.id),
+        ),
+      ]),
+      false,
+    );
+    expect(plan.ordered).toBe(false);
+    expect(plan.fresh).toEqual([]);
+    expect(numbers(plan.workstreams[0]!.next)).toEqual([2, 1, 3]);
+  });
+
   it("sections unranked asks into New, newest first, and leaves ranked and parked ones out", () => {
     const tasks = [
       task(1, { createdAt: "2026-10-14T09:00:00.000Z" }),
@@ -187,13 +231,30 @@ describe("orderPlan", () => {
   });
 });
 
+describe("applyMove", () => {
+  const list = [{ id: "a" }, { id: "b" }, { id: "c" }];
+  it("gives the order a move leaves", () => {
+    expect(applyMove(list, "c", { to: "up" })).toEqual(["a", "c", "b"]);
+    expect(applyMove(list, "a", { to: "down" })).toEqual(["b", "a", "c"]);
+    expect(applyMove(list, "c", { to: "top" })).toEqual(["c", "a", "b"]);
+    expect(applyMove(list, "a", { to: "bottom" })).toEqual(["b", "c", "a"]);
+    expect(applyMove(list, "a", { to: "after", id: "c" })).toEqual(["b", "c", "a"]);
+  });
+  it("leaves the list alone when there is nowhere to go, and takes an arriving item in", () => {
+    expect(applyMove(list, "a", { to: "up" })).toEqual(["a", "b", "c"]);
+    expect(applyMove(list, "c", { to: "down" })).toEqual(["a", "b", "c"]);
+    expect(applyMove(list, "a", { to: "before", id: "nope" })).toEqual(["a", "b", "c"]);
+    expect(applyMove(list, "z", { to: "before", id: "b" })).toEqual(["a", "z", "b", "c"]);
+  });
+});
+
 describe("planMove", () => {
   const list = [
     { id: "a", rank: 1 },
     { id: "b", rank: 2 },
     { id: "c", rank: 3 },
   ];
-  const step = (stepId: string, place: PlaceStep["place"]): PlaceStep => ({ id: stepId, place });
+  const step = (stepId: string, place: PlaceTarget): PlaceStep => ({ id: stepId, place });
 
   it("moves to the ends with a single placement", () => {
     expect(planMove(list, "c", { to: "top" })).toEqual([step("c", { to: "top" })]);
@@ -215,12 +276,19 @@ describe("planMove", () => {
     ]);
   });
 
-  it("gives unranked items a place in the order shown before moving relative to them", () => {
+  it("ranks the unranked items in one batch before moving relative to them", () => {
     const mixed = [{ id: "a", rank: 1 }, { id: "x" }, { id: "y", rank: null }];
     expect(planMove(mixed, "y", { to: "up" })).toEqual([
-      step("x", { to: "bottom" }),
-      step("y", { to: "bottom" }),
+      { rank: ["x", "y"] },
       step("y", { to: "before", id: "x" }),
+    ]);
+  });
+
+  it("sends a first move in a wholly unranked list as one call with the final order", () => {
+    const unranked = [{ id: "a" }, { id: "b" }, { id: "c" }];
+    expect(planMove(unranked, "c", { to: "up" })).toEqual([{ rank: ["a", "c", "b"], moved: "c" }]);
+    expect(planMove(unranked, "a", { to: "down" })).toEqual([
+      { rank: ["b", "a", "c"], moved: "a" },
     ]);
   });
 

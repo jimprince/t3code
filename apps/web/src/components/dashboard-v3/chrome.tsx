@@ -12,6 +12,7 @@ import { useDashboardUi } from "./context";
 import {
   formatClock,
   freshnessSummary,
+  topLevelProjects,
   sourceHealth,
   sourceLabel,
   type SourceHealth,
@@ -150,8 +151,9 @@ export function OlderServerLines({ names }: { readonly names: ReadonlyArray<stri
 /**
  * Ask first (R11). On a server that stores the order, the one-line request line files typed items
  * straight into the project's tracker (the picked project on Home, the page's own project head on a
- * project page). On an older server the existing request box stays, routed to the Chief of Staff on
- * Home. It reads the thread shells itself so a shell change re-renders only this box, not the
+ * project page); Home's picker also offers the Chief of Staff, which sends as the old box did. A
+ * project with no Gitea tracker, and an older server, keep the existing request box, routed to the
+ * Chief of Staff on Home. It reads the thread shells itself so a shell change re-renders only this box, not the
  * whole Dashboard.
  */
 export function AskSection({
@@ -169,7 +171,7 @@ export function AskSection({
   const threads = useOrchestratorThreadShells();
   const fileable = projectHead
     ? ui.root !== null && ui.order.canFile(ui.root)
-    : ui.data.projects.some((scoped) => ui.order.canFile(scoped));
+    : topLevelProjects(ui.data.projects).products.some((scoped) => ui.order.canFile(scoped));
   const summary = useMemo(() => {
     const summaries = buildOrchestratorSummaries(threads, projects);
     return projectHead
@@ -183,7 +185,10 @@ export function AskSection({
   if (fileable)
     return (
       <div {...marker}>
-        <RequestLine projectHead={projectHead ? ui.root : null} />
+        <RequestLine
+          projectHead={projectHead ? ui.root : null}
+          chief={projectHead ? null : summary}
+        />
         <NoticeLine />
       </div>
     );

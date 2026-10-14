@@ -13,7 +13,7 @@ import {
 } from "react";
 
 import { cn } from "../../lib/utils";
-import { Button } from "../ui/button";
+import { Button, InlineButton } from "../ui/button";
 import { Dialog, DialogHeader, DialogPopup, DialogTitle } from "../ui/dialog";
 import { Input } from "../ui/input";
 import {
@@ -27,7 +27,7 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from "../ui/menu";
-import { useDashboardUi } from "./context";
+import { useDashboardUi, useNotice } from "./context";
 import { isEpicHeader, type PlanWorkstreamEntry, type ScopedProject } from "./dashboard.logic";
 import type { Destination } from "./orderActions";
 import { TaskRow } from "./parts";
@@ -129,14 +129,48 @@ const sideOf = (event: DragEvent<HTMLElement>): "before" | "after" => {
   return event.clientY < box.top + box.height / 2 ? "before" : "after";
 };
 
+/**
+ * The drop mark of a row: an inset line, so a drag starting or ending never changes a row's
+ * height and the row under the pointer stays where it is.
+ */
 const dropLine = (mark: DropMark | null, id: string) =>
   mark?.id !== id
-    ? "border-y-2 border-transparent"
+    ? ""
     : mark.side === "before"
-      ? "border-y-2 border-transparent border-t-primary"
+      ? "shadow-[inset_0_2px_0_0_var(--color-primary)]"
       : mark.side === "after"
-        ? "border-y-2 border-transparent border-b-primary"
-        : "border-y-2 border-transparent bg-accent/50";
+        ? "shadow-[inset_0_-2px_0_0_var(--color-primary)]"
+        : "bg-accent/50";
+
+/** A failed write's message by the row it belongs to, where the eye already is. */
+export function RowError({ id }: { readonly id: string }) {
+  const notice = useNotice();
+  const { dismissNotice } = useDashboardUi();
+  if (notice?.tone !== "error" || notice.rowId !== id) return null;
+  return (
+    <div
+      role="alert"
+      className="flex flex-wrap gap-x-2 py-0.5 pl-9 text-xs text-destructive-foreground"
+    >
+      <span>{notice.text}</span>
+      {notice.actions.map((action) => (
+        <InlineButton
+          key={action.label}
+          tone="muted"
+          onClick={() => {
+            dismissNotice();
+            action.run();
+          }}
+        >
+          {action.label}
+        </InlineButton>
+      ))}
+    </div>
+  );
+}
+
+/** The drag's own data type: a row dropped on a text field must not paste its label into it. */
+const DRAG_TYPE = "application/x-t3-order";
 
 function DragHandle({
   label,
@@ -155,7 +189,7 @@ function DragHandle({
       className="flex w-3 shrink-0 cursor-grab justify-center text-muted-foreground/60 hover:text-foreground"
       onDragStart={(event) => {
         event.dataTransfer.effectAllowed = "move";
-        event.dataTransfer.setData("text/plain", label);
+        event.dataTransfer.setData(DRAG_TYPE, label);
         if (rowRef.current) event.dataTransfer.setDragImage(rowRef.current, 0, 0);
         onStart();
       }}
@@ -174,10 +208,14 @@ export function QueuedRow({
   task,
   entry,
   position,
+  compact = false,
 }: {
   readonly task: DashboardTask;
   readonly entry: PlanWorkstreamEntry;
+  /** The row's place in its own workstream's queue. */
   readonly position: number;
+  /** Home's rows from several workstreams in one list: each names its workstream and stays in it. */
+  readonly compact?: boolean;
 }) {
   const ui = useDashboardUi();
   const order = usePlanOrder();
@@ -200,57 +238,69 @@ export function QueuedRow({
     event.preventDefault();
   };
   const dragged = order.dragging;
-  const droppable = dragged?.kind === "task" && dragged.task.id !== task.id;
+  // Home has no workstream headers, so a drop there must not change a row's workstream unseen.
+  const droppable =
+    dragged?.kind === "task" &&
+    dragged.task.id !== task.id &&
+    (!compact || dragged.from.key === here.key);
   return (
-    <div
-      ref={row}
-      role="group"
-      aria-label={`${position}. ${task.title}`}
-      tabIndex={0}
-      data-testid="queued-row"
-      className={cn(
-        "flex items-start outline-none focus-visible:bg-accent/40",
-        dropLine(order.over, task.id),
-        dragged?.kind === "task" && dragged.task.id === task.id && "opacity-50",
-      )}
-      onKeyDown={key}
-      onDragOver={(event) => {
-        if (!droppable) return;
-        event.preventDefault();
-        const side = sideOf(event);
-        if (order.over?.id !== task.id || order.over.side !== side)
-          order.setOver({ id: task.id, side });
-      }}
-      onDrop={(event) => {
-        if (!droppable || dragged?.kind !== "task") return;
-        event.preventDefault();
-        const side = order.over?.id === task.id ? order.over.side : sideOf(event);
-        order.setOver(null);
-        order.setDragging(null);
-        // Another workstream's row takes the task into that workstream, before or after the row.
-        void ui.order.place(order.scoped, dragged.task, {
-          destination: here,
-          list: here.next,
-          move: { to: side === "into" ? "top" : side, id: task.id },
-          origin: dragged.from.next,
-        });
-      }}
-    >
-      <span className="flex h-6 items-center">
-        <DragHandle
-          label={`Drag #${issueNumber(task.id) ?? ""}`}
-          rowRef={row}
-          onStart={() => order.setDragging({ kind: "task", task, from: here })}
-        />
-      </span>
-      <span className="w-5 shrink-0 pt-0.5 text-right text-xs text-muted-foreground tabular-nums">
-        {position}
-      </span>
-      <div className="min-w-0 flex-1 pl-1">
-        <TaskRow scoped={order.scoped} task={task} flush />
+    <>
+      <div
+        ref={row}
+        role="group"
+        aria-label={`${position}. ${task.title}`}
+        tabIndex={0}
+        data-testid="queued-row"
+        className={cn(
+          "flex items-start outline-none focus-visible:bg-accent/40",
+          dropLine(order.over, task.id),
+          dragged?.kind === "task" && dragged.task.id === task.id && "opacity-50",
+        )}
+        onKeyDown={key}
+        onDragOver={(event) => {
+          if (!droppable) return;
+          event.preventDefault();
+          const side = sideOf(event);
+          if (order.over?.id !== task.id || order.over.side !== side)
+            order.setOver({ id: task.id, side });
+        }}
+        onDrop={(event) => {
+          if (!droppable || dragged?.kind !== "task") return;
+          event.preventDefault();
+          const side = order.over?.id === task.id ? order.over.side : sideOf(event);
+          order.setOver(null);
+          order.setDragging(null);
+          // Another workstream's row takes the task into that workstream, before or after the row.
+          void ui.order.place(order.scoped, dragged.task, {
+            destination: here,
+            list: here.next,
+            move: { to: side === "into" ? "top" : side, id: task.id },
+            origin: dragged.from.next,
+          });
+        }}
+      >
+        <span className="flex h-6 items-center">
+          <DragHandle
+            label={`Drag #${issueNumber(task.id) ?? ""}`}
+            rowRef={row}
+            onStart={() => order.setDragging({ kind: "task", task, from: here })}
+          />
+        </span>
+        <span className="w-5 shrink-0 pt-0.5 text-right text-xs text-muted-foreground tabular-nums">
+          {position}
+        </span>
+        <div className="min-w-0 flex-1 pl-1">
+          <TaskRow scoped={order.scoped} task={task} flush />
+        </div>
+        {compact ? (
+          <span className="mt-0.5 hidden max-w-32 shrink-0 truncate pl-2 text-xs text-muted-foreground @xl/dash:inline">
+            {here.title}
+          </span>
+        ) : null}
+        <RowMenu task={task} entry={entry} where="queued" />
       </div>
-      <RowMenu task={task} entry={entry} where="queued" />
-    </div>
+      <RowError id={task.id} />
+    </>
   );
 }
 
@@ -268,7 +318,11 @@ export function ActiveRow({ task }: { readonly task: DashboardTask }) {
   );
 }
 
-/** The workstream header's number and handle, and the drop target for tasks and workstreams. */
+/**
+ * The workstream header's number and handle, and the drop target for tasks and workstreams. A
+ * numbered header also reorders from the keyboard (Alt with the arrows) and from its menu, so the
+ * order never needs a mouse drag.
+ */
 export function WorkstreamOrder({
   entry,
   number,
@@ -284,75 +338,123 @@ export function WorkstreamOrder({
   const workstream = entry.workstream;
   const draggedTask = order.dragging?.kind === "task" ? order.dragging.task : null;
   const draggedWs = order.dragging?.kind === "workstream" ? order.dragging.id : null;
-  const epics = order.destinations.filter((destination) => destination.partOf !== null);
   const droppable =
     draggedTask !== null || (draggedWs !== null && draggedWs !== workstream.id && number !== null);
+  const { destinations } = order;
+  const workstreams = order.scoped.project.workstreams;
   const epicEntries = useMemo(
     () =>
-      epics.map((destination) => ({
-        id: destination.key,
-        rank: order.scoped.project.workstreams.find((ws) => ws.id === destination.key)?.rank,
-      })),
-    [epics, order.scoped.project.workstreams],
+      destinations
+        .filter((destination) => destination.partOf !== null)
+        .map((destination) => ({
+          id: destination.key,
+          rank: workstreams.find((ws) => ws.id === destination.key)?.rank,
+        })),
+    [destinations, workstreams],
   );
   const here = destinationOf(entry);
+  const moveWorkstream = (subjectId: string, move: MoveTo) =>
+    ui.order.place(
+      order.scoped,
+      { id: subjectId, rank: workstreams.find((ws) => ws.id === subjectId)?.rank },
+      {
+        destination: { partOf: null, title: "" },
+        list: epicEntries,
+        move,
+        origin: epicEntries,
+        workstream: workstreams.find((ws) => ws.id === subjectId)?.title ?? "Workstream",
+      },
+    );
+  const key = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (number === null || event.target !== event.currentTarget || !event.altKey) return;
+    if (event.key === "ArrowUp") void moveWorkstream(workstream.id, { to: "up" });
+    else if (event.key === "ArrowDown") void moveWorkstream(workstream.id, { to: "down" });
+    else return;
+    event.preventDefault();
+  };
   return (
-    <div
-      ref={row}
-      className={cn("flex items-center", droppable && dropLine(order.over, workstream.id))}
-      onDragOver={(event) => {
-        if (!droppable) return;
-        event.preventDefault();
-        const side = draggedWs !== null ? sideOf(event) : "into";
-        if (order.over?.id !== workstream.id || order.over.side !== side)
-          order.setOver({ id: workstream.id, side });
-      }}
-      onDrop={(event) => {
-        if (!droppable) return;
-        event.preventDefault();
-        const side = draggedWs !== null ? sideOf(event) : "into";
-        order.setOver(null);
-        order.setDragging(null);
-        if (draggedTask) {
-          const from = order.dragging?.kind === "task" ? order.dragging.from : here;
-          void ui.order.place(order.scoped, draggedTask, {
-            destination: here,
-            list: here.next,
-            move: { to: "top" },
-            origin: from.next,
-          });
-        } else if (draggedWs && side !== "into") {
-          const moving = order.scoped.project.workstreams.find((ws) => ws.id === draggedWs);
-          void ui.order.place(
-            order.scoped,
-            { id: draggedWs, rank: moving?.rank },
-            {
-              destination: { partOf: null, title: "" },
-              list: epicEntries,
-              move: { to: side, id: workstream.id },
-              origin: epicEntries,
-              workstream: moving?.title ?? "Workstream",
-            },
-          );
-        }
-      }}
-    >
-      <span className="flex w-6.5 shrink-0 items-center">
-        {number === null ? null : (
-          <>
-            <DragHandle
-              label={`Drag ${workstream.title}`}
-              rowRef={row}
-              onStart={() => order.setDragging({ kind: "workstream", id: workstream.id })}
-            />
-            <span className="w-3.5 text-right text-xs text-muted-foreground tabular-nums">
-              {number}
-            </span>
-          </>
+    <>
+      <div
+        ref={row}
+        role={number === null ? undefined : "group"}
+        aria-label={number === null ? undefined : `${number}. ${workstream.title}`}
+        tabIndex={number === null ? undefined : 0}
+        data-testid={number === null ? undefined : "workstream-header"}
+        className={cn(
+          "flex items-center outline-none focus-visible:bg-accent/40",
+          droppable && dropLine(order.over, workstream.id),
         )}
-      </span>
-      <div className="min-w-0 flex-1">{children}</div>
-    </div>
+        onKeyDown={key}
+        onDragOver={(event) => {
+          if (!droppable) return;
+          event.preventDefault();
+          const side = draggedWs !== null ? sideOf(event) : "into";
+          if (order.over?.id !== workstream.id || order.over.side !== side)
+            order.setOver({ id: workstream.id, side });
+        }}
+        onDrop={(event) => {
+          if (!droppable) return;
+          event.preventDefault();
+          const side = draggedWs !== null ? sideOf(event) : "into";
+          order.setOver(null);
+          order.setDragging(null);
+          if (draggedTask) {
+            const from = order.dragging?.kind === "task" ? order.dragging.from : here;
+            void ui.order.place(order.scoped, draggedTask, {
+              destination: here,
+              list: here.next,
+              move: { to: "top" },
+              origin: from.next,
+            });
+          } else if (draggedWs && side !== "into") {
+            void moveWorkstream(draggedWs, { to: side, id: workstream.id });
+          }
+        }}
+      >
+        <span className="flex w-6.5 shrink-0 items-center">
+          {number === null ? null : (
+            <>
+              <DragHandle
+                label={`Drag ${workstream.title}`}
+                rowRef={row}
+                onStart={() => order.setDragging({ kind: "workstream", id: workstream.id })}
+              />
+              <span className="w-3.5 text-right text-xs text-muted-foreground tabular-nums">
+                {number}
+              </span>
+            </>
+          )}
+        </span>
+        <div className="min-w-0 flex-1">{children}</div>
+        {number === null ? null : (
+          <Menu>
+            <MenuTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label={`Order ${workstream.title}`}
+                  className="ml-1 flex h-6 w-5 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
+                >
+                  <EllipsisIcon className="size-3.5" aria-hidden />
+                </button>
+              }
+            />
+            <MenuPopup align="end">
+              <MenuItem onClick={() => void moveWorkstream(workstream.id, { to: "top" })}>
+                Move to top
+              </MenuItem>
+              <MenuItem onClick={() => void moveWorkstream(workstream.id, { to: "up" })}>
+                Move up<MenuShortcut>⌥↑</MenuShortcut>
+              </MenuItem>
+              <MenuItem onClick={() => void moveWorkstream(workstream.id, { to: "down" })}>
+                Move down<MenuShortcut>⌥↓</MenuShortcut>
+              </MenuItem>
+            </MenuPopup>
+          </Menu>
+        )}
+      </div>
+      <RowError id={workstream.id} />
+    </>
   );
 }
 
@@ -454,7 +556,7 @@ export function RowMenu({
             </MenuSubPopup>
           </MenuSub>
           <MenuSeparator />
-          {fresh ? null : (
+          {fresh || task.kind === undefined ? null : (
             <MenuItem onClick={() => void ui.order.backToNew(order.scoped, task, origin)}>
               Back to New
             </MenuItem>
@@ -472,7 +574,7 @@ export function RowMenu({
             className="flex items-center gap-2 px-6 pb-5"
             onSubmit={(event) => {
               event.preventDefault();
-              if (!parsed) return;
+              if (!parsed || Number(parsed) === issueNumber(task.id)) return;
               setDuplicate(false);
               setReference("");
               void ui.order.duplicateOf(order.scoped, task, parsed);
@@ -486,7 +588,11 @@ export function RowMenu({
               value={reference}
               onChange={(event) => setReference(event.target.value)}
             />
-            <Button type="submit" size="xs" disabled={!parsed}>
+            <Button
+              type="submit"
+              size="xs"
+              disabled={!parsed || Number(parsed) === issueNumber(task.id)}
+            >
               Close it
             </Button>
           </form>

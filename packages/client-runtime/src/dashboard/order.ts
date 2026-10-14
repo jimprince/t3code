@@ -97,17 +97,23 @@ const isEpicHeader = (workstream: DashboardWorkstream) => typeof workstream.url 
  * The project's Plan in stored order. A briefing-plan project keeps the snapshot's order and gets
  * no New block: only the tracker stores a rank.
  */
-export function orderPlan(project: DashboardProject): OrderedPlan {
-  const ordered = project.planSource === "tracker";
+export function orderPlan(
+  project: DashboardProject,
+  /** False on a client whose server does not store the order: the snapshot's own order stands. */
+  stored: boolean = project.planSource === "tracker",
+): OrderedPlan {
+  const ordered = stored && project.planSource === "tracker";
   const workstreamIds = new Set(project.workstreams.map((workstream) => workstream.id));
   const byId = new Map(project.tasks.map((task) => [task.id, task]));
   const ownerOf = new Map<string, string>();
   for (const workstream of project.workstreams)
     for (const id of workstream.taskIds) ownerOf.set(id, workstream.id);
 
+  // A question is answered, not ordered: it never joins New or the queue.
   const isFresh = (task: DashboardTask) =>
     ordered &&
     task.kind !== undefined &&
+    task.kind !== "question" &&
     task.parked !== true &&
     (task.rank ?? null) === null &&
     (task.status === "pending" || (task.status === "blocked" && task.attentionIds.length === 0));
@@ -136,6 +142,7 @@ export function orderPlan(project: DashboardProject): OrderedPlan {
       else if (!ordered) section.next.push(task);
       else if (
         task.status === "working" ||
+        task.kind === "question" ||
         (task.kind !== undefined && (task.rank ?? null) === null)
       )
         section.now.push(task);
@@ -187,10 +194,14 @@ export function orderPlan(project: DashboardProject): OrderedPlan {
 export type PlaceTarget =
   | { readonly to: "top" | "bottom" | "none" }
   | { readonly to: "before" | "after"; readonly id: string };
-export interface PlaceStep {
-  readonly id: string;
-  readonly place: PlaceTarget;
-}
+/**
+ * One server call of a move: place one item, or rank unranked rows in one write. A batch lists
+ * the rows in the order they will have; `moved` is the row Brad actually moved, the only one the
+ * server credits to him.
+ */
+export type PlaceStep =
+  | { readonly id: string; readonly place: PlaceTarget }
+  | { readonly rank: ReadonlyArray<string>; readonly moved?: string };
 export type MoveTo =
   | { readonly to: "top" }
   | { readonly to: "bottom" }
@@ -201,10 +212,10 @@ export type MoveTo =
 
 /**
  * The writes that carry out a move inside one ordered list. The server only places an item
- * relative to a ranked sibling, so before the first relative move every unranked item in the list
- * is given a place at the bottom, in the order shown; that keeps the list as the user sees it. A
- * move that is already where it was asked to go writes nothing. `list` may omit the mover (an
- * item arriving from another workstream).
+ * relative to a ranked sibling, so before the first relative move the unranked items of the list
+ * are ranked in the order shown, in one batch. When the whole list (and the mover) is unranked,
+ * that one batch also carries the move itself. A move that is already where it was asked to go
+ * writes nothing. `list` may omit the mover (an item arriving from another workstream).
  */
 export function planMove(
   list: ReadonlyArray<{ readonly id: string; readonly rank?: number | null | undefined }>,
@@ -230,8 +241,42 @@ export function planMove(
     target = move.id === moverId || !list.some((item) => item.id === move.id) ? undefined : move.id;
   }
   if (target === undefined) return [];
-  const materialize = list
-    .filter((item) => (item.rank ?? null) === null)
-    .map((item): PlaceStep => ({ id: item.id, place: { to: "bottom" } }));
-  return [...materialize, { id: moverId, place: { to: side, id: target } }];
+  const unranked = list.filter((item) => (item.rank ?? null) === null);
+  const moverUnranked = mover === null || (mover.rank ?? null) === null;
+  if (unranked.length === list.length && moverUnranked)
+    return [{ rank: applyMove(list, moverId, move), moved: moverId }];
+  const step: PlaceStep = { id: moverId, place: { to: side, id: target } };
+  return unranked.length === 0 ? [step] : [{ rank: unranked.map((item) => item.id) }, step];
+}
+
+/**
+ * The ids of `list` after `move`, as the server will have them: what the page shows at once
+ * while the write is on its way. `list` may omit the mover (an item arriving from another
+ * workstream); a move that has no target leaves the list as it was.
+ */
+export function applyMove(
+  list: ReadonlyArray<{ readonly id: string }>,
+  moverId: string,
+  move: MoveTo,
+): string[] {
+  const ids = list.map((item) => item.id);
+  const index = ids.indexOf(moverId);
+  const rest = ids.filter((id) => id !== moverId);
+  const insertAt = (at: number) => [...rest.slice(0, at), moverId, ...rest.slice(at)];
+  switch (move.to) {
+    case "top":
+      return insertAt(0);
+    case "bottom":
+      return insertAt(rest.length);
+    case "up":
+      return index > 0 ? insertAt(index - 1) : ids;
+    case "down":
+      return index >= 0 && index < ids.length - 1 ? insertAt(index + 1) : ids;
+    case "before":
+    case "after": {
+      const target = rest.indexOf(move.id);
+      if (move.id === moverId || target < 0) return ids;
+      return insertAt(move.to === "before" ? target : target + 1);
+    }
+  }
 }
