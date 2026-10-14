@@ -1,0 +1,6 @@
+Bottom: 6d42f6b89f8f2d285da5783ae3e0aea818cf91fd
+Top:    6d42f6b89f8f2d285da5783ae3e0aea818cf91fd
+Author: brad <bradprin@live.com>
+Date:   2026-10-14 12:25:26 +0000
+
+feat(requests): file and order tracker work from CLI and MCP
