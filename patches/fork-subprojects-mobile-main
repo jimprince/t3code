@@ -1,7 +1,7 @@
-Bottom: 2d26ae307b12e914316cf981914c90b7baa8d444
-Top:    46a27c8ff7e12a544de53fecc66feae00311d341
+Bottom: aec54e9f24067af4d3dc29850b0717e396257b53
+Top:    0501e298791db7ebb39a28f64f61058980484a2a
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 11:33:56 +0000
+Date:   2026-10-14 11:36:06 +0000
 
 feat(mobile): nest subprojects inside their project card on the Projects list
 

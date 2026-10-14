@@ -1,6 +1,6 @@
-Bottom: 0345bd6ec3897293ce4f2fb25bf997dc10ddb3b3
-Top:    69a0c3d47a7f141bbf65a5fac11085740037c80c
+Bottom: d7d866c179cd1170d323fba9c2a4eb4e5bf2842d
+Top:    aa3290e8ec7551a610111e895c05039f658f4940
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 11:33:56 +0000
+Date:   2026-10-14 11:36:06 +0000
 
 feat(web): arrange projects by dragging them in the Projects sidebar
