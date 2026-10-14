@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createHash } from "node:crypto";
 import { epicNumber, filingPlace, registerRequestOrderCommands } from "./requestOrderCommands.js";
 import { registerRecoveryCommands } from "./recoveryCommands.js";
 import { ThreadId, MessageId } from "@t3tools/contracts";
@@ -2063,6 +2064,7 @@ request
   .option("--next", "place first in the workstream")
   .option("--last", "place last in the workstream")
   .option("--after <number>", "place after an ordered sibling")
+  .option("--message-id <id>", "filing idempotency key (reuse it when retrying)")
   .action(
     async (
       reference,
@@ -2075,6 +2077,7 @@ request
         next?: boolean;
         last?: boolean;
         after?: string;
+        messageId?: string;
       },
     ) => {
       if (options.kind === "bug") {
@@ -2093,6 +2096,11 @@ request
         );
       printJson(
         await client.projectRequest("projectRequestsCreate", {
+          messageId:
+            options.messageId ??
+            `cli:${createHash("sha256")
+              .update(JSON.stringify([target.threadId, process.env.T3_THREAD_ID, title, options]))
+              .digest("hex")}`,
           threadId: target.threadId,
           title,
           ...requestKindPayload(options.kind, options.bug === true, serverHasItemTypes),

@@ -1,3 +1,5 @@
+import * as Crypto from "effect/Crypto";
+import * as Schema from "effect/Schema";
 import { ProjectIssuesError, type ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as ThreadIssues from "../../../forkThreads/ThreadIssueService.ts";
@@ -6,6 +8,7 @@ import * as RequestLedger from "../../../projectIssues/RequestLedger.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
 import { RequestsToolkit } from "./tools.ts";
+const encodeFilingKey = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 const callingContext = (threadId?: ThreadId) =>
   Effect.gen(function* () {
     const scope = yield* McpInvocationContext.requireMcpCapability("pull-requests");
@@ -14,6 +17,7 @@ const callingContext = (threadId?: ThreadId) =>
     return { threadId: id, actorThreadId: scope.thread?.threadId ?? id };
   });
 const make = Effect.gen(function* () {
+  const crypto = yield* Crypto.Crypto;
   const ledger = yield* RequestLedger.make({
     projectIssues: yield* ProjectIssues.make,
     threadIssues: yield* ThreadIssues.make,
@@ -41,13 +45,27 @@ const make = Effect.gen(function* () {
       (input) =>
         callingContext(input.threadId).pipe(
           Effect.flatMap((context) =>
-            ledger.create({
-              ...input,
-              ...context,
-              title: input.title.trim(),
-              detail: input.detail ?? input.title,
-              kind: input.kind === "bug" ? "task" : input.kind,
-              ...(input.kind === "bug" ? { bug: true } : {}),
+            Effect.gen(function* () {
+              const digest = input.messageId
+                ? null
+                : yield* crypto
+                    .digest("SHA-256", new TextEncoder().encode(encodeFilingKey([context, input])))
+                    .pipe(
+                      Effect.mapError(
+                        () => new ProjectIssuesError({ message: "Could not create a filing key." }),
+                      ),
+                    );
+              return yield* ledger.create({
+                ...input,
+                ...context,
+                messageId:
+                  input.messageId ??
+                  `mcp:${Array.from(digest!, (byte) => byte.toString(16).padStart(2, "0")).join("")}`,
+                title: input.title.trim(),
+                detail: input.detail?.trim() ? input.detail : input.title,
+                kind: input.kind === "bug" ? "task" : input.kind,
+                ...(input.kind === "bug" ? { bug: true } : {}),
+              });
             }),
           ),
         ),

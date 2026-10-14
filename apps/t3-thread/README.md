@@ -472,12 +472,18 @@ new thread. Verify an unfinished step before repeating a side effect.
 `--next`, `--last`, or `--after <N>`. Place it if you are sure of the workstream
 and position; leave it unplaced only when unsure. Without placement it stays New.
 Bug is a task with the bug tag. Epics cannot be children of another epic.
+Retries of the same add call reuse its derived filing key; use `--message-id <id>`
+to supply your own key (choose a new one for a separate identical request).
+Once filed, placement or attachment failures return `placeError` or `attachmentError`
+alongside the issue instead of queuing another filing.
 
 Use `request queue <thread> [--epic <N>] [--all]` to read the queue and
 `request next <thread> [--epic <N>]` to pick its first unblocked, unstarted task.
 `request order <thread> <issue> --top|--bottom|--before <N>|--after <N>|--none`
 moves an existing item (`rank` is an alias); `--none` returns it to New.
-`request epic <thread> <issue> <N|none>` sets or clears its workstream.
+`request epic <thread> <issue> <N|none>` sets or clears its workstream and returns
+it to New when the workstream changes. `request list` includes epics and children
+without an ask label, in workstream order.
 Order commands require the server's `projectRequestOrder` capability.
 Placement attribution and creation time come from the tracker; rank writes
 do not count as progress.

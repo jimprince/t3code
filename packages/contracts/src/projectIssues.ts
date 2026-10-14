@@ -463,6 +463,8 @@ export const ProjectRequestUpdateInput = Schema.Struct({
   reference: TrimmedNonEmptyString,
   partOf: Schema.optionalKey(Schema.NullOr(PositiveInt)),
   duplicateOf: Schema.optionalKey(TrimmedNonEmptyString),
+  /** Brad UI actions only; agents cannot settle or close duplicates. */
+  actor: Schema.optionalKey(Schema.Literals(["brad"])),
   /**
    * `needs-review`: ready for Brad to look at. `awaiting-release`: handed over,
    * waiting for the release batch. `needs-test`: shipped in `release`, waiting
@@ -499,6 +501,8 @@ export type ProjectRequestRef = typeof ProjectRequestRef.Type;
 export const ProjectRequestCreateResult = Schema.Struct({
   request: Schema.NullOr(ProjectRequestRef),
   queued: Schema.Boolean,
+  placeError: Schema.optionalKey(Schema.String),
+  attachmentError: Schema.optionalKey(Schema.String),
   /** Present for direct UI filings: null when the issue was filed but notification failed. */
   notifiedThreadId: Schema.optionalKey(Schema.NullOr(ThreadId)),
 });

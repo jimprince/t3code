@@ -1,9 +1,10 @@
 /**
  * Tracker order contract: /home/brad/maintenance-work/t3-product/tracker-plan/CONTRACT.md
- * Draft v0 sha256 eb397fd3b9438478e2e6ddc3bcc863eb225d376ca9547478817ae615232521fe.
+ * Order and placement v1.1; shared parser exports are consumed by #297.
  * Last-line trailer; in-progress first, rank then issue number, unranked last.
  * Rank changes never represent progress. #297 imports parseRankTrailer for Plan mapping.
  */
+import { PART_OF_LINE } from "./epicProgress.logic.ts";
 import type {
   ProjectIssue,
   ProjectRequestPlacer,
@@ -11,8 +12,8 @@ import type {
   ProjectRequestQueueResult,
 } from "@t3tools/contracts";
 
-const placerTrailer = /(?:^|\r?\n)<!-- t3:placed-by ([^\r\n]+) -->$/;
-const trailer = /(?:^|\r?\n)<!-- t3:rank (-?\d+(?:\.\d+)?) -->(?:\r?\n)?$/;
+const placerTrailer = /(?:^|\r?\n)<!-- t3:placed-by ([^\r\n]+) -->\s*$/;
+const trailer = /(?:^|\r?\n)<!-- t3:rank (-?\d+(?:\.\d+)?) -->\s*$/;
 export function parseRankTrailer(body: string | null | undefined): number | null {
   const value = trailer.exec(body ?? "")?.[1];
   const rank = value === undefined ? null : Number(value);
@@ -39,23 +40,41 @@ export function parsePlacedByTrailer(body: string | null | undefined): ProjectRe
   }
   return null;
 }
-/** Changes only the last-line trailer, preserving every other byte of Brad's words. */
+/** Recover the newest trailer pair, including legacy trailers stranded by other writers. */
+export function editBeforeOrderTrailers(body: string, edit: (text: string) => string): string {
+  const ranks = [...body.matchAll(/^<!-- t3:rank (-?\d+(?:\.\d+)?) -->[ \t]*\r?$/gm)];
+  const last = ranks.at(-1);
+  const rank = last ? parseRankTrailer(last[0]) : null;
+  const actor = last ? parsePlacedByTrailer(body.slice(0, last.index! + last[0].length)) : null;
+  const base = body.replace(/(?:^|\r?\n)<!-- t3:(?:rank|placed-by) [^\r\n]* -->[ \t]*/g, "");
+  const changed = edit(base);
+  return rank === null
+    ? changed
+    : `${changed}${changed ? "\n" : ""}${actor ? `<!-- t3:placed-by ${encodeURIComponent(JSON.stringify(actor))} -->\n` : ""}<!-- t3:rank ${rank} -->`;
+}
+/** Normalize all old trailers while preserving the body and optional attribution. */
 export function replaceRankTrailer(
   body: string,
   rank: number | null,
   actor?: ProjectRequestPlacer,
 ): string {
-  const match = trailer.exec(body);
-  let base = match ? body.slice(0, match.index) : body;
-  if (rank === null || actor) base = base.replace(placerTrailer, "");
-  if (actor && rank !== null)
-    base += `${!base ? "" : "\n"}<!-- t3:placed-by ${encodeURIComponent(JSON.stringify(actor))} -->`;
-  return rank === null ? base : `${base}${!base ? "" : "\n"}<!-- t3:rank ${rank} -->`;
+  let base = "";
+  const normalized = editBeforeOrderTrailers(body, (text) => {
+    base = text;
+    return text;
+  });
+  const placer = actor ?? parsePlacedByTrailer(normalized);
+  return rank === null
+    ? base
+    : `${base}${base ? "\n" : ""}${placer ? `<!-- t3:placed-by ${encodeURIComponent(JSON.stringify(placer))} -->\n` : ""}<!-- t3:rank ${rank} -->`;
 }
 export function replacePartOf(body: string, partOf: number | null): string {
-  const base = body.replace(/^Part of #\d+(?:(?:\r?\n){1,2}|$)/i, "");
-  return partOf === null ? base : `Part of #${partOf}\n\n${base}`;
+  return editBeforeOrderTrailers(body, (text) => {
+    const base = text.replace(PART_OF_LINE, "");
+    return partOf === null ? base : `Part of #${partOf}\n\n${base}`;
+  });
 }
+export const RANK_GAP = 2 ** 20;
 export const isEpic = (issue: ProjectIssue) =>
   issue.labels.includes("ask:epic") ||
   (issue.labels.includes("ask:plan") &&
@@ -119,13 +138,19 @@ export function planPlacement(
   }
   const before = siblings[index - 1]?.rank ?? null;
   const after = siblings[index]?.rank ?? null;
+  if (
+    moving.rank != null &&
+    (before === null || moving.rank > before) &&
+    (after === null || moving.rank < after)
+  )
+    return { writes: [], rank: moving.rank, position: index + 1 };
   const rank =
     before === null
       ? after === null
-        ? 1024
-        : after - 1024
+        ? RANK_GAP
+        : after - RANK_GAP
       : after === null
-        ? before + 1024
+        ? before + RANK_GAP
         : Math.floor(before + (after - before) / 2);
   if (
     Number.isSafeInteger(rank) &&
@@ -136,9 +161,14 @@ export function planPlacement(
   }
   const ordered = [...siblings];
   ordered.splice(index, 0, moving);
+  const base = Math.max(0, ...items.map((i) => i.rank ?? 0));
+  if (!Number.isSafeInteger(base + ordered.length * RANK_GAP))
+    throw new Error("Order exceeds the safe rank range.");
   return {
-    writes: ordered.map((i, n) => ({ number: i.number, rank: (n + 1) * 1024 })),
-    rank: (index + 1) * 1024,
+    writes: ordered
+      .map((i, n) => ({ number: i.number, rank: base + (n + 1) * RANK_GAP }))
+      .reverse(),
+    rank: base + (index + 1) * RANK_GAP,
     position: index + 1,
   };
 }
@@ -157,6 +187,9 @@ export function requestQueue(
   );
   const item = (issue: ProjectIssue, position: number | null) => ({
     ...issue,
+    blockedBy: (issue.blockedBy ?? []).filter((n) =>
+      issues.some((other) => other.number === n && other.closedAt === null),
+    ),
     position,
     kind: workstreamIds.has(issue.number)
       ? ("epic" as const)
@@ -179,14 +212,20 @@ export function requestQueue(
         ws,
         now: siblings.filter(isInProgress).map((i) => item(i, null)),
         next: siblings
-          .filter((i) => !isInProgress(i) && i.rank != null)
+          .filter((i) => !isInProgress(i) && (i.rank != null || !i.isRequest))
           .map((i, n) => item(i, n + 1)),
       };
     });
   return {
     workstreams,
     new: open
-      .filter((i) => i.isRequest && i.rank == null && (epic === undefined || i.partOf === epic))
+      .filter(
+        (i) =>
+          i.isRequest &&
+          !workstreamIds.has(i.number) &&
+          i.rank == null &&
+          (epic === undefined || i.partOf === epic),
+      )
       .toSorted((a, b) => b.createdAt.localeCompare(a.createdAt) || b.number - a.number)
       .map((i) => item(i, null)),
   };
