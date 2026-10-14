@@ -10,12 +10,13 @@ import {
 import * as NodeCrypto from "node:crypto";
 
 import { RemoteEnvironmentClient } from "./client.js";
-import { buildAgentOverview, needsAttention } from "./monitor.js";
+import { buildAgentOverview, getLatestTurnAssistantMessage, needsAttention } from "./monitor.js";
 import {
   buildNotificationMessage,
   buildNotificationRecord,
   MAX_DELIVERY_ATTEMPTS,
   mergeDetectedNotification,
+  shouldDeliverNotification,
   nextAttemptAt,
   TERMINAL_NOTIFICATION_STATUSES,
 } from "./notifications.js";
@@ -38,6 +39,45 @@ const BUSY_RECIPIENT_RETRY_MS = 30_000;
 
 /** How often a running watcher rechecks settlement and quota holds. */
 const SETTLED_RECIPIENT_RECHECK_MS = 60_000;
+/**
+ * A worker that settles itself at close-out is settled seconds after its final
+ * turn, often before any poll saw that turn complete. A settled source still
+ * reports a turn that finished this recently; older settled threads stay skipped.
+ */
+const SETTLED_COMPLETION_WINDOW_MS = 60 * 60_000;
+/** Bound legacy first-completion catch-up after a watcher upgrade or outage. */
+const INITIAL_COMPLETION_WINDOW_MS = 60 * 60_000;
+/** Keeps the watcher awake just long enough to record a completion that settled before the next pass. */
+const SETTLED_COMPLETION_GRACE_MS = 2 * 60_000;
+
+function finishedWithin(
+  thread: Pick<OrchestrationThread, "latestTurn" | "settledAt">,
+  nowMs: number,
+  windowMs: number,
+): boolean {
+  const finishedAt = Date.parse(thread.latestTurn?.completedAt ?? thread.settledAt ?? "");
+  return Number.isFinite(finishedAt) && nowMs - finishedAt <= windowMs;
+}
+
+/**
+ * A settled source whose shell shows no live work and no completion inside `windowMs`. Reading
+ * its full thread could only conclude the same, so watch passes skip that read: each one opened
+ * a connection and a thread snapshot per settled source, every tick.
+ */
+function quietSettledSource(
+  shell: OrchestrationThreadShell | undefined,
+  nowMs: number,
+  windowMs: number,
+): boolean {
+  return (
+    shell !== undefined &&
+    shell.settledOverride === "settled" &&
+    !shell.activeRunId &&
+    !shell.hasPendingApprovals &&
+    !shell.hasPendingUserInput &&
+    !finishedWithin(shell, nowMs, windowMs)
+  );
+}
 
 /**
  * When this process started. A claim stamped before that cannot be ours, even if
@@ -515,6 +555,29 @@ async function scanKnownRoutes(
         (subscription.events === "attention" || isNotificationReply(sourceThread))
       )
         continue;
+      let initialCompletion = false;
+      const completedTurn = overview.state === "completed" ? sourceThread.latestTurn : null;
+      if (completedTurn && subscription.level === "attention" && !subscription.baselineTurnId) {
+        if (subscription.firstCompletionTurnId === completedTurn.turnId) continue;
+        if (!subscription.firstCompletionTurnId) {
+          if (!getLatestTurnAssistantMessage(sourceThread)) continue;
+          // Older routes have no observation marker. Consume their initial result
+          // even when stale/seen, so an upgrade cannot replay a backlog later.
+          subscription.firstCompletionTurnId = completedTurn.turnId;
+          const completedAt = Date.parse(completedTurn.completedAt ?? "");
+          const age = Date.parse(now()) - completedAt;
+          if (
+            !overview.hasNewOutput ||
+            !Number.isFinite(age) ||
+            age < 0 ||
+            age > INITIAL_COMPLETION_WINDOW_MS ||
+            completedAt < Date.parse(subscription.createdAt)
+          )
+            continue;
+          initialCompletion = true;
+        }
+      }
+      if (!needsAttention(overview)) continue;
       // Attention for the turn that was already current when the subscriber
       // signed up is old news to it; only a later turn is a new transition.
       if (
@@ -546,6 +609,28 @@ async function scanKnownRoutes(
         isChildInput,
         subscriberEnvironmentId: mapRouteEnvironment(state, subscription).subscriberEnvironmentId,
       });
+      detected.initialCompletion = initialCompletion;
+      if (!shouldDeliverNotification(subscription, detected)) continue;
+      if (overview.state === "error") {
+        const episode = state.notifications.find(
+          (notification) => notification.eventKey === subscription.errorEventKey,
+        );
+        const occurrenceKey = JSON.stringify([
+          detected.latestTurnId,
+          detected.latestAssistantMessageId,
+        ]);
+        detected.eventKey = episode?.eventKey ?? `${detected.eventKey}:error:${detected.id}`;
+        detected.occurrences =
+          (episode?.occurrences ?? 0) + (episode?.lastOccurrenceKey === occurrenceKey ? 0 : 1);
+        detected.lastOccurrenceKey = occurrenceKey;
+        subscription.errorEventKey = detected.eventKey;
+      }
+      detected.isChildInput = isChildInput;
+      detected.subscriberEnvironmentId = mapRouteEnvironment(
+        state,
+        subscription,
+      ).subscriberEnvironmentId;
+      scanned.push(detected);
     }
   }
 
@@ -787,6 +872,8 @@ export async function detectAttentionEvents(
                         Date.parse(route.inactivityObservation.observedAt))
                       ? observed.inactivityObservation
                       : route.inactivityObservation,
+                  firstCompletionTurnId:
+                    route.firstCompletionTurnId ?? observed.firstCompletionTurnId,
                   observedState: observed.observedState,
                   observedReason: observed.observedReason,
                   errorEventKey: observed.errorEventKey,

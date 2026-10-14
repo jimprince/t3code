@@ -225,6 +225,23 @@ export interface SavedSubscription {
   expiryReason?: "settled" | "archived" | "completed" | "unsubscribed" | null;
   subscriberEnvironmentId?: string;
   events?: "all" | "attention";
+  /** Opt-in inactivity monitoring; zero or absent disables it. */
+  inactivityMinutes?: number;
+  inactivityObservation?: {
+    turnId: string;
+    activityAt: string;
+    quietSince: string;
+    observedAt: string;
+  } | null;
+  level?: NotificationLevel;
+  /** Minutes between unanswered nested-child reminders; zero disables reminders. */
+  inputReminderMinutes?: number;
+  /** First completed turn observed after subscribing; prevents replay of initial results. */
+  firstCompletionTurnId?: string | null;
+  lastDirectMessageTurnId?: string | null;
+  errorEventKey?: string | null;
+  observedState?: AgentState;
+  observedReason?: string;
   subscriberThreadId: string;
   subscriberAgentName: string | null;
   subscriberEnvironment: string;
@@ -268,6 +285,15 @@ export interface SavedNotification {
   subscriberEnvironmentId?: string;
   /** An actionable input/approval for the current organizational parent. */
   isChildInput?: boolean;
+  inactivityActivityAt?: string;
+  pendingQuestion?: string | null;
+  pendingInputRequestKey?: string | null;
+  reminderOfEventKey?: string | null;
+  /** First awaited completion, eligible without an explicit attention marker. */
+  initialCompletion?: boolean;
+  completionDisposition?: "quiet" | "attention" | null;
+  occurrences?: number;
+  lastOccurrenceKey?: string;
   id: string;
   eventKey: string;
   subscriberThreadId: string;
