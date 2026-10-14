@@ -1,7 +1,7 @@
-Bottom: 478aa5b44ffdd19076df69b476c96136b519e25e
-Top:    adf91c264bf2c74c3441e772b6f6cbf4b1f5da9f
+Bottom: 997368836a907365040e5aa1880047a674954ca9
+Top:    4b0eda533f2449ad71b0780ac87d051fb05d7999
 Author: User <user@example.com>
-Date:   2026-10-13 10:25:15 +0000
+Date:   2026-10-14 11:26:24 +0000
 
 feat(desktop): restart for updates when local agents finish
 
