@@ -65,6 +65,7 @@ export interface ExecutionEnvironmentDescriptor {
     taskIssueLaunch?: boolean;
     remoteThreadNesting?: boolean;
     projectItemTypes?: boolean;
+    threadResumeFromPlan?: boolean;
   };
 }
 

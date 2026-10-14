@@ -1,3 +1,4 @@
+import { ThreadResumeService } from "../../../orchestration-v2/ThreadResumeService.ts";
 import { resolveCreatorPurpose } from "../../../forkThreads/ThreadPurpose.ts";
 import { makeNestingService } from "../../../forkThreads/NestingService.ts";
 import * as SqlClient from "effect/sql/SqlClient";
@@ -91,6 +92,13 @@ const writesThread = <P extends { readonly threadId?: ThreadId | undefined }, A,
 ) => McpToolAccess.writesThreads((params: P) => [params.threadId], handle);
 
 export const layer = McpToolAccess.toLayer(ThreadToolkit, {
+  t3_thread_resume_from_plan: McpToolAccess.writesEnvironment((input) =>
+    Effect.gen(function* () {
+      const service = yield* ThreadResumeService;
+      if (input.preview) return yield* service.preview(input);
+      return yield* service.resume(input);
+    }),
+  ),
   t3_thread_forward_prepare: McpToolAccess.reads((input) =>
     Effect.gen(function* () {
       const source = yield* readThread(input.sourceThreadId);
