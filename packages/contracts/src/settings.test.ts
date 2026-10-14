@@ -1112,3 +1112,17 @@ describe("Codex skill extra roots", () => {
     expect(() => decode({ skillExtraRoots: [""] })).toThrow();
   });
 });
+
+describe("Chief of Staff environment preference", () => {
+  it("defaults old settings to null and round-trips a thread id or clear patch", () => {
+    expect(decodeServerSettings({}).chiefOfStaffThreadId).toBeNull();
+    for (const chiefOfStaffThreadId of ["e942f826-445e-4cee-a045-0091707e67c7", null]) {
+      const preference = { chiefOfStaffThreadId };
+      expect(decodeServerSettingsPatch(preference)).toEqual(preference);
+      expect(encodeServerSettings(decodeServerSettings(preference))).toMatchObject(preference);
+    }
+    expect(decodeServerSettingsPatch({})).not.toHaveProperty("chiefOfStaffThreadId");
+    expect(() => decodeServerSettingsPatch({ chiefOfStaffThreadId: 123 })).toThrow();
+    expect(() => decodeServerSettingsPatch({ chiefOfStaffThreadId: " " })).toThrow();
+  });
+});
