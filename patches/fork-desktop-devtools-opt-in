@@ -1,7 +1,7 @@
-Bottom: fb556c22eb77e0cde1956a4c4f4bb1b15e263e20
-Top:    8d5504214bda51221c0dccb3c3006aaedf4296a2
+Bottom: bd880740516cd954d2f69eba86e7fff056f4a5cd
+Top:    897c437615b4da16311df16d421ce5fe3377264e
 Author: brad <bradprin@live.com>
-Date:   2026-10-14 11:45:34 +0000
+Date:   2026-10-14 11:48:39 +0000
 
 fix(desktop): open DevTools only when it is asked for
 
