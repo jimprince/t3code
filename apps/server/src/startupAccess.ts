@@ -1,7 +1,9 @@
 import * as NodeOS from "node:os";
+import * as NodeTTY from "node:tty";
 
 import { QrCode } from "@t3tools/shared/qrCode";
 import * as Effect from "effect/Effect";
+import * as Context from "effect/Context";
 import { HttpServer } from "effect/http";
 
 import * as ServerConfig from "./config.ts";
@@ -12,6 +14,12 @@ export interface HeadlessServeAccessInfo {
   readonly token: string;
   readonly pairingUrl: string;
 }
+
+// Require a terminal on every standard stream: redirected output may be a service
+// journal even when the process inherited a terminal on another descriptor.
+export const ShowStartupCredentials = Context.Reference<boolean>("t3/ShowStartupCredentials", {
+  defaultValue: () => [0, 1, 2].every(NodeTTY.isatty),
+});
 
 type NetworkInterfacesMap = ReturnType<typeof NodeOS.networkInterfaces>;
 
@@ -119,14 +127,21 @@ export const renderTerminalQrCode = (value: string, margin = 2): string => {
   return rows.join("\n");
 };
 
-export const formatHeadlessServeOutput = (accessInfo: HeadlessServeAccessInfo): string =>
+export const formatHeadlessServeOutput = (
+  accessInfo: HeadlessServeAccessInfo,
+  showCredentials = false,
+): string =>
   [
     "T3 Code server is ready.",
     `Connection string: ${accessInfo.connectionString}`,
-    `Token: ${accessInfo.token}`,
-    `Pairing URL: ${accessInfo.pairingUrl}`,
-    "",
-    renderTerminalQrCode(accessInfo.pairingUrl),
+    ...(showCredentials
+      ? [
+          `Token: ${accessInfo.token}`,
+          `Pairing URL: ${accessInfo.pairingUrl}`,
+          "",
+          renderTerminalQrCode(accessInfo.pairingUrl),
+        ]
+      : ["Pairing is available. Run t3 pair on this server to show a pairing URL and QR code."]),
     "",
   ].join("\n");
 
