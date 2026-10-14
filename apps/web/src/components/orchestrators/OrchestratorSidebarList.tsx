@@ -2,12 +2,39 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   buildOrchestratorSummaries,
   buildStandaloneThreadGroups,
+  lastActivityAt,
+  PROJECT_QUIET_AFTER_MS,
   projectSidebarBucket,
   sortOrchestratorSummariesForSidebar,
   type OrchestratorSummary,
   type ProjectSidebarBucket,
   type StandaloneThreadStatus,
+  type SubagentRow,
 } from "@t3tools/client-runtime/state/orchestrators";
+import {
+  partitionThreadPurposes,
+  subprojectPurposeTag,
+} from "@t3tools/client-runtime/state/thread-purpose";
+import type { ThreadPurpose } from "@t3tools/contracts";
+import {
+  closestCenter,
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
+  labelWithTaskProgress,
+  projectSubagentRows,
+  splitSettledSubagents,
+  splitSettledSubprojects,
+  subagentCountLabel,
+  subprojectCountLabel,
+} from "@t3tools/client-runtime/state/projectSubprojects";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { ChevronDownIcon, ChevronRightIcon, CircleAlertIcon, UsersIcon } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
@@ -79,7 +106,11 @@ function useSelectedRoute() {
 /** Subprojects of a project in sidebar order, supplied by the list so every level shares the deferred buckets. */
 type SortSubprojects = (summary: OrchestratorSummary) => ReadonlyArray<OrchestratorSummary>;
 
-/** One compact "/ Name" line per subproject, beneath its parent's card; deeper levels indent. */
+/**
+ * One compact "/ Name" line per subproject, then one "- Name" line per subagent, beneath their
+ * project's card; deeper levels indent. Settled subprojects and subagents are not listed inline:
+ * one collapsed "Settled (N)" row at the end holds both.
+ */
 function SubprojectRows({
   summary,
   selectedRoute,
@@ -90,6 +121,124 @@ function SubprojectRows({
   readonly selectedRoute: string | null;
   readonly sortSubprojects: SortSubprojects;
   readonly depth?: number;
+}) {
+  const { active, settled } = splitSettledSubprojects(sortSubprojects(summary));
+  const agents = splitSettledSubagents(projectSubagentRows(summary, purposes));
+  const settledOpen = settledExpansion.expanded.includes(projectKeyOf(summary));
+  const renderAgent = (row: SubagentRow) => (
+    <SubagentListRow
+      key={`${row.thread.environmentId}:${row.thread.id}`}
+      row={row}
+      showParent={row.parentKey !== projectKeyOf(summary)}
+      selectedRoute={selectedRoute}
+      depth={depth}
+    />
+  );
+  const renderRow = (sub: OrchestratorSummary) => (
+    <SubprojectRow
+      key={projectKeyOf(sub)}
+      sub={sub}
+      purposeTag={subprojectPurposeTag(summary, sub, purposes)}
+      selectedRoute={selectedRoute}
+      sortSubprojects={sortSubprojects}
+      purposes={purposes}
+      settledExpansion={settledExpansion}
+      depth={depth}
+    />
+  );
+  return (
+    <>
+      {active.map(renderRow)}
+      {agents.active.map(renderAgent)}
+      {settled.length > 0 || agents.settled.length > 0 ? (
+        <>
+          <SettledSubprojectsToggle
+            settled={settled}
+            settledSubagents={agents.settled.length}
+            expanded={settledOpen}
+            onToggle={() => settledExpansion.toggle(projectKeyOf(summary))}
+            className="h-6 w-full rounded pr-1.5 text-3xs text-sidebar-muted-foreground"
+            style={{ paddingLeft: `${0.625 + depth * 0.75}rem` }}
+          />
+          {settledOpen ? settled.map(renderRow) : null}
+          {settledOpen ? agents.settled.map(renderAgent) : null}
+        </>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * One subagent of the project: a dot for working or waiting on you, its title, a "read-only" tag
+ * when the provider owns the conversation, the worker that spawned it when that is not the
+ * project itself, and when it last moved. A click opens the subagent's own thread.
+ */
+function SubagentListRow({
+  row,
+  showParent,
+  selectedRoute,
+  depth,
+}: {
+  readonly row: SubagentRow;
+  readonly showParent: boolean;
+  readonly selectedRoute: string | null;
+  readonly depth: number;
+}) {
+  const navigate = useNavigate();
+  const { thread } = row;
+  const selected = selectedRoute === threadKey(thread);
+  return (
+    <button
+      type="button"
+      aria-label={`Open ${thread.title} subagent`}
+      aria-current={selected ? "page" : undefined}
+      style={{ paddingLeft: `${0.625 + depth * 0.75}rem` }}
+      className={`pointer-events-auto flex h-6 w-full cursor-pointer items-center gap-1.5 rounded pr-1.5 text-left text-3xs hover:bg-sidebar-row-hover ${
+        selected ? "bg-sidebar-row-active text-sidebar-foreground" : "text-sidebar-muted-foreground"
+      }`}
+      onClick={() =>
+        void navigate({
+          to: "/$environmentId/$threadId",
+          params: buildThreadRouteParams(scopeThreadRef(thread.environmentId, thread.id)),
+        })
+      }
+    >
+      <span aria-hidden>-</span>
+      <span
+        aria-hidden
+        className={`size-1.5 shrink-0 rounded-full ${
+          row.needsYou ? "bg-warning" : row.working ? "bg-info" : "bg-muted-foreground/40"
+        }`}
+      />
+      <span className="min-w-0 flex-1 truncate">
+        {thread.title}
+        {showParent && row.parentTitle !== null ? ` · ${row.parentTitle}` : ""}
+      </span>
+      {row.readOnly ? <span className="shrink-0">read-only</span> : null}
+      <span className="shrink-0 tabular-nums">
+        {formatRelativeTimeLabel(lastActivityAt(thread))}
+      </span>
+    </button>
+  );
+}
+
+function SubprojectRow({
+  sub,
+  purposeTag,
+  selectedRoute,
+  sortSubprojects,
+  purposes,
+  settledExpansion,
+  depth,
+}: {
+  readonly sub: OrchestratorSummary;
+  /** "Harness" when this subproject belongs to the Harness tab as well as its project's card. */
+  readonly purposeTag: "Harness" | null;
+  readonly selectedRoute: string | null;
+  readonly sortSubprojects: SortSubprojects;
+  readonly purposes: ReadonlyMap<string, ThreadPurpose | null>;
+  readonly settledExpansion: SettledExpansion;
+  readonly depth: number;
 }) {
   const navigate = useNavigate();
   return sortSubprojects(summary).map((sub) => {
@@ -163,8 +312,13 @@ function ProjectRow({
   const openIssues = openTaskCount(summary);
   const { rollup } = summary;
   const hasSubprojects = summary.subprojects.length > 0;
+  const agentRows = projectSubagentRows(summary, purposes);
+  const hasChildren = hasSubprojects || agentRows.length > 0;
   const workingInSubprojects = subprojectWorkingLabel(summary);
-  const foldedHint = subprojectCountLabel(summary);
+  const foldedHint =
+    [subprojectCountLabel(summary), subagentCountLabel(agentRows)]
+      .filter((hint) => hint !== null)
+      .join(" · ") || null;
   const rootRef = scopeThreadRef(summary.root.environmentId, summary.root.id);
   const rootProject =
     summary.projects.find(
@@ -196,15 +350,15 @@ function ProjectRow({
           <span className="min-w-0 flex-1 truncate text-sm font-medium text-sidebar-foreground">
             {summary.root.title}
           </span>
-          {openIssues > 0 ? (
-            <span className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground">
-              {openIssues} {openIssues === 1 ? "task" : "tasks"}
-            </span>
-          ) : null}
-          {hasSubprojects ? (
+          <TaskFraction
+            summary={summary}
+            className="text-xs text-sidebar-muted-foreground"
+            onActivate={openProject}
+          />
+          {hasChildren ? (
             <button
               type="button"
-              aria-label={`${collapsed ? "Show" : "Hide"} subprojects of ${summary.root.title}`}
+              aria-label={`${collapsed ? "Show" : "Hide"} ${hasSubprojects ? "subprojects" : "agents"} of ${summary.root.title}`}
               aria-expanded={!collapsed}
               className="pointer-events-auto -mr-1 flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
               onClick={() => onToggleSubprojects(projectKeyOf(summary))}
@@ -247,7 +401,7 @@ function ProjectRow({
             {workingInSubprojects}
           </span>
         ) : null}
-        {hasSubprojects && !collapsed ? (
+        {hasChildren && !collapsed ? (
           <div className="-mx-1 border-t border-sidebar-border pt-1">
             <SubprojectRows
               summary={summary}

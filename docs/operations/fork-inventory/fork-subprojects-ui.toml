@@ -34,3 +34,9 @@ id = "catchup-r29-shared-subproject-rules"
 date = "2026-10-13"
 decided = "relocate"
 rationale = "Port main's table/progress/count behavior into r28's shared client-runtime rules and tests, retaining one implementation used by web and mobile."
+
+[[decision]]
+id = "subagents-under-projects-20261013"
+date = "2026-10-13"
+decided = "refresh-existing-concern"
+rationale = "Subagents (provider-native and delegate_task children) list as rows under their project, the way subprojects do. Client only: OrchestratorSummary.subagentRows is built from the existing own-tree descendants whose lineage is subagent, so rollup, working and needs-you counts, the Threads filters and the user-created-root rule are untouched. A runless native child reads idle, so its row is working only while the parent's pending-task roster names it. A Harness-purpose subagent stays off a Projects card. Settled rows fold into the existing Settled shelf. Own projectSubagentRows, owningProjectRoot, the sidebar and board rows and their tests here rather than adding a second concern. No contracts, server or migration."
