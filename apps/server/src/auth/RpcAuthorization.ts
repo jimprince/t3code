@@ -47,6 +47,8 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.harnessRoutineKindSet]: AuthOrchestrationOperateScope,
   "thread.session.generation": AuthAccessWriteScope,
   "thread.resume": AuthAccessWriteScope,
+  "thread.resumeFromPlan": AuthOrchestrationOperateScope,
+  "thread.previewResumePlan": AuthOrchestrationOperateScope,
   "thread.stop.receipt": AuthAccessWriteScope,
   "thread.human.pending.list": AuthAccessWriteScope,
   "thread.session.reset": AuthAccessWriteScope,

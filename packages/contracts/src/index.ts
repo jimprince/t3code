@@ -104,3 +104,4 @@ export * from "./threadRecovery.ts";
 export * from "./harness.ts";
 export * from "./routineKind.ts";
 export * from "./dashboard.ts";
+export * from "./threadResume.ts";
