@@ -28,26 +28,67 @@ export function selectChiefOfStaffThread<
   );
 }
 
-/** Resolve a configured environment first; title discovery belongs to the primary environment. */
+/** Fields the title fallback ranks on; all optional so any thread shell shape qualifies. */
+interface DeskCandidateRank {
+  readonly environmentId: EnvironmentId;
+  readonly id: ThreadId;
+  readonly updatedAt: string;
+  readonly pinnedAt?: string | null | undefined;
+  readonly runtime?: { readonly status: string } | null | undefined;
+}
+
+/**
+ * Resolve the desk across every connected environment. An existing explicit preference wins, in
+ * the order given; a stale one (missing or archived thread) falls through so it cannot hide a
+ * valid one. With no usable preference, the exact-title match runs over all environments, because
+ * the desk often lives on a remote whose server has no preference set. Several threads can share
+ * the title (old failed desks stay around), so one is chosen deterministically: not failed, then
+ * pinned, then on the primary environment, then most recently updated, then the larger id.
+ */
 export function selectScopedChiefOfStaffThread<
-  T extends {
-    readonly environmentId: EnvironmentId;
-    readonly id: ThreadId;
+  T extends DeskCandidateRank & {
     readonly title: string;
     readonly archivedAt: unknown;
     readonly deletedAt?: unknown;
   },
 >(input: {
   readonly threads: readonly T[];
-  readonly preferred: ScopedThreadRef | null;
+  readonly preferred: readonly ScopedThreadRef[];
   readonly primaryEnvironmentId: EnvironmentId | null;
 }): ScopedThreadRef | null {
-  const environmentId = input.preferred?.environmentId ?? input.primaryEnvironmentId;
-  const thread = selectChiefOfStaffThread(
-    input.threads.filter((candidate) => candidate.environmentId === environmentId),
-    input.preferred?.threadId ?? null,
-  );
-  return thread ? { environmentId: thread.environmentId, threadId: thread.id } : null;
+  for (const preferred of input.preferred) {
+    const thread = selectChiefOfStaffThread(
+      input.threads.filter((candidate) => candidate.environmentId === preferred.environmentId),
+      preferred.threadId,
+    );
+    if (thread) return { environmentId: thread.environmentId, threadId: thread.id };
+  }
+  let best: T | null = null;
+  for (const candidate of input.threads) {
+    if (selectChiefOfStaffThread([candidate], null) === null) continue;
+    if (best === null || compareDeskCandidates(candidate, best, input.primaryEnvironmentId) > 0) {
+      best = candidate;
+    }
+  }
+  return best ? { environmentId: best.environmentId, threadId: best.id } : null;
+}
+
+/** Positive when `candidate` is the better desk. */
+function compareDeskCandidates(
+  candidate: DeskCandidateRank,
+  best: DeskCandidateRank,
+  primaryEnvironmentId: EnvironmentId | null,
+): number {
+  const healthy = (thread: DeskCandidateRank) =>
+    thread.runtime?.status !== "failed" && thread.runtime?.status !== "error";
+  const pinned = (thread: DeskCandidateRank) => thread.pinnedAt != null;
+  const primary = (thread: DeskCandidateRank) => thread.environmentId === primaryEnvironmentId;
+  for (const rank of [healthy, pinned, primary]) {
+    if (rank(candidate) !== rank(best)) return rank(candidate) ? 1 : -1;
+  }
+  const byUpdate = Date.parse(candidate.updatedAt) - Date.parse(best.updatedAt);
+  if (byUpdate !== 0 && !Number.isNaN(byUpdate)) return byUpdate;
+  return candidate.id > best.id ? 1 : candidate.id < best.id ? -1 : 0;
 }
 
 /** Environment-local dashboard attention already excludes closed and answered decisions. */

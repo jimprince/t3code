@@ -8,6 +8,7 @@ const thread = (id: string, title: string, archivedAt: string | null = null) => 
   environmentId: env,
   id: id as ThreadId,
   title,
+  updatedAt: "2026-10-12T00:00:00Z",
   archivedAt,
 });
 
@@ -43,34 +44,33 @@ describe("selectChiefOfStaffThread", () => {
     thread("old", "Chief of Staff", "2026-10-01T00:00:00Z"),
     thread("desk", "Chief of Staff"),
   ];
-  it("finds the front desk by exact title in the primary environment", () => {
-    expect(
-      selectChiefOfStaffThread({ threads, preferred: null, primaryEnvironmentId: env }),
-    ).toEqual({ environmentId: env, threadId: "desk" });
+  const preferred = (id: string) => [{ environmentId: env, threadId: id as ThreadId }];
+  it("finds the front desk by exact title", () => {
+    expect(selectChiefOfStaffThread({ threads, preferred: [], primaryEnvironmentId: env })).toEqual(
+      { environmentId: env, threadId: "desk" },
+    );
   });
   it("never picks Operations by name", () => {
     expect(
       selectChiefOfStaffThread({
         threads: [thread("ops", "chief-of-staff Operations")],
-        preferred: null,
+        preferred: [],
         primaryEnvironmentId: env,
       }),
     ).toBeNull();
   });
-  it("follows the preference, and a missing or archived preferred thread means no tray", () => {
-    const preferred = (id: string) => ({ environmentId: env, threadId: id as ThreadId });
+  it("follows an existing preference; a stale one falls back to the title match", () => {
     expect(
       selectChiefOfStaffThread({ threads, preferred: preferred("ops"), primaryEnvironmentId: env }),
     ).toEqual({ environmentId: env, threadId: "ops" });
-    expect(
-      selectChiefOfStaffThread({ threads, preferred: preferred("old"), primaryEnvironmentId: env }),
-    ).toBeNull();
-    expect(
-      selectChiefOfStaffThread({
-        threads,
-        preferred: preferred("gone"),
-        primaryEnvironmentId: env,
-      }),
-    ).toBeNull();
+    for (const stale of ["old", "gone"]) {
+      expect(
+        selectChiefOfStaffThread({
+          threads,
+          preferred: preferred(stale),
+          primaryEnvironmentId: env,
+        }),
+      ).toEqual({ environmentId: env, threadId: "desk" });
+    }
   });
 });
