@@ -1,4 +1,6 @@
 import {
+  type OrchestrationV2ThreadShell,
+  type ThreadSubprojectMode,
   ProjectIssuesError,
   type GiteaInstanceConfig,
   type ProjectIssue,
@@ -175,24 +177,34 @@ export const make = Effect.gen(function* () {
   );
 
   /** Tree membership and repositories for an orchestrator thread's project. */
-  const resolveProject = (rootThreadId: ThreadId) =>
+  const resolveProject = (
+    rootThreadId: ThreadId,
+    resolvedThreads?: ReadonlyArray<
+      Pick<OrchestrationV2ThreadShell, "id" | "projectId" | "issues"> & {
+        readonly parentThreadId?: ThreadId | null;
+        readonly subproject?: ThreadSubprojectMode | null;
+      }
+    >,
+  ) =>
     Effect.gen(function* () {
       const instances = yield* instancesOrFail;
-      const snapshot = yield* engine
-        .getShellSnapshot()
-        .pipe(Effect.mapError(() => fail("Could not read threads.")));
-      const parents = new Map(
-        (yield* listMetadata(sql).pipe(
-          Effect.mapError(() => fail("Could not read thread parents.")),
-        )).map((row) => [row.threadId, row.parentThreadId]),
-      );
-      const tree = collectThreadTree(
-        [...snapshot.threads, ...snapshot.archivedThreads].map((thread) => ({
-          ...thread,
-          parentThreadId: parents.get(thread.id) ?? null,
-        })),
-        rootThreadId,
-      );
+      const threads =
+        resolvedThreads ??
+        (yield* Effect.gen(function* () {
+          const snapshot = yield* engine
+            .getShellSnapshot()
+            .pipe(Effect.mapError(() => fail("Could not read threads.")));
+          const parents = new Map(
+            (yield* listMetadata(sql).pipe(
+              Effect.mapError(() => fail("Could not read thread parents.")),
+            )).map((row) => [row.threadId, row.parentThreadId]),
+          );
+          return [...snapshot.threads, ...snapshot.archivedThreads].map((thread) => ({
+            ...thread,
+            parentThreadId: parents.get(thread.id) ?? null,
+          }));
+        }));
+      const tree = collectThreadTree(threads, rootThreadId);
       if (tree.length === 0) return yield* fail(`Thread '${rootThreadId}' was not found.`);
       const projectIds = new Set(tree.map((thread) => thread.projectId));
       const rootProjectId = tree[0]!.projectId;
@@ -263,9 +275,12 @@ export const make = Effect.gen(function* () {
     issueCache.delete(repositoryKey(target));
   };
 
-  const list = (input: ProjectIssuesListInput) =>
+  const list = (
+    input: ProjectIssuesListInput,
+    resolvedThreads?: Parameters<typeof resolveProject>[1],
+  ) =>
     Effect.gen(function* () {
-      const project = yield* resolveProject(input.rootThreadId);
+      const project = yield* resolveProject(input.rootThreadId, resolvedThreads);
       const repositories: ProjectIssueRepository[] = [];
       const issues: ProjectIssue[] = [];
       const results = yield* Effect.forEach(

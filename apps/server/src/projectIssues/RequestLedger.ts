@@ -211,7 +211,7 @@ export const make = (deps: {
           project,
           config.giteaInstances,
         );
-        return target ? { config, thread, root, project, target } : null;
+        return target ? { config, thread, root, project, target, threads } : null;
       });
 
     type Resolved = NonNullable<Effect.Success<ReturnType<typeof resolveThread>>>;
