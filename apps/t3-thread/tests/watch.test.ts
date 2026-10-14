@@ -5,7 +5,6 @@ import { DateTime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { projection, item } from "./v2-fixture.js";
-import { RemoteEnvironmentClient } from "../src/client.js";
 import { loadState, saveState } from "../src/state.js";
 import { buildSubscriptionRecord } from "../src/state.js";
 import { sendDirectResult } from "../src/directResult.js";
