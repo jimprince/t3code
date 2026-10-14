@@ -24,5 +24,5 @@ export function resumeFailureText(error: unknown): string {
 }
 
 /** Dashboard rows for a thread's own to-do list carry this id prefix. */
-export const THREAD_PLAN_TASK_PREFIX = "thread-plan:";
+const THREAD_PLAN_TASK_PREFIX = "thread-plan:";
 export const isThreadPlanTaskId = (id: string) => id.startsWith(THREAD_PLAN_TASK_PREFIX);

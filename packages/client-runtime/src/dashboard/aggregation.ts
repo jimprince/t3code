@@ -1,6 +1,5 @@
 import { ThreadId as ThreadIdSchema } from "@t3tools/contracts";
 import { isThreadResumable } from "../threadResume.ts";
-export { isThreadResumable };
 import type {
   DashboardAttention,
   DashboardProject,
