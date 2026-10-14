@@ -2911,7 +2911,8 @@ it.effect.each(["codex", "claude"] as const)(
       assert.equal(harness.runSetup.mock.calls.length, setupCalls);
       assert.isFalse(result.reused);
       assert.notEqual(result.newThreadId, fixture.threadId);
-      const targetModule = "../../../t3-thread/src/agent-targets.ts";
+      // Variable imports must use file URLs: relative strings depend on the Vite root.
+      const targetModule = new URL("../../../t3-thread/src/agent-targets.ts", import.meta.url).href;
       const { isRawThreadUuid } = yield* Effect.promise(() => import(targetModule));
       assert.isTrue(isRawThreadUuid(result.newThreadId));
       const fresh = yield* threads.getThreadProjection(result.newThreadId);
@@ -3202,7 +3203,7 @@ it.effect.each(["file", "native"] as const)(
           submitRequest = resolve;
         });
         // Run CLI code in its own project compile context, not the server's Effect diagnostics.
-        const cliModule = "../../../t3-thread/src/client.ts";
+        const cliModule = new URL("../../../t3-thread/src/client.ts", import.meta.url).href;
         const { RemoteEnvironmentClient } = yield* Effect.promise(() => import(cliModule));
         const operator = new RemoteEnvironmentClient(
           {
