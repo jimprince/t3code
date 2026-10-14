@@ -133,7 +133,16 @@ export const make = Effect.gen(function* () {
           ...aggregate({
             shells,
             metadata,
-            issues: issueRows,
+            issues: new Map(
+              [...issueRows].map(([id, rows]) => [
+                id,
+                rows.filter(
+                  (i) =>
+                    i.closedAt === null ||
+                    !i.labels.some((label) => label.toLowerCase() === "withdrawn"),
+                ),
+              ]),
+            ),
             plans: [...plans.values()],
             sources: [...sources.values()],
             samples,

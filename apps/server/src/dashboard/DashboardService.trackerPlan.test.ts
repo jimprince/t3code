@@ -1,6 +1,7 @@
 import { describe, expect } from "vite-plus/test";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as DateTime from "effect/DateTime";
 import * as FileSystem from "effect/FileSystem";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/sql/SqlClient";
@@ -158,6 +159,27 @@ describe("durable root-scoped tracker cutover (#297)", () => {
                 .find((p) => p.rootThreadId === b)
                 ?.tasks.some((t) => t.title === "Legacy orphan"),
             ).toBe(true);
+            const originalRows = rows;
+            const closedAt = DateTime.formatIso(yield* DateTime.now);
+            rows = [
+              ...rows,
+              ...[3, 4, 5].map((number) => ({
+                ...row(number),
+                linkedThreadIds: [a],
+                status: "done" as const,
+                closedAt: number === 5 ? null : closedAt,
+                labels: number !== 4 ? ["ask", "Withdrawn"] : ["ask"],
+              })),
+            ];
+            yield* dashboard.refreshAfterWrite;
+            const outcomes = (yield* dashboard.getSnapshot).projects.find(
+              (p) => p.rootThreadId === a,
+            )?.tasks;
+            expect(outcomes?.some((t) => t.title === "Task 3")).toBe(false);
+            expect(outcomes?.some((t) => t.title === "Task 4")).toBe(true);
+            expect(outcomes?.some((t) => t.title === "Task 5")).toBe(true);
+            rows = originalRows;
+            yield* dashboard.refreshAfterWrite;
             const confirmation = initial.projects.find((p) => p.rootThreadId === a)?.tasks[0]
               ?.progress?.confirmedAt;
             rows = rows.map((r) => ({
