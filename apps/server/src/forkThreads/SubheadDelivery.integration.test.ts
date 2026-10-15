@@ -2,14 +2,18 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
 import {
   CommandId,
+  EventId,
   MessageId,
   NamedAgentName,
   ProjectId,
   ProviderDriverKind,
   ProviderInstanceId,
   ThreadId,
+  type OrchestrationV2Run,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as DateTime from "effect/DateTime";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import { expect } from "vite-plus/test";
@@ -20,6 +24,8 @@ import { layerWithRegistry } from "../orchestration-v2/testkit/ProviderReplayHar
 import { CodexProviderCapabilitiesV2 } from "../orchestration-v2/Adapters/CodexAdapterV2.ts";
 import { AutomationStore, layer as storeLayer } from "../automations/AutomationStore.ts";
 import { makeSubheadDelivery } from "./SubheadDelivery.ts";
+import { writeMetadata } from "./MetadataStore.ts";
+import * as EventSink from "../orchestration-v2/EventSink.ts";
 
 const instanceId = ProviderInstanceId.make("codex");
 const modelSelection = { instanceId, model: "gpt-6.1-sol" };
@@ -40,26 +46,64 @@ const runtime = layerWithRegistry(
   ]),
   { databaseLayer: layerMemory, runEffectWorker: false },
 );
-const layer = Layer.mergeAll(Threads.layer.pipe(Layer.provide(runtime)), storeLayer).pipe(
+const layer = Layer.mergeAll(Threads.layer.pipe(Layer.provideMerge(runtime)), storeLayer).pipe(
   Layer.provideMerge(layerMemory),
 );
-const createSender = Effect.gen(function* () {
-  const threads = yield* Threads.ThreadManagementService;
-  yield* threads.dispatch({
-    type: "thread.create",
-    commandId: CommandId.make("create-sender"),
-    threadId: sender,
-    projectId,
-    title: "Sender",
-    modelSelection,
-    createdBy: "user",
-    creationSource: "server",
-    runtimeMode: "full-access",
-    interactionMode: "default",
-    branch: null,
-    worktreePath: null,
+const createThread = (id: ThreadId) =>
+  Effect.gen(function* () {
+    const threads = yield* Threads.ThreadManagementService;
+    yield* threads.dispatch({
+      type: "thread.create",
+      commandId: CommandId.make(`create-${id}`),
+      threadId: id,
+      projectId,
+      title: "Sender",
+      modelSelection,
+      createdBy: "user",
+      creationSource: "server",
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      branch: null,
+      worktreePath: null,
+    });
   });
-});
+const createSender = createThread(sender);
+const nativeInput = (id: string) =>
+  Effect.gen(function* () {
+    const threads = yield* Threads.ThreadManagementService;
+    yield* threads.dispatch({
+      type: "message.dispatch",
+      commandId: CommandId.make(id),
+      threadId: execution,
+      messageId: MessageId.make(id),
+      text: "Work",
+      attachments: [],
+      createdBy: "user",
+      creationSource: "server",
+      dispatchMode: { type: "start_immediately" },
+    });
+    return (yield* threads.getThreadRecords(execution, ["runs"])).runs.find(
+      (run) => run.userMessageId === id,
+    )!;
+  });
+const terminal = (
+  run: OrchestrationV2Run,
+  status: "completed" | "failed" | "interrupted" | "cancelled",
+) =>
+  Effect.gen(function* () {
+    const now = yield* DateTime.now;
+    yield* (yield* EventSink.EventSinkV2).write({
+      events: [
+        {
+          id: EventId.make(`terminal-${run.id}`),
+          type: "run.updated",
+          threadId: execution,
+          occurredAt: now,
+          payload: { ...run, status, completedAt: now },
+        },
+      ],
+    });
+  });
 function completedRun(recipient: ThreadId | null = sender) {
   return {
     id: "subhead:run",
@@ -129,6 +173,53 @@ function completedRun(recipient: ThreadId | null = sender) {
 }
 
 it.layer(NodeServices.layer)("durable virtual results", (it) => {
+  for (const status of ["completed", "failed", "interrupted", "cancelled"] as const) {
+    it.effect(`captures and safely settles a ${status} execution`, () =>
+      Effect.gen(function* () {
+        yield* createSender;
+        yield* createThread(execution);
+        const run = completedRun(null);
+        yield* writeMetadata(yield* SqlClient.SqlClient, {
+          threadId: execution,
+          parentThreadId: sender,
+          virtualAgentId: "helper",
+          virtualRunId: run.id,
+        });
+        yield* terminal(yield* nativeInput(run.steps[0]!.messageId), status);
+        yield* (yield* AutomationStore).insertRun({
+          ...run,
+          status: status === "completed" ? "completed" : "failed",
+        });
+        const delivery = yield* makeSubheadDelivery(Effect.succeed([]));
+        expect((yield* delivery.deliver(run.id)).result).toBe("One useful finding");
+        expect(
+          (yield* (yield* Threads.ThreadManagementService).getThreadShell(execution))
+            ?.settledOverride,
+        ).toBe("settled");
+      }).pipe(Effect.provide(layer)),
+    );
+  }
+  it.effect("never settles an intervening user run when capturing an older helper result", () =>
+    Effect.gen(function* () {
+      yield* createSender;
+      yield* createThread(execution);
+      const run = completedRun(null);
+      yield* writeMetadata(yield* SqlClient.SqlClient, {
+        threadId: execution,
+        parentThreadId: sender,
+        virtualAgentId: "helper",
+        virtualRunId: run.id,
+      });
+      yield* terminal(yield* nativeInput(run.steps[0]!.messageId), "completed");
+      yield* terminal(yield* nativeInput("intervening"), "completed");
+      yield* (yield* AutomationStore).insertRun(run);
+      yield* (yield* makeSubheadDelivery(Effect.succeed([]))).deliver(run.id);
+      expect(
+        (yield* (yield* Threads.ThreadManagementService).getThreadShell(execution))
+          ?.settledOverride,
+      ).toBeNull();
+    }).pipe(Effect.provide(layer)),
+  );
   it.effect("appends one useful result and survives losing the post-dispatch delivery write", () =>
     Effect.gen(function* () {
       yield* createSender;
