@@ -83,6 +83,10 @@
       "types": "./src/projectFaviconCache.ts",
       "default": "./src/projectFaviconCache.ts"
     },
+    "./notify-marker": {
+      "types": "./src/notifyMarker.ts",
+      "default": "./src/notifyMarker.ts"
+    },
     "./user-message": {
       "types": "./src/userMessage.ts",
       "default": "./src/userMessage.ts"

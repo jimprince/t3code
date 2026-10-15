@@ -8,6 +8,7 @@ import {
   collectAssistantCitations,
 } from "@t3tools/shared/assistantCitations";
 import { shallow } from "zustand/vanilla/shallow";
+import { stripNotifyMarker } from "@t3tools/client-runtime/notify-marker";
 import { renderCodexDirectivesForCopy } from "@t3tools/shared/codexMarkdownDirectives";
 import {
   commandDisplayText,
@@ -743,10 +744,12 @@ export function resolveAssistantMessageCopyState({
   showCopyButton: boolean;
   streaming: boolean;
 }) {
-  const hasText = text !== null && text.trim().length > 0;
+  // Copy matches what is shown: the T3_NOTIFY routing marker is not part of the reply.
+  const shown = text === null ? null : stripNotifyMarker(text);
+  const hasText = shown !== null && shown.trim().length > 0;
   const visible = showCopyButton && hasText && !streaming;
   return {
-    text: hasText ? (visible ? renderCodexDirectivesForCopy(text) : text) : null,
+    text: hasText ? (visible ? renderCodexDirectivesForCopy(shown) : shown) : null,
     visible,
   };
 }

@@ -40,6 +40,7 @@ import {
 import { parseScopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { useAtomValue } from "@effect/atom-react";
 import { environmentThreadDetails } from "../../state/threads";
+import { stripNotifyMarker } from "@t3tools/client-runtime/notify-marker";
 import { resolveUserMessagePresentation } from "@t3tools/client-runtime/user-message";
 import { Link } from "@tanstack/react-router";
 import { canForkProjectedAssistantItem } from "@t3tools/client-runtime/state/thread-workflows";
@@ -2992,7 +2993,11 @@ function AttemptFoldTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "at
 
 function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
-  const messageText = row.message.text || (row.message.streaming ? "" : "(empty response)");
+  // The routing marker is not content: a reply that is only the marker shows no body,
+  // not the "(empty response)" placeholder.
+  const messageText =
+    stripNotifyMarker(row.message.text, { streaming: Boolean(row.message.streaming) }) ||
+    (row.message.text || row.message.streaming ? "" : "(empty response)");
 
   return (
     <>

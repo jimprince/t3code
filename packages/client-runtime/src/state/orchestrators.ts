@@ -12,6 +12,7 @@ import {
   type ThreadId,
   type ThreadSubprojectMode,
 } from "@t3tools/contracts";
+import { stripNotifyMarker } from "../notifyMarker.ts";
 import { threadPurposes } from "./threadPurpose.ts";
 
 /** Organizational fields come from the nesting sidecar, never execution lineage. */
@@ -39,6 +40,11 @@ export type ThreadDisplayStatus =
   | "ready";
 const threadActivityKey = supervisionThreadKey;
 const ACTIVE_RUNTIME_STATUSES = ["preparing", "starting", "running", "waiting", "queued"];
+
+/** The worker's last reply line for display; its T3_NOTIFY routing marker is not content. */
+function workerLatestLine(thread: Pick<OrchestratorThreadShell, "source">): string | null {
+  return stripNotifyMarker(thread.source.workerSummary?.output ?? "").trim() || null;
+}
 
 /**
  * Working in the board's sense: an active run or provider goal, or work the thread itself launched
@@ -572,7 +578,7 @@ export function buildOrchestratorSummaries(
       ]);
       const working = descendants.filter(isOwnActive).map((thread) => ({
         thread,
-        latestLine: thread.source.workerSummary?.output?.trim() || null,
+        latestLine: workerLatestLine(thread),
       }));
       const projectKeys = new Set(
         tree.map((thread) => `${thread.environmentId}:${thread.projectId}`),
@@ -598,7 +604,7 @@ export function buildOrchestratorSummaries(
         working,
         blocked: tree.filter(isBlocked).map((thread) => ({
           thread,
-          latestLine: thread.source.workerSummary?.output?.trim() || null,
+          latestLine: workerLatestLine(thread),
         })),
         latestActivityAt: tree
           .map(latestActivityAt)

@@ -307,6 +307,11 @@ describe("firstLine", () => {
     expect(firstLine("\n## Result\nBody")).toBe("Result");
   });
 
+  it("leaves out the T3_NOTIFY routing marker", () => {
+    expect(firstLine("Result\nT3_NOTIFY: quiet")).toBe("Result");
+    expect(firstLine("T3_NOTIFY: quiet")).toBeNull();
+  });
+
   it("cuts a long line at a word boundary", () => {
     const cut = firstLine("word ".repeat(60), 40)!;
     expect(cut.length).toBeLessThanOrEqual(41);

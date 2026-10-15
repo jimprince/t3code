@@ -64,6 +64,26 @@ describe("timeline minimap previews", () => {
     expect(resolveTimelineMinimapPreview(null)).toBeNull();
   });
 
+  it("leaves the T3_NOTIFY routing marker out of previews", () => {
+    const source = rows([
+      ["user", "Result is ready.\nT3_NOTIFY: quiet"],
+      ["assistant", "Argon is not available.\nT3_NOTIFY: attention"],
+      ["user", "Typed\nT3_NOTIFY: quiet"],
+    ]);
+    const [sent, typed] = deriveTimelineMinimapItems(
+      source.map((row, index) =>
+        row.kind === "message" && index === 0
+          ? { ...row, message: { ...row.message, createdBy: "agent" as const } }
+          : row,
+      ),
+    );
+    expect(resolveTimelineMinimapPreview(sent!)).toMatchObject({
+      userText: "Result is ready.",
+      assistantText: "Argon is not available.",
+    });
+    expect(resolveTimelineMinimapPreview(typed!)?.userText).toBe("Typed T3_NOTIFY: quiet");
+  });
+
   it("shows fresh streaming text without changing the jump target", () => {
     const first = deriveTimelineMinimapItems(
       rows([
