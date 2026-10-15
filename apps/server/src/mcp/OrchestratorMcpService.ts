@@ -1,4 +1,5 @@
 import { listMetadata, readMetadata } from "../forkThreads/MetadataStore.ts";
+import { runtimeModeRank } from "@t3tools/shared/providerRuntimeMode";
 import * as SqlClient from "effect/sql/SqlClient";
 import { SendBindingWrite, recordSendBinding } from "../forkThreads/SendBindings.ts";
 import * as TaskIssues from "../projectIssues/TaskIssueLaunchService.ts";
@@ -482,19 +483,6 @@ function canExposeTaskRunResult(run: OrchestrationV2Run | undefined): run is Orc
   return (
     run !== undefined && run.status !== "rolled_back" && isTerminalTaskStatus(taskStatusForRun(run))
   );
-}
-
-function runtimeModeRank(mode: RuntimeMode): number {
-  switch (mode) {
-    case "approval-required":
-      return 0;
-    case "auto-accept-edits":
-      return 1;
-    case "auto":
-      return 2;
-    case "full-access":
-      return 3;
-  }
 }
 
 function interactionModeRank(mode: ProviderInteractionMode): number {

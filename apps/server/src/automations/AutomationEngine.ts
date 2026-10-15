@@ -69,6 +69,7 @@ export class AutomationEngine extends Context.Service<
   {
     readonly start: () => Effect.Effect<void, never, Scope.Scope>;
     readonly drain: Effect.Effect<void>;
+    readonly refresh: Effect.Effect<void>;
     /** Polls issue labels and releases now; the server also does this every five minutes. */
     readonly pollNow: Effect.Effect<void>;
     readonly list: (projectId?: ProjectId) => Fx<ReadonlyArray<Automation>>;
@@ -361,27 +362,48 @@ const make = Effect.gen(function* () {
         Effect.catchCauseIf(
           (cause) => !Cause.hasInterruptsOnly(cause),
           (cause) =>
-            nowIso.pipe(
-              Effect.map((now): AutomationRunStep => ({
-                ...step,
-                status: "failed",
-                result: Cause.pretty(cause).slice(0, 1000),
-                finishedAt: now,
-              })),
-            ),
+            run.virtualSubhead !== undefined
+              ? Effect.gen(function* () {
+                  const latest = yield* store.getRun(run.id);
+                  if (Option.isSome(latest) && latest.value.virtualSubhead)
+                    yield* store.saveRun({
+                      ...latest.value,
+                      virtualSubhead: {
+                        ...latest.value.virtualSubhead,
+                        blockedReason: `Launch outcome uncertain; reconciling the same execution identity: ${Cause.pretty(cause).slice(0, 500)}`,
+                      },
+                    });
+                  return step;
+                })
+              : nowIso.pipe(
+                  Effect.map((now): AutomationRunStep => ({
+                    ...step,
+                    status: "failed",
+                    result: Cause.pretty(cause).slice(0, 1000),
+                    finishedAt: now,
+                  })),
+                ),
         ),
       );
       steps[index] = next;
       if (next.status !== "completed") break;
     }
-    const { status, result } = summarize(steps);
+    const latest =
+      run.virtualSubhead !== undefined ? yield* store.getRun(run.id) : Option.none<AutomationRun>();
+    const base = Option.isSome(latest) ? latest.value : run;
+    const summary = summarize(steps);
+    const status =
+      base.virtualSubhead && base.status === "running" && summary.status === "queued"
+        ? "running"
+        : summary.status;
+    const result = summary.result;
     if (status === "failed")
       for (const [index, step] of steps.entries())
         if (step.status === "queued") steps[index] = { ...step, status: "skipped" };
     if (status === run.status && steps.every((step, index) => sameStep(step, run.steps[index])))
       return;
     yield* store.saveRun({
-      ...run,
+      ...base,
       steps,
       status,
       result,
@@ -443,6 +465,12 @@ const make = Effect.gen(function* () {
     const active = yield* store.activeRuns;
     watched = new Set(active.flatMap((run) => run.steps.map((step) => step.threadId)));
     for (const run of active) yield* advanceRun(run);
+    const virtual = yield* gateway.sweepSubheads;
+    watched = new Set([...watched, ...virtual.watched]);
+    if (virtual.pending || active.some((run) => run.virtualSubhead !== undefined))
+      nextDue = Math.min(nextDue, Date.parse(now) + 5000);
+    // Native resume events normally release held returns immediately; this bounds a lost wake race.
+    if (virtual.watched.length > 0) nextDue = Math.min(nextDue, Date.parse(now) + 60_000);
     if (Number.isFinite(nextDue))
       timer = yield* Effect.sleep(Math.max(1, nextDue - Date.parse(now))).pipe(
         Effect.andThen(Effect.suspend(enqueue)),
@@ -835,6 +863,7 @@ const make = Effect.gen(function* () {
   });
 
   return AutomationEngine.of({
+    refresh: Effect.suspend(enqueue),
     start,
     pollNow: poll,
     drain: Effect.all([observer.drain, worker.drain], { discard: true }).pipe(

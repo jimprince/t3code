@@ -1,4 +1,5 @@
 import { RoutineKind } from "./routineKind.ts";
+import { VirtualSubheadRun } from "./subheads.ts";
 import * as Cron from "effect/Cron";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
@@ -183,6 +184,7 @@ export const AutomationRunTrigger = Schema.Union([
 ]);
 
 export const AutomationRun = Schema.Struct({
+  virtualSubhead: Schema.optionalKey(VirtualSubheadRun),
   id: TrimmedNonEmptyString,
   automationId: TrimmedNonEmptyString,
   projectId: ProjectId,

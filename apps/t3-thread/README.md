@@ -241,6 +241,29 @@ Safety defaults:
 - `project remove` refuses to remove a project with active threads unless `--force` is passed.
 - If multiple active projects share a workspace root, use the project id instead of the path.
 
+## Virtual helpers
+
+Use `t3-thread subhead` to create disabled, versioned helper templates, enable them
+explicitly, and invoke a fresh run for each request. `list`, `show`, `edit
+--expected-version`, `disable` and `retire` manage the template without changing
+standing agents. Every command selects an environment with `--env`.
+
+```bash
+t3-thread subhead send review "Review this change" --env dev-vm --request-id review-123
+t3-thread subhead result <run-id> --env dev-vm
+```
+
+CLI/script calls use their authenticated principal and pull the durable result.
+Thread-return mode is available through native MCP `subhead_send` with its
+thread-scoped credential. Shell thread IDs and `--return-thread` are not accepted
+as sender authentication, and the CLI does not read injected MCP tokens. Keep a
+request ID before retrying: an exact retry returns the same run; changed content
+under the same key rejects.
+
+See [Virtual subheads](./docs/AGENT_OPERATIONS.md#virtual-subheads) for template
+fields, permissions, admission limits, held deliveries and the boundary of the
+no-recursion policy. Slice 1 has CLI/MCP support and no management UI.
+
 ## Notifications
 
 When `T3_THREAD_ID` is set, nested `create` auto-subscribes the caller thread to the new worker by default. `create --top-level` requires an explicit `--notify` to add a subscription.

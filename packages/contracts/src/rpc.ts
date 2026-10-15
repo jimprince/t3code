@@ -1,5 +1,6 @@
 import { DashboardSnapshot, DashboardSubscribeInput } from "./dashboard.ts";
 import { ThreadRecoveryRpcs } from "./threadRecovery.ts";
+import { SubheadRpc } from "./subheadRpc.ts";
 import { MessageForwardRpcs } from "./messageForward.ts";
 import { PlanPublicationInput, PlanPublicationResult } from "./planPublication.ts";
 import { GiteaTokenSetInput, GiteaTokenSetResult, GiteaTokenSetError } from "./giteaToken.ts";
@@ -2499,6 +2500,7 @@ export const WsPlanPublishRpc = Rpc.make("fork.plan.publish", {
 // Every fork RPC lives here, not in WsCoreRpcGroup: past upstream's own methods, the core
 // group's toHandlers type hits TS2589 and the server's handler-service types resolve to any in R.
 export const WsForkRpcGroup = RpcGroup.make(
+  SubheadRpc,
   WsPlanPublishRpc,
   ...HandoffRpcs,
   ...MessageForwardRpcs,

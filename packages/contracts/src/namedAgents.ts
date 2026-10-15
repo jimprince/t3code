@@ -19,6 +19,10 @@ export const PermanentAgent = Schema.Struct({
 export type PermanentAgent = typeof PermanentAgent.Type;
 
 export const NamedAgentSummary = Schema.Struct({
+  kind: Schema.optionalKey(Schema.Literals(["standing", "virtual"])),
+  virtualAgentId: Schema.optionalKey(Schema.String),
+  enabled: Schema.optionalKey(Schema.Boolean),
+  templateVersion: Schema.optionalKey(Schema.Int),
   name: NamedAgentName,
   projectId: ProjectId,
   /** The agent folder, which holds AGENT.md and BRIEFING.md. */
