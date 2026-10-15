@@ -502,7 +502,7 @@ export function HarnessSidebarList() {
             return (
               <div key={key}>
                 <p className="px-2.5 pt-1 text-3xs text-sidebar-muted-foreground">
-                  {owner ?? key.slice(key.indexOf(":") + 1)}
+                  {owner ?? "Head not listed here"}
                 </p>
                 <SubheadGroup
                   group={group}

@@ -1,5 +1,6 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
+  subheadSenderLabel,
   summarizeSubheadGroup,
   type SubheadGroup as SubheadGroupView,
   type SubheadRowView,
@@ -72,10 +73,7 @@ function OpenRunRow({
   const navigate = useNavigate();
   const openSubhead = useOpenSubhead();
   const { isMobile, setOpenMobile } = useSidebar();
-  const sender =
-    (run.senderThreadId === null
-      ? null
-      : lookup.title(row.environmentId, run.senderThreadId)) ?? run.senderPrincipal;
+  const sender = subheadSenderLabel(run, (id) => lookup.title(row.environmentId, id));
   const queued = run.status === "queued";
   const open = () => {
     // The run thread exists only once the run has started; before that the page shows the wait.
@@ -206,11 +204,6 @@ function SubheadRow({
               {row.subhead.name}
             </span>
             <span className={cn("shrink-0 text-xs", TEXT[rightTone])}>{right}</span>
-            {when !== null ? (
-              <span className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground">
-                {formatLocalWhen(Date.parse(when), now)}
-              </span>
-            ) : null}
           </span>
           <span className="truncate text-3xs text-sidebar-muted-foreground">{row.stateLine}</span>
           {row.lastText !== null && when !== null ? (

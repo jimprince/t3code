@@ -163,6 +163,17 @@ export function queuePositions(runs: ReadonlyArray<SubheadRunRow>): ReadonlyMap<
   return positions;
 }
 
+/** The causes the handoff service records, in words; any other text is the server's own sentence. */
+const DELIVERY_CAUSE: Readonly<Record<string, string>> = {
+  SETTLED: "recipient thread is settled, sent when it resumes",
+  ARCHIVED: "recipient thread archived",
+  NOT_FOUND: "recipient thread not found",
+  QUOTA_EXHAUSTED: "recipient provider quota used up, retrying",
+  BUSY: "recipient is busy, retrying",
+};
+const deliveryCause = (error: string | null, fallback: string) =>
+  error === null ? fallback : (DELIVERY_CAUSE[error] ?? error);
+
 export type SubheadDeliveryState =
   | "queued"
   | "pending"
@@ -181,6 +192,15 @@ export interface SubheadRunView {
   /** Short tail of the delivery id, for the "receipt" a person can quote. */
   readonly receipt: string | null;
   readonly sender: string;
+}
+
+/** A thread's title when the list knows it, else a short id (an archived thread has no title). */
+export function subheadSenderLabel(
+  run: SubheadRunRow,
+  senderTitle: (threadId: ThreadId) => string | null,
+): string {
+  if (run.senderThreadId === null) return run.senderPrincipal;
+  return senderTitle(run.senderThreadId) ?? `thread ${run.senderThreadId.slice(0, 8)}`;
 }
 
 /**
@@ -207,7 +227,8 @@ export function describeSubheadRun(
           ? { text: "Completed", tone: "ok" }
           : run.status === "failed"
             ? {
-                text: `Failed: ${run.terminationReason ?? run.delivery.error ?? "no reason recorded"}`,
+                // The error text of an ordinary failure stays with the run thread and the sender.
+                text: run.terminationReason ? `Failed: ${run.terminationReason}` : "Failed",
                 tone: "error",
               }
             : { text: "Skipped", tone: "muted" };
@@ -231,19 +252,19 @@ export function describeSubheadRun(
       case "pull-only":
         return {
           state: "pull-only",
-          text: "Pull only, the sender reads it with status or result",
+          text: "Pull only, the sender reads it",
           tone: "warning",
         };
       case "held":
         return {
           state: "held",
-          text: `Held: ${run.delivery.error ?? "waiting to retry"}`,
+          text: `Held: ${deliveryCause(run.delivery.error, "waiting to retry")}`,
           tone: "warning",
         };
       case "undelivered":
         return {
           state: "undelivered",
-          text: `Undelivered: ${run.delivery.error ?? "no reason recorded"}`,
+          text: `Undelivered: ${deliveryCause(run.delivery.error, "no reason recorded")}`,
           tone: "error",
         };
     }
@@ -252,7 +273,7 @@ export function describeSubheadRun(
     outcome,
     delivery,
     receipt: run.delivery.status === "delivered" ? run.delivery.id.slice(-6) : null,
-    sender: (run.senderThreadId !== null ? context.senderTitle(run.senderThreadId) : null) ?? run.senderPrincipal,
+    sender: subheadSenderLabel(run, context.senderTitle),
   };
 }
 

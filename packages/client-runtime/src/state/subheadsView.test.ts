@@ -184,7 +184,7 @@ describe("describeSubheadRun", () => {
     expect(states[0]!.delivery.text).toBe("Waits for an open run (cap 1)");
     expect(states[0]!.outcome.text).toBe("Queued, position 2");
     expect(states[1]!.outcome.text).toBe("Running");
-    expect(states[3]!.delivery.text).toBe("Pull only, the sender reads it with status or result");
+    expect(states[3]!.delivery.text).toBe("Pull only, the sender reads it");
     expect(states[4]!.delivery.text).toBe("Held: recipient settled");
     expect(states[5]).toMatchObject({
       delivery: { text: "Undelivered: recipient thread archived", tone: "error" },
@@ -195,12 +195,36 @@ describe("describeSubheadRun", () => {
     });
   });
 
+  it("keeps the error text of an ordinary failure out of the list", () => {
+    const failed = describeSubheadRun(
+      run({ subheadName: "a", status: "failed" }),
+      context,
+    );
+    expect(failed.outcome).toEqual({ text: "Failed", tone: "error" });
+  });
+
+  it("turns the server's delivery cause codes into plain words", () => {
+    const text = (status: SubheadRunRow["delivery"]["status"], error: string) =>
+      describeSubheadRun(
+        run({ subheadName: "a", delivery: { ...delivery(status), error } }),
+        context,
+      ).delivery.text;
+    expect(text("held", "SETTLED")).toBe("Held: recipient thread is settled, sent when it resumes");
+    expect(text("undelivered", "ARCHIVED")).toBe("Undelivered: recipient thread archived");
+    expect(text("undelivered", "NOT_FOUND")).toBe("Undelivered: recipient thread not found");
+    expect(text("held", "QUOTA_EXHAUSTED")).toBe("Held: recipient provider quota used up, retrying");
+    expect(text("held", "BUSY")).toBe("Held: recipient is busy, retrying");
+    // Anything else is the server's own sentence and shown as written.
+    expect(text("undelivered", "recipient gone")).toBe("Undelivered: recipient gone");
+  });
+
   it("labels the sender by its thread title when it has one", () => {
     const fromThread = run({ subheadName: "a", senderThreadId: ThreadId.make("alex") });
     expect(
       describeSubheadRun(fromThread, { ...context, senderTitle: () => "Alex (UI)" }).sender,
     ).toBe("Alex (UI)");
-    expect(describeSubheadRun(fromThread, context).sender).toBe("owner");
+    // An archived thread has no title: a short id, never the raw principal string.
+    expect(describeSubheadRun(fromThread, context).sender).toBe("thread alex");
     expect(describeSubheadRun(run({ subheadName: "a" }), context).sender).toBe("owner");
   });
 });

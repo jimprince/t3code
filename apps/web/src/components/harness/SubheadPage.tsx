@@ -114,7 +114,7 @@ function RunRow({
     setResult({ text: value.result ?? "No result recorded yet.", error: false });
   };
   return (
-    <li className="flex flex-col gap-1 border-t border-border/60 py-2 text-sm sm:grid sm:grid-cols-[4.5rem_9rem_minmax(0,1fr)_11rem_15rem_3rem] sm:items-start sm:gap-x-3 sm:gap-y-0">
+    <li className="flex flex-col gap-1 border-t border-border/60 py-2 text-sm @3xl/runs:grid @3xl/runs:grid-cols-[4.5rem_8rem_minmax(0,1fr)_9rem_12rem_6.5rem] @3xl/runs:items-start @3xl/runs:gap-x-3 @3xl/runs:gap-y-0">
       <span className="tabular-nums text-muted-foreground">
         {formatLocalWhen(Date.parse(run.createdAt), now)}
       </span>
@@ -134,7 +134,7 @@ function RunRow({
           <span className="text-muted-foreground"> · receipt {view.receipt}</span>
         ) : null}
       </span>
-      <span className="flex items-center gap-3 sm:justify-end">
+      <span className="flex items-center gap-3 @3xl/runs:justify-end">
         {hasThread ? (
           <Button
             size="xs"
@@ -185,7 +185,7 @@ function RunHeader() {
   return (
     <div
       aria-hidden
-      className="hidden gap-x-3 pb-1 text-xs text-muted-foreground sm:grid sm:grid-cols-[4.5rem_9rem_minmax(0,1fr)_11rem_15rem_3rem]"
+      className="hidden gap-x-3 pb-1 text-xs text-muted-foreground @3xl/runs:grid @3xl/runs:grid-cols-[4.5rem_8rem_minmax(0,1fr)_9rem_12rem_6.5rem]"
     >
       <span>Time</span>
       <span>Sender</span>
@@ -227,7 +227,7 @@ function Template({
       <p className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words text-sm">
         {subhead.prompt}
       </p>
-      <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1 text-sm">
+      <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1 text-sm @3xl/runs:grid-cols-[max-content_minmax(0,1fr)_max-content_minmax(0,1fr)]">
         {rows.map(([label, value]) => (
           <div key={label} className="contents">
             <dt className="text-muted-foreground">{label}</dt>
@@ -485,7 +485,7 @@ export function SubheadPage({
                     onReload={page.refresh}
                   />
                 ) : (
-                  <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+                  <div className="@container/runs flex min-w-0 flex-col gap-6">
                     <div className="flex min-w-0 flex-col gap-5">
                       <Section
                         title="Open runs"
