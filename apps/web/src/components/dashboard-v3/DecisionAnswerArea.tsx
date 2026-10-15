@@ -2,6 +2,7 @@ import {
   questionsComplete,
   sendableText,
   TYPED_ANSWER_MAX,
+  type AnswerPlan,
   type PlanOption,
   type PlanQuestion,
 } from "@t3tools/client-runtime/decision-card";
@@ -10,9 +11,10 @@ import { useRef, useState, type ReactNode } from "react";
 
 import { Button, InlineButton } from "../ui/button";
 import { Input } from "../ui/input";
+import { Textarea } from "../ui/textarea";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import type { DecisionRow } from "./context";
-import { useAnswerPlan, type DecisionAnswers } from "./useDecisionAnswers";
+import type { DecisionAnswers } from "./useDecisionAnswers";
 
 /** An option's text is "long" past this, and then takes a full row in a narrow column. */
 const SHORT_OPTION_CHARS = 24;
@@ -21,6 +23,10 @@ const EFFECT_HINT = {
   settle: "Closes the task",
   start: "Starts the work; the task stays open",
 } as const;
+
+/** A rejecting option that says "type" ("Failed (type what is wrong)") needs its note first. */
+const asksForNote = (option: PlanOption) =>
+  option.action === "reject" && /\btype\b/i.test(option.text);
 
 /** A long option takes its own row in a narrow column and sits inline in a wide one. */
 const isLong = (text: string) => text.length > SHORT_OPTION_CHARS;
@@ -63,36 +69,40 @@ function OptionButton({
 }
 
 /**
- * The type-your-own box. Nothing is sent until Enter or Send: blur, navigation and a snapshot
- * refresh never send, and Esc clears the box (leaving Esc to the surrounding tray once empty).
- * An unsent draft survives a re-render through `draft`/`onDraft`.
+ * The type-your-own box: one line that grows to four. Nothing is sent until Enter or Send (Shift+
+ * Enter makes a new line; an IME's confirming Enter is left alone): blur, navigation and a snapshot
+ * refresh never send, and Esc clears the box (leaving Esc to the surrounding tray once empty). The
+ * text is a draft kept by the caller until the answer is delivered, so Undo or a failure brings it
+ * back. With `enterSends` off (a decline), only Send or Ctrl/Cmd+Enter sends.
  */
 function AnswerBox({
   placeholder,
   initial,
   onDraft,
   onSend,
+  sendLabel = "Send",
+  enterSends = true,
   inputRef,
 }: {
   readonly placeholder: string;
   readonly initial: string;
   readonly onDraft: (text: string) => void;
   readonly onSend: (text: string) => void;
-  readonly inputRef?: React.Ref<HTMLInputElement>;
+  readonly sendLabel?: string;
+  readonly enterSends?: boolean;
+  readonly inputRef?: React.Ref<HTMLTextAreaElement>;
 }) {
   const [text, setText] = useState(initial);
   const sendable = sendableText(text);
   const send = () => {
-    if (sendable === null) return;
-    onSend(sendable);
-    setText("");
-    onDraft("");
+    if (sendable !== null) onSend(sendable);
   };
   return (
-    <div className="flex items-center gap-1.5">
-      <Input
+    <div className="flex items-end gap-1.5">
+      <Textarea
         ref={inputRef}
-        size="sm"
+        size="line"
+        rows={1}
         value={text}
         maxLength={TYPED_ANSWER_MAX}
         placeholder={placeholder}
@@ -102,8 +112,10 @@ function AnswerBox({
           onDraft(event.target.value);
         }}
         onKeyDown={(event) => {
-          if (event.nativeEvent.isComposing) return;
-          if (event.key === "Enter") {
+          // keyCode 229 is the confirming Enter of an IME that reports isComposing already false.
+          if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+          if (event.key === "Enter" && !event.shiftKey) {
+            if (!enterSends && !event.metaKey && !event.ctrlKey) return;
             event.preventDefault();
             send();
           } else if (event.key === "Escape" && text !== "") {
@@ -116,7 +128,7 @@ function AnswerBox({
       />
       <Button size="xs" variant="outline" disabled={sendable === null} onClick={send}>
         <SendIcon />
-        Send
+        {sendLabel}
       </Button>
     </div>
   );
@@ -132,7 +144,9 @@ function QuestionRow({
   readonly pick: string | undefined;
   readonly onPick: (value: string) => void;
 }) {
-  const [typed, setTyped] = useState("");
+  const values = question.options.map((option) => option.value ?? option.label);
+  // A pick that is not one of the options is Brad's own text, shown in the box.
+  const typed = pick !== undefined && !values.includes(pick) ? pick : "";
   return (
     <div className="flex flex-col gap-1">
       <div className="text-xs">
@@ -149,10 +163,7 @@ function QuestionRow({
               hint={option.description}
               recommended={false}
               selected={pick === value}
-              onPick={() => {
-                setTyped("");
-                onPick(value);
-              }}
+              onPick={() => onPick(value)}
             />
           );
         })}
@@ -164,15 +175,20 @@ function QuestionRow({
           maxLength={TYPED_ANSWER_MAX}
           placeholder="Your own answer"
           aria-label={`Your own answer to ${question.header}`}
-          onChange={(event) => {
-            setTyped(event.target.value);
-            onPick(event.target.value);
-          }}
+          onChange={(event) => onPick(event.target.value)}
         />
       )}
     </div>
   );
 }
+
+const parsePicks = (stored: string): Readonly<Record<string, string>> => {
+  try {
+    return stored ? (JSON.parse(stored) as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+};
 
 function Questions({
   row,
@@ -185,9 +201,11 @@ function Questions({
   readonly questions: ReadonlyArray<PlanQuestion>;
   readonly compact: boolean;
 }) {
-  const [picks, setPicks] = useState<Readonly<Record<string, string>>>({});
-  const [typing, setTyping] = useState(false);
-  const ref = useRef<HTMLInputElement>(null);
+  // Picks are a draft like typed text, so Undo or a failed send brings them back.
+  const picksKey = `${row.key}|picks`;
+  const [picks, setPicks] = useState(() => parsePicks(answers.draftOf(picksKey)));
+  const [typing, setTyping] = useState(() => answers.draftOf(row.key) !== "");
+  const ref = useRef<HTMLTextAreaElement>(null);
   const single = questions.length === 1 ? questions[0]! : null;
   if (single) {
     return (
@@ -238,7 +256,11 @@ function Questions({
           key={question.id}
           question={question}
           pick={picks[question.id]}
-          onPick={(value) => setPicks((current) => ({ ...current, [question.id]: value }))}
+          onPick={(value) => {
+            const next = { ...picks, [question.id]: value };
+            setPicks(next);
+            answers.setDraft(picksKey, JSON.stringify(next));
+          }}
         />
       ))}
       <div>
@@ -259,24 +281,28 @@ function Questions({
 /**
  * The one place a decision is answered, shared by the Dashboard rail, the project Dashboard, the
  * Chief of Staff tray strip and (in #356) the blocker popover: one-click options, a type-your-own
- * box that sends only on Enter or Send, and `children` (the muted Discuss / Open links) last. Every
- * answer goes through `answers`, so it is held with Undo, delivered by the same service as a click,
- * and confirmed on the card. `compact` (the tray) keeps the box behind "Type your own".
+ * box, and `children` (the muted Discuss / Open links) last. Every answer goes through `answers`,
+ * so it is held with Undo, delivered by the same service as a click, and confirmed on the card.
+ * What the box holds travels with a click: Passed or Failed plus that text is one answer with a
+ * note, while the text alone is Brad's answer and leaves the item's stage to the server. On an
+ * approval the box declines the request and sends the text to the thread as a message (explicit
+ * Send). `compact` (the tray) keeps the box behind a link.
  */
 export function DecisionAnswerArea({
   row,
+  plan,
   answers,
   compact = false,
   children,
 }: {
   readonly row: DecisionRow;
+  readonly plan: AnswerPlan;
   readonly answers: DecisionAnswers;
   readonly compact?: boolean;
   readonly children?: ReactNode;
 }) {
-  const plan = useAnswerPlan(row);
   const [typing, setTyping] = useState(() => answers.draftOf(row.key) !== "");
-  const boxRef = useRef<HTMLInputElement>(null);
+  const boxRef = useRef<HTMLTextAreaElement>(null);
   const focusBox = () => {
     setTyping(true);
     queueMicrotask(() => boxRef.current?.focus());
@@ -284,24 +310,46 @@ export function DecisionAnswerArea({
 
   const options: ReadonlyArray<PlanOption> =
     plan.mode === "issue" || plan.mode === "legacy-option" ? plan.options : [];
-  const box =
-    plan.mode === "issue" ? (
-      compact && !typing ? (
-        <div className="text-xs">
-          <InlineButton tone="muted" onClick={focusBox}>
-            Type your own
-          </InlineButton>
-        </div>
-      ) : (
-        <AnswerBox
-          inputRef={boxRef}
-          placeholder={plan.placeholder}
-          initial={answers.draftOf(row.key)}
-          onDraft={(text) => answers.setDraft(row.key, text)}
-          onSend={(text) => answers.answerText(row, text)}
-        />
-      )
-    ) : null;
+  const decline =
+    plan.mode === "approval"
+      ? plan.choices.find((choice) => choice.decision === "decline")
+      : undefined;
+  const boxProps =
+    plan.mode === "issue"
+      ? {
+          link: "Type your own",
+          placeholder: plan.placeholder,
+          onSend: (text: string) => answers.answerText(row, text),
+        }
+      : decline
+        ? {
+            link: "Decline with a message",
+            placeholder: `Why decline, sent to ${row.attention.title}`,
+            sendLabel: "Decline and send",
+            enterSends: false,
+            onSend: (text: string) => answers.declineWithMessage(row, decline.decision, text),
+          }
+        : null;
+  const box = boxProps ? (
+    compact && !typing ? (
+      <div className="text-xs">
+        <InlineButton tone="muted" onClick={focusBox}>
+          {boxProps.link}
+        </InlineButton>
+      </div>
+    ) : (
+      <AnswerBox
+        inputRef={boxRef}
+        placeholder={boxProps.placeholder}
+        initial={answers.draftOf(row.key)}
+        onDraft={(text) => answers.setDraft(row.key, text)}
+        onSend={boxProps.onSend}
+        {...("sendLabel" in boxProps
+          ? { sendLabel: boxProps.sendLabel, enterSends: boxProps.enterSends }
+          : {})}
+      />
+    )
+  ) : null;
 
   return (
     <div className="@container/answer mt-1 flex flex-col gap-1.5">
@@ -314,7 +362,10 @@ export function DecisionAnswerArea({
               hint={option.effect ? EFFECT_HINT[option.effect] : undefined}
               recommended={option.recommended}
               onPick={() =>
-                option.action === "follow-up" ? focusBox() : answers.answerOption(row, option)
+                option.action === "follow-up" ||
+                (asksForNote(option) && answers.draftOf(row.key) === "")
+                  ? focusBox()
+                  : answers.answerOption(row, option, answers.draftOf(row.key))
               }
             />
           ))}

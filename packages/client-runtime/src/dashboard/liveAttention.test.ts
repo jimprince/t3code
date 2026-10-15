@@ -19,14 +19,19 @@ describe("liveAttention", () => {
     { environmentId: "unloaded", threads: null },
   ]);
 
-  it("keeps a runtime ask only while its thread still lists that request as pending", () => {
+  it("keeps a runtime ask only while its thread still has a pending request", () => {
     const kept = liveAttention(
       "env",
-      [ask("a", "t1", "r1"), ask("b", "t2", "r2"), ask("c", "t1", "old"), ask("d", "t3", "r3")],
+      [ask("a", "t1", "r1"), ask("b", "t2", "r2"), ask("d", "t3", "r3")],
       live,
       "live",
     );
     expect(kept.map((item) => item.id)).toEqual(["a"]);
+  });
+
+  it("keeps a second pending ask on a thread whose shell lists only one request", () => {
+    const kept = liveAttention("env", [ask("a", "t1", "r1"), ask("b", "t1", "r1b")], live, "live");
+    expect(kept.map((item) => item.id)).toEqual(["a", "b"]);
   });
 
   it("never lists runtime asks from a stored snapshot, and never touches issue items", () => {

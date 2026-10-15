@@ -1,4 +1,5 @@
 import type {
+  DashboardAttention,
   DashboardSnapshot,
   EnvironmentId,
   OrchestrationV2ThreadProjection,
@@ -91,15 +92,25 @@ function compareDeskCandidates(
   return candidate.id > best.id ? 1 : candidate.id < best.id ? -1 : 0;
 }
 
-/** Environment-local dashboard attention already excludes closed and answered decisions. */
+/**
+ * Environment-local dashboard attention already excludes closed and answered decisions. The count
+ * runs each project's attention through `keep` (the Dashboard's live-request filter) so the row,
+ * the tray header and the decision pager all count the same list.
+ */
 export function selectChiefOfStaffSummary(input: {
   readonly thread: OrchestrationV2ThreadShell | null;
   readonly dashboard: DashboardSnapshot | null;
   readonly projection: OrchestrationV2ThreadProjection | null;
+  readonly keep?: (
+    attention: ReadonlyArray<DashboardAttention>,
+  ) => ReadonlyArray<DashboardAttention>;
 }) {
-  const { thread, dashboard, projection } = input;
+  const { thread, dashboard, projection, keep } = input;
   const waiting =
-    dashboard?.projects.reduce((sum, project) => sum + project.attention.length, 0) ?? 0;
+    dashboard?.projects.reduce(
+      (sum, project) => sum + (keep ? keep(project.attention) : project.attention).length,
+      0,
+    ) ?? 0;
   // A newer user message must never replace the last assistant reply timestamp.
   let lastReplyAt =
     thread?.latestVisibleMessage?.role === "assistant" &&

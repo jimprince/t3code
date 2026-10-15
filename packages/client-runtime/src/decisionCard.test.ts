@@ -1,7 +1,13 @@
 import type { DashboardAttention } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { answerPlan, cardSummary, questionsComplete, sendableText } from "./decisionCard.ts";
+import {
+  answerPlan,
+  cardFullText,
+  cardSummary,
+  questionsComplete,
+  sendableText,
+} from "./decisionCard.ts";
 
 const attention = (patch: Partial<DashboardAttention>): DashboardAttention => ({
   id: "a",
@@ -77,6 +83,17 @@ describe("cardSummary", () => {
     expect(cardSummary(attention({ summary: "Widened the column." }))).toBe("Widened the column.");
     expect(cardSummary(attention({ question: "  title " }))).toBeNull();
     expect(cardSummary(attention({ summary: "x", asksNothingYet: true }))).toBeNull();
+  });
+});
+
+describe("cardFullText", () => {
+  it("is the producer's whole text when it says more than the summary, else nothing", () => {
+    const summary = "Widened the column.";
+    const whole = "Widened the column.\n\nAlso fixes the wrap on phones.";
+    expect(cardFullText(attention({ summary, question: whole }))).toBe(whole);
+    expect(cardFullText(attention({ summary, question: summary }))).toBeNull();
+    expect(cardFullText(attention({ question: whole }))).toBeNull();
+    expect(cardFullText(attention({ summary, question: whole, asksNothingYet: true }))).toBeNull();
   });
 });
 

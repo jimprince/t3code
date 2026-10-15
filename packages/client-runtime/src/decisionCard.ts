@@ -112,6 +112,16 @@ export function cardSummary(attention: DashboardAttention): string | null {
   return null;
 }
 
+/**
+ * The whole explanation for "See all": the producer's full text (`question`) when it says more
+ * than the summary, else null and the caller keeps the summary.
+ */
+export function cardFullText(attention: DashboardAttention): string | null {
+  const summary = cardSummary(attention);
+  const text = attention.question?.replace(/<!--[\s\S]*?-->/g, "").trim();
+  return summary !== null && text && text !== summary ? text : null;
+}
+
 /** A multi-question ask is ready to send once every required question has a non-empty answer. */
 export function questionsComplete(
   questions: ReadonlyArray<PlanQuestion>,

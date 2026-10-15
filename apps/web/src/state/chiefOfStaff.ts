@@ -5,14 +5,16 @@ import {
   selectScopedChiefOfStaffThread,
 } from "@t3tools/client-runtime/chief-of-staff";
 import { mountedDashboardSnapshotAtom } from "@t3tools/client-runtime/dashboard";
+import { liveAttention } from "@t3tools/client-runtime/dashboard/live";
 import type { DashboardSnapshot, ScopedThreadRef } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
 import { useMemo } from "react";
 
 import { useCosTrayStore } from "../components/cos-tray/cosTrayStore";
 import { useIsMobile } from "../hooks/useMediaQuery";
-import { useEnvironmentDashboardSnapshot } from "./dashboard";
+import { useEnvironmentDashboardSnapshot, useEnvironmentDashboardSource } from "./dashboard";
 import { useThreadProjection, useThreadShell } from "./entities";
+import { useLiveRuntimeRequests } from "./liveRuntimeRequests";
 import { primaryEnvironmentIdAtom } from "./primaryEnvironment";
 import { environmentServerConfigsAtom } from "./server";
 import { environmentThreadShells } from "./threads";
@@ -64,12 +66,18 @@ export function useChiefOfStaff() {
     ref ? mountedDashboardSnapshotAtom(ref.environmentId) : NO_SNAPSHOT,
   );
   const snapshot = traySnapshot ?? mountedSnapshot;
+  // Count what the pager lists: a snapshot ask its thread no longer holds is not waiting on Brad.
+  // A snapshot only a Dashboard view holds (no tray) is passive and live.
+  const traySource = useEnvironmentDashboardSource(trayOpen ? (ref?.environmentId ?? null) : null);
+  const source = traySnapshot ? traySource : "live";
+  const live = useLiveRuntimeRequests();
   return useMemo(() => {
     if (!ref || !shell) return null;
     const summary = selectChiefOfStaffSummary({
       thread: shell.source,
       dashboard: snapshot,
       projection: projection?.projection ?? null,
+      keep: (attention) => liveAttention(ref.environmentId, attention, live, source),
     });
     return {
       ref,
@@ -78,5 +86,5 @@ export function useChiefOfStaff() {
       lastReplyAt: summary.lastReplyAt,
       replying: summary.isBusy,
     };
-  }, [ref, shell, projection, snapshot]);
+  }, [ref, shell, projection, snapshot, live, source]);
 }

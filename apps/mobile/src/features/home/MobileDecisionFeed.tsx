@@ -854,7 +854,14 @@ export function MobileDecisionFeed({
     decide: async (issue, kind, extra, told) => {
       const result = await decide({
         environmentId,
-        input: { threadId: summary.root.id, reference: issueKey(issue), decision: kind, ...extra },
+        input: {
+          threadId: summary.root.id,
+          reference: issueKey(issue),
+          decision: kind,
+          // Brad's own tap: the server lets only him close finished work.
+          actor: "brad",
+          ...extra,
+        },
       });
       return result._tag === "Success"
         ? {

@@ -13,6 +13,7 @@ import {
   selectChiefOfStaffSummary,
   selectChiefOfStaffThread,
 } from "./chiefOfStaff.ts";
+import { liveAttention, liveRuntimeRequests } from "./dashboard/liveAttention.ts";
 
 const desk = { ...v2ThreadShell, title: "Chief of Staff" };
 const operations = { ...desk, id: ThreadId.make("operations"), title: "chief-of-staff Operations" };
@@ -270,6 +271,32 @@ describe("Chief of Staff summary", () => {
       selectChiefOfStaffSummary({ thread: desk, projection: null, dashboard: snapshot([]) })
         .openDecisionCount,
     ).toBe(0);
+  });
+  it("counts only the asks the live filter keeps, so the header matches the pager", () => {
+    const ask = (id: string, threadId: string): DashboardAttention => ({
+      ...attention(id, "question"),
+      requestId: `req-${id}`,
+      threadId: ThreadId.make(threadId),
+    });
+    const live = liveRuntimeRequests([
+      {
+        environmentId: "env",
+        threads: [
+          { id: "waiting", archivedAt: null, pendingRuntimeRequest: { id: "req-a" } },
+          { id: "answered", archivedAt: null, pendingRuntimeRequest: null },
+        ],
+      },
+    ]);
+    const dashboard = snapshot([attention("issue"), ask("a", "waiting"), ask("b", "answered")]);
+    const keep = (items: ReadonlyArray<DashboardAttention>) =>
+      liveAttention("env", items, live, "live");
+    expect(
+      selectChiefOfStaffSummary({ thread: desk, projection: null, dashboard }).openDecisionCount,
+    ).toBe(3);
+    expect(
+      selectChiefOfStaffSummary({ thread: desk, projection: null, dashboard, keep })
+        .openDecisionCount,
+    ).toBe(2);
   });
   it("keeps the last assistant reply when a newer user message is the shell preview", () => {
     const thread = {

@@ -149,6 +149,25 @@ const environmentDashboardSnapshot = Atom.family((environmentId: EnvironmentId) 
   Atom.make((get) => get(dashboard.snapshot(environmentId)).snapshot).pipe(Atom.setIdleTTL(0)),
 );
 
+const NO_DASHBOARD_SOURCE = Atom.make<"cached" | "live" | "empty">("empty");
+const environmentDashboardSource = Atom.family((environmentId: EnvironmentId) =>
+  Atom.make((get) => get(dashboard.snapshot(environmentId)).source).pipe(Atom.setIdleTTL(0)),
+);
+
+/** Whether one environment's snapshot is live, stored on this device, or missing. */
+export function useEnvironmentDashboardSource(
+  environmentId: EnvironmentId | null,
+): "cached" | "live" | "empty" {
+  return useAtomValue(
+    environmentId === null ? NO_DASHBOARD_SOURCE : environmentDashboardSource(environmentId),
+  );
+}
+
+/** Re-reads an environment's dashboard, for a card whose answer found the snapshot stale. */
+export function refreshDashboard(environmentId: EnvironmentId): void {
+  dashboard.retry(appAtomRegistry, environmentId);
+}
+
 /** One environment's last live snapshot; the Chief of Staff tray counts its decisions from it. */
 export function useEnvironmentDashboardSnapshot(
   environmentId: EnvironmentId | null,

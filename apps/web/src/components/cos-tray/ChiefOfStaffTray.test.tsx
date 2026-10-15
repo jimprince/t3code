@@ -70,7 +70,7 @@ vi.mock("../../state/dashboard", () => ({
   useDashboardData: () => ({ data: { projects }, snapshotSource: "live" }),
 }));
 vi.mock("../../state/liveRuntimeRequests", () => ({
-  useLiveRuntimeRequests: () => ({ environments: new Set(), pending: new Set() }),
+  useLiveRuntimeRequests: () => ({ environments: new Set(), threads: new Set() }),
 }));
 vi.mock("../dashboard-v3/prefs", () => ({ useMinuteClock: () => 0 }));
 vi.mock("../dashboard-v3/useDecisionAnswers", async () => {

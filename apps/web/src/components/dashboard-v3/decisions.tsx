@@ -1,4 +1,4 @@
-import { cardSummary } from "@t3tools/client-runtime/decision-card";
+import { cardFullText, cardSummary } from "@t3tools/client-runtime/decision-card";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { useNavigate } from "@tanstack/react-router";
 import type { ThreadId } from "@t3tools/contracts";
@@ -99,9 +99,13 @@ function DiscussIssue({
 const URL_PATTERN = /(https?:\/\/[^\s)]+)/g;
 
 /** Where to look, with its links live: a URL in the text opens in a new tab. */
-function JudgingWhere({ text }: { readonly text: string }) {
+function JudgingWhere({ text, oneLine }: { readonly text: string; readonly oneLine: boolean }) {
   return (
-    <div className="text-xs text-muted-foreground">
+    <div
+      className={
+        oneLine ? "truncate text-xs text-muted-foreground" : "text-xs text-muted-foreground"
+      }
+    >
       Where:{" "}
       {text.split(URL_PATTERN).map((part, index) =>
         index % 2 === 1 ? (
@@ -178,10 +182,17 @@ export function DecisionCard({
             <InlineButton tone="muted" autoFocus onClick={state.undo}>
               Undo
             </InlineButton>
-          ) : record?.retry ? (
-            <InlineButton tone="muted" onClick={record.retry}>
-              Retry
-            </InlineButton>
+          ) : failed ? (
+            <>
+              {record?.retry ? (
+                <InlineButton tone="muted" onClick={record.retry}>
+                  Retry
+                </InlineButton>
+              ) : null}
+              <InlineButton tone="muted" onClick={() => answers.dismiss(row.key)}>
+                {answers.draftOf(row.key) ? "Edit" : "Dismiss"}
+              </InlineButton>
+            </>
           ) : null}
           {landedThread ? (
             <InlineButton
@@ -209,9 +220,13 @@ export function DecisionCard({
   }
 
   const summary = cardSummary(attention);
+  // "See all" shows the whole text the producer wrote; the feed and tray keep to the summary.
+  const fullText = full ? cardFullText(attention) : null;
   const asksNothing = attention.asksNothingYet === true;
   const marked = attention.options.some((option) => option.recommended);
-  const hasDetails = !!attention.judgingWhere || (!!attention.recommended && !marked);
+  // The tray keeps the four parts in view: Where stays on one line, only the unmarked Recommended
+  // line waits behind Details.
+  const hasDetails = !!attention.recommended && !marked;
   const showDetails = !compact || details;
   // Links are secondary: Discuss where talking it through is a real alternative, Open where the
   // thing to judge lives elsewhere. A live thread question or approval needs neither.
@@ -250,7 +265,7 @@ export function DecisionCard({
           <div className="my-1.5">
             <DecisionMarkdown
               environmentId={scoped.environmentId}
-              markdown={summary}
+              markdown={fullText ?? summary}
               issueUrl={attention.url ?? "https://localhost/"}
               clamp={12}
             />
@@ -272,15 +287,15 @@ export function DecisionCard({
           </InlineButton>
         </div>
       ) : null}
-      {showDetails && attention.judgingWhere ? (
-        <JudgingWhere text={attention.judgingWhere} />
+      {attention.judgingWhere ? (
+        <JudgingWhere text={attention.judgingWhere} oneLine={compact} />
       ) : null}
       {showDetails && attention.recommended && !marked ? (
         <div className="text-xs text-muted-foreground">
           Recommended: <span className="text-foreground">{attention.recommended}</span>
         </div>
       ) : null}
-      <DecisionAnswerArea row={row} answers={answers} compact={compact}>
+      <DecisionAnswerArea row={row} plan={plan} answers={answers} compact={compact}>
         {links}
       </DecisionAnswerArea>
     </div>

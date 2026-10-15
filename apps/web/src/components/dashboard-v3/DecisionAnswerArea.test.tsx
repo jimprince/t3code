@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { EnvironmentId, ThreadId, type DashboardAttention } from "@t3tools/contracts";
+import * as Cause from "effect/Cause";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -8,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   decide: vi.fn(),
   respondToUserInput: vi.fn(),
   respondToApproval: vi.fn(),
+  startTurn: vi.fn(),
+  refresh: vi.fn(),
   decisionAnswers: true,
   navigate: vi.fn(),
 }));
@@ -23,8 +26,13 @@ vi.mock("../../state/threadLinks", () => ({
   }),
 }));
 vi.mock("../../state/projectIssues", () => ({ decideProjectRequest: "decide" }));
+vi.mock("../../state/dashboard", () => ({ refreshDashboard: mocks.refresh }));
 vi.mock("../../state/threads", () => ({
-  threadEnvironment: { respondToApproval: "approval", respondToUserInput: "input" },
+  threadEnvironment: {
+    respondToApproval: "approval",
+    respondToUserInput: "input",
+    startTurn: "startTurn",
+  },
 }));
 vi.mock("../../state/use-atom-command", () => ({
   useAtomCommand: (command: string) =>
@@ -32,10 +40,22 @@ vi.mock("../../state/use-atom-command", () => ({
       ? mocks.decide
       : command === "input"
         ? mocks.respondToUserInput
-        : mocks.respondToApproval,
+        : command === "startTurn"
+          ? mocks.startTurn
+          : mocks.respondToApproval,
 }));
 vi.mock("../../state/entities", () => ({
-  readThreadShells: () => [],
+  readThreadShells: () => [
+    {
+      id: "asking-thread",
+      environmentId: "env-1",
+      title: "Mac agent",
+      modelSelection: { instanceId: "codex", model: "gpt" },
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      runtime: { status: "idle" },
+    },
+  ],
   useServerConfigs: () =>
     new Map([
       [
@@ -47,6 +67,9 @@ vi.mock("../../state/entities", () => ({
         },
       ],
     ]),
+}));
+vi.mock("../orchestrators/DecisionMarkdown", () => ({
+  DecisionMarkdown: ({ markdown }: { markdown: string }) => <div>{markdown}</div>,
 }));
 vi.mock("../orchestrators/ProjectRequestsSection", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../orchestrators/ProjectRequestsSection")>()),
@@ -102,17 +125,31 @@ const REVIEW = attention({
 let root: Root;
 let container: HTMLDivElement;
 
-function Harness({ row }: { readonly row: DecisionRow }) {
+const captured: { answers: ReturnType<typeof useDecisionAnswers> | null } = { answers: null };
+
+function Harness({
+  row,
+  compact,
+  full,
+}: {
+  readonly row: DecisionRow;
+  readonly compact?: boolean;
+  readonly full?: boolean;
+}) {
   const answers = useDecisionAnswers();
+  captured.answers = answers;
   const ui = { answers, now: 0, openTask: vi.fn() } as unknown as DashboardUi;
   return (
     <DashboardUiProvider value={ui}>
-      <DecisionCard row={row} />
+      <DecisionCard row={row} compact={compact ?? false} full={full ?? false} />
     </DashboardUiProvider>
   );
 }
 
-const render = async (row: DecisionRow) => act(async () => root.render(<Harness row={row} />));
+const render = async (row: DecisionRow, view: { compact?: boolean; full?: boolean } = {}) =>
+  act(async () => root.render(<Harness row={row} {...view} />));
+
+const refusal = (message: string) => ({ _tag: "Failure", cause: Cause.fail(new Error(message)) });
 
 function button(label: string) {
   const found = [...container.querySelectorAll<HTMLButtonElement>("button")].find((element) =>
@@ -122,23 +159,28 @@ function button(label: string) {
   return found!;
 }
 
-const box = () => container.querySelector<HTMLInputElement>("input")!;
+const box = () => container.querySelector<HTMLTextAreaElement>("textarea")!;
 
 async function type(text: string) {
   const input = box();
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
   await act(async () => {
     setter.call(input, text);
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
 
-const key = (name: string) =>
-  act(async () => {
-    box().dispatchEvent(
-      new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true }),
-    );
+/** A keydown on the box; resolves true when the page's default (a newline) was left alone. */
+async function key(name: string, init: KeyboardEventInit & { keyCode?: number } = {}) {
+  const event = new KeyboardEvent("keydown", {
+    key: name,
+    bubbles: true,
+    cancelable: true,
+    ...init,
   });
+  await act(async () => void box().dispatchEvent(event));
+  return !event.defaultPrevented;
+}
 
 const HOLD_MS = 5000;
 const hold = () => act(async () => void (await vi.advanceTimersByTimeAsync(HOLD_MS + 50)));
@@ -153,6 +195,8 @@ beforeEach(() => {
     value: { notifiedThreadId: HEAD, commentUrl: "http://git/o/r/issues/355#c1" },
   });
   mocks.respondToUserInput.mockResolvedValue({ _tag: "Success", value: {} });
+  mocks.respondToApproval.mockResolvedValue({ _tag: "Success", value: {} });
+  mocks.startTurn.mockResolvedValue({ _tag: "Success", value: {} });
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -333,12 +377,297 @@ describe("hosts without decisionAnswers", () => {
     });
     await render(rowOf(decision));
     expect(button("Hold the purchase")).toBeDefined();
-    expect(container.querySelector("input")).toBeNull();
+    expect(container.querySelector("textarea")).toBeNull();
 
     const { answer: _answer, ...older } = REVIEW;
     await render(rowOf({ ...older, options: [] }));
-    expect(container.querySelector("input")).toBeNull();
+    expect(container.querySelector("textarea")).toBeNull();
     expect(button("Open")).toBeDefined();
     expect(container.textContent).not.toContain("Approve and close");
+  });
+});
+
+const TEST = attention({
+  answer: "issue-test",
+  summary: "The Plan strip now wraps long titles.",
+  options: [
+    { text: "Passed", recommended: true, action: "approve", effect: "settle" },
+    { text: "Failed", recommended: false, action: "reject" },
+  ],
+});
+
+describe("what the box holds travels with a click, or stands alone as Brad's answer", () => {
+  it("typed words alone are his answer, never a Passed or Failed", async () => {
+    await render(rowOf(TEST));
+    await type("works");
+    await key("Enter");
+    await hold();
+    const input = mocks.decide.mock.calls[0]![0].input;
+    expect(input).toMatchObject({
+      decision: "answer",
+      answer: "works",
+      actor: "brad",
+      expectAnswer: "issue-test",
+    });
+    expect(input.reason).toBeUndefined();
+  });
+
+  it("Passed with text sends the text as its note; Failed does the same", async () => {
+    await render(rowOf(TEST));
+    await type("Checked on the phone too");
+    await act(() => button("Passed").click());
+    expect(container.textContent).toContain("Passed with your note");
+    await hold();
+    expect(mocks.decide.mock.calls[0]![0].input).toMatchObject({
+      decision: "approve",
+      reason: "Checked on the phone too",
+      actor: "brad",
+    });
+    expect(mocks.decide.mock.calls[0]![0].input.answer).toBeUndefined();
+
+    await render(rowOf({ ...TEST, id: "a2" }));
+    await type("The button is hidden under the strip");
+    await act(() => button("Failed").click());
+    await hold();
+    expect(mocks.decide.mock.calls[1]![0].input).toMatchObject({
+      decision: "reject",
+      reason: "The button is hidden under the strip",
+    });
+  });
+
+  it("a Failed that says to type its note opens the box instead of sending bare", async () => {
+    const asking = attention({
+      ...TEST,
+      options: [
+        { text: "Passed", recommended: true, action: "approve", effect: "settle" },
+        { text: "Failed (type what is wrong)", recommended: false, action: "reject" },
+      ],
+    });
+    await render(rowOf(asking), { compact: true });
+    await act(() => button("Failed (type").click());
+    await hold();
+    expect(mocks.decide).not.toHaveBeenCalled();
+    expect(box()).toBeDefined();
+    await type("Nothing happens on tap");
+    await act(() => button("Failed (type").click());
+    await hold();
+    expect(mocks.decide.mock.calls[0]![0].input).toMatchObject({
+      decision: "reject",
+      reason: "Nothing happens on tap",
+    });
+  });
+
+  it("a click on an empty box sends no note", async () => {
+    await render(rowOf(TEST));
+    await act(() => button("Passed").click());
+    await hold();
+    expect(mocks.decide.mock.calls[0]![0].input.reason).toBeUndefined();
+  });
+
+  it("Approve and close on a review comes from Brad and says what the card was", async () => {
+    await render(rowOf(REVIEW));
+    await act(() => button("Approve and close").click());
+    await hold();
+    expect(mocks.decide.mock.calls[0]![0].input).toMatchObject({
+      decision: "approve",
+      actor: "brad",
+      expectAnswer: "issue-review",
+    });
+  });
+});
+
+describe("the box takes several lines", () => {
+  it("Shift+Enter makes a new line, Enter sends it whole", async () => {
+    await render(rowOf(REVIEW));
+    await type("first line\nsecond line");
+    expect(await key("Enter", { shiftKey: true })).toBe(true);
+    await hold();
+    expect(mocks.decide).not.toHaveBeenCalled();
+    expect(await key("Enter")).toBe(false);
+    await hold();
+    expect(mocks.decide.mock.calls[0]![0].input.answer).toBe("first line\nsecond line");
+  });
+
+  it("leaves an IME's confirming Enter alone", async () => {
+    await render(rowOf(REVIEW));
+    await type("かんじ");
+    expect(await key("Enter", { isComposing: true })).toBe(true);
+    expect(await key("Enter", { keyCode: 229 })).toBe(true);
+    await hold();
+    expect(mocks.decide).not.toHaveBeenCalled();
+  });
+});
+
+describe("a typed answer is never lost to Undo, a double Enter or a failure", () => {
+  it("Undo brings the card back with the draft still in the box", async () => {
+    await render(rowOf(REVIEW));
+    await type("keep the old width on phones");
+    await key("Enter");
+    // The second Enter of a double press lands on the focused Undo.
+    await act(() => button("Undo").click());
+    await hold();
+    expect(mocks.decide).not.toHaveBeenCalled();
+    expect(box().value).toBe("keep the old width on phones");
+  });
+
+  it("a note held behind an option click survives Undo too", async () => {
+    await render(rowOf(TEST));
+    await type("saw it fail once");
+    await act(() => button("Failed").click());
+    await act(() => button("Undo").click());
+    expect(box().value).toBe("saw it fail once");
+  });
+
+  it("a refused send keeps the draft, offers Retry, and Edit puts it back in the box", async () => {
+    mocks.decide.mockResolvedValueOnce(refusal("Gitea is unreachable"));
+    await render(rowOf(REVIEW));
+    await type("approved with a caveat");
+    await key("Enter");
+    await hold();
+    expect(container.textContent).toContain("Not sent");
+    expect(container.textContent).toContain("Gitea is unreachable");
+    await act(() => button("Edit").click());
+    expect(box().value).toBe("approved with a caveat");
+  });
+
+  it("a delivered answer ends its draft", async () => {
+    await render(rowOf(REVIEW));
+    await type("done and dusted");
+    await key("Enter");
+    await hold();
+    expect(captured.answers!.draftOf(rowOf(REVIEW).key)).toBe("");
+  });
+
+  it("picks on a multi-question ask come back after Undo", async () => {
+    const asking = attention({
+      id: "q3",
+      taskId: "thread:asking-thread",
+      requestId: "req-3",
+      kind: "question",
+      answer: "thread-question",
+      canRespond: true,
+      threadId: ASKING,
+      title: "Dashboard",
+      questions: [
+        {
+          id: "head",
+          header: "Owner",
+          question: "Who?",
+          options: [{ label: "This VM head", description: "" }],
+        },
+        {
+          id: "when",
+          header: "When",
+          question: "When?",
+          options: [{ label: "Now", description: "" }],
+          allowCustomAnswer: false,
+        },
+      ],
+    });
+    await render(rowOf(asking));
+    await act(() => button("This VM head").click());
+    await act(() => button("Now").click());
+    await act(() => button("Send answers").click());
+    await act(() => button("Undo").click());
+    expect(button("Send answers").disabled).toBe(false);
+    expect(button("This VM head").getAttribute("aria-pressed")).toBe("true");
+  });
+});
+
+describe("a card that went stale before the click", () => {
+  it("says so, refreshes the list, and offers no Retry that would resend it", async () => {
+    mocks.decide.mockResolvedValueOnce(refusal("This item is no longer waiting on you."));
+    await render(rowOf(REVIEW));
+    await act(() => button("Approve and close").click());
+    await hold();
+    expect(container.textContent).toContain("no longer waits on you");
+    expect(mocks.refresh).toHaveBeenCalledWith(ENV);
+    expect(container.textContent).not.toContain("Retry");
+    expect(button("Dismiss")).toBeDefined();
+  });
+});
+
+describe("an approval takes a reason", () => {
+  const APPROVAL = attention({
+    id: "ap1",
+    taskId: "thread:asking-thread",
+    requestId: "req-ap",
+    kind: "approval",
+    answer: "thread-approval",
+    canRespond: true,
+    threadId: ASKING,
+    title: "Run a command",
+  });
+
+  it("Decline and send declines first, then tells the thread why", async () => {
+    await render(rowOf(APPROVAL));
+    await type("Not against production");
+    // Enter alone never declines an approval.
+    expect(await key("Enter")).toBe(true);
+    await hold();
+    expect(mocks.respondToApproval).not.toHaveBeenCalled();
+    await act(() => button("Decline and send").click());
+    await hold();
+    expect(mocks.respondToApproval.mock.calls[0]![0].input).toMatchObject({
+      threadId: ASKING,
+      decision: "decline",
+    });
+    const sent = mocks.startTurn.mock.calls[0]![0].input;
+    expect(sent.threadId).toBe(ASKING);
+    expect(sent.message.text).toBe("Declined: Not against production");
+    expect(container.textContent).toContain("Sent “Declined: Not against production”");
+  });
+
+  it("a message that failed is retried alone, as the same message", async () => {
+    mocks.startTurn.mockResolvedValueOnce(refusal("Thread is archived"));
+    await render(rowOf(APPROVAL));
+    await type("Wrong branch");
+    await act(() => button("Decline and send").click());
+    await hold();
+    expect(container.textContent).toContain("Declined, but the message was not sent");
+    await act(() => button("Retry").click());
+    expect(mocks.respondToApproval).toHaveBeenCalledOnce();
+    expect(mocks.startTurn).toHaveBeenCalledTimes(2);
+    expect(mocks.startTurn.mock.calls[1]![0].input.message.messageId).toBe(
+      mocks.startTurn.mock.calls[0]![0].input.message.messageId,
+    );
+  });
+
+  it("Allow and Decline still work with no text", async () => {
+    await render(rowOf(APPROVAL));
+    await act(() => button("Allow once").click());
+    await hold();
+    expect(mocks.respondToApproval.mock.calls[0]![0].input.decision).toBe("accept");
+    expect(mocks.startTurn).not.toHaveBeenCalled();
+  });
+});
+
+describe("the card's text", () => {
+  const WHERE = attention({
+    ...REVIEW,
+    judgingWhere: "Open Dev after Update #355, Plan column",
+    recommended: "Approve and close",
+  });
+
+  it("the tray strip shows Where on one line without opening Details", async () => {
+    await render(rowOf(WHERE), { compact: true });
+    const where = [...container.querySelectorAll("div")].find((el) =>
+      el.textContent?.startsWith("Where:"),
+    );
+    expect(where?.textContent).toContain("Plan column");
+    expect(where?.className).toContain("truncate");
+  });
+
+  it("See all shows the producer's whole text, not just the summary", async () => {
+    await render(
+      rowOf(
+        attention({
+          ...REVIEW,
+          question: "Widened the Plan column from 14 to 24 characters.\n\nAlso fixes the wrap.",
+        }),
+      ),
+      { full: true },
+    );
+    expect(container.textContent).toContain("Also fixes the wrap.");
   });
 });

@@ -6,12 +6,15 @@
 export interface LiveRuntimeRequests {
   /** Environments whose shells have loaded; an ask in any other one cannot be judged yet. */
   readonly environments: ReadonlySet<string>;
-  /** `runtimeRequestKey` of every pending request on a live thread. */
-  readonly pending: ReadonlySet<string>;
+  /**
+   * `runtimeThreadKey` of every live thread with a pending request. A shell carries one pending
+   * request, though a thread can hold several asks, so liveness is judged per thread.
+   */
+  readonly threads: ReadonlySet<string>;
 }
 
-export const runtimeRequestKey = (environmentId: string, threadId: string, requestId: string) =>
-  `${environmentId}|${threadId}|${requestId}`;
+export const runtimeThreadKey = (environmentId: string, threadId: string) =>
+  `${environmentId}|${threadId}`;
 
 interface ThreadLike {
   readonly id: string;
@@ -33,14 +36,14 @@ export function liveRuntimeRequests(
     environments.add(environmentId);
     for (const thread of threads)
       if (thread.archivedAt === null && thread.pendingRuntimeRequest)
-        pending.add(runtimeRequestKey(environmentId, thread.id, thread.pendingRuntimeRequest.id));
+        pending.add(runtimeThreadKey(environmentId, thread.id));
   }
-  return { environments, pending };
+  return { environments, threads: pending };
 }
 
 /**
  * The attention items worth showing: issue items always, a runtime ask only while its thread still
- * lists that request as pending. A snapshot stored on this device (`cached`) carries no runtime
+ * has a pending request (a second ask on the same thread stays listed with the first). A snapshot stored on this device (`cached`) carries no runtime
  * asks at all, and an environment whose shells have not loaded keeps the live snapshot's asks until
  * they do. Returns the same array when nothing is dropped.
  */
@@ -57,8 +60,7 @@ export function liveAttention<
     if (source !== "live") return false;
     if (!live.environments.has(environmentId)) return true;
     return (
-      item.threadId !== null &&
-      live.pending.has(runtimeRequestKey(environmentId, item.threadId, item.requestId))
+      item.threadId !== null && live.threads.has(runtimeThreadKey(environmentId, item.threadId))
     );
   });
   return kept.length === attention.length ? attention : kept;

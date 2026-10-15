@@ -71,11 +71,14 @@ export function CosDecisionPin({
   // The pin follows the decision it shows by key, so an answered one stays up with its receipt
   // (it moves to the end of `shown` once the snapshot drops it) instead of jumping to the next.
   const [activeKey, setActiveKey] = useState<string | null>(null);
-  const followed = activeKey === null ? -1 : shown.findIndex((row) => row.key === activeKey);
-  const at = followed >= 0 ? followed : Math.min(index, Math.max(0, shown.length - 1));
   const first = shown[0]?.key ?? null;
+  const followKey = activeKey ?? first;
+  const followed = followKey === null ? -1 : shown.findIndex((row) => row.key === followKey);
+  const at = followed >= 0 ? followed : Math.min(index, Math.max(0, shown.length - 1));
   // Start following the first decision at once, so answering it does not move the pin on.
-  if (activeKey === null && first !== null) setActiveKey(first);
+  useEffect(() => {
+    if (activeKey === null && first !== null) setActiveKey(first);
+  }, [activeKey, first]);
   const goTo = (target: number) => {
     setIndex(target);
     setActiveKey(shown[target]?.key ?? null);

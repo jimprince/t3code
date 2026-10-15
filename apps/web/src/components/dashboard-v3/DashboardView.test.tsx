@@ -20,7 +20,7 @@ vi.mock("../../state/threadLinks", () => ({
   }),
 }));
 vi.mock("../../state/liveRuntimeRequests", () => ({
-  useLiveRuntimeRequests: () => ({ environments: new Set<string>(), pending: new Set<string>() }),
+  useLiveRuntimeRequests: () => ({ environments: new Set<string>(), threads: new Set<string>() }),
 }));
 vi.mock("../../state/dashboard", () => ({
   useDashboardData: () => ({

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 const state = vi.hoisted(() => ({
   source: "live" as "live" | "cached",
-  pending: new Set<string>(),
+  threads: new Set<string>(),
   records: new Map<string, { row: { key: string; attention: { title: string } } }>(),
 }));
 
@@ -26,7 +26,7 @@ vi.mock("../../state/dashboard", () => ({
                 title: "Resolved by Product three minutes ago",
                 kind: "question",
                 requestId: "req-old",
-                threadId: "t1",
+                threadId: "t0",
                 options: [],
                 priority: 2,
               },
@@ -38,6 +38,15 @@ vi.mock("../../state/dashboard", () => ({
                 threadId: "t1",
                 options: [],
                 priority: 1,
+              },
+              {
+                id: "second",
+                title: "Second ask on the same thread",
+                kind: "approval",
+                requestId: "req-second",
+                threadId: "t1",
+                options: [],
+                priority: 4,
               },
               {
                 id: "issue",
@@ -56,7 +65,7 @@ vi.mock("../../state/dashboard", () => ({
   }),
 }));
 vi.mock("../../state/liveRuntimeRequests", () => ({
-  useLiveRuntimeRequests: () => ({ environments: new Set(["env"]), pending: state.pending }),
+  useLiveRuntimeRequests: () => ({ environments: new Set(["env"]), threads: state.threads }),
 }));
 vi.mock("../dashboard-v3/prefs", () => ({ useMinuteClock: () => 0 }));
 vi.mock("../dashboard-v3/useDecisionAnswers", () => ({
@@ -83,7 +92,7 @@ const shown = async () => {
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   state.source = "live";
-  state.pending = new Set(["env|t1|req-live"]);
+  state.threads = new Set(["env|t1"]);
   state.records = new Map();
   container = document.createElement("div");
   document.body.append(container);
@@ -103,6 +112,12 @@ describe("the tray pin only shows what is still pending (#303)", () => {
     expect(titles).not.toContain("Resolved by Product three minutes ago");
   });
 
+  it("keeps a second pending ask on a thread whose shell lists only one request", async () => {
+    await shown();
+    // The pin lists one card at a time under "1 of N": the issue item and both asks are counted.
+    expect(container.textContent).toContain("1 of 3");
+  });
+
   it("shows no thread question from a snapshot stored on this device", async () => {
     state.source = "cached";
     const titles = await shown();
@@ -113,11 +128,11 @@ describe("the tray pin only shows what is still pending (#303)", () => {
 describe("the tray pin keeps an answered decision on screen", () => {
   it("stays on the answered card, with its receipt, after the snapshot drops it", async () => {
     // "Tracker decision" is not a runtime ask, so it is listed whatever the pending requests say.
-    state.pending = new Set(["env|t1|req-live"]);
+    state.threads = new Set(["env|t1"]);
     const first = await shown();
     expect(first[0]).toBe("Still waiting on a reply");
     // The ask is answered: its thread no longer lists it, and the answer record carries the card.
-    state.pending = new Set();
+    state.threads = new Set();
     state.records = new Map([
       [
         "env|p|live",

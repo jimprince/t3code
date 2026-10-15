@@ -236,6 +236,8 @@ export function useDecide(summary: OrchestratorSummary, refresh: () => void) {
         threadId: summary.root.id,
         reference: `${issue.repository}#${issue.number}`,
         decision,
+        // Brad's own click: the server lets only him close finished work.
+        actor: "brad",
         ...extra,
       },
     });

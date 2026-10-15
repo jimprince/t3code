@@ -7,7 +7,7 @@ import type * as React from "react";
 import { cn } from "~/lib/utils";
 
 type TextareaProps = React.ComponentProps<"textarea"> & {
-  size?: "sm" | "default" | "lg" | number;
+  size?: "line" | "sm" | "default" | "lg" | number;
   unstyled?: boolean;
 };
 
@@ -33,6 +33,9 @@ function Textarea({ className, size = "default", unstyled = false, ...props }: T
               size === "sm" &&
                 "min-h-16.5 px-[calc(--spacing(2.5)-1px)] py-[calc(--spacing(1)-1px)] max-sm:min-h-19.5",
               size === "lg" && "min-h-18.5 py-[calc(--spacing(2)-1px)] max-sm:min-h-21.5",
+              // One line like a compact Input, growing to four lines before it scrolls.
+              size === "line" &&
+                "min-h-7 max-h-21.5 px-[calc(--spacing(2.5)-1px)] py-[calc(--spacing(1)-1px)] text-sm leading-5 max-sm:min-h-8.5",
             )}
             data-slot="textarea"
             {...mergeProps(defaultProps, props)}
