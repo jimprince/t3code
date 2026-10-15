@@ -90,6 +90,7 @@ const RPC_AGGREGATES = {
   "projectIssues.list": "project-issues",
   "orchestration.handOverNamedAgent": "orchestration",
   "orchestration.listNamedAgents": "orchestration",
+  "fork.subheads": "orchestration",
   "orchestration.resolveNamedAgent": "orchestration",
   "threadIssues.link": "thread-issues",
   "threadIssues.unlink": "thread-issues",

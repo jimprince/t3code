@@ -13,6 +13,8 @@ import type {
   ThreadId,
 } from "@t3tools/contracts";
 import { isPageAgentThreadId } from "@t3tools/contracts";
+import * as SqlClient from "effect/sql/SqlClient";
+import { readMetadata } from "../forkThreads/MetadataStore.ts";
 import {
   RelayApi,
   type RelayAgentActivityPublishProofPayload,
@@ -309,6 +311,7 @@ function describeThreadShellForAwareness(
 }
 
 export function resolveAgentAwarenessRelayPublishSnapshot(input: {
+  readonly resultOwned?: boolean;
   readonly nowMs: number;
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
@@ -335,15 +338,18 @@ export function resolveAgentAwarenessRelayPublishSnapshot(input: {
   }
   const thread = input.thread.value;
   const event = threadNotificationEvent(thread);
-  const eligible = evaluateNotification({
-    event,
-    environmentId: input.environmentId,
-    threadId: thread.id,
-    nowMs: input.nowMs,
-    archived: thread.archivedAt !== null,
-    parentOwned: thread.lineage.relationshipToParent === "subagent" && event?.origin !== "human",
-    busy: threadNotificationBusy(thread),
-  }).eligible;
+  const resultOwned = input.resultOwned === true && event?.kind === "reply";
+  const eligible =
+    !resultOwned &&
+    evaluateNotification({
+      event,
+      environmentId: input.environmentId,
+      threadId: thread.id,
+      nowMs: input.nowMs,
+      archived: thread.archivedAt !== null,
+      parentOwned: thread.lineage.relationshipToParent === "subagent" && event?.origin !== "human",
+      busy: threadNotificationBusy(thread),
+    }).eligible;
   const awareness = projectThreadAwarenessV2({
     environmentId: input.environmentId,
     project: input.project.value,
@@ -353,7 +359,9 @@ export function resolveAgentAwarenessRelayPublishSnapshot(input: {
           completionSuppressed: false,
           lineage: { ...thread.lineage, relationshipToParent: null },
         }
-      : thread,
+      : resultOwned
+        ? { ...thread, completionSuppressed: true }
+        : thread,
   });
   const alertPhase =
     event?.kind === "reply"
@@ -418,6 +426,7 @@ export const make = Effect.gen(function* () {
   const secrets = yield* ServerSecretStore.ServerSecretStore;
   const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
   const threads = yield* ThreadManagement.ThreadManagementService;
+  const sql = yield* SqlClient.SqlClient;
   const projects = yield* ProjectService.ProjectService;
   const crypto = yield* Crypto.Crypto;
   const scope = yield* Effect.scope;
@@ -598,6 +607,10 @@ export const make = Effect.gen(function* () {
       threadId,
       thread,
       project,
+      resultOwned:
+        threadShell !== null &&
+        threadNotificationEvent(threadShell)?.kind === "reply" &&
+        (yield* readMetadata(sql, threadId))?.virtualAgentId !== undefined,
     });
     const publishIdentity = agentAwarenessPublishIdentity(snapshot.state);
     const publishedStateByThread = yield* Ref.get(publishedStateByThreadRef);

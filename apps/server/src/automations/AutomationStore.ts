@@ -54,6 +54,7 @@ export class AutomationStore extends Context.Service<
     readonly deleteScript: (id: string) => Fx<void>;
     /** False when the automation already has a run with this dedupe key. */
     readonly insertRun: (run: AutomationRun) => Fx<boolean>;
+    readonly getRun: (id: string) => Fx<Option.Option<AutomationRun>>;
     readonly saveRun: (run: AutomationRun) => Fx<void>;
     readonly activeRuns: Fx<ReadonlyArray<AutomationRun>>;
     readonly listRuns: (input: {
@@ -192,6 +193,9 @@ const make = Effect.gen(function* () {
           RETURNING run_id AS id
         `;
         if (inserted.length === 0) return false;
+        // Virtual request keys are durable for the life of the registry entry.
+        // Pruning one would allow an old retry to execute the request again.
+        if (run.virtualSubhead !== undefined) return true;
         yield* sql`
           DELETE FROM automation_runs
           WHERE automation_id = ${run.automationId}
@@ -212,10 +216,18 @@ const make = Effect.gen(function* () {
           WHERE run_id = ${run.id}`,
     ).pipe(Effect.asVoid);
 
+  const getRun = (id: string) =>
+    fail(
+      sql<{ json: string }>`SELECT run_json AS json FROM automation_runs WHERE run_id=${id}`,
+    ).pipe(
+      Effect.flatMap(runs),
+      Effect.map((rows) => Option.fromNullishOr(rows[0])),
+    );
+
   const activeRuns = fail(
     sql<{ json: string }>`
       SELECT run_json AS json FROM automation_runs
-      WHERE status IN ('queued', 'running') ORDER BY created_at, run_id`,
+      WHERE status IN ('queued', 'running') ORDER BY created_at, rowid`,
   ).pipe(Effect.flatMap(runs));
 
   const listRuns = (input: { automationId?: string; projectId?: ProjectId; limit: number }) =>
@@ -259,6 +271,7 @@ const make = Effect.gen(function* () {
     saveScript,
     deleteScript,
     insertRun,
+    getRun,
     saveRun,
     activeRuns,
     listRuns,

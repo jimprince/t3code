@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./providerRuntimeMode": {
+      "types": "./src/providerRuntimeMode.ts",
+      "import": "./src/providerRuntimeMode.ts"
+    },
     "./authScopeOptions": {
       "types": "./src/authScopeOptions.ts",
       "import": "./src/authScopeOptions.ts"

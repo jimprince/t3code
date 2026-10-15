@@ -51,6 +51,9 @@ import * as McpSessionRegistry from "./McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "./PreviewAutomationBroker.ts";
 import * as OrchestratorHandlers from "./toolkits/orchestrator/handlers.ts";
 import { OrchestratorToolkit } from "./toolkits/orchestrator/tools.ts";
+import { SubheadToolkit } from "./toolkits/subheads/tools.ts";
+import * as SubheadHandlers from "./toolkits/subheads/handlers.ts";
+import * as SubheadMcpService from "./SubheadMcpService.ts";
 import * as PreviewHandlers from "./toolkits/preview/handlers.ts";
 import {
   PreviewSnapshotTool,
@@ -829,6 +832,9 @@ export const layerOrchestratorToolkit = toolkitRegistration(
 ).pipe(Layer.provide(OrchestratorMcpService.layer), Layer.provide(ThreadMetadataMcpService.layer));
 
 export const layerThreadToolkit = toolkitRegistration(ThreadToolkit, ThreadHandlers.layer);
+export const layerSubheadToolkit = toolkitRegistration(SubheadToolkit, SubheadHandlers.layer).pipe(
+  Layer.provide(SubheadMcpService.layer),
+);
 
 const layerWorktreeToolkitRegistration = toolkitRegistration(
   WorktreeToolkit,
@@ -901,6 +907,7 @@ export const layer = Layer.mergeAll(
   toolkitRegistration(WorkerIdentityToolkit, WorkerIdentityHandlersLive),
   layerPreviewToolkit,
   layerOrchestratorToolkit,
+  layerSubheadToolkit,
   layerThreadToolkit,
   toolkitRegistration(RecoveryToolkit, RecoveryHandlersLive),
   layerHarnessToolkit,

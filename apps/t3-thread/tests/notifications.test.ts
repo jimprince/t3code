@@ -4,7 +4,11 @@ import {
   buildNotificationEventKey,
   buildNotificationMessage,
   buildNotificationRecord,
+  shouldNotify,
 } from "../src/notifications.js";
+import { buildAgentOverview } from "../src/monitor.js";
+import { ThreadMetadata, withThreadMetadata } from "../src/v2/nesting.js";
+import * as Schema from "effect/Schema";
 import type { OrchestrationThread, SavedAgent, SavedSubscription } from "../src/types.js";
 
 function makeAgent(overrides: Partial<SavedAgent> = {}): SavedAgent {
@@ -67,7 +71,35 @@ function makeThread(overrides: Partial<OrchestrationThread> = {}): Orchestration
   };
 }
 
+const decodeThreadMetadata = Schema.decodeUnknownSync(ThreadMetadata);
+
 describe("notification helpers", () => {
+  it("suppresses app-owned subhead completions while retaining ordinary results and escalations", () => {
+    const ordinary = makeThread();
+    const agent = makeAgent();
+    const subscription = makeSubscription({ level: "all" });
+    const overview = { ...buildAgentOverview(agent, ordinary), state: "completed" as const };
+    expect(shouldNotify(subscription, overview, ordinary)).toBe(true);
+    const metadata = decodeThreadMetadata({
+      threadId: ordinary.id,
+      parentThreadId: "head",
+      virtualAgentId: "helper",
+      virtualRunId: "run",
+    });
+    const virtual = withThreadMetadata(ordinary, [metadata]);
+    expect(virtual).toMatchObject({ virtualAgentId: "helper", virtualRunId: "run" });
+    expect(shouldNotify(subscription, overview, virtual)).toBe(false);
+    const record = buildNotificationRecord({
+      sourceAgent: agent,
+      subscription,
+      overview,
+      thread: virtual,
+      now: "2026-10-15T00:00:00.000Z",
+    });
+    expect(record.completionDisposition).toBe("quiet");
+    for (const state of ["error", "needs-approval", "needs-input"] as const)
+      expect(shouldNotify(subscription, { ...overview, state }, virtual)).toBe(true);
+  });
   it("builds a stable event key from subscriber, source, and assistant message", () => {
     expect(
       buildNotificationEventKey({

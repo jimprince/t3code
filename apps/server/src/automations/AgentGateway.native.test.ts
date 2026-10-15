@@ -47,6 +47,8 @@ const issuesTestContext = Layer.mergeAll(
   FetchHttpClient.layer,
 );
 import { AgentGateway, layer as gatewayLayer } from "./AgentGateway.ts";
+import { layer as automationStoreLayer } from "./AutomationStore.ts";
+import * as ProviderMock from "../provider/testUtils/providerRegistryMock.ts";
 import { writeMetadata, listMetadata } from "../forkThreads/MetadataStore.ts";
 
 // Issues are a separate lane; this test exercises the native launch/record boundary only.
@@ -71,6 +73,8 @@ const runtime = makeOrchestratorV2ReplayLayerWithRegistry(
   { databaseLayer: database, runEffectWorker: false },
 );
 const nativeLayer = Layer.mergeAll(
+  automationStoreLayer,
+  ProviderMock.layer([]),
   ThreadManagement.layer.pipe(Layer.provide(runtime)),
   ProjectStore.layer,
   ProjectionStore.layer,

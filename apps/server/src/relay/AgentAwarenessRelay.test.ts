@@ -1,5 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { layerMemory as SqliteMemory } from "../persistence/Sqlite.ts";
 import {
   EnvironmentId,
   EventId,
@@ -19,6 +21,7 @@ import { RelayAgentActivityState } from "@t3tools/contracts/relay";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
@@ -251,6 +254,7 @@ const makeTestRelay = Effect.fnUntraced(function* (
     },
     { preconnect: () => {} },
   );
+  const sqlContext = yield* Layer.build(SqliteMemory.pipe(Layer.provide(NodeServices.layer)));
   const relay = yield* AgentAwarenessRelay.make.pipe(
     Effect.provideService(ServerSecretStore.ServerSecretStore, secrets),
     Effect.provideService(ThreadManagementService.ThreadManagementService, threads),
@@ -283,6 +287,7 @@ const makeTestRelay = Effect.fnUntraced(function* (
     }),
     Effect.provideService(FetchHttpClient.Fetch, fetch),
     Effect.provide(NodeCrypto.layer),
+    Effect.provideContext(sqlContext),
   );
   return { relay, secrets, secretReads, currentShell, shellReads, publications, catchUp };
 });
@@ -951,6 +956,43 @@ describe("startup catch-up", { concurrent: false }, () => {
 });
 
 describe("shared notification eligibility on relay", () => {
+  it("keeps virtual result completion quiet while an approval still alerts", () => {
+    const ended = shell({
+      status: "completed",
+      notificationOrigin: "human",
+      latestRunId: RunId.make("reply"),
+      latestRunCompletedAt: DateTime.makeUnsafe(NOW),
+    });
+    const snapshot = (thread: OrchestrationV2ThreadShell, resultOwned: boolean) =>
+      AgentAwarenessRelay.resolveAgentAwarenessRelayPublishSnapshot({
+        nowMs: Date.parse(NOW),
+        environmentId: EnvironmentId.make("env"),
+        threadId: THREAD_ID,
+        thread: Option.some(thread),
+        project: Option.some({ id: PROJECT_ID, title: "Project" } as never),
+        resultOwned,
+      }).state;
+    assert.equal(snapshot(ended, false)?.notification?.kind, "reply");
+    assert.isNull(snapshot(ended, true));
+    assert.equal(
+      snapshot(
+        {
+          ...ended,
+          pendingRuntimeRequest: {
+            id: RuntimeRequestId.make("approval"),
+            kind: "command",
+            createdAt: DateTime.makeUnsafe(NOW),
+          },
+        },
+        true,
+      )?.notification?.kind,
+      "approval",
+    );
+    assert.equal(
+      snapshot({ ...ended, hasActionableProposedPlan: true }, true)?.notification?.kind,
+      "decision",
+    );
+  });
   it("alerts a human reply while background work remains, but suppresses same-thread work", () => {
     {
       const ended = shell({

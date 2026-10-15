@@ -6,6 +6,8 @@ import * as Rpc from "effect/rpc/Rpc";
 const RemoteParent = Schema.Struct({ environmentId: Schema.String, threadId: ThreadId });
 export const ThreadMetadata = Schema.Struct({
   threadId: ThreadId,
+  virtualAgentId: Schema.optionalKey(Schema.String),
+  virtualRunId: Schema.optionalKey(Schema.String),
   purpose: Schema.optionalKey(Schema.NullOr(Schema.Literals(["project", "harness"]))),
   subproject: Schema.optionalKey(Schema.NullOr(Schema.Literals(["auto", "on", "off"]))),
   parentThreadId: Schema.NullOr(ThreadId),
@@ -54,6 +56,10 @@ export function withThreadMetadata<T extends { id: string; parentThreadId?: stri
   return metadata
     ? {
         ...thread,
+        ...(metadata.virtualAgentId === undefined
+          ? {}
+          : { virtualAgentId: metadata.virtualAgentId }),
+        ...(metadata.virtualRunId === undefined ? {} : { virtualRunId: metadata.virtualRunId }),
         parentThreadId: metadata.parentThreadId,
         remoteParent: metadata.remoteParent ?? null,
         scope: metadata.scope ?? null,

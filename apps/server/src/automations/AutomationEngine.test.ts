@@ -50,6 +50,7 @@ function harness(
     const issues = new Map<string, AutomationObservation[]>();
     const latestReleases = new Map<string, Release>();
     const gateway = Layer.mock(AgentGateway)({
+      sweepSubheads: Effect.succeed({ pending: false, watched: [] }),
       projectExists: () => Effect.succeed(true),
       threadInProject: () => Effect.succeed(true),
       advance: (_run, step) =>

@@ -39,8 +39,14 @@ import * as McpHttpServer from "../../McpHttpServer.ts";
 import * as McpSessionRegistry from "../../McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "../../PreviewAutomationBroker.ts";
 import * as PreviewBrowser from "../../../preview/PreviewBrowser.ts";
+import * as AutomationStore from "../../../automations/AutomationStore.ts";
+import * as AutomationEngine from "../../../automations/AutomationEngine.ts";
+import * as ProjectStore from "../../../orchestration-v2/ProjectStore.ts";
 
 const layerStubServices = Layer.mergeAll(
+  Layer.mock(AutomationStore.AutomationStore)({}),
+  Layer.mock(AutomationEngine.AutomationEngine)({}),
+  Layer.mock(ProjectStore.ProjectStoreV2)({}),
   Layer.mock(HarnessReadService)({}),
   Layer.mock(HarnessPinService)({}),
   Layer.mock(RoutineKindService)({ environmentId: "environment-scratch" }),

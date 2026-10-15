@@ -8,6 +8,10 @@ import { isNoChangeReply } from "@t3tools/shared/completionOutput";
 import { ResumeAdmission } from "../threadRecovery/ResumeAdmission.ts";
 import { interruptedSessionEvents } from "../forkThreads/InterruptedSession.ts";
 import { MessageAdmission } from "../forkThreads/MessageAdmission.ts";
+import {
+  canStartSubheadWorker,
+  subheadCapacityQueueCandidates,
+} from "../forkThreads/SubheadCapacity.ts";
 import { canReconcileStartingSession } from "../forkThreads/StartingSessionReconcile.ts";
 import { normalizeThreadIssueKey, threadIssueKeysEqual } from "@t3tools/shared/threadIssues";
 import {
@@ -1310,6 +1314,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       // Every terminal run checks the queue. Only a deliverable queued run
       // needs the transcript for provider handoff and legacy import context.
       if (!(yield* projectionStore.canStartQueuedRun(threadId))) return;
+      if (!(yield* canStartSubheadWorker(sql, threadId))) return;
       const projection = yield* readCommandProjection(threadId);
       if (
         projection.thread.archivedAt !== null ||
@@ -1917,7 +1922,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     for (const threadId of threadIds) {
       const resumedThread = yield* Effect.gen(function* () {
         if (!(yield* projectionStore.canStartQueuedRun(threadId))) return false;
-        yield* threadDispatch.withLock(threadId, startNextQueuedRun(threadId));
+        yield* withOwnershipLock(
+          sql,
+          threadDispatch.withLock(threadId, startNextQueuedRun(threadId)),
+        );
         return true;
       }).pipe(
         Effect.catch((cause) =>
@@ -11113,6 +11121,17 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       } satisfies OrchestratorV2DispatchResult;
     }
 
+    if (
+      command.type === "message.dispatch" &&
+      !(yield* canStartSubheadWorker(sql, command.threadId).pipe(mapDispatchError(command)))
+    ) {
+      return yield* new OrchestratorDispatchError({
+        commandId: command.commandId,
+        commandType: command.type,
+        cause: "Owning head capacity is full (2 worker turns).",
+      });
+    }
+
     // A limited sender checked these modes before dispatching; the thread's
     // user may have raised them since, and only here can they not change.
     const limit = yield* DispatchModeLimit;
@@ -11285,6 +11304,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       command.type === "thread.create" ||
       command.type === "thread.unarchive" ||
       command.type === "message.dispatch" ||
+      command.type === "queue.resume" ||
       command.type === "thread.auto-settle" ||
       command.type === "thread.auto-settle.set"
     ) {
@@ -11312,8 +11332,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           finalizeDelegatedCompletionDelivery(threadId, stored.event.payload.id),
         );
       }
-      yield* threadDispatch
-        .withLock(
+      yield* withOwnershipLock(
+        sql,
+        threadDispatch.withLock(
           threadId,
           startNextQueuedRun(
             threadId,
@@ -11321,12 +11342,21 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               ? { failedRunId: stored.event.payload.id }
               : undefined,
           ),
-        )
-        .pipe(
+        ),
+      ).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning("Failed to start the next queued V2 run", { threadId, cause }),
+        ),
+      );
+      // A freed shared head slot may belong to another ordinary worker's queue.
+      for (const peer of yield* subheadCapacityQueueCandidates(sql)) {
+        if (peer === threadId) continue;
+        yield* withOwnershipLock(sql, threadDispatch.withLock(peer, startNextQueuedRun(peer))).pipe(
           Effect.catchCause((cause) =>
-            Effect.logWarning("Failed to start the next queued V2 run", { threadId, cause }),
+            Effect.logWarning("Failed to resume a shared-head queue", { threadId: peer, cause }),
           ),
         );
+      }
       // After the queue decision: a provider failure holds the child's queued
       // wakes, and only then is the failed run the task's result.
       const parentThreadId = yield* appOwnedSubagentParentThreadId(threadId);

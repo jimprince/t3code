@@ -1,3 +1,5 @@
+import type { OrchestrationV2Run, OrchestrationV2ConversationMessage } from "@t3tools/contracts";
+
 /** A live run owns its outcome; a stopped session from an earlier run cannot fail it. */
 export function unboundRunOutcome(input: {
   readonly messageCreatedAt: string;
@@ -32,4 +34,15 @@ export function unboundRunOutcome(input: {
       result: session.lastError ?? "Provider session stopped before completion.",
     };
   return null;
+}
+/** Resolve the native run bound to this input, including its original-root fallback. */
+export function inputRootRun(
+  runs: ReadonlyArray<OrchestrationV2Run>,
+  message: Pick<OrchestrationV2ConversationMessage, "id" | "runId">,
+) {
+  return runs.find(
+    (candidate) =>
+      candidate.id === message.runId ||
+      (candidate.userMessageId === message.id && candidate.restartContinuationOfRunId == null),
+  );
 }

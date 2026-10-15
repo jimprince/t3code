@@ -118,6 +118,8 @@ export interface OrchestrationProposedPlan {
 }
 
 export interface OrchestrationThread {
+  virtualAgentId?: string;
+  virtualRunId?: string;
   operatorSummary?: import("@t3tools/contracts").OrchestrationV2OperatorSummary;
   hasActionableProposedPlan?: boolean;
   lastError?: string | null;
@@ -165,6 +167,8 @@ export interface OrchestrationShellSnapshot {
 }
 
 export interface OrchestrationThreadShell {
+  virtualAgentId?: string;
+  virtualRunId?: string;
   activeRunId?: string | null;
   latestRunStartedAt?: string | null;
   status?: string;

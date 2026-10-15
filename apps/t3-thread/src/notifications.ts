@@ -232,6 +232,7 @@ export function shouldNotify(
 }
 
 function turnResultDisposition(thread: OrchestrationThread): "quiet" | "attention" | null {
+  if (thread.virtualAgentId !== undefined) return "quiet";
   const text = getLatestTurnAssistantMessage(thread)?.text.trim() ?? "";
   if (isNoChangeReply(text)) return "quiet";
   const disposition = text.match(/(?:^|\n)T3_NOTIFY: (quiet|attention)$/)?.[1];

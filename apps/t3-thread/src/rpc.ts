@@ -64,6 +64,7 @@ export const RPC_METHODS = {
   automationScriptsRun: "automationScripts.run",
 
   listNamedAgents: "orchestration.listNamedAgents",
+  subheads: "fork.subheads",
   resolveNamedAgent: "orchestration.resolveNamedAgent",
   handOverNamedAgent: "orchestration.handOverNamedAgent",
   threadMetadataList: "fork.threads.metadata.list",

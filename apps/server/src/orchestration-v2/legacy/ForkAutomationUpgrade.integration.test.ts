@@ -40,6 +40,7 @@ import * as Settings from "../../serverSettings.ts";
 import { AgentGateway, layer as gatewayLayer } from "../../automations/AgentGateway.ts";
 import { AutomationEngine, layer as engineLayer } from "../../automations/AutomationEngine.ts";
 import { layer as storeLayer } from "../../automations/AutomationStore.ts";
+import * as SubheadProviderMock from "../../provider/testUtils/providerRegistryMock.ts";
 import { ReleaseFeed } from "../../automations/ReleaseFeed.ts";
 
 vi.mock("../../projectIssues/ProjectIssuesService.ts", async () => {
@@ -172,6 +173,8 @@ it.effect.skipIf(!fixtures)(
                   }),
                   Layer.succeed(ProjectStore.ProjectStoreV2, yield* ProjectStore.ProjectStoreV2),
                   Settings.layerTest(),
+                  storeLayer.pipe(Layer.provide(Layer.succeed(SqlClient.SqlClient, sql))),
+                  SubheadProviderMock.layer(),
                   Layer.mock(ApplicationEvents.OrchestrationEventStore)({}),
                   Layer.mock(ThreadLaunch.ThreadLaunchService)({
                     launch: () => Effect.die("Upgrade must never launch"),

@@ -1,4 +1,5 @@
 import { ThreadResumeRpc, ThreadResumePreviewRpc } from "@t3tools/contracts";
+import { SubheadRpc } from "@t3tools/contracts";
 import {
   HarnessSnapshotRpc,
   HarnessRoutineKindSetRpc,
@@ -275,6 +276,7 @@ const WsAutomationScriptsRunRpc = Rpc.make("automationScripts.run", {
 });
 
 export const WsRpcGroup = RpcGroup.make(
+  SubheadRpc,
   ThreadResumeRpc,
   ThreadResumePreviewRpc,
   HarnessSnapshotRpc,

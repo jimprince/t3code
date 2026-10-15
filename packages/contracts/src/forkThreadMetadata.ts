@@ -17,6 +17,10 @@ export type ThreadPurpose = typeof ThreadPurpose.Type;
 /** Organizational supervision is independent of provider execution lineage. */
 export const ForkThreadMetadata = Schema.Struct({
   threadId: ThreadId,
+  virtualAgentId: Schema.optionalKey(Schema.String),
+  virtualRunId: Schema.optionalKey(Schema.String),
+  virtualResultCapturedAt: Schema.optionalKey(Schema.String),
+  virtualResultCapturedRunId: Schema.optionalKey(Schema.String),
   resumedFrom: Schema.optionalKey(ThreadResumeProvenance),
   purpose: Schema.optionalKey(Schema.NullOr(ThreadPurpose)),
   subproject: Schema.optionalKey(Schema.NullOr(ThreadSubprojectMode)),
