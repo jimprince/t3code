@@ -38,10 +38,15 @@ vi.mock("../../state/entities", () => ({
     ]),
   waitForThreadShell: () => Promise.resolve(state.waitForShell),
 }));
-vi.mock("../../state/session", () => ({
+vi.mock("../../state/session", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../state/session")>()),
   useEnvironmentScope: () => state.permitted,
   readEnvironmentScope: (_: unknown, scope: string) =>
     scope === "orchestration:operate" && state.permitted,
+}));
+vi.mock("../../state/dashboard", () => ({
+  useBlockerSnapshot: () => ({ snapshot: null, stored: false }),
+  refreshDashboard: vi.fn(),
 }));
 // The RPC boundary: the production command, hook and component all run; only the wire is replaced.
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => state.rpc }));

@@ -2,6 +2,7 @@ import { useAtomValue } from "@effect/atom-react";
 import {
   createDashboardAtoms,
   createDashboardSnapshotMerger,
+  mountedDashboardSnapshotAtom,
 } from "@t3tools/client-runtime/dashboard";
 import { DashboardSnapshot, type EnvironmentId } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
@@ -75,9 +76,15 @@ function readStored(environmentId: EnvironmentId): DashboardSnapshot | null {
 
 const written = new Map<EnvironmentId, number>();
 
+/** The stored copy as an atom, so a badge reads it without a subscription and sees a new write. */
+const storedDashboardSnapshot = Atom.family((environmentId: EnvironmentId) =>
+  Atom.make<DashboardSnapshot | null>(readStored(environmentId)).pipe(Atom.keepAlive),
+);
+
 function writeStored(environmentId: EnvironmentId, snapshot: DashboardSnapshot) {
   if (written.get(environmentId) === snapshot.revision) return;
   written.set(environmentId, snapshot.revision);
+  appAtomRegistry.set(storedDashboardSnapshot(environmentId), snapshot);
   try {
     window.localStorage.setItem(STORAGE_PREFIX + environmentId, JSON.stringify(snapshot));
   } catch {
@@ -157,5 +164,28 @@ export function useEnvironmentDashboardSnapshot(
 ): DashboardSnapshot | null {
   return useAtomValue(
     environmentId === null ? NO_DASHBOARD_SNAPSHOT : environmentDashboardSnapshot(environmentId),
+  );
+}
+
+const NO_BLOCKER_SNAPSHOT = Atom.make<DashboardSnapshot | null>(null);
+
+/**
+ * What a Blocked or Waiting badge counts from: the snapshot a mounted Dashboard holds, else the
+ * copy stored on this device (`stored`, so the badge's popover says "as of"). It never subscribes,
+ * so a badge adds no websocket traffic of its own.
+ */
+export function useBlockerSnapshot(environmentId: EnvironmentId | null): {
+  readonly snapshot: DashboardSnapshot | null;
+  readonly stored: boolean;
+} {
+  const mounted = useAtomValue(
+    environmentId === null ? NO_BLOCKER_SNAPSHOT : mountedDashboardSnapshotAtom(environmentId),
+  );
+  const stored = useAtomValue(
+    environmentId === null ? NO_BLOCKER_SNAPSHOT : storedDashboardSnapshot(environmentId),
+  );
+  return useMemo(
+    () => (mounted ? { snapshot: mounted, stored: false } : { snapshot: stored, stored: true }),
+    [mounted, stored],
   );
 }

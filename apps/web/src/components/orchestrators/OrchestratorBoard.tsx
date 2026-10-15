@@ -67,6 +67,7 @@ import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { OrchestratorStatus } from "./OrchestratorStatus";
 import { useOrchestratorThreadShells } from "./useOrchestratorThreads";
 import { readOrchestratorLastVisit, recordOrchestratorVisit } from "./orchestratorVisit";
+import { BlockedBadge, BlockerAnswersProvider, WaitingBadge } from "../blockers/BlockerBadge";
 import { DashboardView } from "../dashboard-v3/DashboardView";
 import { NEXT_CANVAS_ID, NextCanvas } from "../dashboard-v3/nextCanvas";
 import { ProjectAutomationsSlot } from "../projects/ProjectAutomationsSlot";
@@ -296,7 +297,14 @@ function useBlockedRows(summary: OrchestratorSummary): BlockedRow[] {
 /** "N blocked" in the status line: the blocked tags and notes under Workstreams, counted, plus blocked threads inside subprojects. */
 function BlockedCount({ summary }: { readonly summary: OrchestratorSummary }) {
   const count = useBlockedRows(summary).length + subprojectBlocked(summary);
-  return count > 0 ? <span className="text-error">{count} blocked</span> : null;
+  return (
+    <BlockedBadge
+      environmentId={summary.root.environmentId}
+      rootId={summary.root.id}
+      active={count > 0}
+      label={`${count} blocked`}
+    />
+  );
 }
 
 /** A subproject's health chip and sentence, from its own page data. */
@@ -488,8 +496,16 @@ function SubprojectTableRow({ sub }: { readonly sub: OrchestratorSummary }) {
       </span>
       <span className={`${SUBPROJECT_COLUMN.working} text-muted-foreground`}>{working}</span>
       <span className={SUBPROJECT_COLUMN.needsYou}>
-        {blocked ? <span className="text-error">Blocked </span> : null}
-        {needsYou === null ? null : <span className="text-warning-foreground">{needsYou}</span>}
+        <BlockedBadge
+          environmentId={sub.root.environmentId}
+          rootId={sub.root.id}
+          active={blocked}
+        />{" "}
+        <WaitingBadge
+          environmentId={sub.root.environmentId}
+          rootId={sub.root.id}
+          fallbackCount={sub.rollup.needsYou}
+        />
       </span>
       <span className={`${SUBPROJECT_COLUMN.activity} text-xs text-muted-foreground`}>
         {formatRelativeTimeLabel(sub.rollup.latestActivityAt)}
@@ -981,277 +997,282 @@ export function OrchestratorBoard({
 
   return (
     <OpenTaskContext value={onTaskChange ?? null}>
-      <SidebarInset className="h-dvh min-h-0 overflow-hidden">
-        <div className="flex min-h-0 flex-1 flex-col">
-          <WorkspacePageHeader electron={isElectron} className="bg-background">
-            {rootProject ? <ProjectFavicon project={rootProject} className="size-5" /> : null}
-            <WorkspaceBreadcrumb ariaLabel="Project breadcrumb">
-              {newDashboard ? (
-                <WorkspaceBreadcrumbItem className="shrink-0">
-                  <button
-                    type="button"
-                    className="cursor-pointer hover:text-foreground hover:underline"
-                    onClick={() => void navigate({ to: "/dashboard" })}
-                  >
-                    Home
-                  </button>
-                  <span aria-hidden className="pl-2 sm:pl-3">
-                    /
-                  </span>
-                </WorkspaceBreadcrumbItem>
-              ) : null}
-              {trail.map((ancestor) => (
-                <WorkspaceBreadcrumbItem
-                  key={`${ancestor.root.environmentId}:${ancestor.root.id}`}
-                  className="shrink"
-                >
-                  <button
-                    type="button"
-                    className="max-w-24 cursor-pointer truncate hover:text-foreground hover:underline sm:max-w-48"
-                    onClick={() =>
-                      void navigate({
-                        to: "/orchestrators/$environmentId/$threadId",
-                        params: {
-                          environmentId: ancestor.root.environmentId,
-                          threadId: ancestor.root.id,
-                        },
-                      })
-                    }
-                  >
-                    {ancestor.root.title}
-                  </button>
-                  <span aria-hidden className="pl-2 sm:pl-3">
-                    /
-                  </span>
-                </WorkspaceBreadcrumbItem>
-              ))}
-              <WorkspaceBreadcrumbItem current>
-                <span className="flex min-w-0 flex-col">
-                  <h1 className="truncate">{summary.root.title}</h1>
-                  {summary.root.scope ? (
-                    <span className="truncate text-xs font-normal text-muted-foreground">
-                      {summary.root.scope}
-                    </span>
-                  ) : null}
-                </span>
-              </WorkspaceBreadcrumbItem>
-            </WorkspaceBreadcrumb>
-            <div className="flex-1" />
-            {/* Icon-only below `sm`: the labels would leave the breadcrumb about 100px. */}
-            <Button size="sm" variant="ghost" aria-label="Edit" onClick={openEditor}>
-              <PencilIcon />
-              <span className="hidden sm:inline">Edit</span>
-            </Button>
-            <Button
-              size="sm"
-              variant={chatOpen ? "secondary" : "outline"}
-              aria-label={chatOpen ? "Hide chat" : "Chat"}
-              onClick={() => setChatOpen((open) => !open)}
-            >
-              <MessageSquareIcon />
-              <span className="hidden sm:inline">{chatOpen ? "Hide chat" : "Chat"}</span>
-            </Button>
-          </WorkspacePageHeader>
-          <div className="flex min-h-0 flex-1 border-t border-border">
-            <div className="topbar-scroll-fade min-h-0 min-w-0 flex-1 overflow-y-auto">
-              <WorkspacePageContainer width="wide" className="gap-5">
-                {newDashboard ? null : (
-                  <>
-                    {/* On every tab, first: one line until it is used. */}
-                    <ProjectRequestBox
-                      summary={summary}
-                      quickActions={tab === "dashboard" ? REQUEST_QUICK_ACTIONS : undefined}
-                    />
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-                      <OrchestratorStatus status={summary.status} />
-                      {summary.rollup.working > 0 ? (
-                        <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                          <UsersIcon className="size-4" />
-                          {summary.rollup.working} working
-                        </span>
-                      ) : null}
-                      <NeedsYouCount summary={summary} />
-                      <BlockedCount summary={summary} />
-                      <span className="text-xs text-muted-foreground">
-                        {summary.projects.map((project) => project.title).join(" · ")}
-                      </span>
-                    </div>
-
-                    <ProjectHealthLine summary={summary} />
-                    {tab === "dashboard" && !planInLayout ? (
-                      <ProjectSubprojects summary={summary} />
-                    ) : null}
-                    {tab === "dashboard" && !planInLayout ? (
-                      <ProjectSubagents summary={summary} />
-                    ) : null}
-                    {tab === "dashboard" && !planInLayout ? (
-                      <ProjectWorkstreams summary={summary} since={previousVisit} />
-                    ) : null}
-                    <ProjectReleaseLine
-                      summary={summary}
-                      runningVersion={
-                        serverConfigs.get(summary.root.environmentId)?.environment.serverVersion ??
-                        null
-                      }
-                    />
-                  </>
-                )}
-                <ProjectTabBar
-                  tabs={layoutTabs}
-                  tab={tab}
-                  onSelect={selectTab}
-                  editing={editingLayout}
-                  onApply={changeLayout}
-                  actions={
-                    layoutState.live ? (
-                      <Button
-                        size="xs"
-                        variant={editingLayout ? "secondary" : "ghost-muted"}
-                        onClick={() => setEditingLayout((value) => !value)}
-                      >
-                        <SlidersHorizontalIcon />
-                        {editingLayout ? "Done" : "Edit layout"}
-                      </Button>
-                    ) : null
-                  }
-                />
+      <BlockerAnswersProvider>
+        <SidebarInset className="h-dvh min-h-0 overflow-hidden">
+          <div className="flex min-h-0 flex-1 flex-col">
+            <WorkspacePageHeader electron={isElectron} className="bg-background">
+              {rootProject ? <ProjectFavicon project={rootProject} className="size-5" /> : null}
+              <WorkspaceBreadcrumb ariaLabel="Project breadcrumb">
                 {newDashboard ? (
-                  <DashboardView
-                    scope={{ kind: "project", environmentId, threadId }}
-                    leading={nextWidget ? <NextCanvas summary={summary} /> : null}
-                  />
+                  <WorkspaceBreadcrumbItem className="shrink-0">
+                    <button
+                      type="button"
+                      className="cursor-pointer hover:text-foreground hover:underline"
+                      onClick={() => void navigate({ to: "/dashboard" })}
+                    >
+                      Home
+                    </button>
+                    <span aria-hidden className="pl-2 sm:pl-3">
+                      /
+                    </span>
+                  </WorkspaceBreadcrumbItem>
                 ) : null}
-                {newDashboard && activeTab && restWidgets.length > 0 ? (
-                  <ProjectLayoutTabView
-                    summary={summary}
-                    tabs={layoutTabs}
-                    tab={{ ...activeTab, widgets: restWidgets }}
-                    editing={false}
-                    builtins={
-                      new Map(
-                        restWidgets.map((widget) => [
-                          widget.id,
-                          <BuiltinWidget key={widget.id} widget={widget} page={page} />,
-                        ]),
-                      )
-                    }
-                    onApply={changeLayout}
-                  />
-                ) : null}
-                {newDashboard ? null : activeTab ? (
-                  <ProjectLayoutTabView
-                    summary={summary}
-                    tabs={layoutTabs}
-                    tab={activeTab}
-                    editing={editingLayout}
-                    builtins={
-                      new Map(
-                        activeTab.widgets.map((widget) => [
-                          widget.id,
-                          <BuiltinWidget key={widget.id} widget={widget} page={page} />,
-                        ]),
-                      )
-                    }
-                    onApply={changeLayout}
-                  />
-                ) : null}
-              </WorkspacePageContainer>
-            </div>
-            {task ? (
-              <ProjectTaskPanel
-                summary={summary}
-                task={task}
-                onClose={() => onTaskChange?.(null)}
-              />
-            ) : chatOpen ? (
-              <aside className="flex w-full min-w-0 shrink-0 flex-col border-l border-border sm:w-[400px]">
-                <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
-                  <MessageSquareIcon className="size-4 text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                    {summary.root.title}
+                {trail.map((ancestor) => (
+                  <WorkspaceBreadcrumbItem
+                    key={`${ancestor.root.environmentId}:${ancestor.root.id}`}
+                    className="shrink"
+                  >
+                    <button
+                      type="button"
+                      className="max-w-24 cursor-pointer truncate hover:text-foreground hover:underline sm:max-w-48"
+                      onClick={() =>
+                        void navigate({
+                          to: "/orchestrators/$environmentId/$threadId",
+                          params: {
+                            environmentId: ancestor.root.environmentId,
+                            threadId: ancestor.root.id,
+                          },
+                        })
+                      }
+                    >
+                      {ancestor.root.title}
+                    </button>
+                    <span aria-hidden className="pl-2 sm:pl-3">
+                      /
+                    </span>
+                  </WorkspaceBreadcrumbItem>
+                ))}
+                <WorkspaceBreadcrumbItem current>
+                  <span className="flex min-w-0 flex-col">
+                    <h1 className="truncate">{summary.root.title}</h1>
+                    {summary.root.scope ? (
+                      <span className="truncate text-xs font-normal text-muted-foreground">
+                        {summary.root.scope}
+                      </span>
+                    ) : null}
                   </span>
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label="Open the full orchestrator thread"
-                    onClick={() =>
-                      void navigate({
-                        to: "/$environmentId/$threadId",
-                        params: buildThreadRouteParams(rootRef),
-                        state: projectReturnState({
-                          environmentId: summary.root.environmentId,
-                          threadId: summary.root.id,
-                        }),
-                      })
+                </WorkspaceBreadcrumbItem>
+              </WorkspaceBreadcrumb>
+              <div className="flex-1" />
+              {/* Icon-only below `sm`: the labels would leave the breadcrumb about 100px. */}
+              <Button size="sm" variant="ghost" aria-label="Edit" onClick={openEditor}>
+                <PencilIcon />
+                <span className="hidden sm:inline">Edit</span>
+              </Button>
+              <Button
+                size="sm"
+                variant={chatOpen ? "secondary" : "outline"}
+                aria-label={chatOpen ? "Hide chat" : "Chat"}
+                onClick={() => setChatOpen((open) => !open)}
+              >
+                <MessageSquareIcon />
+                <span className="hidden sm:inline">{chatOpen ? "Hide chat" : "Chat"}</span>
+              </Button>
+            </WorkspacePageHeader>
+            <div className="flex min-h-0 flex-1 border-t border-border">
+              <div className="topbar-scroll-fade min-h-0 min-w-0 flex-1 overflow-y-auto">
+                <WorkspacePageContainer width="wide" className="gap-5">
+                  {newDashboard ? null : (
+                    <>
+                      {/* On every tab, first: one line until it is used. */}
+                      <ProjectRequestBox
+                        summary={summary}
+                        quickActions={tab === "dashboard" ? REQUEST_QUICK_ACTIONS : undefined}
+                      />
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+                        <OrchestratorStatus status={summary.status} />
+                        {summary.rollup.working > 0 ? (
+                          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                            <UsersIcon className="size-4" />
+                            {summary.rollup.working} working
+                          </span>
+                        ) : null}
+                        <NeedsYouCount summary={summary} />
+                        <BlockedCount summary={summary} />
+                        <span className="text-xs text-muted-foreground">
+                          {summary.projects.map((project) => project.title).join(" · ")}
+                        </span>
+                      </div>
+
+                      <ProjectHealthLine summary={summary} />
+                      {tab === "dashboard" && !planInLayout ? (
+                        <ProjectSubprojects summary={summary} />
+                      ) : null}
+                      {tab === "dashboard" && !planInLayout ? (
+                        <ProjectSubagents summary={summary} />
+                      ) : null}
+                      {tab === "dashboard" && !planInLayout ? (
+                        <ProjectWorkstreams summary={summary} since={previousVisit} />
+                      ) : null}
+                      <ProjectReleaseLine
+                        summary={summary}
+                        runningVersion={
+                          serverConfigs.get(summary.root.environmentId)?.environment
+                            .serverVersion ?? null
+                        }
+                      />
+                    </>
+                  )}
+                  <ProjectTabBar
+                    tabs={layoutTabs}
+                    tab={tab}
+                    onSelect={selectTab}
+                    editing={editingLayout}
+                    onApply={changeLayout}
+                    actions={
+                      layoutState.live ? (
+                        <Button
+                          size="xs"
+                          variant={editingLayout ? "secondary" : "ghost-muted"}
+                          onClick={() => setEditingLayout((value) => !value)}
+                        >
+                          <SlidersHorizontalIcon />
+                          {editingLayout ? "Done" : "Edit layout"}
+                        </Button>
+                      ) : null
                     }
-                  >
-                    <ArrowUpRightIcon />
-                  </Button>
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label="Close orchestrator chat"
-                    onClick={() => setChatOpen(false)}
-                  >
-                    <XIcon />
-                  </Button>
-                </div>
-                <ChatView
-                  routeKind="server"
-                  environmentId={rootRef.environmentId}
-                  threadId={rootRef.threadId}
-                  presentation="project-panel"
-                  revealMessageId={revealedMessageId}
+                  />
+                  {newDashboard ? (
+                    <DashboardView
+                      scope={{ kind: "project", environmentId, threadId }}
+                      leading={nextWidget ? <NextCanvas summary={summary} /> : null}
+                    />
+                  ) : null}
+                  {newDashboard && activeTab && restWidgets.length > 0 ? (
+                    <ProjectLayoutTabView
+                      summary={summary}
+                      tabs={layoutTabs}
+                      tab={{ ...activeTab, widgets: restWidgets }}
+                      editing={false}
+                      builtins={
+                        new Map(
+                          restWidgets.map((widget) => [
+                            widget.id,
+                            <BuiltinWidget key={widget.id} widget={widget} page={page} />,
+                          ]),
+                        )
+                      }
+                      onApply={changeLayout}
+                    />
+                  ) : null}
+                  {newDashboard ? null : activeTab ? (
+                    <ProjectLayoutTabView
+                      summary={summary}
+                      tabs={layoutTabs}
+                      tab={activeTab}
+                      editing={editingLayout}
+                      builtins={
+                        new Map(
+                          activeTab.widgets.map((widget) => [
+                            widget.id,
+                            <BuiltinWidget key={widget.id} widget={widget} page={page} />,
+                          ]),
+                        )
+                      }
+                      onApply={changeLayout}
+                    />
+                  ) : null}
+                </WorkspacePageContainer>
+              </div>
+              {task ? (
+                <ProjectTaskPanel
+                  summary={summary}
+                  task={task}
+                  onClose={() => onTaskChange?.(null)}
                 />
-              </aside>
-            ) : null}
-          </div>
-        </div>
-        <Dialog open={editing} onOpenChange={setEditing}>
-          <DialogPopup>
-            <DialogHeader>
-              <DialogTitle>Edit project</DialogTitle>
-            </DialogHeader>
-            <div className="flex flex-col gap-4 px-6 pb-2">
-              <label className="flex flex-col gap-1.5 text-sm font-medium">
-                Title
-                <Input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} />
-              </label>
-              <label className="flex flex-col gap-1.5 text-sm font-medium">
-                Scope
-                <Textarea
-                  value={editScope}
-                  rows={2}
-                  maxLength={500}
-                  placeholder="Coordinates the entire repo"
-                  onChange={(event) => setEditScope(event.target.value)}
-                />
-              </label>
-              <label className="flex flex-col gap-1.5 text-sm font-medium">
-                Task repository
-                <Input
-                  value={editTracker}
-                  placeholder="owner/repo, only when the code is not on Gitea"
-                  onChange={(event) => setEditTracker(event.target.value)}
-                />
-              </label>
-            </div>
-            <DialogFooter>
-              {summary.parentProjectKey !== null ? (
-                <Button variant="ghost" className="mr-auto" onClick={() => void showAsWorker()}>
-                  Show as worker
-                </Button>
+              ) : chatOpen ? (
+                <aside className="flex w-full min-w-0 shrink-0 flex-col border-l border-border sm:w-[400px]">
+                  <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
+                    <MessageSquareIcon className="size-4 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                      {summary.root.title}
+                    </span>
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label="Open the full orchestrator thread"
+                      onClick={() =>
+                        void navigate({
+                          to: "/$environmentId/$threadId",
+                          params: buildThreadRouteParams(rootRef),
+                          state: projectReturnState({
+                            environmentId: summary.root.environmentId,
+                            threadId: summary.root.id,
+                          }),
+                        })
+                      }
+                    >
+                      <ArrowUpRightIcon />
+                    </Button>
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label="Close orchestrator chat"
+                      onClick={() => setChatOpen(false)}
+                    >
+                      <XIcon />
+                    </Button>
+                  </div>
+                  <ChatView
+                    routeKind="server"
+                    environmentId={rootRef.environmentId}
+                    threadId={rootRef.threadId}
+                    presentation="project-panel"
+                    revealMessageId={revealedMessageId}
+                  />
+                </aside>
               ) : null}
-              <Button variant="outline" onClick={() => setEditing(false)}>
-                Cancel
-              </Button>
-              <Button disabled={editTitle.trim().length === 0} onClick={() => void saveIdentity()}>
-                Save
-              </Button>
-            </DialogFooter>
-          </DialogPopup>
-        </Dialog>
-      </SidebarInset>
+            </div>
+          </div>
+          <Dialog open={editing} onOpenChange={setEditing}>
+            <DialogPopup>
+              <DialogHeader>
+                <DialogTitle>Edit project</DialogTitle>
+              </DialogHeader>
+              <div className="flex flex-col gap-4 px-6 pb-2">
+                <label className="flex flex-col gap-1.5 text-sm font-medium">
+                  Title
+                  <Input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} />
+                </label>
+                <label className="flex flex-col gap-1.5 text-sm font-medium">
+                  Scope
+                  <Textarea
+                    value={editScope}
+                    rows={2}
+                    maxLength={500}
+                    placeholder="Coordinates the entire repo"
+                    onChange={(event) => setEditScope(event.target.value)}
+                  />
+                </label>
+                <label className="flex flex-col gap-1.5 text-sm font-medium">
+                  Task repository
+                  <Input
+                    value={editTracker}
+                    placeholder="owner/repo, only when the code is not on Gitea"
+                    onChange={(event) => setEditTracker(event.target.value)}
+                  />
+                </label>
+              </div>
+              <DialogFooter>
+                {summary.parentProjectKey !== null ? (
+                  <Button variant="ghost" className="mr-auto" onClick={() => void showAsWorker()}>
+                    Show as worker
+                  </Button>
+                ) : null}
+                <Button variant="outline" onClick={() => setEditing(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  disabled={editTitle.trim().length === 0}
+                  onClick={() => void saveIdentity()}
+                >
+                  Save
+                </Button>
+              </DialogFooter>
+            </DialogPopup>
+          </Dialog>
+        </SidebarInset>
+      </BlockerAnswersProvider>
     </OpenTaskContext>
   );
 }

@@ -106,8 +106,11 @@ describe("Projects sidebar card subprojects", () => {
 
   it("tags a Harness subproject of a project, and only the one that differs from its parent", () => {
     const markup = render();
+    // A row is an overlay button then its content, up to the next row's button.
     const rowOf = (title: string) =>
-      markup.slice(markup.indexOf(`aria-label="Open ${title} subproject"`)).split("</button>")[0]!;
+      markup
+        .slice(markup.indexOf(`aria-label="Open ${title} subproject"`) + 1)
+        .split(/aria-label="Open [^"]+ subproject"/)[0]!;
     expect(rowOf("Reliability")).toContain(">Harness<");
     expect(rowOf("T3 Product")).toContain(">Harness<");
     expect(rowOf("Dashboard")).not.toContain(">Harness<");

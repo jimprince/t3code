@@ -53,6 +53,7 @@ function thread(overrides: Record<string, unknown> = {}): EnvironmentThreadShell
     runtime: null,
     pendingBackgroundTasks: [],
     latestRun: null,
+    source: {},
     ...overrides,
   } as unknown as EnvironmentThreadShell;
 }

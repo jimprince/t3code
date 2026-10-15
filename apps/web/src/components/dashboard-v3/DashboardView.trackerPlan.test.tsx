@@ -159,7 +159,7 @@ describe("workstream headers count child tasks (real T3 projection)", () => {
     await show("t3", REAL_AT);
     // The epic task carries the decision; its header row is the only place that can show it.
     const link = [...rowOf("Make the dev fork update button").querySelectorAll("button")].find(
-      (b) => b.textContent?.includes("waiting on you"),
+      (b) => b.textContent?.includes("Waiting on Brad"),
     );
     expect(link).toBeDefined();
   });
@@ -234,15 +234,17 @@ describe("constructed cases through the same pipeline", () => {
     expect(rowOf("A loose ask with a personal checklist").textContent).not.toMatch(/ETA/);
   });
 
-  it("keeps a waiting-on-you link that opens the decision", async () => {
+  it("keeps a Waiting on Brad badge that opens the decision in a popover", async () => {
     await show("constructed", BUILT_AT);
     await expand("Shipping the ledger");
     const link = [...rowOf("Review the export").querySelectorAll("button")].find((b) =>
-      b.textContent?.includes("waiting on you"),
+      b.textContent?.includes("Waiting on Brad"),
     );
     expect(link).toBeDefined();
     await act(() => link!.click());
-    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.querySelector('[data-slot="popover-popup"]')?.textContent).toContain(
+      "Review the export",
+    );
   });
 
   it("says plainly when a task's membership is in conflict", async () => {
@@ -514,7 +516,7 @@ describe("a subproject waiting on its only epic", () => {
     await act(() => root.render(<DashboardView scope={HOME} />));
     expect(container.textContent).not.toMatch(/Idle:/);
     const line = rowOf("Fixture project");
-    expect(line.textContent).toContain("waiting on you");
+    expect(line.textContent).toContain("Waiting on Brad");
     expect(line.textContent).not.toContain("no open work");
     // The epic is a header, not an open task, so the line does not count it.
     expect(line.textContent).not.toMatch(/more tasks?/);

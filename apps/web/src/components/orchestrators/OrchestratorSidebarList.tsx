@@ -36,7 +36,7 @@ import {
   subprojectCountLabel,
 } from "@t3tools/client-runtime/state/projectSubprojects";
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { ChevronDownIcon, ChevronRightIcon, CircleAlertIcon, UsersIcon } from "lucide-react";
+import { ChevronDownIcon, ChevronRightIcon, UsersIcon } from "lucide-react";
 import {
   useCallback,
   useMemo,
@@ -58,6 +58,7 @@ import { formatRelativeTimeLabel } from "../../timestampFormat";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { useUiStateStore } from "../../uiStateStore";
 import { ProjectFavicon } from "../ProjectFavicon";
+import { BlockedBadge, BlockerAnswersProvider, WaitingBadge } from "../blockers/BlockerBadge";
 import { toastManager } from "../ui/toast";
 import { OrchestratorStatus } from "./OrchestratorStatus";
 import { SettledSubprojectsToggle, TaskFraction } from "./TaskFraction";
@@ -261,47 +262,60 @@ function SubprojectRow({
   const navigate = useNavigate();
   const { rollup } = sub;
   const selected = ownTreeContains(sub, selectedRoute);
+  const openSubproject = () =>
+    void navigate({
+      to: "/orchestrators/$environmentId/$threadId",
+      params: { environmentId: sub.root.environmentId, threadId: sub.root.id },
+    });
+  // The badges are their own buttons, so the row is an overlay button with the content above it.
   return (
     <div>
-      <button
-        type="button"
-        aria-label={labelWithTaskProgress(`Open ${sub.root.title} subproject`, sub)}
-        aria-current={selected ? "page" : undefined}
+      <div
         style={{ paddingLeft: `${0.625 + depth * 0.75}rem` }}
-        className={`pointer-events-auto flex h-6 w-full cursor-pointer items-center gap-1.5 rounded pr-1.5 text-left text-3xs hover:bg-sidebar-row-hover ${
+        className={`pointer-events-auto relative @container/row rounded text-3xs hover:bg-sidebar-row-hover ${
           selected
             ? "bg-sidebar-row-active text-sidebar-foreground"
             : "text-sidebar-muted-foreground"
         }`}
-        onClick={() =>
-          void navigate({
-            to: "/orchestrators/$environmentId/$threadId",
-            params: { environmentId: sub.root.environmentId, threadId: sub.root.id },
-          })
-        }
       >
-        <span aria-hidden>/</span>
-        <span
-          aria-hidden
-          className={`size-1.5 shrink-0 rounded-full ${
-            rollup.needsYou > 0
-              ? "bg-warning"
-              : subprojectIsActive(sub)
-                ? "bg-info"
-                : "bg-muted-foreground/40"
-          }`}
+        <button
+          type="button"
+          aria-label={labelWithTaskProgress(`Open ${sub.root.title} subproject`, sub)}
+          aria-current={selected ? "page" : undefined}
+          className="absolute inset-0 z-0 cursor-pointer rounded focus-visible:outline-2 focus-visible:outline-ring"
+          onClick={openSubproject}
         />
-        <span className="min-w-0 flex-1 truncate">{sub.root.title}</span>
-        {purposeTag !== null ? <span className="shrink-0">{purposeTag}</span> : null}
-        {rollup.blocked > 0 ? <span className="shrink-0 text-error">Blocked</span> : null}
-        {rollup.needsYou > 0 ? (
-          <span className="shrink-0 tabular-nums text-warning-foreground">{rollup.needsYou}</span>
-        ) : null}
-        <TaskFraction summary={sub} />
-        <span className="shrink-0 tabular-nums">
-          {formatRelativeTimeLabel(rollup.latestActivityAt)}
-        </span>
-      </button>
+        <div className="pointer-events-none relative z-10 flex h-6 w-full items-center gap-1.5 pr-1.5 text-left">
+          <span aria-hidden>/</span>
+          <span
+            aria-hidden
+            className={`size-1.5 shrink-0 rounded-full ${
+              rollup.needsYou > 0
+                ? "bg-warning"
+                : subprojectIsActive(sub)
+                  ? "bg-info"
+                  : "bg-muted-foreground/40"
+            }`}
+          />
+          <span className="min-w-0 flex-1 truncate">{sub.root.title}</span>
+          {purposeTag !== null ? <span className="shrink-0">{purposeTag}</span> : null}
+          <BlockedBadge
+            environmentId={sub.root.environmentId}
+            rootId={sub.root.id}
+            active={rollup.blocked > 0}
+          />
+          <WaitingBadge
+            environmentId={sub.root.environmentId}
+            rootId={sub.root.id}
+            fallbackCount={rollup.needsYou}
+            compactLabel
+          />
+          <TaskFraction summary={sub} onActivate={openSubproject} />
+          <span className="shrink-0 tabular-nums">
+            {formatRelativeTimeLabel(rollup.latestActivityAt)}
+          </span>
+        </div>
+      </div>
       <SubprojectRows
         summary={sub}
         selectedRoute={selectedRoute}
@@ -395,7 +409,7 @@ function ProjectRow({
       ref={arrange?.setNodeRef}
       style={arrange?.style}
       {...arrange?.listeners}
-      className={`relative rounded-md ${
+      className={`relative @container/row rounded-md ${
         arrange?.isDragging
           ? "z-20 bg-sidebar-row-hover shadow-md"
           : selected
@@ -443,12 +457,12 @@ function ProjectRow({
         <span className="flex min-w-0 w-full items-center gap-2 text-xs">
           <OrchestratorStatus status={summary.status} />
           <span className="ml-auto inline-flex items-center gap-2 text-sidebar-muted-foreground">
-            {rollup.needsYou > 0 ? (
-              <span className="inline-flex items-center gap-1 text-warning-foreground">
-                <CircleAlertIcon className="size-3.5" />
-                {rollup.needsYou}
-              </span>
-            ) : null}
+            <WaitingBadge
+              environmentId={summary.root.environmentId}
+              rootId={summary.root.id}
+              fallbackCount={rollup.needsYou}
+              compactLabel
+            />
             {rollup.working > 0 ? (
               <span className="inline-flex items-center gap-1">
                 <UsersIcon className="size-3.5" />
@@ -697,71 +711,40 @@ export function OrchestratorSidebarList() {
   );
 
   return (
-    <div className="flex flex-col gap-3">
-      {summaries.length === 0 ? (
-        <p className="px-3 py-4 text-center text-xs text-sidebar-muted-foreground">
-          Projects appear when a top-level thread has workers.
-        </p>
-      ) : (
-        <>
-          <DndContext
-            sensors={dragSensors}
-            collisionDetection={closestCenter}
-            modifiers={[restrictToVerticalAxis, restrictToFirstScrollableAncestor]}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={arranged.map((summary) => threadKey(summary.root))}
-              strategy={verticalListSortingStrategy}
+    <BlockerAnswersProvider>
+      <div className="flex flex-col gap-3">
+        {summaries.length === 0 ? (
+          <p className="px-3 py-4 text-center text-xs text-sidebar-muted-foreground">
+            Projects appear when a top-level thread has workers.
+          </p>
+        ) : (
+          <>
+            <DndContext
+              sensors={dragSensors}
+              collisionDetection={closestCenter}
+              modifiers={[restrictToVerticalAxis, restrictToFirstScrollableAncestor]}
+              onDragEnd={handleDragEnd}
             >
-              <ul
-                aria-label="Projects"
-                className="flex flex-col gap-px"
-                onClickCapture={(event) => {
-                  if (!justDragged.current) return;
-                  event.preventDefault();
-                  event.stopPropagation();
-                }}
+              <SortableContext
+                items={arranged.map((summary) => threadKey(summary.root))}
+                strategy={verticalListSortingStrategy}
               >
-                {arranged.map((summary) => (
-                  <SortableProjectRow
-                    key={threadKey(summary.root)}
-                    id={threadKey(summary.root)}
-                    disabled={!readEnvironmentSupportsPinReorder(summary.root.environmentId)}
-                    reducedMotion={reducedMotion}
-                    onMove={moveProjectBy}
-                    summary={summary}
-                    selectedRoute={selectedRoute}
-                    sortSubprojects={sortSubprojects}
-                    purposes={purposes}
-                    collapsed={collapsedProjects.includes(projectKeyOf(summary))}
-                    onToggleSubprojects={toggleSubprojects}
-                    settledExpansion={settledExpansion}
-                  />
-                ))}
-              </ul>
-            </SortableContext>
-          </DndContext>
-          {quiet.length > 0 ? (
-            <div>
-              <button
-                type="button"
-                className="flex h-7 w-full cursor-pointer items-center gap-1 px-2.5 text-xs font-medium text-sidebar-muted-foreground hover:text-sidebar-foreground"
-                onClick={() => setQuietExpanded((value) => !value)}
-              >
-                {quietExpanded ? (
-                  <ChevronDownIcon className="size-3.5" />
-                ) : (
-                  <ChevronRightIcon className="size-3.5" />
-                )}
-                Quiet
-                <span className="tabular-nums">{quiet.length}</span>
-              </button>
-              {quietExpanded ? (
-                <ul aria-label="Quiet projects" className="flex flex-col gap-px">
-                  {quiet.map((summary) => (
-                    <ProjectRow
-                      key={`${summary.root.environmentId}:${summary.root.id}`}
+                <ul
+                  aria-label="Projects"
+                  className="flex flex-col gap-px"
+                  onClickCapture={(event) => {
+                    if (!justDragged.current) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                >
+                  {arranged.map((summary) => (
+                    <SortableProjectRow
+                      key={threadKey(summary.root)}
+                      id={threadKey(summary.root)}
+                      disabled={!readEnvironmentSupportsPinReorder(summary.root.environmentId)}
+                      reducedMotion={reducedMotion}
+                      onMove={moveProjectBy}
                       summary={summary}
                       selectedRoute={selectedRoute}
                       sortSubprojects={sortSubprojects}
@@ -772,68 +755,102 @@ export function OrchestratorSidebarList() {
                     />
                   ))}
                 </ul>
-              ) : null}
-            </div>
-          ) : null}
-        </>
-      )}
+              </SortableContext>
+            </DndContext>
+            {quiet.length > 0 ? (
+              <div>
+                <button
+                  type="button"
+                  className="flex h-7 w-full cursor-pointer items-center gap-1 px-2.5 text-xs font-medium text-sidebar-muted-foreground hover:text-sidebar-foreground"
+                  onClick={() => setQuietExpanded((value) => !value)}
+                >
+                  {quietExpanded ? (
+                    <ChevronDownIcon className="size-3.5" />
+                  ) : (
+                    <ChevronRightIcon className="size-3.5" />
+                  )}
+                  Quiet
+                  <span className="tabular-nums">{quiet.length}</span>
+                </button>
+                {quietExpanded ? (
+                  <ul aria-label="Quiet projects" className="flex flex-col gap-px">
+                    {quiet.map((summary) => (
+                      <ProjectRow
+                        key={`${summary.root.environmentId}:${summary.root.id}`}
+                        summary={summary}
+                        selectedRoute={selectedRoute}
+                        sortSubprojects={sortSubprojects}
+                        purposes={purposes}
+                        collapsed={collapsedProjects.includes(projectKeyOf(summary))}
+                        onToggleSubprojects={toggleSubprojects}
+                        settledExpansion={settledExpansion}
+                      />
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
+          </>
+        )}
 
-      {orderedStandaloneGroups.length > 0 ? (
-        <section aria-label="Standalone threads">
-          <h2 className="px-2.5 py-1 text-xs font-semibold tracking-wide text-sidebar-muted-foreground uppercase">
-            Threads
-          </h2>
-          {orderedStandaloneGroups.map((group) => (
-            <div key={`${group.project.environmentId}:${group.project.id}`}>
-              <h3 className="px-3 py-1 text-3xs font-medium text-sidebar-muted-foreground">
-                {group.project.title}
-              </h3>
-              <ul className="flex flex-col gap-px">
-                {group.threads.map(({ thread, status }) => {
-                  const presentation = STANDALONE_STATUS[status];
-                  return (
-                    <li key={`${thread.environmentId}:${thread.id}`}>
-                      <button
-                        type="button"
-                        className="flex h-8 w-full cursor-pointer items-center gap-2 rounded-md px-4 text-left text-xs hover:bg-sidebar-row-hover"
-                        onClick={() =>
-                          void navigate({
-                            to: "/$environmentId/$threadId",
-                            params: buildThreadRouteParams(
-                              scopeThreadRef(thread.environmentId, thread.id),
-                            ),
-                          })
-                        }
-                      >
-                        <span
-                          aria-hidden
-                          className={`size-1.5 shrink-0 rounded-full ${presentation.className}`}
-                        />
-                        <span className="min-w-0 flex-1 truncate text-sidebar-foreground">
-                          {thread.title}
-                          {thread.remoteParent && (
-                            <span className="text-sidebar-muted-foreground">
-                              {" "}
-                              · parent on{" "}
-                              {environments.find(
-                                (environment) =>
-                                  environment.environmentId === thread.remoteParent?.environmentId,
-                              )?.label ?? thread.remoteParent.environmentId}
-                            </span>
-                          )}
-                        </span>
-                        <span className="shrink-0 text-3xs text-sidebar-muted-foreground">
-                          {presentation.label}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </section>
-      ) : null}
-    </div>
+        {orderedStandaloneGroups.length > 0 ? (
+          <section aria-label="Standalone threads">
+            <h2 className="px-2.5 py-1 text-xs font-semibold tracking-wide text-sidebar-muted-foreground uppercase">
+              Threads
+            </h2>
+            {orderedStandaloneGroups.map((group) => (
+              <div key={`${group.project.environmentId}:${group.project.id}`}>
+                <h3 className="px-3 py-1 text-3xs font-medium text-sidebar-muted-foreground">
+                  {group.project.title}
+                </h3>
+                <ul className="flex flex-col gap-px">
+                  {group.threads.map(({ thread, status }) => {
+                    const presentation = STANDALONE_STATUS[status];
+                    return (
+                      <li key={`${thread.environmentId}:${thread.id}`}>
+                        <button
+                          type="button"
+                          className="flex h-8 w-full cursor-pointer items-center gap-2 rounded-md px-4 text-left text-xs hover:bg-sidebar-row-hover"
+                          onClick={() =>
+                            void navigate({
+                              to: "/$environmentId/$threadId",
+                              params: buildThreadRouteParams(
+                                scopeThreadRef(thread.environmentId, thread.id),
+                              ),
+                            })
+                          }
+                        >
+                          <span
+                            aria-hidden
+                            className={`size-1.5 shrink-0 rounded-full ${presentation.className}`}
+                          />
+                          <span className="min-w-0 flex-1 truncate text-sidebar-foreground">
+                            {thread.title}
+                            {thread.remoteParent && (
+                              <span className="text-sidebar-muted-foreground">
+                                {" "}
+                                · parent on{" "}
+                                {environments.find(
+                                  (environment) =>
+                                    environment.environmentId ===
+                                    thread.remoteParent?.environmentId,
+                                )?.label ?? thread.remoteParent.environmentId}
+                              </span>
+                            )}
+                          </span>
+                          <span className="shrink-0 text-3xs text-sidebar-muted-foreground">
+                            {presentation.label}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </section>
+        ) : null}
+      </div>
+    </BlockerAnswersProvider>
   );
 }

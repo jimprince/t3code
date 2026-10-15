@@ -13,6 +13,7 @@ const thread = (
     pendingBackgroundTasks: [],
     goal: null,
     todoProgress,
+    source: {},
   }) as unknown as OrchestratorThreadShell;
 
 describe("taskStepProgress", () => {

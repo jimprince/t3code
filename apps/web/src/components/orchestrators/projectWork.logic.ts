@@ -1,3 +1,4 @@
+import { workerCause } from "@t3tools/client-runtime/dashboard/blockers";
 import {
   lastActivityAt as threadActivityAt,
   type OrchestratorBlockedItem,
@@ -62,14 +63,6 @@ function tasksOfWorker(
     );
 }
 
-/** Why a worker counts as blocked: its own "Blocked: ..." line, else that it failed. */
-function workerCause(item: OrchestratorBlockedItem): string {
-  const line = /^blocked\b[\s:,–—-]*(.*)/is.exec(item.latestLine ?? "");
-  const reason = line ? shortLine(line[1]) : null;
-  if (reason) return reason;
-  return line ? "Blocked" : "Failed";
-}
-
 /**
  * Everything stuck on the project, derived and never hand-set: a worker the
  * thread state flags as blocked or failed; an Active task that says "Blocked by
@@ -94,7 +87,7 @@ export function deriveBlocked(input: {
       key: `worker:${item.thread.id}`,
       kind: "worker",
       title: task?.title ?? item.thread.title,
-      cause: workerCause(item),
+      cause: workerCause({ latestLine: item.latestLine }),
       owner: { id: item.thread.id, title: item.thread.title },
       next: null,
       action: null,

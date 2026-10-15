@@ -1,0 +1,878 @@
+{
+  "revision": 0,
+  "asOf": "2026-10-15T10:00:00.000Z",
+  "projects": [
+    {
+      "planSource": "briefing",
+      "id": "project:product-head",
+      "rootThreadId": "product-head",
+      "parentId": null,
+      "title": "Product",
+      "utility": false,
+      "omittedTaskCount": 0,
+      "workstreams": [
+        {
+          "url": null,
+          "threadId": null,
+          "progress": null,
+          "childIssueIds": [],
+          "unknownChildIds": [],
+          "parentWorkstreamId": null,
+          "rank": null,
+          "createdAt": "2026-10-15T10:00:00.000Z",
+          "placedBy": null,
+          "id": "project:product-head:work",
+          "title": "Unsorted",
+          "taskIds": [
+            "issue:git.test/brad/fork#352",
+            "issue:git.test/brad/fork#350",
+            "issue:git.test/brad/fork#339",
+            "issue:git.test/brad/fork#340",
+            "issue:git.test/brad/fork#342",
+            "issue:git.test/brad/fork#343",
+            "issue:git.test/brad/fork#345",
+            "issue:git.test/brad/fork#348",
+            "issue:git.test/brad/fork#256",
+            "issue:git.test/brad/fork#125",
+            "issue:git.test/brad/fork#346",
+            "issue:git.test/brad/fork#338"
+          ]
+        }
+      ],
+      "tasks": [
+        {
+          "id": "issue:git.test/brad/fork#352",
+          "sourceId": "gitea:git.test/brad/fork",
+          "title": "Blocked badges name the blocker",
+          "url": "https://git.test/brad/fork/issues/352",
+          "threadId": null,
+          "workstreamId": "project:product-head:work",
+          "createdAt": "2026-10-15T10:00:00.000Z",
+          "kind": "task",
+          "closedAt": null,
+          "status": "blocked",
+          "progress": null,
+          "movement": {
+            "state": "unknown",
+            "doneDelta": null,
+            "windowMs": 3600000,
+            "fromAt": null,
+            "toAt": "2026-10-15T10:00:00.000Z"
+          },
+          "forecast": null,
+          "nextStep": null,
+          "attentionIds": ["issue:git.test/brad/fork#352:attention"]
+        },
+        {
+          "id": "issue:git.test/brad/fork#350",
+          "sourceId": "gitea:git.test/brad/fork",
+          "title": "Answer from the Needs you card",
+          "url": "https://git.test/brad/fork/issues/350",
+          "threadId": null,
+          "workstreamId": "project:product-head:work",
+          "createdAt": "2026-10-15T10:00:00.000Z",
+          "kind": "task",
+          "closedAt": null,
+          "status": "blocked",
+          "progress": null,
+          "movement": {
+            "state": "unknown",
+            "doneDelta": null,
+            "windowMs": 3600000,
+            "fromAt": null,
+            "toAt": "2026-10-15T10:00:00.000Z"
+          },
+          "forecast": null,
+          "nextStep": null,
+          "attentionIds": ["issue:git.test/brad/fork#350:attention"]
+        },
+        {
+          "id": "issue:git.test/brad/fork#339",
+          "sourceId": "gitea:git.test/brad/fork",
+          "title": "Resume queue after restart",
+          "url": "https://git.test/brad/fork/issues/339",
+          "threadId": null,
+          "workstreamId": "project:product-head:work",
+          "createdAt": "2026-10-15T10:00:00.000Z",
+          "kind": "task",
+          "closedAt": null,
+          "status": "blocked",
+          "progress": null,
+          "movement": {
+            "state": "unknown",
+            "doneDelta": null,
+            "windowMs": 3600000,
+            "fromAt": null,
+            "toAt": "2026-10-15T10:00:00.000Z"
+          },
+          "forecast": null,
+          "nextStep": null,
+          "attentionIds": ["issue:git.test/brad/fork#339:attention"]
+        },
+        {
+          "id": "issue:git.test/brad/fork#340",
+          "sourceId": "gitea:git.test/brad/fork",
+          "title": "Plan column widths",
+          "url": "https://git.test/brad/fork/issues/340",
+          "threadId": null,
+          "workstreamId": "project:product-head:work",
+          "createdAt": "2026-10-15T10:00:00.000Z",
+          "kind": "task",
+          "closedAt": null,
+          "status": "blocked",
+          "progress": null,
+          "movement": {
+            "state": "unknown",
+            "doneDelta": null,
+            "windowMs": 3600000,
+            "fromAt": null,
+            "toAt": "2026-10-15T10:00:00.000Z"
+          },
+          "forecast": null,
+          "nextStep": null,
+          "attentionIds": ["issue:git.test/brad/fork#340:attention"]
+        },
+        {
+          "id": "issue:git.test/brad/fork#342",
+          "sourceId": "gitea:git.test/brad/fork",
+          "title": "Tray strip answers",
+          "url": "https://git.test/brad/fork/issues/342",
+          "threadId": null,
+          "workstreamId": "project:product-head:work",
+          "createdAt": "2026-10-15T10:00:00.000Z",
+          "kind": "task",
+          "closedAt": null,
+          "status": "blocked",
+          "progress": null,
+          "movement": {
+            "state": "unknown",
+            "doneDelta": null,
+            "windowMs": 3600000,
+            "fromAt": null,
+            "toAt": "2026-10-15T10:00:00.000Z"
+          },
+          "forecast": null,
+          "nextStep": null,
+          "attentionIds": ["issue:git.test/brad/fork#342:attention"]
+        },
+        {
+          "id": "issue:git.test/brad/fork#343",
+          "sourceId": "gitea:git.test/brad/fork",
+          "title": "Sidebar subproject rows",
+          "url": "https://git.test/brad/fork/issues/343",
+          "threadId": null,
+          "workstreamId": "project:product-head:work",
+          "createdAt": "2026-10-15T10:00:00.000Z",
+          "kind": "task",
+          "closedAt": null,
+          "status": "blocked",
+          "progress": null,
+          "movement": {
+            "state": "unknown",
+            "doneDelta": null,
+            "windowMs": 3600000,
+            "fromAt": null,
+            "toAt": "2026-10-15T10:00:00.000Z"
+          },
+          "forecast": null,
+          "nextStep": null,
+          "attentionIds": ["issue:git.test/brad/fork#343:attention"]
+        },
+        {
+          "id": "issue:git.test/brad/fork#345",
+          "sourceId": "gitea:git.test/brad/fork",
+          "title": "Dashboard as-of line removal",
+          "url": "https://git.test/brad/fork/issues/345",
+          "threadId": null,
+          "workstreamId": "project:product-head:work",
+          "createdAt": "2026-10-15T10:00:00.000Z",
+          "kind": "task",
+          "closedAt": null,
+          "status": "blocked",
+          "progress": null,
+          "movement": {
+            "state": "unknown",
+            "doneDelta": null,
+            "windowMs": 3600000,
+            "fromAt": null,
+            "toAt": "2026-10-15T10:00:00.000Z"
+          },
+          "forecast": null,
+          "nextStep": null,
+          "attentionIds": ["issue:git.test/brad/fork#345:attention"]
+        },
+        {
+          "id": "issue:git.test/brad/fork#348",
+          "sourceId": "gitea:git.test/brad/fork",
+          "title": "Held queue visible",
+          "url": "https://git.test/brad/fork/issues/348",
+          "threadId": null,
+          "workstreamId": "project:product-head:work",
+          "createdAt": "2026-10-15T10:00:00.000Z",
+          "kind": "task",
+          "closedAt": null,
+          "status": "blocked",
+          "progress": null,
+          "movement": {
+            "state": "unknown",
+            "doneDelta": null,
+            "windowMs": 3600000,
+            "fromAt": null,
+            "toAt": "2026-10-15T10:00:00.000Z"
+          },
+          "forecast": null,
+          "nextStep": null,
+          "attentionIds": ["issue:git.test/brad/fork#348:attention"]
+        },
+        {
+          "id": "issue:git.test/brad/fork#256",
+          "sourceId": "gitea:git.test/brad/fork",
+          "title": "Settled rollup in sidebar",
+          "url": "https://git.test/brad/fork/issues/256",
+          "threadId": null,
+          "workstreamId": "project:product-head:work",
+          "createdAt": "2026-10-15T10:00:00.000Z",
+          "kind": "task",
+          "closedAt": null,
+          "status": "blocked",
+          "progress": null,
+          "movement": {
+            "state": "unknown",
+            "doneDelta": null,
+            "windowMs": 3600000,
+            "fromAt": null,
+            "toAt": "2026-10-15T10:00:00.000Z"
+          },
+          "forecast": null,
+          "nextStep": null,
+          "attentionIds": ["issue:git.test/brad/fork#256:attention"]
+        },
+        {
+          "id": "issue:git.test/brad/fork#125",
+          "sourceId": "gitea:git.test/brad/fork",
+          "title": "Harness tab filter",
+          "url": "https://git.test/brad/fork/issues/125",
+          "threadId": null,
+          "workstreamId": "project:product-head:work",
+          "createdAt": "2026-10-15T10:00:00.000Z",
+          "kind": "task",
+          "closedAt": null,
+          "status": "blocked",
+          "progress": null,
+          "movement": {
+            "state": "unknown",
+            "doneDelta": null,
+            "windowMs": 3600000,
+            "fromAt": null,
+            "toAt": "2026-10-15T10:00:00.000Z"
+          },
+          "forecast": null,
+          "nextStep": null,
+          "attentionIds": ["issue:git.test/brad/fork#125:attention"]
+        },
+        {
+          "id": "issue:git.test/brad/fork#346",
+          "sourceId": "gitea:git.test/brad/fork",
+          "title": "Review the signing notes",
+          "url": "https://git.test/brad/fork/issues/346",
+          "threadId": null,
+          "workstreamId": "project:product-head:work",
+          "createdAt": "2026-10-15T10:00:00.000Z",
+          "kind": "task",
+          "closedAt": null,
+          "status": "blocked",
+          "progress": null,
+          "movement": {
+            "state": "unknown",
+            "doneDelta": null,
+            "windowMs": 3600000,
+            "fromAt": null,
+            "toAt": "2026-10-15T10:00:00.000Z"
+          },
+          "forecast": null,
+          "nextStep": null,
+          "attentionIds": ["issue:git.test/brad/fork#346:attention"]
+        },
+        {
+          "id": "issue:git.test/brad/fork#338",
+          "sourceId": "gitea:git.test/brad/fork",
+          "title": "Code signing: which certificate?",
+          "url": "https://git.test/brad/fork/issues/338",
+          "threadId": null,
+          "workstreamId": "project:product-head:work",
+          "createdAt": "2026-10-15T10:00:00.000Z",
+          "kind": "task",
+          "closedAt": null,
+          "status": "blocked",
+          "progress": null,
+          "movement": {
+            "state": "unknown",
+            "doneDelta": null,
+            "windowMs": 3600000,
+            "fromAt": null,
+            "toAt": "2026-10-15T10:00:00.000Z"
+          },
+          "forecast": null,
+          "nextStep": null,
+          "attentionIds": ["issue:git.test/brad/fork#338:attention"]
+        }
+      ],
+      "attention": [
+        {
+          "id": "issue:git.test/brad/fork#352:attention",
+          "taskId": "issue:git.test/brad/fork#352",
+          "blockingTaskIds": [],
+          "requestId": null,
+          "title": "Blocked badges name the blocker",
+          "kind": "test",
+          "canRespond": true,
+          "answer": "issue-test",
+          "options": [
+            {
+              "text": "Passed",
+              "recommended": true,
+              "effect": "settle",
+              "action": "approve"
+            },
+            {
+              "text": "Failed",
+              "recommended": false,
+              "action": "reject"
+            }
+          ],
+          "priority": 3,
+          "url": "https://git.test/brad/fork/issues/352",
+          "threadId": null,
+          "updatedAt": "2026-10-15T10:00:00.000Z",
+          "deadline": null,
+          "question": "Shipped blocked badges name the blocker for you to try.",
+          "summary": "Shipped blocked badges name the blocker for you to try.",
+          "judgingWhere": "Open the Dev app and try it (#352).",
+          "recommended": null,
+          "asksNothingYet": false,
+          "sourceId": "gitea:git.test/brad/fork"
+        },
+        {
+          "id": "issue:git.test/brad/fork#350:attention",
+          "taskId": "issue:git.test/brad/fork#350",
+          "blockingTaskIds": [],
+          "requestId": null,
+          "title": "Answer from the Needs you card",
+          "kind": "test",
+          "canRespond": true,
+          "answer": "issue-test",
+          "options": [
+            {
+              "text": "Passed",
+              "recommended": true,
+              "effect": "settle",
+              "action": "approve"
+            },
+            {
+              "text": "Failed",
+              "recommended": false,
+              "action": "reject"
+            }
+          ],
+          "priority": 3,
+          "url": "https://git.test/brad/fork/issues/350",
+          "threadId": null,
+          "updatedAt": "2026-10-15T10:00:00.000Z",
+          "deadline": null,
+          "question": "Shipped answer from the needs you card for you to try.",
+          "summary": "Shipped answer from the needs you card for you to try.",
+          "judgingWhere": "Open the Dev app and try it (#350).",
+          "recommended": null,
+          "asksNothingYet": false,
+          "sourceId": "gitea:git.test/brad/fork"
+        },
+        {
+          "id": "issue:git.test/brad/fork#339:attention",
+          "taskId": "issue:git.test/brad/fork#339",
+          "blockingTaskIds": [],
+          "requestId": null,
+          "title": "Resume queue after restart",
+          "kind": "test",
+          "canRespond": true,
+          "answer": "issue-test",
+          "options": [
+            {
+              "text": "Passed",
+              "recommended": true,
+              "effect": "settle",
+              "action": "approve"
+            },
+            {
+              "text": "Failed",
+              "recommended": false,
+              "action": "reject"
+            }
+          ],
+          "priority": 3,
+          "url": "https://git.test/brad/fork/issues/339",
+          "threadId": null,
+          "updatedAt": "2026-10-15T10:00:00.000Z",
+          "deadline": null,
+          "question": "Shipped resume queue after restart for you to try.",
+          "summary": "Shipped resume queue after restart for you to try.",
+          "judgingWhere": "Open the Dev app and try it (#339).",
+          "recommended": null,
+          "asksNothingYet": false,
+          "sourceId": "gitea:git.test/brad/fork"
+        },
+        {
+          "id": "issue:git.test/brad/fork#340:attention",
+          "taskId": "issue:git.test/brad/fork#340",
+          "blockingTaskIds": [],
+          "requestId": null,
+          "title": "Plan column widths",
+          "kind": "test",
+          "canRespond": true,
+          "answer": "issue-test",
+          "options": [
+            {
+              "text": "Passed",
+              "recommended": true,
+              "effect": "settle",
+              "action": "approve"
+            },
+            {
+              "text": "Failed",
+              "recommended": false,
+              "action": "reject"
+            }
+          ],
+          "priority": 3,
+          "url": "https://git.test/brad/fork/issues/340",
+          "threadId": null,
+          "updatedAt": "2026-10-15T10:00:00.000Z",
+          "deadline": null,
+          "question": "Shipped plan column widths for you to try.",
+          "summary": "Shipped plan column widths for you to try.",
+          "judgingWhere": "Open the Dev app and try it (#340).",
+          "recommended": null,
+          "asksNothingYet": false,
+          "sourceId": "gitea:git.test/brad/fork"
+        },
+        {
+          "id": "issue:git.test/brad/fork#342:attention",
+          "taskId": "issue:git.test/brad/fork#342",
+          "blockingTaskIds": [],
+          "requestId": null,
+          "title": "Tray strip answers",
+          "kind": "test",
+          "canRespond": true,
+          "answer": "issue-test",
+          "options": [
+            {
+              "text": "Passed",
+              "recommended": true,
+              "effect": "settle",
+              "action": "approve"
+            },
+            {
+              "text": "Failed",
+              "recommended": false,
+              "action": "reject"
+            }
+          ],
+          "priority": 3,
+          "url": "https://git.test/brad/fork/issues/342",
+          "threadId": null,
+          "updatedAt": "2026-10-15T10:00:00.000Z",
+          "deadline": null,
+          "question": "Shipped tray strip answers for you to try.",
+          "summary": "Shipped tray strip answers for you to try.",
+          "judgingWhere": "Open the Dev app and try it (#342).",
+          "recommended": null,
+          "asksNothingYet": false,
+          "sourceId": "gitea:git.test/brad/fork"
+        },
+        {
+          "id": "issue:git.test/brad/fork#343:attention",
+          "taskId": "issue:git.test/brad/fork#343",
+          "blockingTaskIds": [],
+          "requestId": null,
+          "title": "Sidebar subproject rows",
+          "kind": "test",
+          "canRespond": true,
+          "answer": "issue-test",
+          "options": [
+            {
+              "text": "Passed",
+              "recommended": true,
+              "effect": "settle",
+              "action": "approve"
+            },
+            {
+              "text": "Failed",
+              "recommended": false,
+              "action": "reject"
+            }
+          ],
+          "priority": 3,
+          "url": "https://git.test/brad/fork/issues/343",
+          "threadId": null,
+          "updatedAt": "2026-10-15T10:00:00.000Z",
+          "deadline": null,
+          "question": "Shipped sidebar subproject rows for you to try.",
+          "summary": "Shipped sidebar subproject rows for you to try.",
+          "judgingWhere": "Open the Dev app and try it (#343).",
+          "recommended": null,
+          "asksNothingYet": false,
+          "sourceId": "gitea:git.test/brad/fork"
+        },
+        {
+          "id": "issue:git.test/brad/fork#345:attention",
+          "taskId": "issue:git.test/brad/fork#345",
+          "blockingTaskIds": [],
+          "requestId": null,
+          "title": "Dashboard as-of line removal",
+          "kind": "test",
+          "canRespond": true,
+          "answer": "issue-test",
+          "options": [
+            {
+              "text": "Passed",
+              "recommended": true,
+              "effect": "settle",
+              "action": "approve"
+            },
+            {
+              "text": "Failed",
+              "recommended": false,
+              "action": "reject"
+            }
+          ],
+          "priority": 3,
+          "url": "https://git.test/brad/fork/issues/345",
+          "threadId": null,
+          "updatedAt": "2026-10-15T10:00:00.000Z",
+          "deadline": null,
+          "question": "Shipped dashboard as-of line removal for you to try.",
+          "summary": "Shipped dashboard as-of line removal for you to try.",
+          "judgingWhere": "Open the Dev app and try it (#345).",
+          "recommended": null,
+          "asksNothingYet": false,
+          "sourceId": "gitea:git.test/brad/fork"
+        },
+        {
+          "id": "issue:git.test/brad/fork#348:attention",
+          "taskId": "issue:git.test/brad/fork#348",
+          "blockingTaskIds": [],
+          "requestId": null,
+          "title": "Held queue visible",
+          "kind": "test",
+          "canRespond": true,
+          "answer": "issue-test",
+          "options": [
+            {
+              "text": "Passed",
+              "recommended": true,
+              "effect": "settle",
+              "action": "approve"
+            },
+            {
+              "text": "Failed",
+              "recommended": false,
+              "action": "reject"
+            }
+          ],
+          "priority": 3,
+          "url": "https://git.test/brad/fork/issues/348",
+          "threadId": null,
+          "updatedAt": "2026-10-15T10:00:00.000Z",
+          "deadline": null,
+          "question": "Shipped held queue visible for you to try.",
+          "summary": "Shipped held queue visible for you to try.",
+          "judgingWhere": "Open the Dev app and try it (#348).",
+          "recommended": null,
+          "asksNothingYet": false,
+          "sourceId": "gitea:git.test/brad/fork"
+        },
+        {
+          "id": "issue:git.test/brad/fork#256:attention",
+          "taskId": "issue:git.test/brad/fork#256",
+          "blockingTaskIds": [],
+          "requestId": null,
+          "title": "Settled rollup in sidebar",
+          "kind": "test",
+          "canRespond": true,
+          "answer": "issue-test",
+          "options": [
+            {
+              "text": "Passed",
+              "recommended": true,
+              "effect": "settle",
+              "action": "approve"
+            },
+            {
+              "text": "Failed",
+              "recommended": false,
+              "action": "reject"
+            }
+          ],
+          "priority": 3,
+          "url": "https://git.test/brad/fork/issues/256",
+          "threadId": null,
+          "updatedAt": "2026-10-15T10:00:00.000Z",
+          "deadline": null,
+          "question": "Shipped settled rollup in sidebar for you to try.",
+          "summary": "Shipped settled rollup in sidebar for you to try.",
+          "judgingWhere": "Open the Dev app and try it (#256).",
+          "recommended": null,
+          "asksNothingYet": false,
+          "sourceId": "gitea:git.test/brad/fork"
+        },
+        {
+          "id": "issue:git.test/brad/fork#125:attention",
+          "taskId": "issue:git.test/brad/fork#125",
+          "blockingTaskIds": [],
+          "requestId": null,
+          "title": "Harness tab filter",
+          "kind": "test",
+          "canRespond": true,
+          "answer": "issue-test",
+          "options": [
+            {
+              "text": "Passed",
+              "recommended": true,
+              "effect": "settle",
+              "action": "approve"
+            },
+            {
+              "text": "Failed",
+              "recommended": false,
+              "action": "reject"
+            }
+          ],
+          "priority": 3,
+          "url": "https://git.test/brad/fork/issues/125",
+          "threadId": null,
+          "updatedAt": "2026-10-15T10:00:00.000Z",
+          "deadline": null,
+          "question": "Shipped harness tab filter for you to try.",
+          "summary": "Shipped harness tab filter for you to try.",
+          "judgingWhere": "Open the Dev app and try it (#125).",
+          "recommended": null,
+          "asksNothingYet": false,
+          "sourceId": "gitea:git.test/brad/fork"
+        },
+        {
+          "id": "issue:git.test/brad/fork#346:attention",
+          "taskId": "issue:git.test/brad/fork#346",
+          "blockingTaskIds": [],
+          "requestId": null,
+          "title": "Review the signing notes",
+          "kind": "review",
+          "canRespond": true,
+          "answer": "issue-review",
+          "options": [
+            {
+              "text": "Approve and close",
+              "recommended": true,
+              "effect": "settle",
+              "action": "approve"
+            },
+            {
+              "text": "Reject",
+              "recommended": false,
+              "action": "reject"
+            }
+          ],
+          "priority": 3,
+          "url": "https://git.test/brad/fork/issues/346",
+          "threadId": null,
+          "updatedAt": "2026-10-15T10:00:00.000Z",
+          "deadline": null,
+          "question": "Wrote the signing notes for review.",
+          "summary": "Wrote the signing notes for review.",
+          "judgingWhere": "docs/signing.md on the branch.",
+          "recommended": null,
+          "asksNothingYet": false,
+          "sourceId": "gitea:git.test/brad/fork"
+        },
+        {
+          "id": "issue:git.test/brad/fork#338:attention",
+          "taskId": "issue:git.test/brad/fork#338",
+          "blockingTaskIds": [],
+          "requestId": null,
+          "title": "Code signing: which certificate?",
+          "kind": "decision",
+          "canRespond": true,
+          "answer": "issue-choice",
+          "options": [
+            {
+              "text": "Use the existing Developer ID",
+              "recommended": true,
+              "action": "option"
+            },
+            {
+              "text": "Buy a new certificate",
+              "recommended": false,
+              "action": "option"
+            }
+          ],
+          "priority": 3,
+          "url": "https://git.test/brad/fork/issues/338",
+          "threadId": null,
+          "updatedAt": "2026-10-15T10:00:00.000Z",
+          "deadline": null,
+          "question": "Which certificate should sign the Mac build?",
+          "summary": "Which certificate should sign the Mac build?",
+          "judgingWhere": null,
+          "recommended": "Use the existing Developer ID",
+          "asksNothingYet": false,
+          "sourceId": "gitea:git.test/brad/fork"
+        }
+      ],
+      "sourceIds": ["local", "gitea:git.test/brad/fork"]
+    },
+    {
+      "planSource": "briefing",
+      "id": "project:dashboard-head",
+      "rootThreadId": "dashboard-head",
+      "parentId": "project:product-head",
+      "title": "Dashboard",
+      "utility": false,
+      "omittedTaskCount": 0,
+      "workstreams": [
+        {
+          "url": null,
+          "threadId": null,
+          "progress": null,
+          "childIssueIds": [],
+          "unknownChildIds": [],
+          "parentWorkstreamId": null,
+          "rank": null,
+          "createdAt": "2026-10-15T10:00:00.000Z",
+          "placedBy": null,
+          "id": "project:dashboard-head:work",
+          "title": "Unsorted",
+          "taskIds": ["issue:git.test/brad/fork#304", "issue:git.test/brad/fork#305"]
+        }
+      ],
+      "tasks": [
+        {
+          "id": "issue:git.test/brad/fork#304",
+          "sourceId": "gitea:git.test/brad/fork",
+          "title": "Review the Plan header",
+          "url": "https://git.test/brad/fork/issues/304",
+          "threadId": null,
+          "workstreamId": "project:dashboard-head:work",
+          "createdAt": "2026-10-15T10:00:00.000Z",
+          "kind": "task",
+          "closedAt": null,
+          "status": "blocked",
+          "progress": null,
+          "movement": {
+            "state": "unknown",
+            "doneDelta": null,
+            "windowMs": 3600000,
+            "fromAt": null,
+            "toAt": "2026-10-15T10:00:00.000Z"
+          },
+          "forecast": null,
+          "nextStep": null,
+          "attentionIds": ["issue:git.test/brad/fork#304:attention"]
+        },
+        {
+          "id": "issue:git.test/brad/fork#305",
+          "sourceId": "gitea:git.test/brad/fork",
+          "title": "Review the Done list",
+          "url": "https://git.test/brad/fork/issues/305",
+          "threadId": null,
+          "workstreamId": "project:dashboard-head:work",
+          "createdAt": "2026-10-15T10:00:00.000Z",
+          "kind": "task",
+          "closedAt": null,
+          "status": "blocked",
+          "progress": null,
+          "movement": {
+            "state": "unknown",
+            "doneDelta": null,
+            "windowMs": 3600000,
+            "fromAt": null,
+            "toAt": "2026-10-15T10:00:00.000Z"
+          },
+          "forecast": null,
+          "nextStep": null,
+          "attentionIds": ["issue:git.test/brad/fork#305:attention"]
+        }
+      ],
+      "attention": [
+        {
+          "id": "issue:git.test/brad/fork#304:attention",
+          "taskId": "issue:git.test/brad/fork#304",
+          "blockingTaskIds": [],
+          "requestId": null,
+          "title": "Review the Plan header",
+          "kind": "review",
+          "canRespond": true,
+          "answer": "issue-review",
+          "options": [
+            {
+              "text": "Approve and close",
+              "recommended": true,
+              "effect": "settle",
+              "action": "approve"
+            },
+            {
+              "text": "Reject",
+              "recommended": false,
+              "action": "reject"
+            }
+          ],
+          "priority": 3,
+          "url": "https://git.test/brad/fork/issues/304",
+          "threadId": null,
+          "updatedAt": "2026-10-15T10:00:00.000Z",
+          "deadline": null,
+          "question": "Reworked the Plan header.",
+          "summary": "Reworked the Plan header.",
+          "judgingWhere": "The Plan tab of the Dashboard.",
+          "recommended": null,
+          "asksNothingYet": false,
+          "sourceId": "gitea:git.test/brad/fork"
+        },
+        {
+          "id": "issue:git.test/brad/fork#305:attention",
+          "taskId": "issue:git.test/brad/fork#305",
+          "blockingTaskIds": [],
+          "requestId": null,
+          "title": "Review the Done list",
+          "kind": "review",
+          "canRespond": true,
+          "answer": "issue-review",
+          "options": [
+            {
+              "text": "Approve and close",
+              "recommended": true,
+              "effect": "settle",
+              "action": "approve"
+            },
+            {
+              "text": "Reject",
+              "recommended": false,
+              "action": "reject"
+            }
+          ],
+          "priority": 3,
+          "url": "https://git.test/brad/fork/issues/305",
+          "threadId": null,
+          "updatedAt": "2026-10-15T10:00:00.000Z",
+          "deadline": null,
+          "question": "Trimmed the Done list.",
+          "summary": "Trimmed the Done list.",
+          "judgingWhere": "The Done tab.",
+          "recommended": null,
+          "asksNothingYet": false,
+          "sourceId": "gitea:git.test/brad/fork"
+        }
+      ],
+      "sourceIds": ["local", "gitea:git.test/brad/fork"]
+    }
+  ],
+  "releases": [],
+  "sources": []
+}

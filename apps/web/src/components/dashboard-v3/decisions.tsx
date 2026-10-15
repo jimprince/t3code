@@ -16,7 +16,7 @@ import { issueKey } from "../orchestrators/projectRequests.logic";
 import { useDashboardUi, type DecisionRow } from "./context";
 import { formatDeadline, parseIssueTaskId } from "./dashboard.logic";
 import { DecisionAnswerArea } from "./DecisionAnswerArea";
-import { toldOf, useAnswerPlan } from "./useDecisionAnswers";
+import { toldOf, useAnswerPlan, type DecisionAnswers } from "./useDecisionAnswers";
 
 const KIND_WORD = {
   decision: "decision",
@@ -37,7 +37,7 @@ function consequence(row: DecisionRow): string {
 }
 
 /** The lead of the question, for the compact feed; the full text opens in the card. */
-const lead = (question: string) =>
+export const lead = (question: string) =>
   question
     .replace(/<!--[\s\S]*?-->/g, "")
     .split("\n")
@@ -45,7 +45,7 @@ const lead = (question: string) =>
     .find((line) => line.length > 0) ?? "";
 
 /** Opens the issue's task view, or the waiting thread when the decision has no issue. */
-function useOpenDecisionSource() {
+export function useOpenDecisionSource() {
   const ui = useDashboardUi();
   const navigate = useNavigate();
   return (row: DecisionRow) => {
@@ -127,6 +127,88 @@ function JudgingWhere({ text, oneLine }: { readonly text: string; readonly oneLi
 }
 
 /**
+ * What became of an answered decision: what was sent and where it landed, with Undo while held,
+ * Retry and Dismiss after a failure, and a way to the thread that was told.
+ */
+export function DecisionReceipt({
+  row,
+  state,
+  answers,
+}: {
+  readonly row: DecisionRow;
+  readonly state: NonNullable<ReturnType<DecisionAnswers["stateOf"]>>;
+  readonly answers: DecisionAnswers;
+}) {
+  const navigate = useNavigate();
+  const { attention, scoped } = row;
+  const told = toldOf(row);
+  const record = state.kind === "record" ? state.record : null;
+  const failed = record?.delivery.phase === "failed";
+  const landedThread =
+    record?.delivery.phase === "sent" ? record.delivery.landed?.threadId : undefined;
+  // The thread that was told can differ from the project (a needs-brad decision names its own).
+  const toldTitle = landedThread
+    ? readThreadShells().find((thread) => thread.id === landedThread)?.title
+    : undefined;
+  const text = answers.receipt(
+    state.kind === "held" ? state.label : (record?.label ?? ""),
+    state.kind === "held" ? "held" : state.record.delivery,
+    toldTitle ?? told,
+  );
+  return (
+    <div className="py-1.5" data-testid="decision-card">
+      <div className="flex items-baseline gap-2">
+        {failed ? (
+          <span className="text-destructive-foreground">!</span>
+        ) : (
+          <CheckIcon className="size-3.5 shrink-0 translate-y-0.5 text-success" aria-hidden />
+        )}
+        <span className="min-w-0 flex-1 truncate text-muted-foreground">{attention.title}</span>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-2 pl-5 text-xs text-muted-foreground">
+        <span>{text}</span>
+        {state.kind === "held" ? (
+          <InlineButton tone="muted" autoFocus onClick={state.undo}>
+            Undo
+          </InlineButton>
+        ) : failed ? (
+          <>
+            {record?.retry ? (
+              <InlineButton tone="muted" onClick={record.retry}>
+                Retry
+              </InlineButton>
+            ) : null}
+            <InlineButton tone="muted" onClick={() => answers.dismiss(row.key)}>
+              {answers.draftOf(row.key) ? "Edit" : "Dismiss"}
+            </InlineButton>
+          </>
+        ) : null}
+        {landedThread ? (
+          <InlineButton
+            tone="muted"
+            onClick={() => {
+              // The thread that was told opens in the environment that holds it.
+              const target = resolveThreadLinkTarget(
+                scoped.environmentId,
+                landedThread as ThreadId,
+              );
+              void navigate({
+                to: "/$environmentId/$threadId",
+                params: buildThreadRouteParams(
+                  scopeThreadRef(target.environmentId, target.threadId),
+                ),
+              });
+            }}
+          >
+            View in thread
+          </InlineButton>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/**
  * One decision, saying what it asks (a sentence on what changed or is proposed, where to look, the
  * recommended answer) and answering it right here through the shared answer area. After an answer
  * the card shows what was sent and where it landed, with Undo while held. `full` adds the whole
@@ -145,79 +227,12 @@ export function DecisionCard({
   const ui = useDashboardUi();
   const { answers } = ui;
   const openSource = useOpenDecisionSource();
-  const navigate = useNavigate();
   const { attention, scoped } = row;
   const state = answers.stateOf(row.key);
   const plan = useAnswerPlan(row);
   const [details, setDetails] = useState(false);
-  const told = toldOf(row);
 
-  if (state) {
-    const record = state.kind === "record" ? state.record : null;
-    const failed = record?.delivery.phase === "failed";
-    const landedThread =
-      record?.delivery.phase === "sent" ? record.delivery.landed?.threadId : undefined;
-    // The thread that was told can differ from the project (a needs-brad decision names its own).
-    const toldTitle = landedThread
-      ? readThreadShells().find((thread) => thread.id === landedThread)?.title
-      : undefined;
-    const text = answers.receipt(
-      state.kind === "held" ? state.label : (record?.label ?? ""),
-      state.kind === "held" ? "held" : state.record.delivery,
-      toldTitle ?? told,
-    );
-    return (
-      <div className="py-1.5" data-testid="decision-card">
-        <div className="flex items-baseline gap-2">
-          {failed ? (
-            <span className="text-destructive-foreground">!</span>
-          ) : (
-            <CheckIcon className="size-3.5 shrink-0 translate-y-0.5 text-success" aria-hidden />
-          )}
-          <span className="min-w-0 flex-1 truncate text-muted-foreground">{attention.title}</span>
-        </div>
-        <div className="flex flex-wrap items-center gap-x-2 pl-5 text-xs text-muted-foreground">
-          <span>{text}</span>
-          {state.kind === "held" ? (
-            <InlineButton tone="muted" autoFocus onClick={state.undo}>
-              Undo
-            </InlineButton>
-          ) : failed ? (
-            <>
-              {record?.retry ? (
-                <InlineButton tone="muted" onClick={record.retry}>
-                  Retry
-                </InlineButton>
-              ) : null}
-              <InlineButton tone="muted" onClick={() => answers.dismiss(row.key)}>
-                {answers.draftOf(row.key) ? "Edit" : "Dismiss"}
-              </InlineButton>
-            </>
-          ) : null}
-          {landedThread ? (
-            <InlineButton
-              tone="muted"
-              onClick={() => {
-                // The thread that was told opens in the environment that holds it.
-                const target = resolveThreadLinkTarget(
-                  scoped.environmentId,
-                  landedThread as ThreadId,
-                );
-                void navigate({
-                  to: "/$environmentId/$threadId",
-                  params: buildThreadRouteParams(
-                    scopeThreadRef(target.environmentId, target.threadId),
-                  ),
-                });
-              }}
-            >
-              View in thread
-            </InlineButton>
-          ) : null}
-        </div>
-      </div>
-    );
-  }
+  if (state) return <DecisionReceipt row={row} state={state} answers={answers} />;
 
   const summary = cardSummary(attention);
   // "See all" shows the whole text the producer wrote; the feed and tray keep to the summary.

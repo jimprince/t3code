@@ -1,11 +1,15 @@
 import { isNewlyFiled, newMarkTitle } from "@t3tools/client-runtime/dashboard/order";
+import { blockerHeadline } from "@t3tools/client-runtime/dashboard/blockers";
 import type { DashboardRelease, DashboardTask, ProjectRequestPlacer } from "@t3tools/contracts";
 import { CheckIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import { cn } from "../../lib/utils";
+import { BadgeShell, blockerOfRow, WaitingList } from "../blockers/BlockerBadge";
+import { InlineButton } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { useDashboardUi } from "./context";
+import { useOpenDecisionSource } from "./decisions";
 import { isThreadPlanTaskId } from "./resumeFromPlan.logic";
 import { ThreadPlanLine } from "./ThreadPlanLine";
 import {
@@ -144,25 +148,46 @@ export function UnknownValue({
   );
 }
 
-/** The amber link on a blocked row that opens exactly the decision card blocking it. */
+/**
+ * The amber "Waiting on Brad" on a row that waits on decisions: opens one popover with exactly the
+ * decisions blocking it, each answerable in place, and "Open" for the full card behind it.
+ */
 export function WaitingOnYou({
   keys,
-  label = "waiting on you",
+  label = "Waiting on Brad",
 }: {
   readonly keys: ReadonlyArray<string>;
   readonly label?: string;
 }) {
-  const { openDecisions } = useDashboardUi();
-  if (keys.length === 0) return null;
+  const { decisions } = useDashboardUi();
+  const openSource = useOpenDecisionSource();
+  const [open, setOpen] = useState(false);
+  const entries = useMemo(
+    () =>
+      keys.flatMap((key) => {
+        const row = decisions.find((entry) => entry.key === key);
+        return row ? [{ row, blocker: blockerOfRow(row) }] : [];
+      }),
+    [keys, decisions],
+  );
   return (
-    <button
-      type="button"
-      className="cursor-pointer whitespace-nowrap text-warning-foreground underline decoration-warning/45 underline-offset-2 hover:decoration-warning"
-      onClick={() => openDecisions(keys)}
+    <BadgeShell
+      tone="amber"
+      label={`${label}${keys.length > 1 ? ` (${keys.length})` : ""}`}
+      ariaLabel={`${label}: the decisions blocking this and their answers`}
+      settledLabel="Answered"
+      active={entries.length > 0}
+      open={open}
+      onOpenChange={setOpen}
     >
-      {label}
-      {keys.length > 1 ? ` (${keys.length})` : ""}
-    </button>
+      <WaitingList
+        entries={entries}
+        headline={blockerHeadline(entries.map((entry) => entry.blocker))}
+        asOf={null}
+        stored={false}
+        openItem={openSource}
+      />
+    </BadgeShell>
   );
 }
 
@@ -235,6 +260,43 @@ const STATUS_WORDS: Record<DashboardTask["status"], string> = {
   review: "ready for review",
   done: "done",
 };
+
+/**
+ * The red "Blocked" on a task the snapshot marks blocked with no decision behind it: another issue
+ * holds it. The snapshot does not name that issue, so the popover says what is known and opens the
+ * task, where "Blocked by #N" is written; there is no button because only that issue closing clears it.
+ */
+function TaskBlocked({
+  scoped,
+  task,
+}: {
+  readonly scoped: ScopedProject;
+  readonly task: DashboardTask;
+}) {
+  const ui = useDashboardUi();
+  const [open, setOpen] = useState(false);
+  return (
+    <BadgeShell
+      tone="red"
+      label="Blocked"
+      ariaLabel="Blocked: what holds this task"
+      settledLabel="Cleared"
+      active
+      open={open}
+      onOpenChange={setOpen}
+    >
+      <div className="font-medium">Blocked: {task.title}</div>
+      <div className="text-muted-foreground">
+        Another issue holds this task. It clears when that issue closes.
+      </div>
+      <div>
+        <InlineButton tone="muted" onClick={() => ui.openTask(scoped, task)}>
+          Open task
+        </InlineButton>
+      </div>
+    </BadgeShell>
+  );
+}
 
 /** Whether the task's step list comes from a source that is stale or failed. */
 function useTaskSourceStale(task: DashboardTask): boolean {
@@ -365,6 +427,7 @@ export function TaskRow({
 }
 
 function TaskFigure({
+  scoped,
   task,
   roll,
   keys,
@@ -427,8 +490,12 @@ function TaskFigure({
       <span className="whitespace-nowrap text-muted-foreground/80">
         {keys.length > 0 ? (
           <WaitingOnYou keys={keys} />
+        ) : task.nextStep ? (
+          task.nextStep
+        ) : task.status === "blocked" ? (
+          <TaskBlocked scoped={scoped} task={task} />
         ) : (
-          (task.nextStep ?? STATUS_WORDS[task.status])
+          STATUS_WORDS[task.status]
         )}
       </span>
     );
