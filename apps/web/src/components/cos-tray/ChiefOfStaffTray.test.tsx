@@ -21,6 +21,9 @@ const { answerOption, respond, cleanupAnswers, answers, projects } = vi.hoisted(
       reconcile: vi.fn(),
       answerOption,
       respond,
+      draftOf: () => "",
+      setDraft: vi.fn(),
+      receipt: () => "",
     },
     projects: [
       {
@@ -37,6 +40,7 @@ const { answerOption, respond, cleanupAnswers, answers, projects } = vi.hoisted(
               title: "Choose the clinic name",
               question: "Which name should we use?",
               taskId: null,
+              requestId: null,
               threadId: null,
               deadline: null,
               blockingTaskIds: [],
@@ -62,7 +66,12 @@ vi.mock("../../state/chiefOfStaff", () => ({
     lastReplyAt: null,
   }),
 }));
-vi.mock("../../state/dashboard", () => ({ useDashboardData: () => ({ data: { projects } }) }));
+vi.mock("../../state/dashboard", () => ({
+  useDashboardData: () => ({ data: { projects }, snapshotSource: "live" }),
+}));
+vi.mock("../../state/liveRuntimeRequests", () => ({
+  useLiveRuntimeRequests: () => ({ environments: new Set(), pending: new Set() }),
+}));
 vi.mock("../dashboard-v3/prefs", () => ({ useMinuteClock: () => 0 }));
 vi.mock("../dashboard-v3/useDecisionAnswers", async () => {
   const { useEffect } = await import("react");
@@ -71,7 +80,11 @@ vi.mock("../dashboard-v3/useDecisionAnswers", async () => {
       useEffect(() => cleanupAnswers, []);
       return answers;
     },
-    answerMode: () => "option",
+    useAnswerPlan: () => ({
+      mode: "legacy-option",
+      options: [{ text: "Hold the purchase", recommended: true }],
+    }),
+    toldOf: () => "Delivery",
   };
 });
 vi.mock("../orchestrators/ProjectRequestsSection", () => ({ useDiscuss: () => ({}) }));
@@ -100,7 +113,8 @@ afterEach(async () => {
 
 function button(label: string) {
   const found = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
-    (element) => element.getAttribute("aria-label") === label || element.textContent === label,
+    (element) =>
+      element.getAttribute("aria-label") === label || element.textContent?.startsWith(label),
   );
   expect(found, `button ${label}`).toBeDefined();
   return found!;
@@ -126,7 +140,7 @@ describe("Chief of Staff decision exit", () => {
     expect(button("1 waiting on you").getAttribute("aria-expanded")).toBe("true");
     await act(() => button("Hold the purchase").click());
     expect(answerOption).toHaveBeenCalledOnce();
-    expect(answerOption.mock.calls[0]?.[1]).toBe("Hold the purchase");
+    expect(answerOption.mock.calls[0]?.[1]).toMatchObject({ text: "Hold the purchase" });
   });
 
   it("lets Escape leave a focused decision, while tray controls remain available", async () => {

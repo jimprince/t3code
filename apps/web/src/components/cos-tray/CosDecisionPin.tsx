@@ -1,8 +1,10 @@
+import { liveAttention } from "@t3tools/client-runtime/dashboard/live";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { useDashboardData } from "../../state/dashboard";
+import { useLiveRuntimeRequests } from "../../state/liveRuntimeRequests";
 import type { DashboardUi, DecisionRow } from "../dashboard-v3/context";
 import { DashboardUiProvider } from "../dashboard-v3/context";
 import { rankDecisions } from "../dashboard-v3/dashboard.logic";
@@ -28,7 +30,8 @@ export function CosDecisionPin({
   readonly open: boolean;
   readonly onClose: () => void;
 }) {
-  const { data } = useDashboardData();
+  const { data, snapshotSource } = useDashboardData();
+  const live = useLiveRuntimeRequests();
   const now = useMinuteClock();
   const answers = useDecisionAnswers();
 
@@ -36,17 +39,19 @@ export function CosDecisionPin({
     const all = data.projects
       .filter((entry) => entry.environmentId === environmentId)
       .flatMap((entry) =>
-        entry.project.attention.map((attention) => ({
-          key: `${entry.key}|${attention.id}`,
-          scoped: entry,
-          attention,
-        })),
+        liveAttention(entry.environmentId, entry.project.attention, live, snapshotSource).map(
+          (attention) => ({
+            key: `${entry.key}|${attention.id}`,
+            scoped: entry,
+            attention,
+          }),
+        ),
       );
     return rankDecisions(all.map((row) => row.attention)).flatMap((attention) => {
       const row = all.find((candidate) => candidate.attention === attention);
       return row ? [row] : [];
     });
-  }, [data.projects, environmentId]);
+  }, [data.projects, environmentId, live, snapshotSource]);
 
   const openKeys = useMemo(() => new Set(rows.map((row) => row.key)), [rows]);
   const reconcile = answers.reconcile;
@@ -63,7 +68,18 @@ export function CosDecisionPin({
     [rows, answers.records, openKeys],
   );
   const [index, setIndex] = useState(0);
-  const at = Math.min(index, Math.max(0, shown.length - 1));
+  // The pin follows the decision it shows by key, so an answered one stays up with its receipt
+  // (it moves to the end of `shown` once the snapshot drops it) instead of jumping to the next.
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+  const followed = activeKey === null ? -1 : shown.findIndex((row) => row.key === activeKey);
+  const at = followed >= 0 ? followed : Math.min(index, Math.max(0, shown.length - 1));
+  const first = shown[0]?.key ?? null;
+  // Start following the first decision at once, so answering it does not move the pin on.
+  if (activeKey === null && first !== null) setActiveKey(first);
+  const goTo = (target: number) => {
+    setIndex(target);
+    setActiveKey(shown[target]?.key ?? null);
+  };
 
   const ui = useMemo(
     () =>
@@ -106,7 +122,7 @@ export function CosDecisionPin({
                 variant="ghost"
                 aria-label="Previous decision"
                 disabled={at === 0}
-                onClick={() => setIndex(at - 1)}
+                onClick={() => goTo(at - 1)}
               >
                 <ChevronLeftIcon />
               </Button>
@@ -118,7 +134,7 @@ export function CosDecisionPin({
                 variant="ghost"
                 aria-label="Next decision"
                 disabled={at === shown.length - 1}
-                onClick={() => setIndex(at + 1)}
+                onClick={() => goTo(at + 1)}
               >
                 <ChevronRightIcon />
               </Button>
@@ -126,7 +142,7 @@ export function CosDecisionPin({
           ) : null}
         </div>
         <div className="max-h-[40dvh] overflow-y-auto">
-          <DecisionCard key={row.key} row={row} />
+          <DecisionCard key={row.key} row={row} compact />
         </div>
       </div>
     </DashboardUiProvider>

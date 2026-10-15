@@ -3,6 +3,7 @@ import {
   joinOrchestratorMetadata,
   type OrchestratorSummary,
 } from "@t3tools/client-runtime/state/orchestrators";
+import { liveAttention } from "@t3tools/client-runtime/dashboard/live";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { DashboardTask, EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -10,6 +11,7 @@ import { use, useCallback, useEffect, useMemo, useRef, useState, type ReactNode 
 
 import { readProjects, readThreadShells } from "../../state/entities";
 import { useDashboardData } from "../../state/dashboard";
+import { useLiveRuntimeRequests } from "../../state/liveRuntimeRequests";
 import { useSupervisionMetadata } from "../../state/forkSupervision";
 import { resolveThreadLinkTarget } from "../../state/threadLinks";
 import { buildThreadRouteParams } from "../../threadRoutes";
@@ -186,20 +188,26 @@ export function DashboardView({
     [metadata, root],
   );
 
+  // A thread's own question or approval is listed only while that thread still has it pending:
+  // the snapshot can lag the answer by minutes, or be a stored copy (#303).
+  const liveRequests = useLiveRuntimeRequests();
+  const snapshotSource = state.snapshotSource;
   const decisions = useMemo<ReadonlyArray<DecisionRow>>(() => {
     const rows = data.projects.flatMap((entry) =>
-      entry.project.attention.map((attention) => ({
-        key: `${entry.key}|${attention.id}`,
-        scoped: entry,
-        attention,
-      })),
+      liveAttention(entry.environmentId, entry.project.attention, liveRequests, snapshotSource).map(
+        (attention) => ({
+          key: `${entry.key}|${attention.id}`,
+          scoped: entry,
+          attention,
+        }),
+      ),
     );
     const ranked = rankDecisions(rows.map((row) => row.attention));
     return ranked.flatMap((attention) => {
       const index = rows.findIndex((row) => row.attention === attention);
       return index >= 0 ? [rows[index]!] : [];
     });
-  }, [data.projects]);
+  }, [data.projects, liveRequests, snapshotSource]);
 
   const openKeys = useMemo(() => new Set(decisions.map((row) => row.key)), [decisions]);
   const reconcileAnswers = answers.reconcile;

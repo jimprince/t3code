@@ -28,6 +28,15 @@ export function decisionAnswerInput(pick: DecisionPick, note: string): DecisionA
   };
 }
 
+/** What the server reports about a delivered answer, so the card can say where it went. */
+export interface DecisionLanding {
+  /** Issue reference such as `#355`, when a comment was left on one. */
+  readonly commentedOn?: string | undefined;
+  readonly commentUrl?: string | undefined;
+  /** The thread that was told, or whose question was answered. */
+  readonly threadId?: string | undefined;
+}
+
 /** Where an answer is once its Undo hold ends: on its way, delivered, or refused with the reason. */
 export type DecisionDelivery =
   | { readonly phase: "sending" }
@@ -37,6 +46,8 @@ export type DecisionDelivery =
       readonly at: number;
       /** False when the waiting thread could not be found, so only the issue has it. */
       readonly notified: boolean;
+      /** Where it landed, when the server says: the issue comment and the thread that was told. */
+      readonly landed?: DecisionLanding;
     }
   | { readonly phase: "failed"; readonly error: string };
 
@@ -109,4 +120,24 @@ export function waitingLabel(
   const thread = threads.find((candidate) => candidate.id === waiting);
   if (thread) return thread.title;
   return UUID.test(waiting) ? "the orchestrator" : waiting;
+}
+
+/**
+ * The confirmation line of an answered card, naming what was sent and where it landed:
+ * `Sent "Approve" · commented on #355 · told Dashboard head`. The line before delivery says what
+ * is about to go, so an answer is never a surprise.
+ */
+export function decisionReceipt(
+  label: string,
+  state: "held" | DecisionDelivery,
+  waiting: string,
+): string {
+  const said = `\u201c${label}\u201d`;
+  if (state === "held") return `Sending ${said} to ${waiting}`;
+  if (state.phase === "sending") return `Sending ${said} to ${waiting}`;
+  if (state.phase === "failed") return `Not sent ${said}: ${state.error}`;
+  const parts = [`Sent ${said}`];
+  if (state.landed?.commentedOn) parts.push(`commented on ${state.landed.commentedOn}`);
+  parts.push(state.notified ? `told ${waiting}` : `${waiting} was not found`);
+  return parts.join(" \u00b7 ");
 }

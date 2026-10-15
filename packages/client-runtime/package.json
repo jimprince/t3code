@@ -540,6 +540,14 @@
       "types": "./src/dashboard/order.ts",
       "default": "./src/dashboard/order.ts"
     },
+    "./dashboard/live": {
+      "types": "./src/dashboard/liveAttention.ts",
+      "default": "./src/dashboard/liveAttention.ts"
+    },
+    "./decision-card": {
+      "types": "./src/decisionCard.ts",
+      "default": "./src/decisionCard.ts"
+    },
     "./dashboard/merge": {
       "types": "./src/dashboard/merge.ts",
       "default": "./src/dashboard/merge.ts"

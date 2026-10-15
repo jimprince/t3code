@@ -1,18 +1,22 @@
+import { cardSummary } from "@t3tools/client-runtime/decision-card";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { useNavigate } from "@tanstack/react-router";
+import type { ThreadId } from "@t3tools/contracts";
 import { CheckIcon } from "lucide-react";
+import { useState } from "react";
 
+import { readThreadShells } from "../../state/entities";
 import { resolveThreadLinkTarget } from "../../state/threadLinks";
 import { buildThreadRouteParams } from "../../threadRoutes";
-import { Button, InlineButton } from "../ui/button";
+import { InlineButton } from "../ui/button";
 import { Dialog, DialogHeader, DialogPopup, DialogTitle } from "../ui/dialog";
-import { Tooltip, TooltipTrigger, TooltipPopup } from "../ui/tooltip";
 import { DecisionMarkdown } from "../orchestrators/DecisionMarkdown";
 import { useDiscuss } from "../orchestrators/ProjectRequestsSection";
 import { issueKey } from "../orchestrators/projectRequests.logic";
 import { useDashboardUi, type DecisionRow } from "./context";
 import { formatDeadline, parseIssueTaskId } from "./dashboard.logic";
-import { answerMode } from "./useDecisionAnswers";
+import { DecisionAnswerArea } from "./DecisionAnswerArea";
+import { toldOf, useAnswerPlan } from "./useDecisionAnswers";
 
 const KIND_WORD = {
   decision: "decision",
@@ -86,43 +90,80 @@ function DiscussIssue({
   const discuss = useDiscuss({ root: { environmentId, id: rootId } });
   const pending = discuss.pending === issueKey(issue);
   return (
-    <Button
-      size="xs"
-      variant="ghost-muted"
-      disabled={pending}
-      onClick={() => void discuss.start(issue)}
-    >
+    <InlineButton tone="muted" disabled={pending} onClick={() => void discuss.start(issue)}>
       {pending ? "Opening" : "Discuss"}
-    </Button>
+    </InlineButton>
+  );
+}
+
+const URL_PATTERN = /(https?:\/\/[^\s)]+)/g;
+
+/** Where to look, with its links live: a URL in the text opens in a new tab. */
+function JudgingWhere({ text }: { readonly text: string }) {
+  return (
+    <div className="text-xs text-muted-foreground">
+      Where:{" "}
+      {text.split(URL_PATTERN).map((part, index) =>
+        index % 2 === 1 ? (
+          <a
+            key={`${index % 2 === 1 ? "link" : "text"}:${part}`}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-foreground underline underline-offset-2"
+          >
+            {part}
+          </a>
+        ) : (
+          <span key={`${index % 2 === 1 ? "link" : "text"}:${part}`}>{part}</span>
+        ),
+      )}
+    </div>
   );
 }
 
 /**
- * One decision: what it is, what it blocks, and the buttons to answer it right here through the
- * existing decision services. After an answer the card shows what happened, with Undo while held.
- * `full` adds the whole question; the feed shows its lead only.
+ * One decision, saying what it asks (a sentence on what changed or is proposed, where to look, the
+ * recommended answer) and answering it right here through the shared answer area. After an answer
+ * the card shows what was sent and where it landed, with Undo while held. `full` adds the whole
+ * text; the feed shows its first sentence. `compact` is the tray strip: the sentence and the
+ * options, the rest behind Details.
  */
 export function DecisionCard({
   row,
   full = false,
+  compact = false,
 }: {
   readonly row: DecisionRow;
   readonly full?: boolean;
+  readonly compact?: boolean;
 }) {
   const ui = useDashboardUi();
   const { answers } = ui;
   const openSource = useOpenDecisionSource();
+  const navigate = useNavigate();
   const { attention, scoped } = row;
   const state = answers.stateOf(row.key);
-  const mode = answerMode(row);
-  const told = scoped.project.title;
+  const plan = useAnswerPlan(row);
+  const [details, setDetails] = useState(false);
+  const told = toldOf(row);
 
   if (state) {
     const record = state.kind === "record" ? state.record : null;
-    const strip = answers.strip(state.kind === "held" ? "held" : state.record.delivery, told);
     const failed = record?.delivery.phase === "failed";
+    const landedThread =
+      record?.delivery.phase === "sent" ? record.delivery.landed?.threadId : undefined;
+    // The thread that was told can differ from the project (a needs-brad decision names its own).
+    const toldTitle = landedThread
+      ? readThreadShells().find((thread) => thread.id === landedThread)?.title
+      : undefined;
+    const text = answers.receipt(
+      state.kind === "held" ? state.label : (record?.label ?? ""),
+      state.kind === "held" ? "held" : state.record.delivery,
+      toldTitle ?? told,
+    );
     return (
-      <div className="py-1.5">
+      <div className="py-1.5" data-testid="decision-card">
         <div className="flex items-baseline gap-2">
           {failed ? (
             <span className="text-destructive-foreground">!</span>
@@ -132,11 +173,9 @@ export function DecisionCard({
           <span className="min-w-0 flex-1 truncate text-muted-foreground">{attention.title}</span>
         </div>
         <div className="flex flex-wrap items-center gap-x-2 pl-5 text-xs text-muted-foreground">
-          <span>
-            {state.kind === "held" ? state.label : (record?.label ?? "")} · {strip.text}
-          </span>
+          <span>{text}</span>
           {state.kind === "held" ? (
-            <InlineButton tone="muted" onClick={state.undo}>
+            <InlineButton tone="muted" autoFocus onClick={state.undo}>
               Undo
             </InlineButton>
           ) : record?.retry ? (
@@ -144,13 +183,55 @@ export function DecisionCard({
               Retry
             </InlineButton>
           ) : null}
+          {landedThread ? (
+            <InlineButton
+              tone="muted"
+              onClick={() => {
+                // The thread that was told opens in the environment that holds it.
+                const target = resolveThreadLinkTarget(
+                  scoped.environmentId,
+                  landedThread as ThreadId,
+                );
+                void navigate({
+                  to: "/$environmentId/$threadId",
+                  params: buildThreadRouteParams(
+                    scopeThreadRef(target.environmentId, target.threadId),
+                  ),
+                });
+              }}
+            >
+              View in thread
+            </InlineButton>
+          ) : null}
         </div>
       </div>
     );
   }
 
+  const summary = cardSummary(attention);
+  const asksNothing = attention.asksNothingYet === true;
+  const marked = attention.options.some((option) => option.recommended);
+  const hasDetails = !!attention.judgingWhere || (!!attention.recommended && !marked);
+  const showDetails = !compact || details;
+  // Links are secondary: Discuss where talking it through is a real alternative, Open where the
+  // thing to judge lives elsewhere. A live thread question or approval needs neither.
+  const links =
+    plan.mode === "questions" || plan.mode === "approval" ? null : (
+      <>
+        {plan.mode === "issue" ? (
+          plan.discuss ? (
+            <DiscussButton row={row} />
+          ) : null
+        ) : (
+          <DiscussButton row={row} />
+        )}
+        <InlineButton tone="muted" onClick={() => openSource(row)}>
+          {plan.mode === "open" ? "Open" : "Open task"}
+        </InlineButton>
+      </>
+    );
   return (
-    <div className="py-1.5">
+    <div className="py-1.5" data-testid="decision-card">
       <div className="flex items-baseline gap-2">
         <span className="shrink-0 text-2xs whitespace-nowrap text-warning-foreground">
           {attention.deadline
@@ -160,57 +241,48 @@ export function DecisionCard({
         <span className="min-w-0 flex-1 truncate font-medium">{attention.title}</span>
       </div>
       <div className="text-xs text-muted-foreground">{consequence(row)}</div>
-      {full ? (
-        <div className="my-1.5">
-          <DecisionMarkdown
-            environmentId={scoped.environmentId}
-            markdown={attention.question}
-            issueUrl={attention.url ?? "https://localhost/"}
-            clamp={12}
-          />
+      {asksNothing ? (
+        <div className="text-xs text-warning-foreground">
+          Asks nothing yet: the agent has not said what to check or decide.
         </div>
-      ) : lead(attention.question) ? (
-        <div className="line-clamp-2 text-xs">{lead(attention.question)}</div>
+      ) : summary ? (
+        full ? (
+          <div className="my-1.5">
+            <DecisionMarkdown
+              environmentId={scoped.environmentId}
+              markdown={summary}
+              issueUrl={attention.url ?? "https://localhost/"}
+              clamp={12}
+            />
+          </div>
+        ) : (
+          <div className={compact ? "line-clamp-2 text-xs" : "line-clamp-3 text-xs"}>
+            {lead(summary)}
+          </div>
+        )
       ) : null}
-      <div className="mt-1 flex flex-wrap items-center gap-1">
-        {mode === "option"
-          ? attention.options.map((option) => (
-              <Tooltip key={option.text}>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      size="sm-multiline"
-                      variant={option.recommended ? "default" : "outline"}
-                      className="max-w-full"
-                      onClick={() => answers.answerOption(row, option.text)}
-                    />
-                  }
-                >
-                  <span className="line-clamp-2 min-w-0 text-left break-words">{option.text}</span>
-                </TooltipTrigger>
-                <TooltipPopup>{option.text}</TooltipPopup>
-              </Tooltip>
-            ))
-          : null}
-        {mode === "approval" ? (
-          <>
-            <Button size="xs" onClick={() => answers.respond(row, "accept", "Approved")}>
-              Approve
-            </Button>
-            <Button
-              size="xs"
-              variant="outline"
-              onClick={() => answers.respond(row, "decline", "Declined")}
-            >
-              Decline
-            </Button>
-          </>
-        ) : null}
-        <DiscussButton row={row} />
-        <Button size="xs" variant="ghost-muted" onClick={() => openSource(row)}>
-          {mode === "open" ? "Open" : "Open task"}
-        </Button>
-      </div>
+      {compact && hasDetails ? (
+        <div className="text-xs">
+          <InlineButton
+            tone="muted"
+            aria-expanded={details}
+            onClick={() => setDetails((current) => !current)}
+          >
+            {details ? "Less" : "Details"}
+          </InlineButton>
+        </div>
+      ) : null}
+      {showDetails && attention.judgingWhere ? (
+        <JudgingWhere text={attention.judgingWhere} />
+      ) : null}
+      {showDetails && attention.recommended && !marked ? (
+        <div className="text-xs text-muted-foreground">
+          Recommended: <span className="text-foreground">{attention.recommended}</span>
+        </div>
+      ) : null}
+      <DecisionAnswerArea row={row} answers={answers} compact={compact}>
+        {links}
+      </DecisionAnswerArea>
     </div>
   );
 }

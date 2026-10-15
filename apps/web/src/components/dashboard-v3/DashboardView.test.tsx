@@ -19,6 +19,9 @@ vi.mock("../../state/threadLinks", () => ({
     threadId,
   }),
 }));
+vi.mock("../../state/liveRuntimeRequests", () => ({
+  useLiveRuntimeRequests: () => ({ environments: new Set<string>(), pending: new Set<string>() }),
+}));
 vi.mock("../../state/dashboard", () => ({
   useDashboardData: () => ({
     data: state.data,
@@ -47,6 +50,9 @@ vi.mock("./useDecisionAnswers", async (importOriginal) => ({
     records: new Map(),
     stateOf: () => null,
     reconcile: () => undefined,
+    receipt: () => "",
+    draftOf: () => "",
+    setDraft: () => undefined,
   }),
 }));
 
@@ -185,7 +191,9 @@ describe("a long plan title", () => {
 
 describe("opening a thread from the Dashboard goes to the machine that holds it (#363)", () => {
   const remote = () => {
-    const base = snapshot([{ ...task("local:t1", "Fix the remote worker"), threadId: ThreadId.make("remote-thread") }]);
+    const base = snapshot([
+      { ...task("local:t1", "Fix the remote worker"), threadId: ThreadId.make("remote-thread") },
+    ]);
     return base;
   };
 

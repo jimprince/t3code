@@ -28,6 +28,9 @@ vi.mock("@tanstack/react-router", () => ({
   Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
   useNavigate: () => vi.fn(),
 }));
+vi.mock("../../state/liveRuntimeRequests", () => ({
+  useLiveRuntimeRequests: () => ({ environments: new Set<string>(), pending: new Set<string>() }),
+}));
 vi.mock("../../state/dashboard", () => ({
   useDashboardData: () => ({
     data: state.data,
