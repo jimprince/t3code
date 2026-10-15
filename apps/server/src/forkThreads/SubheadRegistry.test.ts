@@ -20,6 +20,29 @@ const template = {
 };
 
 it.layer(NodeServices.layer)("virtual registry", (it) => {
+  it.effect("requires the creator for mutations and keeps execution ownership immutable", () =>
+    Effect.gen(function* () {
+      const registry = yield* makeSubheadRegistry;
+      yield* registry.create(template, "creator");
+      expect(
+        yield* registry.edit("review", template, 1, "other").pipe(Effect.result),
+      ).toMatchObject({ _tag: "Failure" });
+      expect(
+        yield* registry.setState("review", "enable", "other").pipe(Effect.result),
+      ).toMatchObject({ _tag: "Failure" });
+      expect(
+        yield* registry
+          .edit("review", { ...template, ownerThreadId: ThreadId.make("other-head") }, 1, "creator")
+          .pipe(Effect.result),
+      ).toMatchObject({ _tag: "Failure" });
+      expect(
+        yield* registry
+          .edit("review", { ...template, projectId: ProjectId.make("other-project") }, 1, "creator")
+          .pipe(Effect.result),
+      ).toMatchObject({ _tag: "Failure" });
+      expect((yield* registry.setState("review", "enable", "creator")).enabled).toBe(true);
+    }).pipe(Effect.provide(layerMemory)),
+  );
   it.effect("creates several disabled names per project and retains immutable revisions", () =>
     Effect.gen(function* () {
       const registry = yield* makeSubheadRegistry;

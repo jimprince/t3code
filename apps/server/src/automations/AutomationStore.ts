@@ -234,14 +234,14 @@ const make = Effect.gen(function* () {
     fail(
       input.automationId !== undefined
         ? sql<{ json: string }>`
-            SELECT run_json AS json FROM automation_runs WHERE automation_id = ${input.automationId}
+            SELECT run_json AS json FROM automation_runs WHERE automation_id = ${input.automationId} AND json_type(run_json,'$.virtualSubhead') IS NULL
             ORDER BY created_at DESC, run_id DESC LIMIT ${input.limit}`
         : input.projectId !== undefined
           ? sql<{ json: string }>`
-              SELECT run_json AS json FROM automation_runs WHERE project_id = ${input.projectId}
+              SELECT run_json AS json FROM automation_runs WHERE project_id = ${input.projectId} AND json_type(run_json,'$.virtualSubhead') IS NULL
               ORDER BY created_at DESC, run_id DESC LIMIT ${input.limit}`
           : sql<{ json: string }>`
-              SELECT run_json AS json FROM automation_runs
+              SELECT run_json AS json FROM automation_runs WHERE json_type(run_json,'$.virtualSubhead') IS NULL
               ORDER BY created_at DESC, run_id DESC LIMIT ${input.limit}`,
     ).pipe(Effect.flatMap(runs));
 

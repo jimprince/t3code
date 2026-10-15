@@ -5125,8 +5125,13 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       );
       const activeRun = projection.runs.find(isBlockingRun);
       const pendingMergeBackTransfers = pendingMergeBackTransfersForThread(projection);
+      // Workspace preparation must retain its native launch handshake. Its
+      // release queues the prepared turn if the provider slots are still full.
+      const capacityBlocked =
+        command.dispatchMode.type !== "defer_start" &&
+        !(yield* canStartSubheadWorker(sql, command.threadId).pipe(mapDispatchError(command)));
       const shouldQueue =
-        activeRun !== undefined &&
+        (activeRun !== undefined || capacityBlocked) &&
         (dispatchMode.type === "defer_start" ||
           dispatchMode.type === "start_immediately" ||
           dispatchMode.type === "queue_after_active");
@@ -5141,9 +5146,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         const queueProviderThread =
           activeProviderThread ??
           projection.providerThreads.find(
-            (candidate) => candidate.id === activeRun.providerThreadId,
+            (candidate) => candidate.id === activeRun?.providerThreadId,
           );
-        if (queueProviderThread === undefined) {
+        if (queueProviderThread === undefined && activeRun !== undefined) {
           return yield* new OrchestratorDispatchError({
             commandId: command.commandId,
             commandType: command.type,
@@ -5154,7 +5159,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         const ordinal = nextRunOrdinal(projection);
         const runId = idAllocator.derive.run({ threadId: command.threadId, ordinal });
         const targetProviderThread =
-          modelSelection.instanceId === queueProviderThread.providerInstanceId
+          modelSelection.instanceId === queueProviderThread?.providerInstanceId
             ? queueProviderThread
             : rootProviderThreadsForProvider(projection, modelSelection.instanceId)[0];
         const queuedAdapter = yield* providerAdapters
@@ -5201,7 +5206,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         const attemptId = idAllocator.derive.runAttempt({ runId, attemptOrdinal: 1 });
         const rootNodeId = idAllocator.derive.rootNode({ runId });
         const checkpointScope =
-          activeRun.status === "preparing"
+          capacityBlocked || activeRun?.status === "preparing"
             ? null
             : yield* runtimePolicy.resolve({ thread: projection.thread, modelSelection }).pipe(
                 Effect.flatMap((resolvedRuntimePolicy) =>
@@ -8134,6 +8139,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         });
       }
       const now = yield* DateTime.now;
+      const capacityBlocked = !(yield* canStartSubheadWorker(sql, command.threadId).pipe(
+        mapDispatchError(command),
+      ));
       const resolvedRuntimePolicy = yield* runtimePolicy
         .resolve({ thread: projection.thread, modelSelection: state.run.modelSelection })
         .pipe(mapDispatchError(command));
@@ -8190,8 +8198,13 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         nodeId: state.rootNode.id,
         providerInstanceId: state.run.providerInstanceId,
         occurredAt: now,
-        payload: { ...state.run, status: "starting" },
+        payload: {
+          ...state.run,
+          status: capacityBlocked ? "queued" : "starting",
+          queuePosition: capacityBlocked ? state.run.ordinal : null,
+        },
       });
+      if (capacityBlocked) return;
       yield* Ref.update(effects, (existing) => [
         ...existing,
         {
@@ -11119,17 +11132,6 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         sequence: receipt.resultSequence,
         storedEvents,
       } satisfies OrchestratorV2DispatchResult;
-    }
-
-    if (
-      command.type === "message.dispatch" &&
-      !(yield* canStartSubheadWorker(sql, command.threadId).pipe(mapDispatchError(command)))
-    ) {
-      return yield* new OrchestratorDispatchError({
-        commandId: command.commandId,
-        commandType: command.type,
-        cause: "Owning head capacity is full (2 worker turns).",
-      });
     }
 
     // A limited sender checked these modes before dispatching; the thread's

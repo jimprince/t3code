@@ -304,7 +304,7 @@ Choose an installed provider and model from `t3-thread models --env dev-vm`:
   "description": "Review one bounded change",
   "prompt": "Review the requested change and report concrete findings.",
   "modelSelection": { "instanceId": "codex", "model": "gpt-6.1-sol" },
-  "runtimeMode": "approval-required",
+  "runtimeMode": "auto",
   "concurrency": 1
 }
 ```
@@ -315,14 +315,21 @@ actual project, head, provider, model and runtime mode; a placeholder ID fails.
 
 Use `subhead list [--all]`, `show NAME`, `edit NAME --file helper.json
 --expected-version N`, `disable NAME` and `retire NAME`, each with `--env`.
-Edits create revisions and reject stale expected versions. Disabling prevents new
+Edits create revisions and reject stale expected versions. The creating authenticated
+principal alone can edit or change state; projectId and ownerThreadId are immutable. Disabling prevents new
 admissions and pauses queued work; active work finishes. Retired names stay
-inspectable with `--all` and cannot be enabled accidentally.
+inspectable with `--all` and cannot be enabled accidentally. Disabling or retiring
+all helpers lifts the ordinary head cap after non-terminal virtual runs finish;
+queued disabled/retired helper requests stay paused and have no slice-1 cancel.
+A paused queued request is non-terminal and can therefore keep the ordinary cap
+active indefinitely. A disabled helper can be re-enabled to drain those requests;
+a retired helper cannot be re-enabled, and its already queued requests remain
+paused with the cap active. Retiring does not cancel requests in slice 1.
 
 Persist the request ID before retrying. The same environment, authenticated sender,
 helper and request ID resolve to the original run and execution IDs. Changing the
-request under that key is a conflict. A generated request ID is returned in the
-receipt, but a caller that loses its first response should already have saved one.
+request under that key is a conflict. A generated request ID is printed to stderr before transport and returned in the
+receipt. Save it even if the response is lost; UUIDs avoid collisions.
 
 CLI/script calls authenticate as the paired principal and use **pull-only results**.
 They do not claim to be a thread. Thread-return mode uses native MCP `subhead_send`
@@ -335,6 +342,10 @@ Thread calls return one structured result to the authenticated sender. Stable
 delivery IDs prevent duplicate result messages after retries or restarts. A settled
 recipient holds its delivery; an inaccessible recipient remains visibly undelivered.
 There is no implicit return to the owning head, Brad, or another environment.
+Quota/busy refusals stay held and retry with exponential backoff (15 seconds to
+5 minutes) using the same delivery identity; transport errors retry for 24 hours
+before becoming visibly undelivered. App-owned result deliveries are exempt from
+the ordinary worker capacity cap.
 Normal run-completion wakes are suppressed for this result; approvals, errors and
 required input retain their escalation paths. Do not send a second completion yourself.
 
@@ -342,14 +353,30 @@ The conservative limits are 1 concurrent run per helper (maximum 2), 2 concurren
 worker turns per owning head shared with ordinary workers, 10 queued requests per
 helper, 3 admissions per sender per 10 minutes, 20 runs per helper per day and a
 30-minute active timeout. A disabled helper, capacity or provider quota can hold a
-queue. Timeouts retain capacity until native termination is observed. A run is
-settled after its result is captured only when no approval, background work or
-unfinished child remains.
+queue. Ordinary sends under a full head are admitted as queued native runs and
+start when a slot frees. Terminal root results release their lease independently
+of safe settlement. At 30 minutes the app requests interruption; a fixed 5-minute
+grace then captures a failed result with available partial output and releases
+the lease even if provider termination or streaming evidence remains incomplete.
+A run is settled only when no approval, background work or unfinished child
+remains; settlement retries continue after delivery or pull-only capture.
 
-A virtual run cannot invoke another subhead through authenticated thread calls.
+A virtual run or its descendants cannot invoke another subhead through authenticated thread calls.
 This is an application policy, not a guarantee against unrestricted shell access
 to another principal's credentials. Slice 1 provides no CLI operator credential
 bound to a thread; native MCP uses its existing provider-thread credential.
+All paired CLI callers share an operator principal, request-ID space and sender
+rate limit. Creator checks therefore do not isolate different shells using that
+credential. Non-thread CLI/external MCP callers have no authenticated thread
+lineage or runtime ceiling; the documented policy cannot protect another
+principal credential exposed through unrestricted shell access. Outside MCP
+session-identity stability across reconnect remains unverified.
+
+Do not put secrets in templates or requests. The app stores their plaintext
+snapshots and durable results without virtual-run pruning. `auto` in the example
+allows a headless Codex helper to proceed under its provider sandbox;
+`approval-required` can wait for human approval until timeout. Plain send or
+handover of a helper name directs you to `t3-thread subhead send`.
 Cross-environment execution and spend ceilings are outside this slice.
 
 ## Common Lifecycle Tasks

@@ -10,6 +10,7 @@ import {
   ProviderInstanceId,
   ThreadId,
   type OrchestrationV2Run,
+  type ServerProvider,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as DateTime from "effect/DateTime";
@@ -24,6 +25,7 @@ import { layerWithRegistry } from "../orchestration-v2/testkit/ProviderReplayHar
 import { CodexProviderCapabilitiesV2 } from "../orchestration-v2/Adapters/CodexAdapterV2.ts";
 import { AutomationStore, layer as storeLayer } from "../automations/AutomationStore.ts";
 import { makeSubheadDelivery } from "./SubheadDelivery.ts";
+import { makeSubheadRegistry } from "./SubheadRegistry.ts";
 import { writeMetadata } from "./MetadataStore.ts";
 import * as EventSink from "../orchestration-v2/EventSink.ts";
 
@@ -173,6 +175,109 @@ function completedRun(recipient: ThreadId | null = sender) {
 }
 
 it.layer(NodeServices.layer)("durable virtual results", (it) => {
+  it.effect("generic automation history excludes private virtual requests", () =>
+    Effect.gen(function* () {
+      const store = yield* AutomationStore;
+      const run = completedRun();
+      yield* store.insertRun(run);
+      for (const filter of [{}, { projectId }, { automationId: run.automationId }])
+        expect(yield* store.listRuns({ ...filter, limit: 100 })).toEqual([]);
+      expect(Option.isSome(yield* store.getRun(run.id))).toBe(true);
+    }).pipe(Effect.provide(layer)),
+  );
+  it.effect("a sender under a full head receives one app-owned result", () =>
+    Effect.gen(function* () {
+      yield* createSender;
+      const sql = yield* SqlClient.SqlClient;
+      const registry = yield* makeSubheadRegistry;
+      const run = completedRun();
+      const {
+        name,
+        projectId: project,
+        ownerThreadId,
+        description,
+        prompt,
+        modelSelection: selected,
+        runtimeMode,
+        concurrency,
+      } = run.virtualSubhead.template;
+      yield* registry.create({
+        name,
+        projectId: project,
+        ownerThreadId,
+        description,
+        prompt,
+        modelSelection: selected,
+        runtimeMode,
+        concurrency,
+      });
+      yield* registry.setState("review", "enable");
+      yield* writeMetadata(sql, { threadId: sender, parentThreadId: run.ownerThreadId! });
+      for (const id of ["busy-one", "busy-two"]) {
+        const threadId = ThreadId.make(id);
+        yield* createThread(threadId);
+        yield* writeMetadata(sql, { threadId, parentThreadId: run.ownerThreadId! });
+        yield* (yield* Threads.ThreadManagementService).dispatch({
+          type: "message.dispatch",
+          commandId: CommandId.make(id),
+          messageId: MessageId.make(id),
+          threadId,
+          text: "Busy",
+          attachments: [],
+          createdBy: "user",
+          creationSource: "server",
+          dispatchMode: { type: "start_immediately" },
+        });
+      }
+      yield* (yield* AutomationStore).insertRun(run);
+      const delivery = yield* makeSubheadDelivery(Effect.succeed([]));
+      expect((yield* delivery.deliver(run.id)).virtualSubhead?.delivery.status).toBe("delivered");
+      expect(
+        (yield* (yield* Threads.ThreadManagementService).getThreadRecords(sender, ["messages"]))
+          .messages,
+      ).toHaveLength(1);
+    }).pipe(Effect.provide(layer)),
+  );
+  it.effect("quota holds preserve the delivery identity and recover after backoff", () =>
+    Effect.gen(function* () {
+      yield* createSender;
+      const run = { ...completedRun(), createdAt: DateTime.formatIso(yield* DateTime.now) };
+      const store = yield* AutomationStore;
+      yield* store.insertRun(run);
+      let blocked = true;
+      const delivery = yield* makeSubheadDelivery(
+        Effect.sync(() =>
+          blocked
+            ? [
+                {
+                  instanceId,
+                  usageLimits: { windows: [{ usedPercent: 100 }] },
+                } as unknown as ServerProvider,
+              ]
+            : [],
+        ),
+      );
+      const held = yield* delivery.deliver(run.id);
+      expect(held.virtualSubhead?.delivery.status).toBe("held");
+      expect(held.virtualSubhead?.delivery.error).toBe("QUOTA_EXHAUSTED");
+      expect((yield* delivery.deliver(run.id)).virtualSubhead?.delivery.attempts).toBe(1);
+      blocked = false;
+      const retry = {
+        ...held,
+        virtualSubhead: {
+          ...held.virtualSubhead!,
+          delivery: { ...held.virtualSubhead!.delivery, nextAttemptAt: "1960-01-01T00:00:00.000Z" },
+        },
+      };
+      yield* store.saveRun(retry);
+      expect((yield* delivery.deliver(run.id)).virtualSubhead?.delivery.status).toBe("delivered");
+      yield* delivery.deliver(run.id);
+      expect(
+        (yield* (yield* Threads.ThreadManagementService).getThreadRecords(sender, ["messages"]))
+          .messages,
+      ).toHaveLength(1);
+    }).pipe(Effect.provide(layer)),
+  );
   it.effect.each(["completed", "failed", "interrupted", "cancelled"] as const)(
     "captures and safely settles a %s execution",
     (status) =>
@@ -282,6 +387,16 @@ it.layer(NodeServices.layer)("durable virtual results", (it) => {
         (yield* (yield* Threads.ThreadManagementService).getThreadShell(execution))
           ?.settledOverride,
       ).toBeNull();
+      yield* (yield* Threads.ThreadManagementService).dispatch({
+        type: "thread.settle",
+        commandId: CommandId.make("settle-child"),
+        threadId: child,
+      });
+      yield* (yield* makeSubheadDelivery(Effect.succeed([]))).sweep;
+      expect(
+        (yield* (yield* Threads.ThreadManagementService).getThreadShell(execution))
+          ?.settledOverride,
+      ).toBe("settled");
     }).pipe(Effect.provide(layer)),
   );
   it.effect("appends one useful result and survives losing the post-dispatch delivery write", () =>

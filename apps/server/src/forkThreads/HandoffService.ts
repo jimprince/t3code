@@ -17,6 +17,7 @@ import * as DateTime from "effect/DateTime";
 import * as Cause from "effect/Cause";
 import * as Option from "effect/Option";
 import * as Effect from "effect/Effect";
+import { SubheadResultAdmission } from "./SubheadCapacity.ts";
 import * as Schema from "effect/Schema";
 import type * as SqlClient from "effect/sql/SqlClient";
 import type { ThreadManagementServiceShape } from "../orchestration-v2/ThreadManagementService.ts";
@@ -156,7 +157,11 @@ export const makeHandoffService = (
         // may be explicitly retried after unsettle; transport never retries it by itself.
         if (old) {
           const receipt = yield* currentReceipt(old);
-          if (receipt.status !== "held" && receipt.status !== "accepted") {
+          const retryableResult =
+            subject === "virtual-subhead-results" &&
+            receipt.status === "refused" &&
+            (receipt.cause === "QUOTA_EXHAUSTED" || receipt.cause === "BUSY");
+          if (receipt.status !== "held" && receipt.status !== "accepted" && !retryableResult) {
             saved = { ...old, receipt };
             return false;
           }
@@ -272,6 +277,10 @@ export const makeHandoffService = (
       })
       .pipe(
         Effect.provideService(MessageAdmission, admission),
+        Effect.provideService(
+          SubheadResultAdmission,
+          subject === "virtual-subhead-results" ? input.recipientThreadId : null,
+        ),
         Effect.catchCause(() => Effect.fail(new HandoffError({ causeCode: "DISPATCH_REJECTED" }))),
       );
     if (conflict) return yield* new HandoffError({ causeCode: "SEND_ID_CONFLICT" });

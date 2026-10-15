@@ -46,12 +46,15 @@ export const VirtualSubheadRun = Schema.Struct({
   blockedReason: Schema.NullOr(Schema.String),
   leaseStartedAt: Schema.NullOr(IsoDateTime),
   terminationReason: Schema.NullOr(Schema.String),
+  settlementPending: Schema.optionalKey(Schema.Boolean),
   delivery: Schema.Struct({
     id: TrimmedNonEmptyString,
     status: Schema.Literals(["pending", "pull-only", "held", "undelivered", "delivered"]),
     messageId: Schema.NullOr(Schema.String),
     attempts: Schema.Int,
     error: Schema.NullOr(Schema.String),
+    firstAttemptAt: Schema.optionalKey(IsoDateTime),
+    nextAttemptAt: Schema.optionalKey(IsoDateTime),
   }),
 });
 export type VirtualSubheadRun = typeof VirtualSubheadRun.Type;

@@ -60,8 +60,10 @@ export const makeSubheadRuns = Effect.gen(function* () {
             onExcessProperty: "error",
           });
           if (caller.threadId !== null) {
-            const recursive =
-              yield* sql`SELECT run_id FROM automation_runs WHERE json_type(run_json,'$.virtualSubhead')='object' AND json_extract(run_json,'$.steps[0].threadId')=${caller.threadId} LIMIT 1`;
+            const recursive = yield* sql`WITH RECURSIVE lineage(thread_id) AS (
+                SELECT ${caller.threadId} UNION SELECT json_extract(m.payload,'$.parentThreadId') FROM fork_thread_metadata m JOIN lineage l ON m.thread_id=l.thread_id
+              ) SELECT thread_id FROM lineage WHERE thread_id IN (SELECT thread_id FROM fork_thread_metadata WHERE json_extract(payload,'$.virtualRunId') IS NOT NULL)
+              OR thread_id IN (SELECT json_extract(run_json,'$.steps[0].threadId') FROM automation_runs WHERE json_type(run_json,'$.virtualSubhead')='object') LIMIT 1`;
             if (recursive.length)
               return yield* fail("Subhead recursion is disabled for authenticated run callers.");
           }
