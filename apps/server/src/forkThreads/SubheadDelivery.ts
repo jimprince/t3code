@@ -43,7 +43,9 @@ export const makeSubheadDelivery = (providers: Effect.Effect<ReadonlyArray<Serve
         const records = yield* threads.getThreadRecords(execution, ["messages", "runs"]);
         const message = records.messages.find((item) => item.id === run.steps[0]?.messageId);
         const root = message ? inputRootRun(records.runs, message) : undefined;
-        if (!root) return;
+        const emptyFailedClaim =
+          run.status === "failed" && records.messages.length === 0 && records.runs.length === 0;
+        if (!root && !emptyFailedClaim) return;
         const captured = yield* withOwnershipLock(
           sql,
           sql.withTransaction(
@@ -52,13 +54,13 @@ export const makeSubheadDelivery = (providers: Effect.Effect<ReadonlyArray<Serve
               if (metadata?.virtualRunId !== run.id) return false;
               if (
                 metadata.virtualResultCapturedAt !== undefined &&
-                metadata.virtualResultCapturedRunId === root.id
+                metadata.virtualResultCapturedRunId === root?.id
               )
                 return true;
               yield* writeMetadata(sql, {
                 ...metadata,
                 virtualResultCapturedAt: run.finishedAt ?? run.createdAt,
-                virtualResultCapturedRunId: root.id,
+                ...(root ? { virtualResultCapturedRunId: root.id } : {}),
               });
               return true;
             }),
@@ -68,7 +70,7 @@ export const makeSubheadDelivery = (providers: Effect.Effect<ReadonlyArray<Serve
         const shell = yield* threads.getThreadShell(execution);
         if (
           !shell ||
-          shell.latestRunId !== root.id ||
+          shell.latestRunId !== (root?.id ?? null) ||
           hasActiveWork(shell) ||
           (yield* hasLiveChildren(sql, execution, threads.getThreadShell))
         )
@@ -80,7 +82,7 @@ export const makeSubheadDelivery = (providers: Effect.Effect<ReadonlyArray<Serve
               `subhead:settle:${run.id}:${DateTime.toEpochMillis(shell.updatedAt)}`,
             ),
             threadId: execution,
-            completionRunId: root.id,
+            ...(root ? { completionRunId: root.id } : {}),
             snapshotAt: shell.updatedAt,
           })
           .pipe(

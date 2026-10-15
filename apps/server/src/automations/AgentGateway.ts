@@ -113,6 +113,9 @@ const make = Effect.gen(function* () {
   ) {
     const now = yield* nowIso;
     const virtual = run.virtualSubhead;
+    const leaseExpired =
+      virtual?.leaseStartedAt != null &&
+      Date.parse(now) - Date.parse(virtual.leaseStartedAt) >= 30 * 60_000;
     const finish = (status: "completed" | "failed", result: string): AutomationRunStep => ({
       ...step,
       status,
@@ -129,10 +132,7 @@ const make = Effect.gen(function* () {
     if (step.target.kind === "existing-thread" && shell === null)
       return finish("failed", "Target thread was deleted.");
     const projection = shell === null ? null : yield* readProjection(step.threadId);
-    if (
-      virtual?.leaseStartedAt &&
-      Date.parse(now) - Date.parse(virtual.leaseStartedAt) >= 30 * 60_000
-    ) {
+    if (virtual && leaseExpired) {
       if (virtual.terminationReason === null)
         yield* store
           .saveRun({
@@ -197,10 +197,7 @@ const make = Effect.gen(function* () {
           )
           .at(-1)
           ?.text.trim();
-        const timedOut =
-          virtual.terminationReason !== null ||
-          (virtual.leaseStartedAt !== null &&
-            Date.parse(now) - Date.parse(virtual.leaseStartedAt) >= 30 * 60_000);
+        const timedOut = virtual.terminationReason !== null || leaseExpired;
         if (timedOut)
           return finish(
             "failed",
@@ -243,6 +240,7 @@ const make = Effect.gen(function* () {
         ))
     )
       return step;
+    if (virtual && leaseExpired) return finish("failed", "Active timeout before launch completed.");
     if (virtual) {
       const validation = yield* virtualRegistry.validate(virtual.template).pipe(Effect.result);
       const provider = (yield* providers.getProviders).find(
