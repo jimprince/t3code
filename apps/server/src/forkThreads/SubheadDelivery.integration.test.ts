@@ -220,6 +220,50 @@ it.layer(NodeServices.layer)("durable virtual results", (it) => {
       ).toBeNull();
     }).pipe(Effect.provide(layer)),
   );
+  it.effect("never settles a thread without matching virtual result ownership", () =>
+    Effect.gen(function* () {
+      yield* createSender;
+      yield* createThread(execution);
+      const run = completedRun(null);
+      yield* writeMetadata(yield* SqlClient.SqlClient, {
+        threadId: execution,
+        parentThreadId: sender,
+      });
+      yield* terminal(yield* nativeInput(run.steps[0]!.messageId), "completed");
+      yield* (yield* AutomationStore).insertRun(run);
+      const result = yield* (yield* makeSubheadDelivery(Effect.succeed([]))).deliver(run.id);
+      expect(result.result).toBe("One useful finding");
+      expect(
+        (yield* (yield* Threads.ThreadManagementService).getThreadShell(execution))
+          ?.settledOverride,
+      ).toBeNull();
+    }).pipe(Effect.provide(layer)),
+  );
+  it.effect("captures a result while preserving an unfinished child", () =>
+    Effect.gen(function* () {
+      yield* createSender;
+      yield* createThread(execution);
+      const run = completedRun(null);
+      const sql = yield* SqlClient.SqlClient;
+      yield* writeMetadata(sql, {
+        threadId: execution,
+        parentThreadId: sender,
+        virtualAgentId: "helper",
+        virtualRunId: run.id,
+      });
+      yield* terminal(yield* nativeInput(run.steps[0]!.messageId), "completed");
+      const child = ThreadId.make("unfinished-child");
+      yield* createThread(child);
+      yield* writeMetadata(sql, { threadId: child, parentThreadId: execution });
+      yield* (yield* AutomationStore).insertRun(run);
+      const result = yield* (yield* makeSubheadDelivery(Effect.succeed([]))).deliver(run.id);
+      expect(result.result).toBe("One useful finding");
+      expect(
+        (yield* (yield* Threads.ThreadManagementService).getThreadShell(execution))
+          ?.settledOverride,
+      ).toBeNull();
+    }).pipe(Effect.provide(layer)),
+  );
   it.effect("appends one useful result and survives losing the post-dispatch delivery write", () =>
     Effect.gen(function* () {
       yield* createSender;
