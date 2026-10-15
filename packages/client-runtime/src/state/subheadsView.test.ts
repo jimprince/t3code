@@ -14,7 +14,7 @@ import {
 } from "./subheadsView.ts";
 
 const head = ThreadId.make("head-platform");
-const subhead = (overrides: Partial<Subhead> & { name: string }): Subhead => ({
+const subhead = (overrides: Omit<Partial<Subhead>, "name"> & { name: string }): Subhead => ({
   id: `id-${overrides.name}`,
   kind: "virtual",
   version: 7,
@@ -36,7 +36,9 @@ const subhead = (overrides: Partial<Subhead> & { name: string }): Subhead => ({
   name: NamedAgentName.make(overrides.name),
 });
 let n = 0;
-const run = (overrides: Partial<SubheadRunRow> & { subheadName: string }): SubheadRunRow => {
+const run = (
+  overrides: Omit<Partial<SubheadRunRow>, "subheadName"> & { subheadName: string },
+): SubheadRunRow => {
   n += 1;
   return {
     runId: `run-${n}`,

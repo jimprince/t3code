@@ -391,3 +391,22 @@ export function parseVersionConflict(
   const match = /version conflict: expected (\d+), current (\d+)/i.exec(message);
   return match ? { expected: Number(match[1]), current: Number(match[2]) } : null;
 }
+
+/**
+ * Limits the server applies to every subhead in this version. They are not template fields: the
+ * values mirror admission in apps/server/src/forkThreads/SubheadRuns.ts and the 30 minute run
+ * timeout in apps/server/src/automations/AgentGateway.ts, so the page can state them plainly.
+ */
+export const SUBHEAD_FIXED_LIMITS = {
+  queued: 10,
+  runsPerDay: 20,
+  senderRequests: 3,
+  senderWindowMinutes: 10,
+  timeoutMinutes: 30,
+} as const;
+
+/** "claudeAgent · claude-sonnet-5-5", plus any selected options. */
+export function describeSubheadModel(selection: ModelSelection): string {
+  const options = (selection.options ?? []).map((option) => `${option.id} ${String(option.value)}`).join(" · ");
+  return [selection.instanceId, selection.model, options].filter((part) => part !== "").join(" · ");
+}
