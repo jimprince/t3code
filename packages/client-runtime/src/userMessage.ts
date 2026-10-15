@@ -1,5 +1,7 @@
 import { type OrchestrationV2Actor, ScheduledTaskId } from "@t3tools/contracts";
 
+import { stripNotifyMarker } from "./notifyMarker.ts";
+
 const LEGACY_AUTOMATION_PREFIX = /^\[Triggered by schedule task: [^\r\n]+\]\r?\n\r?\n/;
 const LEGACY_AUTOMATION_MESSAGE_ID = /^scheduled-task-message:(.+):\d+:(?:scheduled|manual)$/;
 
@@ -49,18 +51,21 @@ export function splitAgentMessageHeader(text: string): {
 
 /**
  * Older scheduled messages stored their attribution in the prompt itself, and agent
- * messages carry the CLI sender header; both are split off the returned text.
+ * messages carry the CLI sender header; both are split off the returned text. A trailing
+ * `T3_NOTIFY` routing marker is dropped from assistant and agent-sent text, never from
+ * what a person typed.
  */
 export function resolveUserMessagePresentation(message: {
   readonly id?: string;
   readonly role: string;
   readonly text: string;
+  readonly streaming?: boolean;
   readonly createdBy?: OrchestrationV2Actor;
   readonly scheduledTaskId?: ScheduledTaskId;
 }) {
   if (message.role !== "user") {
     return {
-      text: message.text,
+      text: stripNotifyMarker(message.text, { streaming: message.streaming === true }),
       isAutomation: false,
       scheduledTaskId: undefined,
       agentHeader: undefined,
@@ -85,7 +90,11 @@ export function resolveUserMessagePresentation(message: {
       ? splitAgentMessageHeader(message.text)
       : { header: undefined, text: message.text };
   return {
-    text: isAutomation ? message.text.slice(legacyPrefix[0].length) : split.text,
+    text: isAutomation
+      ? message.text.slice(legacyPrefix[0].length)
+      : message.createdBy === "agent"
+        ? stripNotifyMarker(split.text)
+        : split.text,
     isAutomation,
     scheduledTaskId: legacyTaskId === undefined ? undefined : ScheduledTaskId.make(legacyTaskId),
     agentHeader: split.header,

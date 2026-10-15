@@ -1,3 +1,4 @@
+import { stripNotifyMarker } from "@t3tools/client-runtime/notify-marker";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import { resolveSidebarThreadStatus } from "../Sidebar.logic";
 
@@ -63,9 +64,8 @@ export function formatWorkerCount(count: number, singular: string, plural = `${s
 export function supervisionWorkerOutput(
   thread: Pick<EnvironmentThreadShell, "source" | "runtime">,
 ): string {
-  return (
-    thread.source.workerSummary?.output?.split(/\r?\n/, 1)[0] || thread.runtime?.lastError || ""
-  );
+  const output = stripNotifyMarker(thread.source.workerSummary?.output ?? "");
+  return output.split(/\r?\n/, 1)[0] || thread.runtime?.lastError || "";
 }
 
 export function supervisionWorkerMetadata(

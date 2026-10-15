@@ -1,0 +1,4 @@
+id = "hide-notify-marker"
+category = "fix"
+functionality = "threads"
+text = "The T3_NOTIFY: quiet and T3_NOTIFY: attention routing line an agent ends a message with is no longer shown in replies, previews or copied text on web, desktop and mobile; notifications behave as before."

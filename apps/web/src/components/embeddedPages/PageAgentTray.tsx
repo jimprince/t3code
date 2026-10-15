@@ -16,6 +16,7 @@ import {
   Trash2Icon,
   XIcon,
 } from "lucide-react";
+import { stripNotifyMarker } from "@t3tools/client-runtime/notify-marker";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 
 import { useEnvironmentSettings } from "~/hooks/useSettings";
@@ -327,10 +328,12 @@ const TrayMessage = memo(function TrayMessage(props: {
       </div>
     );
   }
-  if (message.role !== "assistant" || message.text.length === 0) return null;
+  if (message.role !== "assistant") return null;
+  const text = stripNotifyMarker(message.text, { streaming: message.streaming });
+  if (text.length === 0) return null;
   return (
     <ChatMarkdown
-      text={message.text}
+      text={text}
       cwd={undefined}
       environmentId={props.environmentId}
       isStreaming={message.streaming}

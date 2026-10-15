@@ -5,7 +5,13 @@ purpose = "Distinguish agent and automation messages from human messages across 
 retire_when = "Upstream presents agent-origin user-role messages with distinct attribution and shared sender parsing across clients."
 depends_on = ["fork-worker-operations"]
 roles = []
-note = "Brad selected option A. Folds e017e4f3 and Opus-reviewed f583d479 into one concern: left rule without user-bubble fill, known sender thread links, header details and stripped visible body. Steer/interrupt sends retain human styling. Files: apps/mobile/src/features/threads/ThreadFeed.tsx, apps/web/src/components/chat/MessagesTimeline.test.tsx, apps/web/src/components/chat/MessagesTimeline.tsx, docs/release-notes/entries/agent-message-style.toml, docs/user/agent-messages.md, packages/client-runtime/src/userMessage.test.ts, packages/client-runtime/src/userMessage.ts"
+note = "Brad selected option A. Folds e017e4f3 and Opus-reviewed f583d479 into one concern: left rule without user-bubble fill, known sender thread links, header details and stripped visible body. Steer/interrupt sends retain human styling. Files: apps/mobile/src/features/threads/ThreadFeed.tsx, apps/web/src/components/chat/MessagesTimeline.test.tsx, apps/web/src/components/chat/MessagesTimeline.tsx, docs/release-notes/entries/agent-message-style.toml, docs/user/agent-messages.md, packages/client-runtime/src/userMessage.test.ts, packages/client-runtime/src/userMessage.ts. Also owns hiding the T3_NOTIFY routing marker from displayed text (#358): docs/release-notes/entries/hide-notify-marker.toml, packages/client-runtime/src/notifyMarker.ts (+ test), backgroundTurns.ts, state/orchestrators.ts, apps/web chat/MessagesTimeline.logic.ts, supervisionWorkerRow.logic.ts, timelineMinimapItems.ts, orchestrators/workstreamBands.logic.ts and embeddedPages/PageAgentTray.tsx"
+
+[[decision]]
+id = "hide-notify-marker-358"
+date = "2026-10-15"
+decided = "Display paths drop a trailing T3_NOTIFY: quiet|attention line through one shared helper; stored text and routing detectors are untouched."
+rationale = "The marker is notification routing, not content (#358). Only an assistant or agent-sent message loses it; a person's own text, a mid-text mention and a marker inside a code fence stay visible."
 
 [[decision]]
 id = "agent-message-option-a-20261013"
