@@ -102,6 +102,7 @@ const make = Effect.gen(function* () {
       .getThreadRecords(threadId, [
         "runs",
         "messages",
+        "nodes",
         "runtimeRequests",
         "providerSessions",
         "providerThreads",
@@ -183,12 +184,20 @@ const make = Effect.gen(function* () {
           (yield* hasLiveChildren(sql, step.threadId, threads.getThreadShell).pipe(Effect.orDie))
         )
           return started;
+        const answerNodes = new Set(
+          projection?.nodes
+            .filter(
+              (node) => node.kind === "assistant_message" && node.parentNodeId === root?.rootNodeId,
+            )
+            .map((node) => node.id) ?? [],
+        );
         const answers =
           projection?.messages.filter(
             (candidate) =>
               candidate.role === "assistant" &&
               candidate.runId === root?.id &&
-              candidate.nodeId === root?.rootNodeId,
+              (candidate.nodeId === root?.rootNodeId ||
+                (candidate.nodeId !== null && answerNodes.has(candidate.nodeId))),
           ) ?? [];
         if (answers.some((candidate) => candidate.streaming)) return started;
         const answer = answers
