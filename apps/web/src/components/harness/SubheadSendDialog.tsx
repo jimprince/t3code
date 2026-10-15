@@ -18,7 +18,8 @@ import { useSubheadCall } from "./useSubheadCommand";
 /** What this request will do, from the runs already open: start now or wait behind them. */
 export function describeSendOutcome(subhead: Subhead, openRuns: ReadonlyArray<SubheadRunRow>) {
   const queued = openRuns.filter((run) => run.status === "queued").length;
-  if (openRuns.length < subhead.concurrency) return { text: "This request starts now.", warn: false };
+  if (openRuns.length < subhead.concurrency)
+    return { text: "This request starts now.", warn: false };
   return {
     text: `${openRuns.length} run${openRuns.length === 1 ? " is" : "s are"} already open (cap ${subhead.concurrency}). This request queues, position ${queued + 1}.`,
     warn: true,
@@ -103,7 +104,9 @@ export function SubheadSendDialog({
                 <dt className="text-muted-foreground">From</dt>
                 <dd>
                   this session{" "}
-                  <span className="text-xs text-muted-foreground">(authenticated, not editable)</span>
+                  <span className="text-xs text-muted-foreground">
+                    (authenticated, not editable)
+                  </span>
                 </dd>
               </dl>
               <label className="flex flex-col gap-1">

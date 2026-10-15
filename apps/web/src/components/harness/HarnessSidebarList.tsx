@@ -320,7 +320,10 @@ export function HarnessSidebarList() {
   const attention = agents.filter(needsAttention);
   const idle = agents.filter((agent) => !needsAttention(agent));
   // Subheads whose owning head is not a Harness agent here still need a place to show.
-  const ownedGroups = useMemo(() => new Set(agents.map((agent) => `${agent.thread.environmentId}:${agent.thread.id}`)), [agents]);
+  const ownedGroups = useMemo(
+    () => new Set(agents.map((agent) => `${agent.thread.environmentId}:${agent.thread.id}`)),
+    [agents],
+  );
   const orphanGroups = [...subheadGroups].filter(([key]) => !ownedGroups.has(key));
 
   const snapshots = useMemo(

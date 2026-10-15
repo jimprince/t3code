@@ -1,13 +1,15 @@
 import { useAtomValue } from "@effect/atom-react";
-import {
-  buildSubheadRows,
-  type SubheadRowView,
-} from "@t3tools/client-runtime/state/subheads-view";
+import { buildSubheadRows, type SubheadRowView } from "@t3tools/client-runtime/state/subheads-view";
 import {
   createEnvironmentRpcCommand,
   createEnvironmentRpcQueryAtomFamily,
 } from "@t3tools/client-runtime/state/runtime";
-import { NamedAgentName, type EnvironmentId, type Subhead, type SubheadRunRow } from "@t3tools/contracts";
+import {
+  NamedAgentName,
+  type EnvironmentId,
+  type Subhead,
+  type SubheadRunRow,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -36,8 +38,7 @@ const subheadsQuery = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime,
 export const subheadCommand = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "environment-data:subheads:command",
   tag: "fork.subheads",
-  onSuccess: ({ environmentId }) =>
-    Effect.sync(() => refreshSubheadsFor(environmentId)),
+  onSuccess: ({ environmentId }) => Effect.sync(() => refreshSubheadsFor(environmentId)),
 });
 
 const isNamedAgentName = Schema.is(NamedAgentName);
@@ -127,9 +128,7 @@ export function useSubheadPage(environmentId: EnvironmentId, name: string): Subh
   // A name that cannot exist reads the sidebar's runs, which the filter below then empties.
   const runsAtom = useMemo(
     () =>
-      isNamedAgentName(name)
-        ? pageRunsQuery(environmentId, name)
-        : sidebarRunsQuery(environmentId),
+      isNamedAgentName(name) ? pageRunsQuery(environmentId, name) : sidebarRunsQuery(environmentId),
     [environmentId, name],
   );
   const runs = useAtomValue(runsAtom);

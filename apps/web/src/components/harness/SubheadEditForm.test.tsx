@@ -96,10 +96,15 @@ describe("SubheadEditForm", () => {
       "Runtime mode rises from approval-required to full-access.",
     );
     expect(container.textContent).toContain("Confirm and save new version");
-    call.mockResolvedValue({ ok: false, message: "Only the creating principal may edit this subhead." });
+    call.mockResolvedValue({
+      ok: false,
+      message: "Only the creating principal may edit this subhead.",
+    });
     await save();
     expect(call).toHaveBeenCalledWith(
-      expect.objectContaining({ template: expect.objectContaining({ runtimeMode: "full-access" }) }),
+      expect.objectContaining({
+        template: expect.objectContaining({ runtimeMode: "full-access" }),
+      }),
     );
     // The refusal is the server's own sentence, and the form stays open.
     expect(container.textContent).toContain("Only the creating principal may edit this subhead.");

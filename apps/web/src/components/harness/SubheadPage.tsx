@@ -102,9 +102,9 @@ function RunRow({
     queuePosition,
     senderTitle,
   });
-  const [result, setResult] = useState<
-    { readonly text: string; readonly error: boolean } | null
-  >(null);
+  const [result, setResult] = useState<{ readonly text: string; readonly error: boolean } | null>(
+    null,
+  );
   const hasThread = run.status !== "queued" && run.threadId !== null && threadExists(run.threadId);
   // The sender's own result: another sender's run is refused by the server, shown as it says.
   const readResult = async () => {
@@ -257,7 +257,6 @@ export function SubheadPage({
   const now = useMemo(() => Date.parse(`${nowMinute}:00Z`), [nowMinute]);
   const threads = useThreadShells();
   const projects = useProjects();
-  const navigate = useNavigate();
   const [, setSidebarMode] = useSidebarMode();
   const { isMobile, open, setOpen, setOpenMobile } = useSidebar();
   const [editing, setEditing] = useState(false);
@@ -372,9 +371,7 @@ export function SubheadPage({
             ) : (
               <>
                 <div className="flex flex-col gap-1">
-                  <p className="text-xs text-muted-foreground">
-                    Harness › {ownerTitle} ›
-                  </p>
+                  <p className="text-xs text-muted-foreground">Harness › {ownerTitle} ›</p>
                   <div className="flex flex-wrap items-start gap-2">
                     <h2 className="min-w-0 flex-1 text-lg font-semibold break-words">
                       {subhead.name}
@@ -508,7 +505,11 @@ export function SubheadPage({
                             : `${finished.length} finished`
                         }
                       >
-                        <div role="group" aria-label="History filter" className="flex gap-3 text-xs">
+                        <div
+                          role="group"
+                          aria-label="History filter"
+                          className="flex gap-3 text-xs"
+                        >
                           {FILTERS.map((entry) => (
                             <button
                               key={entry.id}
@@ -540,7 +541,11 @@ export function SubheadPage({
                         </p>
                       </Section>
                     </div>
-                    <Template subhead={subhead} projectTitle={projectTitle} ownerTitle={ownerTitle} />
+                    <Template
+                      subhead={subhead}
+                      projectTitle={projectTitle}
+                      ownerTitle={ownerTitle}
+                    />
                   </div>
                 )}
               </>

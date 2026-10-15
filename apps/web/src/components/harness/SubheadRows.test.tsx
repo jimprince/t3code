@@ -17,7 +17,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 const navigate = vi.hoisted(() => vi.fn());
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => navigate }));
-vi.mock("../ui/sidebar", () => ({ useSidebar: () => ({ isMobile: false, setOpenMobile: vi.fn() }) }));
+vi.mock("../ui/sidebar", () => ({
+  useSidebar: () => ({ isMobile: false, setOpenMobile: vi.fn() }),
+}));
 
 import { SubheadGroup } from "./SubheadRows";
 
@@ -99,7 +101,12 @@ describe("SubheadGroup", () => {
     renderGroup(
       [subhead("code-review")],
       [
-        run("code-review", { status: "running", finishedAt: null, senderThreadId: ThreadId.make("alex"), requestSummary: "fix/cart-rounding" }),
+        run("code-review", {
+          status: "running",
+          finishedAt: null,
+          senderThreadId: ThreadId.make("alex"),
+          requestSummary: "fix/cart-rounding",
+        }),
         run("code-review", { status: "queued", finishedAt: null, requestSummary: "api-rename" }),
         run("code-review", { requestSummary: "old settled history" }),
       ],
@@ -138,7 +145,11 @@ describe("SubheadGroup", () => {
     renderGroup(
       [subhead("code-review")],
       [
-        run("code-review", { status: "running", finishedAt: null, threadId: ThreadId.make("thread-running") }),
+        run("code-review", {
+          status: "running",
+          finishedAt: null,
+          threadId: ThreadId.make("thread-running"),
+        }),
         run("code-review", { status: "queued", finishedAt: null }),
       ],
     );

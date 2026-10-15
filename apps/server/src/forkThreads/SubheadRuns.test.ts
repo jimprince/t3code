@@ -236,7 +236,9 @@ it.layer(NodeServices.layer)("subhead run admission", (it) => {
         const onlyReview = yield* service.list({ name: "review", perSubhead: 5 });
         expect(new Set(onlyReview.map((row) => row.subheadName))).toEqual(new Set(["review"]));
         expect(onlyReview.map((row) => row.requestId)).toEqual(["open", "recent", "old"]);
-        expect(yield* service.list({ name: "missing", perSubhead: 5 }).pipe(Effect.flip)).toMatchObject({
+        expect(
+          yield* service.list({ name: "missing", perSubhead: 5 }).pipe(Effect.flip),
+        ).toMatchObject({
           message: expect.stringContaining("No subhead"),
         });
         // Runs of other principals stay listable: this is operator visibility, not a result read.

@@ -64,11 +64,29 @@ describe("buildSubheadRows", () => {
   const review = subhead({ name: "code-review" });
   const triage = subhead({ name: "dep-triage" });
   const retired = subhead({ name: "old-notes", retiredAt: "2026-10-12T00:00:00.000Z" });
-  const off = subhead({ name: "release-notes", enabled: false, ownerThreadId: ThreadId.make("docs") });
+  const off = subhead({
+    name: "release-notes",
+    enabled: false,
+    ownerThreadId: ThreadId.make("docs"),
+  });
   const runs = [
-    run({ subheadName: "code-review", status: "running", createdAt: "2026-10-15T13:38:00.000Z", finishedAt: null }),
-    run({ subheadName: "code-review", status: "queued", createdAt: "2026-10-15T13:40:00.000Z", finishedAt: null }),
-    run({ subheadName: "code-review", createdAt: "2026-10-15T13:20:00.000Z", finishedAt: "2026-10-15T13:22:00.000Z" }),
+    run({
+      subheadName: "code-review",
+      status: "running",
+      createdAt: "2026-10-15T13:38:00.000Z",
+      finishedAt: null,
+    }),
+    run({
+      subheadName: "code-review",
+      status: "queued",
+      createdAt: "2026-10-15T13:40:00.000Z",
+      finishedAt: null,
+    }),
+    run({
+      subheadName: "code-review",
+      createdAt: "2026-10-15T13:20:00.000Z",
+      finishedAt: "2026-10-15T13:22:00.000Z",
+    }),
     run({
       subheadName: "dep-triage",
       status: "failed",
@@ -145,11 +163,21 @@ describe("describeSubheadRun", () => {
   it("names every delivery state in plain words", () => {
     const states = [
       describeSubheadRun(
-        run({ subheadName: "a", status: "queued", finishedAt: null, delivery: delivery("pending") }),
+        run({
+          subheadName: "a",
+          status: "queued",
+          finishedAt: null,
+          delivery: delivery("pending"),
+        }),
         { ...context, queuePosition: 2 },
       ),
       describeSubheadRun(
-        run({ subheadName: "a", status: "running", finishedAt: null, delivery: delivery("pending") }),
+        run({
+          subheadName: "a",
+          status: "running",
+          finishedAt: null,
+          delivery: delivery("pending"),
+        }),
         context,
       ),
       describeSubheadRun(run({ subheadName: "a", delivery: delivery("delivered") }), context),
@@ -196,10 +224,7 @@ describe("describeSubheadRun", () => {
   });
 
   it("keeps the error text of an ordinary failure out of the list", () => {
-    const failed = describeSubheadRun(
-      run({ subheadName: "a", status: "failed" }),
-      context,
-    );
+    const failed = describeSubheadRun(run({ subheadName: "a", status: "failed" }), context);
     expect(failed.outcome).toEqual({ text: "Failed", tone: "error" });
   });
 
@@ -212,7 +237,9 @@ describe("describeSubheadRun", () => {
     expect(text("held", "SETTLED")).toBe("Held: recipient thread is settled, sent when it resumes");
     expect(text("undelivered", "ARCHIVED")).toBe("Undelivered: recipient thread archived");
     expect(text("undelivered", "NOT_FOUND")).toBe("Undelivered: recipient thread not found");
-    expect(text("held", "QUOTA_EXHAUSTED")).toBe("Held: recipient provider quota used up, retrying");
+    expect(text("held", "QUOTA_EXHAUSTED")).toBe(
+      "Held: recipient provider quota used up, retrying",
+    );
     expect(text("held", "BUSY")).toBe("Held: recipient is busy, retrying");
     // Anything else is the server's own sentence and shown as written.
     expect(text("undelivered", "recipient gone")).toBe("Undelivered: recipient gone");
@@ -252,7 +279,12 @@ describe("editing a template", () => {
 
   it("validates the fields the server would refuse", () => {
     const draft = draftFromSubhead(current);
-    const bad = buildTemplateFromDraft(current, { ...draft, prompt: "  ", concurrency: "3", model: "" });
+    const bad = buildTemplateFromDraft(current, {
+      ...draft,
+      prompt: "  ",
+      concurrency: "3",
+      model: "",
+    });
     expect(bad).toEqual({
       ok: false,
       errors: ["Prompt is required.", "Model is required.", "Concurrency must be 1 or 2."],

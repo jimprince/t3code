@@ -68,8 +68,8 @@ export function buildSubheadRows(input: {
 }): ReadonlyArray<SubheadRowView> {
   return input.subheads.map((subhead): SubheadRowView => {
     const own = input.runs.filter((run) => run.agentId === subhead.id);
-    const openRuns = own.filter(isOpenSubheadRun).toSorted((a, b) => -newestFirst(a, b));
-    const lastFinished = own.filter((run) => !isOpenSubheadRun(run)).toSorted(newestFirst)[0] ?? null;
+    const openRuns = own.filter(isOpenSubheadRun).sort((a, b) => -newestFirst(a, b));
+    const lastFinished = own.filter((run) => !isOpenSubheadRun(run)).sort(newestFirst)[0] ?? null;
     const last = lastOutcome(lastFinished);
     const state = subheadState(subhead);
     return {
@@ -117,11 +117,13 @@ export function groupSubheadsByOwner(
     groups.set(owner, {
       visible: list
         .filter((row) => row.state !== "retired")
-        .toSorted(
+        .sort(
           (a, b) =>
-            attentionRank(a) - attentionRank(b) || b.openRuns.length - a.openRuns.length || byName(a, b),
+            attentionRank(a) - attentionRank(b) ||
+            b.openRuns.length - a.openRuns.length ||
+            byName(a, b),
         ),
-      retired: list.filter((row) => row.state === "retired").toSorted(byName),
+      retired: list.filter((row) => row.state === "retired").sort(byName),
     });
   }
   return groups;
@@ -156,8 +158,8 @@ export function queuePositions(runs: ReadonlyArray<SubheadRunRow>): ReadonlyMap<
     bySubhead.set(run.agentId, list);
   }
   for (const list of bySubhead.values()) {
-    list
-      .toSorted((a, b) => -newestFirst(a, b))
+    [...list]
+      .sort((a, b) => -newestFirst(a, b))
       .forEach((run, index) => positions.set(run.runId, index + 1));
   }
   return positions;
@@ -218,7 +220,8 @@ export function describeSubheadRun(
   const outcome: SubheadRunView["outcome"] =
     run.status === "queued"
       ? {
-          text: context.queuePosition === null ? "Queued" : `Queued, position ${context.queuePosition}`,
+          text:
+            context.queuePosition === null ? "Queued" : `Queued, position ${context.queuePosition}`,
           tone: "warning",
         }
       : run.status === "running"
@@ -400,8 +403,14 @@ export function permissionChanges(current: Subhead, next: SubheadTemplate): Read
     changes.push(`Concurrency rises from ${current.concurrency} to ${next.concurrency}.`);
   const wasIsolated =
     current.workspaceStrategy === undefined || current.workspaceStrategy.type === "worktree";
-  if (wasIsolated && next.workspaceStrategy !== undefined && next.workspaceStrategy.type !== "worktree")
-    changes.push(`Workspace changes from ${describeSubheadWorkspace(current.workspaceStrategy)} to ${describeSubheadWorkspace(next.workspaceStrategy)}.`);
+  if (
+    wasIsolated &&
+    next.workspaceStrategy !== undefined &&
+    next.workspaceStrategy.type !== "worktree"
+  )
+    changes.push(
+      `Workspace changes from ${describeSubheadWorkspace(current.workspaceStrategy)} to ${describeSubheadWorkspace(next.workspaceStrategy)}.`,
+    );
   return changes;
 }
 
@@ -428,6 +437,8 @@ export const SUBHEAD_FIXED_LIMITS = {
 
 /** "claudeAgent · claude-sonnet-5-5", plus any selected options. */
 export function describeSubheadModel(selection: ModelSelection): string {
-  const options = (selection.options ?? []).map((option) => `${option.id} ${String(option.value)}`).join(" · ");
+  const options = (selection.options ?? [])
+    .map((option) => `${option.id} ${String(option.value)}`)
+    .join(" · ");
   return [selection.instanceId, selection.model, options].filter((part) => part !== "").join(" · ");
 }

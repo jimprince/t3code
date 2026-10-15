@@ -140,11 +140,7 @@ export function SubheadEditForm({
         />
       </Field>
       <Field label="Instructions (inline text)">
-        <Textarea
-          className="font-mono"
-          value={draft.prompt}
-          onChange={(event) => set("prompt", event.target.value)}
-        />
+        <Textarea value={draft.prompt} onChange={(event) => set("prompt", event.target.value)} />
       </Field>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Provider instance">
@@ -162,7 +158,11 @@ export function SubheadEditForm({
               : "No silent model fallback."
           }
         >
-          <Input font="mono" value={draft.model} onChange={(event) => set("model", event.target.value)} />
+          <Input
+            font="mono"
+            value={draft.model}
+            onChange={(event) => set("model", event.target.value)}
+          />
         </Field>
         <Field
           label="Runtime mode ceiling"
@@ -180,7 +180,10 @@ export function SubheadEditForm({
             ))}
           </select>
         </Field>
-        <Field label="Concurrency cap" hint="Runs at the same time; the head's own cap still applies.">
+        <Field
+          label="Concurrency cap"
+          hint="Runs at the same time; the head's own cap still applies."
+        >
           <select
             className={SELECT_CLASS}
             value={draft.concurrency}
@@ -231,7 +234,9 @@ export function SubheadEditForm({
       ) : null}
       {confirm !== null ? (
         <div role="alert" className="flex flex-col gap-1 text-sm text-warning-foreground">
-          <p className="font-medium">This edit broadens what future runs may do. Confirm to save:</p>
+          <p className="font-medium">
+            This edit broadens what future runs may do. Confirm to save:
+          </p>
           <ul className="list-disc pl-5">
             {confirm.map((change) => (
               <li key={change}>{change}</li>
