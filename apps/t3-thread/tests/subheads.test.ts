@@ -1,8 +1,29 @@
 import { Command } from "commander";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { registerSubheadCommands } from "../src/subheads.js";
 
 describe("subhead commands", () => {
+  it("prints a generated retry ID before transport failure", async () => {
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    let announced = "";
+    try {
+      const program = new Command().exitOverride();
+      registerSubheadCommands(program, {
+        print: () => {},
+        call: async (_env, _op, input) => {
+          announced = stderr.mock.calls.map(([v]) => String(v)).join("");
+          expect(announced).toContain(String(input.requestId));
+          throw new Error("transport timeout");
+        },
+      });
+      await expect(
+        program.parseAsync(["node", "t3", "subhead", "send", "review", "Work", "--env", "test"]),
+      ).rejects.toThrow("transport timeout");
+      expect(announced).toMatch(/request-id/);
+    } finally {
+      stderr.mockRestore();
+    }
+  });
   it("keeps a supplied retry id and never sends a caller identity in request text", async () => {
     const calls: unknown[] = [];
     const program = new Command().exitOverride();

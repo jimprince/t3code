@@ -67,6 +67,20 @@ function fakeClients(
 }
 
 describe("routeToNamedAgent", () => {
+  it("directs plain send and handover of a virtual name to subhead send", async () => {
+    const { factory } = fakeClients({ test: { agents: [{ ...printer, kind: "virtual" }] } });
+    for (const requireLive of [false, true]) {
+      await expect(
+        routeToNamedAgent({
+          state: state(["test"]),
+          name: "printer",
+          message: "Work",
+          requireLive,
+          clientFactory: factory,
+        }),
+      ).rejects.toThrow("t3-thread subhead send");
+    }
+  });
   it("starts a dormant agent with the message on the one environment that has it", async () => {
     const { factory, resolved } = fakeClients({
       mac: { agents: [] },

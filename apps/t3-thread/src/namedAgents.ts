@@ -11,6 +11,7 @@ import type { OrchestrationThreadShell, StateFile } from "./types.js";
  * name to the live incarnation, which the server starts when the agent is dormant.
  */
 export interface NamedAgentSummary {
+  kind?: "virtual" | "standing";
   name: string;
   projectId: string;
   workspaceRoot: string;
@@ -91,6 +92,10 @@ export async function routeToNamedAgent(input: {
       .listNamedAgents()
       .catch(() => [] as NamedAgentSummary[]);
     const agent = agents.find((agent) => agent.name === input.name);
+    if (agent?.kind === "virtual")
+      throw new Error(
+        `Use t3-thread subhead send ${input.name} --env ${environment.name} for this virtual helper.`,
+      );
     if (agent) owners.push({ environment: environment.name, liveThreadId: agent.liveThreadId });
   }
   if (owners.length === 0) return null;

@@ -89,6 +89,8 @@ export function registerSubheadCommands(
       if ((request === undefined) === (options.messageFile === undefined))
         throw new Error("Give a request or --message-file.");
       const requestId = options.requestId ?? NodeCrypto.randomUUID();
+      if (options.requestId === undefined)
+        process.stderr.write(`Subhead request-id: ${requestId}\n`);
       return invoke(options, "send", {
         name,
         request: options.messageFile ? NodeFS.readFileSync(options.messageFile, "utf8") : request!,

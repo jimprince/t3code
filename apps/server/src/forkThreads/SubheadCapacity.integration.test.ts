@@ -37,6 +37,118 @@ const template = {
 };
 
 it.layer(NodeServices.layer)("shared head capacity", (it) => {
+  it.effect(
+    "a capped fresh launch preserves workspace preparation before queueing provider work",
+    () =>
+      Effect.gen(function* () {
+        yield* createSubheadTestThread(head);
+        const sql = yield* SqlClient.SqlClient;
+        for (const id of ["prepare-busy-a", "prepare-busy-b", "fresh-workspace"]) {
+          yield* createSubheadTestThread(ThreadId.make(id));
+          yield* writeMetadata(sql, { threadId: ThreadId.make(id), parentThreadId: head });
+        }
+        yield* sendSubheadTestMessage(ThreadId.make("prepare-busy-a"));
+        yield* sendSubheadTestMessage(ThreadId.make("prepare-busy-b"));
+        const registry = yield* makeSubheadRegistry;
+        yield* registry.create(template);
+        yield* registry.setState("review", "enable");
+        const threads = yield* Threads.ThreadManagementService;
+        const threadId = ThreadId.make("fresh-workspace");
+        yield* threads.dispatch({
+          type: "message.dispatch",
+          commandId: CommandId.make("fresh-workspace"),
+          threadId,
+          messageId: MessageId.make("fresh-workspace"),
+          text: "Fresh",
+          attachments: [],
+          createdBy: "user",
+          creationSource: "server",
+          dispatchMode: { type: "defer_start", workspaceStrategy: { type: "root" } },
+        });
+        const run = (yield* threads.getThreadRecords(threadId, ["runs"])).runs[0]!;
+        expect(run.status).toBe("preparing");
+        expect(run.workspacePreparation).toEqual({ type: "root" });
+        yield* threads.dispatch({
+          type: "prepared-run.release",
+          commandId: CommandId.make("release-fresh-workspace"),
+          threadId,
+          runId: run.id,
+        });
+        expect((yield* threads.getThreadRecords(threadId, ["runs"])).runs[0]?.status).toBe(
+          "queued",
+        );
+        yield* threads.dispatch({
+          type: "thread.stop",
+          commandId: CommandId.make("free-for-prepared"),
+          threadId: ThreadId.make("prepare-busy-a"),
+        });
+        yield* threads.dispatch({
+          type: "queue.resume",
+          commandId: CommandId.make("resume-prepared"),
+          threadId,
+        });
+        expect((yield* threads.getThreadRecords(threadId, ["runs"])).runs[0]?.status).not.toBe(
+          "queued",
+        );
+      }).pipe(Effect.provide(subheadNativeLayer)),
+  );
+  it.effect("released virtual leases do not retain slots through stale native work", () =>
+    Effect.gen(function* () {
+      yield* createSubheadTestThread(head);
+      const registry = yield* makeSubheadRegistry;
+      yield* registry.create({ ...template, concurrency: 2 });
+      yield* registry.setState("review", "enable");
+      const runs = yield* makeSubheadRuns;
+      const capacity = yield* makeSubheadCapacity;
+      const store = yield* AutomationStore;
+      const sql = yield* SqlClient.SqlClient;
+      const threads = yield* Threads.ThreadManagementService;
+      const executions: ThreadId[] = [];
+      for (const id of ["stale-a", "stale-b"]) {
+        const run = yield* runs.send(
+          { ...caller, principal: id },
+          { name: "review", requestId: id, request: "Work" },
+        );
+        expect(yield* capacity.reserve(run.id)).toBe(true);
+        const step = run.steps[0]!;
+        executions.push(step.threadId);
+        yield* createSubheadTestThread(step.threadId);
+        yield* writeMetadata(sql, {
+          threadId: step.threadId,
+          parentThreadId: head,
+          virtualRunId: run.id,
+        });
+        yield* threads.dispatch({
+          type: "message.dispatch",
+          commandId: CommandId.make(id),
+          threadId: step.threadId,
+          messageId: step.messageId,
+          text: step.prompt,
+          attachments: [],
+          createdBy: "user",
+          creationSource: "server",
+          dispatchMode: { type: "start_immediately" },
+        });
+        yield* store.saveRun({ ...run, status: "failed", finishedAt: run.createdAt });
+      }
+      const idle = ThreadId.make("after-stale");
+      yield* createSubheadTestThread(idle);
+      yield* writeMetadata(sql, { threadId: idle, parentThreadId: head });
+      expect(yield* capacity.canStart(idle)).toBe(true);
+      yield* sendSubheadTestMessage(idle);
+      const reused = executions[0]!;
+      yield* threads.dispatch({
+        type: "thread.stop",
+        commandId: CommandId.make("stop-old-virtual-turn"),
+        threadId: reused,
+      });
+      yield* sendSubheadTestMessage(reused, "later-user-turn");
+      const later = ThreadId.make("later-worker");
+      yield* createSubheadTestThread(later);
+      yield* writeMetadata(sql, { threadId: later, parentThreadId: head });
+      expect(yield* capacity.canStart(later)).toBe(false);
+    }).pipe(Effect.provide(subheadNativeLayer)),
+  );
   it.effect("a previously queued ordinary turn cannot bypass a full head on resume", () =>
     Effect.gen(function* () {
       yield* createSubheadTestThread(head);
@@ -121,14 +233,48 @@ it.layer(NodeServices.layer)("shared head capacity", (it) => {
       expect(yield* capacity.reserve(a.id)).toBe(true);
       expect(yield* capacity.reserve(b.id)).toBe(false);
       expect(yield* capacity.canStart(third)).toBe(false);
-      const rejected = yield* sendSubheadTestMessage(third).pipe(Effect.exit);
-      expect(rejected._tag).toBe("Failure");
+      yield* sendSubheadTestMessage(third);
+      const threads = yield* Threads.ThreadManagementService;
+      expect((yield* threads.getThreadRecords(third, ["runs"])).runs[0]?.status).toBe("queued");
       yield* (yield* AutomationStore).saveRun({
         ...a,
         status: "completed",
         finishedAt: a.createdAt,
       });
-      expect(yield* capacity.reserve(b.id)).toBe(true);
+      yield* threads.dispatch({
+        type: "queue.resume",
+        commandId: CommandId.make("third-resume"),
+        threadId: third,
+      });
+      expect((yield* threads.getThreadRecords(third, ["runs"])).runs[0]?.status).not.toBe("queued");
+    }).pipe(Effect.provide(subheadNativeLayer)),
+  );
+  it.effect("disabled and retired registries lift the head cap after active leases finish", () =>
+    Effect.gen(function* () {
+      yield* createSubheadTestThread(head);
+      const sql = yield* SqlClient.SqlClient;
+      for (const id of ["busy-a", "busy-b", "idle"]) {
+        yield* createSubheadTestThread(ThreadId.make(id));
+        yield* writeMetadata(sql, { threadId: ThreadId.make(id), parentThreadId: head });
+      }
+      yield* sendSubheadTestMessage(ThreadId.make("busy-a"));
+      yield* sendSubheadTestMessage(ThreadId.make("busy-b"));
+      const registry = yield* makeSubheadRegistry;
+      yield* registry.create(template);
+      yield* registry.setState("review", "enable");
+      const capacity = yield* makeSubheadCapacity;
+      expect(yield* capacity.canStart(ThreadId.make("idle"))).toBe(false);
+      yield* sendSubheadTestMessage(ThreadId.make("idle"));
+      expect(
+        (yield* (yield* Threads.ThreadManagementService).getThreadRecords(ThreadId.make("idle"), [
+          "runs",
+        ])).runs[0]?.status,
+      ).toBe("queued");
+      yield* registry.setState("review", "disable");
+      expect(yield* capacity.queuedPeers).toContain("idle");
+      expect(yield* capacity.canStart(ThreadId.make("idle"))).toBe(true);
+      yield* registry.setState("review", "retire");
+      expect(yield* capacity.canStart(ThreadId.make("idle"))).toBe(true);
     }).pipe(Effect.provide(subheadNativeLayer)),
   );
   it.effect(

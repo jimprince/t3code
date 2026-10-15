@@ -2,6 +2,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
 import { ProjectId, ThreadId, ProviderInstanceId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as Layer from "effect/Layer";
 import * as FileSystem from "effect/FileSystem";
 import { expect } from "vite-plus/test";
@@ -66,7 +67,7 @@ it.layer(NodeServices.layer)("subhead run admission", (it) => {
         );
         expect(a.id).toBe(b.id);
         expect(a.steps[0]?.threadId).toBe(b.steps[0]?.threadId);
-        expect(yield* (yield* AutomationStore).listRuns({ limit: 100 })).toHaveLength(1);
+        expect(yield* (yield* AutomationStore).activeRuns).toHaveLength(1);
         yield* registry.edit("review", { ...template, prompt: "Changed" }, 1);
         const retry = yield* service.send(caller, input);
         expect(retry.virtualSubhead?.template.prompt).toBe(template.prompt);
@@ -120,7 +121,7 @@ it.layer(NodeServices.layer)("subhead run admission", (it) => {
         expect(
           yield* service.send(caller, { ...input, requestId: "rate-4" }).pipe(Effect.flip),
         ).toMatchObject({ message: expect.stringContaining("rate") });
-        expect(yield* (yield* AutomationStore).listRuns({ limit: 100 })).toHaveLength(3);
+        expect(yield* (yield* AutomationStore).activeRuns).toHaveLength(3);
       }).pipe(Effect.provide(database)),
   );
   it.effect("bounds queued work at ten and daily admissions at twenty", () =>
@@ -149,11 +150,14 @@ it.layer(NodeServices.layer)("subhead run admission", (it) => {
           { ...input, requestId: `daily-${index}` },
         );
         yield* store.saveRun({ ...run, status: "completed", finishedAt: run.createdAt });
+        admitted.push(run);
       }
       expect(
         yield* service.send({ ...caller, principal: "daily-overflow" }, input).pipe(Effect.flip),
       ).toMatchObject({ message: expect.stringContaining("daily") });
-      expect(yield* store.listRuns({ limit: 100 })).toHaveLength(20);
+      const persisted = yield* Effect.forEach(admitted, (run) => store.getRun(run.id));
+      expect(persisted.every(Option.isSome)).toBe(true);
+      expect(yield* store.listRuns({ limit: 100 })).toEqual([]);
       expect(
         yield* service
           .read({ ...caller, principal: "someone-else" }, admitted[0]!.id)

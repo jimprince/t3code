@@ -258,7 +258,11 @@ Thread-return mode is available through native MCP `subhead_send` with its
 thread-scoped credential. Shell thread IDs and `--return-thread` are not accepted
 as sender authentication, and the CLI does not read injected MCP tokens. Keep a
 request ID before retrying: an exact retry returns the same run; changed content
-under the same key rejects.
+under the same key rejects. Generated IDs are printed to stderr before transport.
+Paired CLI callers share a principal, request-ID space and sender rate limit;
+creator authorization cannot isolate shells sharing that credential. Store no
+secrets in templates or requests. Ordinary full-head sends queue, while app-owned
+results can return through a full head.
 
 See [Virtual subheads](./docs/AGENT_OPERATIONS.md#virtual-subheads) for template
 fields, permissions, admission limits, held deliveries and the boundary of the

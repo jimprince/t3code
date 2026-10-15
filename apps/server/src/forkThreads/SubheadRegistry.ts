@@ -77,6 +77,8 @@ export const makeSubheadRegistry = Effect.gen(function* () {
     locked(
       Effect.gen(function* () {
         const previous = yield* get(name);
+        if (actor !== (previous.createdBy ?? "system"))
+          return yield* fail("Only the creating principal may edit this subhead.");
         if (previous.version !== expectedVersion)
           return yield* fail(
             `Template version conflict: expected ${expectedVersion}, current ${previous.version}.`,
@@ -86,6 +88,11 @@ export const makeSubheadRegistry = Effect.gen(function* () {
           onExcessProperty: "error",
         });
         if (template.name !== previous.name) return yield* fail("A subhead name is immutable.");
+        if (
+          template.projectId !== previous.projectId ||
+          template.ownerThreadId !== previous.ownerThreadId
+        )
+          return yield* fail("A subhead projectId and ownerThreadId are immutable.");
         return yield* write({
           ...previous,
           ...template,
@@ -99,6 +106,8 @@ export const makeSubheadRegistry = Effect.gen(function* () {
     locked(
       Effect.gen(function* () {
         const previous = yield* get(name);
+        if (actor !== (previous.createdBy ?? "system"))
+          return yield* fail("Only the creating principal may change this subhead.");
         if (previous.retiredAt !== null && state === "enable")
           return yield* fail("Subhead is retired; its name remains reserved.");
         const at = yield* now;

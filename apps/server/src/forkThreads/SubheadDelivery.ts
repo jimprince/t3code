@@ -38,14 +38,15 @@ export const makeSubheadDelivery = (providers: Effect.Effect<ReadonlyArray<Serve
     const settleCaptured = (run: AutomationRun) =>
       Effect.gen(function* () {
         const execution = run.steps[0]?.threadId;
-        if (!execution) return;
-        if (!(yield* threads.getThreadShell(execution))) return;
+        if (!execution) return false;
+        const initial = yield* threads.getThreadShell(execution);
+        if (!initial || initial.settledOverride === "settled") return false;
         const records = yield* threads.getThreadRecords(execution, ["messages", "runs"]);
         const message = records.messages.find((item) => item.id === run.steps[0]?.messageId);
         const root = message ? inputRootRun(records.runs, message) : undefined;
         const emptyFailedClaim =
           run.status === "failed" && records.messages.length === 0 && records.runs.length === 0;
-        if (!root && !emptyFailedClaim) return;
+        if (!root && !emptyFailedClaim) return true;
         const captured = yield* withOwnershipLock(
           sql,
           sql.withTransaction(
@@ -66,7 +67,7 @@ export const makeSubheadDelivery = (providers: Effect.Effect<ReadonlyArray<Serve
             }),
           ),
         );
-        if (!captured) return;
+        if (!captured) return false;
         const shell = yield* threads.getThreadShell(execution);
         if (
           !shell ||
@@ -74,7 +75,7 @@ export const makeSubheadDelivery = (providers: Effect.Effect<ReadonlyArray<Serve
           hasActiveWork(shell) ||
           (yield* hasLiveChildren(sql, execution, threads.getThreadShell))
         )
-          return;
+          return true;
         yield* threads
           .dispatch({
             type: "thread.auto-settle",
@@ -90,6 +91,7 @@ export const makeSubheadDelivery = (providers: Effect.Effect<ReadonlyArray<Serve
               Effect.logDebug("Subhead settlement deferred", { runId: run.id, cause }),
             ),
           );
+        return (yield* threads.getThreadShell(execution))?.settledOverride !== "settled";
       });
     const deliver = (runId: string) =>
       lock
@@ -98,11 +100,19 @@ export const makeSubheadDelivery = (providers: Effect.Effect<ReadonlyArray<Serve
             const found = yield* store.getRun(runId);
             if (Option.isNone(found) || found.value.virtualSubhead === undefined)
               return yield* new NamedAgentError({ message: "Subhead result not found." });
-            const run = found.value;
-            const virtual = run.virtualSubhead!;
+            let run = found.value;
             if (run.status === "queued" || run.status === "running") return run;
-            yield* settleCaptured(run);
+            const settlementPending = yield* settleCaptured(run);
+            run = { ...run, virtualSubhead: { ...run.virtualSubhead!, settlementPending } };
+            yield* store.saveRun(run);
+            const virtual = run.virtualSubhead!;
             if (["delivered", "pull-only", "undelivered"].includes(virtual.delivery.status))
+              return run;
+            const now = DateTime.formatIso(yield* DateTime.now);
+            if (
+              virtual.delivery.nextAttemptAt &&
+              Date.parse(virtual.delivery.nextAttemptAt) > Date.parse(now)
+            )
               return run;
             const save = (delivery: typeof virtual.delivery) => {
               const next: AutomationRun = { ...run, virtualSubhead: { ...virtual, delivery } };
@@ -126,6 +136,26 @@ export const makeSubheadDelivery = (providers: Effect.Effect<ReadonlyArray<Serve
               finishedAt: run.finishedAt,
             };
             const attempts = virtual.delivery.attempts + 1;
+            const retry = (error: string, held = false) =>
+              save({
+                ...virtual.delivery,
+                status:
+                  !held &&
+                  Date.parse(now) - Date.parse(virtual.delivery.firstAttemptAt ?? now) >=
+                    24 * 60 * 60_000
+                    ? "undelivered"
+                    : held
+                      ? "held"
+                      : "pending",
+                attempts,
+                firstAttemptAt: virtual.delivery.firstAttemptAt ?? now,
+                nextAttemptAt: DateTime.formatIso(
+                  DateTime.makeUnsafe(
+                    Date.parse(now) + Math.min(5 * 60_000, 15_000 * 2 ** Math.min(attempts - 1, 5)),
+                  ),
+                ),
+                error,
+              });
             return yield* handoffs
               .accept({
                 sendId: virtual.delivery.id,
@@ -138,6 +168,8 @@ export const makeSubheadDelivery = (providers: Effect.Effect<ReadonlyArray<Serve
               })
               .pipe(
                 Effect.flatMap((receipt) => {
+                  if (receipt.cause === "QUOTA_EXHAUSTED" || receipt.cause === "BUSY")
+                    return retry(receipt.cause, true);
                   const status =
                     receipt.status === "held"
                       ? "held"
@@ -153,14 +185,7 @@ export const makeSubheadDelivery = (providers: Effect.Effect<ReadonlyArray<Serve
                     error: receipt.cause,
                   });
                 }),
-                Effect.catch((cause) =>
-                  save({
-                    ...virtual.delivery,
-                    status: attempts >= 6 ? "undelivered" : "pending",
-                    attempts,
-                    error: String(cause),
-                  }),
-                ),
+                Effect.catch((cause) => retry(String(cause))),
               );
           }),
         )
@@ -168,16 +193,19 @@ export const makeSubheadDelivery = (providers: Effect.Effect<ReadonlyArray<Serve
     const sweep = Effect.gen(function* () {
       const rows = yield* sql<{
         run_id: string;
-      }>`SELECT a.run_id FROM automation_runs a LEFT JOIN orchestration_v2_projection_threads t ON t.thread_id=json_extract(a.run_json,'$.virtualSubhead.senderThreadId') WHERE a.status NOT IN ('queued','running') AND json_type(a.run_json,'$.virtualSubhead')='object' AND (json_extract(a.run_json,'$.virtualSubhead.delivery.status')='pending' OR (json_extract(a.run_json,'$.virtualSubhead.delivery.status')='held' AND COALESCE(json_extract(t.payload_json,'$.settledOverride'),'')<>'settled')) ORDER BY a.created_at,a.rowid LIMIT 100`;
+      }>`SELECT a.run_id FROM automation_runs a LEFT JOIN orchestration_v2_projection_threads t ON t.thread_id=json_extract(a.run_json,'$.virtualSubhead.senderThreadId') WHERE a.status NOT IN ('queued','running') AND json_type(a.run_json,'$.virtualSubhead')='object' AND (COALESCE(json_extract(a.run_json,'$.virtualSubhead.settlementPending'),1)=1 OR json_extract(a.run_json,'$.virtualSubhead.delivery.status')='pending' OR (json_extract(a.run_json,'$.virtualSubhead.delivery.status')='held' AND COALESCE(json_extract(t.payload_json,'$.settledOverride'),'')<>'settled')) ORDER BY a.created_at,a.rowid LIMIT 100`;
       for (const row of rows) yield* deliver(row.run_id);
       const pending =
         yield* sql`SELECT run_id FROM automation_runs WHERE status NOT IN ('queued','running') AND json_type(run_json,'$.virtualSubhead')='object' AND json_extract(run_json,'$.virtualSubhead.delivery.status')='pending' LIMIT 1`;
       const held = yield* sql<{
         thread_id: string;
       }>`SELECT DISTINCT json_extract(run_json,'$.virtualSubhead.senderThreadId') AS thread_id FROM automation_runs WHERE json_type(run_json,'$.virtualSubhead')='object' AND json_extract(run_json,'$.virtualSubhead.delivery.status')='held' AND json_extract(run_json,'$.virtualSubhead.senderThreadId') IS NOT NULL`;
+      const settlement = yield* sql<{
+        thread_id: string;
+      }>`SELECT json_extract(run_json,'$.steps[0].threadId') AS thread_id FROM automation_runs WHERE status NOT IN ('queued','running') AND json_extract(run_json,'$.virtualSubhead.settlementPending')=1`;
       return {
         pending: pending.length > 0 || rows.length === 100,
-        watched: held.map((row) => ThreadId.make(row.thread_id)),
+        watched: [...held, ...settlement].map((row) => ThreadId.make(row.thread_id)),
       };
     }).pipe(Effect.mapError(failure));
     return { deliver, sweep };
