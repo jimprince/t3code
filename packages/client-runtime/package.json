@@ -15,6 +15,10 @@
       "types": "./src/state/harnessChecksList.ts",
       "default": "./src/state/harnessChecksList.ts"
     },
+    "./state/subheads-view": {
+      "types": "./src/state/subheadsView.ts",
+      "default": "./src/state/subheadsView.ts"
+    },
     "./state/harness-view": {
       "types": "./src/state/harnessView.ts",
       "default": "./src/state/harnessView.ts"

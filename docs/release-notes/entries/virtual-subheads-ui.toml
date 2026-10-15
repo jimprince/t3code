@@ -1,0 +1,4 @@
+id = "virtual-subheads-ui"
+category = "feature"
+functionality = "agents"
+text = "Open a subhead from under its head in the Harness tab to send it a request, read its run history with delivery state, edit its template and enable, disable or retire it."

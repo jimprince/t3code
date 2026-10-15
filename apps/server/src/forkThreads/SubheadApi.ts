@@ -67,6 +67,8 @@ export const makeSubheadApi = Effect.gen(function* () {
           return yield* status(caller, input.runId);
         case "result":
           return yield* result(caller, input.runId);
+        case "runs":
+          return { runs: yield* runs.list(input) };
         default:
           return yield* registry
             .handle(input, caller.principal)

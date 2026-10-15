@@ -4,8 +4,9 @@ import {
   SubheadTemplate,
   ThreadId,
   MessageId,
-  type AutomationRun,
+  AutomationRun,
   type RuntimeMode,
+  type SubheadRunRow,
   type Subhead,
 } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
@@ -32,6 +33,10 @@ const decodeSend = Schema.decodeUnknownEffect(SubheadSendInput);
 const fail = (message: string) => new NamedAgentError({ message });
 const error = (cause: unknown) => (isNamedAgentError(cause) ? cause : fail(String(cause)));
 const encodeTemplate = Schema.encodeSync(Schema.fromJsonString(SubheadTemplate));
+const decodeRun = Schema.decodeUnknownEffect(Schema.fromJsonString(AutomationRun));
+const OPEN = ["queued", "running"];
+/** Request text in lists is a summary; the full text belongs to the run's sender. */
+const summarize = (text: string) => text.replace(/\s+/g, " ").trim().slice(0, 200);
 
 /** Admission owns only the existing run store. Native execution belongs to AutomationEngine. */
 export const makeSubheadRuns = Effect.gen(function* () {
@@ -177,5 +182,51 @@ export const makeSubheadRuns = Effect.gen(function* () {
         return yield* fail("This authenticated sender cannot read that subhead result.");
       return run;
     }).pipe(Effect.mapError(error));
-  return { send, read };
+  /**
+   * Operator view of runs: every open run plus the newest `perSubhead` finished runs of each
+   * subhead (or of the one named). Rows carry no result text; reading that still needs the
+   * authenticated sender. Newest first.
+   */
+  const list = (input: { readonly name?: string | undefined; readonly perSubhead: number }) =>
+    Effect.gen(function* () {
+      const only = input.name === undefined ? null : (yield* registry.get(input.name)).id;
+      const automationId = only === null ? null : `subhead:${only}`;
+      const rows = yield* sql<{ json: string }>`
+        SELECT run_json AS json FROM automation_runs
+        WHERE json_type(run_json,'$.virtualSubhead')='object'
+          AND (${automationId} IS NULL OR automation_id=${automationId})
+          AND (status IN (${OPEN[0]!},${OPEN[1]!}) OR run_id IN (
+            SELECT run_id FROM (
+              SELECT run_id, ROW_NUMBER() OVER (
+                PARTITION BY automation_id ORDER BY created_at DESC, run_id DESC) AS rn
+              FROM automation_runs
+              WHERE json_type(run_json,'$.virtualSubhead')='object' AND status NOT IN (${OPEN[0]!},${OPEN[1]!})
+            ) WHERE rn<=${input.perSubhead}))
+        ORDER BY created_at DESC, run_id DESC`;
+      const runs = yield* Effect.forEach(rows, (row) => decodeRun(row.json));
+      return runs.flatMap((run): SubheadRunRow[] => {
+        const virtual = run.virtualSubhead;
+        if (virtual === undefined) return [];
+        return [
+          {
+            runId: run.id,
+            agentId: virtual.agentId,
+            subheadName: virtual.template.name,
+            requestId: virtual.requestId,
+            requestSummary: summarize(virtual.request),
+            senderPrincipal: virtual.senderPrincipal,
+            senderThreadId: virtual.senderThreadId,
+            templateVersion: virtual.template.version,
+            status: run.status,
+            threadId: run.steps[0]?.threadId ?? null,
+            delivery: virtual.delivery,
+            blockedReason: virtual.blockedReason,
+            terminationReason: virtual.terminationReason,
+            createdAt: run.createdAt,
+            finishedAt: run.finishedAt,
+          },
+        ];
+      });
+    }).pipe(Effect.mapError(error));
+  return { send, read, list };
 });

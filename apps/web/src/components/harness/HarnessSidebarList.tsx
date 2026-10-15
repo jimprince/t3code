@@ -19,8 +19,13 @@ import {
   harnessOwnerTitles,
 } from "@t3tools/client-runtime/state/harness-checks-list";
 import { buildHarnessStrip } from "@t3tools/client-runtime/state/harness-strip";
+import {
+  groupSubheadsByOwner,
+  type SubheadGroup as SubheadGroupView,
+} from "@t3tools/client-runtime/state/subheads-view";
 import { buildOrchestratorSummaries } from "@t3tools/client-runtime/state/orchestrators";
 import { partitionThreadPurposes } from "@t3tools/client-runtime/state/thread-purpose";
+import type { ThreadId } from "@t3tools/contracts";
 import { formatLocalWhen } from "@t3tools/shared/localTime";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { ChevronDownIcon, ChevronRightIcon, PinIcon, XIcon } from "lucide-react";
@@ -31,6 +36,7 @@ import { useThreadActionMenu } from "../../hooks/useThreadActionMenu";
 import { cn } from "../../lib/utils";
 import { useProjects } from "../../state/entities";
 import { useHarnessEnvironments } from "../../state/harness";
+import { useSubheadEnvironments } from "../../state/subheads";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -38,6 +44,7 @@ import { useSidebar } from "../ui/sidebar";
 import { ProjectQueryState } from "../orchestrators/ProjectQueryState";
 import { useOrchestratorThreadShells } from "../orchestrators/useOrchestratorThreads";
 import { useSelectedRoute } from "../orchestrators/OrchestratorSidebarList";
+import { SubheadGroup, type SubheadThreadLookup } from "./SubheadRows";
 import { TONE_DOT } from "./harnessTone";
 import { useHarnessCheckPin } from "./useHarnessCheckPin";
 
@@ -86,11 +93,20 @@ function HarnessAgentRow({
   now,
   selectedRoute,
   touch,
+  subheads,
+  selectedSubhead,
+  lookup,
+  threadExists,
 }: {
   readonly agent: HarnessAgentView;
   readonly now: number;
   readonly selectedRoute: string | null;
   readonly touch: boolean;
+  /** The subheads this head owns, or undefined when it has none. */
+  readonly subheads: SubheadGroupView | undefined;
+  readonly selectedSubhead: string | null;
+  readonly lookup: SubheadThreadLookup;
+  readonly threadExists: (environmentId: string, threadId: ThreadId) => boolean;
 }) {
   const navigate = useNavigate();
   const { thread } = agent;
@@ -145,6 +161,16 @@ function HarnessAgentRow({
           {formatLocalWhen(Date.parse(agent.latestActivityAt), now)}
         </span>
       </button>
+      {subheads ? (
+        <SubheadGroup
+          group={subheads}
+          now={now}
+          touch={touch}
+          selectedSubhead={selectedSubhead}
+          lookup={lookup}
+          threadExists={threadExists}
+        />
+      ) : null}
     </li>
   );
 }
@@ -157,6 +183,15 @@ function useSelectedCheck() {
       params.environmentId && params.checkKey
         ? { environmentId: params.environmentId, checkKey: params.checkKey }
         : null,
+  });
+}
+
+/** The subhead open in the main pane, as `<environmentId>:<name>`, or null on any other page. */
+function useSelectedSubhead() {
+  return useParams({
+    strict: false,
+    select: (params: { environmentId?: string; name?: string }) =>
+      params.environmentId && params.name ? `${params.environmentId}:${params.name}` : null,
   });
 }
 
@@ -249,8 +284,47 @@ export function HarnessSidebarList() {
     const summaries = buildOrchestratorSummaries(threads, projects);
     return buildHarnessAgents(partitionThreadPurposes(threads, summaries).harness);
   }, [projects, threads]);
-  const attention = agents.filter((agent) => agent.bucket !== "idle");
-  const idle = agents.filter((agent) => agent.bucket === "idle");
+  // Subheads group under the head that owns them, whichever environment serves them.
+  const subheadEnvironments = useSubheadEnvironments();
+  const subheadGroups = useMemo(() => {
+    const groups = new Map<string, SubheadGroupView>();
+    for (const environment of subheadEnvironments) {
+      for (const [owner, group] of groupSubheadsByOwner(environment.rows))
+        groups.set(`${environment.environmentId}:${owner}`, group);
+    }
+    return groups;
+  }, [subheadEnvironments]);
+  const selectedSubhead = useSelectedSubhead();
+  const threadTitles = useMemo(
+    () => new Map(threads.map((thread) => [`${thread.environmentId}:${thread.id}`, thread.title])),
+    [threads],
+  );
+  const lookup = useMemo<SubheadThreadLookup>(
+    () => ({ title: (environmentId, id) => threadTitles.get(`${environmentId}:${id}`) ?? null }),
+    [threadTitles],
+  );
+  const threadExists = useCallback(
+    (environmentId: string, id: ThreadId) => threadTitles.has(`${environmentId}:${id}`),
+    [threadTitles],
+  );
+  const groupOf = (agent: HarnessAgentView) =>
+    subheadGroups.get(`${agent.thread.environmentId}:${agent.thread.id}`);
+  // A quiet head still shows when its subheads have open work or a failure to look at.
+  const needsAttention = (agent: HarnessAgentView) => {
+    const group = groupOf(agent);
+    return (
+      agent.bucket !== "idle" ||
+      (group?.visible.some((row) => row.openRuns.length > 0 || row.lastTone === "error") ?? false)
+    );
+  };
+  const attention = agents.filter(needsAttention);
+  const idle = agents.filter((agent) => !needsAttention(agent));
+  // Subheads whose owning head is not a Harness agent here still need a place to show.
+  const ownedGroups = useMemo(
+    () => new Set(agents.map((agent) => `${agent.thread.environmentId}:${agent.thread.id}`)),
+    [agents],
+  );
+  const orphanGroups = [...subheadGroups].filter(([key]) => !ownedGroups.has(key));
 
   const snapshots = useMemo(
     () => environments.flatMap(({ snapshot }) => (snapshot === null ? [] : [snapshot])),
@@ -378,6 +452,10 @@ export function HarnessSidebarList() {
                 now={now}
                 selectedRoute={selectedRoute}
                 touch={isMobile}
+                subheads={groupOf(agent)}
+                selectedSubhead={selectedSubhead}
+                lookup={lookup}
+                threadExists={threadExists}
               />
             ))}
             {idle.length > 0 ? (
@@ -408,12 +486,40 @@ export function HarnessSidebarList() {
                     now={now}
                     selectedRoute={selectedRoute}
                     touch={isMobile}
+                    subheads={groupOf(agent)}
+                    selectedSubhead={selectedSubhead}
+                    lookup={lookup}
+                    threadExists={threadExists}
                   />
                 ))
               : null}
           </ul>
         )}
       </section>
+
+      {orphanGroups.length > 0 ? (
+        <section aria-label="Subheads of other heads">
+          <SectionHeading title="Other subheads" detail="owner is not a Harness agent" />
+          {orphanGroups.map(([key, group]) => {
+            const owner = threadTitles.get(key);
+            return (
+              <div key={key}>
+                <p className="px-2.5 pt-1 text-3xs text-sidebar-muted-foreground">
+                  {owner ?? "Head not listed here"}
+                </p>
+                <SubheadGroup
+                  group={group}
+                  now={now}
+                  touch={isMobile}
+                  selectedSubhead={selectedSubhead}
+                  lookup={lookup}
+                  threadExists={threadExists}
+                />
+              </div>
+            );
+          })}
+        </section>
+      ) : null}
 
       <section aria-label="Harness checks">
         <SectionHeading title="Checks" detail={summaryParts.join(" · ") || null}>
