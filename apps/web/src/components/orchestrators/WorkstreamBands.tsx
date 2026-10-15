@@ -290,7 +290,7 @@ export function TeamStrip({
             <StatusCell tone={TEAM_TONE[member.tag]}>{label}</StatusCell>
             <div className="min-w-0 flex-1">
               <span className="text-sm">
-                <InlineButton onClick={() => openThread(member.threadId)}>
+                <InlineButton onClick={() => openThread(member.threadId, member.environmentId)}>
                   <span className="whitespace-normal text-left">{member.title}</span>
                 </InlineButton>
               </span>
