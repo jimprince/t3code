@@ -132,6 +132,22 @@ describe("resolveThreadAcrossEnvironments", () => {
     expect(result).toEqual({ kind: "unavailable", reason: "loading" });
   });
 
+  it("does not hand a link to another machine while the message's own machine is still loading", () => {
+    const result = resolve("target", [
+      environment(devVm, "Dev VM", { state: "connecting" }),
+      environment(mac, "Mac", { threads: ["target"] }),
+    ]);
+    expect(result).toEqual({ kind: "unavailable", reason: "loading" });
+  });
+
+  it("still opens the other machine's thread when the message's own machine is disconnected", () => {
+    const result = resolve("target", [
+      environment(devVm, "Dev VM", { state: "disconnected" }),
+      environment(mac, "Mac", { threads: ["target"] }),
+    ]);
+    expect(result).toMatchObject({ kind: "found", environmentId: mac });
+  });
+
   it("still finds a thread in a disconnected environment's cached snapshot", () => {
     const result = resolve("target", [
       environment(devVm, "Dev VM"),
@@ -282,6 +298,40 @@ describe("createThreadLinkAtoms", () => {
 
     registry.set(indexes.get(mac)!, new Map([[ThreadId.make("target"), thread("target")]]));
     expect(registry.get(atom)).toMatchObject({ kind: "found", environmentId: mac, label: "Mac" });
+  });
+
+  it("stays loading, never disconnected, while a connected machine loads its thread list", () => {
+    const { atoms, registry, indexes, states, environmentsAtom } = harness();
+    const atom = atoms(threadLinkKey(devVm, ThreadId.make("target")));
+    registry.mount(atom);
+    // connecting
+    expect(registry.get(atom)).toEqual({ kind: "unavailable", reason: "loading" });
+    // connected, thread list still synchronizing
+    registry.set(environmentsAtom, [
+      summary(devVm, "Dev VM", "connected"),
+      summary(mac, "Mac", "connected"),
+    ]);
+    registry.set(states.get(mac)!, shellState("synchronizing"));
+    expect(registry.get(atom)).toEqual({ kind: "unavailable", reason: "loading" });
+    // live, thread arrives
+    registry.set(indexes.get(mac)!, new Map([[ThreadId.make("target"), thread("target")]]));
+    registry.set(states.get(mac)!, shellState("live"));
+    expect(registry.get(atom)).toMatchObject({ kind: "found", environmentId: mac });
+  });
+
+  it("calls an idle machine that was never asked to connect disconnected, not loading", () => {
+    const { atoms, registry, environmentsAtom } = harness();
+    const atom = atoms(threadLinkKey(devVm, ThreadId.make("target")));
+    registry.mount(atom);
+    registry.set(environmentsAtom, [
+      summary(devVm, "Dev VM", "connected"),
+      summary(mac, "Mac", "available"),
+    ]);
+    expect(registry.get(atom)).toEqual({
+      kind: "unavailable",
+      reason: "disconnected",
+      environments: ["Mac"],
+    });
   });
 
   it("hands back the same answer object when unrelated shell updates leave it unchanged", () => {
