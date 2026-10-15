@@ -11,7 +11,7 @@ export interface ThreadLinkEnvironment<Shell extends { readonly id: ThreadId }> 
   readonly label: string;
   /** The thread list is current (a live shell stream). Only a live list can say a thread is absent. */
   readonly live: boolean;
-  /** Not live yet, but on its way (connecting or reconnecting). */
+  /** Not live yet, but on its way: connecting, reconnecting, or connected and still loading its thread list. */
   readonly connecting: boolean;
   readonly threads: ReadonlyMap<ThreadId, Shell>;
 }
@@ -65,6 +65,13 @@ export function resolveThreadAcrossEnvironments<Shell extends { readonly id: Thr
       (environment) => environment.environmentId === input.preferredEnvironmentId,
     );
     if (preferred !== undefined) return found(preferred, threadId, true);
+    // The message's own machine is still loading: its list may yet hold this id, so wait for it.
+    const own = input.environments.find(
+      (environment) => environment.environmentId === input.preferredEnvironmentId,
+    );
+    if (holders.length > 0 && own !== undefined && !own.live && own.connecting) {
+      return { kind: "unavailable", reason: "loading" };
+    }
     const [only, second] = holders;
     if (only !== undefined && second === undefined) return found(only, threadId, false);
     if (only !== undefined) {
@@ -170,7 +177,9 @@ export function createThreadLinkAtoms(input: {
   ) => Atom.Atom<ReadonlyMap<ThreadId, OrchestrationV2ThreadShell>>;
   readonly shellStateValueAtom: (environmentId: EnvironmentId) => Atom.Atom<EnvironmentShellState>;
 }) {
-  // Reads only a boolean from each shell stream, so list updates do not wake every link.
+  // Narrows each shell stream to "is live", so other status changes do not re-run a link. Every
+  // thread list update still re-runs each link atom; `resolutionsEqual` then keeps the previous
+  // answer object, so a link component re-renders only when its own answer changes.
   const liveAtom = Atom.family((environmentId: EnvironmentId) =>
     Atom.make((get) => get(input.shellStateValueAtom(environmentId)).status === "live").pipe(
       Atom.withLabel(`thread-link-environment-live:${environmentId}`),
@@ -192,8 +201,10 @@ export function createThreadLinkAtoms(input: {
             environmentId: environment.environmentId,
             label: environment.environmentLabel,
             live: get(liveAtom(environment.environmentId)),
+            // "connected" without a live list is still loading it. An idle "available" environment
+            // was never asked to connect and cannot answer.
             connecting:
-              environment.connectionState === "available" ||
+              environment.connectionState === "connected" ||
               environment.connectionState === "connecting" ||
               environment.connectionState === "reconnecting",
             threads: get(input.threadIndexAtom(environment.environmentId)),

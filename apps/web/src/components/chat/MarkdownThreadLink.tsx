@@ -11,7 +11,6 @@ import { MessageSquareTextIcon } from "lucide-react";
 import { useProject } from "../../state/entities";
 import { useThreadLink } from "../../state/threadLinks";
 import { ProjectFavicon } from "../ProjectFavicon";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
 type Resolution = ThreadLinkResolution<OrchestrationV2ThreadShell>;
 
@@ -28,7 +27,8 @@ function threadLinkTooltip(link: Resolution, projectTitle: string | undefined) {
     case "ambiguous":
       return `On several machines: ${machines(link.candidates.map((candidate) => candidate.label))}`;
     case "unavailable":
-      if (link.reason === "not-found") return "Not found on any connected machine";
+      if (link.reason === "not-found")
+        return "Not found on any connected machine (it may be archived)";
       if (link.reason === "disconnected") {
         return `${machines(link.environments)} ${link.environments.length === 1 ? "is" : "are"} disconnected`;
       }
@@ -42,8 +42,9 @@ function threadLinkTooltip(link: Resolution, projectTitle: string | undefined) {
  * the way a web link leads with its favicon. `label` is what the message wrote,
  * shown only when this client cannot see the thread. The link names no environment, so
  * the thread is looked up in the message's own environment first and then in every other
- * connected one; it opens in whichever holds it. A thread that cannot be found still opens
- * in the message's environment, since archived threads are not in the index but still open.
+ * connected one; it opens in whichever holds it. A thread that cannot be found, or whose id
+ * several other machines hold, still opens in the message's environment (archived threads are
+ * not in the index but still open), and the tooltip says why.
  */
 export function MarkdownThreadLink(props: {
   readonly environmentId: EnvironmentId;
@@ -60,15 +61,6 @@ export function MarkdownThreadLink(props: {
   const title = found?.thread.title.trim() || props.label;
   const tooltip = threadLinkTooltip(link, project?.title);
   const copy = formatThreadLink(threadId, title);
-  if (link.kind === "ambiguous") {
-    // The link does not say which machine; opening either would be a guess.
-    return (
-      <Tooltip>
-        <TooltipTrigger render={<span data-markdown-copy={copy} />}>{title}</TooltipTrigger>
-        <TooltipPopup side="top">{tooltip}</TooltipPopup>
-      </Tooltip>
-    );
-  }
   return (
     <Link
       to="/$environmentId/$threadId"
