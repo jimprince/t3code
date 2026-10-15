@@ -986,6 +986,20 @@ export function OrchestratorBoard({
           <WorkspacePageHeader electron={isElectron} className="bg-background">
             {rootProject ? <ProjectFavicon project={rootProject} className="size-5" /> : null}
             <WorkspaceBreadcrumb ariaLabel="Project breadcrumb">
+              {newDashboard ? (
+                <WorkspaceBreadcrumbItem className="shrink-0">
+                  <button
+                    type="button"
+                    className="cursor-pointer hover:text-foreground hover:underline"
+                    onClick={() => void navigate({ to: "/dashboard" })}
+                  >
+                    Home
+                  </button>
+                  <span aria-hidden className="pl-2 sm:pl-3">
+                    /
+                  </span>
+                </WorkspaceBreadcrumbItem>
+              ) : null}
               {trail.map((ancestor) => (
                 <WorkspaceBreadcrumbItem
                   key={`${ancestor.root.environmentId}:${ancestor.root.id}`}

@@ -26,9 +26,6 @@ vi.mock("../../state/dashboard", () => ({
   useDashboardData: () => ({
     data: state.data,
     revision: 1,
-    failed: false,
-    retry: undefined,
-    olderEnvironments: [],
     snapshotSource: "live",
   }),
 }));
@@ -240,4 +237,39 @@ describe("opening a thread from the Dashboard goes to the machine that holds it 
       threadId: "remote-thread",
     });
   });
+});
+
+describe("the Dashboard carries no freshness status line", () => {
+  const SOURCE = {
+    id: "gitea:git/o/r",
+    kind: "gitea",
+    observedAt: "2026-10-14T12:00:00.000Z",
+    staleAfterMs: 15 * 60_000,
+    coverage: "complete",
+    failed: false,
+  };
+  const justNow = new Date().toISOString();
+  it.each([
+    ["fresh", { ...SOURCE, lastSuccessAt: justNow }],
+    ["slow", { ...SOURCE, failed: true, lastSuccessAt: "2026-10-14T11:00:00.000Z" }],
+    ["stale", { ...SOURCE, lastSuccessAt: "2026-10-14T11:00:00.000Z" }],
+    ["failed", { ...SOURCE, failed: true, lastSuccessAt: null }],
+  ])(
+    "shows neither the as-of header nor the slow-source text when a source is %s",
+    async (_state, source) => {
+      for (const scope of [HOME, PROJECT]) {
+        state.data = {
+          ...snapshot([task("issue:git/o/r#1", "A task")]),
+          sources: [source, { ...source, id: "plan:voice", kind: "plan" }],
+        };
+        await render(scope);
+        expect(section("plan")).not.toBeNull();
+        const text = container.textContent ?? "";
+        expect(text).not.toMatch(/as of/i);
+        expect(text).not.toMatch(/slow|last known|older server|refresh failed/i);
+        expect(container.querySelector('[data-testid="dashboard-section-freshness"]')).toBeNull();
+        expect(taskTitle("A task")).toBeDefined();
+      }
+    },
+  );
 });

@@ -35,9 +35,6 @@ vi.mock("../../state/dashboard", () => ({
   useDashboardData: () => ({
     data: state.data,
     revision: 1,
-    failed: false,
-    retry: undefined,
-    olderEnvironments: [],
     snapshotSource: "live",
   }),
 }));

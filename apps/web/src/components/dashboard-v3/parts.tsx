@@ -82,14 +82,7 @@ export function ProgressBar({
   );
 }
 
-export type SectionName =
-  | "ask"
-  | "freshness"
-  | "plan"
-  | "releases"
-  | "decisions"
-  | "outcomes"
-  | "utilities";
+export type SectionName = "ask" | "plan" | "releases" | "decisions" | "outcomes" | "utilities";
 
 /**
  * The attributes the cold-load trace reads to tell when a section shows its rows or its truthful

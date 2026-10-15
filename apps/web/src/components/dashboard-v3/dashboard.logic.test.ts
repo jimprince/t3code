@@ -16,7 +16,6 @@ import {
   diffAgainst,
   firstVisitChanges,
   outcomesSince,
-  freshnessSummary,
   formatEta,
   formatEtaDay,
   planNotes,
@@ -29,7 +28,6 @@ import {
   rankDecisions,
   rollup,
   sourceHealth,
-  sourceLabel,
   takeBaseline,
   taskForecast,
   versionState,
@@ -192,58 +190,6 @@ describe("sources", () => {
     expect(sourceHealth(source({ lastSuccessAt: null }), NOW)).toBe("stale");
     expect(sourceHealth(source({ failed: true }), NOW)).toBe("failed");
     expect(sourceHealth(source({ coverage: "bounded" }), NOW)).toBe("partial");
-  });
-
-  const names = {
-    environments: new Map([["env-1", "brad-linux-dev"]]),
-    projectTitle: (root: string) => (root === "root-1" ? "Chief of Staff" : undefined),
-  };
-
-  it("names a single late source in words, without an alarm", () => {
-    expect(freshnessSummary([source()], NOW, names)).toBeNull();
-    expect(
-      freshnessSummary([source({ lastSuccessAt: "2026-10-11T05:02:00.000Z" })], NOW, names),
-    ).toEqual({ text: "Voice tasks slow, showing last known", failed: false });
-  });
-
-  it("sums many late reads per server and never shows an id", () => {
-    const late = (id: string) =>
-      source({ id, kind: "gitea", failed: true, lastSuccessAt: "2026-10-11T12:00:00.000Z" });
-    const summary = freshnessSummary(
-      [
-        late("env-1:older:root-1:issues"),
-        late("env-1:older:root-2:issues"),
-        late("env-2:gitea:git/o/r"),
-        source({ id: "env-1:plan:voice" }),
-      ],
-      NOW,
-      names,
-    );
-    expect(summary?.text).toBe(
-      "brad-linux-dev: 2 reads slow, Dashboard: 1 read slow, showing last known",
-    );
-    expect(summary?.failed).toBe(false);
-  });
-
-  it("is an alarm only when no source has ever returned data", () => {
-    const dead = source({
-      id: "env-1:gitea:git/o/r",
-      kind: "gitea",
-      failed: true,
-      lastSuccessAt: null,
-    });
-    expect(freshnessSummary([dead], NOW, names)?.failed).toBe(true);
-    expect(freshnessSummary([dead, source()], NOW, names)?.failed).toBe(false);
-  });
-
-  it("titles a source with its server and project", () => {
-    expect(sourceLabel({ id: "env-1:older:root-1:issues", kind: "gitea" }, names)).toBe(
-      "brad-linux-dev · Chief of Staff tracker issues",
-    );
-    expect(sourceLabel({ id: "env-1:plan:voice", kind: "plan" }, names)).toBe(
-      "brad-linux-dev · Voice tasks",
-    );
-    expect(sourceLabel({ id: "gitea:git/o/repo", kind: "gitea" }, names)).toBe("Gitea repo");
   });
 });
 

@@ -6,7 +6,7 @@ import {
 import { liveAttention } from "@t3tools/client-runtime/dashboard/live";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { DashboardTask, EnvironmentId, ThreadId } from "@t3tools/contracts";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { use, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { readProjects, readThreadShells } from "../../state/entities";
@@ -18,7 +18,7 @@ import { buildThreadRouteParams } from "../../threadRoutes";
 import { Sheet, SheetPopup } from "../ui/sheet";
 import { OpenTaskContext } from "../orchestrators/TaskLink";
 import { ProjectTaskPanel } from "../orchestrators/ProjectTaskPanel";
-import { AskSection, FreshnessStamp, OlderServerLines } from "./chrome";
+import { AskSection } from "./chrome";
 import { DashboardUiProvider, NoticeContext, type DashboardUi, type DecisionRow } from "./context";
 import {
   parseIssueTaskId,
@@ -29,7 +29,6 @@ import {
 } from "./dashboard.logic";
 import { DecisionDialog } from "./decisions";
 import { useCollapsedKeys, useMinuteClock } from "./prefs";
-import { sectionMarker } from "./parts";
 import { useOrderActions, type DashboardNotice, type PendingMoves } from "./orderActions";
 import { applyPendingMoves, snapshotHasCaughtUp, type PendingMove } from "./pendingMoves";
 import { useDecisionAnswers } from "./useDecisionAnswers";
@@ -311,20 +310,6 @@ export function DashboardView({
           data-snapshot-source={state.snapshotSource}
           className="@container/dash flex flex-col gap-2"
         >
-          <div {...sectionMarker("freshness", { ready, revision: state.revision })}>
-            <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1">
-              {scope.kind === "project" ? (
-                <Link
-                  to="/dashboard"
-                  className="text-xs text-muted-foreground hover:text-foreground"
-                >
-                  Home
-                </Link>
-              ) : null}
-              <FreshnessStamp failed={state.failed} onRetry={state.retry} />
-            </div>
-            <OlderServerLines names={state.olderEnvironments} />
-          </div>
           {leading}
           <AskSection projectHead={projectHead} />
           {data.asOf === null ? (

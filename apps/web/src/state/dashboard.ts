@@ -6,7 +6,7 @@ import {
 import { DashboardSnapshot, type EnvironmentId } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { Atom } from "effect/reactivity";
-import { useCallback, useEffect, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 
 import { connectionAtomRuntime } from "../connection/runtime";
 import { appAtomRegistry } from "../rpc/atomRegistry";
@@ -87,13 +87,8 @@ function writeStored(environmentId: EnvironmentId, snapshot: DashboardSnapshot) 
 
 export interface DashboardState {
   readonly data: DashboardData;
-  /** At least one environment's refresh is failing; the last good snapshot is still shown. */
-  readonly failed: boolean;
   readonly revision: string;
   readonly snapshotSource: "cached" | "live" | "empty";
-  readonly olderEnvironments: ReadonlyArray<string>;
-  /** Re-opens every environment's subscription; the last good snapshot stays on screen meanwhile. */
-  readonly retry: () => void;
 }
 
 /**
@@ -111,9 +106,6 @@ export function useDashboardData(): DashboardState {
     [environments],
   );
   const entries = useAtomValue(environmentsDashboard(key));
-  const retry = useCallback(() => {
-    for (const { environmentId } of entries) dashboard.retry(appAtomRegistry, environmentId);
-  }, [entries]);
   useEffect(() => {
     for (const { environmentId, state } of entries)
       if (state.snapshot) writeStored(environmentId, state.snapshot);
@@ -131,17 +123,8 @@ export function useDashboardData(): DashboardState {
           ? "live"
           : "cached"
         : "empty",
-      olderEnvironments: entries
-        .filter((e) => e.state.olderServer)
-        .map(
-          (e) =>
-            environments.find((env) => env.environmentId === e.environmentId)?.label ??
-            e.environmentId,
-        ),
-      failed: entries.some(({ state }) => state.failed),
-      retry,
     };
-  }, [entries, environments, retry]);
+  }, [entries]);
 }
 
 const NO_DASHBOARD_SNAPSHOT = Atom.make<DashboardSnapshot | null>(null);
