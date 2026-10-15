@@ -12,6 +12,7 @@ import {
   type ThreadId,
   type ThreadSubprojectMode,
 } from "@t3tools/contracts";
+import { isThreadResumable } from "../threadResume.ts";
 import { stripNotifyMarker } from "../notifyMarker.ts";
 import { threadPurposes } from "./threadPurpose.ts";
 
@@ -51,8 +52,9 @@ function workerLatestLine(thread: Pick<OrchestratorThreadShell, "source">): stri
  * that is still going (subagents, background tasks). Dev servers and monitors do not count; they only watch.
  */
 export function isThreadWorking(
-  thread: Pick<EnvironmentThreadShell, "runtime" | "pendingBackgroundTasks" | "goal">,
+  thread: Pick<EnvironmentThreadShell, "runtime" | "pendingBackgroundTasks" | "goal" | "source">,
 ): boolean {
+  if (thread.source.queueHeld === true) return false;
   if (ACTIVE_RUNTIME_STATUSES.includes(thread.runtime?.status ?? "idle")) return true;
   if (thread.goal?.status === "active" && thread.runtime?.status !== "failed") return true;
   return thread.pendingBackgroundTasks.some(
@@ -97,6 +99,8 @@ export function resolveThreadDisplayStatus(
 ): ThreadDisplayStatus {
   if (thread.hasPendingApprovals) return "approval";
   if (thread.hasPendingUserInput) return "input";
+  // Queue holds are explained by the Blocked badge; they are not failed runs.
+  if (thread.source.queueHeld === true) return "ready";
   if (ACTIVE_RUNTIME_STATUSES.includes(thread.runtime?.status ?? "idle")) return "working";
   if (thread.runtime?.status === "failed") return "failed";
   if (isThreadWorking(thread)) return "working";
@@ -392,16 +396,22 @@ function latestActivityAt(thread: OrchestratorThreadShell): string {
 }
 
 function isBlocked(thread: OrchestratorThreadShell): boolean {
-  if (thread.archivedAt != null || thread.settledOverride === "settled" || isOwnActive(thread)) {
-    return false;
-  }
+  if (thread.archivedAt != null || thread.settledOverride === "settled") return false;
+  if (thread.source.queueHeld === true) return true;
+  if (isThreadResumable(thread.source)) return true;
+  if (isOwnActive(thread)) return false;
   if (thread.runtime?.status === "failed") return true;
   if (thread.latestRun?.status === "failed") return true;
   return /^blocked\b/i.test(thread.source.workerSummary?.output?.trim() ?? "");
 }
 
 function isOwnActive(thread: OrchestratorThreadShell): boolean {
-  if (thread.archivedAt != null || thread.settledOverride === "settled") return false;
+  if (
+    thread.archivedAt != null ||
+    thread.settledOverride === "settled" ||
+    thread.source.queueHeld === true
+  )
+    return false;
   const status = resolveThreadDisplayStatus({ ...thread, hasActiveDescendants: false });
   return (
     status === "approval" || status === "input" || status === "working" || status === "monitoring"

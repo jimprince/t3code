@@ -2534,6 +2534,7 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
       ]) {
         assert.equal(heldShell.latestRunId, runId);
         assert.equal(heldShell.status, "completed");
+        assert.isTrue(heldShell.queueHeld);
       }
 
       // With only held runs, nothing has executed: both shells read idle.
@@ -2557,7 +2558,37 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
       ]) {
         assert.isNull(onlyHeldShell.latestRunId);
         assert.equal(onlyHeldShell.status, "idle");
+        assert.isTrue(onlyHeldShell.queueHeld);
       }
+
+      // Releasing the queued runs clears the flag in SQL and memory projections.
+      for (const [id, ordinal] of [
+        [runId, 1],
+        [RunId.make("run:clock:newer"), 2],
+      ] as const) {
+        yield* projectionStore.apply({
+          id: EventId.make(`event:queue-release:${ordinal}`),
+          type: "run.updated",
+          threadId,
+          occurredAt: later,
+          payload: {
+            ...run,
+            id,
+            ordinal,
+            status: "queued",
+            queueHeld: false,
+            startedAt: null,
+            completedAt: null,
+          },
+        });
+      }
+      const resumedProjection = yield* projectionStore.getThreadProjection(threadId);
+      const resumedSqlShell = yield* projectionStore.getThreadShell(threadId);
+      assert.isFalse(resumedSqlShell?.queueHeld);
+      assert.isFalse(ProjectionStore.threadShellFromProjection(resumedProjection).queueHeld);
+      const legacyWire = { ...encodeThreadShell(resumedSqlShell!) };
+      delete legacyWire.queueHeld;
+      assert.isUndefined(decodeThreadShell(legacyWire).queueHeld);
 
       // A wake run counts from the start of the work it continues.
       yield* projectionStore.apply({

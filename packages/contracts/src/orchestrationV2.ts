@@ -1938,6 +1938,8 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
     Schema.NullOr(Schema.Literals(["preparing", "starting", "running", "waiting"])),
   ),
   status: OrchestrationV2ShellThreadStatus,
+  /** The newest queued run is held pending an explicit resume. Older servers omit this. */
+  queueHeld: Schema.optional(Schema.Boolean),
   lastError: Schema.optional(Schema.NullOr(Schema.String)),
   lastErrorClass: Schema.optional(Schema.NullOr(OrchestrationV2ProviderFailureClass)),
   usageLimitResetAt: Schema.optional(Schema.NullOr(IsoDateTime)),

@@ -80,7 +80,9 @@ type DashboardShell = Pick<
   OrchestrationV2ThreadShell,
   "id" | "title" | "archivedAt" | "todoProgress" | "updatedAt"
 > &
-  Partial<Pick<OrchestrationV2ThreadShell, "settledOverride" | "status" | "planResumeState">>;
+  Partial<
+    Pick<OrchestrationV2ThreadShell, "settledOverride" | "status" | "planResumeState" | "queueHeld">
+  >;
 /** A run is in flight: working or waiting on someone. */
 const IN_FLIGHT_RUN_STATUSES: ReadonlySet<string> = new Set([
   "preparing",
@@ -89,8 +91,10 @@ const IN_FLIGHT_RUN_STATUSES: ReadonlySet<string> = new Set([
   "running",
   "waiting",
 ]);
-const isThreadInFlight = (thread: DashboardShell) =>
-  thread.status !== undefined && IN_FLIGHT_RUN_STATUSES.has(thread.status);
+export const isThreadInFlight = (thread: DashboardShell) =>
+  thread.queueHeld !== true &&
+  thread.status !== undefined &&
+  IN_FLIGHT_RUN_STATUSES.has(thread.status);
 /** Retired and explicitly settled heads no longer own dashboard work. */
 export const isDashboardThreadActive = (thread: DashboardShell) =>
   thread.archivedAt === null &&
@@ -422,7 +426,9 @@ export function aggregate(input: {
           status:
             issue.status === "done"
               ? "done"
-              : attentionIds.length > 0 || (issue.blockedBy?.length ?? 0) > 0
+              : attentionIds.length > 0 ||
+                  linked?.queueHeld === true ||
+                  (issue.blockedBy?.length ?? 0) > 0
                 ? "blocked"
                 : issue.status === "needs-review"
                   ? "review"
@@ -456,7 +462,7 @@ export function aggregate(input: {
         !thread.todoProgress ||
         thread.todoProgress.total === 0 ||
         thread.todoProgress.completed >= thread.todoProgress.total ||
-        !(isThreadInFlight(thread) || resumable) ||
+        !(isThreadInFlight(thread) || resumable || thread.queueHeld === true) ||
         // The thread an issue row shows is covered by it. Another linked thread keeps its own row
         // only when it is stopped and resumable (say a dead worker beside the head the row resolves
         // to); an in-flight one is covered by its issue and must not add a second row.
@@ -481,14 +487,15 @@ export function aggregate(input: {
         threadId: thread.id,
         workstreamId: `project:${root.id}:work`,
         // A stopped thread is neither working nor stalled-by-idle: "blocked" keeps it out of both.
-        status: resumable ? "blocked" : "working",
+        status: resumable || thread.queueHeld === true ? "blocked" : "working",
         // An issue row that borrows this thread's steps already counts them; the dashboard totals
         // sum task progress, so this row shows none.
         progress: progressSources.has(thread.id) ? null : progress,
         // Stopped work is frozen: no gain or pace forecast from before it stopped.
-        movement: resumable
-          ? movement(id, null, history, input.now)
-          : movement(id, progress, history, input.now),
+        movement:
+          resumable || thread.queueHeld === true
+            ? movement(id, null, history, input.now)
+            : movement(id, progress, history, input.now),
         forecast: null,
         nextStep: thread.todoProgress.currentStep?.text ?? null,
         attentionIds: [],

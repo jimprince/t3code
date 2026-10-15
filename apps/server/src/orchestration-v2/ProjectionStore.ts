@@ -972,6 +972,7 @@ type ShellThreadRow = {
   readonly forked_from_run_source_thread_id: string | null;
   readonly latest_run_id: string | null;
   readonly latest_run_status: string | null;
+  readonly queue_held: number | null;
   readonly latest_run_requested_at: string | null;
   readonly latest_run_started_at: string | null;
   readonly latest_run_completed_at: string | null;
@@ -1548,6 +1549,10 @@ export function threadShellFromProjection(
     notificationRequestId:
       projection.plans.find((plan) => plan.kind === "proposed_plan" && plan.status === "active")
         ?.id ?? null,
+    queueHeld:
+      projection.runs
+        .filter((run) => run.status === "queued")
+        .toSorted((a, b) => b.ordinal - a.ordinal)[0]?.queueHeld === true,
     latestRunId: latestRun?.id ?? null,
     latestRunRequestedAt: latestRun?.requestedAt ?? null,
     latestRunStartedAt: latestRun?.startedAt ?? null,
@@ -1667,6 +1672,7 @@ type ShellThreadState = {
   readonly notificationRequestId: string | null;
   readonly latestRunId: RunId | null;
   readonly latestRunStatus: OrchestrationV2ShellThreadStatus;
+  readonly queueHeld: boolean;
   readonly latestRunRequestedAt: DateTime.Utc | null;
   readonly latestRunStartedAt: DateTime.Utc | null;
   readonly latestRunCompletedAt: DateTime.Utc | null;
@@ -1842,6 +1848,7 @@ function shellFromState(input: {
     activityRunStatus: input.state.activityRunStatus,
     activityRunStartedAt: input.state.activityRunStartedAt,
     status: input.state.latestRunStatus,
+    queueHeld: input.state.queueHeld,
     lastError: input.state.lastError,
     lastErrorClass: input.state.lastErrorClass,
     usageLimitResetAt: input.state.usageLimitResetAt,
@@ -5326,6 +5333,10 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               END AS forked_from_run_source_thread_id,
               presented.run_id AS latest_run_id,
               presented.status AS latest_run_status,
+              (SELECT json_extract(q.payload_json, '$.queueHeld')
+               FROM orchestration_v2_projection_runs q
+               WHERE q.thread_id = t.thread_id AND q.status = 'queued'
+               ORDER BY q.ordinal DESC, q.run_id DESC LIMIT 1) AS queue_held,
               presented.requested_at AS latest_run_requested_at,
               json_extract(presented.payload_json, '$.startedAt') AS latest_run_started_at,
               presented.completed_at AS latest_run_completed_at,
@@ -5935,6 +5946,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
           completionSuppressed: isNoChangeReply(row.notification_reply_text),
           latestRunId,
           latestRunStatus,
+          queueHeld: row.queue_held === 1,
           latestRunRequestedAt,
           latestRunStartedAt,
           latestRunCompletedAt,

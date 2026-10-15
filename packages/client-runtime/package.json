@@ -528,6 +528,10 @@
       "types": "./src/dashboard/aggregation.ts",
       "default": "./src/dashboard/aggregation.ts"
     },
+    "./dashboard/blockers": {
+      "types": "./src/dashboard/blockers.ts",
+      "default": "./src/dashboard/blockers.ts"
+    },
     "./dashboard/progress": {
       "types": "./src/dashboard/progress.ts",
       "default": "./src/dashboard/progress.ts"
