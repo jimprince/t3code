@@ -20,6 +20,7 @@ export function completionAllowed(
     thread.pinnedAt == null &&
     !isPermanentRoot(thread.id, permanentRoots) &&
     metadata?.settleOnComplete !== false &&
+    (metadata?.virtualAgentId === undefined || metadata.virtualResultCapturedAt !== undefined) &&
     !projection.runs.some((run) =>
       ["queued", "running", "waiting", "starting"].includes(run.status),
     ) &&

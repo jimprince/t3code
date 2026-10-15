@@ -47,7 +47,7 @@ export const makeSubheadRegistry = Effect.gen(function* () {
     });
   const locked = <A, E>(effect: Effect.Effect<A, E>) =>
     withOwnershipLock(sql, sql.withTransaction(effect)).pipe(Effect.mapError(storageError));
-  const create = (input: unknown) =>
+  const create = (input: unknown, actor = "system") =>
     locked(
       Effect.gen(function* () {
         const template = yield* Schema.decodeUnknownEffect(SubheadTemplate)(input, {
@@ -66,10 +66,12 @@ export const makeSubheadRegistry = Effect.gen(function* () {
           retiredAt: null,
           createdAt: at,
           updatedAt: at,
+          createdBy: actor,
+          updatedBy: actor,
         });
       }),
     );
-  const edit = (name: string, input: unknown, expectedVersion: number) =>
+  const edit = (name: string, input: unknown, expectedVersion: number, actor = "system") =>
     locked(
       Effect.gen(function* () {
         const previous = yield* get(name);
@@ -87,10 +89,11 @@ export const makeSubheadRegistry = Effect.gen(function* () {
           ...template,
           version: previous.version + 1,
           updatedAt: yield* now,
+          updatedBy: actor,
         });
       }),
     );
-  const setState = (name: string, state: "enable" | "disable" | "retire") =>
+  const setState = (name: string, state: "enable" | "disable" | "retire", actor = "system") =>
     locked(
       Effect.gen(function* () {
         const previous = yield* get(name);
@@ -102,6 +105,7 @@ export const makeSubheadRegistry = Effect.gen(function* () {
           enabled: state === "enable",
           retiredAt: state === "retire" ? (previous.retiredAt ?? at) : previous.retiredAt,
           updatedAt: at,
+          updatedBy: actor,
         };
         yield* sql`UPDATE named_virtual_agents SET payload=${encode(next)} WHERE id=${next.id}`;
         return next;

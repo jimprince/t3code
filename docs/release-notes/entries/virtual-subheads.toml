@@ -1,0 +1,4 @@
+id = "virtual-subheads"
+category = "feature"
+functionality = "agents"
+text = "Create versioned virtual helpers from the CLI, run a fresh worker for each request, and retrieve one durable result through the CLI or a return to the calling MCP thread."

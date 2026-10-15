@@ -1,5 +1,5 @@
 import * as ThreadResumeRpc from "./orchestration-v2/threadResumeRpcHandlers.ts";
-import { makeSubheadRegistryRpc } from "./forkThreads/SubheadRegistryRpc.ts";
+import { makeSubheadApi } from "./forkThreads/SubheadApi.ts";
 import * as HarnessPinRpc from "./harness/rpcHandlers.ts";
 import { RoutineKindService } from "./harness/RoutineKindService.ts";
 import { HarnessReadService } from "./harness/HarnessReadService.ts";
@@ -1256,7 +1256,7 @@ const layerWsRpc = (
   Layer.effectContext(
     Effect.gen(function* () {
       const namedAgents = yield* makeNamedAgents;
-      const subheads = yield* makeSubheadRegistryRpc;
+      const subheads = yield* makeSubheadApi;
       const automations = yield* AutomationEngine.AutomationEngine;
       const currentSessionId = currentSession.sessionId;
       const sql = yield* SqlClient.SqlClient;
@@ -3270,7 +3270,7 @@ const layerWsRpc = (
       );
       const forwards = makeMessageForwardService(sql, threadManagement, handoffs.accept);
       const forkHandlers = WsForkRpcGroup.of({
-        "fork.subheads": (input) => subheads.handle(input),
+        "fork.subheads": (input) => subheads.handlePrincipal(currentSession.subject, input),
         [WS_METHODS.harnessRoutineKindSet]: (input) =>
           Effect.flatMap(RoutineKindService, (service) => service.set(input)),
         [WS_METHODS.harnessSnapshot]: (input) =>

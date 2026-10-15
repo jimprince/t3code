@@ -1,6 +1,6 @@
 import { DashboardSnapshot, DashboardSubscribeInput } from "./dashboard.ts";
 import { ThreadRecoveryRpcs } from "./threadRecovery.ts";
-import { SubheadRpc } from "./subheads.ts";
+import { SubheadRpc } from "./subheadRpc.ts";
 import { MessageForwardRpcs } from "./messageForward.ts";
 import { PlanPublicationInput, PlanPublicationResult } from "./planPublication.ts";
 import { GiteaTokenSetInput, GiteaTokenSetResult, GiteaTokenSetError } from "./giteaToken.ts";

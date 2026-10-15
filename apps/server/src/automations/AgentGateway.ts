@@ -28,6 +28,14 @@ import * as ApplicationEvents from "../persistence/OrchestrationEventStore.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import type { AutomationObservation } from "./events.ts";
 import { unboundRunOutcome } from "./runOutcome.ts";
+import { AutomationStore } from "./AutomationStore.ts";
+import { makeSubheadCapacity } from "../forkThreads/SubheadCapacity.ts";
+import { makeSubheadRegistryRpc } from "../forkThreads/SubheadRegistryRpc.ts";
+import { makeSubheadDelivery } from "../forkThreads/SubheadDelivery.ts";
+import { readMetadata, writeMetadata } from "../forkThreads/MetadataStore.ts";
+import { hasActiveWork } from "../forkThreads/ArchiveDeadlines.ts";
+import { hasLiveChildren } from "../forkThreads/WorkerLifecycleMetadata.ts";
+import * as Providers from "../provider/ProviderRegistry.ts";
 
 import * as ProjectIssuesService from "../projectIssues/ProjectIssuesService.ts";
 /** Why the engine should look again. */
@@ -51,6 +59,7 @@ export class AgentGateway extends Context.Service<
       run: AutomationRun,
       step: AutomationRunStep,
     ) => Effect.Effect<AutomationRunStep>;
+    readonly sweepSubheads: Effect.Effect<{ pending: boolean; watched: ReadonlyArray<ThreadId> }>;
     /** Orchestration changes that may move a watched run or legacy record. */
     readonly wakeups: (
       watched: () => ReadonlySet<string>,
@@ -82,6 +91,11 @@ const make = Effect.gen(function* () {
   const settingsService = yield* ServerSettings.ServerSettingsService;
   const applicationEvents = yield* ApplicationEvents.OrchestrationEventStore;
   const projectIssues = yield* ProjectIssuesService.make;
+  const store = yield* AutomationStore;
+  const capacity = yield* makeSubheadCapacity;
+  const virtualRegistry = yield* makeSubheadRegistryRpc;
+  const providers = yield* Providers.ProviderRegistry;
+  const returns = yield* makeSubheadDelivery(providers.getProviders);
   const nowIso = DateTime.now.pipe(Effect.map(DateTime.formatIso));
   const readProjection = (threadId: ThreadId) =>
     threads
@@ -98,6 +112,7 @@ const make = Effect.gen(function* () {
     step: AutomationRunStep,
   ) {
     const now = yield* nowIso;
+    const virtual = run.virtualSubhead;
     const finish = (status: "completed" | "failed", result: string): AutomationRunStep => ({
       ...step,
       status,
@@ -114,6 +129,27 @@ const make = Effect.gen(function* () {
     if (step.target.kind === "existing-thread" && shell === null)
       return finish("failed", "Target thread was deleted.");
     const projection = shell === null ? null : yield* readProjection(step.threadId);
+    if (
+      virtual?.leaseStartedAt &&
+      Date.parse(now) - Date.parse(virtual.leaseStartedAt) >= 30 * 60_000
+    ) {
+      if (virtual.terminationReason === null)
+        yield* store
+          .saveRun({
+            ...run,
+            virtualSubhead: { ...virtual, terminationReason: "Active timeout after 30 minutes." },
+          })
+          .pipe(Effect.orDie);
+      if (shell === null) return finish("failed", "Active timeout before launch completed.");
+      yield* threads
+        .interruptThread({
+          projectId: run.projectId,
+          threadId: step.threadId,
+          commandId: CommandId.make(`subhead:timeout:${run.id}`),
+          reason: "Subhead active timeout",
+        })
+        .pipe(Effect.orDie);
+    }
     const message = projection?.messages.find(
       (message) => message.id === step.messageId && message.role === "user",
     );
@@ -146,6 +182,41 @@ const make = Effect.gen(function* () {
             }
           : null,
       });
+      if (outcome && virtual) {
+        if (
+          (shell && hasActiveWork(shell)) ||
+          (yield* hasLiveChildren(sql, step.threadId, threads.getThreadShell).pipe(Effect.orDie))
+        )
+          return started;
+        const answers =
+          projection?.messages.filter(
+            (candidate) =>
+              candidate.role === "assistant" &&
+              candidate.runId === root?.id &&
+              candidate.nodeId === root?.rootNodeId,
+          ) ?? [];
+        if (answers.some((candidate) => candidate.streaming)) return started;
+        const answer = answers
+          .toSorted(
+            (a, b) => DateTime.toEpochMillis(a.updatedAt) - DateTime.toEpochMillis(b.updatedAt),
+          )
+          .at(-1)
+          ?.text.trim();
+        const timedOut =
+          virtual.terminationReason !== null ||
+          (virtual.leaseStartedAt !== null &&
+            Date.parse(now) - Date.parse(virtual.leaseStartedAt) >= 30 * 60_000);
+        if (timedOut)
+          return finish(
+            "failed",
+            `Active timeout after 30 minutes.${answer ? `\n\n${answer}` : ""}`,
+          );
+        if (outcome.status === "completed")
+          return answer
+            ? finish("completed", answer)
+            : finish("failed", "Provider completed without a final assistant result.");
+        return finish("failed", `${outcome.result}${answer ? `\n\n${answer}` : ""}`);
+      }
       if (outcome) return finish(outcome.status, outcome.result);
       if (!root && message.runId === null && shell?.historyOrigin === "v1_import") {
         const legacy = yield* threads
@@ -177,6 +248,36 @@ const make = Effect.gen(function* () {
         ))
     )
       return step;
+    if (virtual) {
+      const validation = yield* virtualRegistry.validate(virtual.template).pipe(Effect.result);
+      const provider = (yield* providers.getProviders).find(
+        (item) => item.instanceId === virtual.template.modelSelection.instanceId,
+      );
+      const exhausted =
+        provider?.usageLimits?.windows.some(
+          (window) =>
+            window.usedPercent >= 100 &&
+            (!window.resetsAt || Date.parse(window.resetsAt) > Date.parse(now)),
+        ) ?? false;
+      const reason =
+        validation._tag === "Failure"
+          ? String(validation.failure)
+          : exhausted
+            ? "Pinned provider quota is exhausted."
+            : null;
+      if (reason !== null) {
+        const latest = yield* store.getRun(run.id).pipe(Effect.orDie);
+        if (Option.isSome(latest) && latest.value.virtualSubhead)
+          yield* store
+            .saveRun({
+              ...latest.value,
+              virtualSubhead: { ...latest.value.virtualSubhead, blockedReason: reason },
+            })
+            .pipe(Effect.orDie);
+        return step;
+      }
+      if (!(yield* capacity.reserve(run.id).pipe(Effect.orDie))) return step;
+    }
     const settings = resolveProjectSettings(
       yield* settingsService.getSettings.pipe(Effect.orDie),
       run.projectId,
@@ -189,6 +290,7 @@ const make = Effect.gen(function* () {
       ([, instance]) => instance.enabled,
     );
     const modelSelection =
+      virtual?.template.modelSelection ??
       settings.defaultModelSelection ??
       owner?.modelSelection ??
       (fallback
@@ -217,7 +319,7 @@ const make = Effect.gen(function* () {
             modelSelection: modelSelection!,
             createdBy: "system",
             creationSource: "server",
-            runtimeMode: settings.defaultRuntimeMode,
+            runtimeMode: virtual?.template.runtimeMode ?? settings.defaultRuntimeMode,
             interactionMode: "default",
             branch: null,
             worktreePath: null,
@@ -233,6 +335,17 @@ const make = Effect.gen(function* () {
           })
           .pipe(Effect.orDie);
       }
+      if (virtual) {
+        const metadata = yield* readMetadata(sql, step.threadId).pipe(Effect.orDie);
+        if (metadata?.virtualRunId === undefined)
+          yield* writeMetadata(sql, {
+            ...metadata,
+            threadId: step.threadId,
+            parentThreadId: run.ownerThreadId ?? null,
+            virtualAgentId: virtual.agentId,
+            virtualRunId: run.id,
+          }).pipe(Effect.orDie);
+      }
       yield* launch
         .launch({
           commandId,
@@ -241,12 +354,15 @@ const make = Effect.gen(function* () {
           title: step.title,
           generateTitle: false,
           reuseExistingThread: true,
-          modelSelection: shell?.modelSelection ?? modelSelection!,
+          modelSelection:
+            virtual?.template.modelSelection ?? shell?.modelSelection ?? modelSelection!,
           createdBy: "system",
           creationSource: "server",
-          runtimeMode: shell?.runtimeMode ?? settings.defaultRuntimeMode,
+          runtimeMode:
+            virtual?.template.runtimeMode ?? shell?.runtimeMode ?? settings.defaultRuntimeMode,
           interactionMode: shell?.interactionMode ?? "default",
-          workspaceStrategy: { type: "root" },
+          workspaceStrategy: virtual?.template.workspaceStrategy ?? { type: "root" },
+          ...(virtual ? { creatorThreadId: virtual.template.ownerThreadId } : {}),
           initialMessage: { messageId: step.messageId, text: step.prompt, attachments: [] },
         })
         .pipe(Effect.orDie);
@@ -385,7 +501,31 @@ const make = Effect.gen(function* () {
     ),
     Effect.orDie,
   );
+  const sweepSubheads = Effect.gen(function* () {
+    const result = yield* returns.sweep.pipe(Effect.orDie);
+    for (const threadId of yield* capacity.queuedPeers.pipe(Effect.orDie)) {
+      if (!(yield* capacity.canStart(threadId).pipe(Effect.orDie))) continue;
+      const records = yield* threads.getThreadRecords(threadId, ["runs"]).pipe(Effect.orDie);
+      const next = records.runs.find(
+        (candidate) => candidate.status === "queued" && candidate.queueHeld !== true,
+      );
+      if (next)
+        yield* threads
+          .dispatch({
+            type: "queue.resume",
+            commandId: CommandId.make(`subhead:capacity:resume:${next.id}`),
+            threadId,
+          })
+          .pipe(
+            Effect.catch((cause) =>
+              Effect.logDebug("Shared head queue resume deferred", { threadId, cause }),
+            ),
+          );
+    }
+    return result;
+  });
   return AgentGateway.of({
+    sweepSubheads,
     projectExists,
     threadInProject,
     advance,

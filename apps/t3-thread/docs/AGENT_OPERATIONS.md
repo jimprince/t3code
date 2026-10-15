@@ -267,6 +267,69 @@ reports `"started": true`. Handover is atomic and refused while the agent is
 busy. Before touching a resource another agent may own, check `t3-thread agents`
 and send to its owner instead of acting.
 
+## Virtual subheads
+
+A virtual subhead is a reusable named template. Each request gets a fresh run thread
+nested under the owning head, with the admitted template version frozen in its
+automation run. It has no standing provider session and never rewrites AGENT.md or
+BRIEFING.md. Several virtual names may use one execution project. Names are unique
+across standing agents and virtual helpers; retirement keeps the name reserved.
+
+Create a disabled template from an app-owned JSON snapshot, validate it by enabling
+it explicitly, then send a bounded request:
+
+```bash
+t3-thread subhead create --env dev-vm --file helper.json
+t3-thread subhead enable review --env dev-vm
+t3-thread subhead send review "Review the change" --env dev-vm --request-id review-123
+t3-thread subhead status <run-id> --env dev-vm
+t3-thread subhead result <run-id> --env dev-vm
+```
+
+The template supplies `name`, `projectId`, `ownerThreadId`, `description`, `prompt`,
+`modelSelection` (`instanceId`, `model`, optional provider options), `runtimeMode`
+and `concurrency` (normally 1). The prompt is stored by value. Unsupported
+properties, including prompt-only tool allowlists, are rejected. Restricted
+permissions require a provider with verified sandbox/approval enforcement.
+
+Use `subhead list [--all]`, `show NAME`, `edit NAME --file helper.json
+--expected-version N`, `disable NAME` and `retire NAME`, each with `--env`.
+Edits create revisions and reject stale expected versions. Disabling prevents new
+admissions and pauses queued work; active work finishes. Retired names stay
+inspectable with `--all` and cannot be enabled accidentally.
+
+Persist the request ID before retrying. The same environment, authenticated sender,
+helper and request ID resolve to the original run and execution IDs. Changing the
+request under that key is a conflict. A generated request ID is returned in the
+receipt, but a caller that loses its first response should already have saved one.
+
+CLI/script calls authenticate as the paired principal and use **pull-only results**.
+They do not claim to be a thread. Thread-return mode uses native MCP `subhead_send`
+with the authenticated thread-scoped credential; `subhead_status` and
+`subhead_result` read the same durable run. The CLI never reads injected MCP tokens
+and accepts no `--return-thread` identity override. A shell `T3_THREAD_ID` or sender
+header is not authentication.
+
+Thread calls return one structured result to the authenticated sender. Stable
+delivery IDs prevent duplicate result messages after retries or restarts. A settled
+recipient holds its delivery; an inaccessible recipient remains visibly undelivered.
+There is no implicit return to the owning head, Brad, or another environment.
+Normal run-completion wakes are suppressed for this result; approvals, errors and
+required input retain their escalation paths. Do not send a second completion yourself.
+
+The conservative limits are 1 concurrent run per helper (maximum 2), 2 concurrent
+worker turns per owning head shared with ordinary workers, 10 queued requests per
+helper, 3 admissions per sender per 10 minutes, 20 runs per helper per day and a
+30-minute active timeout. A disabled helper, capacity or provider quota can hold a
+queue. Timeouts retain capacity until native termination is observed. A run is
+settled after its result is captured only when no approval, background work or
+unfinished child remains.
+
+A virtual run cannot invoke another subhead through authenticated thread calls.
+This is an application policy, not a guarantee against unrestricted shell access
+to another principal's credentials. Slice 1 provides no thread-scoped operator
+credential, cross-environment execution, recursive calls or spend ceiling.
+
 ## Common Lifecycle Tasks
 
 List saved agents:

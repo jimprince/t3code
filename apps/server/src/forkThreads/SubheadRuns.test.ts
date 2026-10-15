@@ -1,0 +1,126 @@
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { it } from "@effect/vitest";
+import { ProjectId, ThreadId, ProviderInstanceId } from "@t3tools/contracts";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as FileSystem from "effect/FileSystem";
+import { expect } from "vite-plus/test";
+import { layerMemory, layerFromPath } from "../persistence/Sqlite.ts";
+import { layer as storeLayer, AutomationStore } from "../automations/AutomationStore.ts";
+import { makeSubheadRegistry } from "./SubheadRegistry.ts";
+import { makeSubheadRuns } from "./SubheadRuns.ts";
+
+const template = {
+  name: "review",
+  projectId: ProjectId.make("project"),
+  ownerThreadId: ThreadId.make("head"),
+  description: "Reviews changes",
+  prompt: "Review the request.",
+  modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-6.1-sol" },
+  runtimeMode: "approval-required" as const,
+  concurrency: 1,
+};
+const caller = {
+  environmentId: "environment",
+  principal: "script:fixture",
+  threadId: null,
+  runtimeMode: "full-access" as const,
+};
+const input = { name: "review", requestId: "retry", request: "Check this change" };
+const database = storeLayer.pipe(Layer.provideMerge(layerMemory));
+
+it.layer(NodeServices.layer)("subhead run admission", (it) => {
+  it.effect(
+    "reopens a real SQLite file and returns the original run and execution identities",
+    () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const folder = yield* fs.makeTempDirectoryScoped({ prefix: "subhead-restart-" });
+        const persisted = storeLayer.pipe(
+          Layer.provideMerge(layerFromPath(`${folder}/state.sqlite`)),
+        );
+        const first = yield* Effect.gen(function* () {
+          const registry = yield* makeSubheadRegistry;
+          yield* registry.create(template);
+          yield* registry.setState("review", "enable");
+          return yield* (yield* makeSubheadRuns).send(caller, input);
+        }).pipe(Effect.provide(persisted));
+        const retry = yield* Effect.gen(function* () {
+          const service = yield* makeSubheadRuns;
+          return yield* service.send(caller, input);
+        }).pipe(Effect.provide(persisted));
+        expect(retry).toEqual(first);
+      }),
+  );
+  it.effect(
+    "concurrent retries persist one frozen AutomationRun and conflicting text rejects",
+    () =>
+      Effect.gen(function* () {
+        const registry = yield* makeSubheadRegistry;
+        yield* registry.create(template);
+        yield* registry.setState("review", "enable");
+        const service = yield* makeSubheadRuns;
+        const [a, b] = yield* Effect.all(
+          [service.send(caller, input), service.send(caller, input)],
+          { concurrency: "unbounded" },
+        );
+        expect(a.id).toBe(b.id);
+        expect(a.steps[0]?.threadId).toBe(b.steps[0]?.threadId);
+        expect(yield* (yield* AutomationStore).listRuns({ limit: 100 })).toHaveLength(1);
+        yield* registry.edit("review", { ...template, prompt: "Changed" }, 1);
+        const retry = yield* service.send(caller, input);
+        expect(retry.virtualSubhead?.template.prompt).toBe(template.prompt);
+        expect(
+          yield* service.send(caller, { ...input, request: "Different" }).pipe(Effect.flip),
+        ).toMatchObject({ message: expect.stringContaining("conflict") });
+      }).pipe(Effect.provide(database)),
+  );
+  it.effect(
+    "disabled helpers reject new sends, retries survive disabling, and run callers cannot recurse",
+    () =>
+      Effect.gen(function* () {
+        const registry = yield* makeSubheadRegistry;
+        yield* registry.create(template);
+        const service = yield* makeSubheadRuns;
+        expect(yield* service.send(caller, input).pipe(Effect.flip)).toMatchObject({
+          message: expect.stringContaining("disabled"),
+        });
+        yield* registry.setState("review", "enable");
+        const run = yield* service.send(caller, input);
+        expect(
+          yield* service
+            .send(
+              { ...caller, threadId: run.steps[0]!.threadId },
+              { ...input, requestId: "recursive" },
+            )
+            .pipe(Effect.flip),
+        ).toMatchObject({ message: expect.stringContaining("recursion") });
+        yield* registry.setState("review", "disable");
+        expect((yield* service.send(caller, input)).id).toBe(run.id);
+        expect(
+          yield* service.send(caller, { ...input, requestId: "new" }).pipe(Effect.flip),
+        ).toMatchObject({ message: expect.stringContaining("disabled") });
+      }).pipe(Effect.provide(database)),
+  );
+  it.effect(
+    "enforces admission rate and caller permission ceilings without losing admitted rows",
+    () =>
+      Effect.gen(function* () {
+        const registry = yield* makeSubheadRegistry;
+        yield* registry.create({ ...template, runtimeMode: "full-access" });
+        yield* registry.setState("review", "enable");
+        const service = yield* makeSubheadRuns;
+        expect(
+          yield* service
+            .send({ ...caller, runtimeMode: "approval-required" }, input)
+            .pipe(Effect.flip),
+        ).toMatchObject({ message: expect.stringContaining("permission") });
+        for (let index = 0; index < 3; index++)
+          yield* service.send(caller, { ...input, requestId: `rate-${index}` });
+        expect(
+          yield* service.send(caller, { ...input, requestId: "rate-4" }).pipe(Effect.flip),
+        ).toMatchObject({ message: expect.stringContaining("rate") });
+        expect(yield* (yield* AutomationStore).listRuns({ limit: 100 })).toHaveLength(3);
+      }).pipe(Effect.provide(database)),
+  );
+});

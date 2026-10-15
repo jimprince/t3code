@@ -3,9 +3,7 @@ import { IsoDateTime, ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseS
 import { NamedAgentName } from "./namedAgents.ts";
 import { ModelSelection } from "./modelSelection.ts";
 import { RuntimeMode } from "./providerPolicy.ts";
-import * as Rpc from "effect/rpc/Rpc";
-import { EnvironmentAuthorizationError } from "./auth.ts";
-import { NamedAgentError } from "./namedAgents.ts";
+import { OrchestrationV2ThreadLaunchWorkspaceStrategy } from "./orchestrationV2.ts";
 
 /** App-owned snapshots. Edits never change an admitted run's template. */
 export const SubheadTemplate = Schema.Struct({
@@ -16,6 +14,7 @@ export const SubheadTemplate = Schema.Struct({
   prompt: TrimmedNonEmptyString.check(Schema.isMaxLength(100_000)),
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
+  workspaceStrategy: Schema.optionalKey(OrchestrationV2ThreadLaunchWorkspaceStrategy),
   concurrency: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 2 })),
 });
 export type SubheadTemplate = typeof SubheadTemplate.Type;
@@ -28,8 +27,40 @@ export const Subhead = Schema.Struct({
   retiredAt: Schema.NullOr(IsoDateTime),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
+  createdBy: Schema.optionalKey(Schema.String),
+  updatedBy: Schema.optionalKey(Schema.String),
 });
 export type Subhead = typeof Subhead.Type;
+
+/** Stored on AutomationRun, never a second execution ledger. */
+export const VirtualSubheadRun = Schema.Struct({
+  agentId: TrimmedNonEmptyString,
+  environmentId: TrimmedNonEmptyString,
+  template: Subhead,
+  templateHash: TrimmedNonEmptyString,
+  senderPrincipal: TrimmedNonEmptyString,
+  senderThreadId: Schema.NullOr(ThreadId),
+  requestId: TrimmedNonEmptyString,
+  request: Schema.String,
+  requestHash: TrimmedNonEmptyString,
+  blockedReason: Schema.NullOr(Schema.String),
+  leaseStartedAt: Schema.NullOr(IsoDateTime),
+  terminationReason: Schema.NullOr(Schema.String),
+  delivery: Schema.Struct({
+    id: TrimmedNonEmptyString,
+    status: Schema.Literals(["pending", "pull-only", "held", "undelivered", "delivered"]),
+    messageId: Schema.NullOr(Schema.String),
+    attempts: Schema.Int,
+    error: Schema.NullOr(Schema.String),
+  }),
+});
+export type VirtualSubheadRun = typeof VirtualSubheadRun.Type;
+export const SubheadSendInput = Schema.Struct({
+  name: NamedAgentName,
+  requestId: TrimmedNonEmptyString.check(Schema.isMaxLength(200)),
+  request: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(100_000)),
+});
+export type SubheadSendInput = typeof SubheadSendInput.Type;
 
 export const SubheadRegistryInput = Schema.Union([
   Schema.Struct({ operation: Schema.Literal("list"), all: Schema.Boolean }),
@@ -52,8 +83,3 @@ export const SubheadRegistryResult = Schema.Union([
   Subhead,
   Schema.Struct({ agents: Schema.Array(Subhead) }),
 ]);
-export const SubheadRpc = Rpc.make("fork.subheads", {
-  payload: SubheadRegistryInput,
-  success: SubheadRegistryResult,
-  error: Schema.Union([NamedAgentError, EnvironmentAuthorizationError]),
-});
