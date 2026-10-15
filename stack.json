@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "905eb09e63de3bb8261b1924c59fe92c0cd0a432",
-  "head": "e41392c1904bcc6fc8e549916351a5574013ff75",
+  "prev": "ccbfa653dbdca910cbbcfed15840cc35712e3a1b",
+  "head": "00f464cafd799d17634ec632b99c6e48e90d7924",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -166,7 +166,9 @@
     "fork-pr-watch-recovery",
     "fork-shell-snapshot-cache",
     "fork-sqlite-worker-connections",
-    "fork-agent-message-style",
+    "fork-agent-message-style"
+  ],
+  "unapplied": [
     "fork-no-change-suppress",
     "fork-dashboard-v3-01-plan-widget",
     "fork-dashboard-v3-02-subprojects-table",
@@ -193,7 +195,6 @@
     "fork-dashboard-v3-19-tracker-plan",
     "fork-dashboard-v3-20-order-ui"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
