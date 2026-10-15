@@ -11,6 +11,7 @@ import { use, useCallback, useEffect, useMemo, useRef, useState, type ReactNode 
 import { readProjects, readThreadShells } from "../../state/entities";
 import { useDashboardData } from "../../state/dashboard";
 import { useSupervisionMetadata } from "../../state/forkSupervision";
+import { resolveThreadLinkTarget } from "../../state/threadLinks";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { Sheet, SheetPopup } from "../ui/sheet";
 import { OpenTaskContext } from "../orchestrators/TaskLink";
@@ -214,11 +215,13 @@ export function DashboardView({
       const summary = issue ? summaryFor(target) : null;
       if (issue && summary) return setSheet({ summary, ref: issue });
       if (task.url) return void window.open(task.url, "_blank", "noopener,noreferrer");
-      if (task.threadId)
+      if (task.threadId) {
+        const thread = resolveThreadLinkTarget(target.environmentId, task.threadId);
         void navigate({
           to: "/$environmentId/$threadId",
-          params: buildThreadRouteParams(scopeThreadRef(target.environmentId, task.threadId)),
+          params: buildThreadRouteParams(scopeThreadRef(thread.environmentId, thread.threadId)),
         });
+      }
     },
     [navigate, openTaskInPage, summaryFor],
   );

@@ -4,13 +4,20 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-const state = vi.hoisted(() => ({ data: null as unknown }));
+const state = vi.hoisted(() => ({ data: null as unknown, navigate: vi.fn() }));
 
 // The data and router boundaries are replaced; DashboardView, VariantA, the plan rows and the chrome
 // all run as shipped.
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
-  useNavigate: () => vi.fn(),
+  useNavigate: () => state.navigate,
+}));
+// A thread of this project that lives on the other connected machine.
+vi.mock("../../state/threadLinks", () => ({
+  resolveThreadLinkTarget: (environmentId: string, threadId: string) => ({
+    environmentId: threadId === "remote-thread" ? "env-2" : environmentId,
+    threadId,
+  }),
 }));
 vi.mock("../../state/dashboard", () => ({
   useDashboardData: () => ({
@@ -27,13 +34,15 @@ vi.mock("../../state/entities", () => ({
   readThreadShells: () => [],
   useProjects: () => [],
   useServerConfigs: () => new Map(),
+  useThreadShell: () => null,
 }));
 vi.mock("../../state/environments", () => ({ useEnvironments: () => ({ environments: [] }) }));
 vi.mock("../../state/forkSupervision", () => ({ useSupervisionMetadata: () => [] }));
 vi.mock("../orchestrators/useOrchestratorThreads", () => ({
   useOrchestratorThreadShells: () => [],
 }));
-vi.mock("./useDecisionAnswers", () => ({
+vi.mock("./useDecisionAnswers", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./useDecisionAnswers")>()),
   useDecisionAnswers: () => ({
     records: new Map(),
     stateOf: () => null,
@@ -114,6 +123,7 @@ const taskTitle = (text: string) =>
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   window.localStorage.clear();
+  state.navigate.mockReset();
   state.data = snapshot([task("issue:git/o/r#1", LONG_TITLE)]);
   container = document.createElement("div");
   document.body.append(container);
@@ -170,5 +180,56 @@ describe("a long plan title", () => {
     await render(HOME);
     const row = taskTitle(LONG_TITLE)!.parentElement!;
     expect(row.className).toContain("minmax(120px,1fr)_96px_minmax(110px,auto)");
+  });
+});
+
+describe("opening a thread from the Dashboard goes to the machine that holds it (#363)", () => {
+  const remote = () => {
+    const base = snapshot([{ ...task("local:t1", "Fix the remote worker"), threadId: ThreadId.make("remote-thread") }]);
+    return base;
+  };
+
+  it("opens a task's linked thread in its own environment, not the project's", async () => {
+    state.data = remote();
+    await render(PROJECT);
+    await act(() => taskTitle("Fix the remote worker")!.click());
+    expect(state.navigate).toHaveBeenCalledOnce();
+    expect(state.navigate.mock.calls[0]![0].params).toMatchObject({
+      environmentId: "env-2",
+      threadId: "remote-thread",
+    });
+  });
+
+  it("opens a decision's waiting thread in its own environment, not the project's", async () => {
+    const data = remote() as { projects: Array<{ project: { attention: unknown[] } }> };
+    data.projects[0]!.project.attention = [
+      {
+        id: "a1",
+        taskId: "thread:remote-thread",
+        requestId: "req-1",
+        blockingTaskIds: [],
+        title: "Which head owns it?",
+        kind: "question",
+        canRespond: false,
+        options: [],
+        priority: 1,
+        url: null,
+        threadId: "remote-thread",
+        updatedAt: "2026-10-14T12:00:00.000Z",
+        deadline: null,
+        question: "Which head should own the dashboard?",
+        sourceId: "local",
+      },
+    ];
+    state.data = data;
+    await render(PROJECT);
+    const open = [...(section("decisions")?.querySelectorAll("button") ?? [])].find(
+      (button) => button.textContent === "Open",
+    );
+    await act(() => open!.click());
+    expect(state.navigate.mock.calls.at(-1)![0].params).toMatchObject({
+      environmentId: "env-2",
+      threadId: "remote-thread",
+    });
   });
 });

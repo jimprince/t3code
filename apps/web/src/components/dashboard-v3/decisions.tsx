@@ -2,6 +2,7 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { useNavigate } from "@tanstack/react-router";
 import { CheckIcon } from "lucide-react";
 
+import { resolveThreadLinkTarget } from "../../state/threadLinks";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { Button, InlineButton } from "../ui/button";
 import { Dialog, DialogHeader, DialogPopup, DialogTitle } from "../ui/dialog";
@@ -52,11 +53,13 @@ function useOpenDecisionSource() {
       return;
     }
     const threadId = row.attention.threadId;
-    if (threadId)
+    if (threadId) {
+      const target = resolveThreadLinkTarget(row.scoped.environmentId, threadId);
       void navigate({
         to: "/$environmentId/$threadId",
-        params: buildThreadRouteParams(scopeThreadRef(row.scoped.environmentId, threadId)),
+        params: buildThreadRouteParams(scopeThreadRef(target.environmentId, target.threadId)),
       });
+    }
   };
 }
 
