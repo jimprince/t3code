@@ -72,9 +72,10 @@ function epicOptions(scoped: ScopedProject) {
  * The one-line request box: Task, Bug or Epic, the workstream, then the words. Enter files the
  * item last in its workstream, Cmd or Ctrl with Enter files it next. The issue exists in the
  * tracker before the owner is told, and the result is the notice line under the box. Pasted or
- * dropped images are uploaded as the old box did and filed with the item. Focusing the empty line
- * shows the quick starters, "Save for later" parks the words in the Roadmap without filing, and on
- * Home the picker's Chief of Staff choice sends the old box's message to the desk.
+ * dropped images are uploaded as the old box did and filed with the item. The empty line stays one
+ * line at any width; focusing it shows the key hints and the quick starters. "Save for later"
+ * parks the words in the Roadmap without filing, and on Home the picker's Chief of Staff choice
+ * sends the old box's message to the desk.
  */
 export function RequestLine({
   projectHead,
@@ -195,7 +196,7 @@ export function RequestLine({
       <select
         aria-label="Project"
         value={toChief ? CHIEF : (target?.key ?? "")}
-        className="max-w-44 shrink-0 bg-transparent text-xs text-muted-foreground"
+        className="max-w-32 min-w-0 bg-transparent text-xs text-muted-foreground"
         onChange={(event) => {
           const value = event.target.value;
           const next = targets.find((scoped) => scoped.key === value) ?? null;
@@ -390,7 +391,8 @@ export function RequestLine({
     ui.report({ tone: "ok", text: "Saved for later.", actions: [] });
   };
 
-  const hint = nextKeyHint(typeof navigator === "undefined" ? "" : navigator.platform);
+  // Too long for the collapsed line: shown in the row under the line while it has focus.
+  const keys = `Enter files it last, ${nextKeyHint(typeof navigator === "undefined" ? "" : navigator.platform)} files it next`;
   const empty = text.length === 0 && images.length === 0;
   return (
     <div
@@ -425,7 +427,7 @@ export function RequestLine({
               type="button"
               aria-pressed={kind === option.kind}
               className={cn(
-                "px-2 py-px text-muted-foreground",
+                "px-1.5 py-px text-muted-foreground",
                 kind === option.kind &&
                   (option.kind === "bug"
                     ? "bg-card text-destructive-foreground"
@@ -447,8 +449,12 @@ export function RequestLine({
           value={text}
           // Read-only, not disabled: a disabled field drops focus, and the next filing starts typing.
           readOnly={busy}
-          placeholder={`New request. Enter files it last, ${hint} files it next`}
-          className="field-sizing-content max-h-40 min-h-6 min-w-0 flex-1 resize-none bg-transparent px-1 py-0.5 outline-none placeholder:text-muted-foreground/70"
+          placeholder="New request"
+          // The empty line is one line at any width; typed words may wrap.
+          className={cn(
+            "field-sizing-content max-h-40 min-h-6 min-w-16 flex-1 resize-none bg-transparent px-1 py-0.5 outline-none placeholder:text-muted-foreground/70",
+            empty && "overflow-hidden whitespace-nowrap",
+          )}
           onChange={(event) => change(event.target.value)}
           onPaste={(event: ClipboardEvent) => {
             const files = imageFiles(event.clipboardData.files);
@@ -475,7 +481,7 @@ export function RequestLine({
           <select
             aria-label="Workstream"
             value={epic ?? ""}
-            className="max-w-52 shrink-0 bg-transparent text-xs text-muted-foreground"
+            className="max-w-32 min-w-0 bg-transparent text-xs text-muted-foreground"
             onChange={(event) =>
               setPickedEpic({
                 project: target.key,
@@ -536,22 +542,25 @@ export function RequestLine({
           ))}
         </ul>
       ) : null}
-      {focused && empty ? (
-        <div className="flex flex-wrap gap-1.5">
-          {REQUEST_QUICK_ACTIONS.map((action) => (
-            <Button
-              key={action.label}
-              size="xs"
-              variant="outline"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => {
-                caretToEnd.current = true;
-                change(action.text);
-              }}
-            >
-              {action.label}
-            </Button>
-          ))}
+      {focused ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {empty
+            ? REQUEST_QUICK_ACTIONS.map((action) => (
+                <Button
+                  key={action.label}
+                  size="xs"
+                  variant="outline"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    caretToEnd.current = true;
+                    change(action.text);
+                  }}
+                >
+                  {action.label}
+                </Button>
+              ))
+            : null}
+          <span className="text-xs text-muted-foreground">{keys}</span>
         </div>
       ) : null}
     </div>

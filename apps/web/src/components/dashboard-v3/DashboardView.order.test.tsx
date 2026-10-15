@@ -549,6 +549,20 @@ describe("images on the request line", () => {
 });
 
 describe("the request line keeps what the old box had", () => {
+  it("keeps the collapsed line short and shows the key hints on focus", async () => {
+    await show();
+    // The long placeholder wrapped to two lines beside the chat panel; the hints wait for focus.
+    expect(field().placeholder).toBe("New request");
+    expect(text()).not.toContain("files it last");
+    await act(async () => field().focus());
+    expect(text()).toContain("Enter files it last,");
+    expect(text()).toContain("files it next");
+    // Typing folds the starters away but the hints stay for the typed line.
+    await type("Typed words");
+    expect(text()).not.toContain("Bug report");
+    expect(text()).toContain("files it last");
+  });
+
   it("shows the starters on focus and puts one in the line", async () => {
     await show();
     expect(text()).not.toContain("Bug report");
