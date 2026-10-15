@@ -11,12 +11,14 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "build (+ auto-submit to TestFlight / Google Play) or update (OTA)"
+        description: "Build (+ auto-submit), view, submit an existing iOS build, or update (OTA)"
         required: true
         type: choice
         default: build
         options:
           - build
+          - view
+          - submit
           - update
       profile:
         description: "Store build profile (v2-preview: TestFlight + Play closed track v2; build only)"
@@ -35,6 +37,10 @@ on:
           - ios
           - android
           - all
+      build_id:
+        description: "Existing EAS build ID (required for view/submit)"
+        required: false
+        type: string
       version:
         description: "Optional build version override (blank uses app.config.ts; an override is committed before building)"
         required: false
@@ -203,6 +209,59 @@ jobs:
             echo
             echo "> Apple closes an iOS release train after App Store approval. Before building iOS, confirm \`$version\` is newer than the approved App Store version."
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: View existing iOS build
+        if: steps.expo-token.outputs.present == 'true' && inputs.mode == 'view'
+        working-directory: apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EAS_BUILD_ID: ${{ inputs.build_id }}
+        run: |
+          test -n "$EAS_BUILD_ID" || { echo "::error::build_id is required"; exit 1; }
+          eas build:view "$EAS_BUILD_ID" --json
+          eas build:list --platform ios --limit 3 --json --non-interactive
+
+      - name: Prepare App Store Connect key
+        if: steps.expo-token.outputs.present == 'true' && inputs.mode == 'submit'
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          EXPO_ASC_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          EXPO_ASC_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER }}
+          EAS_BUILD_ID: ${{ inputs.build_id }}
+        run: |
+          test -n "$EAS_BUILD_ID" || { echo "::error::build_id is required"; exit 1; }
+          test -n "$APPLE_API_KEY" && test -n "$EXPO_ASC_KEY_ID" && test -n "$EXPO_ASC_ISSUER_ID" || { echo "::error::App Store Connect key secrets are required"; exit 1; }
+          umask 077
+          key_path="$RUNNER_TEMP/ios-submit.p8"
+          printf '%s' "$APPLE_API_KEY" > "$key_path"
+          chmod 600 "$key_path"
+          echo "EXPO_ASC_API_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+
+      - name: Submit existing iOS build
+        if: steps.expo-token.outputs.present == 'true' && inputs.mode == 'submit'
+        working-directory: apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_ASC_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          EXPO_ASC_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER }}
+          EAS_BUILD_ID: ${{ inputs.build_id }}
+        run: |
+          # EAS Submit resolves local keys from the submit profile, not build-auth env.
+          node <<'NODE'
+          const fs = require('node:fs');
+          const config = JSON.parse(fs.readFileSync('eas.json', 'utf8'));
+          Object.assign(config.submit.production.ios, {
+            ascApiKeyPath: process.env.EXPO_ASC_API_KEY_PATH,
+            ascApiKeyId: process.env.EXPO_ASC_KEY_ID,
+            ascApiKeyIssuerId: process.env.EXPO_ASC_ISSUER_ID,
+          });
+          fs.writeFileSync('eas.json', JSON.stringify(config, null, 2));
+          NODE
+          eas submit --platform ios --id "$EAS_BUILD_ID" --profile production --non-interactive
+
+      - name: Remove App Store Connect key
+        if: always() && inputs.mode == 'submit'
+        run: rm -f "$RUNNER_TEMP/ios-submit.p8"
 
       - name: Build and submit (manual)
         if: steps.expo-token.outputs.present == 'true' && github.event_name == 'workflow_dispatch' && inputs.mode == 'build'
