@@ -1,5 +1,6 @@
 import { NamedAgentError, ThreadId, type AutomationRun } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 import * as SqlClient from "effect/sql/SqlClient";
@@ -8,6 +9,13 @@ import { makeSubheadRegistry } from "./SubheadRegistry.ts";
 import { withOwnershipLock } from "./NamedAgentPolicy.ts";
 
 const registrySchemas = new WeakMap<SqlClient.SqlClient, boolean>();
+/** Only the app-owned handoff transport can supply this, never an RPC parameter. */
+export const SubheadResultAdmission = Context.Reference<ThreadId | null>(
+  "t3/SubheadResultAdmission",
+  {
+    defaultValue: () => null,
+  },
+);
 const hasRegistry = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
     let ready = registrySchemas.get(sql);
@@ -18,15 +26,24 @@ const hasRegistry = (sql: SqlClient.SqlClient) =>
       registrySchemas.set(sql, ready);
     }
     if (!ready) return false;
-    return (yield* sql`SELECT id FROM named_virtual_agents LIMIT 1`).length > 0;
+    return (
+      (yield* sql`SELECT id FROM named_virtual_agents WHERE json_extract(payload,'$.enabled')=1 AND json_extract(payload,'$.retiredAt') IS NULL UNION ALL SELECT run_id AS id FROM automation_runs WHERE status IN ('queued','running') AND json_type(run_json,'$.virtualSubhead')='object' LIMIT 1`)
+        .length > 0
+    );
   });
 
 /** Only heads that opted into virtual helpers acquire this shared worker ceiling. */
-const ancestorHeads = (sql: SqlClient.SqlClient, threadId: ThreadId) => sql<{ thread_id: string }>`
+const ancestorHeads = (
+  sql: SqlClient.SqlClient,
+  threadId: ThreadId,
+  includeInactive = false,
+) => sql<{ thread_id: string }>`
   WITH RECURSIVE ancestors(thread_id) AS (
     SELECT json_extract(payload,'$.parentThreadId') FROM fork_thread_metadata WHERE thread_id=${threadId}
     UNION SELECT json_extract(m.payload,'$.parentThreadId') FROM fork_thread_metadata m JOIN ancestors a ON m.thread_id=a.thread_id
-  ) SELECT DISTINCT a.thread_id FROM ancestors a JOIN named_virtual_agents n ON json_extract(n.payload,'$.ownerThreadId')=a.thread_id WHERE a.thread_id IS NOT NULL
+  ) SELECT DISTINCT a.thread_id FROM ancestors a WHERE a.thread_id IS NOT NULL AND (
+    EXISTS(SELECT 1 FROM named_virtual_agents n WHERE json_extract(n.payload,'$.ownerThreadId')=a.thread_id AND (${includeInactive ? 1 : 0}=1 OR (json_extract(n.payload,'$.enabled')=1 AND json_extract(n.payload,'$.retiredAt') IS NULL)))
+    OR EXISTS(SELECT 1 FROM automation_runs r WHERE r.status IN ('queued','running') AND json_type(r.run_json,'$.virtualSubhead')='object' AND json_extract(r.run_json,'$.ownerThreadId')=a.thread_id))
 `;
 
 /** Native work and pre-launch virtual leases are one set of execution threads, not two caps. */
@@ -46,6 +63,7 @@ const headHasRoom = (sql: SqlClient.SqlClient, head: ThreadId, except: ThreadId)
 /** Called under native ownership serialization at initial input and every queue promotion. */
 export const canStartSubheadWorker = (sql: SqlClient.SqlClient, threadId: ThreadId) =>
   Effect.gen(function* () {
+    if ((yield* SubheadResultAdmission) === threadId) return true;
     if (!(yield* hasRegistry(sql))) return true;
     for (const head of yield* ancestorHeads(sql, threadId)) {
       if (!(yield* headHasRoom(sql, ThreadId.make(head.thread_id), threadId))) return false;
@@ -56,14 +74,15 @@ export const canStartSubheadWorker = (sql: SqlClient.SqlClient, threadId: Thread
 /** Held queues remain a user decision. Only unheld queues of opted-in heads are candidates. */
 export const subheadCapacityQueueCandidates = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
-    if (!(yield* hasRegistry(sql))) return [] as ThreadId[];
+    yield* hasRegistry(sql);
+    if (registrySchemas.get(sql) !== true) return [] as ThreadId[];
     const rows = yield* sql<{
       thread_id: string;
     }>`SELECT DISTINCT r.thread_id FROM orchestration_v2_projection_runs r WHERE r.status='queued' AND COALESCE(json_extract(r.payload_json,'$.queueHeld'),0)=0 ORDER BY r.requested_at LIMIT 100`;
     const candidates: ThreadId[] = [];
     for (const row of rows) {
       const id = ThreadId.make(row.thread_id);
-      if ((yield* ancestorHeads(sql, id)).length > 0) candidates.push(id);
+      if ((yield* ancestorHeads(sql, id, true)).length > 0) candidates.push(id);
     }
     return candidates;
   });

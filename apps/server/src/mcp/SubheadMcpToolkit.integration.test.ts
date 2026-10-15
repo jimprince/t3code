@@ -114,7 +114,7 @@ it.layer(NodeServices.layer)("subhead MCP transport", (it) => {
         const b = receipt((yield* invoke("subhead_send", request)).structuredContent);
         expect(a.runId).toBe(b.runId);
         const store = yield* AutomationStore;
-        const runs = yield* store.listRuns({ limit: 100 });
+        const runs = yield* store.activeRuns;
         expect(runs).toHaveLength(1);
         expect(runs[0]?.virtualSubhead?.senderThreadId).toBe(caller);
         expect(runs[0]?.ownerThreadId).toBe(head);
@@ -136,7 +136,7 @@ it.layer(NodeServices.layer)("subhead MCP transport", (it) => {
         expect(
           (yield* invoke("subhead_send", { ...request, senderThreadId: "victim" })).isError,
         ).toBe(false);
-        const admitted = yield* (yield* AutomationStore).listRuns({ limit: 100 });
+        const admitted = yield* (yield* AutomationStore).activeRuns;
         expect(admitted).toHaveLength(1);
         expect(admitted[0]?.virtualSubhead?.senderThreadId).toBe(caller);
         expect(admitted[0]?.virtualSubhead?.senderPrincipal).toBe(`thread:${caller}`);
@@ -151,7 +151,7 @@ it.layer(NodeServices.layer)("subhead MCP transport", (it) => {
         yield* createSubheadTestThread(limited, "approval-required");
         yield* sendSubheadTestMessage(limited);
         expect((yield* invoke("subhead_send", request, scope(limited))).isError).toBe(true);
-        expect(yield* (yield* AutomationStore).listRuns({ limit: 100 })).toHaveLength(1);
+        expect(yield* (yield* AutomationStore).activeRuns).toHaveLength(1);
         expect((yield* invoke("subhead_send", request)).isError).toBe(false);
       }).pipe(Effect.provide(layer)),
   );
@@ -161,7 +161,7 @@ it.layer(NodeServices.layer)("subhead MCP transport", (it) => {
       const first = yield* invoke("subhead_send", request);
       expect(first.isError).toBe(false);
       const store = yield* AutomationStore;
-      const run = (yield* store.listRuns({ limit: 100 }))[0]!;
+      const run = (yield* store.activeRuns)[0]!;
       const execution = run.steps[0]!.threadId;
       yield* createSubheadTestThread(execution);
       yield* sendSubheadTestMessage(execution);
@@ -172,7 +172,7 @@ it.layer(NodeServices.layer)("subhead MCP transport", (it) => {
           scope(execution),
         )).isError,
       ).toBe(true);
-      expect(yield* store.listRuns({ limit: 100 })).toHaveLength(1);
+      expect(yield* store.activeRuns).toHaveLength(1);
     }).pipe(Effect.provide(layer)),
   );
   it.effect("denies an authenticated descendant of a virtual execution", () =>
@@ -185,6 +185,7 @@ it.layer(NodeServices.layer)("subhead MCP transport", (it) => {
       yield* sendSubheadTestMessage(child);
       yield* writeMetadata(yield* SqlClient.SqlClient, {
         threadId: run.steps[0]!.threadId,
+        parentThreadId: head,
         virtualRunId: run.id,
       });
       yield* writeMetadata(yield* SqlClient.SqlClient, {

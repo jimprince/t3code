@@ -33,8 +33,6 @@ import { makeSubheadCapacity } from "../forkThreads/SubheadCapacity.ts";
 import { makeSubheadRegistryRpc } from "../forkThreads/SubheadRegistryRpc.ts";
 import { makeSubheadDelivery } from "../forkThreads/SubheadDelivery.ts";
 import { readMetadata, writeMetadata } from "../forkThreads/MetadataStore.ts";
-import { hasActiveWork } from "../forkThreads/ArchiveDeadlines.ts";
-import { hasLiveChildren } from "../forkThreads/WorkerLifecycleMetadata.ts";
 import * as Providers from "../provider/ProviderRegistry.ts";
 
 import * as ProjectIssuesService from "../projectIssues/ProjectIssuesService.ts";
@@ -46,6 +44,8 @@ export type AutomationWakeup = "thread" | "legacy" | "project";
  * and its tables know nothing about V1 commands, events or projections; porting to another core
  * rewrites this file.
  */
+export const SUBHEAD_TIMEOUT_GRACE_MINUTES = 5;
+
 export class AgentGateway extends Context.Service<
   AgentGateway,
   {
@@ -117,6 +117,10 @@ const make = Effect.gen(function* () {
     const leaseExpired =
       virtual?.leaseStartedAt != null &&
       Date.parse(now) - Date.parse(virtual.leaseStartedAt) >= 30 * 60_000;
+    const graceExpired =
+      virtual?.leaseStartedAt != null &&
+      Date.parse(now) - Date.parse(virtual.leaseStartedAt) >=
+        (30 + SUBHEAD_TIMEOUT_GRACE_MINUTES) * 60_000;
     const finish = (status: "completed" | "failed", result: string): AutomationRunStep => ({
       ...step,
       status,
@@ -149,7 +153,11 @@ const make = Effect.gen(function* () {
           commandId: CommandId.make(`subhead:timeout:${run.id}`),
           reason: "Subhead active timeout",
         })
-        .pipe(Effect.orDie);
+        .pipe(
+          Effect.catch((cause) =>
+            Effect.logWarning("Subhead timeout interrupt deferred", { runId: run.id, cause }),
+          ),
+        );
     }
     const message = projection?.messages.find(
       (message) => message.id === step.messageId && message.role === "user",
@@ -178,12 +186,7 @@ const make = Effect.gen(function* () {
             }
           : null,
       });
-      if (outcome && virtual) {
-        if (
-          (shell && hasActiveWork(shell)) ||
-          (yield* hasLiveChildren(sql, step.threadId, threads.getThreadShell).pipe(Effect.orDie))
-        )
-          return started;
+      if (virtual && (outcome || graceExpired)) {
         const answerNodes = new Set(
           projection?.nodes
             .filter(
@@ -199,7 +202,7 @@ const make = Effect.gen(function* () {
               (candidate.nodeId === root?.rootNodeId ||
                 (candidate.nodeId !== null && answerNodes.has(candidate.nodeId))),
           ) ?? [];
-        if (answers.some((candidate) => candidate.streaming)) return started;
+        if (!graceExpired && answers.some((candidate) => candidate.streaming)) return started;
         const answer = answers
           .toSorted(
             (a, b) => DateTime.toEpochMillis(a.updatedAt) - DateTime.toEpochMillis(b.updatedAt),
@@ -212,11 +215,14 @@ const make = Effect.gen(function* () {
             "failed",
             `Active timeout after 30 minutes.${answer ? `\n\n${answer}` : ""}`,
           );
-        if (outcome.status === "completed")
+        if (outcome?.status === "completed")
           return answer
             ? finish("completed", answer)
             : finish("failed", "Provider completed without a final assistant result.");
-        return finish("failed", `${outcome.result}${answer ? `\n\n${answer}` : ""}`);
+        return finish(
+          "failed",
+          `${outcome?.result ?? "Timeout grace expired."}${answer ? `\n\n${answer}` : ""}`,
+        );
       }
       if (outcome) return finish(outcome.status, outcome.result);
       if (!root && message.runId === null && shell?.historyOrigin === "v1_import") {
@@ -228,6 +234,8 @@ const make = Effect.gen(function* () {
       }
       return started;
     }
+    if (graceExpired)
+      return finish("failed", "Active timeout after 30 minutes; termination grace expired.");
     if (step.status === "running")
       return finish(
         "failed",

@@ -152,7 +152,14 @@ it.layer(NodeServices.layer)("shared head capacity", (it) => {
       yield* registry.setState("review", "enable");
       const capacity = yield* makeSubheadCapacity;
       expect(yield* capacity.canStart(ThreadId.make("idle"))).toBe(false);
+      yield* sendSubheadTestMessage(ThreadId.make("idle"));
+      expect(
+        (yield* (yield* Threads.ThreadManagementService).getThreadRecords(ThreadId.make("idle"), [
+          "runs",
+        ])).runs[0]?.status,
+      ).toBe("queued");
       yield* registry.setState("review", "disable");
+      expect(yield* capacity.queuedPeers).toContain("idle");
       expect(yield* capacity.canStart(ThreadId.make("idle"))).toBe(true);
       yield* registry.setState("review", "retire");
       expect(yield* capacity.canStart(ThreadId.make("idle"))).toBe(true);

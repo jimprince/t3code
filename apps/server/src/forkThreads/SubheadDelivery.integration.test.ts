@@ -191,7 +191,26 @@ it.layer(NodeServices.layer)("durable virtual results", (it) => {
       const sql = yield* SqlClient.SqlClient;
       const registry = yield* makeSubheadRegistry;
       const run = completedRun();
-      yield* registry.create(run.virtualSubhead.template);
+      const {
+        name,
+        projectId: project,
+        ownerThreadId,
+        description,
+        prompt,
+        modelSelection: selected,
+        runtimeMode,
+        concurrency,
+      } = run.virtualSubhead.template;
+      yield* registry.create({
+        name,
+        projectId: project,
+        ownerThreadId,
+        description,
+        prompt,
+        modelSelection: selected,
+        runtimeMode,
+        concurrency,
+      });
       yield* registry.setState("review", "enable");
       yield* writeMetadata(sql, { threadId: sender, parentThreadId: run.ownerThreadId! });
       for (const id of ["busy-one", "busy-two"]) {
@@ -241,12 +260,13 @@ it.layer(NodeServices.layer)("durable virtual results", (it) => {
       const held = yield* delivery.deliver(run.id);
       expect(held.virtualSubhead?.delivery.status).toBe("held");
       expect(held.virtualSubhead?.delivery.error).toBe("QUOTA_EXHAUSTED");
+      expect((yield* delivery.deliver(run.id)).virtualSubhead?.delivery.attempts).toBe(1);
       blocked = false;
       const retry = {
         ...held,
         virtualSubhead: {
           ...held.virtualSubhead!,
-          delivery: { ...held.virtualSubhead!.delivery, nextAttemptAt: "2020-01-01T00:00:00.000Z" },
+          delivery: { ...held.virtualSubhead!.delivery, nextAttemptAt: "1960-01-01T00:00:00.000Z" },
         },
       };
       yield* store.saveRun(retry);
