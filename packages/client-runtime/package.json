@@ -335,6 +335,10 @@
       "types": "./src/state/terminal.ts",
       "default": "./src/state/terminal.ts"
     },
+    "./state/thread-link-resolution": {
+      "types": "./src/state/threadLinkResolution.ts",
+      "default": "./src/state/threadLinkResolution.ts"
+    },
     "./state/threads": {
       "types": "./src/state/threads.ts",
       "default": "./src/state/threads.ts"
