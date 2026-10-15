@@ -27,6 +27,8 @@ import * as TaskIssues from "../projectIssues/TaskIssueLaunchService.ts";
 import * as Settings from "../serverSettings.ts";
 import * as Events from "../persistence/OrchestrationEventStore.ts";
 import * as ProviderMock from "../provider/testUtils/providerRegistryMock.ts";
+import * as ServerConfig from "../config.ts";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import { makeSubheadRegistry } from "./SubheadRegistry.ts";
 import { makeSubheadRuns } from "./SubheadRuns.ts";
 import { readMetadata } from "./MetadataStore.ts";
@@ -75,6 +77,8 @@ it.layer(NodeServices.layer)("native virtual launch", (it) => {
           deletedAt: null,
         };
         const external = Layer.mergeAll(
+          FetchHttpClient.layer,
+          ServerConfig.layerTest(workspaceRoot, { prefix: "subhead-gateway-" }),
           Layer.mock(ProjectService.ProjectService)({
             getById: () => Effect.succeed(Option.some(project)),
           }),

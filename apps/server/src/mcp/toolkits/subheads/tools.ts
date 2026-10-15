@@ -13,7 +13,7 @@ import { ThreadManagementService } from "../../../orchestration-v2/ThreadManagem
 const dependencies = [SubheadMcpService, McpInvocationContext, ThreadManagementService];
 const send = Tool.make("subhead_send", {
   description:
-    "Invoke an enabled virtual helper by name. Persist clientRequestId before retrying: exact retries return the same run, conflicting content rejects. The app freezes the template, launches one fresh thread under its owning head and returns one durable result to this authenticated calling thread. Outside MCP clients use pull-only results. A virtual run cannot invoke another subhead. Parameters cannot override the authenticated sender or return destination. Read status/result using runId; do not send a second completion yourself.",
+    "Invoke an enabled virtual helper by name. Persist clientRequestId before retrying: exact retries return the same run, conflicting content rejects. The app freezes the template, launches one fresh thread under its owning head and returns one durable result to this authenticated calling thread. Outside MCP clients use pull-only results. Authenticated virtual-run thread calls cannot invoke another subhead; unrestricted shell access to another principal's credentials is outside this tool-level guarantee. Parameters cannot override the authenticated sender or return destination. Read status/result using runId; do not send a second completion yourself.",
   parameters: SubheadMcpSendInput,
   success: SubheadRunReceipt,
   failure: OrchestratorMcpFailure,

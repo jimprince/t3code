@@ -63,7 +63,11 @@ export const makeSubheadRegistryRpc = Effect.gen(function* () {
           message:
             "This model needs recorded administrator authorization; use an ordinary approved model for slice 1.",
         });
-    });
+    }).pipe(
+      Effect.mapError((cause) =>
+        Schema.is(NamedAgentError)(cause) ? cause : new NamedAgentError({ message: String(cause) }),
+      ),
+    );
   const handle = (input: SubheadRegistryInput, actor = "system") =>
     Effect.gen(function* () {
       switch (input.operation) {

@@ -124,26 +124,34 @@ it.layer(NodeServices.layer)("subhead MCP transport", (it) => {
         ).toMatchObject({ runId: a.runId, result: null });
       }).pipe(Effect.provide(layer)),
   );
-  it.effect("rejects return identity overrides, read-only writes and permission escalation", () =>
-    Effect.gen(function* () {
-      const invoke = yield* setup;
-      expect(
-        (yield* invoke("subhead_send", { ...request, senderThreadId: "victim" })).isError,
-      ).toBe(true);
-      const outside: McpInvocationScope = {
-        ...scope(),
-        thread: undefined,
-        requestNamespace: "outside",
-        client: { sessionId: "outside", label: "Outside", access: "read-only" },
-      };
-      expect((yield* invoke("subhead_send", request, outside)).isError).toBe(true);
-      const limited = ThreadId.make("limited");
-      yield* createSubheadTestThread(limited, "approval-required");
-      yield* sendSubheadTestMessage(limited);
-      expect((yield* invoke("subhead_send", request, scope(limited))).isError).toBe(true);
-      expect(yield* (yield* AutomationStore).listRuns({ limit: 100 })).toHaveLength(0);
-      expect((yield* invoke("subhead_send", request)).isError).toBe(false);
-    }).pipe(Effect.provide(layer)),
+  it.effect(
+    "ignores return identity overrides and rejects read-only writes and permission escalation",
+    () =>
+      Effect.gen(function* () {
+        const invoke = yield* setup;
+        // MCP decodes declared parameters and strips unknown fields. Authentication
+        // remains the sole sender source even when an outside caller supplies one.
+        expect(
+          (yield* invoke("subhead_send", { ...request, senderThreadId: "victim" })).isError,
+        ).toBe(false);
+        const admitted = yield* (yield* AutomationStore).listRuns({ limit: 100 });
+        expect(admitted).toHaveLength(1);
+        expect(admitted[0]?.virtualSubhead?.senderThreadId).toBe(caller);
+        expect(admitted[0]?.virtualSubhead?.senderPrincipal).toBe(`thread:${caller}`);
+        const outside: McpInvocationScope = {
+          ...scope(),
+          thread: undefined,
+          requestNamespace: "outside",
+          client: { sessionId: "outside", label: "Outside", access: "read-only" },
+        };
+        expect((yield* invoke("subhead_send", request, outside)).isError).toBe(true);
+        const limited = ThreadId.make("limited");
+        yield* createSubheadTestThread(limited, "approval-required");
+        yield* sendSubheadTestMessage(limited);
+        expect((yield* invoke("subhead_send", request, scope(limited))).isError).toBe(true);
+        expect(yield* (yield* AutomationStore).listRuns({ limit: 100 })).toHaveLength(1);
+        expect((yield* invoke("subhead_send", request)).isError).toBe(false);
+      }).pipe(Effect.provide(layer)),
   );
   it.effect("denies authenticated virtual-run recursion without creating another ledger row", () =>
     Effect.gen(function* () {

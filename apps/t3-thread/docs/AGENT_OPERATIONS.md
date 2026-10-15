@@ -292,6 +292,27 @@ and `concurrency` (normally 1). The prompt is stored by value. Unsupported
 properties, including prompt-only tool allowlists, are rejected. Restricted
 permissions require a provider with verified sandbox/approval enforcement.
 
+For example, save this as `helper.json`, replacing the project/head IDs with
+existing IDs from `t3-thread projects --env dev-vm` and the head's `status`.
+Choose an installed provider and model from `t3-thread models --env dev-vm`:
+
+```json
+{
+  "name": "review",
+  "projectId": "your-project-id",
+  "ownerThreadId": "your-head-thread-id",
+  "description": "Review one bounded change",
+  "prompt": "Review the requested change and report concrete findings.",
+  "modelSelection": { "instanceId": "codex", "model": "gpt-6.1-sol" },
+  "runtimeMode": "approval-required",
+  "concurrency": 1
+}
+```
+
+Runtime modes are `approval-required`, `auto-accept-edits`, `auto`, and
+`full-access`. Restricted modes currently require Codex. Enabling checks the
+actual project, head, provider, model and runtime mode; a placeholder ID fails.
+
 Use `subhead list [--all]`, `show NAME`, `edit NAME --file helper.json
 --expected-version N`, `disable NAME` and `retire NAME`, each with `--env`.
 Edits create revisions and reject stale expected versions. Disabling prevents new
@@ -327,8 +348,9 @@ unfinished child remains.
 
 A virtual run cannot invoke another subhead through authenticated thread calls.
 This is an application policy, not a guarantee against unrestricted shell access
-to another principal's credentials. Slice 1 provides no thread-scoped operator
-credential, cross-environment execution, recursive calls or spend ceiling.
+to another principal's credentials. Slice 1 provides no CLI operator credential
+bound to a thread; native MCP uses its existing provider-thread credential.
+Cross-environment execution and spend ceilings are outside this slice.
 
 ## Common Lifecycle Tasks
 

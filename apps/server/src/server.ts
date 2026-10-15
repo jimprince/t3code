@@ -569,12 +569,15 @@ const layerProviderInstallationRefresh = Layer.effectDiscard(
   }),
 );
 
-const layerAutomationServices = AutomationEngine.layer.pipe(
-  Layer.provide(
-    Layer.mergeAll(
-      AgentGateway.layer.pipe(Layer.provide(AutomationStore.layer)),
-      AutomationStore.layer,
-      ReleaseFeed.layer,
+const layerAutomationServices = Layer.merge(
+  AutomationStore.layer,
+  AutomationEngine.layer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        AgentGateway.layer.pipe(Layer.provide(AutomationStore.layer)),
+        AutomationStore.layer,
+        ReleaseFeed.layer,
+      ),
     ),
   ),
 );

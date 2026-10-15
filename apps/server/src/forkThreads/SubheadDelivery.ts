@@ -117,7 +117,7 @@ export const makeSubheadDelivery = (providers: Effect.Effect<ReadonlyArray<Serve
                 sendId: virtual.delivery.id,
                 recipientThreadId: virtual.senderThreadId,
                 ...(run.steps[0] ? { senderThreadId: run.steps[0].threadId } : {}),
-                text: JSON.stringify(envelope),
+                text: Schema.encodeSync(Schema.UnknownFromJsonString)(envelope),
                 coalesceKey: null,
                 intent: "auto",
                 allowQueueFallback: true,
