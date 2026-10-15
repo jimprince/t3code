@@ -271,7 +271,7 @@ it.layer(NodeServices.layer)("native virtual launch", (it) => {
                   id: MessageId.make("child-answer"),
                   nodeId: childAnswerNode.id,
                   text: "Child output must not replace the root result.",
-                  updatedAt: DateTime.add(capturedAt, { millis: 1 }),
+                  updatedAt: DateTime.add(capturedAt, { seconds: 1 }),
                 },
               },
               {
