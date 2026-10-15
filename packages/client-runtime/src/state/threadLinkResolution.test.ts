@@ -1,8 +1,14 @@
-import { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ThreadId, type OrchestrationV2ThreadShell } from "@t3tools/contracts";
+import * as Option from "effect/Option";
+import { Atom, AtomRegistry } from "effect/reactivity";
 import { describe, expect, it } from "vite-plus/test";
 
+import type { EnvironmentConnectionSummary } from "./presentation.ts";
+import type { EnvironmentShellState } from "./shell.ts";
 import {
+  createThreadLinkAtoms,
   resolveThreadAcrossEnvironments,
+  threadLinkKey,
   type ThreadLinkEnvironment,
 } from "./threadLinkResolution.ts";
 
@@ -170,5 +176,97 @@ describe("resolveThreadAcrossEnvironments", () => {
       environmentId: mac,
       threadId: "mcp%3Aabc",
     });
+  });
+});
+
+describe("createThreadLinkAtoms", () => {
+  const summary = (
+    environmentId: EnvironmentId,
+    environmentLabel: string,
+    connectionState: EnvironmentConnectionSummary["connectionState"],
+  ): EnvironmentConnectionSummary => ({
+    environmentId,
+    environmentLabel,
+    displayUrl: "",
+    isRelayManaged: false,
+    isEnabled: true,
+    connectionState,
+    connectionError: null,
+    connectionErrorTraceId: null,
+  });
+  const shellState = (status: EnvironmentShellState["status"]): EnvironmentShellState => ({
+    snapshot: Option.none(),
+    status,
+    error: Option.none(),
+  });
+  const thread = (id: string) => ({ id: ThreadId.make(id) }) as OrchestrationV2ThreadShell;
+
+  function harness() {
+    const environmentsAtom = Atom.make<ReadonlyArray<EnvironmentConnectionSummary>>([
+      summary(devVm, "Dev VM", "connected"),
+      summary(mac, "Mac", "connecting"),
+    ]);
+    const indexes = new Map<EnvironmentId, ReturnType<typeof Atom.make<ReadonlyMap<ThreadId, OrchestrationV2ThreadShell>>>>([
+      [devVm, Atom.make(new Map([[ThreadId.make("source"), thread("source")]]))],
+      [mac, Atom.make(new Map())],
+    ]);
+    const states = new Map<EnvironmentId, ReturnType<typeof Atom.make<EnvironmentShellState>>>([
+      [devVm, Atom.make(shellState("live"))],
+      [mac, Atom.make(shellState("empty"))],
+    ]);
+    const atoms = createThreadLinkAtoms({
+      environmentsAtom,
+      threadIndexAtom: (id) => indexes.get(id)!,
+      shellStateValueAtom: (id) => states.get(id)!,
+    });
+    const registry = AtomRegistry.make();
+    return { atoms, registry, indexes, states, environmentsAtom };
+  }
+
+  it("follows a link as the other environment connects and its threads arrive", () => {
+    const { atoms, registry, indexes, states, environmentsAtom } = harness();
+    const atom = atoms(threadLinkKey(devVm, ThreadId.make("target")));
+    registry.mount(atom);
+    expect(registry.get(atom)).toEqual({ kind: "unavailable", reason: "loading" });
+
+    registry.set(environmentsAtom, [
+      summary(devVm, "Dev VM", "connected"),
+      summary(mac, "Mac", "offline"),
+    ]);
+    expect(registry.get(atom)).toEqual({
+      kind: "unavailable",
+      reason: "disconnected",
+      environments: ["Mac"],
+    });
+
+    registry.set(environmentsAtom, [
+      summary(devVm, "Dev VM", "connected"),
+      summary(mac, "Mac", "connected"),
+    ]);
+    registry.set(states.get(mac)!, shellState("live"));
+    expect(registry.get(atom)).toEqual({ kind: "unavailable", reason: "not-found" });
+
+    registry.set(indexes.get(mac)!, new Map([[ThreadId.make("target"), thread("target")]]));
+    expect(registry.get(atom)).toMatchObject({ kind: "found", environmentId: mac, label: "Mac" });
+  });
+
+  it("hands back the same answer object when unrelated shell updates leave it unchanged", () => {
+    const { atoms, registry, indexes } = harness();
+    const atom = atoms(threadLinkKey(devVm, ThreadId.make("source")));
+    registry.mount(atom);
+    const before = registry.get(atom);
+    registry.set(indexes.get(mac)!, new Map([[ThreadId.make("other"), thread("other")]]));
+    expect(registry.get(atom)).toBe(before);
+  });
+
+  it("ignores disabled environments", () => {
+    const { atoms, registry, environmentsAtom } = harness();
+    registry.set(environmentsAtom, [
+      summary(devVm, "Dev VM", "connected"),
+      { ...summary(mac, "Mac", "offline"), isEnabled: false },
+    ]);
+    const atom = atoms(threadLinkKey(devVm, ThreadId.make("nobody")));
+    registry.mount(atom);
+    expect(registry.get(atom)).toEqual({ kind: "unavailable", reason: "not-found" });
   });
 });
