@@ -11,11 +11,13 @@ import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 import { withOwnershipLock } from "./NamedAgentPolicy.ts";
 
+const isNamedAgentError = Schema.is(NamedAgentError);
+const decodeTemplate = Schema.decodeUnknownEffect(SubheadTemplate);
+
 const decode = Schema.decodeUnknownEffect(Schema.fromJsonString(Subhead));
 const encode = Schema.encodeSync(Schema.fromJsonString(Subhead));
 const fail = (message: string) => new NamedAgentError({ message });
-const storageError = (cause: unknown) =>
-  Schema.is(NamedAgentError)(cause) ? cause : fail(String(cause));
+const storageError = (cause: unknown) => (isNamedAgentError(cause) ? cause : fail(String(cause)));
 
 /** Registry/revision writes share standing-agent ownership serialization and one SQL transaction. */
 export const makeSubheadRegistry = Effect.gen(function* () {
@@ -50,7 +52,7 @@ export const makeSubheadRegistry = Effect.gen(function* () {
   const create = (input: unknown, actor = "system") =>
     locked(
       Effect.gen(function* () {
-        const template = yield* Schema.decodeUnknownEffect(SubheadTemplate)(input, {
+        const template = yield* decodeTemplate(input, {
           onExcessProperty: "error",
         });
         const collision =
@@ -80,7 +82,7 @@ export const makeSubheadRegistry = Effect.gen(function* () {
             `Template version conflict: expected ${expectedVersion}, current ${previous.version}.`,
           );
         if (previous.retiredAt !== null) return yield* fail("Subhead is retired.");
-        const template = yield* Schema.decodeUnknownEffect(SubheadTemplate)(input, {
+        const template = yield* decodeTemplate(input, {
           onExcessProperty: "error",
         });
         if (template.name !== previous.name) return yield* fail("A subhead name is immutable.");

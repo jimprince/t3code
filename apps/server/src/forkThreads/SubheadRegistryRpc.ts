@@ -12,6 +12,8 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Providers from "../provider/ProviderRegistry.ts";
 
+const isNamedAgentError = Schema.is(NamedAgentError);
+
 /** Enabling validates actual execution resources; files are never read as live templates. */
 export const makeSubheadRegistryRpc = Effect.gen(function* () {
   const registry = yield* makeSubheadRegistry;
@@ -65,7 +67,7 @@ export const makeSubheadRegistryRpc = Effect.gen(function* () {
         });
     }).pipe(
       Effect.mapError((cause) =>
-        Schema.is(NamedAgentError)(cause) ? cause : new NamedAgentError({ message: String(cause) }),
+        isNamedAgentError(cause) ? cause : new NamedAgentError({ message: String(cause) }),
       ),
     );
   const handle = (input: SubheadRegistryInput, actor = "system") =>
@@ -86,7 +88,7 @@ export const makeSubheadRegistryRpc = Effect.gen(function* () {
       }
     }).pipe(
       Effect.mapError((cause) =>
-        Schema.is(NamedAgentError)(cause) ? cause : new NamedAgentError({ message: String(cause) }),
+        isNamedAgentError(cause) ? cause : new NamedAgentError({ message: String(cause) }),
       ),
     );
   return { handle, validate, registry };

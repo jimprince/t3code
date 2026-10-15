@@ -71,6 +71,8 @@ function makeThread(overrides: Partial<OrchestrationThread> = {}): Orchestration
   };
 }
 
+const decodeThreadMetadata = Schema.decodeUnknownSync(ThreadMetadata);
+
 describe("notification helpers", () => {
   it("suppresses app-owned subhead completions while retaining ordinary results and escalations", () => {
     const ordinary = makeThread();
@@ -78,7 +80,7 @@ describe("notification helpers", () => {
     const subscription = makeSubscription({ level: "all" });
     const overview = { ...buildAgentOverview(agent, ordinary), state: "completed" as const };
     expect(shouldNotify(subscription, overview, ordinary)).toBe(true);
-    const metadata = Schema.decodeUnknownSync(ThreadMetadata)({
+    const metadata = decodeThreadMetadata({
       threadId: ordinary.id,
       parentThreadId: "head",
       virtualAgentId: "helper",

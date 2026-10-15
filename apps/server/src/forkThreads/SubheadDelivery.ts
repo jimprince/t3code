@@ -20,9 +20,11 @@ import { withOwnershipLock } from "./NamedAgentPolicy.ts";
 import { hasActiveWork } from "./ArchiveDeadlines.ts";
 import { hasLiveChildren } from "./WorkerLifecycleMetadata.ts";
 
+const isNamedAgentError = Schema.is(NamedAgentError);
+const encodeEnvelope = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 const locks = new WeakMap<SqlClient.SqlClient, Semaphore.Semaphore>();
 const failure = (cause: unknown) =>
-  Schema.is(NamedAgentError)(cause) ? cause : new NamedAgentError({ message: String(cause) });
+  isNamedAgentError(cause) ? cause : new NamedAgentError({ message: String(cause) });
 
 /** The existing handoff journal atomically binds the delivery to its native message and wake. */
 export const makeSubheadDelivery = (providers: Effect.Effect<ReadonlyArray<ServerProvider>>) =>
@@ -127,7 +129,7 @@ export const makeSubheadDelivery = (providers: Effect.Effect<ReadonlyArray<Serve
                 sendId: virtual.delivery.id,
                 recipientThreadId: virtual.senderThreadId,
                 ...(run.steps[0] ? { senderThreadId: run.steps[0].threadId } : {}),
-                text: yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(envelope),
+                text: yield* encodeEnvelope(envelope),
                 coalesceKey: null,
                 intent: "auto",
                 allowQueueFallback: true,

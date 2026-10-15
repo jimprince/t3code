@@ -1,6 +1,13 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
-import { ThreadId, ProviderInstanceId, ServerProvider, type Project } from "@t3tools/contracts";
+import {
+  CommandId,
+  ThreadId,
+  ProviderInstanceId,
+  ServerProvider,
+  type Project,
+} from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -129,16 +136,17 @@ it.layer(NodeServices.layer)("native virtual launch", (it) => {
             instanceId: ProviderInstanceId.make("codex"),
             model: "fixture-pinned-model",
           };
-          yield* registry.create({
+          const template = {
             name: "review",
             projectId: subheadProject,
             ownerThreadId: head,
             description: "Review",
             prompt: "Frozen prompt",
             modelSelection: selected,
-            runtimeMode: "approval-required",
+            runtimeMode: "approval-required" as const,
             concurrency: 1,
-          });
+          };
+          yield* registry.create(template);
           yield* registry.setState("review", "enable");
           const admission = yield* makeSubheadRuns;
           const run = yield* admission.send(
@@ -183,6 +191,53 @@ it.layer(NodeServices.layer)("native virtual launch", (it) => {
             Option.getOrThrow(yield* (yield* AutomationStore).getRun(run.id)).virtualSubhead
               ?.template.prompt,
           ).toBe("Frozen prompt");
+          yield* registry.create({ ...template, name: "review-timeout" });
+          yield* registry.setState("review-timeout", "enable");
+          const pending = yield* admission.send(
+            {
+              environmentId: "environment",
+              principal: "script:test",
+              threadId: null,
+              runtimeMode: "full-access",
+            },
+            {
+              name: "review-timeout",
+              requestId: "expired-empty-claim",
+              request: "Must not start after its lease expires",
+            },
+          );
+          const expired = {
+            ...pending,
+            status: "running" as const,
+            virtualSubhead: {
+              ...pending.virtualSubhead!,
+              leaseStartedAt: DateTime.formatIso(
+                DateTime.subtract(yield* DateTime.now, { minutes: 31 }),
+              ),
+            },
+          };
+          const store = yield* AutomationStore;
+          yield* store.saveRun(expired);
+          yield* threads.dispatch({
+            type: "thread.create",
+            commandId: CommandId.make("expired-empty-claim"),
+            threadId: expired.steps[0]!.threadId,
+            projectId: subheadProject,
+            title: "Interrupted launch",
+            modelSelection: selected,
+            runtimeMode: "approval-required",
+            interactionMode: "default",
+            branch: null,
+            worktreePath: null,
+            createdBy: "system",
+            creationSource: "server",
+          });
+          const outcome = yield* live.advance(expired, expired.steps[0]!);
+          expect(outcome.status).toBe("failed");
+          expect(outcome.result).toContain("timeout");
+          expect(
+            (yield* threads.getThreadRecords(expired.steps[0]!.threadId, ["messages"])).messages,
+          ).toHaveLength(0);
         }).pipe(Effect.provide(Layer.mergeAll(gateway, subheadNativeLayer)));
       }),
   );

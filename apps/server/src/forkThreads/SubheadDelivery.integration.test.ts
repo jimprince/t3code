@@ -173,8 +173,9 @@ function completedRun(recipient: ThreadId | null = sender) {
 }
 
 it.layer(NodeServices.layer)("durable virtual results", (it) => {
-  for (const status of ["completed", "failed", "interrupted", "cancelled"] as const) {
-    it.effect(`captures and safely settles a ${status} execution`, () =>
+  it.effect.each(["completed", "failed", "interrupted", "cancelled"] as const)(
+    "captures and safely settles a %s execution",
+    (status) =>
       Effect.gen(function* () {
         yield* createSender;
         yield* createThread(execution);
@@ -197,8 +198,7 @@ it.layer(NodeServices.layer)("durable virtual results", (it) => {
             ?.settledOverride,
         ).toBe("settled");
       }).pipe(Effect.provide(layer)),
-    );
-  }
+  );
   it.effect("never settles an intervening user run when capturing an older helper result", () =>
     Effect.gen(function* () {
       yield* createSender;
@@ -237,6 +237,26 @@ it.layer(NodeServices.layer)("durable virtual results", (it) => {
         (yield* (yield* Threads.ThreadManagementService).getThreadShell(execution))
           ?.settledOverride,
       ).toBeNull();
+    }).pipe(Effect.provide(layer)),
+  );
+  it.effect("settles an owned empty claim after a captured launch failure", () =>
+    Effect.gen(function* () {
+      yield* createSender;
+      yield* createThread(execution);
+      const run = { ...completedRun(null), status: "failed" as const };
+      yield* writeMetadata(yield* SqlClient.SqlClient, {
+        threadId: execution,
+        parentThreadId: sender,
+        virtualAgentId: "helper",
+        virtualRunId: run.id,
+      });
+      yield* (yield* AutomationStore).insertRun(run);
+      const result = yield* (yield* makeSubheadDelivery(Effect.succeed([]))).deliver(run.id);
+      expect(result.result).toBe("One useful finding");
+      expect(
+        (yield* (yield* Threads.ThreadManagementService).getThreadShell(execution))
+          ?.settledOverride,
+      ).toBe("settled");
     }).pipe(Effect.provide(layer)),
   );
   it.effect("captures a result while preserving an unfinished child", () =>

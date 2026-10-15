@@ -26,8 +26,11 @@ export interface SubheadCaller {
   readonly threadId: ThreadId | null;
   readonly runtimeMode: RuntimeMode;
 }
+const isNamedAgentError = Schema.is(NamedAgentError);
+const decodeSend = Schema.decodeUnknownEffect(SubheadSendInput);
+
 const fail = (message: string) => new NamedAgentError({ message });
-const error = (cause: unknown) => (Schema.is(NamedAgentError)(cause) ? cause : fail(String(cause)));
+const error = (cause: unknown) => (isNamedAgentError(cause) ? cause : fail(String(cause)));
 const encodeTemplate = Schema.encodeSync(Schema.fromJsonString(SubheadTemplate));
 
 /** Admission owns only the existing run store. Native execution belongs to AutomationEngine. */
@@ -53,7 +56,7 @@ export const makeSubheadRuns = Effect.gen(function* () {
       sql,
       store.transaction(
         Effect.gen(function* () {
-          const input = yield* Schema.decodeUnknownEffect(SubheadSendInput)(raw, {
+          const input = yield* decodeSend(raw, {
             onExcessProperty: "error",
           });
           if (caller.threadId !== null) {

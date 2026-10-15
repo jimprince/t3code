@@ -1,6 +1,6 @@
 import type { Command } from "commander";
-import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import * as NodeCrypto from "node:crypto";
+import * as NodeFS from "node:fs";
 import { RemoteEnvironmentClient } from "./client.js";
 import { loadState, requireEnvironment } from "./state.js";
 
@@ -52,7 +52,9 @@ export function registerSubheadCommands(
     .requiredOption("--env <name>")
     .requiredOption("--file <path>")
     .action((options: Options) =>
-      invoke(options, "create", { template: JSON.parse(readFileSync(options.file!, "utf8")) }),
+      invoke(options, "create", {
+        template: JSON.parse(NodeFS.readFileSync(options.file!, "utf8")),
+      }),
     );
   group
     .command("edit")
@@ -67,7 +69,7 @@ export function registerSubheadCommands(
       return invoke(options, "edit", {
         name,
         expectedVersion,
-        template: JSON.parse(readFileSync(options.file!, "utf8")),
+        template: JSON.parse(NodeFS.readFileSync(options.file!, "utf8")),
       });
     });
   for (const state of ["enable", "disable", "retire"] as const)
@@ -86,10 +88,10 @@ export function registerSubheadCommands(
     .action((name: string, request: string | undefined, options: Options) => {
       if ((request === undefined) === (options.messageFile === undefined))
         throw new Error("Give a request or --message-file.");
-      const requestId = options.requestId ?? randomUUID();
+      const requestId = options.requestId ?? NodeCrypto.randomUUID();
       return invoke(options, "send", {
         name,
-        request: options.messageFile ? readFileSync(options.messageFile, "utf8") : request!,
+        request: options.messageFile ? NodeFS.readFileSync(options.messageFile, "utf8") : request!,
         requestId,
       });
     });
