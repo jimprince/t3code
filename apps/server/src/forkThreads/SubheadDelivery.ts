@@ -12,6 +12,7 @@ import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as SqlClient from "effect/sql/SqlClient";
 import { AutomationStore } from "../automations/AutomationStore.ts";
+import { inputRootRun } from "../automations/runOutcome.ts";
 import * as Threads from "../orchestration-v2/ThreadManagementService.ts";
 import { makeHandoffService } from "./HandoffService.ts";
 import { readMetadata, writeMetadata } from "./MetadataStore.ts";
@@ -36,27 +37,36 @@ export const makeSubheadDelivery = (providers: Effect.Effect<ReadonlyArray<Serve
       Effect.gen(function* () {
         const execution = run.steps[0]?.threadId;
         if (!execution) return;
-        yield* withOwnershipLock(
+        if (!(yield* threads.getThreadShell(execution))) return;
+        const records = yield* threads.getThreadRecords(execution, ["messages", "runs"]);
+        const message = records.messages.find((item) => item.id === run.steps[0]?.messageId);
+        const root = message ? inputRootRun(records.runs, message) : undefined;
+        if (!root) return;
+        const captured = yield* withOwnershipLock(
           sql,
           sql.withTransaction(
             Effect.gen(function* () {
               const metadata = yield* readMetadata(sql, execution);
+              if (metadata?.virtualRunId !== run.id) return false;
               if (
-                metadata?.virtualRunId !== run.id ||
-                metadata.virtualResultCapturedAt !== undefined
+                metadata.virtualResultCapturedAt !== undefined &&
+                metadata.virtualResultCapturedRunId === root.id
               )
-                return;
+                return true;
               yield* writeMetadata(sql, {
                 ...metadata,
                 virtualResultCapturedAt: run.finishedAt ?? run.createdAt,
+                virtualResultCapturedRunId: root.id,
               });
+              return true;
             }),
           ),
         );
+        if (!captured) return;
         const shell = yield* threads.getThreadShell(execution);
         if (
           !shell ||
-          !shell.latestRunId ||
+          shell.latestRunId !== root.id ||
           hasActiveWork(shell) ||
           (yield* hasLiveChildren(sql, execution, threads.getThreadShell))
         )
@@ -68,7 +78,7 @@ export const makeSubheadDelivery = (providers: Effect.Effect<ReadonlyArray<Serve
               `subhead:settle:${run.id}:${DateTime.toEpochMillis(shell.updatedAt)}`,
             ),
             threadId: execution,
-            completionRunId: shell.latestRunId,
+            completionRunId: root.id,
             snapshotAt: shell.updatedAt,
           })
           .pipe(

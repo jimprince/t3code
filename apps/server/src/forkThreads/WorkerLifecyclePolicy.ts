@@ -44,6 +44,9 @@ export function completionEligible(
   return (
     completionAllowed(projection, metadata, permanentRoots) &&
     latest?.id === runId &&
-    latest.status === "completed"
+    (latest.status === "completed" ||
+      (metadata?.virtualAgentId !== undefined &&
+        metadata.virtualResultCapturedRunId === latest.id &&
+        ["failed", "interrupted", "cancelled", "rolled_back"].includes(latest.status)))
   );
 }

@@ -27,7 +27,7 @@ import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as ApplicationEvents from "../persistence/OrchestrationEventStore.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import type { AutomationObservation } from "./events.ts";
-import { unboundRunOutcome } from "./runOutcome.ts";
+import { inputRootRun, unboundRunOutcome } from "./runOutcome.ts";
 import { AutomationStore } from "./AutomationStore.ts";
 import { makeSubheadCapacity } from "../forkThreads/SubheadCapacity.ts";
 import { makeSubheadRegistryRpc } from "../forkThreads/SubheadRegistryRpc.ts";
@@ -157,12 +157,7 @@ const make = Effect.gen(function* () {
       const started: AutomationRunStep =
         step.status === "queued" ? { ...step, status: "running", startedAt: now } : step;
       // The root run for this exact input owns completion, never a tool or child terminal.
-      const root = projection?.runs.find(
-        (candidate) =>
-          candidate.id === message.runId ||
-          (candidate.userMessageId === step.messageId &&
-            candidate.restartContinuationOfRunId == null),
-      );
+      const root = projection ? inputRootRun(projection.runs, message) : undefined;
       const providerThread = projection?.providerThreads.find(
         (thread) => thread.id === root?.providerThreadId,
       );
