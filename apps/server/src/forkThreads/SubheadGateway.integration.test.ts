@@ -42,6 +42,8 @@ import * as ServerConfig from "../config.ts";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import { makeSubheadRegistry } from "./SubheadRegistry.ts";
 import { makeSubheadRuns } from "./SubheadRuns.ts";
+import { writeMetadata } from "./MetadataStore.ts";
+import { makeSubheadCapacity } from "./SubheadCapacity.ts";
 import { readMetadata } from "./MetadataStore.ts";
 import {
   subheadNativeLayer,
@@ -67,9 +69,9 @@ const provider = Schema.decodeUnknownSync(ServerProvider)({
 });
 
 it.layer(NodeServices.layer)("native virtual launch", (it) => {
-  it.effect(
-    "pins model/runtime and retries after a lost engine write without another thread or message",
-    () =>
+  it.effect.each(["normal", "idle-child", "stuck-stream"] as const)(
+    "native capture and lease release: %s",
+    (scenario) =>
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const workspaceRoot = yield* fs.makeTempDirectoryScoped({ prefix: "subhead-launch-" });
@@ -227,7 +229,7 @@ it.layer(NodeServices.layer)("native virtual launch", (it) => {
             role: "assistant" as const,
             nodeId: answerNode.id,
             text: "A concrete finding from the native answer leaf.",
-            streaming: false,
+            streaming: scenario === "stuck-stream",
             createdAt: capturedAt,
             updatedAt: capturedAt,
           };
@@ -283,9 +285,44 @@ it.layer(NodeServices.layer)("native virtual launch", (it) => {
               },
             ],
           });
-          const captured = yield* live.advance(run, run.steps[0]!);
-          expect(captured.status).toBe("completed");
-          expect(captured.result).toBe(answer.text);
+          if (scenario === "idle-child") {
+            const child = ThreadId.make("idle-unsettled-child");
+            yield* createSubheadTestThread(child);
+            yield* writeMetadata(sql, { threadId: child, parentThreadId: execution });
+          }
+          const captureRun =
+            scenario === "stuck-stream"
+              ? {
+                  ...run,
+                  virtualSubhead: {
+                    ...run.virtualSubhead!,
+                    leaseStartedAt: DateTime.formatIso(
+                      DateTime.subtract(yield* DateTime.now, { minutes: 36 }),
+                    ),
+                  },
+                }
+              : run;
+          const captured = yield* live.advance(captureRun, run.steps[0]!);
+          expect(captured.status).toBe(scenario === "stuck-stream" ? "failed" : "completed");
+          expect(captured.result).toContain(answer.text);
+          yield* (yield* AutomationStore).saveRun({
+            ...captureRun,
+            status: captured.status as "completed" | "failed",
+            steps: [captured],
+            result: captured.result,
+            finishedAt: captured.finishedAt,
+          });
+          const capacity = yield* makeSubheadCapacity;
+          const next = yield* admission.send(
+            {
+              environmentId: "environment",
+              principal: "script:next",
+              threadId: null,
+              runtimeMode: "full-access",
+            },
+            { name: "review", requestId: "next", request: "Next" },
+          );
+          expect(yield* capacity.reserve(next.id)).toBe(true);
           yield* registry.create({ ...template, name: "review-timeout" });
           yield* registry.setState("review-timeout", "enable");
           const pending = yield* admission.send(

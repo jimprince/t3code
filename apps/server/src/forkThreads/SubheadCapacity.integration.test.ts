@@ -121,14 +121,41 @@ it.layer(NodeServices.layer)("shared head capacity", (it) => {
       expect(yield* capacity.reserve(a.id)).toBe(true);
       expect(yield* capacity.reserve(b.id)).toBe(false);
       expect(yield* capacity.canStart(third)).toBe(false);
-      const rejected = yield* sendSubheadTestMessage(third).pipe(Effect.exit);
-      expect(rejected._tag).toBe("Failure");
+      yield* sendSubheadTestMessage(third);
+      const threads = yield* Threads.ThreadManagementService;
+      expect((yield* threads.getThreadRecords(third, ["runs"])).runs[0]?.status).toBe("queued");
       yield* (yield* AutomationStore).saveRun({
         ...a,
         status: "completed",
         finishedAt: a.createdAt,
       });
-      expect(yield* capacity.reserve(b.id)).toBe(true);
+      yield* threads.dispatch({
+        type: "queue.resume",
+        commandId: CommandId.make("third-resume"),
+        threadId: third,
+      });
+      expect((yield* threads.getThreadRecords(third, ["runs"])).runs[0]?.status).not.toBe("queued");
+    }).pipe(Effect.provide(subheadNativeLayer)),
+  );
+  it.effect("disabled and retired registries lift the head cap after active leases finish", () =>
+    Effect.gen(function* () {
+      yield* createSubheadTestThread(head);
+      const sql = yield* SqlClient.SqlClient;
+      for (const id of ["busy-a", "busy-b", "idle"]) {
+        yield* createSubheadTestThread(ThreadId.make(id));
+        yield* writeMetadata(sql, { threadId: ThreadId.make(id), parentThreadId: head });
+      }
+      yield* sendSubheadTestMessage(ThreadId.make("busy-a"));
+      yield* sendSubheadTestMessage(ThreadId.make("busy-b"));
+      const registry = yield* makeSubheadRegistry;
+      yield* registry.create(template);
+      yield* registry.setState("review", "enable");
+      const capacity = yield* makeSubheadCapacity;
+      expect(yield* capacity.canStart(ThreadId.make("idle"))).toBe(false);
+      yield* registry.setState("review", "disable");
+      expect(yield* capacity.canStart(ThreadId.make("idle"))).toBe(true);
+      yield* registry.setState("review", "retire");
+      expect(yield* capacity.canStart(ThreadId.make("idle"))).toBe(true);
     }).pipe(Effect.provide(subheadNativeLayer)),
   );
   it.effect(

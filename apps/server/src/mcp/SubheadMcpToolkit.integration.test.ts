@@ -4,6 +4,7 @@ import { EnvironmentId, ServerProvider, SubheadRunReceipt, ThreadId } from "@t3t
 import { McpServer, McpSchema } from "effect/ai";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 import { expect } from "vite-plus/test";
@@ -12,6 +13,7 @@ import { AutomationStore } from "../automations/AutomationStore.ts";
 import { ServerEnvironment } from "../environment/ServerEnvironment.ts";
 import * as Projects from "../orchestration-v2/ProjectStore.ts";
 import * as ProviderMock from "../provider/testUtils/providerRegistryMock.ts";
+import { writeMetadata } from "../forkThreads/MetadataStore.ts";
 import { makeSubheadRegistry } from "../forkThreads/SubheadRegistry.ts";
 import {
   subheadNativeLayer,
@@ -171,6 +173,31 @@ it.layer(NodeServices.layer)("subhead MCP transport", (it) => {
         )).isError,
       ).toBe(true);
       expect(yield* store.listRuns({ limit: 100 })).toHaveLength(1);
+    }).pipe(Effect.provide(layer)),
+  );
+  it.effect("denies an authenticated descendant of a virtual execution", () =>
+    Effect.gen(function* () {
+      const invoke = yield* setup;
+      const first = receipt((yield* invoke("subhead_send", request)).structuredContent);
+      const run = Option.getOrThrow(yield* (yield* AutomationStore).getRun(first.runId));
+      const child = ThreadId.make("virtual-child");
+      yield* createSubheadTestThread(child);
+      yield* sendSubheadTestMessage(child);
+      yield* writeMetadata(yield* SqlClient.SqlClient, {
+        threadId: run.steps[0]!.threadId,
+        virtualRunId: run.id,
+      });
+      yield* writeMetadata(yield* SqlClient.SqlClient, {
+        threadId: child,
+        parentThreadId: run.steps[0]!.threadId,
+      });
+      expect(
+        (yield* invoke(
+          "subhead_send",
+          { ...request, clientRequestId: "child-recursion" },
+          scope(child),
+        )).isError,
+      ).toBe(true);
     }).pipe(Effect.provide(layer)),
   );
 });
