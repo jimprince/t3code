@@ -82,7 +82,7 @@ export function planBradAnswer(input: {
   readonly reference: string;
   readonly url: string;
 }): BradAnswerPlan | null {
-  const squash = (value: string | undefined) => value?.trim().replace(/\s+/g, " ") ?? "";
+  const squash = (value: string | undefined) => value?.trim().replace(/[ \t]+/g, " ") ?? "";
   const given = squash(input.decision === "option" ? input.option : input.answer);
   if (!given) return null;
   const note = squash(input.note);

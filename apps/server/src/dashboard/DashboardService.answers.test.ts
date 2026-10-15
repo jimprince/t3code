@@ -30,7 +30,7 @@ import * as DashboardService from "./DashboardService.ts";
 const root = ThreadId.make("root");
 describe("answered runtime asks (#303)", () => {
   it.effect.each(["runtime-request.updated", "turn-item.updated"] as const)(
-    "publishes immediately on %s without a tracker refresh or debounce",
+    "publishes on %s through its own debounce without a tracker refresh",
     (type) =>
       Effect.scoped(
         Effect.gen(function* () {
@@ -83,6 +83,9 @@ describe("answered runtime asks (#303)", () => {
                 questionAnswer: { answers: { heard: "Yes" } },
               },
             } as unknown as OrchestrationV2DomainEvent);
+            yield* TestClock.adjust("74 millis");
+            expect((yield* dashboard.getSnapshot).projects[0]?.attention).toHaveLength(1);
+            yield* TestClock.adjust("1 millis");
             const snapshot = yield* Deferred.await(published);
             expect(snapshot.projects[0]?.attention).toEqual([]);
             expect((yield* dashboard.getSnapshot).revision).toBe(snapshot.revision);

@@ -1,4 +1,4 @@
 id = "dashboard-explicit-review-approval"
 category = "fix"
 functionality = "dashboard"
-text = "Approving finished work now closes it on Brad's explicit approval; approving a plan still gives the go-ahead and keeps it open. Decisions also accept written answers with the same comment and notification trail as option clicks."
+text = "Approving finished work now closes it when you explicitly approve it; approving a plan still gives the go-ahead and keeps it open. Review and test notes keep their stage unchanged. Decisions also accept written answers with the same comment and notification trail as option clicks."

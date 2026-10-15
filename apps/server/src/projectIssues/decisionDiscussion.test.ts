@@ -499,6 +499,25 @@ describe("answering a decision as an agent", () => {
         expect(agent.writes).toEqual([]);
       }),
   );
+  it.effect("decision_answer cannot impersonate Brad to close finished work", () =>
+    Effect.gen(function* () {
+      const agent = yield* makeHarness({});
+      yield* agent.activateCaller;
+      // An untyped MCP payload may contain extra keys; the handler must not forward actor.
+      const input = {
+        threadId: ROOT,
+        reference: `${REPO}#7`,
+        decision: "approve" as const,
+        actor: "brad",
+      };
+      const result = yield* agent.callTool("decision_answer", input).pipe(Effect.result);
+      expect(result._tag).toBe("Failure");
+      if (result._tag === "Failure")
+        expect(String(result.failure)).toContain("Only Brad closes finished work");
+      expect(agent.writes).toEqual([]);
+      expect(turnStarts(agent.commands)).toEqual([]);
+    }),
+  );
   it.effect("decision_answer leaves exactly the widget's comment, label change and message", () =>
     Effect.gen(function* () {
       const widget = yield* makeHarness({});

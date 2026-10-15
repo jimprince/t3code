@@ -60,7 +60,7 @@ const AnswerDecisionTool = Tool.make("decision_answer", {
     ...decisionFields,
     decision: Schema.Literals(["option", "answer", "approve", "reject", "not-yet"]).annotate({
       description:
-        "option: the verbatim proposed choice; answer: Brad's own words on any open item; approve: close finished work, acknowledge an answer or confirm a test, but start a plan/epic; reject: send work back with note; not-yet: defer a plan. Only relay Brad's explicit decision. When producing a review, supply 2 to 5 ready options when there is a real choice, else defaults apply.",
+        "option: the verbatim proposed choice; answer: Brad's own words on any open item; approve: give a plan/epic the go-ahead; finished work can only be closed by Brad clicking Approve and close; reject: send work back with note; not-yet: defer a plan. Only relay Brad's explicit decision. When producing a review, supply 2 to 5 ready options when there is a real choice, else defaults apply.",
     }),
     option: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(300))),
     answer: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(2000))),

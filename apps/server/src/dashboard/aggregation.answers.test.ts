@@ -49,12 +49,12 @@ describe("dashboard and tray inline answer data (#355)", () => {
       readyComment: {
         author: "agent",
         createdAt: now,
-        body: "Shipped the widened strip for review.\nWhat you are judging and where: Test the tray in Dev after Update #355.\nOption A: Passed\nOption B: Failed\nRecommended: Option A",
+        body: "Shipped the widened strip for review.\nWhat you are judging and where: Test the tray in Dev after Update #355.\nOption A: Passed\nOption B: fAiLeD (type what is wrong)\nRecommended: a",
       },
     };
     expect(build([issue]).projects[0]!.attention[0]?.options).toEqual([
       { text: "Passed", recommended: true, action: "approve", effect: "settle" },
-      { text: "Failed", recommended: false, action: "reject" },
+      { text: "fAiLeD (type what is wrong)", recommended: false, action: "reject" },
     ]);
   });
   it("distinguishes finished-work approval from plan approval and supplies every default", () => {
@@ -150,4 +150,17 @@ describe("dashboard and tray inline answer data (#355)", () => {
     });
     expect(attention.options).toHaveLength(4);
   });
+});
+
+it("keeps full detail for older feeds while the compact summary has two sentences", () => {
+  const text =
+    "Built the smaller change. It preserves the owner link. A third sentence gives the audit detail.";
+  const attention = build([
+    {
+      ...row(1, ["ask:task", "needs-review"]),
+      readyComment: { author: "agent", createdAt: now, body: text },
+    },
+  ]).projects[0]!.attention[0]!;
+  expect(attention.question).toBe(text);
+  expect(attention.summary).toBe("Built the smaller change. It preserves the owner link.");
 });

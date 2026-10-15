@@ -10,6 +10,17 @@ export {
   rootRepositories,
 } from "@t3tools/client-runtime/dashboard/aggregation";
 
+const standardActions = new Map<string, string>([
+  ["passed", "approve"],
+  ["works", "approve"],
+  ["approve", "approve"],
+  ["failed", "reject"],
+  ["broken", "reject"],
+  ["reject", "reject"],
+  ["not yet", "not-yet"],
+  ["got it", "approve"],
+]);
+
 /** Server-owned answer data; shared aggregation retains older clients' rows. */
 export function aggregate(input: Parameters<typeof aggregateBase>[0]) {
   const snapshot = aggregateBase(input);
@@ -76,8 +87,9 @@ export function aggregate(input: Parameters<typeof aggregateBase>[0]) {
           ? issue.decision.options
           : ready.options.map((option) => ({
               text: option.text,
-              recommended:
-                ready.recommendation === option.label || ready.recommendation === option.text,
+              recommended: [option.label, option.label.replace(/^Option /, ""), option.text].some(
+                (label) => label.toLowerCase() === ready.recommendation?.toLowerCase(),
+              ),
             }));
         const modes = {
           choice: "issue-choice",
@@ -90,7 +102,7 @@ export function aggregate(input: Parameters<typeof aggregateBase>[0]) {
         return {
           ...item,
           answer: modes[category],
-          question: ready.summary,
+          question: ready.asksNothingYet ? "" : ready.detail.slice(0, 1500),
           summary: ready.summary,
           judgingWhere: ready.judgingWhere,
           recommended:
@@ -100,7 +112,13 @@ export function aggregate(input: Parameters<typeof aggregateBase>[0]) {
             ? proposed.map((option) => {
                 // Preserve producer labels; an explicitly named standard action keeps
                 // its consequence (e.g. proposed Passed still confirms the test).
-                const standard = defaults.find((choice) => choice.text === option.text);
+                const actionWord = option.text
+                  .trim()
+                  .toLowerCase()
+                  .match(/^(not yet|got it|\w+)\b/)?.[1];
+                const standard = defaults.find(
+                  (choice) => choice.action === standardActions.get(actionWord ?? ""),
+                );
                 return {
                   ...option,
                   action: standard?.action ?? ("option" as const),

@@ -139,9 +139,17 @@ function fakeGitea(initial?: { labels: string[]; body?: string }) {
           { id: 11, name: "needs-test" },
           { id: 12, name: "backlog" },
         ]);
-      case "POST /issues/14/labels":
-        inProgress = true;
+      case "DELETE /issues/14/labels/8":
+        inProgress = false;
+        extraLabels.delete("in-progress");
         return reply(200, {});
+      case "POST /issues/14/labels": {
+        const sent = request.body._tag === "Uint8Array" ? request.body.body : new Uint8Array();
+        const ids = JSON.parse(new TextDecoder().decode(sent)).labels as number[];
+        if (ids.includes(8)) inProgress = true;
+        if (ids.includes(10)) extraLabels.add("awaiting-release");
+        return reply(200, {});
+      }
       case "DELETE /issues/14/labels/7":
         labelled = false;
         return reply(200, {});
@@ -282,14 +290,14 @@ describe("inline issue answers (#355)", () => {
       }),
   );
   it.effect.each([
-    { labels: ["ask:task", "needs-review"], closes: true, comment: "Approved by Brad" },
+    { labels: ["ask:task", "needs-review"], closes: true, comment: "Approved and closed by Brad" },
     { labels: ["ask:epic", "needs-review"], closes: false, comment: "Approved by Brad" },
     {
       labels: ["ask:question", "needs-review"],
       closes: true,
-      comment: "Got it: acknowledged by Brad",
+      comment: "Approved and closed by Brad",
     },
-    { labels: ["ask:task", "needs-test"], closes: true, comment: "Passed: confirmed by Brad" },
+    { labels: ["ask:task", "needs-test"], closes: true, comment: "Approved and closed by Brad" },
   ])("approve respects the item's meaning: $labels", ({ labels, closes, comment }) =>
     Effect.gen(function* () {
       const gitea = fakeGitea({ labels });
@@ -300,7 +308,8 @@ describe("inline issue answers (#355)", () => {
           messages.push(command.threadId);
           return Effect.succeed({});
         },
-        (ledger) => ledger.decide({ threadId: root, reference: "14", decision: "approve" }),
+        (ledger) =>
+          ledger.decide({ threadId: root, reference: "14", decision: "approve", actor: "brad" }),
       );
       expect(gitea.state).toBe(closes ? "closed" : "open");
       expect(gitea.comments).toEqual([comment]);
@@ -329,12 +338,12 @@ describe("inline issue answers (#355)", () => {
     {
       labels: ["ask:task", "needs-test"],
       decision: "answer" as const,
-      comment: "Failed: Fix the boundary",
+      comment: "Brad answered: Fix the boundary",
     },
     {
       labels: ["ask:question", "needs-review"],
       decision: "answer" as const,
-      comment: "Follow-up from Brad: Fix the boundary",
+      comment: "Brad answered: Fix the boundary",
     },
     {
       labels: ["ask:task", "needs-review"],
@@ -365,16 +374,126 @@ describe("inline issue answers (#355)", () => {
       );
       expect(gitea.comments).toEqual([comment]);
       expect(gitea.state).toBe("open");
-      expect(gitea.labels).toContain("in-progress");
-      expect(gitea.labels).not.toContain("needs-review");
-      expect(gitea.labels).not.toContain("needs-test");
+      if (decision === "answer") expect(gitea.labels).toEqual(labels);
+      else {
+        expect(gitea.labels).toContain("in-progress");
+        expect(gitea.labels).not.toContain("needs-review");
+        expect(gitea.labels).not.toContain("needs-test");
+      }
       expect(messages).toHaveLength(1);
       expect(messages[0]).toMatchObject({
         threadId: waiting,
         text: expect.stringContaining(comment),
       });
       expect(messages[0]?.text).toContain("brad/chief-of-staff#14");
+      if (decision === "reject")
+        expect(messages[0]?.text).toContain(
+          "Do the work again and mark it for review when it is ready.",
+        );
       expect(gitea.patches).toEqual([]);
+    }),
+  );
+
+  it.effect.each(["ask:task", "ask:question", "ask:epic"])(
+    "requires Brad for finished-work approval but permits plan go-ahead: %s",
+    (kind) =>
+      Effect.gen(function* () {
+        const gitea = fakeGitea({ labels: [kind, "needs-review"] });
+        const result = yield* withLedger(
+          gitea,
+          () => Effect.succeed({}),
+          (ledger) => ledger.decide({ threadId: root, reference: "14", decision: "approve" }),
+        ).pipe(Effect.result);
+        if (kind === "ask:epic") {
+          expect(result._tag).toBe("Success");
+          expect(gitea.labels).toContain("in-progress");
+        } else {
+          expect(result._tag).toBe("Failure");
+          if (result._tag === "Failure")
+            expect(result.failure.message).toContain("Only Brad closes finished work");
+          expect(gitea.comments).toEqual([]);
+        }
+        expect(gitea.state).toBe("open");
+      }),
+  );
+
+  it.effect.each(["approve", "reject", "answer", "option"] as const)(
+    "rejects a stale %s card before any write or notification",
+    (decision) =>
+      Effect.gen(function* () {
+        const gitea = fakeGitea({ labels: ["ask:task", "in-progress"] });
+        const result = yield* withLedger(
+          gitea,
+          () => Effect.die("must not notify"),
+          (ledger) =>
+            ledger.decide({
+              threadId: root,
+              reference: "14",
+              decision,
+              actor: "brad",
+              expectAnswer: "issue-review",
+              answer: "Works",
+              option: "Passed",
+            }),
+        ).pipe(Effect.result);
+        expect(result._tag).toBe("Failure");
+        if (result._tag === "Failure")
+          expect(result.failure.message).toContain("no longer waiting on you");
+        expect(gitea.comments).toEqual([]);
+        expect(gitea.patches).toEqual([]);
+        expect(gitea.labels).toEqual(["ask:task", "in-progress"]);
+      }),
+  );
+
+  it.effect("an approval carries its draft and tells the owner settlement is final", () =>
+    Effect.gen(function* () {
+      const gitea = fakeGitea({ labels: ["ask:task", "needs-review"] });
+      const messages: string[] = [];
+      yield* withLedger(
+        gitea,
+        (command) => {
+          messages.push(command.text!);
+          return Effect.succeed({});
+        },
+        (ledger) =>
+          ledger.decide({
+            threadId: root,
+            reference: "14",
+            decision: "approve",
+            actor: "brad",
+            expectAnswer: "issue-review",
+            reason: "Works on both machines",
+          }),
+      );
+      expect(gitea.comments).toEqual(["Approved and closed by Brad\n\nWorks on both machines"]);
+      expect(messages[0]).toContain("Settled; nothing more to do.");
+      expect(gitea.state).toBe("closed");
+    }),
+  );
+
+  it.effect("Not yet does not wake the owner", () =>
+    Effect.gen(function* () {
+      const gitea = fakeGitea({ labels: ["ask:epic", "needs-review"] });
+      const result = yield* withLedger(
+        gitea,
+        () => Effect.die("must not notify"),
+        (ledger) =>
+          ledger.decide({ threadId: root, reference: "14", decision: "not-yet", reason: "Wait" }),
+      );
+      expect(result.notifiedThreadId).toBeNull();
+      expect(gitea.comments).toEqual(["Not yet: Wait"]);
+    }),
+  );
+
+  it.effect("awaiting-release writes need no Brad-ready summary", () =>
+    Effect.gen(function* () {
+      const gitea = fakeGitea({ labels: ["ask:task", "in-progress"] });
+      yield* withLedger(
+        gitea,
+        () => Effect.succeed({}),
+        (ledger) => ledger.update({ threadId: root, reference: "14", status: "awaiting-release" }),
+      );
+      expect(gitea.labels).toContain("awaiting-release");
     }),
   );
 
@@ -419,13 +538,19 @@ describe("inline issue answers (#355)", () => {
                 ? Effect.fail(new ProjectIssuesError({ message: "Retry delivery" }))
                 : Effect.succeed({});
             },
-            (ledger) => ledger.decide({ threadId: root, reference: "14", decision: "approve" }),
+            (ledger) =>
+              ledger.decide({
+                threadId: root,
+                reference: "14",
+                decision: "approve",
+                actor: "brad",
+              }),
           );
         expect((yield* decide().pipe(Effect.flip)).message).toContain("was not told");
         expect(gitea.state).toBe("closed");
         refuse = false;
         const receipt = yield* decide();
-        expect(gitea.comments).toEqual(["Approved by Brad"]);
+        expect(gitea.comments).toEqual(["Approved and closed by Brad"]);
         expect(ids).toHaveLength(2);
         expect(ids[0]).toBe(ids[1]);
         expect(receipt).toHaveProperty("messageId", ids[1]);

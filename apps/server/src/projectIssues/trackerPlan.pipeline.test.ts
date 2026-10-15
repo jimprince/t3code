@@ -665,6 +665,19 @@ it.effect(
             created_at: now,
             body: "Progress: next: Wait for Brad",
           },
+          ...[
+            "Brad chose: B",
+            "Brad answered: works",
+            "Not yet: later",
+            "Approved by Brad",
+            "Release-bot: shipped",
+            "Brad sent this back: fix it",
+          ].map((body, index) => ({
+            id: index + 4,
+            issue_url: "https://git.test/brad/repo/issues/1",
+            created_at: now,
+            body,
+          })),
         ],
         "brad/repo",
         false,
@@ -686,4 +699,29 @@ it.effect(
       expect(result.cached.issues[0]?.readyComment).toEqual(result.result.issues[0]?.readyComment);
       expect(result.calls.some((url) => /issues\/1\/comments/.test(url))).toBe(false);
     }),
+);
+
+it.effect("bounds persisted ready summaries without per-item reads", () =>
+  Effect.gen(function* () {
+    const result = yield* runPipeline(
+      [rawIssue(1, "", ["ask", "ask:task", "needs-review"])],
+      [
+        {
+          id: 1,
+          issue_url: "https://git.test/brad/repo/issues/1",
+          created_at: now,
+          body: "Built the smaller change. " + "Detail ".repeat(600),
+        },
+      ],
+      "brad/repo",
+      false,
+      false,
+      false,
+      undefined,
+      true,
+    );
+    expect(result.result.issues[0]?.readyComment?.body).toHaveLength(1500);
+    expect(result.cached.issues[0]?.readyComment?.body).toHaveLength(1500);
+    expect(result.calls.some((url) => /issues\/1\/comments/.test(url))).toBe(false);
+  }),
 );

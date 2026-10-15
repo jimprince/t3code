@@ -2212,7 +2212,7 @@ request
   .requiredOption("--release <tag>", "release it shipped in, for example fork.24 (its milestone)")
   .requiredOption(
     "--test <step>",
-    "what Brad is judging and where: screenshot, link, or Dev app after Update X",
+    "what Brad is judging and where: screenshot, link, or Dev app after Update X; without --summary, use more than one word beyond the title",
   )
   .option(
     "--summary <text>",
@@ -2408,11 +2408,11 @@ decision
   .option("--option <text>", "the option Brad chose, as listed")
   .option(
     "--answer <text>",
-    "Brad's own answer to any open item; comments, changes stage and tells its asking thread",
+    "Brad's own words; comments and tells the asking thread. Review/test notes keep the stage unchanged",
   )
   .option(
     "--approve",
-    "Brad explicitly approves: close finished work, or give a plan/epic the go-ahead",
+    "Give a plan/epic the go-ahead (the original --approve meaning); agents cannot close finished work. Ask Brad to click Approve and close",
   )
   .option("--reject", "send work back with --note, only when Brad decided to reject it")
   .option("--not-yet", "return a Needs you item to Pending")

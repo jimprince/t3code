@@ -1244,14 +1244,14 @@ opens the same thread while it is not archived. Record only what Brad settled on
 ```bash
 t3-thread decision answer <project-thread> <owner/repo#N> --option "<option as listed>" [--note "<why>"]
 t3-thread decision answer <project-thread> <owner/repo#N> --answer "<his words>"   # any open item
-t3-thread decision answer <project-thread> <owner/repo#N> --approve                # explicit approval: close finished work; start a plan
+t3-thread decision answer <project-thread> <owner/repo#N> --approve                # original --approve: plan go-ahead only; Brad closes finished work in the UI
 t3-thread decision answer <project-thread> <owner/repo#N> --reject [--note "<what to fix>"]
 t3-thread decision answer <project-thread> <owner/repo#N> --not-yet [--note "<reason>"]
 t3-thread decision discuss <project-thread> <owner/repo#N>
 ```
 
-`decision answer` is the widget's own answer path (same comment, label change and message to
-the waiting thread); the MCP tools `decision_answer` and `decision_discuss` do the same.
+Review/test `--answer` is a note: it preserves the stage and tells the owner. Only Brad's UI can approve and close finished work. `decision answer` uses the same comment and message trail to
+the waiting thread; the MCP tools `decision_answer` and `decision_discuss` do the same.
 `<project-thread>` is a thread of the decision's project; the discussion brief names it.
 
 ## Project page widgets and tracker repository

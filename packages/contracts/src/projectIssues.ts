@@ -349,8 +349,8 @@ export const DEFAULT_DECISION_OPTIONS = {
 /**
  * Brad decides an open item. Approve closes finished work and acknowledges answers
  * or tests; on a plan/epic it gives the go-ahead and leaves it open. Reject sends
- * work back. Options and free text leave one comment, change labels/stage and tell
- * the asking thread; needs-brad answers remove that label and keep the issue open.
+ * work back. Options and free text leave one comment and tell
+ * the asking thread; review/test text keeps its stage. Needs-brad answers remove that label.
  */
 export const ProjectRequestDecideInput = Schema.Struct({
   /** A thread of the project tree, as in `ProjectRequestUpdateInput`. */
@@ -358,12 +358,18 @@ export const ProjectRequestDecideInput = Schema.Struct({
   /** Issue number in the project's tracker repository, `owner/repo#N`, or a full issue URL. */
   reference: TrimmedNonEmptyString,
   decision: Schema.Literals(["approve", "reject", "not-yet", "option", "answer"]),
+  /** Set by Brad's client; agents may approve plans but cannot close finished work. */
+  actor: Schema.optionalKey(Schema.Literal("brad")),
+  /** The card semantics at click time; reject a click if the item has since moved. */
+  expectAnswer: Schema.optionalKey(
+    Schema.Literals(["issue-choice", "issue-review", "issue-approve", "issue-read", "issue-test"]),
+  ),
   /** The option Brad chose (with `option`). */
   option: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(300))),
   /** Brad's own answer on any open item (with `answer`). */
   answer: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(2000))),
-  /** Why not yet (with `not-yet`), or the short note that goes with an answer; one line. */
-  reason: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(500))),
+  /** Why not yet (with `not-yet`), or the short note that goes with an answer. */
+  reason: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(2000))),
 });
 export type ProjectRequestDecideInput = typeof ProjectRequestDecideInput.Type;
 

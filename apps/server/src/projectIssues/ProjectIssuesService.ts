@@ -452,7 +452,7 @@ export const make = Effect.gen(function* () {
               Date.parse(note.createdAt) > Date.parse(previousReady.createdAt) ||
               (note.createdAt === previousReady.createdAt && note.id >= previousReady.id)
             )
-              pendingReady[number] = note;
+              pendingReady[number] = { ...note, body: note.body.slice(0, 1500) };
           }
           if (!comment.body.startsWith("Progress: ")) continue;
           const previous = pending[number];

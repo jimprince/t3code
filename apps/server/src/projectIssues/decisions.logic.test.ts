@@ -147,3 +147,15 @@ describe("the curator's backlog-sort block", () => {
     );
   });
 });
+
+it("keeps Brad's line breaks when recording a note", () => {
+  const plan = planBradAnswer({
+    decision: "answer",
+    answer: "Works  here.\nTry the phone next.",
+    title: "Test",
+    reference: "repo#1",
+    url: "https://example.test/1",
+  });
+  expect(plan?.comment).toBe("Brad answered: Works here.\nTry the phone next.");
+  expect(plan?.message).toContain("Works here.\nTry the phone next.");
+});

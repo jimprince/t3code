@@ -1,8 +1,10 @@
 import type { ProjectIssue } from "@t3tools/contracts";
 
-/** A comment that is never an answer: a progress note, a curator note or Brad's own follow-up. */
+/** A comment that is never an answer: server bookkeeping or Brad's own response. */
 export const isNotAnswer = (body: string) =>
-  /^\s*(?:progress:|curator:|follow-up from brad\b)/i.test(body.replace(/<!--[\s\S]*?-->/g, ""));
+  /^\s*(?:progress:|curator:|follow-up from brad\b|brad (?:chose|answered|sent this back|approved and merged)\b|approved (?:and closed )?by brad\b|not yet\b|passed:|failed:|got it:|release(?:[ -]bot)?\s*:|pr[ -]bot\s*:|released? (?:in|to)\b|shipped (?:in|to)\b|duplicate(?: of|:)|filed by mistake\. withdrawn by brad\b)/i.test(
+    body.replace(/<!--[\s\S]*?-->/g, ""),
+  );
 
 /**
  * An answer shown under its question: the first one to three sentences of the
@@ -15,7 +17,7 @@ export function answerSentences(text: string, limit = 3): string {
     .replace(/\*\*|__|`|^#+\s*|^>\s*|^[-*]\s+/gm, "")
     .replace(/\s+/g, " ")
     .trim();
-  const sentences = plain.match(/[^.!?]+[.!?]+(?=\s|$)|[^.!?]+$/g) ?? [plain];
+  const sentences = plain.split(/(?<=[.!?]["'”’)\]]*)\s+(?=[A-Z0-9"'(“])/);
   return sentences
     .slice(0, limit)
     .map((sentence) => sentence.trim())
@@ -72,7 +74,7 @@ export function parseDecisionComment(body: string): NeedsYouDecision {
       recommendation = recommended[1]!.trim();
       continue;
     }
-    rest.push(line);
+    if (!/^[-*]\s+\[[ xX]\]/.test(line)) rest.push(line);
   }
   const named = new Set(options.map((option) => option.label));
   const choices = options.length >= 2 && named.size === options.length ? options : [];

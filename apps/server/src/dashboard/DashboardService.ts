@@ -585,7 +585,7 @@ export const make = Effect.gen(function* () {
   );
   yield* engine.streamDomainEvents.pipe(
     // Resolving a question must publish even if subsequent thread events keep arriving
-    // or the tracker refresh is blocked. Runtime answers bypass the thread debounce.
+    // or the tracker refresh is blocked. Runtime answers have their own debounce.
     Stream.filter(
       (event) =>
         event.type === "runtime-request.updated" ||
@@ -593,6 +593,7 @@ export const make = Effect.gen(function* () {
           (event.payload.type === "user_input_request" ||
             event.payload.type === "approval_request")),
     ),
+    Stream.debounce("75 millis"),
     Stream.runForEach(() => publishLocal),
     Effect.forkScoped,
   );

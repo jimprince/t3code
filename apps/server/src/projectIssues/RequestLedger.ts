@@ -1071,9 +1071,7 @@ export const make = (deps: {
           .filter(Boolean)
           .join("\n\n");
         const validation =
-          input.status === "needs-review" ||
-          input.status === "needs-test" ||
-          input.status === "awaiting-release"
+          input.status === "needs-review" || input.status === "needs-test"
             ? validateDecisionReady(
                 input.title ?? issue.title ?? "",
                 input.comment?.trim() ? note : "",
@@ -1331,6 +1329,26 @@ export const make = (deps: {
             !decisionIssue &&
             (ready || issue.state === "closed") &&
             (!epic || test);
+          const mode = decisionIssue
+            ? "issue-choice"
+            : test
+              ? "issue-test"
+              : !ready
+                ? null
+                : question
+                  ? "issue-read"
+                  : epic
+                    ? "issue-approve"
+                    : "issue-review";
+          // A closed approval retry still delivers its original receipt/message.
+          if (input.expectAnswer && issue.state !== "closed" && input.expectAnswer !== mode)
+            return yield* fail(
+              "This item is no longer waiting on you in that mode. Refresh the card and try again.",
+            );
+          if (closes && input.actor !== "brad")
+            return yield* fail(
+              "Only Brad closes finished work; ask him to click Approve and close.",
+            );
           const subject = {
             title: issue.title ?? `#${reference.number}`,
             reference: ref,
@@ -1353,12 +1371,9 @@ export const make = (deps: {
                 : planDecision({ ...subject, decision: input.decision, reason: input.reason });
           if (!answer) return yield* fail("Choose an option or write an answer.");
           let commentText = answer.comment;
-          if (input.decision === "answer" && !decisionIssue && question)
-            commentText = commentText.replace(/^Brad answered:/, "Follow-up from Brad:");
-          if (input.decision === "answer" && !decisionIssue && test)
-            commentText = commentText.replace(/^Brad answered:/, "Failed:");
-          if (closes && question && !test) commentText = "Got it: acknowledged by Brad";
-          if (closes && test) commentText = "Passed: confirmed by Brad";
+          if (closes) commentText = "Approved and closed by Brad";
+          if (input.reason?.trim() && input.decision === "approve")
+            commentText += `\n\n${input.reason.trim()}`;
           const comments = yield* api
             .request(target.instance, `${path}/comments`, GiteaComments)
             .pipe(Effect.mapError((error) => fail(`Could not read ${ref}: ${error.detail}`)));
@@ -1404,7 +1419,7 @@ export const make = (deps: {
                     fail(`The answer is on ${ref}, but it could not be closed: ${error.detail}`),
                   ),
                 );
-          } else if (!decisionIssue) {
+          } else if (!decisionIssue && input.decision !== "answer") {
             const status = input.decision === "not-yet" ? "pending" : "in-progress";
             const stageLabels = [...STATUS_LABELS, AWAITING_RELEASE_LABEL, NEEDS_TEST_LABEL];
             const ids = yield* ensureLabels(target.instance, target.repository, stageLabels).pipe(
@@ -1428,6 +1443,7 @@ export const make = (deps: {
           }
           invalidate(target);
           yield* refreshDashboard.pipe(Effect.forkDetach);
+          if (input.decision === "not-yet") return { notifiedThreadId: null, ...receipt };
           const threads = yield* readThreads;
           let recipientId: string | null;
           if (decisionIssue) {
@@ -1479,7 +1495,10 @@ export const make = (deps: {
               ),
             );
           const messageId = `decision-answer:${Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
-          const message = `${commentText}\n\nOn ${ref} "${subject.title}" (${subject.url}).${epic && input.decision === "approve" ? " Go ahead." : ""}`;
+          const message =
+            input.decision === "reject" && answer.message
+              ? answer.message
+              : `${commentText}\n\nOn ${ref} "${subject.title}" (${subject.url}).${closes ? " Settled; nothing more to do." : epic && input.decision === "approve" ? " Go ahead." : ""}`;
           const notifiedThreadId = yield* tellThread(
             recipient,
             message,
@@ -1883,7 +1902,7 @@ export const make = (deps: {
                   const readySummary: LatestComment = ready
                     ? {
                         author: ready.user?.login ?? "",
-                        body: ready.body,
+                        body: ready.body.slice(0, 1500),
                         createdAt: ready.created_at,
                       }
                     : null;
