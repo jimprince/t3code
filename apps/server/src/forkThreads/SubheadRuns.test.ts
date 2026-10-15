@@ -123,4 +123,42 @@ it.layer(NodeServices.layer)("subhead run admission", (it) => {
         expect(yield* (yield* AutomationStore).listRuns({ limit: 100 })).toHaveLength(3);
       }).pipe(Effect.provide(database)),
   );
+  it.effect("bounds queued work at ten and daily admissions at twenty", () =>
+    Effect.gen(function* () {
+      const registry = yield* makeSubheadRegistry;
+      yield* registry.create(template);
+      yield* registry.setState("review", "enable");
+      const service = yield* makeSubheadRuns;
+      const store = yield* AutomationStore;
+      const admitted = [];
+      for (let index = 0; index < 10; index++)
+        admitted.push(
+          yield* service.send(
+            { ...caller, principal: `sender-${index}` },
+            { ...input, requestId: `queue-${index}` },
+          ),
+        );
+      expect(
+        yield* service.send({ ...caller, principal: "queue-overflow" }, input).pipe(Effect.flip),
+      ).toMatchObject({ message: expect.stringContaining("queue") });
+      for (const run of admitted)
+        yield* store.saveRun({ ...run, status: "completed", finishedAt: run.createdAt });
+      for (let index = 10; index < 20; index++) {
+        const run = yield* service.send(
+          { ...caller, principal: `sender-${index}` },
+          { ...input, requestId: `daily-${index}` },
+        );
+        yield* store.saveRun({ ...run, status: "completed", finishedAt: run.createdAt });
+      }
+      expect(
+        yield* service.send({ ...caller, principal: "daily-overflow" }, input).pipe(Effect.flip),
+      ).toMatchObject({ message: expect.stringContaining("daily") });
+      expect(yield* store.listRuns({ limit: 100 })).toHaveLength(20);
+      expect(
+        yield* service
+          .read({ ...caller, principal: "someone-else" }, admitted[0]!.id)
+          .pipe(Effect.flip),
+      ).toMatchObject({ message: expect.stringContaining("authenticated sender") });
+    }).pipe(Effect.provide(database)),
+  );
 });
