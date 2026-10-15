@@ -1,7 +1,7 @@
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import type { ProjectIssue, ProjectRequestStage } from "@t3tools/contracts";
+import type { EnvironmentId, ProjectIssue, ProjectRequestStage } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { CheckIcon, ChevronDownIcon, ChevronRightIcon, RotateCcwIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -20,7 +20,7 @@ import { buildThreadRouteParams } from "../../threadRoutes";
 import { Button, InlineButton } from "../ui/button";
 import { toastManager } from "../ui/toast";
 import { NO_OPEN_KEYS, openKeysSchema, toggleKey } from "./openGroups.logic";
-import { projectReturnState } from "./projectNavigation";
+import { projectThreadOpen } from "./projectNavigation";
 import { formatIssueAge } from "./projectIssuesBoard.logic";
 import { useNextReleaseItems } from "./ProjectRoadmapWidget";
 import { TaskTitle } from "./TaskLink";
@@ -255,6 +255,7 @@ export function useDecide(summary: OrchestratorSummary, refresh: () => void) {
 /** The project a request belongs to, as far as opening and discussing its threads needs. */
 export interface ProjectRootRef {
   readonly root: Pick<OrchestratorSummary["root"], "environmentId" | "id">;
+  readonly descendants?: ReadonlyArray<Pick<OrchestratorSummary["root"], "environmentId" | "id">>;
 }
 
 /**
@@ -298,23 +299,17 @@ export function useDiscuss(summary: ProjectRootRef) {
   return { pending, start };
 }
 
-/** Opens a thread of the project, coming back to the project page afterwards. */
-export function useOpenThread(summary: ProjectRootRef) {
+/**
+ * Opens a thread of the project, coming back to the project page afterwards. The thread opens in
+ * its own environment (a project spans machines): pass `environmentId` when the row knows it,
+ * else the thread is looked up among the project's threads.
+ */
+export function useOpenThread(project: ProjectRootRef) {
   const navigate = useNavigate();
-  return (threadId: string) =>
-    void navigate({
-      to: "/$environmentId/$threadId",
-      params: buildThreadRouteParams(
-        scopeThreadRef(
-          summary.root.environmentId,
-          threadId as Parameters<typeof scopeThreadRef>[1],
-        ),
-      ),
-      state: projectReturnState({
-        environmentId: summary.root.environmentId,
-        threadId: summary.root.id,
-      }),
-    });
+  return (threadId: string, environmentId?: EnvironmentId) => {
+    const { ref, state } = projectThreadOpen(project, threadId, environmentId);
+    void navigate({ to: "/$environmentId/$threadId", params: buildThreadRouteParams(ref), state });
+  };
 }
 
 /**

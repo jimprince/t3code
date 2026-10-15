@@ -4,6 +4,11 @@
  * the frame identity check (the message must come from its own iframe).
  */
 
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import type { ScopedThreadRef } from "@t3tools/contracts";
+
+import { findProjectThread } from "./projectNavigation";
+
 const CANVAS_MESSAGE_TYPE = "t3-canvas";
 export const CANVAS_RESULT_TYPE = "t3-canvas-result";
 
@@ -140,4 +145,13 @@ export function takeRateSlot(
   if (history.length >= limit.count) return false;
   history.push(now);
   return true;
+}
+
+/** The thread a canvas `open-thread` names, in its own environment; null when it is not in the project. */
+export function canvasOpenThread(
+  project: Parameters<typeof findProjectThread>[0],
+  threadId: string,
+): ScopedThreadRef | null {
+  const thread = findProjectThread(project, threadId);
+  return thread ? scopeThreadRef(thread.environmentId, thread.id) : null;
 }

@@ -8,6 +8,7 @@ import {
   isProjectPullRequestDetail,
   owningProjectReturn,
   projectReturnState,
+  projectThreadOpen,
 } from "./projectNavigation";
 
 describe("project navigation", () => {
@@ -92,5 +93,49 @@ describe("project navigation", () => {
         threadId: "project",
       });
     }
+  });
+});
+
+describe("opening a thread from a project page", () => {
+  const env = (id: string) => EnvironmentId.make(id);
+  const identity = (environmentId: string, id: string) => ({
+    environmentId: env(environmentId),
+    id: ThreadId.make(id),
+  });
+  const project = {
+    root: identity("dev-vm", "root"),
+    descendants: [identity("dev-vm", "local-child"), identity("local-mbp", "remote-child")],
+  };
+  const returnToProject = { projectReturn: { environmentId: "dev-vm", threadId: "root" } };
+
+  it("opens a remote descendant in its own environment and returns to the project", () => {
+    expect(projectThreadOpen(project, "remote-child")).toEqual({
+      ref: { environmentId: "local-mbp", threadId: "remote-child" },
+      state: returnToProject,
+    });
+  });
+
+  it("uses the destination's environment when the caller already knows it", () => {
+    expect(projectThreadOpen(project, "anything", env("local-mbp")).ref).toEqual({
+      environmentId: "local-mbp",
+      threadId: "anything",
+    });
+  });
+
+  it("keeps same-environment threads and unknown ids in the project's own environment", () => {
+    expect(projectThreadOpen(project, "local-child").ref.environmentId).toBe("dev-vm");
+    expect(projectThreadOpen(project, "root").ref.environmentId).toBe("dev-vm");
+    expect(projectThreadOpen(project, "not-listed").ref.environmentId).toBe("dev-vm");
+    expect(projectThreadOpen({ root: project.root }, "remote-child").ref.environmentId).toBe(
+      "dev-vm",
+    );
+  });
+
+  it("prefers the project's own environment when a remote descendant reuses an id", () => {
+    const shared = {
+      root: identity("dev-vm", "root"),
+      descendants: [identity("local-mbp", "dup"), identity("dev-vm", "dup")],
+    };
+    expect(projectThreadOpen(shared, "dup").ref.environmentId).toBe("dev-vm");
   });
 });

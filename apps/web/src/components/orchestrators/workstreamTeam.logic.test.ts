@@ -35,14 +35,19 @@ const thread = (
     archived?: boolean;
     parent?: string | null;
     completedAt?: string;
+    environmentId?: string;
+    remoteParentOf?: string;
   } = {},
 ) =>
   ({
     id,
     title: `Thread ${id}`,
     scope: overrides.scope ?? null,
-    environmentId: "env",
+    environmentId: overrides.environmentId ?? "env",
     parentThreadId: overrides.parent === undefined ? "root" : overrides.parent,
+    remoteParent: overrides.remoteParentOf
+      ? { environmentId: "env", threadId: overrides.remoteParentOf }
+      : undefined,
     archivedAt: overrides.archived ? "2026-10-05T00:00:00.000Z" : null,
     settledOverride: overrides.settled ? "settled" : null,
     createdAt: "2026-10-01T00:00:00.000Z",
@@ -100,6 +105,26 @@ describe("deriveTeam", () => {
     expect(members.map((m) => [m.threadId, m.head, m.tag, m.responsibility])).toEqual([
       ["root", true, "idle", "Maintains the fork"],
       ["dash", false, "idle", "Project page and dashboard"],
+    ]);
+  });
+
+  it("keeps the environment of a standing agent that lives on another machine", () => {
+    const { members } = team(
+      [
+        thread("local", { scope: "Local agent" }),
+        thread("remote", {
+          scope: "Remote agent",
+          parent: null,
+          environmentId: "other-env",
+          remoteParentOf: "root",
+        }),
+      ],
+      [epic],
+    );
+    expect(members.map((member) => [member.threadId, member.environmentId])).toEqual([
+      ["root", "env"],
+      ["local", "env"],
+      ["remote", "other-env"],
     ]);
   });
 
