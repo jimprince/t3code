@@ -269,6 +269,7 @@ export const make = Effect.gen(function* () {
       projectCloneTracking: true,
       projectLayout: true,
       dashboardSnapshot: true,
+      decisionAnswers: true,
       sessionRefresh: true,
       ...(serverSelfUpdate === null ? {} : { serverSelfUpdate }),
       ...(serverInstallation === null ? {} : { serverInstallation }),

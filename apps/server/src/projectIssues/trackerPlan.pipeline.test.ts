@@ -21,7 +21,8 @@ import {
   ThreadId,
   type GiteaInstanceConfig,
 } from "@t3tools/contracts";
-import { aggregate, briefingPlanRoot } from "@t3tools/client-runtime/dashboard/aggregation";
+import { briefingPlanRoot } from "@t3tools/client-runtime/dashboard/aggregation";
+import { aggregate } from "../dashboard/aggregation.ts";
 import { compactSnapshot } from "@t3tools/client-runtime/dashboard/progress";
 import { mergeDashboardSnapshots } from "@t3tools/client-runtime/dashboard/merge";
 import { ServerConfig } from "../config.ts";
@@ -637,4 +638,52 @@ it.effect("keeps legacy labelled-epic counting separate from tracker membership 
     expect(rows.find((i) => i.number === 3)?.briefingPartOf).toBe(2);
     expect(rows.find((i) => i.number === 4)?.briefingPartOf).toBeNull();
   }),
+);
+
+it.effect(
+  "ready summary and verbatim options reach the dashboard/tray snapshot through the repository comment scan",
+  () =>
+    Effect.gen(function* () {
+      const result = yield* runPipeline(
+        [rawIssue(1, "", ["ask", "ask:task", "needs-review"])],
+        [
+          {
+            id: 1,
+            issue_url: "https://git.test/brad/repo/issues/1",
+            created_at: now,
+            body: "Built the smaller change. Check the linked output.\nOption A: Keep the current design\nOption B: Ship the smaller change\nRecommended: Option B",
+          },
+          {
+            id: 2,
+            issue_url: "https://git.test/brad/repo/issues/1",
+            created_at: now,
+            body: "Curator: sorted into the workstream",
+          },
+          {
+            id: 3,
+            issue_url: "https://git.test/brad/repo/issues/1",
+            created_at: now,
+            body: "Progress: next: Wait for Brad",
+          },
+        ],
+        "brad/repo",
+        false,
+        false,
+        false,
+        undefined,
+        true,
+      );
+      const item = result.snapshot.projects[0]?.attention[0];
+      expect(item).toMatchObject({
+        kind: "review",
+        answer: "issue-review",
+        question: "Built the smaller change. Check the linked output.",
+        options: [
+          { text: "Keep the current design", recommended: false, action: "option" },
+          { text: "Ship the smaller change", recommended: true, action: "option" },
+        ],
+      });
+      expect(result.cached.issues[0]?.readyComment).toEqual(result.result.issues[0]?.readyComment);
+      expect(result.calls.some((url) => /issues\/1\/comments/.test(url))).toBe(false);
+    }),
 );

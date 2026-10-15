@@ -1131,9 +1131,10 @@ t3-thread request list "$T3_THREAD_ID"
 t3-thread request add "$T3_THREAD_ID" "Measure the jaw pull force" --kind task --detail "<his words>"
 t3-thread request add "$T3_THREAD_ID" "Fix the stuck wizard step" --kind task --bug
 t3-thread request start "$T3_THREAD_ID" 12
-t3-thread request ready "$T3_THREAD_ID" 12 --summary "<the answer, or what to look at and where>"
+t3-thread request ready "$T3_THREAD_ID" 12 --summary "<what is ready, what to look at and where>"
+t3-thread request ready "$T3_THREAD_ID" 12 --summary "<the real choice>" --option "<first choice>" --option "<second choice>" --recommend 2
 t3-thread request ready "$T3_THREAD_ID" 12 --stage awaiting-release --summary "<what was built>"
-t3-thread request shipped "$T3_THREAD_ID" 12 --release fork.24 --test "<one-line test step>"
+t3-thread request shipped "$T3_THREAD_ID" 12 --release fork.24 --summary "<what changed>" --test "<what to judge and where, e.g. Dev app after Update fork.24>" --option Passed --option Failed --recommend 1
 t3-thread request reopen "$T3_THREAD_ID" 12
 t3-thread request note "$T3_THREAD_ID" 12 "blocked on the jaw pull force measurement"
 t3-thread request type "$T3_THREAD_ID" 12 task --bug     # --no-bug removes the tag
@@ -1183,6 +1184,32 @@ for something the capture missed; when Gitea is unreachable it is queued and fil
 issue URL; `start`, `note`, `ready` and `shipped` work on any open tracker issue, not only
 captured requests.
 
+Every Brad-facing ready, test, review or decision follows this producer contract:
+
+```text
+Built the widened review strip so the plan is readable without opening the thread.
+What you are judging and where: Check the 644 px review card in your Dev app after Update #355, or the linked screenshot.
+Option A: Approve the wider strip
+Option B: Keep the current width
+Recommended: Option A
+```
+
+Supply (1) a plain sentence explaining what changed or what you propose, (2) what Brad is
+judging AND where to look (screenshot, link, or Dev app after Update X), (3) the recommended
+answer, and (4) the choices. `request ready` and MCP `request_ready` refuse a missing/title-only
+summary or one with no explanatory sentence beyond the title. The error says what to add.
+Missing judging/location, recommendation or choices returns warnings and still records the
+ready item. Do not copy the title into the summary. Needs-brad issues use this same content
+with their fenced decision block for routing/options. Keep rank and placed-by trailers intact;
+answers and ready submissions are comments, never issue-body rewrites.
+
+For reviews, propose 2 to 5 single-line `--option` labels when there is a real choice;
+`--recommend` is numbered from 1. The server records these verbatim as `Option A:` lines
+in the ready comment. Without options, finished work offers **Approve and close / Reject**;
+a plan or epic offers **Approve: go ahead / Not yet**. Supply a ready summary that explains
+WHAT Brad is approving. Answers to read default to Got it / Follow up; tests to Passed / Failed.
+Only Brad's explicit approval closes finished work. Plan approval starts it and keeps it open.
+
 ## Decisions waiting on Brad
 
 When you need Brad to choose or answer something, file one Gitea issue per question in the
@@ -1202,12 +1229,11 @@ options:
 
 `waiting:` is optional (default `chief-of-staff-inbox`): a thread id, a permanent agent name or
 a thread title in slug form, resolved on the server. `options:` takes 2 to 5 lines and exactly
-one `[recommended]`; leave it out for an open question and the project page and the mobile app
-show an answer box. Several questions are several issues ("Part of #N" on the first body
+one `[recommended]`; give options unless this is a genuinely open question. Every decision
+can be answered inline, including free text, from the Dashboard. Several questions are several issues ("Part of #N" on the first body
 line). Brad answers on the Decisions widget (or in the mobile app): the answer is commented on
 the issue as `Brad chose: <option>` or `Brad answered: <text>`, sent to the waiting thread with
-the issue reference, and `needs-brad` is removed. The issue stays open: close it when the
-decision is carried out.
+the issue reference, and `needs-brad` is removed. The issue stays open until Brad settles it; agents never close it.
 
 Brad can choose Discuss on a decision (Decisions widget, a Needs you decision row, or the
 mobile app) to talk it through first. That opens a thread nested under the waiting thread
@@ -1217,8 +1243,9 @@ opens the same thread while it is not archived. Record only what Brad settled on
 
 ```bash
 t3-thread decision answer <project-thread> <owner/repo#N> --option "<option as listed>" [--note "<why>"]
-t3-thread decision answer <project-thread> <owner/repo#N> --answer "<his words>"   # needs-brad only
-t3-thread decision answer <project-thread> <owner/repo#N> --approve                # Needs you plans
+t3-thread decision answer <project-thread> <owner/repo#N> --answer "<his words>"   # any open item
+t3-thread decision answer <project-thread> <owner/repo#N> --approve                # explicit approval: close finished work; start a plan
+t3-thread decision answer <project-thread> <owner/repo#N> --reject [--note "<what to fix>"]
 t3-thread decision answer <project-thread> <owner/repo#N> --not-yet [--note "<reason>"]
 t3-thread decision discuss <project-thread> <owner/repo#N>
 ```

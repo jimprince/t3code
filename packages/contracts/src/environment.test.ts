@@ -14,6 +14,15 @@ const descriptor = {
 } as const;
 
 describe("ExecutionEnvironmentDescriptor", () => {
+  it("keeps older hosts on their existing decision controls", () => {
+    expect(decodeDescriptor(descriptor).capabilities.decisionAnswers).toBeUndefined();
+    expect(
+      decodeDescriptor({
+        ...descriptor,
+        capabilities: { ...descriptor.capabilities, decisionAnswers: true },
+      }).capabilities.decisionAnswers,
+    ).toBe(true);
+  });
   it("decodes old, recognized and future manual installation descriptors", () => {
     expect(decodeDescriptor(descriptor).capabilities.serverInstallation).toBeUndefined();
     for (const installation of [{ kind: "npx" }, { kind: "npm-global", prefix: "/opt/node" }]) {

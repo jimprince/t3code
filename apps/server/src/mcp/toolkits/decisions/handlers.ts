@@ -17,6 +17,23 @@ const make = Effect.gen(function* () {
   });
 
   return {
+    request_ready: McpToolAccess.writesThreads(
+      (input) => [input.threadId],
+      (input) =>
+        Effect.gen(function* () {
+          const scope = yield* McpInvocationContext.requireMcpCapability("pull-requests");
+          if (!input.threadId && scope.thread === undefined)
+            return yield* new ProjectIssuesError({ message: "A calling T3 thread is required." });
+          return yield* ledger.update({
+            threadId: input.threadId ?? scope.thread!.threadId,
+            reference: input.reference,
+            status: input.stage ?? "needs-review",
+            ...(input.release ? { release: input.release } : {}),
+            comment: input.summary,
+            ...(input.options ? { options: input.options } : {}),
+          });
+        }),
+    ),
     decision_discuss: McpToolAccess.writesThreads(
       (input) => [input.threadId],
       (input) =>

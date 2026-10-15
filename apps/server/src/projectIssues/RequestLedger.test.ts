@@ -27,6 +27,7 @@ import { RANK_GAP, parseRankTrailer, parsePlacedByTrailer } from "./requestOrder
 import { parseRequestMarker } from "./projectIssues.logic.ts";
 import { DashboardService } from "../dashboard/DashboardService.ts";
 import { make } from "./RequestLedger.ts";
+import { parseDecisionComment } from "@t3tools/client-runtime/decision-comment";
 
 const instance: GiteaInstanceConfig = {
   id: "home",
@@ -65,12 +66,15 @@ const body = [
  * A fake Gitea holding issue #14: steps named in `failing` answer HTTP 500, and posted
  * comments and removed labels stick, like the real API, so a retry sees what landed.
  */
-function fakeGitea() {
+function fakeGitea(initial?: { labels: string[]; body?: string }) {
   const failing = new Set<string>();
   const comments: string[] = [];
   const calls: string[] = [];
   let labelled = true;
   let inProgress = false;
+  let state = "open";
+  const extraLabels = new Set(initial?.labels ?? []);
+  const patches: unknown[] = [];
   const client = HttpClient.make((request) => {
     const path = new URL(request.url).pathname.replace("/api/v1/repos/brad/chief-of-staff", "");
     const step = `${request.method} ${path}`;
@@ -84,24 +88,48 @@ function fakeGitea() {
       case "GET /issues/14":
         return reply(200, {
           title: "Day Planner access",
-          body,
-          state: "open",
+          body: initial?.body ?? (initial ? "" : body),
+          state,
           html_url: "http://git.home:3000/brad/chief-of-staff/issues/14",
           labels: [
-            ...(labelled ? [{ name: "needs-brad" }] : []),
+            ...(!initial && labelled ? [{ name: "needs-brad" }] : []),
+            ...[...extraLabels].map((name) => ({ name })),
             ...(inProgress ? [{ name: "in-progress" }] : []),
           ],
         });
       case "GET /issues/14/comments":
         return reply(
           200,
-          comments.map((text) => ({ body: text, created_at: "2026-10-06T15:44:00Z" })),
+          comments.map((text, index) => ({
+            id: index + 1,
+            html_url: `http://git.home:3000/brad/chief-of-staff/issues/14#issuecomment-${index + 1}`,
+            body: text,
+            created_at: "2026-10-06T15:44:00Z",
+          })),
         );
       case "POST /issues/14/comments": {
         const sent = request.body._tag === "Uint8Array" ? request.body.body : new Uint8Array();
         comments.push(JSON.parse(new TextDecoder().decode(sent)).body);
-        return reply(201, {});
+        return reply(201, {
+          id: comments.length,
+          html_url: `http://git.home:3000/brad/chief-of-staff/issues/14#issuecomment-${comments.length}`,
+        });
       }
+      case "PATCH /issues/14": {
+        const patch =
+          request.body._tag === "Uint8Array"
+            ? JSON.parse(new TextDecoder().decode(request.body.body))
+            : {};
+        patches.push(patch);
+        state = patch.state ?? state;
+        return reply(200, {});
+      }
+      case "DELETE /issues/14/labels/9":
+        extraLabels.delete("needs-review");
+        return reply(200, {});
+      case "DELETE /issues/14/labels/11":
+        extraLabels.delete("needs-test");
+        return reply(200, {});
       case "GET /labels":
         return reply(200, [
           { id: 7, name: "needs-brad" },
@@ -121,13 +149,29 @@ function fakeGitea() {
         return reply(404, {});
     }
   });
-  return { client, failing, comments, calls };
+  return {
+    client,
+    failing,
+    comments,
+    calls,
+    patches,
+    get state() {
+      return state;
+    },
+    get labels() {
+      return [...extraLabels, ...(inProgress ? ["in-progress"] : [])];
+    },
+  };
 }
 
 /** Brad picks the recommended option on #14 from the Decisions widget. */
 const withLedger = <A>(
-  gitea: ReturnType<typeof fakeGitea>,
-  dispatch: (command: { readonly threadId: string }) => Effect.Effect<unknown, ProjectIssuesError>,
+  gitea: Pick<ReturnType<typeof fakeGitea>, "client">,
+  dispatch: (command: {
+    readonly threadId: string;
+    readonly messageId?: string;
+    readonly text?: string;
+  }) => Effect.Effect<unknown, ProjectIssuesError>,
   action: (ledger: Effect.Success<ReturnType<typeof make>>) => Effect.Effect<A, ProjectIssuesError>,
   link: (input: {
     threadId: ThreadId;
@@ -143,6 +187,10 @@ const withLedger = <A>(
         trackerForRoot: () => Effect.succeed(null),
         repositoryForProject: () => Effect.succeed(target),
         invalidate: () => undefined,
+        list: () =>
+          Effect.succeed({
+            issues: [{ repository: target.repository, number: 14, linkedThreadIds: [waiting] }],
+          }),
         ...issueOverrides,
       } as never,
       threadIssues: { link } as never,
@@ -179,7 +227,11 @@ const withLedger = <A>(
 
 const answer14 = (
   gitea: ReturnType<typeof fakeGitea>,
-  dispatch: (command: { readonly threadId: string }) => Effect.Effect<unknown, ProjectIssuesError>,
+  dispatch: (command: {
+    readonly threadId: string;
+    readonly messageId?: string;
+    readonly text?: string;
+  }) => Effect.Effect<unknown, ProjectIssuesError>,
 ) =>
   withLedger(gitea, dispatch, (ledger) =>
     ledger.decide({
@@ -191,6 +243,235 @@ const answer14 = (
   );
 
 const CHOSE = "Brad chose: Tailnet/LAN only with one password";
+
+describe("inline issue answers (#355)", () => {
+  it.effect(
+    "refuses a title-only ready summary before writes and warns without refusing missing optional parts",
+    () =>
+      Effect.gen(function* () {
+        const gitea = fakeGitea({ labels: ["ask:task"] });
+        yield* withLedger(
+          gitea,
+          () => Effect.die("no notification"),
+          (ledger) =>
+            Effect.gen(function* () {
+              const rejected = yield* ledger
+                .update({
+                  threadId: root,
+                  reference: "14",
+                  status: "needs-review",
+                  comment: "Day Planner access",
+                })
+                .pipe(Effect.result);
+              expect(rejected._tag).toBe("Failure");
+              if (rejected._tag === "Failure")
+                expect(rejected.failure.message).toContain("beyond repeating the title");
+              expect(gitea.calls).toEqual(["GET /issues/14"]);
+              const accepted = yield* ledger.update({
+                threadId: root,
+                reference: "14",
+                status: "needs-review",
+                comment: "Built password-protected access on the tailnet for review.",
+              });
+              expect(accepted.warnings).toHaveLength(3);
+              expect(gitea.comments).toEqual([
+                "Built password-protected access on the tailnet for review.",
+              ]);
+            }),
+        );
+      }),
+  );
+  it.effect.each([
+    { labels: ["ask:task", "needs-review"], closes: true, comment: "Approved by Brad" },
+    { labels: ["ask:epic", "needs-review"], closes: false, comment: "Approved by Brad" },
+    {
+      labels: ["ask:question", "needs-review"],
+      closes: true,
+      comment: "Got it: acknowledged by Brad",
+    },
+    { labels: ["ask:task", "needs-test"], closes: true, comment: "Passed: confirmed by Brad" },
+  ])("approve respects the item's meaning: $labels", ({ labels, closes, comment }) =>
+    Effect.gen(function* () {
+      const gitea = fakeGitea({ labels });
+      const messages: string[] = [];
+      const result = yield* withLedger(
+        gitea,
+        (command) => {
+          messages.push(command.threadId);
+          return Effect.succeed({});
+        },
+        (ledger) => ledger.decide({ threadId: root, reference: "14", decision: "approve" }),
+      );
+      expect(gitea.state).toBe(closes ? "closed" : "open");
+      expect(gitea.comments).toEqual([comment]);
+      expect(messages).toEqual([waiting]);
+      expect(result).toMatchObject({
+        notifiedThreadId: waiting,
+        commentUrl: expect.stringContaining("#issuecomment-1"),
+        messageId: expect.stringContaining("decision-answer:"),
+      });
+      if (!closes) expect(gitea.labels).toContain("in-progress");
+      expect(gitea.patches.every((patch) => !Object.hasOwn(patch as object, "body"))).toBe(true);
+    }),
+  );
+
+  it.effect.each([
+    {
+      labels: ["ask:task", "needs-review"],
+      decision: "reject" as const,
+      comment: "Brad sent this back:\n\nFix the boundary",
+    },
+    {
+      labels: ["ask:task", "needs-review"],
+      decision: "answer" as const,
+      comment: "Brad answered: Fix the boundary",
+    },
+    {
+      labels: ["ask:task", "needs-test"],
+      decision: "answer" as const,
+      comment: "Failed: Fix the boundary",
+    },
+    {
+      labels: ["ask:question", "needs-review"],
+      decision: "answer" as const,
+      comment: "Follow-up from Brad: Fix the boundary",
+    },
+    {
+      labels: ["ask:task", "needs-review"],
+      decision: "option" as const,
+      comment: "Brad chose: Fix the boundary",
+    },
+  ])("leaves one complete trail for $decision on $labels", ({ labels, decision, comment }) =>
+    Effect.gen(function* () {
+      const originalBody =
+        "Summary\n<!-- t3:placed-by %7B%22kind%22%3A%22brad%22%7D -->\n<!-- t3:rank 100 -->";
+      const gitea = fakeGitea({ labels, body: originalBody });
+      const messages: { threadId: string; text?: string }[] = [];
+      yield* withLedger(
+        gitea,
+        (command) => {
+          messages.push(command);
+          return Effect.succeed({});
+        },
+        (ledger) =>
+          ledger.decide({
+            threadId: root,
+            reference: "14",
+            decision,
+            answer: "Fix the boundary",
+            option: "Fix the boundary",
+            ...(decision === "reject" ? { reason: "Fix the boundary" } : {}),
+          }),
+      );
+      expect(gitea.comments).toEqual([comment]);
+      expect(gitea.state).toBe("open");
+      expect(gitea.labels).toContain("in-progress");
+      expect(gitea.labels).not.toContain("needs-review");
+      expect(gitea.labels).not.toContain("needs-test");
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toMatchObject({
+        threadId: waiting,
+        text: expect.stringContaining(comment),
+      });
+      expect(messages[0]?.text).toContain("brad/chief-of-staff#14");
+      expect(gitea.patches).toEqual([]);
+    }),
+  );
+
+  it.effect("free text removes needs-brad and tells its waiting thread", () =>
+    Effect.gen(function* () {
+      const gitea = fakeGitea();
+      const messages: string[] = [];
+      yield* withLedger(
+        gitea,
+        (command) => {
+          messages.push(command.threadId);
+          return Effect.succeed({});
+        },
+        (ledger) =>
+          ledger.decide({
+            threadId: root,
+            reference: "14",
+            decision: "answer",
+            answer: "Use the smaller scope",
+          }),
+      );
+      expect(gitea.comments).toEqual(["Brad answered: Use the smaller scope"]);
+      expect(gitea.calls).toContain("DELETE /issues/14/labels/7");
+      expect(gitea.state).toBe("open");
+      expect(messages).toEqual([waiting]);
+    }),
+  );
+
+  it.effect(
+    "a failed notification after closing retries the same comment and message identity",
+    () =>
+      Effect.gen(function* () {
+        const gitea = fakeGitea({ labels: ["ask:task", "needs-review"] });
+        let refuse = true;
+        const ids: string[] = [];
+        const decide = () =>
+          withLedger(
+            gitea,
+            (command) => {
+              ids.push(command.messageId!);
+              return refuse
+                ? Effect.fail(new ProjectIssuesError({ message: "Retry delivery" }))
+                : Effect.succeed({});
+            },
+            (ledger) => ledger.decide({ threadId: root, reference: "14", decision: "approve" }),
+          );
+        expect((yield* decide().pipe(Effect.flip)).message).toContain("was not told");
+        expect(gitea.state).toBe("closed");
+        refuse = false;
+        const receipt = yield* decide();
+        expect(gitea.comments).toEqual(["Approved by Brad"]);
+        expect(ids).toHaveLength(2);
+        expect(ids[0]).toBe(ids[1]);
+        expect(receipt).toHaveProperty("messageId", ids[1]);
+        const closedAnswer = yield* withLedger(
+          gitea,
+          () => Effect.die("must not tell"),
+          (ledger) =>
+            ledger.decide({
+              threadId: root,
+              reference: "14",
+              decision: "answer",
+              answer: "Another answer",
+            }),
+        ).pipe(Effect.flip);
+        expect(closedAnswer.message).toBe("That issue is already closed.");
+      }),
+  );
+
+  it.effect("the ready producer writes options the production comment parser reads back", () =>
+    Effect.gen(function* () {
+      const gitea = fakeGitea({ labels: ["ask:task"] });
+      const options = [
+        { text: "Ship after testing", recommended: false },
+        { text: "Keep the current design", recommended: true },
+      ];
+      yield* withLedger(
+        gitea,
+        () => Effect.die("no notification"),
+        (ledger) =>
+          ledger.update({
+            threadId: root,
+            reference: "14",
+            status: "needs-review",
+            comment: "Built the smaller design. Review the linked work.",
+            options,
+          }),
+      );
+      const parsed = parseDecisionComment(gitea.comments[0]!);
+      expect(parsed.options.map((option) => option.text)).toEqual(
+        options.map((option) => option.text),
+      );
+      expect(parsed.recommendation).toBe("Option B");
+      expect(parsed.summary).toBe("Built the smaller design. Review the linked work.");
+    }),
+  );
+});
 
 describe("answering a decision", () => {
   it.effect("fails with what landed when the label stays, and a retry finishes once", () =>
@@ -211,7 +492,11 @@ describe("answering a decision", () => {
 
       gitea.failing.clear();
       const retried = yield* answer14(gitea, dispatch);
-      expect(retried).toEqual({ notifiedThreadId: waiting });
+      expect(retried).toMatchObject({
+        notifiedThreadId: waiting,
+        commentUrl: expect.stringContaining("#issuecomment-1"),
+        messageId: expect.stringContaining("decision-answer:"),
+      });
       expect(gitea.comments).toEqual([CHOSE]);
       expect(told).toEqual([waiting]);
     }),
@@ -238,7 +523,11 @@ describe("answering a decision", () => {
       refuse = false;
       gitea.calls.length = 0;
       const retried = yield* answer14(gitea, dispatch);
-      expect(retried).toEqual({ notifiedThreadId: waiting });
+      expect(retried).toMatchObject({
+        notifiedThreadId: waiting,
+        commentUrl: expect.stringContaining("#issuecomment-1"),
+        messageId: expect.stringContaining("decision-answer:"),
+      });
       expect(gitea.comments).toEqual([CHOSE]);
       expect(gitea.calls).toEqual(["GET /issues/14", "GET /issues/14/comments"]);
       expect(told).toEqual([waiting]);

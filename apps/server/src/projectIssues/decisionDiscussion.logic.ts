@@ -91,10 +91,12 @@ export function buildDiscussionBrief(input: {
     lines.push(
       "",
       "Discuss it with Brad: answer his questions, look things up when that helps, and do not start the work itself. When he settles, record it once:",
-      `  ${answer} --approve`,
+      `  ${answer} --approve # finished work: approve and close; plan/epic: approve and go ahead`,
+      `  ${answer} --reject [--note "<what to fix>"]`,
+      `  ${answer} --answer "<his answer in his words>"`,
       `  ${answer} --option "<the option as listed, e.g. A: ...>"`,
       `  ${answer} --not-yet [--note "<his reason>"]`,
-      `If he wants something none of these say, send it to the waiting thread instead: t3-thread send ${input.owner.id} "<his answer on ${input.reference}>".`,
+      "Free text uses --answer on every open item, leaving the same comment, stage and message trail as an option. Only Brad settles; never infer his approval.",
     );
   }
   lines.push(

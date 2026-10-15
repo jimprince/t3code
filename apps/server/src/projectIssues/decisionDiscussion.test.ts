@@ -482,6 +482,23 @@ it.effect("returns the created discussion even when the seed dispatch fails", ()
 );
 
 describe("answering a decision as an agent", () => {
+  it.effect(
+    "request_ready refuses title-only content through the same server validator before any write",
+    () =>
+      Effect.gen(function* () {
+        const agent = yield* makeHarness({});
+        yield* agent.activateCaller;
+        const failure = yield* agent
+          .callTool("request_ready", {
+            threadId: ROOT,
+            reference: `${REPO}#7`,
+            summary: "Plan the jaw rework",
+          })
+          .pipe(Effect.flip);
+        expect(String(failure)).toContain("plain sentence explaining what changed");
+        expect(agent.writes).toEqual([]);
+      }),
+  );
   it.effect("decision_answer leaves exactly the widget's comment, label change and message", () =>
     Effect.gen(function* () {
       const widget = yield* makeHarness({});
@@ -503,7 +520,10 @@ describe("answering a decision as an agent", () => {
         note: "Cheapest to test first",
       });
 
-      expect(result).toEqual({ notifiedThreadId: OWNER });
+      expect(result).toMatchObject({
+        notifiedThreadId: OWNER,
+        messageId: expect.stringContaining("decision-answer:"),
+      });
       expect(agent.writes).toEqual([
         {
           method: "POST",

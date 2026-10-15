@@ -13,6 +13,7 @@ import {
   type ProjectIssuesListResult,
   type ThreadId,
 } from "@t3tools/contracts";
+import { isNotAnswer } from "@t3tools/client-runtime/decision-comment";
 import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import * as Clock from "effect/Clock";
@@ -393,16 +394,29 @@ export const make = Effect.gen(function* () {
     const cached = noteCache.get(key);
     if (cached && now - cached.at < ISSUE_CACHE_TTL_MS) return cached.value;
     const read = Effect.gen(function* () {
-      const state = cached?.value.state ?? {
-        cursor: null,
-        maxUpdatedAt: null,
-        page: 1,
-        notes: {},
-        pending: {},
-        scanStartedAt: null,
-      };
+      const savedState = cached?.value.state;
+      // Older cursors indexed only Progress notes. Backfill ready summaries once,
+      // preserving the previous progress evidence until the bounded scan completes.
+      const state =
+        savedState?.ready !== undefined
+          ? savedState
+          : {
+              ...(savedState ?? {}),
+              cursor: null,
+              maxUpdatedAt: null,
+              page: 1,
+              notes: savedState?.notes ?? {},
+              pending: {},
+              scanStartedAt: null,
+              ready: {},
+              pendingReady: {},
+            };
       const scanStartedAt = state.scanStartedAt ?? DateTime.formatIso(DateTime.makeUnsafe(now));
       const pending: Record<string, TrackerComment> = { ...state.notes, ...state.pending };
+      const pendingReady: Record<string, TrackerComment> = {
+        ...state.ready,
+        ...state.pendingReady,
+      };
       let maxUpdatedAt = state.maxUpdatedAt;
       let complete = false;
       let page = state.page;
@@ -425,12 +439,22 @@ export const make = Effect.gen(function* () {
           )
             maxUpdatedAt = updatedAt;
           const number = trackerCommentIssueNumber(comment.issue_url);
-          if (number === null || !comment.body.startsWith("Progress: ")) continue;
+          if (number === null) continue;
           const note = {
             id: comment.id,
             body: comment.body.slice(0, COMMENT_CHARS),
             createdAt: comment.created_at,
           };
+          if (!isNotAnswer(comment.body)) {
+            const previousReady = pendingReady[number];
+            if (
+              !previousReady ||
+              Date.parse(note.createdAt) > Date.parse(previousReady.createdAt) ||
+              (note.createdAt === previousReady.createdAt && note.id >= previousReady.id)
+            )
+              pendingReady[number] = note;
+          }
+          if (!comment.body.startsWith("Progress: ")) continue;
           const previous = pending[number];
           pending[number] =
             latestProgressNote(previous && previous.id !== note.id ? [previous, note] : [note]) ??
@@ -455,6 +479,8 @@ export const make = Effect.gen(function* () {
         page: complete ? 1 : page,
         notes: complete ? pending : state.notes,
         pending: complete ? {} : pending,
+        ready: complete ? pendingReady : (state.ready ?? {}),
+        pendingReady: complete ? {} : pendingReady,
       };
       yield* noteStore.write(key, nextState);
       return {
@@ -676,6 +702,15 @@ export const make = Effect.gen(function* () {
           const { partOf: _partOf, ...base } = projected;
           issues.push({
             ...base,
+            ...(notes.state?.ready?.[issue.number]
+              ? {
+                  readyComment: {
+                    author: "",
+                    body: notes.state.ready[issue.number]!.body,
+                    createdAt: notes.state.ready[issue.number]!.createdAt,
+                  },
+                }
+              : {}),
             briefingPartOf: parseBriefingPartOf(issue.body),
             ...(briefingEpics.has(issue.number)
               ? { briefingEpic: briefingEpics.get(issue.number)! }

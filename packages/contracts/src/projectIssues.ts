@@ -182,6 +182,12 @@ export const ProjectIssue = Schema.Struct({
       Schema.Struct({ author: Schema.String, body: Schema.String, createdAt: IsoDateTime }),
     ),
   ),
+  /** Agent's ready summary, retained separately from newer Progress and Curator notes. */
+  readyComment: Schema.optionalKey(
+    Schema.NullOr(
+      Schema.Struct({ author: Schema.String, body: Schema.String, createdAt: IsoDateTime }),
+    ),
+  ),
   /**
    * For an open request: the thread's reply to the message that filed it (the
    * last assistant message of the turn that message started), so each question
@@ -320,22 +326,41 @@ export type ProjectRequestSettleInput = typeof ProjectRequestSettleInput.Type;
 export const ProjectRequestSettleResult = Schema.Struct({ settled: Schema.Boolean });
 export type ProjectRequestSettleResult = typeof ProjectRequestSettleResult.Type;
 
+/** Explicit Brad actions: finished-work approval closes; plan approval starts work. */
+export const DEFAULT_DECISION_OPTIONS = {
+  review: [
+    { text: "Approve and close", recommended: true, action: "approve", effect: "settle" },
+    { text: "Reject", recommended: false, action: "reject" },
+  ],
+  approve: [
+    { text: "Approve: go ahead", recommended: true, action: "approve", effect: "start" },
+    { text: "Not yet", recommended: false, action: "not-yet" },
+  ],
+  answers: [
+    { text: "Got it", recommended: true, action: "approve", effect: "settle" },
+    { text: "Follow up", recommended: false, action: "follow-up" },
+  ],
+  test: [
+    { text: "Passed", recommended: true, action: "approve", effect: "settle" },
+    { text: "Failed", recommended: false, action: "reject" },
+  ],
+} as const;
+
 /**
- * Brad decides an item waiting on him from Needs you. `approve` and `option` start
- * the work (comment, in progress, one message to the thread on it); `not-yet`
- * returns the item to Pending with his reason and sends nothing. On a `needs-brad`
- * decision issue, `option` and `answer` comment, remove the label and send the answer
- * to the thread the issue says is waiting; the issue stays open.
+ * Brad decides an open item. Approve closes finished work and acknowledges answers
+ * or tests; on a plan/epic it gives the go-ahead and leaves it open. Reject sends
+ * work back. Options and free text leave one comment, change labels/stage and tell
+ * the asking thread; needs-brad answers remove that label and keep the issue open.
  */
 export const ProjectRequestDecideInput = Schema.Struct({
   /** A thread of the project tree, as in `ProjectRequestUpdateInput`. */
   threadId: ThreadId,
   /** Issue number in the project's tracker repository, `owner/repo#N`, or a full issue URL. */
   reference: TrimmedNonEmptyString,
-  decision: Schema.Literals(["approve", "not-yet", "option", "answer"]),
+  decision: Schema.Literals(["approve", "reject", "not-yet", "option", "answer"]),
   /** The option Brad chose (with `option`). */
   option: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(300))),
-  /** Brad's own answer to an open question (with `answer`). */
+  /** Brad's own answer on any open item (with `answer`). */
   answer: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(2000))),
   /** Why not yet (with `not-yet`), or the short note that goes with an answer; one line. */
   reason: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(500))),
@@ -343,8 +368,10 @@ export const ProjectRequestDecideInput = Schema.Struct({
 export type ProjectRequestDecideInput = typeof ProjectRequestDecideInput.Type;
 
 export const ProjectRequestDecideResult = Schema.Struct({
-  /** The thread that was told to go ahead; null for Not yet or when it could not be messaged. */
+  /** The asking or owning thread that received the answer; null when none is available. */
   notifiedThreadId: Schema.NullOr(ThreadId),
+  commentUrl: Schema.optionalKey(Schema.String),
+  messageId: Schema.optionalKey(Schema.String),
 });
 export type ProjectRequestDecideResult = typeof ProjectRequestDecideResult.Type;
 
@@ -504,6 +531,15 @@ export type ProjectRequestCreateInput = typeof ProjectRequestCreateInput.Type;
  * not an agent action.
  */
 export const ProjectRequestUpdateInput = Schema.Struct({
+  /** Proposed choices in the ready comment; only with needs-review or needs-test. */
+  options: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({
+        text: TrimmedNonEmptyString.check(Schema.isMaxLength(200), Schema.isPattern(/^[^\r\n]+$/)),
+        recommended: Schema.Boolean,
+      }),
+    ).check(Schema.isMinLength(2), Schema.isMaxLength(5)),
+  ),
   threadId: ThreadId,
   /** Issue number in the project's tracker repository, or a full issue URL. */
   reference: TrimmedNonEmptyString,
@@ -536,6 +572,8 @@ export const ProjectRequestUpdateInput = Schema.Struct({
 export type ProjectRequestUpdateInput = typeof ProjectRequestUpdateInput.Type;
 
 export const ProjectRequestRef = Schema.Struct({
+  /** Missing optional producer-contract parts; the ready write succeeded. */
+  warnings: Schema.optionalKey(Schema.Array(Schema.String)),
   host: TrimmedNonEmptyString,
   repository: TrimmedNonEmptyString,
   number: PositiveInt,

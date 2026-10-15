@@ -159,6 +159,9 @@ const StoredTrackerComment = Schema.Struct({
   createdAt: Schema.String,
 });
 const StoredRepositoryNotes = Schema.Struct({
+  /** Ready summaries share the bounded repository-comment scan with progress notes. */
+  ready: Schema.optionalKey(Schema.Record(Schema.String, StoredTrackerComment)),
+  pendingReady: Schema.optionalKey(Schema.Record(Schema.String, StoredTrackerComment)),
   scanStartedAt: Schema.optionalKey(Schema.NullOr(Schema.String)),
   cursor: Schema.NullOr(Schema.String),
   maxUpdatedAt: Schema.NullOr(Schema.String),

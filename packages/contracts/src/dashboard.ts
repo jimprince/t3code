@@ -1,4 +1,6 @@
 import { ThreadFilePlan } from "./orchestrationV2.ts";
+import { OrchestrationV2UserInputQuestion } from "./orchestrationV2.ts";
+import { ProviderApprovalOption } from "./providerPolicy.ts";
 import { ProjectRequestPlacer } from "./projectIssues.ts";
 import * as Schema from "effect/Schema";
 import { IsoDateTime, NonNegativeInt, ThreadId } from "./baseSchemas.ts";
@@ -74,13 +76,44 @@ export const DashboardAttention = Schema.Struct({
   title: Schema.String,
   kind: Schema.Literals(["decision", "question", "approval", "review", "test"]),
   canRespond: Schema.Boolean,
-  options: Schema.Array(Schema.Struct({ text: Schema.String, recommended: Schema.Boolean })),
+  /** Answer semantics independent of display kind and proposed option text. */
+  answer: Schema.optionalKey(
+    Schema.Literals([
+      "issue-choice",
+      "issue-review",
+      "issue-approve",
+      "issue-read",
+      "issue-test",
+      "thread-question",
+      "thread-approval",
+    ]),
+  ),
+  options: Schema.Array(
+    Schema.Struct({
+      text: Schema.String,
+      recommended: Schema.Boolean,
+      /** Explicit consequence of an approve action. */
+      effect: Schema.optionalKey(Schema.Literals(["settle", "start"])),
+      /** follow-up focuses the answer box; other actions call projectRequests.decide. */
+      action: Schema.optionalKey(
+        Schema.Literals(["approve", "reject", "not-yet", "option", "follow-up"]),
+      ),
+    }),
+  ),
+  questions: Schema.optionalKey(Schema.Array(OrchestrationV2UserInputQuestion)),
+  messageResponse: Schema.optionalKey(Schema.Boolean),
+  approvalOptions: Schema.optionalKey(Schema.Array(ProviderApprovalOption)),
   priority: NonNegativeInt,
   url: Schema.NullOr(Schema.String),
   threadId: Schema.NullOr(ThreadId),
   updatedAt: IsoDateTime,
   deadline: Schema.NullOr(Schema.String),
   question: Schema.String,
+  /** Producer's explanation; empty when the card asks nothing beyond its title. */
+  summary: Schema.optionalKey(Schema.String),
+  judgingWhere: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  recommended: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  asksNothingYet: Schema.optionalKey(Schema.Boolean),
   sourceId: Schema.String,
 });
 export type DashboardAttention = typeof DashboardAttention.Type;

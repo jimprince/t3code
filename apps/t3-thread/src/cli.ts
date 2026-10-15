@@ -126,7 +126,7 @@ function resolveParentThreadId(
   return reference;
 }
 import type { ProjectLayout } from "@t3tools/contracts";
-import { decisionAnswerPayload, type DecisionAnswerFlags } from "./decisions.js";
+import { decisionAnswerPayload, readyOptions, type DecisionAnswerFlags } from "./decisions.js";
 
 import { runResumePlan } from "./resumePlan.js";
 
@@ -2147,21 +2147,41 @@ request
   .argument("<thread>", "saved agent name or raw thread UUID in the project")
   .argument("<request>", "issue number in the project tracker, owner/repo#N, or issue URL")
   .option("--stage <stage>", "needs-review (default) or awaiting-release", "needs-review")
-  .option("--summary <text>", "comment for Brad: the answer, or what to look at and where")
-  .action(async (reference, requestReference, options: { stage: string; summary?: string }) => {
-    if (options.stage !== "needs-review" && options.stage !== "awaiting-release") {
-      throw new Error("--stage must be needs-review or awaiting-release.");
-    }
-    const { agent: target, client } = await withAgent(reference);
-    printJson(
-      await client.projectRequest("projectRequestsUpdate", {
-        threadId: target.threadId,
-        reference: requestReference,
-        status: options.stage,
-        ...(options.summary ? { comment: options.summary } : {}),
-      }),
-    );
-  });
+  .option(
+    "--summary <text>",
+    "plain sentence beyond the title; What you are judging and where: <screenshot/link/Dev Update>; Option A:/B:; Recommended: Option A. Title-only summaries are refused; missing parts warn",
+  )
+  .option(
+    "--option <label>",
+    "proposed choice, repeat 2 to 5 times; without options Brad sees Approve and close / Reject for finished work",
+    (value: string, previous: string[]) => [...previous, value],
+    [] as string[],
+  )
+  .option("--recommend <number>", "recommended option, numbered from 1")
+  .action(
+    async (
+      reference,
+      requestReference,
+      options: { stage: string; summary?: string; option: string[]; recommend?: string },
+    ) => {
+      const choices = readyOptions(options.option, options.recommend);
+      if (choices && options.stage !== "needs-review")
+        throw new Error("--option requires needs-review.");
+      if (options.stage !== "needs-review" && options.stage !== "awaiting-release") {
+        throw new Error("--stage must be needs-review or awaiting-release.");
+      }
+      const { agent: target, client } = await withAgent(reference);
+      printJson(
+        await client.projectRequest("projectRequestsUpdate", {
+          threadId: target.threadId,
+          reference: requestReference,
+          status: options.stage,
+          ...(choices ? { options: choices } : {}),
+          ...(options.summary ? { comment: options.summary } : {}),
+        }),
+      );
+    },
+  );
 
 request
   .command("note")
@@ -2190,19 +2210,49 @@ request
   .argument("<thread>", "saved agent name or raw thread UUID in the project")
   .argument("<request>", "issue number in the project tracker, owner/repo#N, or issue URL")
   .requiredOption("--release <tag>", "release it shipped in, for example fork.24 (its milestone)")
-  .requiredOption("--test <step>", "one-line test step for Brad")
-  .action(async (reference, requestReference, options: { release: string; test: string }) => {
-    const { agent: target, client } = await withAgent(reference);
-    printJson(
-      await client.projectRequest("projectRequestsUpdate", {
-        threadId: target.threadId,
-        reference: requestReference,
-        status: "needs-test",
-        release: options.release,
-        comment: `Test: ${options.test}`,
-      }),
-    );
-  });
+  .requiredOption(
+    "--test <step>",
+    "what Brad is judging and where: screenshot, link, or Dev app after Update X",
+  )
+  .option(
+    "--summary <text>",
+    "plain sentence explaining what changed beyond the title; missing optional producer parts warn",
+  )
+  .option(
+    "--option <label>",
+    "proposed choice, repeat 2 to 5 times; defaults are Passed / Failed",
+    (value: string, previous: string[]) => [...previous, value],
+    [] as string[],
+  )
+  .option("--recommend <number>", "recommended option, numbered from 1")
+  .action(
+    async (
+      reference,
+      requestReference,
+      options: {
+        release: string;
+        test: string;
+        summary?: string;
+        option: string[];
+        recommend?: string;
+      },
+    ) => {
+      const choices = readyOptions(options.option, options.recommend);
+      const { agent: target, client } = await withAgent(reference);
+      printJson(
+        await client.projectRequest("projectRequestsUpdate", {
+          threadId: target.threadId,
+          reference: requestReference,
+          status: "needs-test",
+          release: options.release,
+          comment: options.summary
+            ? `${options.summary}\nWhat you are judging and where: ${options.test}`
+            : `Test: ${options.test}`,
+          ...(choices ? { options: choices } : {}),
+        }),
+      );
+    },
+  );
 
 request
   .command("type")
@@ -2356,8 +2406,15 @@ decision
   .argument("<thread>", "saved agent name or raw thread UUID in the decision's project")
   .argument("<decision>", "issue number in the project tracker, owner/repo#N, or issue URL")
   .option("--option <text>", "the option Brad chose, as listed")
-  .option("--answer <text>", "Brad's own answer to a needs-brad decision")
-  .option("--approve", "approve a Needs you plan")
+  .option(
+    "--answer <text>",
+    "Brad's own answer to any open item; comments, changes stage and tells its asking thread",
+  )
+  .option(
+    "--approve",
+    "Brad explicitly approves: close finished work, or give a plan/epic the go-ahead",
+  )
+  .option("--reject", "send work back with --note, only when Brad decided to reject it")
   .option("--not-yet", "return a Needs you item to Pending")
   .option("--note <text>", "one line of why (the reason, with --not-yet)")
   .action(async (reference, decisionReference, options: DecisionAnswerFlags) => {

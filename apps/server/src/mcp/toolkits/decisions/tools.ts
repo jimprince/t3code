@@ -3,6 +3,8 @@ import {
   OrchestratorMcpFailure,
   ProjectIssuesError,
   ProjectRequestDecideResult,
+  ProjectRequestRef,
+  ProjectRequestUpdateInput,
   ProjectRequestDiscussResult,
   ThreadId,
   TrimmedNonEmptyString,
@@ -56,9 +58,9 @@ const AnswerDecisionTool = Tool.make("decision_answer", {
     "Record the answer Brad settled on, exactly as answering from the Decisions widget or Needs you: the answer is commented on the issue and sent to the waiting thread, and a needs-brad decision leaves the widget. Only record what Brad decided.",
   parameters: Schema.Struct({
     ...decisionFields,
-    decision: Schema.Literals(["option", "answer", "approve", "not-yet"]).annotate({
+    decision: Schema.Literals(["option", "answer", "approve", "reject", "not-yet"]).annotate({
       description:
-        "option: one of the listed options; answer: his own words (needs-brad decisions); approve or not-yet: a Needs you plan or item.",
+        "option: the verbatim proposed choice; answer: Brad's own words on any open item; approve: close finished work, acknowledge an answer or confirm a test, but start a plan/epic; reject: send work back with note; not-yet: defer a plan. Only relay Brad's explicit decision. When producing a review, supply 2 to 5 ready options when there is a real choice, else defaults apply.",
     }),
     option: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(300))),
     answer: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(2000))),
@@ -78,4 +80,28 @@ const AnswerDecisionTool = Tool.make("decision_answer", {
   .annotate(Tool.Idempotent, false)
   .annotate(Tool.OpenWorld, true);
 
-export const DecisionsToolkit = Toolkit.make(DiscussDecisionTool, AnswerDecisionTool);
+const ReadyRequestTool = Tool.make("request_ready", {
+  description:
+    "Mark work ready for Brad. Supply a plain sentence explaining what changed/proposed beyond the title, a 'What you are judging and where:' line with a screenshot/link/Dev Update location, 2 to 5 Option A:/Option B: choices (or options), and Recommended: Option A. A title-only summary is refused; missing location, recommendation or choices returns warnings. Finished work defaults to Approve and close / Reject; plans to Approve: go ahead / Not yet; tests to Passed / Failed. Only Brad settles.",
+  parameters: Schema.Struct({
+    ...decisionFields,
+    summary: TrimmedNonEmptyString,
+    stage: Schema.optionalKey(Schema.Literals(["needs-review", "needs-test"])),
+    release: ProjectRequestUpdateInput.fields.release,
+    options: ProjectRequestUpdateInput.fields.options,
+  }),
+  success: ProjectRequestRef,
+  failure,
+  dependencies,
+})
+  .annotate(Tool.Title, "Mark a request ready")
+  .annotate(Tool.Readonly, false)
+  .annotate(Tool.Destructive, false)
+  .annotate(Tool.Idempotent, false)
+  .annotate(Tool.OpenWorld, true);
+
+export const DecisionsToolkit = Toolkit.make(
+  DiscussDecisionTool,
+  AnswerDecisionTool,
+  ReadyRequestTool,
+);

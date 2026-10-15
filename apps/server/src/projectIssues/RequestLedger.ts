@@ -1,4 +1,7 @@
 import * as IssueBody from "./issueBody.ts";
+import { validateDecisionReady } from "./decisionReady.logic.ts";
+import { isNotAnswer } from "@t3tools/client-runtime/decision-comment";
+import { planSendBack } from "./decisionFeed.logic.ts";
 import { parsePartOf } from "./epicProgress.logic.ts";
 import { HttpClient } from "effect/http";
 import * as ShellSnapshotDiagnostics from "../diagnostics/ShellSnapshotDiagnostics.ts";
@@ -126,18 +129,23 @@ const GiteaIssueLabels = Schema.Struct({
   html_url: Schema.String,
   labels: Schema.optional(Schema.NullOr(Schema.Array(Schema.Struct({ name: Schema.String })))),
 });
-const GiteaComments = Schema.Array(
-  Schema.Struct({
-    body: Schema.String,
-    created_at: Schema.String,
-    user: Schema.optional(Schema.NullOr(Schema.Struct({ login: Schema.String }))),
-  }),
-);
+const GiteaComment = Schema.Struct({
+  id: Schema.optionalKey(Schema.Number),
+  html_url: Schema.optionalKey(Schema.String),
+  body: Schema.String,
+  created_at: Schema.String,
+  user: Schema.optional(Schema.NullOr(Schema.Struct({ login: Schema.String }))),
+});
+const GiteaComments = Schema.Array(GiteaComment);
 
 const RECENT_MESSAGE_LIMIT = 500;
+const encodeDecisionKey = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 type LatestComment = { author: string; body: string; createdAt: string } | null;
 /** Each request's newest comment, kept until the issue's updated_at moves (process-wide). */
-const latestCommentCache = new Map<string, { updatedAt: string; comment: LatestComment }>();
+const latestCommentCache = new Map<
+  string,
+  { updatedAt: string; comment: LatestComment; ready: LatestComment }
+>();
 type Answer = NonNullable<ProjectIssuesListResult["issues"][number]["answer"]>;
 /** Found answers never change, so they are kept for the life of the process. */
 const answerCache = new Map<string, Answer>();
@@ -1009,6 +1017,8 @@ export const make = (deps: {
      */
     const update = (input: ProjectRequestUpdateInput) =>
       Effect.gen(function* () {
+        if (input.options && input.status !== "needs-review" && input.status !== "needs-test")
+          return yield* fail("Options require needs-review or needs-test.");
         if (input.duplicateOf !== undefined && input.actor !== "brad")
           return yield* fail(
             "Only Brad can close a duplicate from the Dashboard UI; agents must note the duplicate and leave it open.",
@@ -1043,6 +1053,33 @@ export const make = (deps: {
         if (issue.pull_request != null)
           return yield* fail("That Gitea URL is a pull request, not an issue.");
         const names = new Set((issue.labels ?? []).map((label) => label.name.toLowerCase()));
+        const summary =
+          input.comment?.trim() ||
+          (input.status !== undefined && names.has(input.status)
+            ? null
+            : progressLineFor(input.status));
+        const choices =
+          input.options?.map(
+            (option, index) => `Option ${String.fromCharCode(65 + index)}: ${option.text}`,
+          ) ?? [];
+        const recommended = input.options?.findIndex((option) => option.recommended) ?? -1;
+        const note = [
+          summary,
+          ...choices,
+          recommended >= 0 ? `Recommended: Option ${String.fromCharCode(65 + recommended)}` : null,
+        ]
+          .filter(Boolean)
+          .join("\n\n");
+        const validation =
+          input.status === "needs-review" ||
+          input.status === "needs-test" ||
+          input.status === "awaiting-release"
+            ? validateDecisionReady(
+                input.title ?? issue.title ?? "",
+                input.comment?.trim() ? note : "",
+              )
+            : { error: null, warnings: [] };
+        if (validation.error) return yield* fail(validation.error);
         // Typing a task is the one change that applies to any tracker issue, open or closed.
         const typeOnly =
           (input.kind !== undefined ||
@@ -1193,11 +1230,6 @@ export const make = (deps: {
         }
         // Every stage change leaves a short progress line on the issue, so the page can
         // show the latest one even when the agent wrote no summary.
-        const note =
-          input.comment?.trim() ||
-          (input.status !== undefined && names.has(input.status)
-            ? null
-            : progressLineFor(input.status));
         if (note) {
           yield* api
             .send(target.instance, "POST", `${path}/comments`, { body: note })
@@ -1216,6 +1248,7 @@ export const make = (deps: {
           repository: target.repository,
           number: reference.number,
           url: issue.html_url,
+          ...(validation.warnings.length ? { warnings: validation.warnings } : {}),
         } satisfies ProjectRequestRef;
       });
 
@@ -1266,159 +1299,202 @@ export const make = (deps: {
         return notified;
       });
 
-    /**
-     * Brad answers a decision issue, in an order that makes a retry safe: his answer is
-     * commented on it (the record, not posted again when it is already the newest
-     * comment), the needs-brad label comes off so it leaves the Decisions widget, and
-     * the thread its decision block says is waiting is told last. A failed step fails
-     * with what already happened. The issue stays open.
-     */
-    const answerDecision = (
-      input: ProjectRequestDecideInput,
-      target: GiteaRepositoryTarget,
-      reference: { readonly number: number },
-      issue: typeof GiteaIssueLabels.Type,
-    ) =>
-      Effect.gen(function* () {
-        const path = `${GiteaApi.repositoryPath(target.repository)}/issues/${reference.number}`;
-        const ref = `${target.repository}#${reference.number}`;
-        const plan = planBradAnswer({
-          decision: input.decision === "answer" ? "answer" : "option",
-          option: input.option,
-          answer: input.answer,
-          note: input.reason,
-          title: issue.title ?? `#${reference.number}`,
-          reference: ref,
-          url: issue.html_url,
-        });
-        if (!plan) return yield* fail("Choose an option or write an answer.");
-
-        const comments = yield* api
-          .request(target.instance, `${path}/comments`, GiteaComments)
-          .pipe(Effect.mapError((error) => fail(`Could not read ${ref}: ${error.detail}`)));
-        if (comments.at(-1)?.body.trim() !== plan.comment) {
-          yield* api
-            .send(target.instance, "POST", `${path}/comments`, { body: plan.comment })
-            .pipe(
+    // Serialize answer trails; persisted comment ids also key dispatch deduplication on retries.
+    const decisionLock = Semaphore.makeUnsafe(1);
+    const decide = (input: ProjectRequestDecideInput) =>
+      decisionLock.withPermit(
+        Effect.gen(function* () {
+          const resolved = yield* resolveOrFail(input.threadId);
+          const reference = parseRequestReference(input.reference, resolved.target);
+          if (!reference)
+            return yield* fail("Expected an issue number, owner/repo#N, or issue URL.");
+          const target =
+            reference.repository === resolved.target.repository
+              ? resolved.target
+              : { ...resolved.target, repository: reference.repository };
+          const path = `${GiteaApi.repositoryPath(target.repository)}/issues/${reference.number}`;
+          const ref = `${target.repository}#${reference.number}`;
+          const issue = yield* api
+            .request(target.instance, path, GiteaIssueLabels)
+            .pipe(Effect.mapError((error) => fail(error.detail)));
+          if (issue.pull_request != null)
+            return yield* fail("That Gitea URL is a pull request, not an issue.");
+          const names = new Set((issue.labels ?? []).map((label) => label.name.toLowerCase()));
+          const decisionIssue = names.has(NEEDS_BRAD_LABEL) || hasDecisionBlock(issue.body);
+          const question = names.has("ask:question") && !names.has("ask:task");
+          const epic =
+            !question && !names.has("ask:task") && (names.has("ask:epic") || names.has("ask:plan"));
+          const test = names.has(NEEDS_TEST_LABEL);
+          const ready = names.has("needs-review") || test;
+          const closes =
+            input.decision === "approve" &&
+            !decisionIssue &&
+            (ready || issue.state === "closed") &&
+            (!epic || test);
+          const subject = {
+            title: issue.title ?? `#${reference.number}`,
+            reference: ref,
+            url: issue.html_url,
+          };
+          const answer =
+            input.decision === "answer" || input.decision === "option"
+              ? planBradAnswer({
+                  ...subject,
+                  decision: input.decision,
+                  answer: input.answer,
+                  option: input.option,
+                  note: input.reason,
+                })
+              : input.decision === "reject"
+                ? planSendBack({
+                    ...subject,
+                    note: input.reason?.trim() || (test ? "Failed" : "Rejected by Brad"),
+                  })
+                : planDecision({ ...subject, decision: input.decision, reason: input.reason });
+          if (!answer) return yield* fail("Choose an option or write an answer.");
+          let commentText = answer.comment;
+          if (input.decision === "answer" && !decisionIssue && question)
+            commentText = commentText.replace(/^Brad answered:/, "Follow-up from Brad:");
+          if (input.decision === "answer" && !decisionIssue && test)
+            commentText = commentText.replace(/^Brad answered:/, "Failed:");
+          if (closes && question && !test) commentText = "Got it: acknowledged by Brad";
+          if (closes && test) commentText = "Passed: confirmed by Brad";
+          const comments = yield* api
+            .request(target.instance, `${path}/comments`, GiteaComments)
+            .pipe(Effect.mapError((error) => fail(`Could not read ${ref}: ${error.detail}`)));
+          let comment = comments.at(-1);
+          // A closed item accepts only the retry of the approval that already closed it.
+          if (issue.state === "closed" && (!closes || comment?.body.trim() !== commentText))
+            return yield* fail("That issue is already closed.");
+          if (comment?.body.trim() !== commentText) {
+            const posted = yield* api
+              .request(
+                target.instance,
+                `${path}/comments`,
+                Schema.Struct({
+                  id: Schema.optionalKey(Schema.Number),
+                  html_url: Schema.optionalKey(Schema.String),
+                }),
+                { body: commentText },
+              )
+              .pipe(
+                Effect.mapError((error) =>
+                  fail(`Could not post the answer on ${ref}: ${error.detail}`),
+                ),
+              );
+            comment = { ...posted, body: commentText, created_at: "" };
+          }
+          const receipt = comment?.html_url ? { commentUrl: comment.html_url } : {};
+          if (names.has(NEEDS_BRAD_LABEL)) {
+            yield* ensureLabels(target.instance, target.repository, [NEEDS_BRAD_LABEL]).pipe(
+              Effect.flatMap(([labelId]) =>
+                api.send(target.instance, "DELETE", `${path}/labels/${labelId}`),
+              ),
               Effect.mapError((error) =>
-                fail(`Could not post the answer on ${ref}: ${error.detail}`),
+                fail(`The answer is on ${ref}, but its needs-brad label stayed: ${error.detail}`),
               ),
             );
-        }
-        const asksBrad = (issue.labels ?? []).some(
-          (label) => label.name.toLowerCase() === NEEDS_BRAD_LABEL,
-        );
-        if (asksBrad) {
-          yield* ensureLabels(target.instance, target.repository, [NEEDS_BRAD_LABEL]).pipe(
-            Effect.flatMap(([labelId]) =>
-              api.send(target.instance, "DELETE", `${path}/labels/${labelId}`),
-            ),
-            Effect.mapError((error) =>
-              fail(`The answer is on ${ref}, but its needs-brad label stayed: ${error.detail}`),
-            ),
-          );
-        }
-        invalidate(target);
-
-        const threads = yield* readThreads.pipe(
-          Effect.mapError(() => fail(`The answer is on ${ref}, but threads could not be read.`)),
-        );
-        const waitingId = resolveWaitingThread(
-          parseDecisionIssue(issue.body).waiting,
-          threads,
-          yield* projectService
-            .listShells()
+          }
+          if (closes) {
+            if (issue.state !== "closed")
+              yield* api
+                .send(target.instance, "PATCH", path, { state: "closed" })
+                .pipe(
+                  Effect.mapError((error) =>
+                    fail(`The answer is on ${ref}, but it could not be closed: ${error.detail}`),
+                  ),
+                );
+          } else if (!decisionIssue) {
+            const status = input.decision === "not-yet" ? "pending" : "in-progress";
+            const stageLabels = [...STATUS_LABELS, AWAITING_RELEASE_LABEL, NEEDS_TEST_LABEL];
+            const ids = yield* ensureLabels(target.instance, target.repository, stageLabels).pipe(
+              Effect.mapError((error) =>
+                fail(`The answer is on ${ref}, but its stage stayed: ${error.detail}`),
+              ),
+            );
+            for (const [index, name] of stageLabels.entries()) {
+              const wanted = name === status;
+              if (wanted === names.has(name)) continue;
+              yield* (
+                wanted
+                  ? api.send(target.instance, "POST", `${path}/labels`, { labels: [ids[index]] })
+                  : api.send(target.instance, "DELETE", `${path}/labels/${ids[index]}`)
+              ).pipe(
+                Effect.mapError((error) =>
+                  fail(`The answer is on ${ref}, but its stage stayed: ${error.detail}`),
+                ),
+              );
+            }
+          }
+          invalidate(target);
+          yield* refreshDashboard.pipe(Effect.forkDetach);
+          const threads = yield* readThreads;
+          let recipientId: string | null;
+          if (decisionIssue) {
+            recipientId = resolveWaitingThread(
+              parseDecisionIssue(issue.body).waiting,
+              threads,
+              yield* projectService
+                .listShells()
+                .pipe(
+                  Effect.mapError(() =>
+                    fail(`The answer is on ${ref}, but projects could not be read.`),
+                  ),
+                ),
+            );
+          } else {
+            const listed = yield* deps.projectIssues.list({ rootThreadId: resolved.root.id });
+            const item = listed.issues.find(
+              (candidate) =>
+                candidate.repository === reference.repository &&
+                candidate.number === reference.number,
+            );
+            recipientId = decisionThreadId(
+              item?.owner?.threadId
+                ? [item.owner.threadId, ...item.linkedThreadIds]
+                : (item?.linkedThreadIds ?? []),
+              resolved.root.id,
+              new Set(
+                threads.filter((thread) => thread.archivedAt === null).map((thread) => thread.id),
+              ),
+            );
+          }
+          const recipient = threads.find((thread) => thread.id === recipientId);
+          if (!recipient) return { notifiedThreadId: null, ...receipt };
+          const digest = yield* crypto
+            .digest(
+              "SHA-256",
+              new TextEncoder().encode(
+                encodeDecisionKey([
+                  target.host,
+                  target.repository,
+                  reference.number,
+                  comment?.id ?? commentText,
+                ]),
+              ),
+            )
             .pipe(
               Effect.mapError(() =>
-                fail(`The answer is on ${ref}, but projects could not be read.`),
+                fail(`The answer is on ${ref}, but a delivery id could not be created.`),
+              ),
+            );
+          const messageId = `decision-answer:${Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+          const message = `${commentText}\n\nOn ${ref} "${subject.title}" (${subject.url}).${epic && input.decision === "approve" ? " Go ahead." : ""}`;
+          const notifiedThreadId = yield* tellThread(
+            recipient,
+            message,
+            reference.number,
+            messageId,
+          ).pipe(
+            Effect.mapError((error) =>
+              fail(
+                `The answer is on ${ref}, but ${recipient.title} was not told: ${describeError(error)}`,
               ),
             ),
-        );
-        const recipient = threads.find((thread) => thread.id === waitingId);
-        if (!recipient) return { notifiedThreadId: null };
-        const notifiedThreadId = yield* tellThread(recipient, plan.message, reference.number).pipe(
-          Effect.mapError((error) =>
-            fail(
-              `The answer is on ${ref}, but ${recipient.title} was not told: ${describeError(error)}`,
-            ),
-          ),
-        );
-        return { notifiedThreadId };
-      });
-
-    /**
-     * Brad decides an item from Needs you. Approve and an option comment, move the
-     * issue to in progress and tell the thread on it (the orchestrator when none is
-     * linked) to go ahead; Not yet comments his reason and returns it to Pending.
-     */
-    const decide = (input: ProjectRequestDecideInput) =>
-      Effect.gen(function* () {
-        const resolved = yield* resolveOrFail(input.threadId);
-        const reference = parseRequestReference(input.reference, resolved.target);
-        if (!reference) return yield* fail("Expected an issue number, owner/repo#N, or issue URL.");
-        const target =
-          reference.repository === resolved.target.repository
-            ? resolved.target
-            : { ...resolved.target, repository: reference.repository };
-        const issue = yield* api
-          .request(
-            target.instance,
-            `${GiteaApi.repositoryPath(target.repository)}/issues/${reference.number}`,
-            GiteaIssueLabels,
-          )
-          .pipe(Effect.mapError((error) => fail(error.detail)));
-        if (issue.state === "closed") return yield* fail("That issue is already closed.");
-        const asksBrad = (issue.labels ?? []).some(
-          (label) => label.name.toLowerCase() === NEEDS_BRAD_LABEL,
-        );
-        if (
-          input.decision === "answer" ||
-          (input.decision === "option" && (asksBrad || hasDecisionBlock(issue.body)))
-        ) {
-          return yield* answerDecision(input, target, reference, issue);
-        }
-        const plan = planDecision({
-          decision: input.decision,
-          option: input.option,
-          reason: input.reason,
-          title: issue.title ?? `#${reference.number}`,
-          url: issue.html_url,
-        });
-        if (!plan) return yield* fail("Choose an option to decide with.");
-
-        const threads = yield* readThreads;
-        const listed = yield* deps.projectIssues.list({ rootThreadId: resolved.root.id });
-        const linked =
-          listed.issues.find(
-            (candidate) =>
-              candidate.repository === reference.repository &&
-              candidate.number === reference.number,
-          )?.linkedThreadIds ?? [];
-        const liveThreadIds = new Set(
-          threads.filter((thread) => thread.archivedAt === null).map((thread) => thread.id),
-        );
-        const recipient = threads.find(
-          (thread) => thread.id === decisionThreadId(linked, resolved.root.id, liveThreadIds),
-        );
-
-        yield* update({
-          threadId: input.threadId,
-          reference: input.reference,
-          status: plan.status,
-          comment: plan.comment,
-        });
-        if (plan.message === null || !recipient) return { notifiedThreadId: null };
-
-        const notifiedThreadId = yield* tellThread(recipient, plan.message, reference.number).pipe(
-          Effect.tapError((error) =>
-            Effect.logWarning("could not tell the thread about Brad's decision", {
-              detail: String(error),
-            }),
-          ),
-          Effect.orElseSucceed(() => null),
-        );
-        return { notifiedThreadId };
-      });
+          );
+          return { notifiedThreadId, ...receipt, messageId };
+        }),
+      );
 
     /**
      * Brad wants to talk a decision through before answering it. Opens a thread nested
@@ -1782,9 +1858,10 @@ export const make = (deps: {
             const cacheKey = `${issue.host}/${issue.repository}#${issue.number}`;
             const cached = latestCommentCache.get(cacheKey);
             if (cached && cached.updatedAt === issue.updatedAt) {
-              return Effect.succeed(
-                cached.comment ? withLatestComment(issue, cached.comment) : issue,
-              );
+              return Effect.succeed({
+                ...(cached.comment ? withLatestComment(issue, cached.comment) : issue),
+                readyComment: cached.ready,
+              });
             }
             return api
               .request(
@@ -1802,8 +1879,23 @@ export const make = (deps: {
                         createdAt: latest.created_at,
                       }
                     : null;
-                  latestCommentCache.set(cacheKey, { updatedAt: issue.updatedAt, comment });
-                  return comment ? withLatestComment(issue, comment) : issue;
+                  const ready = comments.findLast((row) => !isNotAnswer(row.body));
+                  const readySummary: LatestComment = ready
+                    ? {
+                        author: ready.user?.login ?? "",
+                        body: ready.body,
+                        createdAt: ready.created_at,
+                      }
+                    : null;
+                  latestCommentCache.set(cacheKey, {
+                    updatedAt: issue.updatedAt,
+                    comment,
+                    ready: readySummary,
+                  });
+                  return {
+                    ...(comment ? withLatestComment(issue, comment) : issue),
+                    readyComment: readySummary,
+                  };
                 }),
                 Effect.orElseSucceed(() => issue),
               );
