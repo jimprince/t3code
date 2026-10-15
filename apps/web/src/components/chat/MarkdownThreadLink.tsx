@@ -1,5 +1,8 @@
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
-import type { ThreadLinkResolution } from "@t3tools/client-runtime/state/thread-link-resolution";
+import {
+  threadLinkTarget,
+  type ThreadLinkResolution,
+} from "@t3tools/client-runtime/state/thread-link-resolution";
 import type { EnvironmentId, OrchestrationV2ThreadShell, ThreadId } from "@t3tools/contracts";
 import { formatThreadLink } from "@t3tools/shared/threadLinks";
 import { Link } from "@tanstack/react-router";
@@ -51,7 +54,8 @@ export function MarkdownThreadLink(props: {
   const project = useProject(
     found === null ? null : scopeProjectRef(found.environmentId, found.thread.projectId),
   );
-  const threadId = found?.threadId ?? props.threadId;
+  const target = threadLinkTarget(link, props);
+  const threadId = target.threadId;
   const title = found?.thread.title.trim() || props.label;
   const tooltip = threadLinkTooltip(link, project?.title);
   const copy = formatThreadLink(threadId, title);
@@ -66,7 +70,7 @@ export function MarkdownThreadLink(props: {
   return (
     <Link
       to="/$environmentId/$threadId"
-      params={{ environmentId: found?.environmentId ?? props.environmentId, threadId }}
+      params={{ environmentId: target.environmentId, threadId }}
       title={tooltip}
       data-markdown-copy={copy}
     >

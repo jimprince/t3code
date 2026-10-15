@@ -9,6 +9,7 @@ import {
   createThreadLinkAtoms,
   resolveThreadAcrossEnvironments,
   threadLinkKey,
+  threadLinkTarget,
   type ThreadLinkEnvironment,
 } from "./threadLinkResolution.ts";
 
@@ -176,6 +177,32 @@ describe("resolveThreadAcrossEnvironments", () => {
       environmentId: mac,
       threadId: "mcp%3Aabc",
     });
+  });
+});
+
+describe("threadLinkTarget", () => {
+  const written = { environmentId: devVm, threadId: ThreadId.make("mcp%3Aabc") };
+
+  it("goes to the environment and id where the thread was found", () => {
+    const resolution = resolve("mcp%3Aabc", [
+      environment(devVm, "Dev VM"),
+      environment(mac, "Mac", { threads: ["mcp:abc"] }),
+    ]);
+    expect(threadLinkTarget(resolution, written)).toEqual({
+      environmentId: mac,
+      threadId: "mcp:abc",
+    });
+  });
+
+  it("goes where the link was written when the thread is not found or ambiguous", () => {
+    const missing = resolve("mcp%3Aabc", [environment(devVm, "Dev VM")]);
+    expect(threadLinkTarget(missing, written)).toEqual(written);
+    const ambiguous = resolve("mcp%3Aabc", [
+      environment(devVm, "Dev VM"),
+      environment(mac, "Mac", { threads: ["mcp:abc"] }),
+      environment(laptop, "Laptop", { threads: ["mcp:abc"] }),
+    ]);
+    expect(threadLinkTarget(ambiguous, written)).toEqual(written);
   });
 });
 

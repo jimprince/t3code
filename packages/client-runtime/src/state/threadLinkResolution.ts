@@ -89,6 +89,20 @@ export function resolveThreadAcrossEnvironments<Shell extends { readonly id: Thr
     : { kind: "unavailable", reason: "not-found" };
 }
 
+/**
+ * Where following a link goes: the thread where it was found. When it was not found (or the id
+ * is ambiguous) it goes where the link was written, whose thread route says what is missing;
+ * archived threads are not in the thread list but still open there.
+ */
+export function threadLinkTarget(
+  resolution: ThreadLinkResolution<{ readonly id: ThreadId }>,
+  written: { readonly environmentId: EnvironmentId; readonly threadId: ThreadId },
+): { readonly environmentId: EnvironmentId; readonly threadId: ThreadId } {
+  return resolution.kind === "found"
+    ? { environmentId: resolution.environmentId, threadId: resolution.threadId }
+    : written;
+}
+
 function found<Shell extends { readonly id: ThreadId }>(
   environment: ThreadLinkEnvironment<Shell>,
   threadId: ThreadId,

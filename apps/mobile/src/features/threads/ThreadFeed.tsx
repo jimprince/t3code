@@ -190,6 +190,7 @@ import {
   WORK_GROUP_TOGGLE_HEIGHT,
 } from "./thread-work-log";
 import { appendPendingThreadMessages, type PendingThreadFeedEntry } from "./pending-thread-feed";
+import { resolveThreadLinkTarget } from "../../state/threadLinks";
 import type { QueuedThreadMessage } from "../../state/thread-outbox-model";
 import { resolveThreadFeedFixedItemSize } from "./thread-feed-item-size";
 import { htmlRenderFrameHeight } from "@t3tools/shared/htmlRender";
@@ -2402,12 +2403,13 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   const userBubbleColor = theme["--color-user-bubble"];
   const onMarkdownLinkPress = useCallback(
     (href: string) => {
-      // A thread link names a thread in this feed's environment.
+      // A thread link names no environment: this feed's first, then any other connected one.
       const linkedThreadId = parseThreadLinkHref(href);
       if (linkedThreadId) {
+        const target = resolveThreadLinkTarget(props.environmentId, linkedThreadId);
         navigation.navigate("Thread", {
-          environmentId: String(props.environmentId),
-          threadId: String(linkedThreadId),
+          environmentId: String(target.environmentId),
+          threadId: String(target.threadId),
         });
         return;
       }

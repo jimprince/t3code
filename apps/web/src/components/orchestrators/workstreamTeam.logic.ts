@@ -1,3 +1,4 @@
+import type { EnvironmentId } from "@t3tools/contracts";
 import {
   lastActivityAt,
   type OrchestratorThreadShell,
@@ -11,6 +12,8 @@ export type TeamTag = Exclude<ThreadTag, "done"> | "idle";
 
 export interface TeamMember {
   readonly threadId: string;
+  /** The machine the agent runs on; a project's standing agents may live on another. */
+  readonly environmentId: EnvironmentId;
   readonly title: string;
   readonly head: boolean;
   readonly tag: TeamTag;
@@ -94,6 +97,7 @@ export function deriveTeam(input: {
     ].filter((part): part is string => part !== null);
     return {
       threadId: thread.id,
+      environmentId: thread.environmentId,
       title: thread.title,
       head,
       tag: teamTag(thread, workerNotes),

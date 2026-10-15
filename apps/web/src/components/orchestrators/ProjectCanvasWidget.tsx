@@ -1,5 +1,4 @@
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { ProjectCanvas, ProjectCanvasPage } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -17,6 +16,7 @@ import {
   allowedIssueUrl,
   allowedUrl,
   canvasHeightKey,
+  canvasOpenThread,
   CANVAS_RESULT_TYPE,
   hostsOf,
   parseCanvasMessage,
@@ -216,15 +216,13 @@ function useCanvasBridge(
           setPending({ id: parsed.id, text: action.text });
           return;
         case "open-thread": {
-          const thread = [summary.root, ...summary.descendants].find(
-            (candidate) => candidate.id === action.threadId,
-          );
+          const thread = canvasOpenThread(summary, action.threadId);
           if (!thread) return reject(action.threadId, "thread is not in this project");
           record(action.intent, action.threadId, "done");
           reply(parsed.id, true);
           void navigate({
             to: "/$environmentId/$threadId",
-            params: buildThreadRouteParams(scopeThreadRef(summary.root.environmentId, thread.id)),
+            params: buildThreadRouteParams(thread),
           });
           return;
         }

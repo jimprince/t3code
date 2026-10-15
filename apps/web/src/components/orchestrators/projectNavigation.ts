@@ -1,4 +1,5 @@
-import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import type { EnvironmentId, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
 
 export interface ProjectReturnLocation {
   readonly environmentId: EnvironmentId;
@@ -26,6 +27,50 @@ export function isProjectPullRequestDetail(
 interface ThreadIdentity {
   readonly environmentId: EnvironmentId;
   readonly id: ThreadId;
+}
+
+interface ProjectThreads {
+  readonly root: ThreadIdentity;
+  readonly descendants?: ReadonlyArray<ThreadIdentity>;
+}
+
+/**
+ * A thread of the project by id, whichever machine it lives on. A project spans machines, so
+ * a remote descendant keeps its own environment; the project's own environment wins when an id
+ * is reused on another machine.
+ */
+export function findProjectThread(
+  project: ProjectThreads,
+  threadId: string,
+): ThreadIdentity | undefined {
+  const threads = [project.root, ...(project.descendants ?? [])];
+  return (
+    threads.find(
+      (thread) => thread.id === threadId && thread.environmentId === project.root.environmentId,
+    ) ?? threads.find((thread) => thread.id === threadId)
+  );
+}
+
+/**
+ * Opens a thread listed on a project page: the thread's own scope, and the project page to come
+ * back to. Callers that hold the thread pass its environment; a bare id (a task's linked thread)
+ * is looked up among the project's threads, else it is taken to be in the project's environment.
+ */
+export function projectThreadOpen(
+  project: ProjectThreads,
+  threadId: string,
+  environmentId?: EnvironmentId,
+) {
+  return {
+    ref: scopeThreadRef(
+      environmentId ?? findProjectThread(project, threadId)?.environmentId ?? project.root.environmentId,
+      threadId as ThreadId,
+    ),
+    state: projectReturnState({
+      environmentId: project.root.environmentId,
+      threadId: project.root.id,
+    }),
+  };
 }
 
 /**

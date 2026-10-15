@@ -1,7 +1,9 @@
+import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
   allowedIssueUrl,
+  canvasOpenThread,
   allowedUrl,
   CANVAS_HEIGHT,
   canvasHeightKey,
@@ -130,5 +132,35 @@ describe("canvas height storage", () => {
     expect(readStoredCanvasHeight("120.5")).toBeNull();
     expect(readStoredCanvasHeight("tall")).toBeNull();
     expect(readStoredCanvasHeight("")).toBeNull();
+  });
+});
+
+describe("canvasOpenThread", () => {
+  const identity = (environmentId: string, id: string) => ({
+    environmentId: EnvironmentId.make(environmentId),
+    id: ThreadId.make(id),
+  });
+  const project = {
+    root: identity("dev-vm", "root"),
+    descendants: [identity("dev-vm", "local-child"), identity("local-mbp", "remote-child")],
+  };
+
+  it("opens a remote descendant in its own environment, not the project's", () => {
+    expect(canvasOpenThread(project, "remote-child")).toEqual({
+      environmentId: "local-mbp",
+      threadId: "remote-child",
+    });
+  });
+
+  it("keeps the project's environment for its own threads", () => {
+    expect(canvasOpenThread(project, "local-child")).toEqual({
+      environmentId: "dev-vm",
+      threadId: "local-child",
+    });
+    expect(canvasOpenThread(project, "root")?.environmentId).toBe("dev-vm");
+  });
+
+  it("refuses a thread that is not in the project", () => {
+    expect(canvasOpenThread(project, "elsewhere")).toBeNull();
   });
 });
