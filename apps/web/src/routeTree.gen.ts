@@ -38,6 +38,7 @@ import { Route as ChatDashboardRouteImport } from './routes/_chat.dashboard'
 import { Route as ChatDraftDraftIdRouteImport } from './routes/_chat.draft.$draftId'
 import { Route as ChatEnvironmentIdThreadIdRouteImport } from './routes/_chat.$environmentId.$threadId'
 import { Route as ChatOrchestratorsEnvironmentIdThreadIdRouteImport } from './routes/_chat.orchestrators.$environmentId.$threadId'
+import { Route as ChatHarnessSubheadsEnvironmentIdNameRouteImport } from './routes/_chat.harness.subheads.$environmentId.$name'
 import { Route as ChatHarnessChecksEnvironmentIdCheckKeyRouteImport } from './routes/_chat.harness.checks.$environmentId.$checkKey'
 
 const WelcomeRoute = WelcomeRouteImport.update({
@@ -187,6 +188,12 @@ const ChatOrchestratorsEnvironmentIdThreadIdRoute =
     path: '/orchestrators/$environmentId/$threadId',
     getParentRoute: () => ChatRoute,
   } as any)
+const ChatHarnessSubheadsEnvironmentIdNameRoute =
+  ChatHarnessSubheadsEnvironmentIdNameRouteImport.update({
+    id: '/harness/subheads/$environmentId/$name',
+    path: '/harness/subheads/$environmentId/$name',
+    getParentRoute: () => ChatRoute,
+  } as any)
 const ChatHarnessChecksEnvironmentIdCheckKeyRoute =
   ChatHarnessChecksEnvironmentIdCheckKeyRouteImport.update({
     id: '/harness/checks/$environmentId/$checkKey',
@@ -224,6 +231,7 @@ export interface FileRoutesByFullPath {
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
   '/orchestrators/$environmentId/$threadId': typeof ChatOrchestratorsEnvironmentIdThreadIdRoute
   '/harness/checks/$environmentId/$checkKey': typeof ChatHarnessChecksEnvironmentIdCheckKeyRoute
+  '/harness/subheads/$environmentId/$name': typeof ChatHarnessSubheadsEnvironmentIdNameRoute
 }
 export interface FileRoutesByTo {
   '/connect': typeof ConnectRoute
@@ -255,6 +263,7 @@ export interface FileRoutesByTo {
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
   '/orchestrators/$environmentId/$threadId': typeof ChatOrchestratorsEnvironmentIdThreadIdRoute
   '/harness/checks/$environmentId/$checkKey': typeof ChatHarnessChecksEnvironmentIdCheckKeyRoute
+  '/harness/subheads/$environmentId/$name': typeof ChatHarnessSubheadsEnvironmentIdNameRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -288,6 +297,7 @@ export interface FileRoutesById {
   '/_chat/draft/$draftId': typeof ChatDraftDraftIdRoute
   '/_chat/orchestrators/$environmentId/$threadId': typeof ChatOrchestratorsEnvironmentIdThreadIdRoute
   '/_chat/harness/checks/$environmentId/$checkKey': typeof ChatHarnessChecksEnvironmentIdCheckKeyRoute
+  '/_chat/harness/subheads/$environmentId/$name': typeof ChatHarnessSubheadsEnvironmentIdNameRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -321,6 +331,7 @@ export interface FileRouteTypes {
     | '/draft/$draftId'
     | '/orchestrators/$environmentId/$threadId'
     | '/harness/checks/$environmentId/$checkKey'
+    | '/harness/subheads/$environmentId/$name'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/connect'
@@ -352,6 +363,7 @@ export interface FileRouteTypes {
     | '/draft/$draftId'
     | '/orchestrators/$environmentId/$threadId'
     | '/harness/checks/$environmentId/$checkKey'
+    | '/harness/subheads/$environmentId/$name'
   id:
     | '__root__'
     | '/_chat'
@@ -384,6 +396,7 @@ export interface FileRouteTypes {
     | '/_chat/draft/$draftId'
     | '/_chat/orchestrators/$environmentId/$threadId'
     | '/_chat/harness/checks/$environmentId/$checkKey'
+    | '/_chat/harness/subheads/$environmentId/$name'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -603,6 +616,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatOrchestratorsEnvironmentIdThreadIdRouteImport
       parentRoute: typeof ChatRoute
     }
+    '/_chat/harness/subheads/$environmentId/$name': {
+      id: '/_chat/harness/subheads/$environmentId/$name'
+      path: '/harness/subheads/$environmentId/$name'
+      fullPath: '/harness/subheads/$environmentId/$name'
+      preLoaderRoute: typeof ChatHarnessSubheadsEnvironmentIdNameRouteImport
+      parentRoute: typeof ChatRoute
+    }
     '/_chat/harness/checks/$environmentId/$checkKey': {
       id: '/_chat/harness/checks/$environmentId/$checkKey'
       path: '/harness/checks/$environmentId/$checkKey'
@@ -621,6 +641,7 @@ interface ChatRouteChildren {
   ChatDraftDraftIdRoute: typeof ChatDraftDraftIdRoute
   ChatOrchestratorsEnvironmentIdThreadIdRoute: typeof ChatOrchestratorsEnvironmentIdThreadIdRoute
   ChatHarnessChecksEnvironmentIdCheckKeyRoute: typeof ChatHarnessChecksEnvironmentIdCheckKeyRoute
+  ChatHarnessSubheadsEnvironmentIdNameRoute: typeof ChatHarnessSubheadsEnvironmentIdNameRoute
 }
 
 const ChatRouteChildren: ChatRouteChildren = {
@@ -633,6 +654,8 @@ const ChatRouteChildren: ChatRouteChildren = {
     ChatOrchestratorsEnvironmentIdThreadIdRoute,
   ChatHarnessChecksEnvironmentIdCheckKeyRoute:
     ChatHarnessChecksEnvironmentIdCheckKeyRoute,
+  ChatHarnessSubheadsEnvironmentIdNameRoute:
+    ChatHarnessSubheadsEnvironmentIdNameRoute,
 }
 
 const ChatRouteWithChildren = ChatRoute._addFileChildren(ChatRouteChildren)

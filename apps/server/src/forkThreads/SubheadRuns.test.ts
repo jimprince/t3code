@@ -2,6 +2,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
 import { ProjectId, ThreadId, ProviderInstanceId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as TestClock from "effect/testing/TestClock";
 import * as Option from "effect/Option";
 import * as Layer from "effect/Layer";
 import * as FileSystem from "effect/FileSystem";
@@ -164,5 +165,84 @@ it.layer(NodeServices.layer)("subhead run admission", (it) => {
           .pipe(Effect.flip),
       ).toMatchObject({ message: expect.stringContaining("authenticated sender") });
     }).pipe(Effect.provide(database)),
+  );
+  it.effect(
+    "lists every open run plus the newest finished runs per subhead, with no result text",
+    () =>
+      Effect.gen(function* () {
+        const registry = yield* makeSubheadRegistry;
+        for (const name of ["review", "audit"]) {
+          yield* registry.create({ ...template, name });
+          yield* registry.setState(name, "enable");
+        }
+        const service = yield* makeSubheadRuns;
+        const store = yield* AutomationStore;
+        // The run column that orders history is the admission time, so advance the test clock.
+        const send = (name: string, requestId: string, request = "Check this change") =>
+          TestClock.adjust("1 minute").pipe(
+            Effect.andThen(
+              service.send(
+                { ...caller, principal: `sender-${requestId}`, threadId: null },
+                { name, requestId, request },
+              ),
+            ),
+          );
+        const old = yield* send("review", "old");
+        const recent = yield* send("review", "recent", `${"long request ".repeat(40)}end`);
+        const open = yield* send("review", "open");
+        const other = yield* send("audit", "other");
+        yield* store.saveRun({
+          ...old,
+          status: "completed",
+          result: "secret finding",
+          finishedAt: old.createdAt,
+        });
+        yield* store.saveRun({
+          ...recent,
+          status: "failed",
+          finishedAt: recent.createdAt,
+          virtualSubhead: {
+            ...recent.virtualSubhead!,
+            terminationReason: "timeout 30m",
+            delivery: { ...recent.virtualSubhead!.delivery, status: "undelivered" },
+          },
+        });
+        yield* store.saveRun({ ...open, status: "running" });
+        yield* store.saveRun({ ...other, status: "completed", finishedAt: other.createdAt });
+
+        const rows = yield* service.list({ perSubhead: 1 });
+        // Open run, the newest finished review run and the only audit run; the older review run
+        // is outside the one-per-subhead window.
+        expect(rows.map((row) => [row.subheadName, row.requestId, row.status])).toEqual(
+          expect.arrayContaining([
+            ["review", "open", "running"],
+            ["review", "recent", "failed"],
+            ["audit", "other", "completed"],
+          ]),
+        );
+        expect(rows.some((row) => row.requestId === "old")).toBe(false);
+        const failed = rows.find((row) => row.requestId === "recent")!;
+        expect(failed).toMatchObject({
+          templateVersion: 1,
+          terminationReason: "timeout 30m",
+          delivery: { status: "undelivered" },
+          senderThreadId: null,
+          threadId: recent.steps[0]!.threadId,
+        });
+        expect(failed.requestSummary.length).toBeLessThanOrEqual(200);
+        expect(JSON.stringify(rows)).not.toContain("secret finding");
+        expect(Object.keys(failed)).not.toContain("result");
+
+        const onlyReview = yield* service.list({ name: "review", perSubhead: 5 });
+        expect(new Set(onlyReview.map((row) => row.subheadName))).toEqual(new Set(["review"]));
+        expect(onlyReview.map((row) => row.requestId)).toEqual(["open", "recent", "old"]);
+        expect(
+          yield* service.list({ name: "missing", perSubhead: 5 }).pipe(Effect.flip),
+        ).toMatchObject({
+          message: expect.stringContaining("No subhead"),
+        });
+        // Runs of other principals stay listable: this is operator visibility, not a result read.
+        expect(onlyReview.map((row) => row.senderPrincipal)).toContain("sender-open");
+      }).pipe(Effect.provide(database)),
   );
 });
