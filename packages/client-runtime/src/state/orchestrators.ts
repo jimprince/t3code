@@ -39,7 +39,7 @@ export type ThreadDisplayStatus =
   | "monitoring"
   | "supervising"
   | "ready";
-const threadActivityKey = supervisionThreadKey;
+export const threadActivityKey = supervisionThreadKey;
 const ACTIVE_RUNTIME_STATUSES = ["preparing", "starting", "running", "waiting", "queued"];
 
 /** The worker's last reply line for display; its T3_NOTIFY routing marker is not content. */
@@ -54,8 +54,15 @@ function workerLatestLine(thread: Pick<OrchestratorThreadShell, "source">): stri
 export function isThreadWorking(
   thread: Pick<EnvironmentThreadShell, "runtime" | "pendingBackgroundTasks" | "goal" | "source">,
 ): boolean {
+  if (
+    ACTIVE_RUNTIME_STATUSES.includes(thread.runtime?.status ?? thread.source.status) &&
+    !(
+      thread.source.queueHeld === true &&
+      (thread.runtime?.status ?? thread.source.status) === "queued"
+    )
+  )
+    return true;
   if (thread.source.queueHeld === true) return false;
-  if (ACTIVE_RUNTIME_STATUSES.includes(thread.runtime?.status ?? "idle")) return true;
   if (thread.goal?.status === "active" && thread.runtime?.status !== "failed") return true;
   return thread.pendingBackgroundTasks.some(
     (task) => task.kind !== "command" && task.kind !== "monitor",
@@ -99,10 +106,17 @@ export function resolveThreadDisplayStatus(
 ): ThreadDisplayStatus {
   if (thread.hasPendingApprovals) return "approval";
   if (thread.hasPendingUserInput) return "input";
-  // Queue holds are explained by the Blocked badge; they are not failed runs.
+  if (
+    ACTIVE_RUNTIME_STATUSES.includes(thread.runtime?.status ?? thread.source.status) &&
+    !(
+      thread.source.queueHeld === true &&
+      (thread.runtime?.status ?? thread.source.status) === "queued"
+    )
+  )
+    return "working";
+  // An idle queue hold does not stop an independently running turn.
   if (thread.source.queueHeld === true) return "ready";
-  if (ACTIVE_RUNTIME_STATUSES.includes(thread.runtime?.status ?? "idle")) return "working";
-  if (thread.runtime?.status === "failed") return "failed";
+  if ((thread.runtime?.status ?? thread.source.status) === "failed") return "failed";
   if (isThreadWorking(thread)) return "working";
   if (
     thread.pendingBackgroundTasks.some((task) => task.kind === "monitor" || task.kind === "command")
@@ -111,7 +125,7 @@ export function resolveThreadDisplayStatus(
   if (thread.settled !== true && thread.hasActiveDescendants === true) return "supervising";
   return "ready";
 }
-function parentKey(thread: OrchestratorThreadShell) {
+export function orchestratorParentKey(thread: OrchestratorThreadShell) {
   return thread.supervisionParentKey === undefined
     ? thread.remoteParent
       ? `${thread.remoteParent.environmentId}:${thread.remoteParent.threadId}`
@@ -325,7 +339,7 @@ export function sortOrchestratorSummariesForSidebar(
 export function isUserOpenedThread(thread: OrchestratorThreadShell): boolean {
   return (
     thread.archivedAt === null &&
-    parentKey(thread) != null &&
+    orchestratorParentKey(thread) != null &&
     thread.source.createdBy === "user" &&
     thread.source.creationSource === "server" &&
     thread.lineage.relationshipToParent === null
@@ -345,8 +359,8 @@ export function threadsVisibleInThreadsMode(
   if (!projectsViewEnabled) return threads;
   const childrenByParent = new Map<string, OrchestratorThreadShell[]>();
   for (const thread of threads) {
-    if (thread.archivedAt !== null || parentKey(thread) == null) continue;
-    const key = parentKey(thread)!;
+    if (thread.archivedAt !== null || orchestratorParentKey(thread) == null) continue;
+    const key = orchestratorParentKey(thread)!;
     const children = childrenByParent.get(key);
     if (children) children.push(thread);
     else childrenByParent.set(key, [thread]);
@@ -356,7 +370,7 @@ export function threadsVisibleInThreadsMode(
     const rootKey = threadActivityKey(root);
     if (
       root.archivedAt !== null ||
-      parentKey(root) != null ||
+      orchestratorParentKey(root) != null ||
       !(childrenByParent.has(rootKey) || root.subproject === "on")
     ) {
       continue;
@@ -387,7 +401,7 @@ function hasPlanReady(thread: OrchestratorThreadShell): boolean {
     thread.hasActionableProposedPlan &&
     !thread.hasPendingApprovals &&
     !thread.hasPendingUserInput &&
-    !["preparing", "running", "starting"].includes(thread.runtime?.status ?? "idle")
+    !["preparing", "running", "starting"].includes(thread.runtime?.status ?? thread.source.status)
   );
 }
 
@@ -395,26 +409,28 @@ function latestActivityAt(thread: OrchestratorThreadShell): string {
   return lastActivityAt(thread);
 }
 
-function isBlocked(thread: OrchestratorThreadShell): boolean {
-  if (thread.archivedAt != null || thread.settledOverride === "settled") return false;
-  if (thread.source.queueHeld === true) return true;
-  if (isThreadResumable(thread.source)) return true;
-  if (isOwnActive(thread)) return false;
-  if (thread.runtime?.status === "failed") return true;
-  if (thread.latestRun?.status === "failed") return true;
-  return /^blocked\b/i.test(thread.source.workerSummary?.output?.trim() ?? "");
-}
-
-function isOwnActive(thread: OrchestratorThreadShell): boolean {
+export function isThreadBlocked(thread: OrchestratorThreadShell): boolean {
   if (
     thread.archivedAt != null ||
     thread.settledOverride === "settled" ||
-    thread.source.queueHeld === true
+    /\(retired\b/i.test(thread.title)
   )
     return false;
-  const status = resolveThreadDisplayStatus({ ...thread, hasActiveDescendants: false });
+  if (isOwnActive(thread)) return false;
+  if (thread.source.queueHeld === true) return true;
+  if (isThreadResumable(thread.source)) return true;
+  if ((thread.runtime?.status ?? thread.source.status) === "failed") return true;
+  if (thread.latestRun?.status === "failed") return true;
+  return /^blocked\b/i.test(stripNotifyMarker(thread.source.workerSummary?.output ?? "").trim());
+}
+
+function isOwnActive(thread: OrchestratorThreadShell): boolean {
+  if (thread.archivedAt != null || thread.settledOverride === "settled") return false;
   return (
-    status === "approval" || status === "input" || status === "working" || status === "monitoring"
+    thread.hasPendingApprovals ||
+    thread.hasPendingUserInput ||
+    isThreadWorking(thread) ||
+    thread.pendingBackgroundTasks.some((task) => task.kind === "monitor" || task.kind === "command")
   );
 }
 
@@ -428,9 +444,9 @@ function collectDescendants(
   const queue = [...(childrenByParent.get(rootKey) ?? [])];
   for (const child of queue) {
     const key = threadActivityKey(child);
-    if (visited.has(key)) continue;
+    if (visited.has(key) || /\(retired\b/i.test(child.title)) continue;
     visited.add(key);
-    descendants.push(child);
+    if (child.archivedAt === null) descendants.push(child);
     queue.push(...(childrenByParent.get(key) ?? []));
   }
   return descendants;
@@ -457,9 +473,14 @@ function collectOwnDescendants(
   const queue = [...(childrenByParent.get(rootKey) ?? [])];
   for (const child of queue) {
     const key = threadActivityKey(child);
-    if (visited.has(key) || child.subproject === "on") continue;
+    if (
+      visited.has(key) ||
+      (child.subproject === "on" && child.archivedAt === null) ||
+      /\(retired\b/i.test(child.title)
+    )
+      continue;
     visited.add(key);
-    descendants.push(child);
+    if (child.archivedAt === null) descendants.push(child);
     queue.push(...(childrenByParent.get(key) ?? []));
   }
   return descendants;
@@ -471,7 +492,7 @@ function collectOwnDescendants(
  */
 function isNestedWorker(thread: OrchestratorThreadShell): boolean {
   return (
-    parentKey(thread) != null &&
+    orchestratorParentKey(thread) != null &&
     thread.lineage.relationshipToParent === null &&
     (thread.source.createdBy === "user" || thread.source.createdBy === "agent") &&
     !isUserOpenedThread(thread)
@@ -489,7 +510,7 @@ function buildSubagentRows(
       (thread) => thread.lineage.relationshipToParent === "subagent" || isNestedWorker(thread),
     )
     .map((thread): SubagentRow => {
-      const key = parentKey(thread);
+      const key = orchestratorParentKey(thread);
       const working = isThreadWorking(thread) || runningChildKeys.has(threadActivityKey(thread));
       const needsYou = thread.hasPendingApprovals || thread.hasPendingUserInput;
       const subagent = thread.lineage.relationshipToParent === "subagent";
@@ -518,6 +539,51 @@ function buildSubagentRows(
   );
 }
 
+/** The exact red set for a row, shared by the rollup and named blocker popover. */
+export function blockedThreadSet(
+  row: Pick<OrchestratorSummary, "root" | "blocked" | "subprojects">,
+) {
+  const seen = new Set<string>();
+  const projects = [row];
+  return projects.flatMap(function visit(project): Array<{
+    thread: OrchestratorThreadShell;
+    owner: OrchestratorThreadShell;
+  }> {
+    return [
+      ...project.blocked.flatMap(({ thread }) => {
+        const key = threadActivityKey(thread);
+        if (seen.has(key)) return [];
+        seen.add(key);
+        return [{ thread, owner: project.root }];
+      }),
+      ...project.subprojects.flatMap(visit),
+    ];
+  });
+}
+
+/** Retired ownership trees are excluded even when descendants precede their head in a push. */
+export function retiredThreadKeys(threads: readonly OrchestratorThreadShell[]) {
+  const children = new Map<string, string[]>();
+  const queue = threads
+    .filter((thread) => /\(retired\b/i.test(thread.title))
+    .map(threadActivityKey);
+  for (const thread of threads) {
+    const parent = orchestratorParentKey(thread);
+    if (parent) {
+      const siblings = children.get(parent) ?? [];
+      siblings.push(threadActivityKey(thread));
+      children.set(parent, siblings);
+    }
+  }
+  const retired = new Set<string>();
+  for (const key of queue) {
+    if (retired.has(key)) continue;
+    retired.add(key);
+    queue.push(...(children.get(key) ?? []));
+  }
+  return retired;
+}
+
 /** Builds the read-only orchestrator projection used by every client surface. */
 export function buildOrchestratorSummaries(
   threads: ReadonlyArray<OrchestratorThreadShell>,
@@ -525,12 +591,14 @@ export function buildOrchestratorSummaries(
   metadata?: ReadonlyArray<ScopedSupervisionMetadata>,
 ): ReadonlyArray<OrchestratorSummary> {
   if (metadata !== undefined) threads = joinOrchestratorMetadata(threads, metadata);
+  const retired = retiredThreadKeys(threads);
+  threads = threads.filter((thread) => !retired.has(threadActivityKey(thread)));
   const childrenByParent = new Map<string, OrchestratorThreadShell[]>();
   const byKey = new Map<string, OrchestratorThreadShell>();
   for (const thread of threads) {
     byKey.set(threadActivityKey(thread), thread);
-    if (thread.archivedAt != null || parentKey(thread) == null) continue;
-    const key = parentKey(thread)!;
+    if (orchestratorParentKey(thread) == null) continue;
+    const key = orchestratorParentKey(thread)!;
     const children = childrenByParent.get(key);
     if (children) children.push(thread);
     else childrenByParent.set(key, [thread]);
@@ -549,17 +617,21 @@ export function buildOrchestratorSummaries(
     }
   }
   const isSubproject = (thread: OrchestratorThreadShell) =>
-    thread.subproject === "on" && parentKey(thread) != null;
+    thread.subproject === "on" && orchestratorParentKey(thread) != null;
   /** The enclosing project's root: the first thread above that is top-level or a subproject. */
   const enclosingProjectKey = (thread: OrchestratorThreadShell): string | null => {
     const seen = new Set([threadActivityKey(thread)]);
-    let key = parentKey(thread);
+    let key = orchestratorParentKey(thread);
     while (key != null && !seen.has(key)) {
       seen.add(key);
       const parent = byKey.get(key);
-      if (!parent || parent.archivedAt != null) return null;
-      if (parentKey(parent) == null || isSubproject(parent)) return key;
-      key = parentKey(parent);
+      if (!parent) return null;
+      if (
+        parent.archivedAt === null &&
+        (orchestratorParentKey(parent) == null || isSubproject(parent))
+      )
+        return key;
+      key = orchestratorParentKey(parent);
     }
     return null;
   };
@@ -568,14 +640,17 @@ export function buildOrchestratorSummaries(
     .filter(
       (thread) =>
         thread.archivedAt == null &&
+        !/\(retired\b/i.test(thread.title) &&
         (isSubproject(thread)
           ? true
           : // A project: a top-level thread that owns workers, or one marked as a
             // project in its own right (a standing orchestrator between jobs).
             // Pinning only orders the sidebar (Brad, 2026-10-10); it never
             // promotes a thread into Projects.
-            parentKey(thread) == null &&
-            ((childrenByParent.get(threadActivityKey(thread))?.length ?? 0) > 0 ||
+            orchestratorParentKey(thread) == null &&
+            (collectDescendants(thread, childrenByParent).some(
+              (child) => child.archivedAt === null,
+            ) ||
               thread.subproject === "on")),
     )
     .map((root) => {
@@ -612,7 +687,7 @@ export function buildOrchestratorSummaries(
         projects: projectList,
         needsYou,
         working,
-        blocked: tree.filter(isBlocked).map((thread) => ({
+        blocked: tree.filter(isThreadBlocked).map((thread) => ({
           thread,
           latestLine: workerLatestLine(thread),
         })),
@@ -665,7 +740,7 @@ export function buildOrchestratorSummaries(
       rollup: {
         needsYou: item.needsYou.length + sum((sub) => sub.rollup.needsYou),
         working,
-        blocked: item.blocked.length + sum((sub) => sub.rollup.blocked),
+        blocked: blockedThreadSet({ ...item, subprojects }).length,
         latestActivityAt: [
           item.latestActivityAt,
           ...subprojects.map((sub) => sub.rollup.latestActivityAt),
@@ -685,7 +760,9 @@ export function buildStandaloneThreadGroups(
   lastVisitedAtByThreadKey: Readonly<Record<string, string>>,
 ): ReadonlyArray<StandaloneThreadGroup> {
   const parentKeys = new Set(
-    threads.flatMap((thread) => (parentKey(thread) == null ? [] : [parentKey(thread)!])),
+    threads.flatMap((thread) =>
+      orchestratorParentKey(thread) == null ? [] : [orchestratorParentKey(thread)!],
+    ),
   );
   const statusOf = (thread: OrchestratorThreadShell): StandaloneThreadStatus | null => {
     if (thread.hasPendingApprovals) return "approval";
@@ -709,7 +786,7 @@ export function buildStandaloneThreadGroups(
   for (const thread of threads) {
     if (
       thread.archivedAt != null ||
-      parentKey(thread) != null ||
+      orchestratorParentKey(thread) != null ||
       parentKeys.has(threadActivityKey(thread))
     ) {
       continue;

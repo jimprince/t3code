@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { liveAttention, liveRuntimeRequests } from "./liveAttention.ts";
+import { liveAttention, liveRuntimeRequests, mergeLiveAttention } from "./liveAttention.ts";
 
 const shell = (id: string, pending: string | null, archivedAt: unknown = null) => ({
   id,
@@ -44,4 +44,32 @@ describe("liveAttention", () => {
     const all = [ask("a", "t1", "r1")];
     expect(liveAttention("unloaded", all, live, "live")).toBe(all);
   });
+});
+
+it("unions live shell asks by id, preserves full live answers and replaces obsolete cached asks", () => {
+  const live = liveRuntimeRequests([
+    {
+      environmentId: "env",
+      threads: [
+        {
+          id: "thread",
+          archivedAt: null,
+          title: "Worker",
+          pendingRuntimeRequest: {
+            id: "request",
+            kind: "user_input",
+            createdAt: "2026-10-15T10:00:00Z",
+          },
+        },
+      ],
+    },
+  ]);
+  const current = live.attention!.get("env")![0]!;
+  const full = { ...current, canRespond: true, question: "Choose A or B" };
+  const tracker = { ...current, id: "issue", requestId: null, threadId: null };
+  expect(mergeLiveAttention("env", [tracker, full], live, "live")).toEqual([tracker, full]);
+  const stale = { ...full, id: "runtime:old:old", threadId: "old" as typeof current.threadId };
+  expect(mergeLiveAttention("env", [tracker, stale], live, "cached")).toEqual([tracker, current]);
+  expect(mergeLiveAttention("env", [tracker], live, "cached")).toHaveLength(2);
+  expect(mergeLiveAttention("other", [tracker], live, "cached")).toEqual([tracker]);
 });

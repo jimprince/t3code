@@ -92,7 +92,7 @@ const IN_FLIGHT_RUN_STATUSES: ReadonlySet<string> = new Set([
   "waiting",
 ]);
 export const isThreadInFlight = (thread: DashboardShell) =>
-  thread.queueHeld !== true &&
+  (thread.queueHeld !== true || (thread.status !== "queued" && thread.status !== "idle")) &&
   thread.status !== undefined &&
   IN_FLIGHT_RUN_STATUSES.has(thread.status);
 /** Retired and explicitly settled heads no longer own dashboard work. */
@@ -427,7 +427,7 @@ export function aggregate(input: {
             issue.status === "done"
               ? "done"
               : attentionIds.length > 0 ||
-                  linked?.queueHeld === true ||
+                  (linked?.queueHeld === true && !isThreadInFlight(linked)) ||
                   (issue.blockedBy?.length ?? 0) > 0
                 ? "blocked"
                 : issue.status === "needs-review"
@@ -487,13 +487,16 @@ export function aggregate(input: {
         threadId: thread.id,
         workstreamId: `project:${root.id}:work`,
         // A stopped thread is neither working nor stalled-by-idle: "blocked" keeps it out of both.
-        status: resumable || thread.queueHeld === true ? "blocked" : "working",
+        status:
+          resumable || (thread.queueHeld === true && !isThreadInFlight(thread))
+            ? "blocked"
+            : "working",
         // An issue row that borrows this thread's steps already counts them; the dashboard totals
         // sum task progress, so this row shows none.
         progress: progressSources.has(thread.id) ? null : progress,
         // Stopped work is frozen: no gain or pace forecast from before it stopped.
         movement:
-          resumable || thread.queueHeld === true
+          resumable || (thread.queueHeld === true && !isThreadInFlight(thread))
             ? movement(id, null, history, input.now)
             : movement(id, progress, history, input.now),
         forecast: null,

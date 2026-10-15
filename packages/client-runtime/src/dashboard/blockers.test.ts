@@ -8,10 +8,18 @@ import {
 } from "@t3tools/contracts";
 import { presentThreadShell } from "../state/models.ts";
 import { v2ThreadShell } from "../state/orchestrationV2TestFixtures.ts";
-import { buildOrchestratorSummaries, isThreadWorking } from "../state/orchestrators.ts";
+import {
+  buildOrchestratorSummaries,
+  isThreadWorking,
+  resolveThreadDisplayStatus,
+} from "../state/orchestrators.ts";
 import type { OrchestratorThreadShell } from "../state/orchestrators.ts";
+import { liveRuntimeRequests } from "./liveAttention.ts";
 import { aggregate, isThreadInFlight } from "./aggregation.ts";
 import {
+  blockerSet,
+  projectBlockerSet,
+  taskBlockers,
   attentionBlockers,
   blockerHeadline,
   threadBlockers,
@@ -345,4 +353,207 @@ it("never settles a failed shell that still has a live provider turn", () => {
     action: null,
     actionReason: expect.stringContaining("running turn"),
   });
+});
+
+const issueFixture = (number: number, overrides: Partial<ProjectIssue> = {}): ProjectIssue => ({
+  host: "host",
+  repository: "brad/fork",
+  number,
+  title: `Task ${number}`,
+  url: `https://host/brad/fork/issues/${number}`,
+  status: "in-progress",
+  labels: [],
+  isRequest: false,
+  requestSource: null,
+  assignees: [],
+  comments: 0,
+  createdAt: now,
+  updatedAt: now,
+  closedAt: null,
+  linkedThreadIds: [],
+  ...overrides,
+});
+
+it.each(["settled", "archived"])("keeps failed children reachable through a %s worker", (state) => {
+  const root = shell("root");
+  const parent = shell(
+    "parent",
+    state === "settled" ? { settledOverride: "settled" } : { archivedAt: v2ThreadShell.createdAt },
+    "root",
+  );
+  const child = shell("child", { status: "failed" }, "parent");
+  const shells = [root, parent, child];
+  const row = buildOrchestratorSummaries(shells, []).find((row) => row.root.id === root.id)!;
+  expect(blockerSet(row, options).map((b) => b.name)).toEqual(["child"]);
+  expect(row.rollup.blocked).toBe(blockerSet(row, options).length);
+  expect(threadBlockers(shells, root.id, options)).toEqual(blockerSet(row, options));
+});
+
+it("uses organize nesting for both the red count and the named set", () => {
+  const root = shell("Product");
+  const nested = {
+    ...shell("Dashboard", { status: "failed" }),
+    subproject: "on" as const,
+    supervisionParentKey: `env:${root.id}`,
+  };
+  const row = buildOrchestratorSummaries([root, nested], [])[0]!;
+  expect(row.rollup.blocked).toBe(1);
+  expect(blockerSet(row, options)).toMatchObject([
+    { name: "Dashboard", action: null, actionReason: expect.stringContaining("heads") },
+  ]);
+  expect(row.rollup.blocked).toBe(blockerSet(row, options).length);
+});
+
+it("keeps remote worker identities distinct and counts their named set", () => {
+  const root = shell("Product");
+  const local = shell("worker", { status: "failed" }, "Product");
+  const remote = {
+    ...shell("worker", { status: "failed" }),
+    environmentId: EnvironmentId.make("remote"),
+    remoteParent: { environmentId: root.environmentId, threadId: root.id },
+  };
+  const row = buildOrchestratorSummaries([root, local, remote], [])[0]!;
+  const blockers = blockerSet(row, options);
+  expect(row.rollup.blocked).toBe(2);
+  expect(blockers).toHaveLength(row.rollup.blocked);
+  expect(new Set(blockers.map((b) => b.key)).size).toBe(2);
+  expect(blockers[1]?.target.environmentId).toBe("remote");
+});
+
+it("names issue-blocked and stale tasks in the same project blocked set", () => {
+  const row = buildOrchestratorSummaries([{ ...shell("root"), subproject: "on" }], [])[0]!;
+  const issues = [
+    issueFixture(1, { blockedBy: [2] }),
+    issueFixture(2, { status: "pending", title: "Signing key" }),
+    issueFixture(3, { updatedAt: "2026-10-11T10:00:00.000Z" }),
+  ];
+  expect(projectBlockerSet(row, issues, options)).toMatchObject([
+    { name: "Task 1", kind: "blocked-by", reason: "Blocked by #2: Signing key." },
+    { name: "Task 3", kind: "stuck", reason: expect.stringContaining("Stuck 4d") },
+  ]);
+});
+
+it("gives held queues and missing stored asks their own task causes", () => {
+  const held = shell("held", { status: "queued", queueHeld: true, todoProgress });
+  const result = aggregate({
+    shells: [held.source],
+    metadata: [{ threadId: held.id, parentThreadId: null, subproject: "on" }],
+    issues: new Map(),
+    sources: [],
+    plans: [],
+    samples: [],
+    now,
+  });
+  const task = result.projects[0]!.tasks[0]!;
+  expect(taskBlockers(task, [held], [], options)).toMatchObject([
+    { kind: "held-queue", reason: "Queue held on held.", action: { type: "resume-queue" } },
+  ]);
+  const idle = shell("held");
+  expect(
+    taskBlockers({ ...task, attentionIds: ["runtime:held:missing"] }, [idle], [], options),
+  ).toMatchObject([
+    {
+      kind: "waiting-question",
+      reason: "Waiting on a question in held (open the thread).",
+      action: null,
+    },
+  ]);
+});
+
+it("never settles project roots or subproject heads while failed workers remain eligible", () => {
+  const shells = [
+    shell("root", { status: "failed" }),
+    { ...shell("head", { status: "failed" }, "root"), subproject: "on" as const },
+    shell("worker", { status: "failed" }, "head"),
+  ];
+  const blockers = blockerSet(buildOrchestratorSummaries(shells, [])[0]!, options);
+  expect(blockers.map((b) => b.action?.type ?? null)).toEqual([null, null, "settle"]);
+  expect(blockers.slice(0, 2).every((b) => b.actionReason?.includes("heads"))).toBe(true);
+});
+
+it("a running turn wins over its held follow-up queue", () => {
+  const running = shell("worker", { status: "running", queueHeld: true, todoProgress }, "root");
+  expect(isThreadWorking(running)).toBe(true);
+  expect(resolveThreadDisplayStatus(running)).toBe("working");
+  expect(isThreadInFlight(running.source)).toBe(true);
+  const dashboard = aggregate({
+    shells: [shell("root").source, running.source],
+    metadata: [
+      { threadId: id("root"), parentThreadId: null, subproject: "on" },
+      { threadId: running.id, parentThreadId: id("root") },
+    ],
+    issues: new Map(),
+    sources: [],
+    plans: [],
+    samples: [],
+    now,
+  });
+  expect(dashboard.projects.flatMap((project) => project.tasks)).toContainEqual(
+    expect.objectContaining({ threadId: running.id, status: "working" }),
+  );
+  const row = buildOrchestratorSummaries([shell("root"), running], [])[0]!;
+  expect(row.rollup).toMatchObject({ working: 1, blocked: 0 });
+  expect(blockerSet(row, options)).toEqual([]);
+});
+
+it("ignores failures with live background work, retired trees and stale error text", () => {
+  const root = shell("root");
+  const working = {
+    ...shell("active", { status: "failed" }, "root"),
+    pendingBackgroundTasks: [
+      { kind: "subagent" as const, taskId: "task", childThreadId: id("child") },
+    ],
+  };
+  const retired = shell("Old (retired)", {}, "root");
+  const child = shell("old-worker", { status: "failed" }, retired.id);
+  const blocked = shell(
+    "blocked",
+    {
+      lastError: "Old failure",
+      workerSummary: {
+        output: "BLOCKED: Need credentials\nT3_NOTIFY: attention",
+        messageCount: 1,
+        toolCount: 0,
+        usedTokens: null,
+        activity: null,
+        history: "v2",
+      },
+    },
+    "root",
+  );
+  expect(threadBlockers([child, retired], null, options)).toEqual([]);
+  const row = buildOrchestratorSummaries([root, working, retired, child, blocked], [])[0]!;
+  expect(row.rollup.blocked).toBe(1);
+  expect(blockerSet(row, options)).toMatchObject([{ name: "blocked", reason: "Need credentials" }]);
+});
+
+it("unions stored tracker items with live asks even when stored attention is nonempty", () => {
+  const root = shell("Product");
+  const child = shell(
+    "worker",
+    {
+      pendingRuntimeRequest: {
+        id: "request" as never,
+        kind: "user_input",
+        createdAt: v2ThreadShell.createdAt as never,
+      },
+    },
+    "Product",
+  );
+  const live = liveRuntimeRequests([
+    { environmentId: "env", threads: [root.source, child.source] },
+  ]);
+  const snapshot = { asOf: now, projects: [project("Product", null, [attention(1, "test")])] };
+  const result = attentionBlockers(snapshot, root.id, {
+    stored: true,
+    live,
+    shells: [root, child],
+    environmentId: root.environmentId,
+  });
+  expect(result.blockers.map((b) => b.key)).toEqual([
+    "runtime:worker:request",
+    attention(1, "test").id,
+  ]);
+  expect(result.blockers[0]).toMatchObject({ action: null, owner: { name: "Product" } });
+  expect(blockerHeadline([result.blockers[0]!])).toBe("Waiting on Brad: “worker”");
 });
