@@ -150,7 +150,10 @@ describe("resolveThreadAcrossEnvironments", () => {
       environmentId: mac,
       threadId: "mcp:abc-123",
     });
-    expect(resolve("thread:xyz", environments)).toMatchObject({ kind: "found", threadId: "thread:xyz" });
+    expect(resolve("thread:xyz", environments)).toMatchObject({
+      kind: "found",
+      threadId: "thread:xyz",
+    });
     // A prefix is part of the id; it never matches the bare id behind it.
     expect(resolve("abc-123", environments)).toMatchObject({ kind: "unavailable" });
   });
@@ -233,13 +236,17 @@ describe("createThreadLinkAtoms", () => {
       summary(devVm, "Dev VM", "connected"),
       summary(mac, "Mac", "connecting"),
     ]);
-    const indexes = new Map<EnvironmentId, ReturnType<typeof Atom.make<ReadonlyMap<ThreadId, OrchestrationV2ThreadShell>>>>([
-      [devVm, Atom.make(new Map([[ThreadId.make("source"), thread("source")]]))],
-      [mac, Atom.make(new Map())],
+    const threadIndex = (...ids: string[]) =>
+      Atom.make<ReadonlyMap<ThreadId, OrchestrationV2ThreadShell>>(
+        new Map(ids.map((id) => [ThreadId.make(id), thread(id)] as const)),
+      );
+    const indexes = new Map([
+      [devVm, threadIndex("source")],
+      [mac, threadIndex()],
     ]);
-    const states = new Map<EnvironmentId, ReturnType<typeof Atom.make<EnvironmentShellState>>>([
-      [devVm, Atom.make(shellState("live"))],
-      [mac, Atom.make(shellState("empty"))],
+    const states = new Map([
+      [devVm, Atom.make<EnvironmentShellState>(shellState("live"))],
+      [mac, Atom.make<EnvironmentShellState>(shellState("empty"))],
     ]);
     const atoms = createThreadLinkAtoms({
       environmentsAtom,

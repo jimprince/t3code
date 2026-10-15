@@ -1,5 +1,5 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import type { EnvironmentId, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
+import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 
 export interface ProjectReturnLocation {
   readonly environmentId: EnvironmentId;
@@ -63,7 +63,9 @@ export function projectThreadOpen(
 ) {
   return {
     ref: scopeThreadRef(
-      environmentId ?? findProjectThread(project, threadId)?.environmentId ?? project.root.environmentId,
+      environmentId ??
+        findProjectThread(project, threadId)?.environmentId ??
+        project.root.environmentId,
       threadId as ThreadId,
     ),
     state: projectReturnState({

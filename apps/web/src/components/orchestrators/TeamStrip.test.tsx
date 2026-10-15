@@ -40,7 +40,8 @@ afterEach(() => {
 it("opens a Team member that runs on another machine in that machine's environment", () => {
   const summary = {
     root: identity("dev-vm", "root"),
-    descendants: [identity("local-mbp", "remote-agent")],
+    // The member carries its own environment; the strip must not need the project to list it.
+    descendants: [],
   } as unknown as OrchestratorSummary;
   act(() => {
     tree = create(

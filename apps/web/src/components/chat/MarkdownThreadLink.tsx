@@ -11,6 +11,7 @@ import { MessageSquareTextIcon } from "lucide-react";
 import { useProject } from "../../state/entities";
 import { useThreadLink } from "../../state/threadLinks";
 import { ProjectFavicon } from "../ProjectFavicon";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
 type Resolution = ThreadLinkResolution<OrchestrationV2ThreadShell>;
 
@@ -62,9 +63,10 @@ export function MarkdownThreadLink(props: {
   if (link.kind === "ambiguous") {
     // The link does not say which machine; opening either would be a guess.
     return (
-      <span title={tooltip} data-markdown-copy={copy}>
-        {title}
-      </span>
+      <Tooltip>
+        <TooltipTrigger render={<span data-markdown-copy={copy} />}>{title}</TooltipTrigger>
+        <TooltipPopup side="top">{tooltip}</TooltipPopup>
+      </Tooltip>
     );
   }
   return (

@@ -20,8 +20,11 @@ const threadLinkAtom = createThreadLinkAtoms({
  * environment's thread first, then any other connected environment's.
  */
 export function resolveThreadLinkTarget(environmentId: EnvironmentId, threadId: ThreadId) {
-  return threadLinkTarget(appAtomRegistry.get(threadLinkAtom(threadLinkKey(environmentId, threadId))), {
-    environmentId,
-    threadId,
-  });
+  return threadLinkTarget(
+    appAtomRegistry.get(threadLinkAtom(threadLinkKey(environmentId, threadId))),
+    {
+      environmentId,
+      threadId,
+    },
+  );
 }

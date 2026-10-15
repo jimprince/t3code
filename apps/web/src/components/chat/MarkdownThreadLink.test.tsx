@@ -5,7 +5,7 @@ import {
   type OrchestrationV2ThreadShell,
 } from "@t3tools/contracts";
 import type { ThreadLinkEnvironment } from "@t3tools/client-runtime/state/thread-link-resolution";
-import type { ReactNode } from "react";
+import { cloneElement, type ReactElement, type ReactNode } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -30,12 +30,19 @@ vi.mock("@tanstack/react-router", () => ({
     title?: string;
     children: ReactNode;
   }) => (
-    <a href={to} data-params={JSON.stringify(params)} title={title} {...rest}>
+    <a href={to} data-params={JSON.stringify(params)} data-title={title} {...rest}>
       {children}
     </a>
   ),
 }));
 vi.mock("../ProjectFavicon", () => ({ ProjectFavicon: () => null }));
+// The popup text stands in as the span's title so the tests read one tooltip either way.
+vi.mock("../ui/tooltip", () => ({
+  Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ render, children }: { render: ReactElement; children?: ReactNode }) =>
+    cloneElement(render, undefined, children),
+  TooltipPopup: ({ children }: { children: ReactNode }) => <i data-popup>{children}</i>,
+}));
 // The component reads the project and the link target; the resolver itself is the real one.
 vi.mock("../../state/entities", () => ({
   useThreadShell: (ref: { environmentId: string; threadId: string } | null) =>
@@ -43,7 +50,8 @@ vi.mock("../../state/entities", () => ({
       ? null
       : ((
           fixture.environments.find(
-            (environment) => (environment as { environmentId: string }).environmentId === ref.environmentId,
+            (environment) =>
+              (environment as { environmentId: string }).environmentId === ref.environmentId,
           ) as { threads: Map<string, unknown> } | undefined
         )?.threads.get(ref.threadId) ?? null),
   useProject: (ref: { environmentId: string; projectId: string } | null) =>
@@ -87,11 +95,7 @@ let tree: ReactTestRenderer | null = null;
 function render(threadId: string, label = "the label") {
   act(() => {
     tree = create(
-      <MarkdownThreadLink
-        environmentId={devVm}
-        threadId={ThreadId.make(threadId)}
-        label={label}
-      />,
+      <MarkdownThreadLink environmentId={devVm} threadId={ThreadId.make(threadId)} label={label} />,
     );
   });
   const anchor = tree!.root.find((node) => node.type === "a" || node.type === "span");
@@ -99,7 +103,10 @@ function render(threadId: string, label = "the label") {
     params: anchor.props["data-params"]
       ? (JSON.parse(anchor.props["data-params"] as string) as Record<string, string>)
       : null,
-    title: anchor.props.title as string | undefined,
+    title: (anchor.props["data-title"] ??
+      tree!.root.findAll((node) => node.props["data-popup"])[0]?.children.join("")) as
+      | string
+      | undefined,
     copy: anchor.props["data-markdown-copy"] as string,
     text: JSON.stringify(tree!.toJSON()),
   };

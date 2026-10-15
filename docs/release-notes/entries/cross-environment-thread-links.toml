@@ -1,0 +1,4 @@
+id = "cross-environment-thread-links"
+category = "fix"
+functionality = "thread links"
+text = "Open thread links, project Team members, task threads and canvas links on the machine the thread lives on, and say plainly when a thread is missing or its machine is disconnected."

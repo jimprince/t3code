@@ -33,15 +33,15 @@ afterEach(() => {
 
 /** Mounts the hook the Task panel, Team strip and thread rows share, and returns its opener. */
 function mountOpenThread() {
-  let open: ReturnType<typeof useOpenThread> | null = null;
+  const opener: { open: ReturnType<typeof useOpenThread> | null } = { open: null };
   function Probe() {
-    open = useOpenThread(summary);
+    opener.open = useOpenThread(summary);
     return null;
   }
   act(() => {
     tree = create(<Probe />);
   });
-  return open!;
+  return opener.open!;
 }
 
 describe("useOpenThread", () => {

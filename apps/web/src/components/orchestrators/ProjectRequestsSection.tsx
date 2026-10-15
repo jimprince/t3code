@@ -20,7 +20,7 @@ import { buildThreadRouteParams } from "../../threadRoutes";
 import { Button, InlineButton } from "../ui/button";
 import { toastManager } from "../ui/toast";
 import { NO_OPEN_KEYS, openKeysSchema, toggleKey } from "./openGroups.logic";
-import { projectReturnState, projectThreadOpen } from "./projectNavigation";
+import { projectThreadOpen } from "./projectNavigation";
 import { formatIssueAge } from "./projectIssuesBoard.logic";
 import { useNextReleaseItems } from "./ProjectRoadmapWidget";
 import { TaskTitle } from "./TaskLink";
