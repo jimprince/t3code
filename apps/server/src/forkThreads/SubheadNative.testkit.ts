@@ -32,7 +32,7 @@ const runtime = layerWithRegistry(
   { databaseLayer: layerMemory, runEffectWorker: false },
 );
 export const subheadNativeLayer = Layer.mergeAll(
-  Threads.layer.pipe(Layer.provide(runtime)),
+  Threads.layer.pipe(Layer.provideMerge(runtime)),
   storeLayer,
 ).pipe(Layer.provideMerge(layerMemory));
 export const createSubheadTestThread = (id: ThreadId, runtimeMode: RuntimeMode = "full-access") =>

@@ -2,6 +2,9 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
 import {
   CommandId,
+  EventId,
+  MessageId,
+  NodeId,
   ThreadId,
   ProviderInstanceId,
   ServerProvider,
@@ -21,6 +24,7 @@ import * as Threads from "../orchestration-v2/ThreadManagementService.ts";
 import * as Launch from "../orchestration-v2/ThreadLaunchService.ts";
 import * as Projects from "../orchestration-v2/ProjectStore.ts";
 import * as Receipts from "../orchestration-v2/CommandReceiptStore.ts";
+import * as EventSink from "../orchestration-v2/EventSink.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as SetupTracker from "../project/WorktreeSetupTracker.ts";
@@ -191,6 +195,97 @@ it.layer(NodeServices.layer)("native virtual launch", (it) => {
             Option.getOrThrow(yield* (yield* AutomationStore).getRun(run.id)).virtualSubhead
               ?.template.prompt,
           ).toBe("Frozen prompt");
+          const records = yield* threads.getThreadRecords(execution, ["runs", "nodes", "messages"]);
+          const root = records.runs[0]!;
+          const rootNode = records.nodes.find((node) => node.id === root.rootNodeId)!;
+          const input = records.messages.find((message) => message.id === run.steps[0]!.messageId)!;
+          const capturedAt = yield* DateTime.now;
+          const answerNode = {
+            ...rootNode,
+            id: NodeId.make("native-answer"),
+            kind: "assistant_message" as const,
+            parentNodeId: rootNode.id,
+            status: "completed" as const,
+            completedAt: capturedAt,
+          };
+          const childNode = {
+            ...rootNode,
+            id: NodeId.make("native-child"),
+            kind: "subagent" as const,
+            parentNodeId: rootNode.id,
+            status: "completed" as const,
+            completedAt: capturedAt,
+          };
+          const childAnswerNode = {
+            ...answerNode,
+            id: NodeId.make("child-answer"),
+            parentNodeId: childNode.id,
+          };
+          const answer = {
+            ...input,
+            id: MessageId.make("native-answer"),
+            role: "assistant" as const,
+            nodeId: answerNode.id,
+            text: "A concrete finding from the native answer leaf.",
+            streaming: false,
+            createdAt: capturedAt,
+            updatedAt: capturedAt,
+          };
+          yield* (yield* EventSink.EventSinkV2).write({
+            events: [
+              {
+                id: EventId.make("answer-node"),
+                type: "node.updated",
+                threadId: execution,
+                occurredAt: capturedAt,
+                payload: answerNode,
+              },
+              {
+                id: EventId.make("child-node"),
+                type: "node.updated",
+                threadId: execution,
+                occurredAt: capturedAt,
+                payload: childNode,
+              },
+              {
+                id: EventId.make("child-answer-node"),
+                type: "node.updated",
+                threadId: execution,
+                occurredAt: capturedAt,
+                payload: childAnswerNode,
+              },
+              {
+                id: EventId.make("answer-message"),
+                type: "message.updated",
+                threadId: execution,
+                occurredAt: capturedAt,
+                payload: answer,
+              },
+              {
+                id: EventId.make("child-answer-message"),
+                type: "message.updated",
+                threadId: execution,
+                occurredAt: capturedAt,
+                payload: {
+                  ...answer,
+                  id: MessageId.make("child-answer"),
+                  nodeId: childAnswerNode.id,
+                  text: "Child output must not replace the root result.",
+                  updatedAt: DateTime.add(capturedAt, { millis: 1 }),
+                },
+              },
+              {
+                id: EventId.make("root-completed"),
+                type: "run.updated",
+                threadId: execution,
+                occurredAt: capturedAt,
+                payload: { ...root, status: "completed", completedAt: capturedAt },
+              },
+            ],
+          });
+          const captured = yield* live.advance(run, run.steps[0]!);
+          expect(captured.status).toBe("completed");
+          expect(captured.result).toBe(answer.text);
           yield* registry.create({ ...template, name: "review-timeout" });
           yield* registry.setState("review-timeout", "enable");
           const pending = yield* admission.send(
