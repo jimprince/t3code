@@ -5124,7 +5124,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       );
       const activeRun = projection.runs.find(isBlockingRun);
       const pendingMergeBackTransfers = pendingMergeBackTransfersForThread(projection);
-      const capacityBlocked = !(yield* canStartSubheadWorker(sql, command.threadId));
+      // Workspace preparation must retain its native launch handshake. Its
+      // release queues the prepared turn if the provider slots are still full.
+      const capacityBlocked =
+        command.dispatchMode.type !== "defer_start" &&
+        !(yield* canStartSubheadWorker(sql, command.threadId).pipe(mapDispatchError(command)));
       const shouldQueue =
         (activeRun !== undefined || capacityBlocked) &&
         (dispatchMode.type === "defer_start" ||
@@ -8134,6 +8138,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         });
       }
       const now = yield* DateTime.now;
+      const capacityBlocked = !(yield* canStartSubheadWorker(sql, command.threadId).pipe(
+        mapDispatchError(command),
+      ));
       const resolvedRuntimePolicy = yield* runtimePolicy
         .resolve({ thread: projection.thread, modelSelection: state.run.modelSelection })
         .pipe(mapDispatchError(command));
@@ -8190,8 +8197,13 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         nodeId: state.rootNode.id,
         providerInstanceId: state.run.providerInstanceId,
         occurredAt: now,
-        payload: { ...state.run, status: "starting" },
+        payload: {
+          ...state.run,
+          status: capacityBlocked ? "queued" : "starting",
+          queuePosition: capacityBlocked ? state.run.ordinal : null,
+        },
       });
+      if (capacityBlocked) return;
       yield* Ref.update(effects, (existing) => [
         ...existing,
         {

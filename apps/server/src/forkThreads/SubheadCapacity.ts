@@ -52,9 +52,11 @@ const headHasRoom = (sql: SqlClient.SqlClient, head: ThreadId, except: ThreadId)
   WITH RECURSIVE children(thread_id) AS (
     SELECT thread_id FROM fork_thread_metadata WHERE json_extract(payload,'$.parentThreadId')=${head}
     UNION SELECT m.thread_id FROM fork_thread_metadata m JOIN children c ON json_extract(m.payload,'$.parentThreadId')=c.thread_id
+  ), released(thread_id,message_id) AS (
+    SELECT json_extract(run_json,'$.steps[0].threadId'),json_extract(run_json,'$.steps[0].messageId') FROM automation_runs WHERE status NOT IN ('queued','running') AND json_type(run_json,'$.virtualSubhead')='object'
   ), occupied(thread_id) AS (
-    SELECT r.thread_id FROM orchestration_v2_projection_runs r JOIN children c ON r.thread_id=c.thread_id WHERE r.status IN ('preparing','starting','running','waiting')
-    UNION SELECT p.thread_id FROM orchestration_v2_projection_provider_threads p JOIN children c ON p.thread_id=c.thread_id WHERE json_array_length(json_extract(p.payload_json,'$.pendingBackgroundTasks'))>0 OR json_extract(p.payload_json,'$.goal.status')='active'
+    SELECT r.thread_id FROM orchestration_v2_projection_runs r JOIN children c ON r.thread_id=c.thread_id WHERE r.status IN ('preparing','starting','running','waiting') AND NOT EXISTS(SELECT 1 FROM released v WHERE v.thread_id=r.thread_id AND v.message_id=json_extract(r.payload_json,'$.userMessageId'))
+    UNION SELECT p.thread_id FROM orchestration_v2_projection_provider_threads p JOIN children c ON p.thread_id=c.thread_id WHERE (json_array_length(json_extract(p.payload_json,'$.pendingBackgroundTasks'))>0 OR json_extract(p.payload_json,'$.goal.status')='active') AND NOT EXISTS(SELECT 1 FROM released v JOIN orchestration_v2_projection_runs r ON r.thread_id=v.thread_id AND json_extract(r.payload_json,'$.userMessageId')=v.message_id WHERE v.thread_id=p.thread_id AND r.ordinal=(SELECT MAX(latest.ordinal) FROM orchestration_v2_projection_runs latest WHERE latest.thread_id=p.thread_id))
     UNION SELECT json_extract(a.run_json,'$.steps[0].threadId') FROM automation_runs a WHERE a.status='running' AND json_type(a.run_json,'$.virtualSubhead')='object'
       AND (json_extract(a.run_json,'$.ownerThreadId')=${head} OR json_extract(a.run_json,'$.ownerThreadId') IN (SELECT thread_id FROM children))
   ) SELECT thread_id FROM occupied WHERE thread_id<>${except} LIMIT 2
@@ -76,6 +78,8 @@ export const subheadCapacityQueueCandidates = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
     yield* hasRegistry(sql);
     if (registrySchemas.get(sql) !== true) return [] as ThreadId[];
+    if ((yield* sql`SELECT id FROM named_virtual_agents LIMIT 1`).length === 0)
+      return [] as ThreadId[];
     const rows = yield* sql<{
       thread_id: string;
     }>`SELECT DISTINCT r.thread_id FROM orchestration_v2_projection_runs r WHERE r.status='queued' AND COALESCE(json_extract(r.payload_json,'$.queueHeld'),0)=0 ORDER BY r.requested_at LIMIT 100`;

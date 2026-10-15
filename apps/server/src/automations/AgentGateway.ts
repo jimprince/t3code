@@ -39,13 +39,13 @@ import * as ProjectIssuesService from "../projectIssues/ProjectIssuesService.ts"
 /** Why the engine should look again. */
 export type AutomationWakeup = "thread" | "legacy" | "project";
 
+export const SUBHEAD_TIMEOUT_GRACE_MINUTES = 5;
+
 /**
  * Everything the automation engine needs from the orchestration core, in one place. The engine
  * and its tables know nothing about V1 commands, events or projections; porting to another core
  * rewrites this file.
  */
-export const SUBHEAD_TIMEOUT_GRACE_MINUTES = 5;
-
 export class AgentGateway extends Context.Service<
   AgentGateway,
   {

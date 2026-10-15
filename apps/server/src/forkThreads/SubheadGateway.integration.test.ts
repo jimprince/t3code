@@ -69,7 +69,7 @@ const provider = Schema.decodeUnknownSync(ServerProvider)({
 });
 
 it.layer(NodeServices.layer)("native virtual launch", (it) => {
-  it.effect.each(["normal", "idle-child", "stuck-stream"] as const)(
+  it.effect.each(["normal", "idle-child", "stuck-stream", "stuck-running"] as const)(
     "native capture and lease release: %s",
     (scenario) =>
       Effect.gen(function* () {
@@ -229,7 +229,7 @@ it.layer(NodeServices.layer)("native virtual launch", (it) => {
             role: "assistant" as const,
             nodeId: answerNode.id,
             text: "A concrete finding from the native answer leaf.",
-            streaming: scenario === "stuck-stream",
+            streaming: scenario.startsWith("stuck-"),
             createdAt: capturedAt,
             updatedAt: capturedAt,
           };
@@ -281,7 +281,11 @@ it.layer(NodeServices.layer)("native virtual launch", (it) => {
                 type: "run.updated",
                 threadId: execution,
                 occurredAt: capturedAt,
-                payload: { ...root, status: "completed", completedAt: capturedAt },
+                payload: {
+                  ...root,
+                  status: scenario === "stuck-running" ? "running" : "completed",
+                  completedAt: scenario === "stuck-running" ? null : capturedAt,
+                },
               },
             ],
           });
@@ -290,20 +294,19 @@ it.layer(NodeServices.layer)("native virtual launch", (it) => {
             yield* createSubheadTestThread(child);
             yield* writeMetadata(sql, { threadId: child, parentThreadId: execution });
           }
-          const captureRun =
-            scenario === "stuck-stream"
-              ? {
-                  ...run,
-                  virtualSubhead: {
-                    ...run.virtualSubhead!,
-                    leaseStartedAt: DateTime.formatIso(
-                      DateTime.subtract(yield* DateTime.now, { minutes: 36 }),
-                    ),
-                  },
-                }
-              : run;
+          const captureRun = scenario.startsWith("stuck-")
+            ? {
+                ...run,
+                virtualSubhead: {
+                  ...run.virtualSubhead!,
+                  leaseStartedAt: DateTime.formatIso(
+                    DateTime.subtract(yield* DateTime.now, { minutes: 36 }),
+                  ),
+                },
+              }
+            : run;
           const captured = yield* live.advance(captureRun, run.steps[0]!);
-          expect(captured.status).toBe(scenario === "stuck-stream" ? "failed" : "completed");
+          expect(captured.status).toBe(scenario.startsWith("stuck-") ? "failed" : "completed");
           expect(captured.result).toContain(answer.text);
           yield* (yield* AutomationStore).saveRun({
             ...captureRun,

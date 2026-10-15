@@ -149,9 +149,11 @@ export const makeSubheadDelivery = (providers: Effect.Effect<ReadonlyArray<Serve
                       : "pending",
                 attempts,
                 firstAttemptAt: virtual.delivery.firstAttemptAt ?? now,
-                nextAttemptAt: new Date(
-                  Date.parse(now) + Math.min(5 * 60_000, 15_000 * 2 ** Math.min(attempts - 1, 5)),
-                ).toISOString(),
+                nextAttemptAt: DateTime.formatIso(
+                  DateTime.makeUnsafe(
+                    Date.parse(now) + Math.min(5 * 60_000, 15_000 * 2 ** Math.min(attempts - 1, 5)),
+                  ),
+                ),
                 error,
               });
             return yield* handoffs

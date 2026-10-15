@@ -321,6 +321,10 @@ admissions and pauses queued work; active work finishes. Retired names stay
 inspectable with `--all` and cannot be enabled accidentally. Disabling or retiring
 all helpers lifts the ordinary head cap after non-terminal virtual runs finish;
 queued disabled/retired helper requests stay paused and have no slice-1 cancel.
+A paused queued request is non-terminal and can therefore keep the ordinary cap
+active indefinitely. A disabled helper can be re-enabled to drain those requests;
+a retired helper cannot be re-enabled, and its already queued requests remain
+paused with the cap active. Retiring does not cancel requests in slice 1.
 
 Persist the request ID before retrying. The same environment, authenticated sender,
 helper and request ID resolve to the original run and execution IDs. Changing the
