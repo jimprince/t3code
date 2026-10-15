@@ -3,6 +3,9 @@ import { IsoDateTime, ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseS
 import { NamedAgentName } from "./namedAgents.ts";
 import { ModelSelection } from "./modelSelection.ts";
 import { RuntimeMode } from "./providerPolicy.ts";
+import * as Rpc from "effect/rpc/Rpc";
+import { EnvironmentAuthorizationError } from "./auth.ts";
+import { NamedAgentError } from "./namedAgents.ts";
 
 /** App-owned snapshots. Edits never change an admitted run's template. */
 export const SubheadTemplate = Schema.Struct({
@@ -27,3 +30,30 @@ export const Subhead = Schema.Struct({
   updatedAt: IsoDateTime,
 });
 export type Subhead = typeof Subhead.Type;
+
+export const SubheadRegistryInput = Schema.Union([
+  Schema.Struct({ operation: Schema.Literal("list"), all: Schema.Boolean }),
+  Schema.Struct({ operation: Schema.Literal("show"), name: NamedAgentName }),
+  Schema.Struct({ operation: Schema.Literal("create"), template: Schema.Unknown }),
+  Schema.Struct({
+    operation: Schema.Literal("edit"),
+    name: NamedAgentName,
+    template: Schema.Unknown,
+    expectedVersion: Schema.Int,
+  }),
+  Schema.Struct({
+    operation: Schema.Literal("state"),
+    name: NamedAgentName,
+    state: Schema.Literals(["enable", "disable", "retire"]),
+  }),
+]);
+export type SubheadRegistryInput = typeof SubheadRegistryInput.Type;
+export const SubheadRegistryResult = Schema.Union([
+  Subhead,
+  Schema.Struct({ agents: Schema.Array(Subhead) }),
+]);
+export const SubheadRpc = Rpc.make("fork.subheads", {
+  payload: SubheadRegistryInput,
+  success: SubheadRegistryResult,
+  error: Schema.Union([NamedAgentError, EnvironmentAuthorizationError]),
+});

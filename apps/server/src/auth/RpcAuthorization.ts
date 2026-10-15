@@ -77,6 +77,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.automationScriptsRemove]: AuthOrchestrationOperateScope,
   [WS_METHODS.automationScriptsRun]: AuthOrchestrationOperateScope,
   "orchestration.listNamedAgents": AuthOrchestrationReadScope,
+  "fork.subheads": AuthOrchestrationOperateScope,
   "orchestration.resolveNamedAgent": AuthOrchestrationOperateScope,
   "orchestration.handOverNamedAgent": AuthOrchestrationOperateScope,
   [WS_METHODS.serverPreviewRecovery]: AuthOrchestrationReadScope,

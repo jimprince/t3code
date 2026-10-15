@@ -22,6 +22,7 @@ import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.t
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { liveRoots } from "./NamedAgentPolicy.ts";
+import { makeSubheadRegistry } from "./SubheadRegistry.ts";
 import { buildIncarnationMessage, readAgentScope } from "./namedAgentBriefing.ts";
 
 const agentError = (cause: unknown) =>
@@ -38,6 +39,7 @@ export const makeNamedAgents = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const crypto = yield* Crypto.Crypto;
+  const virtual = yield* makeSubheadRegistry;
   const newId = crypto.randomUUIDv4;
   const readOptional = (file: string) =>
     fs.readFileString(file).pipe(Effect.orElseSucceed(() => null as string | null));
@@ -123,7 +125,26 @@ export const makeNamedAgents = Effect.gen(function* () {
             };
           }),
       );
-      return { agents: agents.toSorted((a, b) => a.name.localeCompare(b.name)) };
+      const virtualAgents = yield* Effect.forEach(yield* virtual.list(false), (entry) =>
+        Effect.gen(function* () {
+          const project = yield* projects.getShell(entry.projectId);
+          return {
+            kind: "virtual" as const,
+            virtualAgentId: entry.id,
+            enabled: entry.enabled,
+            templateVersion: entry.version,
+            name: entry.name,
+            projectId: entry.projectId,
+            workspaceRoot:
+              project._tag === "Some" ? project.value.workspaceRoot : "(project unavailable)",
+            scope: entry.description,
+            liveThreadId: null,
+          };
+        }),
+      );
+      return {
+        agents: [...agents, ...virtualAgents].toSorted((a, b) => a.name.localeCompare(b.name)),
+      };
     }).pipe(Effect.mapError(agentError));
   const resolve = (
     input: ResolveNamedAgentInput,

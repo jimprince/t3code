@@ -7,6 +7,7 @@ import { registerPlanCommands } from "./planCommands.js";
 import { registerGiteaTokenCommand, GiteaTokenCliError } from "./giteaToken.js";
 import type { QueuedSendOrigin } from "./types.js";
 import { registerAutomationCommands } from "./automations.js";
+import { registerSubheadCommands } from "./subheads.js";
 
 import { parseInactivityMinutes } from "./inactivity.js";
 import { Command } from "commander";
@@ -3128,6 +3129,7 @@ registerRecoveryCommands(
   printJson,
 );
 registerAutomationCommands(program);
+registerSubheadCommands(program);
 registerGiteaTokenCommand(program);
 const sensitiveTokenCommand = ["source-control", "gitea", "set-token"].every((part) =>
   process.argv.slice(2).includes(part),

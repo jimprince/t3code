@@ -58,6 +58,11 @@ export const assertRootSlot = (
 
 export const validateNaming = (sql: SqlClient.SqlClient, projectId: ProjectId, name: string) =>
   Effect.gen(function* () {
+    const virtual = yield* sql`SELECT id FROM named_virtual_agents WHERE name=${name}`;
+    if (virtual.length > 0)
+      return yield* new NamedAgentError({
+        message: `Named agent '${name}' already exists as a virtual subhead.`,
+      });
     const namesakes = yield* sql<{
       project_id: string;
     }>`SELECT project_id FROM projection_projects WHERE deleted_at IS NULL AND project_id<>${projectId} AND json_extract(permanent_agent_json,'$.name')=${name}`;
