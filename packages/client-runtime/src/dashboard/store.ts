@@ -152,7 +152,6 @@ export function createDashboardAtoms<R, ER>(
       });
       return {
         snapshot: visibleSnapshot,
-        loadFailed: !cached && result !== null && AsyncResult.isFailure(result),
         source: value ? ("live" as const) : cached ? ("cached" as const) : ("empty" as const),
       };
     }).pipe(Atom.setIdleTTL(0), Atom.withLabel(`dashboard:${environmentId}`)),

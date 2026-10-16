@@ -61,7 +61,6 @@ describe("dashboard subscription lifetime", () => {
       expect(registry.get(dashboard.snapshot(environmentId))).toMatchObject({
         snapshot: stored,
         source: "cached",
-        loadFailed: false,
       });
       expect(calls).toBe(0);
       unmount();
@@ -240,7 +239,6 @@ it.effect("an older VM publishes a live dashboard while its tracker RPC is still
       yield* Deferred.await(trackerStarted);
       const value = registry.get(atom);
       expect(value).toMatchObject({
-        loadFailed: false,
         source: "live",
       });
       expect(value.snapshot?.projects[0]?.title).toBe("T3 Orchestrator");
@@ -252,58 +250,6 @@ it.effect("an older VM publishes a live dashboard while its tracker RPC is still
       unsubscribe();
       registry.dispose();
       vi.useRealTimers();
-    }
-  }),
-);
-
-it.effect("exposes a failed empty load and recovers when explicitly retried", () =>
-  Effect.gen(function* () {
-    const failed = yield* Deferred.make<void>();
-    const recovered = yield* Deferred.make<void>();
-    const value = { ...emptySnapshot("2026-10-15T10:00:00Z"), revision: 8 };
-    let attempts = 0;
-    const runtime = Atom.runtime(
-      Layer.succeed(EnvironmentRegistry.EnvironmentRegistry, {
-        followStream: () =>
-          Stream.suspend(() =>
-            ++attempts === 1
-              ? Stream.fail(new ProjectDashboardError({ message: "Disconnected" }))
-              : Stream.concat(Stream.succeed(value), Stream.never),
-          ),
-      } as unknown as EnvironmentRegistry.EnvironmentRegistry["Service"]),
-    );
-    const dashboard = createDashboardAtoms(runtime, {
-      config: () => Atom.make(config(true)),
-      shell: () => Atom.make(null),
-    });
-    const registry = AtomRegistry.make();
-    const atom = dashboard.snapshot(environmentId);
-    const unmount = registry.subscribe(
-      atom,
-      (state) => {
-        if (state.loadFailed) Deferred.doneUnsafe(failed, Exit.void);
-        if (state.snapshot?.revision === 8) Deferred.doneUnsafe(recovered, Exit.void);
-      },
-      { immediate: true },
-    );
-    try {
-      yield* Deferred.await(failed);
-      expect(registry.get(atom)).toMatchObject({
-        loadFailed: true,
-        source: "empty",
-        snapshot: null,
-      });
-      dashboard.retry(registry, environmentId);
-      yield* Deferred.await(recovered);
-      expect(registry.get(atom)).toMatchObject({
-        loadFailed: false,
-        source: "live",
-        snapshot: value,
-      });
-      expect(attempts).toBe(2);
-    } finally {
-      unmount();
-      registry.dispose();
     }
   }),
 );
