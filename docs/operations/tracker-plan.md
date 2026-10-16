@@ -20,7 +20,10 @@ file supplies only its binding and flag, never linked overrides or orphan rows.
 Refresh reads the bounded file and compares its SHA256 content hash; changed files
 are decoded again, including after restart. Only the tracker header is decoded,
 so legacy task payloads remain ignored. Read/decode failures retain the last
-good tracker header and selection with a failed source receipt.
+good tracker header and selection with a failed source receipt. The predecessor
+list is optional and unknown header keys are ignored; a malformed
+`predecessorRootThreadIds` value fails the whole header decode, retains the last
+good selection, and marks the source failed.
 Removed orphan rows are recorded as migration discontinuity; linked issue ids
 stay stable.
 
@@ -41,7 +44,10 @@ earlier predecessors so the chain is flattened. Update these together:
 
 The optional predecessor list transfers request-marker author/root IDs, issue
 links, issue owners and resolved decision-waiting threads before exclusion and
-ownership. A predecessor no longer renders as a project or tracker root, even
+ownership. Each successor also adopts the predecessor's own issue list, so links
+and repositories discovered only through that head are retained. Refresh keeps
+listing declared predecessors present in the shell snapshot, including settled
+and archived heads. A predecessor no longer renders as a project or tracker root, even
 when active, archived or settled. Stronger links to a narrower live project
 continue to win. Historical headers can form a transitive chain ending at a
 current root. A cycle, duplicate claim by separate files, or predecessor that

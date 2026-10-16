@@ -239,112 +239,7 @@ export const make = Effect.gen(function* () {
         .pipe(ShellSnapshotDiagnostics.withCaller("DashboardService"));
       const metadata = yield* listMetadata(sql);
       const { roots } = dashboardRoots([...shell.threads, ...shell.archivedThreads], metadata);
-      const activeRootIds = new Set(roots.map((r) => r.id));
-      for (const rootId of issueRows.keys())
-        if (!activeRootIds.has(rootId)) issueRows.delete(rootId);
-      for (const rootId of ownRepositories.keys())
-        if (!activeRootIds.has(rootId)) ownRepositories.delete(rootId);
       const seenSources = new Set<string>(["local", "release:server"]);
-      // Roots are serial; the existing repository adapter bounds its network concurrency to four.
-      // Its shared repository cache avoids repeated reads for overlapping project scopes.
-      for (const root of roots) {
-        const now = DateTime.formatIso(yield* DateTime.now);
-        const result = yield* issues.list({ rootThreadId: root.id }).pipe(Effect.option);
-        if (
-          result._tag === "None" ||
-          (result.value.repositories.length === 0 && ownRepositories.has(root.id))
-        ) {
-          const repository = ownRepositories.get(root.id);
-          if (repository) {
-            const id = `gitea:${repository}`;
-            seenSources.add(id);
-            const previous = sources.get(id);
-            if (previous) sources.set(id, { ...previous, failed: true, observedAt: now });
-          }
-          for (const issue of issueRows.get(root.id) ?? []) {
-            const id = `gitea:${issue.host}/${issue.repository}`;
-            seenSources.add(id);
-            const previous = sources.get(id);
-            if (previous) sources.set(id, { ...previous, failed: true, observedAt: now });
-          }
-          continue;
-        }
-        const current = result.value;
-        if (current.primaryRepository)
-          ownRepositories.set(
-            root.id,
-            `${current.primaryRepository.host}/${current.primaryRepository.repository}`,
-          );
-        else ownRepositories.delete(root.id);
-        const failed = new Set(
-          current.repositories
-            .filter((r) => r.error !== null)
-            .map((r) => `${r.host}/${r.repository}`),
-        );
-        const previous = issueRows.get(root.id) ?? [];
-        if (
-          current.issues.some((issue) => {
-            const prior = previous.find(
-              (old) =>
-                old.host === issue.host &&
-                old.repository === issue.repository &&
-                old.number === issue.number,
-            );
-            return (
-              issue.plan &&
-              (!prior?.plan ||
-                issue.plan.evidenceVersion !== prior.plan.evidenceVersion ||
-                (issue.plan.confirmedAt != null &&
-                  Date.parse(issue.plan.confirmedAt) >
-                    Date.parse(prior.plan.confirmedAt ?? "1970-01-01")))
-            );
-          })
-        )
-          lastWriteAt = Number.NEGATIVE_INFINITY;
-        issueRows.set(root.id, [
-          ...current.issues.map((issue) => ({
-            ...issue,
-            ...(issue.plan
-              ? {
-                  plan: confirmTrackerPlan(
-                    issue.plan,
-                    previous.find(
-                      (old) =>
-                        old.host === issue.host &&
-                        old.repository === issue.repository &&
-                        old.number === issue.number,
-                    )?.plan ?? null,
-                    current.fetchedAt,
-                  ),
-                }
-              : {}),
-          })),
-          ...previous.filter((i) => failed.has(`${i.host}/${i.repository}`)),
-        ]);
-        for (const repo of current.repositories) {
-          const id = `gitea:${repo.host}/${repo.repository}`;
-          seenSources.add(id);
-          sources.set(id, {
-            id,
-            kind: "gitea",
-            observedAt: now,
-            lastSuccessAt: repo.error
-              ? (sources.get(id)?.lastSuccessAt ?? null)
-              : current.fetchedAt,
-            staleAfterMs: 120_000,
-            coverage: repo.error ? "unavailable" : "bounded",
-            failed: repo.error !== null,
-            ...(repo.noteCoverage && repo.noteCoverage !== "complete"
-              ? {
-                  detail:
-                    repo.noteCoverage === "bounded"
-                      ? "Progress notes have partial coverage"
-                      : "Progress notes unavailable",
-                }
-              : {}),
-          });
-        }
-      }
       const planPaths = [
         ".local/share/briefing/tasks",
         ".shared/briefing/tasks",
@@ -457,6 +352,120 @@ export const make = Effect.gen(function* () {
       const { successors } = trackerSuccessors([...plans.values()], roots);
       for (const predecessor of successors.keys()) {
         if (trackerRoots.delete(predecessor)) lastWriteAt = Number.NEGATIVE_INFINITY;
+      }
+      const activeRootIds = new Set(roots.map((r) => r.id));
+      // ProjectIssuesService resolves settled/archived shells too. Keep their explicit
+      // links discoverable after retirement, without rendering them as projects.
+      const issueScopes = [
+        ...roots,
+        ...[...shell.threads, ...shell.archivedThreads].filter(
+          (thread) => successors.has(thread.id) && !activeRootIds.has(thread.id),
+        ),
+      ];
+      const issueScopeIds = new Set(issueScopes.map((root) => root.id));
+      for (const rootId of issueRows.keys())
+        if (!issueScopeIds.has(rootId)) issueRows.delete(rootId);
+      for (const rootId of ownRepositories.keys())
+        if (!issueScopeIds.has(rootId)) ownRepositories.delete(rootId);
+      // Roots are serial; the existing repository adapter bounds its network concurrency to four.
+      // Its shared repository cache avoids repeated reads for overlapping project scopes.
+      for (const root of issueScopes) {
+        const now = DateTime.formatIso(yield* DateTime.now);
+        const result = yield* issues.list({ rootThreadId: root.id }).pipe(Effect.option);
+        if (
+          result._tag === "None" ||
+          (result.value.repositories.length === 0 && ownRepositories.has(root.id))
+        ) {
+          const repository = ownRepositories.get(root.id);
+          if (repository) {
+            const id = `gitea:${repository}`;
+            seenSources.add(id);
+            const previous = sources.get(id);
+            if (previous) sources.set(id, { ...previous, failed: true, observedAt: now });
+          }
+          for (const issue of issueRows.get(root.id) ?? []) {
+            const id = `gitea:${issue.host}/${issue.repository}`;
+            seenSources.add(id);
+            const previous = sources.get(id);
+            if (previous) sources.set(id, { ...previous, failed: true, observedAt: now });
+          }
+          continue;
+        }
+        const current = result.value;
+        if (current.primaryRepository)
+          ownRepositories.set(
+            root.id,
+            `${current.primaryRepository.host}/${current.primaryRepository.repository}`,
+          );
+        else ownRepositories.delete(root.id);
+        const failed = new Set(
+          current.repositories
+            .filter((r) => r.error !== null)
+            .map((r) => `${r.host}/${r.repository}`),
+        );
+        const previous = issueRows.get(root.id) ?? [];
+        if (
+          current.issues.some((issue) => {
+            const prior = previous.find(
+              (old) =>
+                old.host === issue.host &&
+                old.repository === issue.repository &&
+                old.number === issue.number,
+            );
+            return (
+              issue.plan &&
+              (!prior?.plan ||
+                issue.plan.evidenceVersion !== prior.plan.evidenceVersion ||
+                (issue.plan.confirmedAt != null &&
+                  Date.parse(issue.plan.confirmedAt) >
+                    Date.parse(prior.plan.confirmedAt ?? "1970-01-01")))
+            );
+          })
+        )
+          lastWriteAt = Number.NEGATIVE_INFINITY;
+        issueRows.set(root.id, [
+          ...current.issues.map((issue) => ({
+            ...issue,
+            ...(issue.plan
+              ? {
+                  plan: confirmTrackerPlan(
+                    issue.plan,
+                    previous.find(
+                      (old) =>
+                        old.host === issue.host &&
+                        old.repository === issue.repository &&
+                        old.number === issue.number,
+                    )?.plan ?? null,
+                    current.fetchedAt,
+                  ),
+                }
+              : {}),
+          })),
+          ...previous.filter((i) => failed.has(`${i.host}/${i.repository}`)),
+        ]);
+        for (const repo of current.repositories) {
+          const id = `gitea:${repo.host}/${repo.repository}`;
+          seenSources.add(id);
+          sources.set(id, {
+            id,
+            kind: "gitea",
+            observedAt: now,
+            lastSuccessAt: repo.error
+              ? (sources.get(id)?.lastSuccessAt ?? null)
+              : current.fetchedAt,
+            staleAfterMs: 120_000,
+            coverage: repo.error ? "unavailable" : "bounded",
+            failed: repo.error !== null,
+            ...(repo.noteCoverage && repo.noteCoverage !== "complete"
+              ? {
+                  detail:
+                    repo.noteCoverage === "bounded"
+                      ? "Progress notes have partial coverage"
+                      : "Progress notes unavailable",
+                }
+              : {}),
+          });
+        }
       }
       let healthPath: string | null = null;
       for (const candidate of [

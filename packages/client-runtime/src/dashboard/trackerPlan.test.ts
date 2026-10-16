@@ -667,3 +667,32 @@ describe("tracker head handover (#370)", () => {
     expect(cycle.projects.some((p) => p.rootThreadId === nextHead)).toBe(true);
   });
 });
+
+it.each([false, true])(
+  "keeps links and repositories discovered only by the predecessor (settled=%s)",
+  (settled) => {
+    const data = handoverInput(settled);
+    const source = { threadId: t3Head, rootThreadId: t3Head, messageId: "m" };
+    const common = makeIssue(80, { requestSource: source });
+    const adopted = { ...common, linkedThreadIds: [oldHead] };
+    const foreign = makeIssue(81, {
+      repository: "brad/predecessor-only",
+      url: "https://git.test/brad/predecessor-only/issues/81",
+      linkedThreadIds: [oldHead],
+      requestSource: source,
+    });
+    data.issues = new Map([
+      [t3Head, [common]],
+      [nextHead, [common]],
+      [dashHead, []],
+      [oldHead, [adopted, foreign]],
+    ]);
+    const snapshot = aggregate(data);
+    const project = snapshot.projects.find((p) => p.rootThreadId === nextHead);
+    expect(project?.tasks.map((t) => t.title).sort()).toEqual(["Issue 80", "Issue 81"]);
+    expect(snapshot.projects.find((p) => p.rootThreadId === t3Head)?.tasks).toHaveLength(0);
+    expect(snapshot.projects.some((p) => p.rootThreadId === oldHead)).toBe(false);
+    const keys = snapshot.projects.flatMap((p) => p.tasks.map((t) => t.id));
+    expect(new Set(keys).size).toBe(keys.length);
+  },
+);

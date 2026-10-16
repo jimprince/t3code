@@ -71,3 +71,9 @@ id = "tracker-head-handover"
 date = "2026-10-16"
 decided = "Revalidate tracker headers by content hash and resolve explicit predecessorRootThreadIds before ownership/exclusion; retain last selection on failures."
 rationale = "A head handover must preserve the Plan after predecessor retirement without rewriting issue provenance or weakening administrative handover fences (#370)."
+
+[[decision]]
+id = "predecessor-issue-discovery"
+date = "2026-10-16"
+decided = "Adopt each predecessor's per-root issue list as successor candidates and keep listing declared predecessors present in the shell, including settled heads."
+rationale = "Only the predecessor's discovery tree may contain its explicit links or additional repositories; reading canonical roots alone loses that work (#370 S2)."

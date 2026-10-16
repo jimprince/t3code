@@ -427,3 +427,104 @@ it.effect.each([false, true])(
       yield* run(restored);
     }),
 );
+
+it.effect.each([false, true])(
+  "refreshes predecessor-only discovery on first handover refresh (settled=%s)",
+  (settled) =>
+    Effect.gen(function* () {
+      const t3 = ThreadId.make("t3-root");
+      const shells = [a, b, t3].map((id) => ({
+        ...v2ThreadShell,
+        id,
+        title: id,
+        archivedAt: null,
+        settledOverride: id === a && settled ? ("settled" as const) : null,
+        todoProgress: null,
+      }));
+      const metadata = shells.map((t) => ({
+        payload: JSON.stringify({ threadId: t.id, parentThreadId: null, subproject: "on" }),
+      }));
+      const queried: ThreadId[] = [];
+      const common = {
+        ...row(80),
+        linkedThreadIds: [],
+        requestSource: { threadId: t3, rootThreadId: t3, messageId: "m" },
+      };
+      const foreign = {
+        ...common,
+        number: 81,
+        title: "Predecessor-only repository",
+        repository: "brad/predecessor-only",
+        url: "https://git.test/brad/predecessor-only/issues/81",
+        linkedThreadIds: [a],
+      };
+      const program = Effect.scoped(
+        Effect.gen(function* () {
+          const dashboard = yield* DashboardService.make;
+          yield* dashboard.refreshAfterWrite;
+          const snapshot = yield* dashboard.getSnapshot;
+          expect(queried).toContain(a);
+          expect(
+            snapshot.projects
+              .find((p) => p.rootThreadId === b)
+              ?.tasks.map((t) => t.title)
+              .sort(),
+          ).toEqual(["Predecessor-only repository", "Task 80"]);
+          expect(snapshot.projects.find((p) => p.rootThreadId === t3)?.tasks).toHaveLength(0);
+          expect(snapshot.projects.some((p) => p.rootThreadId === a)).toBe(false);
+          yield* dashboard.refreshAfterWrite;
+          expect(queried.filter((id) => id === a)).toHaveLength(2);
+        }),
+      ).pipe(
+        Effect.provideService(FileSystem.FileSystem, {
+          exists: (path: string) => Effect.succeed(path.endsWith(".local/share/briefing/tasks")),
+          readDirectory: () => Effect.succeed(["handover.json"]),
+          readFileString: () =>
+            Effect.succeed(
+              JSON.stringify({
+                source: "tracker",
+                rootThreadId: b,
+                predecessorRootThreadIds: [a],
+                head: "handover",
+                title: "Handover",
+                updated_utc: at,
+              }),
+            ),
+        } as never),
+        Effect.provideService(SqlClient.SqlClient, (() => Effect.succeed(metadata)) as never),
+        Effect.provideService(ThreadManagement.ThreadManagementService, {
+          getShellSnapshot: () =>
+            Effect.succeed({ threads: shells, archivedThreads: [], projects: [] }),
+          streamDomainEvents: Stream.never,
+        } as never),
+        Effect.provideService(ProjectService.ProjectService, {
+          listShells: () => Effect.succeed([]),
+        } as never),
+        Effect.provideService(ProjectIssuesService.Service, {
+          list: ({ rootThreadId }: { rootThreadId: ThreadId }) =>
+            Effect.sync(() => {
+              queried.push(rootThreadId);
+              return {
+                primaryRepository: { host: "git.test", repository: "brad/repo" },
+                repositories: [
+                  { host: "git.test", repository: "brad/repo", error: null },
+                  ...(rootThreadId === a
+                    ? [{ host: "git.test", repository: foreign.repository, error: null }]
+                    : []),
+                ],
+                issues:
+                  rootThreadId === a ? [{ ...common, linkedThreadIds: [a] }, foreign] : [common],
+                fetchedAt: at,
+              };
+            }),
+        } as never),
+        Effect.provideService(PlanFileService, { scan: Effect.succeed([]) } as never),
+        Effect.provideService(DashboardStore.DashboardStore, {
+          read: Effect.succeed(null),
+          write: () => Effect.void,
+        }),
+        Effect.provide(NodeServices.layer),
+      );
+      yield* program;
+    }),
+);

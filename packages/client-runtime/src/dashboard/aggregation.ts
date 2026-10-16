@@ -235,9 +235,17 @@ export function aggregate(input: {
   const owners = new Map<string, ThreadId>();
   const included = new Set(threads.map((t) => t.id));
   const excluded = new Set(input.shells.filter((t) => !included.has(t.id)).map((t) => t.id));
+  // Discovery is scoped to each root's own tree. Adopt its predecessor lists too,
+  // including repositories that no other root can discover.
+  const rootIssues = new Map(roots.map((root) => [root.id, input.issues.get(root.id) ?? []]));
+  for (const [predecessor, successor] of successors) {
+    const inherited = input.issues.get(predecessor);
+    const current = rootIssues.get(successor);
+    if (current && inherited?.length) rootIssues.set(successor, [...current, ...inherited]);
+  }
   const rows = new Map<string, ProjectIssue>();
   for (const root of roots)
-    for (const original of input.issues.get(root.id) ?? []) {
+    for (const original of rootIssues.get(root.id) ?? []) {
       const issue: ProjectIssue =
         successors.size === 0
           ? original
@@ -310,7 +318,7 @@ export function aggregate(input: {
     const waiting = waitingThreads.get(key);
     const candidates = roots.filter(
       (root) =>
-        input.issues.get(root.id)?.some((i) => issueId(i.host, i.repository, i.number) === key) ||
+        rootIssues.get(root.id)?.some((i) => issueId(i.host, i.repository, i.number) === key) ||
         trees.get(root.id)!.some((t) => t.id === waiting),
     );
     const waitingOwner = candidates
