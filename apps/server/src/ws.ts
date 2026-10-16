@@ -56,6 +56,7 @@ import {
   authScopeResponse,
   AuthAccessStreamError,
   type AuthAccessStreamEvent,
+  AuthAccessWriteScope,
   AuthOrchestrationOperateScope,
   type AuthEnvironmentScope,
   type ScheduledTaskListResult,
@@ -3270,7 +3271,12 @@ const layerWsRpc = (
       );
       const forwards = makeMessageForwardService(sql, threadManagement, handoffs.accept);
       const forkHandlers = WsForkRpcGroup.of({
-        "fork.subheads": (input) => subheads.handlePrincipal(currentSession.subject, input),
+        "fork.subheads": (input) =>
+          subheads.handlePrincipal(
+            currentSession.subject,
+            input,
+            currentSession.scopes.includes(AuthAccessWriteScope),
+          ),
         [WS_METHODS.harnessRoutineKindSet]: (input) =>
           Effect.flatMap(RoutineKindService, (service) => service.set(input)),
         [WS_METHODS.harnessSnapshot]: (input) =>
