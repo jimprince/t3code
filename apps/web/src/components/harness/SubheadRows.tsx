@@ -108,7 +108,7 @@ function OpenRunRow({
             {formatLocalWhen(Date.parse(run.createdAt), now)}
           </span>
         </span>
-        <span className="truncate pl-3 text-3xs text-sidebar-muted-foreground">
+        <span className="truncate pl-3 text-3xs max-sm:text-xs text-sidebar-muted-foreground">
           from {sender} · {queued ? `waits for cap ${row.subhead.concurrency}` : "running"}
         </span>
       </button>
@@ -140,15 +140,27 @@ function SubheadRow({
       : "warning"
     : row.state === "disabled"
       ? "muted"
-      : row.lastTone;
+      : row.deliveryAlert !== null && row.lastTone !== "error"
+        ? "warning"
+        : row.lastTone;
   const right = hasOpen
     ? `${row.openRuns.length} open`
     : row.state === "disabled"
       ? "off"
       : row.lastTone === "error"
         ? "failed"
-        : "0 open";
-  const rightTone: SubheadTone = hasOpen ? "info" : row.lastTone === "error" ? "error" : "muted";
+        : row.undelivered > 0
+          ? "undelivered"
+          : row.held > 0
+            ? "held"
+            : "0 open";
+  const rightTone: SubheadTone = hasOpen
+    ? "info"
+    : row.lastTone === "error"
+      ? "error"
+      : row.undelivered > 0 || row.held > 0
+        ? "warning"
+        : "muted";
   const when = row.lastFinished?.finishedAt ?? row.lastFinished?.createdAt ?? null;
   return (
     <li>
@@ -158,27 +170,35 @@ function SubheadRow({
           selected && "bg-sidebar-row-active",
         )}
       >
-        <button
-          type="button"
-          aria-expanded={hasOpen ? !collapsed : undefined}
-          aria-label={`${collapsed ? "Show" : "Hide"} open runs of ${row.subhead.name}`}
-          disabled={!hasOpen}
-          className={cn(
-            "flex shrink-0 cursor-pointer items-center justify-center text-sidebar-muted-foreground disabled:cursor-default",
-            touch ? "size-11" : "size-7",
-          )}
-          onClick={() => setCollapsed((value) => !value)}
-        >
-          {hasOpen ? (
-            collapsed ? (
+        {hasOpen ? (
+          <button
+            type="button"
+            aria-expanded={!collapsed}
+            aria-label={`${collapsed ? "Show" : "Hide"} open runs of ${row.subhead.name}`}
+            className={cn(
+              "flex shrink-0 cursor-pointer items-center justify-center text-sidebar-muted-foreground",
+              touch ? "size-11" : "size-7",
+            )}
+            onClick={() => setCollapsed((value) => !value)}
+          >
+            {collapsed ? (
               <ChevronRightIcon aria-hidden className="size-3.5" />
             ) : (
               <ChevronDownIcon aria-hidden className="size-3.5" />
-            )
-          ) : (
-            <span aria-hidden className={cn("size-1.5 rounded-full", DOT[tone])} />
-          )}
-        </button>
+            )}
+          </button>
+        ) : (
+          // Nothing to expand: a status dot, not a disabled button announcing "Hide".
+          <span
+            aria-hidden
+            className={cn(
+              "flex shrink-0 items-center justify-center",
+              touch ? "size-11" : "size-7",
+            )}
+          >
+            <span className={cn("size-1.5 rounded-full", DOT[tone])} />
+          </span>
+        )}
         <button
           type="button"
           aria-label={`Open subhead ${row.subhead.name}`}
@@ -205,11 +225,18 @@ function SubheadRow({
             </span>
             <span className={cn("shrink-0 text-xs", TEXT[rightTone])}>{right}</span>
           </span>
-          <span className="truncate text-3xs text-sidebar-muted-foreground">{row.stateLine}</span>
+          <span className="truncate text-3xs max-sm:text-xs text-sidebar-muted-foreground">
+            {row.stateLine}
+          </span>
           {row.lastText !== null && when !== null ? (
-            <span className={cn("truncate text-3xs", TEXT[row.lastTone])}>
+            <span className={cn("truncate text-3xs max-sm:text-xs", TEXT[row.lastTone])}>
               {row.lastText} {formatLocalWhen(Date.parse(when), now)}
               {row.lastDetail ? ` · ${row.lastDetail}` : ""}
+            </span>
+          ) : null}
+          {row.deliveryAlert !== null ? (
+            <span className="truncate text-3xs max-sm:text-xs text-warning-foreground">
+              {row.deliveryAlert}
             </span>
           ) : null}
         </button>

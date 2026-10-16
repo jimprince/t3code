@@ -29,6 +29,8 @@ export const Subhead = Schema.Struct({
   updatedAt: IsoDateTime,
   createdBy: Schema.optionalKey(Schema.String),
   updatedBy: Schema.optionalKey(Schema.String),
+  /** Only on API responses, never stored: whether the caller may edit or change the state. */
+  callerMayChange: Schema.optionalKey(Schema.Boolean),
 });
 export type Subhead = typeof Subhead.Type;
 
