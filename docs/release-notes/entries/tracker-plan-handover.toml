@@ -1,0 +1,4 @@
+id = "tracker-plan-handover"
+category = "fix"
+functionality = "dashboard"
+text = "Keep a project's tracker Plan with its successor after a head handover. Header edits take effect after refresh or restart, old issue links follow the declared successor, and narrower linked projects retain their work. Conflicting handover declarations appear as migration warnings."

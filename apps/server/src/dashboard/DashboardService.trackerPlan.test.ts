@@ -3,6 +3,7 @@ import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as DateTime from "effect/DateTime";
 import * as FileSystem from "effect/FileSystem";
+import * as PlatformError from "effect/PlatformError";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -15,6 +16,8 @@ import { PlanFileService } from "../orchestration-v2/PlanFileService.ts";
 import { trackerPlan } from "../projectIssues/trackerPlan.logic.ts";
 import * as DashboardStore from "./DashboardStore.ts";
 import * as DashboardService from "./DashboardService.ts";
+import { emptySnapshot } from "./dashboard.logic.ts";
+import { compactStoredDashboard, expandStoredDashboard } from "./DashboardStore.ts";
 
 const a = ThreadId.make("root-a");
 const b = ThreadId.make("root-b");
@@ -148,7 +151,7 @@ describe("durable root-scoped tracker cutover (#297)", () => {
                 initial.projects.find((p) => p.rootThreadId === a)?.tasks[0]?.progress
                   ?.confirmationKnown,
               ).toBe(true);
-              expect(flaggedReads).toBe(2);
+              expect(flaggedReads).toBeGreaterThanOrEqual(2);
               return;
             }
             expect(
@@ -193,7 +196,7 @@ describe("durable root-scoped tracker cutover (#297)", () => {
               (yield* dashboard.getSnapshot).projects.find((p) => p.rootThreadId === a)?.tasks[0]
                 ?.progress?.confirmedAt,
             ).toBe(confirmation);
-            expect(flaggedReads).toBe(2);
+            expect(flaggedReads).toBeGreaterThanOrEqual(2);
             rows = rows.map((r) =>
               r.number === 1
                 ? {
@@ -280,9 +283,147 @@ describe("durable root-scoped tracker cutover (#297)", () => {
         );
         yield* run;
         reload = true;
-        // Restart uses the last persisted root source and header, without a payload reread.
+        // Restart restores tracker selection and validates the current header.
         yield* run;
-        expect(flaggedReads).toBe(2);
+        expect(flaggedReads).toBeGreaterThanOrEqual(2);
       }),
   );
 });
+
+it.effect.each([false, true])(
+  "rebinds changed tracker headers (restored=%s), retaining selection on failures (#370)",
+  (restored) =>
+    Effect.gen(function* () {
+      let stored: Effect.Success<DashboardStore.DashboardStore["Service"]["read"]> = null;
+      let root = a;
+      let includePredecessor = false;
+      let invalid = false;
+      let unreadable = false;
+      const shells = [a, b].map((id) => ({
+        ...v2ThreadShell,
+        id,
+        title: id,
+        archivedAt: null,
+        todoProgress: null,
+      }));
+      const metadata = shells.map((t) => ({
+        payload: JSON.stringify({ threadId: t.id, parentThreadId: null, subproject: "on" }),
+      }));
+      const run = (restart: boolean) =>
+        Effect.scoped(
+          Effect.gen(function* () {
+            const dashboard = yield* DashboardService.make;
+            yield* dashboard.refreshAfterWrite;
+            if (!restart) {
+              expect(stored?.plans?.[0]?.rootThreadId).toBe(a);
+              root = b;
+              yield* dashboard.refreshAfterWrite;
+              expect(stored?.trackerRoots).toContain(a);
+              expect(stored?.trackerRoots).toContain(b);
+              includePredecessor = true;
+              yield* dashboard.refreshAfterWrite;
+            }
+            expect(stored?.plans?.[0]?.rootThreadId).toBe(b);
+            expect(stored?.trackerRoots).toContain(b);
+            expect(stored?.trackerRoots).not.toContain(a);
+            const snapshot = yield* dashboard.getSnapshot;
+            expect(snapshot.projects.some((p) => p.rootThreadId === a)).toBe(false);
+            expect(snapshot.projects.find((p) => p.rootThreadId === b)?.planSource).toBe("tracker");
+            for (const failure of ["read", "decode"] as const) {
+              unreadable = failure === "read";
+              invalid = failure === "decode";
+              yield* dashboard.refreshAfterWrite;
+              expect(stored?.plans?.[0]?.rootThreadId).toBe(b);
+              expect(
+                (yield* dashboard.getSnapshot).projects.find((p) => p.rootThreadId === b)
+                  ?.planSource,
+              ).toBe("tracker");
+              expect(
+                (yield* dashboard.getSnapshot).sources.find((s) => s.id === "plan:handover")
+                  ?.failed,
+              ).toBe(true);
+            }
+            unreadable = false;
+            invalid = false;
+          }),
+        ).pipe(
+          Effect.provideService(FileSystem.FileSystem, {
+            exists: (path: string) => Effect.succeed(path.endsWith(".local/share/briefing/tasks")),
+            readDirectory: () => Effect.succeed(["handover.json"]),
+            readFileString: () =>
+              unreadable
+                ? Effect.fail(
+                    PlatformError.systemError({
+                      _tag: "PermissionDenied",
+                      module: "FileSystem",
+                      method: "readFileString",
+                    }),
+                  )
+                : Effect.succeed(
+                    invalid
+                      ? "{"
+                      : JSON.stringify({
+                          source: "tracker",
+                          rootThreadId: root,
+                          predecessorRootThreadIds: root === b && includePredecessor ? [a] : [],
+                          head: "handover",
+                          title: "Handover",
+                          updated_utc: at,
+                          unknownFutureKey: true,
+                          workstreams: "ignored",
+                        }),
+                  ),
+          } as never),
+          Effect.provideService(SqlClient.SqlClient, (() => Effect.succeed(metadata)) as never),
+          Effect.provideService(ThreadManagement.ThreadManagementService, {
+            getShellSnapshot: () =>
+              Effect.succeed({ threads: shells, archivedThreads: [], projects: [] }),
+            streamDomainEvents: Stream.never,
+          } as never),
+          Effect.provideService(ProjectService.ProjectService, {
+            listShells: () => Effect.succeed([]),
+          } as never),
+          Effect.provideService(ProjectIssuesService.Service, {
+            list: () =>
+              Effect.succeed({
+                primaryRepository: null,
+                repositories: [],
+                issues: [],
+                fetchedAt: at,
+              }),
+          } as never),
+          Effect.provideService(PlanFileService, { scan: Effect.succeed([]) } as never),
+          Effect.provideService(DashboardStore.DashboardStore, {
+            read: Effect.sync(() => stored),
+            write: (value) =>
+              Effect.sync(() => {
+                stored = value;
+              }),
+          }),
+          Effect.provide(NodeServices.layer),
+        );
+      if (restored) {
+        root = b;
+        includePredecessor = true;
+        stored = expandStoredDashboard(
+          compactStoredDashboard({
+            snapshot: emptySnapshot(at),
+            samples: [],
+            trackerRoots: [a],
+            plans: [
+              {
+                source: "tracker",
+                rootThreadId: a,
+                head: "handover",
+                title: "Handover",
+                updated_utc: at,
+                workstreams: [],
+                fileName: "handover.json",
+              },
+            ],
+          }),
+        );
+      }
+      yield* run(restored);
+    }),
+);

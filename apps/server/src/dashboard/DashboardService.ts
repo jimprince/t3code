@@ -1,6 +1,8 @@
 import { PlanFileService, enrichFilePlanShells } from "../orchestration-v2/PlanFileService.ts";
 import * as ShellSnapshotDiagnostics from "../diagnostics/ShellSnapshotDiagnostics.ts";
 import packageJson from "../../package.json" with { type: "json" };
+import * as Crypto from "effect/Crypto";
+import * as Hex from "effect/encoding/Hex";
 import * as NodeOS from "node:os";
 import { ThreadId as ThreadIdSchema } from "@t3tools/contracts";
 import type {
@@ -36,6 +38,7 @@ import {
   briefingPlanRoot,
   dashboardRoots,
   rootRepositories,
+  trackerSuccessors,
 } from "./aggregation.ts";
 import { compactSnapshot, emptySnapshot, sampleProgress } from "./dashboard.logic.ts";
 import { confirmTrackerPlan } from "../projectIssues/trackerPlan.logic.ts";
@@ -48,9 +51,11 @@ const decodeTrackerHeader = Schema.decodeUnknownOption(
     title: Schema.String,
     updated_utc: Schema.String,
     rootThreadId: ThreadIdSchema,
+    predecessorRootThreadIds: Schema.optionalKey(Schema.Array(ThreadIdSchema)),
   }),
 );
 const decodeBriefingPlan = Schema.decodeUnknownEffect(BriefingPlan);
+const decodePlanJson = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
 export class DashboardService extends Context.Service<
   DashboardService,
   {
@@ -69,6 +74,7 @@ export const make = Effect.gen(function* () {
   const store = yield* DashboardStore.DashboardStore;
   const planFiles = yield* PlanFileService;
   const fs = yield* FileSystem.FileSystem;
+  const crypto = yield* Crypto.Crypto;
   const path = yield* Path.Path;
   const changes = yield* PubSub.sliding<DashboardSnapshot>(1);
   const lock = Semaphore.makeUnsafe(1);
@@ -89,6 +95,7 @@ export const make = Effect.gen(function* () {
     (saved?.plans ?? []).map((plan) => [plan.fileName ?? `${plan.head}.json`, plan]),
   );
   const trackerRoots = new Set<ThreadId>((saved?.trackerRoots ?? []).map((id) => id as ThreadId));
+  const headerHashes = new Map<string, string>();
   let subscribers = 0;
   let lastWriteAt = Number.NEGATIVE_INFINITY;
   const refreshRequests = yield* Queue.sliding<void>(1);
@@ -372,13 +379,6 @@ export const make = Effect.gen(function* () {
       }
       for (const filename of filenames.filter((f) => f.endsWith(".json")).slice(0, 64)) {
         const id = `plan:${filename.slice(0, -5)}`;
-        const cachedPlan = plans.get(filename);
-        if (
-          cachedPlan?.source === "tracker" &&
-          cachedPlan.rootThreadId &&
-          trackerRoots.has(cachedPlan.rootThreadId)
-        )
-          continue;
         seenSources.add(id);
         const now = DateTime.formatIso(yield* DateTime.now);
         const plan = yield* fs.readFileString(path.join(directory!, filename)).pipe(
@@ -386,12 +386,30 @@ export const make = Effect.gen(function* () {
             (contents) => contents.length <= 256_000,
             () => new Error("Plan exceeds size limit"),
           ),
-          Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown))),
-          Effect.flatMap((value) => {
-            const header = decodeTrackerHeader(value);
-            if (header._tag === "Some") return Effect.succeed({ ...header.value, workstreams: [] });
-            return decodeBriefingPlan(value);
-          }),
+          Effect.flatMap(
+            Effect.fn(function* (contents: string) {
+              const hash = Hex.encode(
+                yield* crypto.digest("SHA-256", new TextEncoder().encode(contents)),
+              );
+              const cached = plans.get(filename);
+              if (cached?.source === "tracker" && headerHashes.get(filename) === hash)
+                return cached;
+              return yield* decodePlanJson(contents).pipe(
+                Effect.flatMap((value) => {
+                  const header = decodeTrackerHeader(value);
+                  return header._tag === "Some"
+                    ? Effect.succeed({ ...header.value, workstreams: [] })
+                    : decodeBriefingPlan(value);
+                }),
+                Effect.tap((decoded) =>
+                  Effect.sync(() => {
+                    if (Number.isFinite(Date.parse(decoded.updated_utc)))
+                      headerHashes.set(filename, hash);
+                  }),
+                ),
+              );
+            }),
+          ),
           Effect.option,
         );
         if (plan._tag === "Some" && Number.isFinite(Date.parse(plan.value.updated_utc))) {
@@ -435,6 +453,10 @@ export const make = Effect.gen(function* () {
             coverage: "unavailable",
             failed: true,
           });
+      }
+      const { successors } = trackerSuccessors([...plans.values()], roots);
+      for (const predecessor of successors.keys()) {
+        if (trackerRoots.delete(predecessor)) lastWriteAt = Number.NEGATIVE_INFINITY;
       }
       let healthPath: string | null = null;
       for (const candidate of [

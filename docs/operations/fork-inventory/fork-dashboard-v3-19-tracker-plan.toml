@@ -45,6 +45,7 @@ files = [
   "apps/web/src/components/dashboard-v3/plan.tsx",
   "docs/operations/tracker-plan.md",
   "docs/release-notes/entries/tracker-plan.toml",
+  "docs/release-notes/entries/tracker-plan-handover.toml",
 ]
 
 [[decision]]
@@ -64,3 +65,9 @@ id = "web-no-bar-without-checklist"
 date = "2026-10-14"
 decided = "A task without a checklist shows 'no checklist yet', no bar and no 0/1; it is counted as an open task, never as a step. A workstream header shows done/total child tasks; an empty epic is a heading. An ETA is a calendar date, never a time."
 rationale = "The 0/1 is counting only (contract v1.2); drawing it would show a binary bar as measured progress, and a due date has day precision only."
+
+[[decision]]
+id = "tracker-head-handover"
+date = "2026-10-16"
+decided = "Revalidate tracker headers by content hash and resolve explicit predecessorRootThreadIds before ownership/exclusion; retain last selection on failures."
+rationale = "A head handover must preserve the Plan after predecessor retirement without rewriting issue provenance or weakening administrative handover fences (#370)."

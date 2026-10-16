@@ -567,3 +567,103 @@ it("uses the separately preserved labelled-epic and canonical parent on JSON roo
     aggregate(input([oldIssue], [fallbackPlan])).projects[0]?.tasks[0]?.progress,
   ).toMatchObject({ done: 1, total: 1 });
 });
+
+const oldHead = ThreadId.make("c7da3448-db80-4c1a-8454-3a6859305370");
+const nextHead = ThreadId.make("next-head");
+const t3Head = ThreadId.make("t3-head");
+const dashHead = ThreadId.make("dash-head");
+const worker = ThreadId.make("worker");
+const handoverInput = (settled = false) => {
+  const ids = [t3Head, oldHead, nextHead, dashHead, worker];
+  const issues = [
+    makeIssue(1, { requestSource: { threadId: oldHead, rootThreadId: oldHead, messageId: "m" } }),
+    makeIssue(2, { requestSource: { threadId: worker, rootThreadId: oldHead, messageId: "m" } }),
+    makeIssue(3, { linkedThreadIds: [oldHead, t3Head] }),
+    makeIssue(4, { linkedThreadIds: [oldHead, dashHead] }),
+    makeIssue(5, { linkedThreadIds: [oldHead] }),
+    makeIssue(6, {
+      owner: { threadId: oldHead, title: "Old", projectTitle: "Product" },
+      requestSource: { threadId: oldHead, rootThreadId: oldHead, messageId: "m" },
+    }),
+    makeIssue(7, { decision: { waiting: oldHead, options: [], context: "Decide" } }),
+  ];
+  return {
+    ...input(issues, [
+      { ...plan, rootThreadId: nextHead, predecessorRootThreadIds: [oldHead] } as BriefingPlan,
+    ]),
+    shells: ids.map((id) => ({
+      ...v2ThreadShell,
+      id,
+      title: id,
+      archivedAt: null,
+      todoProgress: null,
+      settledOverride: id === oldHead && settled ? ("settled" as const) : null,
+    })),
+    metadata: ids.map((threadId) => ({
+      threadId,
+      parentThreadId: threadId === t3Head ? null : threadId === worker ? nextHead : t3Head,
+      subproject: threadId === worker ? ("auto" as const) : ("on" as const),
+    })),
+    issues: new Map(ids.map((id) => [id, issues])),
+    trackerRoots: new Set([oldHead, nextHead]),
+  };
+};
+
+describe("tracker head handover (#370)", () => {
+  it.each([false, true])("canonicalizes ownership before exclusion (old settled=%s)", (settled) => {
+    const snapshot = aggregate(handoverInput(settled));
+    expect(snapshot.projects.some((p) => p.rootThreadId === oldHead)).toBe(false);
+    const owner = (n: number) =>
+      snapshot.projects.find((p) => p.tasks.some((t) => t.title === `Issue ${n}`))?.rootThreadId;
+    for (const n of [1, 2, 3, 5, 6, 7]) expect(owner(n), `issue ${n}`).toBe(nextHead);
+    expect(owner(4)).toBe(dashHead);
+    const keys = snapshot.projects.flatMap((p) => p.tasks.map((t) => t.id));
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+  it("ignores a doubly claimed predecessor and reports a migration warning", () => {
+    const data = handoverInput();
+    data.plans.push({
+      ...plan,
+      fileName: "other.json",
+      rootThreadId: dashHead,
+      predecessorRootThreadIds: [oldHead],
+    } as BriefingPlan);
+    const snapshot = aggregate(data);
+    expect(snapshot.projects.some((p) => p.rootThreadId === oldHead)).toBe(true);
+    expect(snapshot.planMigration?.some((w) => /claimed/i.test(w.reason))).toBe(true);
+  });
+  it("rejects a predecessor with its own current flagged file", () => {
+    const data = handoverInput();
+    data.plans.push({ ...plan, rootThreadId: oldHead });
+    const snapshot = aggregate(data);
+    expect(snapshot.projects.some((p) => p.rootThreadId === oldHead)).toBe(true);
+    expect(snapshot.planMigration?.some((w) => /flagged/i.test(w.reason))).toBe(true);
+  });
+  it("resolves a chain through a historical header and guards cycles", () => {
+    const data = handoverInput(true);
+    const ancestor = ThreadId.make("ancestor");
+    data.plans.push({
+      ...plan,
+      rootThreadId: oldHead,
+      predecessorRootThreadIds: [ancestor],
+    } as BriefingPlan);
+    data.issues = new Map(
+      [t3Head, nextHead, dashHead].map((id) => [
+        id,
+        [makeIssue(99, { linkedThreadIds: [ancestor] })],
+      ]),
+    );
+    expect(
+      aggregate(data).projects.find((p) => p.tasks.some((t) => t.title === "Issue 99"))
+        ?.rootThreadId,
+    ).toBe(nextHead);
+    data.plans = [
+      { ...plan, rootThreadId: nextHead },
+      { ...plan, rootThreadId: ancestor, predecessorRootThreadIds: [oldHead] },
+      { ...plan, rootThreadId: oldHead, predecessorRootThreadIds: [ancestor] },
+    ];
+    const cycle = aggregate(data);
+    expect(cycle.planMigration?.some((w) => /cycle/.test(w.reason))).toBe(true);
+    expect(cycle.projects.some((p) => p.rootThreadId === nextHead)).toBe(true);
+  });
+});

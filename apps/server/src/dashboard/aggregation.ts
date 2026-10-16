@@ -8,6 +8,7 @@ export {
   briefingPlanRoot,
   dashboardRoots,
   rootRepositories,
+  trackerSuccessors,
 } from "@t3tools/client-runtime/dashboard/aggregation";
 
 const standardActions = new Map<string, string>([

@@ -17,9 +17,39 @@ rules. Inferred checklist workstreams apply after tracker cutover; a cross-root
 JSON row stays with its JSON owner. The dashboard persists cutover with its snapshot; a tracker outage,
 file disappearance or last-epic closure does not restore the old JSON. A flagged
 file supplies only its binding and flag, never linked overrides or orphan rows.
-Once that binding is cached, refresh does not read its task payload again.
+Refresh reads the bounded file and compares its SHA256 content hash; changed files
+are decoded again, including after restart. Only the tracker header is decoded,
+so legacy task payloads remain ignored. Read/decode failures retain the last
+good tracker header and selection with a failed source receipt.
 Removed orphan rows are recorded as migration discontinuity; linked issue ids
 stay stable.
+
+For a head handover, normally edit the same briefing file: set the new
+`rootThreadId` and append the old id to `predecessorRootThreadIds`, keeping any
+earlier predecessors so the chain is flattened. Update these together:
+
+```json
+{
+  "source": "tracker",
+  "rootThreadId": "<new-head-id>",
+  "predecessorRootThreadIds": ["<old-head-id>"],
+  "head": "product",
+  "title": "Product",
+  "updated_utc": "2026-10-16T00:00:00Z"
+}
+```
+
+The optional predecessor list transfers request-marker author/root IDs, issue
+links, issue owners and resolved decision-waiting threads before exclusion and
+ownership. A predecessor no longer renders as a project or tracker root, even
+when active, archived or settled. Stronger links to a narrower live project
+continue to win. Historical headers can form a transitive chain ending at a
+current root. A cycle, duplicate claim by separate files, or predecessor that
+is itself a current root with its own flagged file is ignored and reported via
+the migration-warning feed. Remove the old current flag when transferring its
+identity; do not rewrite tracker issue bodies. An edited binding alone does not
+clear the old sticky tracker selection: only an accepted predecessor declaration
+does that. Administrative handover fences are independent of this header.
 
 A workstream is an open epic or an open issue with canonical children or a child
 checklist. A child's first content line `Part of #N` wins over parent checklists;

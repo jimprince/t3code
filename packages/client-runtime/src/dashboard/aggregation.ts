@@ -37,6 +37,7 @@ export const BriefingPlan = Schema.Struct({
   fileName: Schema.optionalKey(Schema.String),
   rootThreadId: Schema.optionalKey(ThreadIdSchema),
   source: Schema.optionalKey(Schema.Literal("tracker")),
+  predecessorRootThreadIds: Schema.optionalKey(Schema.Array(ThreadIdSchema)),
   head: Schema.String,
   title: Schema.String,
   updated_utc: Schema.String,
@@ -72,6 +73,57 @@ export function briefingPlanRoot(
     (root) => root.title.trim().toLowerCase() === plan.title.trim().toLowerCase(),
   );
   return matches.length === 1 ? matches[0]!.id : null;
+}
+/** Resolve explicit handovers before filtering retired identities or choosing ownership.
+ * Historical headers may form a chain; a current root's own flag remains authoritative.
+ */
+export function trackerSuccessors(
+  plans: readonly BriefingPlan[],
+  roots: readonly { id: ThreadId }[],
+) {
+  const current = new Set(roots.map((root) => root.id));
+  const flagged = new Set(
+    plans
+      .filter((p) => p.source === "tracker" && p.rootThreadId && current.has(p.rootThreadId))
+      .map((p) => p.rootThreadId!),
+  );
+  const claims = new Map<ThreadId, { successor: ThreadId; plan: BriefingPlan }[]>();
+  for (const plan of plans) {
+    if (plan.source !== "tracker" || !plan.rootThreadId) continue;
+    for (const predecessor of new Set(plan.predecessorRootThreadIds ?? [])) {
+      const entries = claims.get(predecessor) ?? [];
+      entries.push({ successor: plan.rootThreadId, plan });
+      claims.set(predecessor, entries);
+    }
+  }
+  const warnings: NonNullable<DashboardSnapshot["planMigration"]>[number][] = [];
+  const warn = (id: ThreadId, reason: string) => {
+    for (const { plan } of claims.get(id) ?? [])
+      warnings.push({
+        kind: "unbound-briefing-file",
+        fileName: plan.fileName ?? `${plan.head}.json`,
+        reason: `Predecessor ${id}: ${reason}`,
+      });
+  };
+  const edges = new Map<ThreadId, ThreadId>();
+  for (const [id, entries] of claims) {
+    if (entries.length > 1) warn(id, "claimed by multiple briefing files; ignored");
+    else if (flagged.has(id)) warn(id, "root still has its own flagged file; ignored");
+    else edges.set(id, entries[0]!.successor);
+  }
+  const successors = new Map<ThreadId, ThreadId>();
+  for (const id of edges.keys()) {
+    const seen = new Set<ThreadId>();
+    let target = id;
+    while (edges.has(target) && !seen.has(target)) {
+      seen.add(target);
+      target = edges.get(target)!;
+    }
+    if (seen.has(target)) warn(id, "successor cycle; ignored");
+    else if (!current.has(target)) warn(id, "successor is not an active project; ignored");
+    else successors.set(id, target);
+  }
+  return { successors, warnings };
 }
 const UNCONFIRMED_AT = "1970-01-01T00:00:00.000Z";
 const utility = (title: string) =>
@@ -151,13 +203,22 @@ export function aggregate(input: {
   readonly trackerRoots?: ReadonlySet<ThreadId>;
   readonly rootRepositories?: ReadonlyMap<ThreadId, string>;
 }): DashboardSnapshot {
-  const { threads, roots } = dashboardRoots(
-    input.shells,
-    input.metadata,
-    input.remoteParentThreadIds,
-  );
+  const initial = dashboardRoots(input.shells, input.metadata, input.remoteParentThreadIds);
+  const { successors, warnings } = trackerSuccessors(input.plans, initial.roots);
+  const canonical = (id: ThreadId) => successors.get(id) ?? id;
+  const { threads, roots } =
+    successors.size === 0
+      ? initial
+      : dashboardRoots(
+          input.shells.filter((t) => !successors.has(t.id)),
+          input.metadata.map((row) => ({
+            ...row,
+            parentThreadId: row.parentThreadId ? canonical(row.parentThreadId) : null,
+          })),
+          input.remoteParentThreadIds?.map(canonical),
+        );
   const boundPlans = new Map(input.plans.map((plan) => [plan, briefingPlanRoot(plan, roots)]));
-  const trackerRoots = new Set(input.trackerRoots ?? []);
+  const trackerRoots = new Set([...(input.trackerRoots ?? [])].map(canonical));
   for (const root of roots) {
     const plans = input.plans.filter((plan) => boundPlans.get(plan) === root.id);
     if (plans.some((plan) => plan.source === "tracker" && plan.rootThreadId === root.id))
@@ -176,7 +237,24 @@ export function aggregate(input: {
   const excluded = new Set(input.shells.filter((t) => !included.has(t.id)).map((t) => t.id));
   const rows = new Map<string, ProjectIssue>();
   for (const root of roots)
-    for (const issue of input.issues.get(root.id) ?? []) {
+    for (const original of input.issues.get(root.id) ?? []) {
+      const issue: ProjectIssue =
+        successors.size === 0
+          ? original
+          : {
+              ...original,
+              requestSource: original.requestSource
+                ? {
+                    ...original.requestSource,
+                    threadId: canonical(original.requestSource.threadId),
+                    rootThreadId: canonical(original.requestSource.rootThreadId),
+                  }
+                : null,
+              linkedThreadIds: [...new Set(original.linkedThreadIds.map(canonical))],
+              ...(original.owner
+                ? { owner: { ...original.owner, threadId: canonical(original.owner.threadId) } }
+                : {}),
+            };
       // Shared repositories can return a retired head's decision through another active root.
       if (
         (issue.owner && excluded.has(issue.owner.threadId)) ||
@@ -219,10 +297,13 @@ export function aggregate(input: {
       // Legacy cards can carry "agent-name (thread-prefix)". A unique saved id is stronger
       // evidence than the older server's project-head stand-in for an unresolved name.
       const prefix = wanted.match(/\(([a-f0-9]{8,})\)$/i)?.[1];
-      const matches = liveThreads.filter(
+      const matches = input.shells.filter(
         (t) => t.id === wanted || (prefix && t.id.startsWith(prefix)),
       );
-      return matches.length === 1 ? [[key, matches[0]!.id] as const] : [];
+      const ids = [...new Set(matches.map((t) => canonical(t.id)))].filter((id) =>
+        liveThreads.some((t) => t.id === id),
+      );
+      return ids.length === 1 ? [[key, ids[0]!] as const] : [];
     }),
   );
   for (const [key, issue] of rows) {
@@ -878,7 +959,10 @@ export function aggregate(input: {
     ),
   );
   const planMigration = input.plans
-    .filter((plan) => plan.source === "tracker" && !boundPlans.get(plan))
+    .filter(
+      (plan) =>
+        plan.source === "tracker" && !boundPlans.get(plan) && !successors.has(plan.rootThreadId!),
+    )
     .map((plan) => ({
       kind: "unbound-briefing-file" as const,
       fileName: plan.fileName ?? `${plan.head}.json`,
@@ -891,7 +975,9 @@ export function aggregate(input: {
     projects,
     releases,
     sources: [...input.sources],
-    ...(planMigration.length ? { planMigration } : {}),
+    ...(planMigration.length || warnings.length
+      ? { planMigration: [...planMigration, ...warnings] }
+      : {}),
   };
 }
 
