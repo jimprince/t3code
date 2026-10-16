@@ -17,3 +17,9 @@ id = "receipt-version-error-215"
 date = "2026-10-09"
 decided = "adapt"
 rationale = "A capability refusal names the target environment and version, preserves the unsent identity and explains the supported target update; receipt safety has no legacy fallback."
+
+[[decision]]
+id = "local-duplicate-send-369"
+date = "2026-10-16"
+decided = "adapt"
+rationale = "t3-thread send hashes the resolved target and trimmed whitespace-collapsed raw body in its local send-intents store, scoped to sender and destination environment. Existing exact receipt lookup supplies the send-specific run binding: held, queued and started deliveries refuse identical sends at any age until terminal, with explicit uncertainty on unreadable run state. Terminal runs allow immediate reuse; force, same-ID retry and keyed coalescing retain their semantics. Covers the Oct 15 original held for three hours before release/start/resend without server or RPC changes. Existing pre-hash receipts, other hosts and concurrent first sends are outside this local guard."

@@ -1,0 +1,4 @@
+id = "t3-thread-duplicate-send-guard"
+category = "fix"
+functionality = "worker threads"
+text = "Prevent repeated t3-thread sends from starting duplicate work while an identical earlier send is held, queued or running; use --force for an intentional repeat."

@@ -137,3 +137,31 @@ describe("server admission of CLI sends", () => {
     });
   });
 });
+
+it("records the CLI duplicate hash and delivery receipt beside its existing send intent", async () => {
+  await withTempState(async () => {
+    const harness = makeHarness({ ...makeRunningThread(), session: null });
+    const duplicateSend = { hash: "normalized-target-body-hash", senderThreadId: "sender" };
+    const outcome = await harness.client.sendMessage({
+      threadId: "thread-1",
+      text: "private body",
+      commandId: "hashed-send",
+      duplicateSend,
+    });
+    const intent = JSON.parse(
+      await NodeFSP.readFile(
+        NodePath.join(
+          NodePath.dirname(process.env.T3_AGENT_STATE_FILE!),
+          "send-intents/hashed-send.json",
+        ),
+        "utf8",
+      ),
+    );
+    expect(outcome.dispatched).toBe(true);
+    expect(intent).toMatchObject({
+      duplicateSend,
+      receipt: { sendId: "hashed-send", status: "started" },
+    });
+    expect(JSON.stringify(intent)).not.toContain("private body");
+  });
+});

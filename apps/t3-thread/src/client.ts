@@ -25,6 +25,7 @@ import {
   type HandoffLookupInput,
   type HandoffLookupResult,
 } from "@t3tools/contracts";
+import { recordSendReceipt, type DuplicateSendMetadata } from "./duplicateSend.js";
 import { persistSendIntent, sendTransportCause, sendWasNeverSubmitted } from "./sendIntents.js";
 import { effectivePurpose } from "@t3tools/client-runtime/state/thread-purpose";
 import { withThreadMetadata, type ThreadMetadata } from "./v2/nesting.js";
@@ -1136,6 +1137,7 @@ export class RemoteEnvironmentClient {
     /** Replace this sender's still-waiting queued send that carries the same key. */
     coalesceKey?: string | null;
     senderEnvironment?: string;
+    duplicateSend?: DuplicateSendMetadata;
   }): Promise<SendMessageOutcome> {
     const sendId = input.commandId ?? NodeCrypto.randomUUID();
     try {
@@ -1145,6 +1147,7 @@ export class RemoteEnvironmentClient {
         environment: this.environment.name,
         text: input.text,
         coalesceKey: input.coalesceKey,
+        duplicateSend: input.duplicateSend,
         provenance: [
           input.origin ?? null,
           input.allowWhileRunning === true,
@@ -1220,6 +1223,7 @@ export class RemoteEnvironmentClient {
           ...(response.runId === undefined ? {} : { runId: response.runId }),
           ...(response.run === undefined ? {} : { run: response.run }),
         };
+        if (input.duplicateSend) await recordSendReceipt(receipt);
         const forwardedMessage =
           "forwardedMessage" in response ? response.forwardedMessage : input.forwardedMessage;
         if (
