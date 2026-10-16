@@ -1,0 +1,4 @@
+id = "handover-warning-reasons"
+category = "fix"
+functionality = "dashboard"
+text = "Plan migration warnings say what is wrong, such as a predecessor claimed by two files, instead of calling the file unbound, and two different warnings on one file stay two lines."

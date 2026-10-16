@@ -643,6 +643,92 @@ it.effect("keeps delegated child pull-request links independent of the parent", 
   }).pipe(Effect.provide(layerTest)),
 );
 
+const taskIssueLink = (number: number) => ({
+  host: "git.example.test",
+  repository: "brad/tasks",
+  number,
+  url: `https://git.example.test/brad/tasks/issues/${number}`,
+  linkedAt: "2026-10-16T09:00:00.000Z",
+  snapshot: {
+    title: `Task ${number}`,
+    state: "open" as const,
+    syncedAt: "2026-10-16T09:00:00.000Z",
+  },
+});
+
+it.effect("links a delegated child to its own issue, never to the parent's", () =>
+  Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const parentThreadId = ThreadId.make("thread:parent-issue");
+    yield* orchestrator.dispatch({
+      type: "thread.create",
+      commandId: CommandId.make("create-parent-issue"),
+      threadId: parentThreadId,
+      projectId: ProjectId.make("project:parent-issue"),
+      title: "Parent holding an issue",
+      modelSelection,
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      branch: null,
+      worktreePath: null,
+      createdBy: "user",
+      creationSource: "web",
+    });
+    yield* orchestrator.dispatch({
+      type: "thread.issue.link",
+      commandId: CommandId.make("link-parent-issue"),
+      threadId: parentThreadId,
+      link: taskIssueLink(1),
+    });
+    yield* orchestrator.dispatch({
+      type: "message.dispatch",
+      commandId: CommandId.make("start-parent-issue"),
+      threadId: parentThreadId,
+      messageId: MessageId.make("message:parent-issue"),
+      text: "Delegate two tasks",
+      attachments: [],
+      dispatchMode: { type: "start_immediately" },
+      createdBy: "user",
+      creationSource: "web",
+    });
+    const parentRun = (yield* projections.getThreadProjection(parentThreadId)).runs[0]!;
+    const delegate = (commandId: string, issue?: ReturnType<typeof taskIssueLink>) =>
+      orchestrator.dispatch({
+        type: "delegated_task.request",
+        commandId: CommandId.make(commandId),
+        parentThreadId,
+        parentRunId: parentRun.id,
+        parentNodeId: parentRun.rootNodeId!,
+        task: commandId,
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        ...(issue === undefined ? {} : { issue }),
+        createdBy: "agent",
+        creationSource: "mcp",
+      });
+    yield* delegate("delegate-without-issue");
+    yield* delegate("delegate-with-issue", taskIssueLink(2));
+
+    const parent = yield* projections.getThreadProjection(parentThreadId);
+    const childOf = (task: string) =>
+      projections.getThreadProjection(
+        parent.subagents.find((candidate) => candidate.prompt === task)!.childThreadId!,
+      );
+    // The parent keeps its own link; a child carries only what it was delegated.
+    assert.deepEqual(
+      parent.thread.issues?.map((link) => link.number),
+      [1],
+    );
+    assert.deepEqual((yield* childOf("delegate-without-issue")).thread.issues ?? [], []);
+    const linked = yield* childOf("delegate-with-issue");
+    assert.deepEqual(linked.thread.issues, [taskIssueLink(2)]);
+    // The link is part of the child's creation, so it exists from its first run.
+    assert.lengthOf(linked.runs, 1);
+  }).pipe(Effect.provide(layerTest)),
+);
+
 const stopAdapter: ProviderAdapter.ProviderAdapterV2["Service"] = {
   ...adapter,
   openSession: (input) =>

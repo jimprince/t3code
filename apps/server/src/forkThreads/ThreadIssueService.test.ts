@@ -262,6 +262,67 @@ describe("issue link service", () => {
   );
 });
 
+describe("issue link resolution without storing", () => {
+  effectIt.effect("returns the link a delegated child will carry and dispatches nothing", () =>
+    Effect.gen(function* () {
+      const dispatched: unknown[] = [];
+      const threadId = ThreadId.make("issue-parent");
+      const link = yield* make.pipe(
+        Effect.flatMap((service) =>
+          service.resolveLink({ threadId, reference: "brad/gpu-transcriber#6" }),
+        ),
+        Effect.provideService(ProjectService, {
+          getShell: () => Effect.succeed(Option.some(macProject)),
+        } as never),
+        Effect.provideService(ThreadManagementService, {
+          // The parent already holds the issue; resolving for a child must not care.
+          getThreadShell: () =>
+            Effect.succeed({
+              id: threadId,
+              projectId: "project",
+              issues: [{ host: "git.home:3000", repository: "brad/gpu-transcriber", number: 6 }],
+            }),
+          dispatch: (command: unknown) => {
+            dispatched.push(command);
+            return Effect.succeed({});
+          },
+        } as never),
+        Effect.provideService(
+          HttpClient.HttpClient,
+          HttpClient.make((request) =>
+            Effect.succeed(
+              HttpClientResponse.fromWeb(
+                request,
+                new Response(
+                  JSON.stringify({
+                    number: 6,
+                    title: "Fix transcription",
+                    state: "open",
+                    html_url: "http://git.home:3000/brad/gpu-transcriber/issues/6",
+                    pull_request: null,
+                  }),
+                ),
+              ),
+            ),
+          ),
+        ),
+        Effect.provide(
+          Layer.mergeAll(
+            ServerSettingsService.layerTest({ giteaInstances: [macInstance] }),
+            NodeServices.layer,
+          ),
+        ),
+      );
+      expect(link).toMatchObject({
+        repository: "brad/gpu-transcriber",
+        number: 6,
+        snapshot: { title: "Fix transcription", state: "open" },
+      });
+      expect(dispatched).toEqual([]);
+    }),
+  );
+});
+
 describe("issue link service with a public alias not in the configuration", () => {
   const internalProject: Pick<OrchestrationProjectShell, "repositoryIdentity"> = {
     repositoryIdentity: {

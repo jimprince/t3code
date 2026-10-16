@@ -1,4 +1,4 @@
-import { type ThreadId, ProjectIssuesError } from "@t3tools/contracts";
+import { type ThreadId, type ThreadIssueLink, ProjectIssuesError } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -14,6 +14,15 @@ export class TaskIssueLaunchService extends Context.Service<
       readonly threadId: ThreadId;
       readonly reference: string;
     }) => Effect.Effect<void, ProjectIssuesError>;
+    /**
+     * The link for a task reference, resolved against `threadId`'s project and
+     * not written, for a thread that does not exist yet. It records nothing in
+     * the tracker.
+     */
+    readonly resolve: (input: {
+      readonly threadId: ThreadId;
+      readonly reference: string;
+    }) => Effect.Effect<ThreadIssueLink, ProjectIssuesError>;
   }
 >()("t3/projectIssues/TaskIssueLaunchService") {}
 
@@ -25,6 +34,10 @@ export const layer = Layer.effect(
     const ledger = yield* RequestLedger.make({ threadIssues, projectIssues });
     return TaskIssueLaunchService.of({
       start: (input) => ledger.update({ ...input, status: "in-progress" }).pipe(Effect.asVoid),
+      resolve: (input) =>
+        threadIssues
+          .resolveLink(input)
+          .pipe(Effect.mapError((error) => new ProjectIssuesError({ message: error.message }))),
     });
   }),
 );

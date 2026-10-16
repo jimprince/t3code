@@ -1866,6 +1866,16 @@ const make = Effect.gen(function* () {
           parent.thread.interactionMode,
           input.interactionMode,
         );
+        // The link is resolved before anything is created, so a bad reference
+        // leaves no unattributed child behind.
+        const issue =
+          input.issue === undefined
+            ? undefined
+            : Option.isNone(taskIssues)
+              ? yield* failure("capability_denied", "Task-linked creation is unavailable.")
+              : yield* taskIssues.value
+                  .resolve({ threadId: scope.thread.threadId, reference: input.issue })
+                  .pipe(Effect.mapError((error) => failure("invalid_request", error.message)));
         const key = yield* requestKey(input.clientRequestId);
         const commandId = stableCommandId({
           scope,
@@ -1886,6 +1896,7 @@ const make = Effect.gen(function* () {
             modelSelection: target.modelSelection,
             runtimeMode,
             interactionMode,
+            ...(issue === undefined ? {} : { issue }),
             // Async delegations wake the parent on every child terminal; wait
             // delegations deliver through the blocking tool call, so a wake is
             // only needed if the parent settled first (timeout, disconnect).

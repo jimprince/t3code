@@ -1,0 +1,4 @@
+id = "delegate-task-issue-link"
+category = "fix"
+functionality = "agents"
+text = "Delegated child threads no longer inherit their parent's issue links, and delegate_task takes an optional issue so a child is linked to the one item it works on before it starts."

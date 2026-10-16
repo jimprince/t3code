@@ -5,6 +5,7 @@ import type {
   DashboardSnapshot,
   DashboardSource,
   DashboardTask,
+  DashboardWorker,
   EnvironmentId,
   ThreadFilePlan,
 } from "@t3tools/contracts";
@@ -628,9 +629,59 @@ export function planNotes(warnings: ReadonlyArray<string> | undefined): string[]
   ];
 }
 
-/** "Unbound briefing file: t3-product.json": a source:tracker file that matches no project. */
-export function unboundBriefingLabel(warning: { readonly fileName: string }): string {
-  return `Unbound briefing file: ${warning.fileName}`;
+/**
+ * One briefing-file warning as a line. A handover claim the server ignored names its own problem
+ * ("t3-product.json: predecessor c7da3448 is claimed by more than one file (ignored)"); any other
+ * is a tracker file that matches no project, with the server's reason when it gives one.
+ */
+export function briefingWarningLabel(warning: {
+  readonly fileName: string;
+  readonly reason?: string | undefined;
+}): string {
+  const reason = warning.reason?.trim();
+  if (reason?.startsWith("predecessor ")) return `${warning.fileName}: ${reason}`;
+  return `Unbound briefing file: ${warning.fileName}${reason ? ` (${reason})` : ""}`;
+}
+
+/** Most workers a row names before it counts the rest. */
+const NAMED_WORKERS = 2;
+
+/** How long a run has gone: "<1m", "12m", "1h 5m", "2d". */
+export function formatRunning(startedAt: string, now: number): string {
+  const minutes = Math.floor((now - Date.parse(startedAt)) / 60_000);
+  if (!Number.isFinite(minutes) || minutes < 1) return "<1m";
+  if (minutes < 60) return `${minutes}m`;
+  if (minutes < 24 * 60) {
+    const rest = minutes % 60;
+    return `${Math.floor(minutes / 60)}h${rest ? ` ${rest}m` : ""}`;
+  }
+  return `${Math.floor(minutes / (24 * 60))}d`;
+}
+
+/**
+ * What a row's Working line says: the first names with how long each has run (or that it is still
+ * starting or queued), then how many more there are. Empty when nothing is working.
+ */
+export function workingSummary(
+  workers: ReadonlyArray<DashboardWorker> | undefined,
+  now: number,
+): {
+  readonly named: ReadonlyArray<{ readonly worker: DashboardWorker; readonly detail: string }>;
+  readonly more: number;
+} {
+  const all = workers ?? [];
+  return {
+    named: all.slice(0, NAMED_WORKERS).map((worker) => ({
+      worker,
+      detail:
+        worker.state === "running" && worker.startedAt
+          ? formatRunning(worker.startedAt, now)
+          : worker.state === "running"
+            ? "running"
+            : worker.state,
+    })),
+    more: Math.max(0, all.length - NAMED_WORKERS),
+  };
 }
 
 /**

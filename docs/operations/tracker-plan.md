@@ -115,7 +115,21 @@ and task steps are never added together. A due date shows as a calendar date
 snapshot and rows dropped from a retired plan file each get one short line.
 A first observation whose confirmation time is unknown is never dated.
 A `source: tracker` briefing file that binds to no root shows once on Home as
-"Unbound briefing file: <file>" (it never switches a root). A truncated plan body
+"Unbound briefing file: <file> (<reason>)" (it never switches a root). A truncated plan body
 shows "Plan body truncated" under its row. A checklist-less task shows its latest
 note's `next:` text in place of "no checklist yet". An epic's own due date shows on
 its header when the snapshot keeps the epic's task.
+
+A task or workstream row shows one extra line, `Working: <thread> · 12m`, only while
+a thread is working on it now: the thread holds an explicit link to the issue
+(`request start`/`note`, launch with `--issue`, `link_gitea_issue`, or `delegate_task`
+with `issue`), is not a project head (a head's links mean intake, including a
+predecessor head resolved through `predecessorRootThreadIds`), and has a run that is
+running, starting or queued. Each name opens that thread; at most two show, then `+N`.
+Waiting on Brad stays in the existing badge; settled, idle and held threads never
+show. The snapshot carries at most eight workers per row, recomputed locally on run
+and link changes with no tracker or provider read. A running thread linked to two
+items shows on both. Links stored before delegated children stopped inheriting their
+parent's issues still count when the thread is running.
+A handover warning shows its own reason ("t3-product.json: predecessor c7da3448 is
+claimed by more than one file (ignored)"), one line per distinct warning.
