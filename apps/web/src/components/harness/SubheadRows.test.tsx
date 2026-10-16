@@ -165,4 +165,31 @@ describe("SubheadGroup", () => {
       params: { environmentId: "dev", name: "code-review" },
     });
   });
+
+  it("shows a lost result on the row with or without open runs, even after a delivered one", () => {
+    const lost = run("code-review", {
+      createdAt: "2026-10-12T09:00:00.000Z",
+      finishedAt: "2026-10-12T09:05:00.000Z",
+      delivery: { id: "d-lost", status: "undelivered", messageId: null, attempts: 1, error: "ARCHIVED" },
+    });
+    const delivered = run("code-review", {
+      createdAt: "2026-10-15T09:00:00.000Z",
+      finishedAt: "2026-10-15T09:05:00.000Z",
+    });
+    renderGroup([subhead("code-review")], [lost, delivered]);
+    // Once in the group heading and once on the row itself.
+    const mentions = () => (container.textContent?.match(/1 undelivered/g) ?? []).length;
+    expect(mentions()).toBe(2);
+    expect(container.textContent).toContain("last ok");
+    // Nothing is open, so there is nothing to expand and no toggle claims to hide anything.
+    expect(container.querySelector("[aria-label^='Hide open runs']")).toBeNull();
+    expect(container.querySelector("[aria-label^='Show open runs']")).toBeNull();
+    renderGroup(
+      [subhead("code-review")],
+      [lost, delivered, run("code-review", { status: "running", finishedAt: null })],
+    );
+    // The expanded row adds "Details · 1 undelivered".
+    expect(mentions()).toBe(3);
+    expect(container.querySelector("[aria-label^='Hide open runs']")).not.toBeNull();
+  });
 });

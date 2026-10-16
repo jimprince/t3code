@@ -21,6 +21,7 @@ import {
 import { buildHarnessStrip } from "@t3tools/client-runtime/state/harness-strip";
 import {
   groupSubheadsByOwner,
+  subheadNeedsAttention,
   type SubheadGroup as SubheadGroupView,
 } from "@t3tools/client-runtime/state/subheads-view";
 import { buildOrchestratorSummaries } from "@t3tools/client-runtime/state/orchestrators";
@@ -309,12 +310,13 @@ export function HarnessSidebarList() {
   );
   const groupOf = (agent: HarnessAgentView) =>
     subheadGroups.get(`${agent.thread.environmentId}:${agent.thread.id}`);
-  // A quiet head still shows when its subheads have open work or a failure to look at.
+  // A quiet head still shows when its subheads have open work, or a failure or lost result from
+  // the last day; an older failure stays on the subhead row and does not reorder the heads.
   const needsAttention = (agent: HarnessAgentView) => {
     const group = groupOf(agent);
     return (
       agent.bucket !== "idle" ||
-      (group?.visible.some((row) => row.openRuns.length > 0 || row.lastTone === "error") ?? false)
+      (group?.visible.some((row) => subheadNeedsAttention(row, now)) ?? false)
     );
   };
   const attention = agents.filter(needsAttention);

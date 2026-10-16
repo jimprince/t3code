@@ -1,6 +1,6 @@
 import type { EnvironmentId, Subhead, SubheadRunRow } from "@t3tools/contracts";
 import { describeSubheadModel } from "@t3tools/client-runtime/state/subheads-view";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { randomUUID } from "../../lib/utils";
 import { Button } from "../ui/button";
@@ -27,6 +27,14 @@ export function describeSendOutcome(subhead: Subhead, openRuns: ReadonlyArray<Su
 }
 
 /**
+ * The request id and text not yet accepted, per subhead. A dialog closed after a timeout and
+ * reopened resumes the same id, so a request the server did receive is never run twice; the entry
+ * is dropped only once a send succeeds.
+ */
+const unsent = new Map<string, { requestId: string; message: string }>();
+const unsentKey = (environmentId: string, name: string) => `${environmentId}:${name}`;
+
+/**
  * Sends one request to a subhead. The sender is the authenticated session, not a field, and the
  * result is pull-only because a browser session has no thread to return to: it is read from the
  * run's history row. The request id is generated here and shown, so a retry returns the same
@@ -46,16 +54,28 @@ export function SubheadSendDialog({
   readonly onSent: () => void;
 }) {
   const call = useSubheadCall(environmentId);
-  const [requestId] = useState(() => `r-${randomUUID().slice(0, 8)}`);
-  const [message, setMessage] = useState("");
+  const key = unsentKey(environmentId, subhead.name);
+  const [requestId] = useState(() => {
+    const kept = unsent.get(key);
+    if (kept) return kept.requestId;
+    const created = `r-${randomUUID().slice(0, 8)}`;
+    unsent.set(key, { requestId: created, message: "" });
+    return created;
+  });
+  const [message, setMessage] = useState(() => unsent.get(key)?.message ?? "");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [receipt, setReceipt] = useState<{ runId: string; status: string } | null>(null);
+  // A fast double submit must not send twice before the first answer sets `pending`.
+  const inFlight = useRef(false);
   const outcome = describeSendOutcome(subhead, openRuns);
   const submit = async () => {
+    if (inFlight.current) return;
     if (message.trim() === "") {
       setError("Write the request first.");
       return;
     }
+    inFlight.current = true;
     setPending(true);
     setError(null);
     const result = await call({
@@ -64,13 +84,16 @@ export function SubheadSendDialog({
       requestId,
       request: message,
     });
+    inFlight.current = false;
     setPending(false);
     if (!result.ok) {
       setError(result.message);
       return;
     }
+    unsent.delete(key);
+    const value = result.value as { runId?: string; status?: string };
+    setReceipt({ runId: value.runId ?? requestId, status: value.status ?? "queued" });
     onSent();
-    onClose();
   };
   return (
     <Dialog
@@ -115,7 +138,10 @@ export function SubheadSendDialog({
                   aria-label="Request"
                   autoFocus
                   value={message}
-                  onChange={(event) => setMessage(event.target.value)}
+                  onChange={(event) => {
+                    setMessage(event.target.value);
+                    unsent.set(key, { requestId, message: event.target.value });
+                  }}
                 />
               </label>
               <p>
@@ -136,18 +162,32 @@ export function SubheadSendDialog({
               </p>
               {error !== null ? (
                 <p role="alert" className="break-words text-error">
-                  {error}
+                  {error} The request id and text are kept, so sending again is safe.
+                </p>
+              ) : null}
+              {receipt !== null ? (
+                <p role="status" className="break-words text-success-foreground">
+                  Sent. Run {receipt.runId} is {receipt.status}. Its result will appear in the
+                  history below; read it there.
                 </p>
               ) : null}
             </div>
           </DialogPanel>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={pending}>
-              Send
-            </Button>
+            {receipt !== null ? (
+              <Button type="button" onClick={onClose}>
+                Close
+              </Button>
+            ) : (
+              <>
+                <Button type="button" variant="outline" onClick={onClose}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={pending}>
+                  Send
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </form>
       </DialogPopup>

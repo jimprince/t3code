@@ -10,6 +10,8 @@ import {
   groupSubheadsByOwner,
   parseVersionConflict,
   permissionChanges,
+  subheadChangeNotice,
+  subheadNeedsAttention,
   summarizeSubheadGroup,
 } from "./subheadsView.ts";
 
@@ -151,7 +153,12 @@ describe("buildSubheadRows", () => {
 });
 
 describe("describeSubheadRun", () => {
-  const context = { concurrency: 1, queuePosition: null, senderTitle: () => null };
+  const context = {
+    concurrency: 1,
+    queuePosition: null,
+    senderTitle: () => null,
+    formatWhen: (iso: string) => `at ${iso.slice(11, 16)}`,
+  };
   const delivery = (state: SubheadRunRow["delivery"]["status"], error: string | null = null) => ({
     id: "d-abcdef",
     status: state,
@@ -213,6 +220,8 @@ describe("describeSubheadRun", () => {
     expect(states[0]!.outcome.text).toBe("Queued, position 2");
     expect(states[1]!.outcome.text).toBe("Running");
     expect(states[3]!.delivery.text).toBe("Pull only, the sender reads it");
+    // Pull-only is how every CLI sender works, not a warning.
+    expect(states[3]!.delivery.tone).toBe("muted");
     expect(states[4]!.delivery.text).toBe("Held: recipient settled");
     expect(states[5]).toMatchObject({
       delivery: { text: "Undelivered: recipient thread archived", tone: "error" },
@@ -337,5 +346,152 @@ describe("parseVersionConflict", () => {
       current: 8,
     });
     expect(parseVersionConflict("Subhead is retired.")).toBeNull();
+  });
+});
+
+describe("delivery that needs a look", () => {
+  const review = subhead({ name: "code-review" });
+  const lost = run({
+    subheadName: "code-review",
+    createdAt: "2026-10-10T09:00:00.000Z",
+    finishedAt: "2026-10-10T09:05:00.000Z",
+    delivery: { id: "d-1", status: "undelivered", messageId: null, attempts: 1, error: "ARCHIVED" },
+  });
+  const held = run({
+    subheadName: "code-review",
+    createdAt: "2026-10-11T09:00:00.000Z",
+    finishedAt: "2026-10-11T09:05:00.000Z",
+    delivery: { id: "d-2", status: "held", messageId: null, attempts: 1, error: "SETTLED" },
+  });
+  const fine = run({
+    subheadName: "code-review",
+    createdAt: "2026-10-15T09:00:00.000Z",
+    finishedAt: "2026-10-15T09:05:00.000Z",
+  });
+  const rowOf = (runs: ReadonlyArray<SubheadRunRow>) =>
+    buildSubheadRows({ environmentId: "env", subheads: [review], runs })[0]!;
+
+  it("keeps an older undelivered or held result on the row after a newer one was delivered", () => {
+    const row = rowOf([lost, held, fine]);
+    expect(row.undelivered).toBe(1);
+    expect(row.held).toBe(1);
+    expect(row.deliveryAlert).toBe("1 undelivered · 1 held");
+    // The newest finished run was delivered, and the row still says something needs a look.
+    expect(row.lastText).toBe("last ok");
+    expect(rowOf([fine]).deliveryAlert).toBeNull();
+  });
+
+  it("calls a completed but undelivered newest run 'last ok, undelivered' in warning tone", () => {
+    expect(rowOf([lost])).toMatchObject({ lastText: "last ok, undelivered", lastTone: "warning" });
+    expect(rowOf([held])).toMatchObject({ lastText: "last ok, held", lastTone: "warning" });
+  });
+
+  it("never shows a delivery code as the reason a run failed", () => {
+    const failed = run({
+      subheadName: "code-review",
+      status: "failed",
+      delivery: { id: "d-3", status: "held", messageId: null, attempts: 1, error: "SETTLED" },
+    });
+    expect(rowOf([failed])).toMatchObject({ lastText: "last failed", lastDetail: null });
+  });
+
+  it("ranks undelivered rows with failures, ahead of quiet ones, and counts them in the heading", () => {
+    const quiet = subhead({ name: "audits" });
+    const rows = buildSubheadRows({
+      environmentId: "env",
+      subheads: [quiet, review],
+      runs: [lost, run({ subheadName: "audits" })],
+    });
+    const group = groupSubheadsByOwner(rows).get(head)!;
+    expect(group.visible.map((row) => row.subhead.name)).toEqual(["code-review", "audits"]);
+    expect(summarizeSubheadGroup(group)).toBe("2 · 1 undelivered");
+  });
+
+  it("promotes a head only for open runs or trouble from the last 24 hours", () => {
+    const now = Date.parse("2026-10-16T09:00:00.000Z");
+    const staleFailure = run({
+      subheadName: "code-review",
+      status: "failed",
+      createdAt: "2026-10-10T09:00:00.000Z",
+      finishedAt: "2026-10-10T09:05:00.000Z",
+    });
+    const freshFailure = run({
+      subheadName: "code-review",
+      status: "failed",
+      createdAt: "2026-10-16T08:00:00.000Z",
+      finishedAt: "2026-10-16T08:05:00.000Z",
+    });
+    const open = run({ subheadName: "code-review", status: "running", finishedAt: null, createdAt: "2026-10-10T09:00:00.000Z" });
+    // The row itself still shows the old failure; only the head's bucket ignores it.
+    expect(rowOf([staleFailure]).lastTone).toBe("error");
+    expect(subheadNeedsAttention(rowOf([staleFailure, lost, held]), now)).toBe(false);
+    expect(subheadNeedsAttention(rowOf([freshFailure]), now)).toBe(true);
+    expect(subheadNeedsAttention(rowOf([open]), now)).toBe(true);
+    expect(subheadNeedsAttention(rowOf([fine]), now)).toBe(false);
+    const freshLost = { ...lost, createdAt: "2026-10-16T08:00:00.000Z", finishedAt: "2026-10-16T08:05:00.000Z" };
+    expect(subheadNeedsAttention(rowOf([freshLost]), now)).toBe(true);
+  });
+});
+
+describe("delivery still retrying", () => {
+  it("says so for a finished run, and keeps 'result not ready' for runs that are not finished", () => {
+    const context = {
+      concurrency: 1,
+      queuePosition: null,
+      senderTitle: () => null,
+      formatWhen: (iso: string) => `at ${iso.slice(11, 16)}`,
+    };
+    const pending = {
+      id: "d-9",
+      status: "pending" as const,
+      messageId: null,
+      attempts: 3,
+      error: "BUSY",
+      nextAttemptAt: "2026-10-16T09:31:00.000Z",
+    };
+    const finished = describeSubheadRun(run({ subheadName: "a", delivery: pending }), context);
+    expect(finished.delivery).toEqual({
+      state: "retrying",
+      text: "Retrying delivery: recipient is busy, retrying · next at 09:31",
+      tone: "warning",
+    });
+    expect(
+      describeSubheadRun(run({ subheadName: "a", delivery: { id: "d-9", status: "pending", messageId: null, attempts: 3, error: null } }), context).delivery.text,
+    ).toBe("Retrying delivery");
+    const running = describeSubheadRun(
+      run({ subheadName: "a", status: "running", finishedAt: null, delivery: pending }),
+      context,
+    );
+    expect(running.delivery).toMatchObject({ state: "pending", text: "Pending, result not ready" });
+  });
+});
+
+describe("who may change a subhead", () => {
+  it("names the creator when the server says this session may not change it", () => {
+    const entry = subhead({ name: "code-review", createdBy: "one-time-token" });
+    expect(subheadChangeNotice({ ...entry, callerMayChange: false })).toBe(
+      "Only one-time-token or an administrator may change this subhead.",
+    );
+    expect(subheadChangeNotice({ ...entry, callerMayChange: true })).toBeNull();
+    // An older server does not say; the server still decides.
+    expect(subheadChangeNotice(entry)).toBeNull();
+  });
+});
+
+describe("provider and model changes", () => {
+  it("need a confirmation line like any other broader change", () => {
+    const current = subhead({ name: "code-review" });
+    const draft = draftFromSubhead(current);
+    const changes = (patch: Partial<typeof draft>) => {
+      const built = buildTemplateFromDraft(current, { ...draft, ...patch });
+      if (!built.ok) throw new Error("invalid");
+      return permissionChanges(current, built.template);
+    };
+    expect(changes({ model: "claude-opus-5-5" })).toEqual([
+      "Model changes from claude-sonnet-5-5 to claude-opus-5-5.",
+    ]);
+    expect(changes({ instanceId: "codex_gmail" })).toEqual([
+      "Provider changes from claudeAgent to codex_gmail.",
+    ]);
   });
 });

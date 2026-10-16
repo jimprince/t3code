@@ -7,6 +7,7 @@ import {
   queuePositions,
   RUNTIME_MODE_LABEL,
   SUBHEAD_FIXED_LIMITS,
+  subheadChangeNotice,
   subheadState,
   type SubheadTone,
 } from "@t3tools/client-runtime/state/subheads-view";
@@ -14,7 +15,7 @@ import type { EnvironmentId, Subhead, SubheadRunRow, ThreadId } from "@t3tools/c
 import { formatLocalWhen } from "@t3tools/shared/localTime";
 import { useNavigate } from "@tanstack/react-router";
 import { ChevronLeftIcon } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { isElectron } from "../../env";
 import { useNowMinute } from "../../hooks/useNowMinute";
@@ -101,6 +102,7 @@ function RunRow({
     concurrency: subhead.concurrency,
     queuePosition,
     senderTitle,
+    formatWhen: (iso) => formatLocalWhen(Date.parse(iso), now),
   });
   const [result, setResult] = useState<{ readonly text: string; readonly error: boolean } | null>(
     null,
@@ -111,24 +113,38 @@ function RunRow({
     const answer = await call({ operation: "result", runId: run.runId });
     if (!answer.ok) return setResult({ text: answer.message, error: true });
     const value = answer.value as { result?: string | null };
-    setResult({ text: value.result ?? "No result recorded yet.", error: false });
+    setResult({
+      text:
+        value.result ??
+        (run.status === "failed"
+          ? "No output was recorded for this failed run. Open its run thread for the error."
+          : "No result recorded yet."),
+      error: false,
+    });
   };
   return (
     <li className="flex flex-col gap-1 border-t border-border/60 py-2 text-sm @3xl/runs:grid @3xl/runs:grid-cols-[4.5rem_8rem_minmax(0,1fr)_9rem_12rem_6.5rem] @3xl/runs:items-start @3xl/runs:gap-x-3 @3xl/runs:gap-y-0">
       <span className="tabular-nums text-muted-foreground">
+        <CellLabel>Time</CellLabel>
         {formatLocalWhen(Date.parse(run.createdAt), now)}
       </span>
-      <span className="min-w-0 break-words">{view.sender}</span>
       <span className="min-w-0 break-words">
+        <CellLabel>Sender</CellLabel>
+        {view.sender}
+      </span>
+      <span className="min-w-0 break-words">
+        <CellLabel>Request</CellLabel>
         {run.requestSummary}
         <span className="block text-xs text-muted-foreground">
           pinned v{run.templateVersion} · {run.requestId}
         </span>
       </span>
       <span className={cn("min-w-0 break-words", TONE_TEXT[view.outcome.tone])}>
+        <CellLabel>Outcome</CellLabel>
         {view.outcome.text}
       </span>
       <span className={cn("min-w-0 break-words", TONE_TEXT[view.delivery.tone])}>
+        <CellLabel>Delivery</CellLabel>
         {view.delivery.text}
         {view.receipt !== null ? (
           <span className="text-muted-foreground"> · receipt {view.receipt}</span>
@@ -139,6 +155,7 @@ function RunRow({
           <Button
             size="xs"
             variant="link"
+            className="max-sm:min-h-11 max-sm:min-w-11"
             aria-label={`Open run thread of ${run.requestId}`}
             onClick={() =>
               void navigate({
@@ -153,17 +170,19 @@ function RunRow({
           </Button>
         ) : (
           <span className="text-muted-foreground">
+            <CellLabel>Run thread</CellLabel>
             {run.status === "queued" ? "no thread yet" : "none"}
           </span>
         )}
-        {run.status === "completed" ? (
+        {run.status === "completed" || run.status === "failed" ? (
           <Button
             size="xs"
             variant="link"
-            aria-label={`Read result of ${run.requestId}`}
+            className="max-sm:min-h-11 max-sm:min-w-11"
+            aria-label={`Read ${run.status === "failed" ? "output" : "result"} of ${run.requestId}`}
             onClick={() => void readResult()}
           >
-            Result
+            {run.status === "failed" ? "Output" : "Result"}
           </Button>
         ) : null}
       </span>
@@ -178,6 +197,16 @@ function RunRow({
         </p>
       ) : null}
     </li>
+  );
+}
+
+/**
+ * The column's name. Stacked on a phone it labels each value in sight; where the columns line up
+ * under the header row it stays for screen readers only.
+ */
+function CellLabel({ children }: { readonly children: ReactNode }) {
+  return (
+    <span className="mr-1.5 text-xs text-muted-foreground @3xl/runs:sr-only">{children}</span>
   );
 }
 
@@ -259,7 +288,13 @@ export function SubheadPage({
   const projects = useProjects();
   const [, setSidebarMode] = useSidebarMode();
   const { isMobile, open, setOpen, setOpenMobile } = useSidebar();
-  const [editing, setEditing] = useState(false);
+  // The form edits the subhead as it was when Edit was clicked; the 15 s poll must not replace it.
+  const [editSession, setEditSession] = useState<{
+    readonly id: number;
+    readonly snapshot: Subhead;
+  } | null>(null);
+  const [reloadRequested, setReloadRequested] = useState(false);
+  const editing = editSession !== null;
   const [sending, setSending] = useState(false);
   const [retiring, setRetiring] = useState(false);
   const [filter, setFilter] = useState<HistoryFilter>("all");
@@ -302,6 +337,15 @@ export function SubheadPage({
         : true,
   );
   const state = subhead ? subheadState(subhead) : null;
+  const changeNotice = subhead ? subheadChangeNotice(subhead) : null;
+  const startEdit = () => subhead && setEditSession({ id: (editSession?.id ?? 0) + 1, snapshot: subhead });
+  // Reload restarts the open form from the newest version once the page has read it.
+  useEffect(() => {
+    if (reloadRequested && editSession && subhead && subhead.version !== editSession.snapshot.version) {
+      setEditSession({ id: editSession.id + 1, snapshot: subhead });
+      setReloadRequested(false);
+    }
+  }, [editSession, reloadRequested, subhead]);
 
   const changeState = async (next: "enable" | "disable" | "retire") => {
     if (!subhead) return;
@@ -388,8 +432,8 @@ export function SubheadPage({
                         <Button
                           size="sm"
                           variant="outline"
-                          disabled={state === "retired"}
-                          onClick={() => setEditing(true)}
+                          disabled={state === "retired" || changeNotice !== null}
+                          onClick={startEdit}
                         >
                           Edit
                         </Button>
@@ -397,6 +441,7 @@ export function SubheadPage({
                           <Button
                             size="sm"
                             variant="outline"
+                            disabled={changeNotice !== null}
                             onClick={() => void changeState("disable")}
                           >
                             Disable
@@ -405,6 +450,7 @@ export function SubheadPage({
                           <Button
                             size="sm"
                             variant="outline"
+                            disabled={changeNotice !== null}
                             onClick={() => void changeState("enable")}
                           >
                             Enable
@@ -414,6 +460,7 @@ export function SubheadPage({
                           <Button
                             size="sm"
                             variant="destructive-outline"
+                            disabled={changeNotice !== null}
                             onClick={() => setRetiring(true)}
                           >
                             Retire
@@ -445,6 +492,9 @@ export function SubheadPage({
                       {subhead.description}
                     </p>
                   ) : null}
+                  {changeNotice !== null ? (
+                    <p className="text-sm break-words text-muted-foreground">{changeNotice}</p>
+                  ) : null}
                   {actionError !== null ? (
                     <p role="alert" className="text-sm break-words text-error">
                       {actionError}
@@ -467,19 +517,31 @@ export function SubheadPage({
                   ) : null}
                 </div>
 
-                {editing ? (
+                {editSession !== null ? (
                   <SubheadEditForm
-                    key={subhead.version}
+                    key={editSession.id}
                     environmentId={environmentId}
-                    subhead={subhead}
+                    subhead={editSession.snapshot}
+                    latestVersion={subhead.version}
                     projectTitle={projectTitle}
                     ownerTitle={ownerTitle}
-                    onCancel={() => setEditing(false)}
+                    onCancel={() => {
+                      setEditSession(null);
+                      setReloadRequested(false);
+                    }}
                     onSaved={() => {
-                      setEditing(false);
+                      setEditSession(null);
+                      setReloadRequested(false);
                       page.refresh();
                     }}
-                    onReload={page.refresh}
+                    onReload={() => {
+                      if (subhead.version !== editSession.snapshot.version)
+                        setEditSession({ id: editSession.id + 1, snapshot: subhead });
+                      else {
+                        setReloadRequested(true);
+                        page.refresh();
+                      }
+                    }}
                   />
                 ) : (
                   <div className="@container/runs flex min-w-0 flex-col gap-6">

@@ -50,6 +50,7 @@ beforeEach(() => {
       <SubheadEditForm
         environmentId={EnvironmentId.make("dev")}
         subhead={current}
+        latestVersion={7}
         projectTitle="web-app"
         ownerTitle="Platform head"
         onCancel={vi.fn()}

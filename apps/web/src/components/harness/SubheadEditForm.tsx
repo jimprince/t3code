@@ -8,7 +8,7 @@ import {
   type SubheadWorkspaceType,
 } from "@t3tools/client-runtime/state/subheads-view";
 import type { EnvironmentId, RuntimeMode, Subhead } from "@t3tools/contracts";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -64,17 +64,21 @@ export function SubheadEditForm({
   subhead,
   projectTitle,
   ownerTitle,
+  latestVersion,
   onCancel,
   onSaved,
   onReload,
 }: {
   readonly environmentId: EnvironmentId;
+  /** The subhead as it was when Edit was clicked; the form edits this, whatever the poll reads. */
   readonly subhead: Subhead;
+  /** The version the server holds now; a newer one than `subhead` means someone saved meanwhile. */
+  readonly latestVersion: number;
   readonly projectTitle: string;
   readonly ownerTitle: string;
   readonly onCancel: () => void;
   readonly onSaved: () => void;
-  /** Reads the subhead again, so the form restarts from the version someone else saved. */
+  /** Restarts the form from the newest version, dropping the draft. */
   readonly onReload: () => void;
 }) {
   const call = useSubheadCall(environmentId);
@@ -83,12 +87,15 @@ export function SubheadEditForm({
   const [confirm, setConfirm] = useState<ReadonlyArray<string> | null>(null);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  // State updates are asynchronous: a fast double Enter would send two edits with one version.
+  const inFlight = useRef(false);
   const set = <K extends keyof SubheadDraft>(key: K, value: SubheadDraft[K]) => {
     setDraft((current) => ({ ...current, [key]: value }));
     setConfirm(null);
   };
   const conflict = refusal === null ? null : parseVersionConflict(refusal);
   const save = async () => {
+    if (inFlight.current) return;
     const built = buildTemplateFromDraft(subhead, draft);
     if (!built.ok) {
       setErrors(built.errors);
@@ -100,6 +107,7 @@ export function SubheadEditForm({
       setConfirm(changes);
       return;
     }
+    inFlight.current = true;
     setPending(true);
     setRefusal(null);
     const result = await call({
@@ -108,6 +116,7 @@ export function SubheadEditForm({
       expectedVersion: subhead.version,
       template: built.template,
     });
+    inFlight.current = false;
     setPending(false);
     if (!result.ok) {
       setRefusal(result.message);
@@ -128,6 +137,17 @@ export function SubheadEditForm({
         Editing v{subhead.version}. Saving creates v{subhead.version + 1} for future requests; runs
         already open keep v{subhead.version}.
       </p>
+      {latestVersion > subhead.version ? (
+        <div role="status" className="flex flex-col items-start gap-1.5 text-sm text-warning-foreground">
+          <p>
+            v{latestVersion} was saved while you were editing v{subhead.version}. Your draft is
+            kept, but saving it will be refused until you reload.
+          </p>
+          <Button size="xs" variant="outline" type="button" onClick={onReload}>
+            Reload v{latestVersion} and drop the draft
+          </Button>
+        </div>
+      ) : null}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Fixed label="Name (cannot change)" value={subhead.name} />
         <Fixed label="Project (cannot change)" value={projectTitle} />
