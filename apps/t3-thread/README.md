@@ -514,3 +514,26 @@ without an ask label, in workstream order.
 Order commands require the server's `projectRequestOrder` capability.
 Placement attribution and creation time come from the tracker; rank writes
 do not count as progress.
+
+### Duplicate send protection
+
+`send` refuses an identical body to the same resolved target while this sender's
+previous delivery is held, queued, accepted, started or steered and its run is
+not terminal, regardless of age. `--force` sends anyway. Explicit same
+`--send-id` retries and keyed `--coalesce` / `--progress` sends keep their existing
+semantics. A confirmed terminal run permits an identical send immediately;
+there is no terminal cooldown.
+
+The CLI hashes the JSON array `[resolvedThreadId, normalizedBody]` with SHA-256.
+Normalization uses JavaScript `trim()` and replaces each run of JavaScript
+`/\s+/gu` whitespace with one ASCII space. Case and punctuation remain unchanged;
+the body is taken before sender attribution is added.
+
+Hashes and delivery receipts live beside the local routing state in
+`send-intents/`, scoped to sender thread and target environment. Before refusing,
+the CLI refreshes the matching send through the existing receipt lookup, which
+reports its exact run's terminal state. An unreadable run is treated as not
+terminal and the refusal says so. The latest thread turn alone cannot prove
+that an older queued send finished. Protection begins with receipts written by
+this version on this host; it does not coordinate simultaneous sends or sends
+from another host, and older intents without the new hash cannot be matched.

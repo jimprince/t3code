@@ -7,6 +7,8 @@ import * as Schema from "effect/Schema";
 import * as Predicate from "effect/Predicate";
 import { stableStringify } from "@t3tools/shared/relaySigning";
 
+import type { DuplicateSendMetadata } from "./duplicateSend.js";
+
 const isHandoffCause = Schema.is(HandoffCause);
 
 /** Persist before transport. These files contain identities and hashes, never message bodies. */
@@ -17,6 +19,7 @@ export async function persistSendIntent(input: {
   text: string;
   coalesceKey?: string | null;
   provenance?: unknown;
+  duplicateSend?: DuplicateSendMetadata;
 }) {
   if (!/^[a-zA-Z0-9._:-]{1,128}$/.test(input.sendId)) throw new Error("INVALID_SEND_ID");
   const directory = NodePath.join(NodePath.dirname(resolveStateFile()), "send-intents");
@@ -30,6 +33,7 @@ export async function persistSendIntent(input: {
       .update(stableStringify([input.text, input.provenance ?? null]))
       .digest("hex"),
     createdAt: new Date().toISOString(),
+    ...(input.duplicateSend ? { duplicateSend: input.duplicateSend } : {}),
   };
   const filename = NodePath.join(directory, `${input.sendId}.json`);
   let file;

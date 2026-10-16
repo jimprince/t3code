@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { duplicateSendHash, refuseDuplicateSend } from "./duplicateSend.js";
 import * as NodeCrypto from "node:crypto";
 import { epicNumber, filingPlace, registerRequestOrderCommands } from "./requestOrderCommands.js";
 import { registerRecoveryCommands } from "./recoveryCommands.js";
@@ -264,6 +265,7 @@ type SendCommandOptions = {
   progress?: boolean;
   control?: boolean;
   sendId?: string;
+  force?: boolean;
 };
 type QueueCommandOptions = { env?: string; open?: boolean; summary?: boolean };
 
@@ -2683,6 +2685,7 @@ agent
   .option("--progress", "shorthand for --coalesce progress")
   .option("--control", "explicit control steering; may interrupt a Claude tool")
   .option("--send-id <id>", "explicit same-ID retry; default recovery is receipt lookup")
+  .option("--force", "send even when the same body has a non-terminal send")
   .action(async (name, messageParts: string[], options: SendCommandOptions) => {
     const rawText = messageParts.join(" ").trim();
     // Resolve live named agents without invoking their unreceipted start RPC.
@@ -2732,6 +2735,20 @@ agent
     }
     const { agent: savedAgent, client, saved } = await withAgent(routed?.threadId ?? name);
     const state = await loadState();
+    const duplicateSend = {
+      hash: duplicateSendHash(savedAgent.threadId, rawText),
+      senderThreadId: callerId,
+    };
+    const coalesceKey = options.coalesce ?? (options.progress ? "progress" : null);
+    await refuseDuplicateSend({
+      client,
+      threadId: savedAgent.threadId,
+      metadata: duplicateSend,
+      environment: savedAgent.environment,
+      sendId: options.sendId,
+      force: options.force,
+      coalesceKey,
+    });
     const outcome = await sendDirectResult({
       callerThreadId: resolveCallerThreadId(),
       subscriberThreadId: savedAgent.threadId,
@@ -2752,7 +2769,8 @@ agent
           senderEnvironment:
             resolveCallerEnvironmentMetadata()?.environmentName ??
             resolveCallerEnvironmentMetadata()?.environmentId,
-          coalesceKey: options.coalesce ?? (options.progress ? "progress" : null),
+          coalesceKey,
+          duplicateSend,
           agentName: saved ? savedAgent.name : null,
         }),
     });
