@@ -118,3 +118,80 @@ describe("project issue metadata refresh", () => {
     }),
   );
 });
+
+describe("repository discovery from thread links", () => {
+  // A link on a tree thread adds its repository to the head's discovery, unless the thread was
+  // only delegated the item: a worker link must not make the delegating head list a repository.
+  it.effect.each([
+    ["an ordinary link", undefined, true],
+    ["a worker link", "worker" as const, false],
+  ])("%s", ([, role, fetched]) =>
+    Effect.gen(function* () {
+      const threadId = ThreadId.make("root");
+      const now = "2026-10-05T00:00:00.000Z";
+      const instance: GiteaInstanceConfig = {
+        id: "home",
+        host: "git.home",
+        sshAliases: [],
+        sshPorts: [2222],
+        webOrigin: "http://git.home:3000",
+        apiOrigin: "http://git.home:3000",
+        token: "test",
+      };
+      const link = {
+        host: "git.home:3000",
+        repository: "brad/elsewhere",
+        number: 7,
+        url: "http://git.home:3000/brad/elsewhere/issues/7",
+        linkedAt: now,
+        snapshot: { title: "brad/elsewhere #7", state: "open", syncedAt: now },
+        ...(role ? { role } : {}),
+      };
+      const thread = { id: threadId, projectId: "project", issues: [link] };
+      const project = {
+        id: "project",
+        workspaceRoot: "/repo",
+        repositoryIdentity: {
+          provider: "gitea",
+          canonicalKey: "git.bradleyprince.com/brad/t3code-fork",
+          locator: { remoteUrl: "ssh://git@git.home:2222/brad/t3code-fork.git" },
+        },
+      };
+      const urls: string[] = [];
+      const result = yield* make.pipe(
+        Effect.flatMap((service) => service.list({ rootThreadId: threadId })),
+        Effect.provideService(SqlClient.SqlClient, ((_strings: TemplateStringsArray) =>
+          Effect.succeed([])) as never),
+        Effect.provideService(ProjectService, {
+          getShell: () => Effect.succeed(Option.some(project)),
+          listShells: () => Effect.succeed([project]),
+        } as never),
+        Effect.provideService(ThreadManagementService, {
+          getShellSnapshot: () => Effect.succeed({ threads: [thread], archivedThreads: [] }),
+          getThreadShell: () => Effect.succeed(thread),
+          dispatch: () => Effect.succeed({}),
+        } as never),
+        Effect.provideService(
+          HttpClient.HttpClient,
+          HttpClient.make((request) => {
+            urls.push(request.url);
+            return Effect.succeed(
+              HttpClientResponse.fromWeb(request, new Response(JSON.stringify([]))),
+            );
+          }),
+        ),
+        Effect.provide(
+          Layer.mergeAll(
+            ServerSettingsService.layerTest({ giteaInstances: [instance] }),
+            ServerConfig.layerTest(process.cwd(), { prefix: "t3-project-issues-" }).pipe(
+              Layer.provideMerge(NodeServices.layer),
+            ),
+          ),
+        ),
+      );
+      expect(urls.some((url) => url.includes("/repos/brad/elsewhere/issues"))).toBe(fetched);
+      expect(urls.some((url) => url.includes("/repos/brad/t3code-fork/issues"))).toBe(true);
+      expect(result.primaryRepository?.repository).toBe("brad/t3code-fork");
+    }),
+  );
+});

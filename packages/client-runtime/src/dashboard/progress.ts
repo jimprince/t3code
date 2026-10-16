@@ -137,6 +137,7 @@ export function compactSnapshot(snapshot: DashboardSnapshot, maxBytes = 95_000):
     );
     const keptWorkstreams = new Set<string>();
     // Over budget, a row someone needs comes first, then one a thread is working on, then the rest.
+    // The priority only picks what to keep; kept rows are emitted in their own order below.
     const ordered = [...project.tasks].sort(
       (a, b) =>
         Number(b.attentionIds.length > 0) - Number(a.attentionIds.length > 0) ||
@@ -175,6 +176,7 @@ export function compactSnapshot(snapshot: DashboardSnapshot, maxBytes = 95_000):
       keptWorkstreams.has(workstream.id),
     );
     const kept = new Set(tasks.map((t) => t.id));
+    const inOrder = project.tasks.filter((t) => kept.has(t.id));
     const attention = project.attention.filter((a) => kept.has(a.taskId));
     const shownAttention = new Set(attention.map((a) => a.id));
     return {
@@ -182,7 +184,7 @@ export function compactSnapshot(snapshot: DashboardSnapshot, maxBytes = 95_000):
       omittedTaskCount: project.omittedTaskCount + project.tasks.length - tasks.length,
       omittedWorkstreamCount:
         (project.omittedWorkstreamCount ?? 0) + project.workstreams.length - workstreams.length,
-      tasks: tasks.map((t) => ({
+      tasks: inOrder.map((t) => ({
         ...t,
         attentionIds: t.attentionIds.filter((id) => shownAttention.has(id)),
       })),

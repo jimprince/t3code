@@ -134,7 +134,7 @@ counts from the true total, and over budget a row being worked is kept ahead of 
 A thread's own current links decide whether it shows, so an unlink hides it at once; the
 cached tracker rows speak only for servers that do not report shell links. A link made by
 `delegate_task` with `issue` has role `worker`: it shows the child but is ignored when the
-snapshot picks the owning project; every other link keeps deciding ownership as before. Links stored before delegated children stopped inheriting their
+snapshot picks the owning project, keeps no item listed on its own (a settled or archived worker never hides an open item) and adds no repository to the delegating head's discovery; every other link keeps deciding ownership as before. Kept rows keep their snapshot order when the budget trims rows. Links stored before delegated children stopped inheriting their
 parent's issues still count when the thread is running.
 A handover warning shows its own reason ("t3-product.json: predecessor c7da3448 is
 claimed by more than one file (ignored)"), one line per distinct warning.

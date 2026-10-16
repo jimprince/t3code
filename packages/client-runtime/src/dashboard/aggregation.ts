@@ -274,6 +274,14 @@ export function aggregate(input: {
     const current = rootIssues.get(successor);
     if (current && inherited?.length) rootIssues.set(successor, [...current, ...inherited]);
   }
+  // Links a thread was delegated (role "worker") only show it working on the item: they never
+  // decide ownership or keep an item listed. Read from every shell, since a worker is usually
+  // settled or archived by the time its item is looked at.
+  const delegatedLinks = new Set<string>();
+  for (const thread of input.shells)
+    for (const link of thread.issues ?? [])
+      if (link.role === "worker")
+        delegatedLinks.add(`${issueId(link.host, link.repository, link.number)}|${thread.id}`);
   const rows = new Map<string, ProjectIssue>();
   for (const root of roots)
     for (const original of rootIssues.get(root.id) ?? []) {
@@ -294,13 +302,14 @@ export function aggregate(input: {
                 ? { owner: { ...original.owner, threadId: canonical(original.owner.threadId) } }
                 : {}),
             };
+      const key = issueId(issue.host, issue.repository, issue.number);
+      const owningLinks = issue.linkedThreadIds.filter((id) => !delegatedLinks.has(`${key}|${id}`));
       // Shared repositories can return a retired head's decision through another active root.
       if (
         (issue.owner && excluded.has(issue.owner.threadId)) ||
-        (issue.linkedThreadIds.length > 0 && issue.linkedThreadIds.every((id) => excluded.has(id)))
+        (owningLinks.length > 0 && owningLinks.every((id) => excluded.has(id)))
       )
         continue;
-      const key = issueId(issue.host, issue.repository, issue.number);
       const prior = rows.get(key);
       const selected =
         prior && Date.parse(prior.updatedAt) > Date.parse(issue.updatedAt) ? prior : issue;
@@ -349,14 +358,12 @@ export function aggregate(input: {
   const rootIds = new Set(roots.map((root) => root.id));
   // The cached issue rows learn of a link change only on the next tracker refresh; the shells
   // already carry it, so a worker shows as soon as it is linked and drops as soon as it is
-  // unlinked. Links a thread was delegated (role "worker") never decide ownership.
+  // unlinked.
   const shellLinks = new Map<string, ThreadId[]>();
-  const delegatedLinks = new Set<string>();
   for (const thread of threads)
     for (const link of thread.issues ?? []) {
       const key = issueId(link.host, link.repository, link.number);
       shellLinks.set(key, [...(shellLinks.get(key) ?? []), thread.id]);
-      if (link.role === "worker") delegatedLinks.add(`${key}|${thread.id}`);
     }
   for (const [key, issue] of rows) {
     const waiting = waitingThreads.get(key);
