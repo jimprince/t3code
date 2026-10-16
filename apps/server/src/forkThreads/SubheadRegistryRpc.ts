@@ -5,7 +5,7 @@ import {
   type Subhead,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
-import { makeSubheadRegistry } from "./SubheadRegistry.ts";
+import { makeSubheadRegistry, mayChangeSubhead } from "./SubheadRegistry.ts";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as Threads from "../orchestration-v2/ThreadManagementService.ts";
 import * as Option from "effect/Option";
@@ -70,20 +70,37 @@ export const makeSubheadRegistryRpc = Effect.gen(function* () {
         isNamedAgentError(cause) ? cause : new NamedAgentError({ message: String(cause) }),
       ),
     );
-  const handle = (input: SubheadRegistryInput, actor = "system") =>
+  /** `administrator` is true for a session holding the administrative scope (the desktop app). */
+  const handle = (input: SubheadRegistryInput, actor = "system", administrator = false) =>
     Effect.gen(function* () {
+      // Responses say whether this caller may change the entry, so a client can disable the
+      // buttons instead of offering a form the server would refuse. Stored rows never hold it.
+      const forCaller = (entry: Subhead): Subhead => ({
+        ...entry,
+        callerMayChange: mayChangeSubhead(entry, actor, administrator),
+      });
       switch (input.operation) {
         case "list":
-          return { agents: yield* registry.list(input.all) };
+          return { agents: (yield* registry.list(input.all)).map(forCaller) };
         case "show":
-          return yield* registry.get(input.name);
+          return forCaller(yield* registry.get(input.name));
         case "create":
-          return yield* registry.create(input.template, actor);
+          return forCaller(yield* registry.create(input.template, actor));
         case "edit":
-          return yield* registry.edit(input.name, input.template, input.expectedVersion, actor);
+          return forCaller(
+            yield* registry.edit(
+              input.name,
+              input.template,
+              input.expectedVersion,
+              actor,
+              administrator,
+            ),
+          );
         case "state": {
           if (input.state === "enable") yield* validate(yield* registry.get(input.name));
-          return yield* registry.setState(input.name, input.state, actor);
+          return forCaller(
+            yield* registry.setState(input.name, input.state, actor, administrator),
+          );
         }
       }
     }).pipe(

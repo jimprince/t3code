@@ -19,6 +19,17 @@ const encode = Schema.encodeSync(Schema.fromJsonString(Subhead));
 const fail = (message: string) => new NamedAgentError({ message });
 const storageError = (cause: unknown) => (isNamedAgentError(cause) ? cause : fail(String(cause)));
 
+/**
+ * Who may edit or change the state of a subhead: its creating principal, or a session holding the
+ * administrative scope (the desktop app). A row from before creators were recorded belongs to
+ * "system". Clients use the same rule to disable buttons that would be refused.
+ */
+export const mayChangeSubhead = (
+  entry: { readonly createdBy?: string | undefined },
+  actor: string,
+  administrator: boolean,
+) => administrator || actor === (entry.createdBy ?? "system");
+
 /** Registry/revision writes share standing-agent ownership serialization and one SQL transaction. */
 export const makeSubheadRegistry = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -73,12 +84,18 @@ export const makeSubheadRegistry = Effect.gen(function* () {
         });
       }),
     );
-  const edit = (name: string, input: unknown, expectedVersion: number, actor = "system") =>
+  const edit = (
+    name: string,
+    input: unknown,
+    expectedVersion: number,
+    actor = "system",
+    administrator = false,
+  ) =>
     locked(
       Effect.gen(function* () {
         const previous = yield* get(name);
-        if (actor !== (previous.createdBy ?? "system"))
-          return yield* fail("Only the creating principal may edit this subhead.");
+        if (!mayChangeSubhead(previous, actor, administrator))
+          return yield* fail("Only the creating principal or an administrator may edit this subhead.");
         if (previous.version !== expectedVersion)
           return yield* fail(
             `Template version conflict: expected ${expectedVersion}, current ${previous.version}.`,
@@ -102,12 +119,19 @@ export const makeSubheadRegistry = Effect.gen(function* () {
         });
       }),
     );
-  const setState = (name: string, state: "enable" | "disable" | "retire", actor = "system") =>
+  const setState = (
+    name: string,
+    state: "enable" | "disable" | "retire",
+    actor = "system",
+    administrator = false,
+  ) =>
     locked(
       Effect.gen(function* () {
         const previous = yield* get(name);
-        if (actor !== (previous.createdBy ?? "system"))
-          return yield* fail("Only the creating principal may change this subhead.");
+        if (!mayChangeSubhead(previous, actor, administrator))
+          return yield* fail(
+            "Only the creating principal or an administrator may change this subhead.",
+          );
         if (previous.retiredAt !== null && state === "enable")
           return yield* fail("Subhead is retired; its name remains reserved.");
         const at = yield* now;

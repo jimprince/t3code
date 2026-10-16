@@ -26,6 +26,8 @@ export interface SubheadCaller {
   readonly principal: string;
   readonly threadId: ThreadId | null;
   readonly runtimeMode: RuntimeMode;
+  /** Holds the administrative scope: may change subheads other principals created. */
+  readonly administrator?: boolean;
 }
 const isNamedAgentError = Schema.is(NamedAgentError);
 const decodeSend = Schema.decodeUnknownEffect(SubheadSendInput);
@@ -35,6 +37,8 @@ const error = (cause: unknown) => (isNamedAgentError(cause) ? cause : fail(Strin
 const encodeTemplate = Schema.encodeSync(Schema.fromJsonString(SubheadTemplate));
 const decodeRun = Schema.decodeUnknownEffect(Schema.fromJsonString(AutomationRun));
 const OPEN = ["queued", "running"];
+/** Finished runs with an unresolved delivery that `list` keeps visible per subhead. */
+const ATTENTION_PER_SUBHEAD = 20;
 /** Request text in lists is a summary; the full text belongs to the run's sender. */
 const summarize = (text: string) => text.replace(/\s+/g, " ").trim().slice(0, 200);
 
@@ -184,11 +188,18 @@ export const makeSubheadRuns = Effect.gen(function* () {
     }).pipe(Effect.mapError(error));
   /**
    * Operator view of runs: every open run plus the newest `perSubhead` finished runs of each
-   * subhead (or of the one named). Rows carry no result text; reading that still needs the
+   * subhead (or of the one named), plus the newest `attentionPerSubhead` finished runs whose
+   * delivery needs a look (undelivered, held, or still retrying), however old, so a lost result
+   * does not fall out of the window. Rows carry no result text; reading that still needs the
    * authenticated sender. Newest first.
    */
-  const list = (input: { readonly name?: string | undefined; readonly perSubhead: number }) =>
+  const list = (input: {
+    readonly name?: string | undefined;
+    readonly perSubhead: number;
+    readonly attentionPerSubhead?: number | undefined;
+  }) =>
     Effect.gen(function* () {
+      const attentionCap = input.attentionPerSubhead ?? ATTENTION_PER_SUBHEAD;
       const only = input.name === undefined ? null : (yield* registry.get(input.name)).id;
       const automationId = only === null ? null : `subhead:${only}`;
       const rows = yield* sql<{ json: string }>`
@@ -201,7 +212,15 @@ export const makeSubheadRuns = Effect.gen(function* () {
                 PARTITION BY automation_id ORDER BY created_at DESC, run_id DESC) AS rn
               FROM automation_runs
               WHERE json_type(run_json,'$.virtualSubhead')='object' AND status NOT IN (${OPEN[0]!},${OPEN[1]!})
-            ) WHERE rn<=${input.perSubhead}))
+            ) WHERE rn<=${input.perSubhead})
+          OR run_id IN (
+            SELECT run_id FROM (
+              SELECT run_id, ROW_NUMBER() OVER (
+                PARTITION BY automation_id ORDER BY created_at DESC, run_id DESC) AS rn
+              FROM automation_runs
+              WHERE json_type(run_json,'$.virtualSubhead')='object' AND status NOT IN (${OPEN[0]!},${OPEN[1]!})
+                AND json_extract(run_json,'$.virtualSubhead.delivery.status') IN ('undelivered','held','pending')
+            ) WHERE rn<=${attentionCap}))
         ORDER BY created_at DESC, run_id DESC`;
       const runs = yield* Effect.forEach(rows, (row) => decodeRun(row.json));
       return runs.flatMap((run): SubheadRunRow[] => {

@@ -71,15 +71,16 @@ export const makeSubheadApi = Effect.gen(function* () {
           return { runs: yield* runs.list(input) };
         default:
           return yield* registry
-            .handle(input, caller.principal)
+            .handle(input, caller.principal, caller.administrator === true)
             .pipe(Effect.tap(() => engine.refresh));
       }
     });
-  const handlePrincipal = (principal: string, input: SubheadInput) =>
+  /** `administrator`: the session holds the administrative scope, as the desktop app's does. */
+  const handlePrincipal = (principal: string, input: SubheadInput, administrator = false) =>
     Effect.gen(function* () {
       const environmentId = yield* environment.getEnvironmentId;
       return yield* handle(
-        { environmentId, principal, threadId: null, runtimeMode: "full-access" },
+        { environmentId, principal, threadId: null, runtimeMode: "full-access", administrator },
         input,
       );
     });

@@ -1,6 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
-import { ProjectId, ThreadId, ProviderInstanceId } from "@t3tools/contracts";
+import { ProjectId, ThreadId, ProviderInstanceId, type AutomationRun } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as TestClock from "effect/testing/TestClock";
 import * as Option from "effect/Option";
@@ -196,6 +196,10 @@ it.layer(NodeServices.layer)("subhead run admission", (it) => {
           status: "completed",
           result: "secret finding",
           finishedAt: old.createdAt,
+          virtualSubhead: {
+            ...old.virtualSubhead!,
+            delivery: { ...old.virtualSubhead!.delivery, status: "delivered" },
+          },
         });
         yield* store.saveRun({
           ...recent,
@@ -208,7 +212,15 @@ it.layer(NodeServices.layer)("subhead run admission", (it) => {
           },
         });
         yield* store.saveRun({ ...open, status: "running" });
-        yield* store.saveRun({ ...other, status: "completed", finishedAt: other.createdAt });
+        yield* store.saveRun({
+          ...other,
+          status: "completed",
+          finishedAt: other.createdAt,
+          virtualSubhead: {
+            ...other.virtualSubhead!,
+            delivery: { ...other.virtualSubhead!.delivery, status: "pull-only" },
+          },
+        });
 
         const rows = yield* service.list({ perSubhead: 1 });
         // Open run, the newest finished review run and the only audit run; the older review run
@@ -243,6 +255,55 @@ it.layer(NodeServices.layer)("subhead run admission", (it) => {
         });
         // Runs of other principals stay listable: this is operator visibility, not a result read.
         expect(onlyReview.map((row) => row.senderPrincipal)).toContain("sender-open");
+      }).pipe(Effect.provide(database)),
+  );
+  it.effect(
+    "also lists held, undelivered and retrying results outside the window, bounded per subhead",
+    () =>
+      Effect.gen(function* () {
+        const registry = yield* makeSubheadRegistry;
+        yield* registry.create({ ...template, name: "review" });
+        yield* registry.setState("review", "enable");
+        const service = yield* makeSubheadRuns;
+        const store = yield* AutomationStore;
+        const send = (requestId: string) =>
+          TestClock.adjust("1 minute").pipe(
+            Effect.andThen(
+              service.send(
+                { ...caller, principal: `sender-${requestId}`, threadId: null },
+                { name: "review", requestId, request: requestId },
+              ),
+            ),
+          );
+        const finish = (
+          run: AutomationRun,
+          status: "undelivered" | "held" | "pending" | "delivered" | "pull-only",
+        ) =>
+          store.saveRun({
+            ...run,
+            status: "completed",
+            finishedAt: run.createdAt,
+            virtualSubhead: {
+              ...run.virtualSubhead!,
+              delivery: { ...run.virtualSubhead!.delivery, status, error: status === "held" ? "SETTLED" : null },
+            },
+          });
+        yield* finish(yield* send("lost-1"), "undelivered");
+        yield* finish(yield* send("lost-2"), "undelivered");
+        yield* finish(yield* send("lost-3"), "undelivered");
+        yield* finish(yield* send("held"), "held");
+        yield* finish(yield* send("retrying"), "pending");
+        yield* finish(yield* send("fine-1"), "delivered");
+        yield* finish(yield* send("fine-2"), "pull-only");
+        const rows = yield* service.list({ name: "review", perSubhead: 1, attentionPerSubhead: 3 });
+        const ids = rows.map((row) => row.requestId);
+        // The newest finished run, plus the newest three runs whose delivery needs a look.
+        expect(ids).toEqual(["fine-2", "retrying", "held", "lost-3"]);
+        expect(ids).not.toContain("fine-1");
+        expect(ids).not.toContain("lost-1");
+        expect(
+          (yield* service.list({ perSubhead: 0 })).map((row) => row.requestId),
+        ).toEqual(["retrying", "held", "lost-3", "lost-2", "lost-1"]);
       }).pipe(Effect.provide(database)),
   );
 });
