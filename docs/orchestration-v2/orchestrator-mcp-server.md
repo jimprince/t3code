@@ -243,7 +243,7 @@ parent's pull-request links). `issue` links the one tracker issue the child work
 on, resolved before anything is created and stored in the child's creation, so the
 link exists before its first run and Plan can show the child as working on that item.
 The link carries `role: "worker"`: it counts for the Working line but never decides which
-project's Plan owns the item (links from `create_threads` issue, `--issue` launches,
+project's Plan owns the item, keep it listed, or add its repository to your discovery (links from `create_threads` issue, `--issue` launches,
 `link_gitea_issue` and `request start`/`note` keep deciding ownership as before). Unlike
 `create_threads` with an issue, it does not change the item's tracker stage and writes no
 comment. A reference that cannot be resolved fails the call without creating a child.

@@ -324,6 +324,9 @@ export const make = Effect.gen(function* () {
         for (const issue of thread.issues ?? []) {
           const key = `${repositoryKey(issue)}#${issue.number}`;
           linkedThreads.set(key, [...(linkedThreads.get(key) ?? []), thread.id]);
+          // A worker link only shows the thread on the item; it must not make this head list
+          // (and so be a candidate owner for) a repository it would not otherwise track.
+          if (issue.role === "worker") continue;
           const repoKey = repositoryKey(issue);
           if (targets.has(repoKey)) continue;
           const instance = instances.find((candidate) => instanceHost(candidate) === issue.host);

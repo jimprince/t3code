@@ -832,12 +832,37 @@ describe("threads working on a Plan row (#364)", () => {
       expect(owner).toBe(P);
       expect(workers?.map((w) => w.threadId)).toEqual([C]);
     });
-    it("still lets a thread's ordinary link decide ownership, as before", () => {
+    it("lets the same link decide ownership only when it is not a worker link", () => {
       expect(place(twoHeads([link], [C])).owner).toBe(T);
-      // Links stored before children stopped inheriting keep deciding as they did; a new child
-      // without one leaves the item with the head that holds it.
+      expect(place(twoHeads([{ ...link, role: "worker" }], [C])).owner).toBe(P);
+      // Links stored before children stopped inheriting keep deciding as they did.
       expect(place(twoHeads([link], [P, C])).owner).toBe(T);
-      expect(place(twoHeads([], [P])).owner).toBe(P);
+    });
+    it.each([
+      ["settled", { settledOverride: "settled" as const }],
+      ["archived", { archivedAt: DateTime.makeUnsafe(now) }],
+    ])(
+      "keeps an open item on its owner's Plan after its only linker, a %s worker, is gone",
+      (_n, gone) => {
+        const data = twoHeads([{ ...link, role: "worker" as const }], [C]);
+        Object.assign(
+          data.shells.find((shell) => shell.id === C)!,
+          gone,
+        );
+        const { owner, workers } = place(data);
+        expect(owner).toBe(P);
+        expect(workers).toBeUndefined();
+      },
+    );
+    it("still drops an item whose only ordinary linkers are all gone", () => {
+      const data = twoHeads([link], [C]);
+      Object.assign(
+        data.shells.find((shell) => shell.id === C)!,
+        {
+          settledOverride: "settled" as const,
+        },
+      );
+      expect(place(data).owner).toBeUndefined();
     });
   });
   it("hides a worker the moment its own links drop the item, before the cached rows catch up", () => {
@@ -898,6 +923,30 @@ describe("threads working on a Plan row (#364)", () => {
       .projects.flatMap((p) => p.tasks)
       .find((t) => t.title === "Issue 3");
     expect(task?.workers?.map((w) => w.threadId)).toEqual([worker]);
+  });
+  it("keeps a briefing project's row order when a worker starts", () => {
+    const issues = [1, 2, 3, 4, 5].map((n) => makeIssue(n));
+    const order = (workers: ThreadId[]) =>
+      compactSnapshot(
+        aggregate({
+          ...scenario(
+            workers.map((id) => running(id)),
+            issues,
+          ),
+          plans: [],
+          trackerRoots: undefined,
+        } as never),
+      ).projects[0]!.tasks.map((t) => t.title);
+    const idle = order([]);
+    expect(idle).toHaveLength(5);
+    const busy = aggregate({
+      ...scenario(
+        [running(w1)],
+        [...issues.slice(0, 3), makeIssue(4, { linkedThreadIds: [w1] }), issues[4]!],
+      ),
+      plans: [],
+    } as never);
+    expect(compactSnapshot(busy).projects[0]!.tasks.map((t) => t.title)).toEqual(idle);
   });
   it("keeps a row being worked ahead of an idle one when the snapshot is over budget", () => {
     const snapshot = aggregate(
