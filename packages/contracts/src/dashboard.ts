@@ -80,6 +80,8 @@ export const DashboardTask = Schema.Struct({
   hasChecklist: Schema.optionalKey(Schema.Boolean),
   /** Absent when nothing is working on the item; capped by the producer. */
   workers: Schema.optionalKey(Schema.Array(DashboardWorker)),
+  /** How many threads work on the item in all; `workers` stops at the producer's cap. */
+  workerCount: Schema.optionalKey(NonNegativeInt),
 });
 export type DashboardTask = typeof DashboardTask.Type;
 export const DashboardAttention = Schema.Struct({
@@ -146,6 +148,7 @@ export const DashboardWorkstream = Schema.Struct({
   title: Schema.String,
   taskIds: Schema.Array(Schema.String),
   workers: Schema.optionalKey(Schema.Array(DashboardWorker)),
+  workerCount: Schema.optionalKey(NonNegativeInt),
 });
 export type DashboardWorkstream = typeof DashboardWorkstream.Type;
 export const DashboardProject = Schema.Struct({

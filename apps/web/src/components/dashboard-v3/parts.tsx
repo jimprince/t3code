@@ -450,6 +450,7 @@ export function TaskRow({
         <WorkingLine
           scoped={scoped}
           workers={task.workers}
+          count={task.workerCount}
           className="order-last col-span-3 pl-6 @xl/dash:order-none @xl/dash:col-span-3 @xl/dash:col-start-2 @xl/dash:pl-0"
         />
       )}

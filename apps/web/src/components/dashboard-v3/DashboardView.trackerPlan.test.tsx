@@ -616,6 +616,24 @@ describe("threads working on a row (#364)", () => {
     expect(workingLines()).toEqual(["Working: One · 1h 15m, Two · starting +1"]);
   });
 
+  it("counts +N from the true total when the list was capped", async () => {
+    const eight = Array.from({ length: 8 }, (_, i) =>
+      worker(`c${i}`, `Capped ${i}`, "running", 30 - i),
+    );
+    await show("t3", BUILT_AT, (snapshot) => {
+      const edited = withWorkers("fork.7: update/reconnect", eight)(snapshot);
+      return {
+        ...edited,
+        projects: edited.projects.map((project) => ({
+          ...project,
+          tasks: project.tasks.map((t) => (t.workers ? { ...t, workerCount: 15 } : t)),
+        })),
+      };
+    });
+    await expand("Unsorted");
+    expect(workingLines()[0]).toMatch(/\+13$/);
+  });
+
   it("puts a workstream's workers under its heading", async () => {
     await show(
       "t3",

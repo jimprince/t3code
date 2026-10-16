@@ -136,8 +136,11 @@ export function compactSnapshot(snapshot: DashboardSnapshot, maxBytes = 95_000):
       ]),
     );
     const keptWorkstreams = new Set<string>();
+    // Over budget, a row someone needs comes first, then one a thread is working on, then the rest.
     const ordered = [...project.tasks].sort(
-      (a, b) => Number(b.attentionIds.length > 0) - Number(a.attentionIds.length > 0),
+      (a, b) =>
+        Number(b.attentionIds.length > 0) - Number(a.attentionIds.length > 0) ||
+        Number(b.workers !== undefined) - Number(a.workers !== undefined),
     );
     for (const task of ordered) {
       const header = headers.get(task.workstreamId);

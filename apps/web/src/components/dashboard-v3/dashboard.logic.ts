@@ -665,6 +665,8 @@ export function formatRunning(startedAt: string, now: number): string {
 export function workingSummary(
   workers: ReadonlyArray<DashboardWorker> | undefined,
   now: number,
+  /** The true number of workers, when the list was capped. */
+  total?: number,
 ): {
   readonly named: ReadonlyArray<{ readonly worker: DashboardWorker; readonly detail: string }>;
   readonly more: number;
@@ -680,7 +682,7 @@ export function workingSummary(
             ? "running"
             : worker.state,
     })),
-    more: Math.max(0, all.length - NAMED_WORKERS),
+    more: Math.max(0, Math.max(total ?? 0, all.length) - NAMED_WORKERS),
   };
 }
 

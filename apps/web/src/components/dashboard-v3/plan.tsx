@@ -359,7 +359,12 @@ function WorkstreamRow({
           {line}
         </div>
       ))}
-      <WorkingLine scoped={scoped} workers={workstream.workers} className="py-0.5 pl-6" />
+      <WorkingLine
+        scoped={scoped}
+        workers={workstream.workers}
+        count={workstream.workerCount}
+        className="py-0.5 pl-6"
+      />
       {collapsed ? null : (
         <>
           {ordering ? (

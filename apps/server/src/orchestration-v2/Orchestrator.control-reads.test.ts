@@ -723,7 +723,8 @@ it.effect("links a delegated child to its own issue, never to the parent's", () 
     );
     assert.deepEqual((yield* childOf("delegate-without-issue")).thread.issues ?? [], []);
     const linked = yield* childOf("delegate-with-issue");
-    assert.deepEqual(linked.thread.issues, [taskIssueLink(2)]);
+    // The link is a worker link: it shows the child working on the item but never routes ownership.
+    assert.deepEqual(linked.thread.issues, [{ ...taskIssueLink(2), role: "worker" }]);
     // The link is part of the child's creation, so it exists from its first run.
     assert.lengthOf(linked.runs, 1);
   }).pipe(Effect.provide(layerTest)),
