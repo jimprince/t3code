@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import { OpenTaskContext } from "../orchestrators/TaskLink";
 import projection from "./fixtures/trackerPlanProjection.json";
 
-const state = vi.hoisted(() => ({ data: null as unknown, now: 0 }));
+const state = vi.hoisted(() => ({ data: null as unknown, now: 0, navigate: vi.fn() }));
 
 // The data and router boundaries are replaced; DashboardView, VariantA, the plan rows and the chrome
 // all run as shipped. The data is the recorded output of the server's production tracker pipeline
@@ -17,7 +17,7 @@ const state = vi.hoisted(() => ({ data: null as unknown, now: 0 }));
 // real client-runtime merge: see fixtures/trackerPlanProjection.json "provenance".
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
-  useNavigate: () => vi.fn(),
+  useNavigate: () => state.navigate,
 }));
 vi.mock("../../state/liveRuntimeRequests", () => ({
   useLiveRuntimeRequests: () => ({ environments: new Set<string>(), threads: new Set<string>() }),
@@ -548,5 +548,171 @@ describe("the same unbound file reported by two environments", () => {
     expect(container.textContent?.match(/Unbound briefing file: t3-product\.json/g)).toHaveLength(
       1,
     );
+  });
+});
+
+describe("threads working on a row (#364)", () => {
+  const worker = (
+    id: string,
+    title: string,
+    state: "running" | "starting" | "queued",
+    ago?: number,
+  ) => ({
+    threadId: ThreadId.make(id),
+    title,
+    state,
+    startedAt:
+      ago === undefined ? null : new Date(Date.parse(BUILT_AT) - ago * 60_000).toISOString(),
+  });
+  type Worker = ReturnType<typeof worker>;
+  /** Puts workers on the task titled `task` and, optionally, on the workstream titled `stream`. */
+  const withWorkers =
+    (task: string, workers: ReadonlyArray<Worker>, stream?: [string, ReadonlyArray<Worker>]) =>
+    (snapshot: DashboardSnapshot): DashboardSnapshot => ({
+      ...snapshot,
+      projects: snapshot.projects.map((project) => ({
+        ...project,
+        tasks: project.tasks.map((t) => (t.title.includes(task) ? { ...t, workers } : t)),
+        workstreams: project.workstreams.map((w) =>
+          stream && w.title === stream[0] ? { ...w, workers: stream[1] } : w,
+        ),
+      })),
+    });
+  const lineOf = (row: Element) =>
+    [...row.parentElement!.querySelectorAll("span, div")].find((el) =>
+      el.textContent?.startsWith("Working:"),
+    );
+  const workingLines = () =>
+    [...container.querySelectorAll('[data-testid="working-line"]')].map((el) => el.textContent);
+
+  it("shows nothing when no row has a worker", async () => {
+    await show("t3", REAL_AT);
+    await expand("Unsorted");
+    expect(workingLines()).toEqual([]);
+  });
+
+  it("names a worker and how long it has run, under its row only", async () => {
+    await show(
+      "t3",
+      BUILT_AT,
+      withWorkers("fork.7: update/reconnect", [worker("w1", "Fork 7 builder", "running", 12)]),
+    );
+    await expand("Unsorted");
+    expect(workingLines()).toEqual(["Working: Fork 7 builder · 12m"]);
+    expect(lineOf(rowOf("fork.7: update/reconnect"))).toBeDefined();
+  });
+
+  it("shows two names then +N, with starting and queued said as such", async () => {
+    await show(
+      "t3",
+      BUILT_AT,
+      withWorkers("fork.7: update/reconnect", [
+        worker("w1", "One", "running", 75),
+        worker("w2", "Two", "starting"),
+        worker("w3", "Three", "queued"),
+      ]),
+    );
+    await expand("Unsorted");
+    expect(workingLines()).toEqual(["Working: One · 1h 15m, Two · starting +1"]);
+  });
+
+  it("puts a workstream's workers under its heading", async () => {
+    await show(
+      "t3",
+      BUILT_AT,
+      withWorkers(
+        "no such task",
+        [],
+        ["Dashboard roadmap", [worker("w9", "Roadmap builder", "queued")]],
+      ),
+    );
+    expect(workingLines()).toEqual(["Working: Roadmap builder · queued"]);
+  });
+
+  it("opens the thread of the title clicked, in the row's own environment", async () => {
+    await show(
+      "t3",
+      BUILT_AT,
+      withWorkers("fork.7: update/reconnect", [
+        worker("w1", "One", "running", 3),
+        worker("w2", "Two", "running", 2),
+      ]),
+    );
+    await expand("Unsorted");
+    const title = [...container.querySelectorAll('[data-testid="working-line"] button')].find(
+      (b) => b.textContent === "Two",
+    );
+    await act(() => (title as HTMLButtonElement).click());
+    expect(state.navigate).toHaveBeenCalledWith({
+      to: "/$environmentId/$threadId",
+      params: { environmentId: "env-1", threadId: "w2" },
+    });
+  });
+
+  it("wraps on a phone: every part may shrink and break", async () => {
+    await show(
+      "t3",
+      BUILT_AT,
+      withWorkers("fork.7: update/reconnect", [
+        worker(
+          "w1",
+          "A very long worker thread title that must wrap rather than push the row wider",
+          "running",
+          5,
+        ),
+      ]),
+    );
+    await expand("Unsorted");
+    const line = container.querySelector('[data-testid="working-line"]')!;
+    expect(line.className).toMatch(/flex-wrap/);
+    expect(line.querySelector("button")!.className).toMatch(/min-w-0/);
+    expect(line.querySelector("button")!.className).toMatch(/break-words/);
+  });
+});
+
+describe("migration warnings keep their reason (#370 S3)", () => {
+  const warn = (fileName: string, reason: string) => ({
+    kind: "unbound-briefing-file" as const,
+    fileName,
+    reason,
+  });
+  const withWarnings =
+    (...warnings: ReturnType<typeof warn>[]) =>
+    (snapshot: DashboardSnapshot): DashboardSnapshot => ({ ...snapshot, planMigration: warnings });
+
+  it("says what is wrong with a handover claim, not that the file is unbound", async () => {
+    await show(
+      "constructed",
+      BUILT_AT,
+      withWarnings(
+        warn("t3-product.json", "predecessor c7da3448 is claimed by more than one file (ignored)"),
+      ),
+      HOME,
+    );
+    const text = container.textContent ?? "";
+    expect(text).toContain(
+      "t3-product.json: predecessor c7da3448 is claimed by more than one file (ignored)",
+    );
+    expect(text).not.toContain("Unbound briefing file");
+  });
+
+  it("keeps two different warnings for one file as two lines, and one repeated warning as one", async () => {
+    await show(
+      "constructed",
+      BUILT_AT,
+      withWarnings(
+        warn("t3-product.json", "predecessor aaaaaaaa is in a successor cycle (ignored)"),
+        warn("t3-product.json", "predecessor bbbbbbbb is claimed by more than one file (ignored)"),
+        warn("t3-product.json", "predecessor bbbbbbbb is claimed by more than one file (ignored)"),
+      ),
+      HOME,
+    );
+    const text = container.textContent ?? "";
+    expect(text.match(/t3-product\.json: predecessor/g)).toHaveLength(2);
+  });
+
+  it("names the reason a file is unbound", async () => {
+    await show("constructedUnbound", BUILT_AT, undefined, HOME);
+    expect(container.textContent).toMatch(/Unbound briefing file: t3-product\.json \(.+\)/);
   });
 });

@@ -103,13 +103,13 @@ export function trackerSuccessors(
       warnings.push({
         kind: "unbound-briefing-file",
         fileName: plan.fileName ?? `${plan.head}.json`,
-        reason: `Predecessor ${id}: ${reason}`,
+        reason: `predecessor ${id.slice(0, 8)} ${reason}`,
       });
   };
   const edges = new Map<ThreadId, ThreadId>();
   for (const [id, entries] of claims) {
-    if (entries.length > 1) warn(id, "claimed by multiple briefing files; ignored");
-    else if (flagged.has(id)) warn(id, "root still has its own flagged file; ignored");
+    if (entries.length > 1) warn(id, "is claimed by more than one file (ignored)");
+    else if (flagged.has(id)) warn(id, "still has its own flagged file (ignored)");
     else edges.set(id, entries[0]!.successor);
   }
   const successors = new Map<ThreadId, ThreadId>();
@@ -120,8 +120,9 @@ export function trackerSuccessors(
       seen.add(target);
       target = edges.get(target)!;
     }
-    if (seen.has(target)) warn(id, "successor cycle; ignored");
-    else if (!current.has(target)) warn(id, "successor is not an active project; ignored");
+    if (seen.has(target)) warn(id, "is in a successor cycle (ignored)");
+    else if (!current.has(target))
+      warn(id, "names a successor that is not an active project (ignored)");
     else successors.set(id, target);
   }
   return { successors, warnings };
@@ -728,7 +729,12 @@ export function aggregate(input: {
     );
     const planTasks = tasks
       .filter((task) => !headerIds.has(task.id) || task.attentionIds.length > 0)
-      .map((task) => (headerIds.has(task.id) ? { ...task, progress: null } : task));
+      .map((task) => {
+        if (!headerIds.has(task.id)) return task;
+        // The epic's heading carries its workers; its own task row must not repeat them.
+        const { workers: _workers, ...rest } = task;
+        return { ...rest, progress: null };
+      });
     const workstreams = headers.map<DashboardProject["workstreams"][number]>((issue) => {
       const id = issueId(issue.host, issue.repository, issue.number);
       return {

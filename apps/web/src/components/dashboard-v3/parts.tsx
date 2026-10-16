@@ -16,6 +16,7 @@ import { useDashboardUi } from "./context";
 import { useOpenDecisionSource } from "./decisions";
 import { isThreadPlanTaskId } from "./resumeFromPlan.logic";
 import { ThreadPlanLine } from "./ThreadPlanLine";
+import { WorkingLine } from "./WorkingLine";
 import {
   barSegments,
   formatClock,
@@ -445,6 +446,13 @@ export function TaskRow({
           {line}
         </span>
       ))}
+      {done ? null : (
+        <WorkingLine
+          scoped={scoped}
+          workers={task.workers}
+          className="order-last col-span-3 pl-6 @xl/dash:order-none @xl/dash:col-span-3 @xl/dash:col-start-2 @xl/dash:pl-0"
+        />
+      )}
       {task.threadId && !done ? (
         <ThreadPlanLine
           environmentId={scoped.environmentId}

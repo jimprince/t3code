@@ -19,12 +19,13 @@ import {
   projectTasks,
   rollup,
   subprojectsOf,
-  unboundBriefingLabel,
+  briefingWarningLabel,
   versionState,
   type PlanWorkstreamEntry,
   type ScopedProject,
 } from "./dashboard.logic";
 import { ActiveRow, PlanOrderProvider, QueuedRow, WorkstreamOrder } from "./orderRows";
+import { WorkingLine } from "./WorkingLine";
 import {
   NewMark,
   ProgressBar,
@@ -358,6 +359,7 @@ function WorkstreamRow({
           {line}
         </div>
       ))}
+      <WorkingLine scoped={scoped} workers={workstream.workers} className="py-0.5 pl-6" />
       {collapsed ? null : (
         <>
           {ordering ? (
@@ -456,16 +458,18 @@ function SubprojectRow({
  */
 export function PlanWarnings() {
   const { data } = useDashboardUi();
-  // The same file read by two environments is one file.
+  // The same warning read by two environments is one warning; two warnings on one file stay two.
   const warnings = [
-    ...new Map((data.planMigration ?? []).map((warning) => [warning.fileName, warning])).values(),
+    ...new Map(
+      (data.planMigration ?? []).map((warning) => [briefingWarningLabel(warning), warning]),
+    ).values(),
   ];
   if (warnings.length === 0) return null;
   return (
     <div className="pb-1">
       {warnings.map((warning) => (
-        <div key={warning.fileName} className="py-0.5 text-muted-foreground">
-          {unboundBriefingLabel(warning)}
+        <div key={briefingWarningLabel(warning)} className="py-0.5 text-muted-foreground">
+          {briefingWarningLabel(warning)}
         </div>
       ))}
     </div>
