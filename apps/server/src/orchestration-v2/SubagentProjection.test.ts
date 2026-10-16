@@ -77,6 +77,16 @@ function makeParentThread(): OrchestrationV2AppThread {
     activeOrderKey: "a0",
     autoSettleDisabledAt: snoozedAt,
     unsettledAt: snoozedAt,
+    issues: [
+      {
+        host: "git.example.test",
+        repository: "brad/tasks",
+        number: 364,
+        url: "https://git.example.test/brad/tasks/issues/364",
+        linkedAt: "2026-07-24T09:00:00.000Z",
+        snapshot: { title: "Parent task", state: "open", syncedAt: "2026-07-24T09:00:00.000Z" },
+      },
+    ],
   };
 }
 
@@ -113,6 +123,9 @@ it("keeps a subagent child awake when its parent thread is snoozed", () => {
   assert.deepEqual(childThread.modelSelection, childModelSelection);
   assert.equal(childThread.activeProviderThreadId, childProviderThreadId);
   assert.isUndefined(childThread.historyOrigin);
+  // A child works on what it is delegated, not on every issue its parent holds.
+  assert.deepEqual(childThread.issues ?? [], []);
+  assert.lengthOf(parentThread.issues ?? [], 1);
   assert.deepEqual(childThread.lineage, {
     parentThreadId,
     relationshipToParent: "subagent",

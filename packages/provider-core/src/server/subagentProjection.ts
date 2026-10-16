@@ -59,6 +59,9 @@ export function makeSubagentChildThread(input: {
     title: input.title,
     linkedPullRequest: null,
     pullRequests: [],
+    // Neither PR nor issue links are inherited: a child works on what it is
+    // delegated, and delegate_task links its own issue explicitly.
+    issues: [],
     historyOrigin: undefined,
     providerInstanceId: input.providerInstanceId,
     modelSelection: input.modelSelection,
