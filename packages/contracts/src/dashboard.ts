@@ -33,6 +33,18 @@ export const DashboardMovement = Schema.Struct({
   toAt: IsoDateTime,
 });
 export type DashboardMovement = typeof DashboardMovement.Type;
+/**
+ * A thread working on a Plan item right now: explicitly linked to the item, not
+ * its owning head, and with a run in flight. The environment is the snapshot's own.
+ */
+export const DashboardWorker = Schema.Struct({
+  threadId: ThreadId,
+  title: Schema.String,
+  state: Schema.Literals(["running", "starting", "queued"]),
+  /** When the current work began; null while it has not started. */
+  startedAt: Schema.NullOr(IsoDateTime),
+});
+export type DashboardWorker = typeof DashboardWorker.Type;
 export const DashboardTask = Schema.Struct({
   membershipWarnings: Schema.optionalKey(Schema.Array(Schema.String)),
   id: Schema.String,
@@ -66,6 +78,8 @@ export const DashboardTask = Schema.Struct({
   nextStep: Schema.NullOr(Schema.String),
   attentionIds: Schema.Array(Schema.String),
   hasChecklist: Schema.optionalKey(Schema.Boolean),
+  /** Absent when nothing is working on the item; capped by the producer. */
+  workers: Schema.optionalKey(Schema.Array(DashboardWorker)),
 });
 export type DashboardTask = typeof DashboardTask.Type;
 export const DashboardAttention = Schema.Struct({
@@ -131,6 +145,7 @@ export const DashboardWorkstream = Schema.Struct({
   id: Schema.String,
   title: Schema.String,
   taskIds: Schema.Array(Schema.String),
+  workers: Schema.optionalKey(Schema.Array(DashboardWorker)),
 });
 export type DashboardWorkstream = typeof DashboardWorkstream.Type;
 export const DashboardProject = Schema.Struct({

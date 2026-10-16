@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import { DashboardSnapshot, EnvironmentId, ThreadId, type ProjectIssue } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
 import { v2ThreadShell } from "../state/orchestrationV2TestFixtures.ts";
 import { aggregate, type BriefingPlan } from "./aggregation.ts";
@@ -696,3 +697,149 @@ it.each([false, true])(
     expect(new Set(keys).size).toBe(keys.length);
   },
 );
+
+describe("threads working on a Plan row (#364)", () => {
+  const startedAt = DateTime.makeUnsafe("2026-10-14T09:48:00.000Z");
+  const shellOf = (id: ThreadId, extra: Record<string, unknown> = {}) => ({
+    ...v2ThreadShell,
+    id,
+    title: `Thread ${id}`,
+    archivedAt: null,
+    todoProgress: null,
+    status: "idle" as const,
+    activityRunStartedAt: null,
+    ...extra,
+  });
+  const running = (id: ThreadId, extra: Record<string, unknown> = {}) =>
+    shellOf(id, { status: "running", activityRunStartedAt: startedAt, ...extra });
+  const scenario = (
+    workers: readonly ReturnType<typeof shellOf>[],
+    issues: ProjectIssue[],
+    headStatus: "running" | "idle" = "running",
+  ) => ({
+    ...input(issues),
+    shells: [
+      shellOf(root, { title: "Head", status: headStatus, activityRunStartedAt: startedAt }),
+      ...workers,
+    ],
+    metadata: [
+      { threadId: root, parentThreadId: null, subproject: "on" as const },
+      ...workers.map((w) => ({ threadId: w.id, parentThreadId: root })),
+    ],
+  });
+  const workersOf = (data: ReturnType<typeof scenario>, number = 1) =>
+    aggregate(data).projects[0]?.tasks.find((t) => t.title === `Issue ${number}`)?.workers;
+  const w1 = ThreadId.make("w1");
+  const w2 = ThreadId.make("w2");
+  const w3 = ThreadId.make("w3");
+
+  it("shows an explicitly linked running thread and never the owning head", () => {
+    const data = scenario([running(w1)], [makeIssue(1, { linkedThreadIds: [root, w1] })]);
+    expect(workersOf(data)).toEqual([
+      {
+        threadId: w1,
+        title: "Thread w1",
+        state: "running",
+        startedAt: "2026-10-14T09:48:00.000Z",
+      },
+    ]);
+  });
+  it("shows starting and queued work as such, and nothing for waiting, held, idle or finished", () => {
+    const hidden = [
+      shellOf(ThreadId.make("waiting"), { status: "waiting" }),
+      shellOf(ThreadId.make("held"), { status: "queued", queueHeld: true }),
+      shellOf(ThreadId.make("idle")),
+      shellOf(ThreadId.make("done"), { status: "completed" }),
+      running(ThreadId.make("settled"), { settledOverride: "settled" }),
+      running(ThreadId.make("archived"), { archivedAt: DateTime.makeUnsafe(now) }),
+    ];
+    const data = scenario(
+      [shellOf(w1, { status: "queued" }), shellOf(w2, { status: "preparing" }), ...hidden],
+      [makeIssue(1, { linkedThreadIds: [w1, w2, ...hidden.map((h) => h.id)] })],
+    );
+    expect(workersOf(data)?.map((w) => [w.threadId, w.state, w.startedAt])).toEqual([
+      [w2, "starting", null],
+      [w1, "queued", null],
+    ]);
+  });
+  it("shows a thread the moment it is linked, before the cached issue rows learn of it", () => {
+    const link = {
+      host: "git.test",
+      repository: "brad/repo",
+      number: 1,
+      url: "https://git.test/brad/repo/issues/1",
+      linkedAt: now,
+      snapshot: { title: "Issue 1", state: "open" as const, syncedAt: now },
+    };
+    const data = scenario(
+      [running(w1, { issues: [link] }), running(w2, { issues: [{ ...link, number: 2 }] })],
+      [makeIssue(1, { linkedThreadIds: [] })],
+    );
+    expect(workersOf(data)?.map((w) => w.threadId)).toEqual([w1]);
+  });
+  it("hides a child whose parent, not the child, holds the link", () => {
+    const data = scenario([running(w1)], [makeIssue(1, { linkedThreadIds: [root] })]);
+    expect(workersOf(data)).toBeUndefined();
+    expect(aggregate(data).projects[0]?.tasks[0]).not.toHaveProperty("workers");
+  });
+  it("keeps ownership where it was whether or not a child inherited the parent's link", () => {
+    const owner = (linked: ThreadId[]) =>
+      aggregate(scenario([running(w1)], [makeIssue(1, { linkedThreadIds: linked })])).projects.find(
+        (p) => p.tasks.some((t) => t.title === "Issue 1"),
+      )?.rootThreadId;
+    expect(owner([root])).toBe(root);
+    expect(owner([root, w1])).toBe(root);
+  });
+  it("lists the longest-running first, deduplicates, and caps the list", () => {
+    const many = Array.from({ length: 12 }, (_, i) =>
+      running(ThreadId.make(`m${String(i).padStart(2, "0")}`), {
+        activityRunStartedAt: DateTime.makeUnsafe(
+          `2026-10-14T09:${String(59 - i).padStart(2, "0")}:00.000Z`,
+        ),
+      }),
+    );
+    const data = scenario(many, [
+      makeIssue(1, { linkedThreadIds: [...many.map((w) => w.id), many[0]!.id] }),
+    ]);
+    const workers = workersOf(data)!;
+    expect(workers).toHaveLength(8);
+    expect(workers[0]?.threadId).toBe("m11");
+    expect(new Set(workers.map((w) => w.threadId)).size).toBe(8);
+  });
+  it("puts a workstream's own workers on its heading", () => {
+    const epic = makeIssue(5, {
+      epic: { done: 1, total: 4, remaining: [6] },
+      plan: { ...summary, done: 1, total: 4 },
+      linkedThreadIds: [w1],
+    });
+    const snapshot = aggregate(scenario([running(w1)], [epic, makeIssue(6, { partOf: 5 })]));
+    const workstream = snapshot.projects[0]?.workstreams.find((w) => w.title === "Issue 5");
+    expect(workstream?.workers?.map((w) => w.threadId)).toEqual([w1]);
+  });
+  it("does not count a predecessor head as a worker, but keeps a real worker", () => {
+    const data = handoverInput();
+    const workerShell = (id: ThreadId) => data.shells.find((s) => s.id === id)!;
+    Object.assign(workerShell(oldHead), { status: "running" });
+    Object.assign(workerShell(worker), { status: "running", activityRunStartedAt: startedAt });
+    data.issues = new Map(
+      [t3Head, oldHead, nextHead, dashHead, worker].map((id) => [
+        id,
+        [makeIssue(3, { linkedThreadIds: [oldHead, worker] })],
+      ]),
+    );
+    const task = aggregate(data)
+      .projects.flatMap((p) => p.tasks)
+      .find((t) => t.title === "Issue 3");
+    expect(task?.workers?.map((w) => w.threadId)).toEqual([worker]);
+  });
+  it("survives the wire schema and compaction", () => {
+    const snapshot = aggregate(
+      scenario(
+        [running(w1), running(w2), running(w3)],
+        [makeIssue(1, { linkedThreadIds: [w1, w2, w3] })],
+      ),
+    );
+    const wire = decodeSnapshot(JSON.parse(JSON.stringify(compactSnapshot(snapshot))));
+    expect(wire.projects[0]?.tasks[0]?.workers).toHaveLength(3);
+  });
+});

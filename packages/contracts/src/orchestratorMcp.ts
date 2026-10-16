@@ -176,6 +176,12 @@ export const OrchestratorMcpDelegateTaskInput = Schema.Struct({
   target: Schema.optional(OrchestratorMcpTarget),
   title: Schema.optional(OrchestratorMcpTitle),
   role: Schema.optional(OrchestratorMcpTaskRole),
+  issue: Schema.optional(
+    TrimmedNonEmptyString.annotate({
+      description:
+        "The one tracker issue this child works on, as owner/repo#N or a configured Gitea issue URL. It is linked to the child before its first run so Plan can show it as working on that item. The child never inherits this thread's own issue links.",
+    }),
+  ),
   mode: Schema.optional(
     Schema.Literals(["async", "wait"]).annotate({
       description:

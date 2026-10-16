@@ -1213,6 +1213,127 @@ describe("OrchestratorMcpService provider resolution", () => {
       }),
   );
 
+  it.effect("resolves delegate_task's issue before dispatch and hands it to the child", () =>
+    Effect.gen(function* () {
+      const link = {
+        host: "git.example.test",
+        repository: "brad/tasks",
+        number: 7,
+        url: "https://git.example.test/brad/tasks/issues/7",
+        linkedAt: "2026-10-16T09:00:00.000Z",
+        snapshot: { title: "Task 7", state: "open" as const, syncedAt: "2026-10-16T09:00:00.000Z" },
+      };
+      const task = {
+        id: taskId,
+        threadId: parentThreadId,
+        runId: parentRunId,
+        parentNodeId,
+        origin: "app_owned",
+        createdBy: "agent",
+        driver: ProviderDriverKind.make("codex"),
+        providerInstanceId: codexInstanceId,
+        providerThreadId: null,
+        childThreadId,
+        nativeTaskRef: null,
+        prompt: "Build it",
+        title: null,
+        model: "gpt-5.4",
+        status: "running",
+        result: null,
+        startedAt: null,
+        completedAt: null,
+      };
+      const dispatched = yield* Ref.make<ReadonlyArray<unknown>>([]);
+      const resolved: Array<{ threadId: string; reference: string }> = [];
+      let delegated = false;
+      const layerDependencies = Layer.mergeAll(
+        NodeServices.layer,
+        Layer.succeed(TaskIssues.TaskIssueLaunchService, {
+          start: () => Effect.void,
+          resolve: (input) =>
+            Effect.suspend(() => {
+              resolved.push(input);
+              return input.reference === "brad/tasks#7"
+                ? Effect.succeed(link)
+                : Effect.fail(new ProjectIssuesError({ message: "Unknown issue" }));
+            }),
+        }),
+        Layer.mock(ThreadManagementService.ThreadManagementService)({
+          getThreadRecords: (threadId) =>
+            Effect.succeed(
+              threadId === parentThreadId
+                ? parentProjection(delegated ? [task] : [])
+                : childProjection,
+            ),
+          dispatch: (command) =>
+            Ref.update(dispatched, (commands) => [...commands, command]).pipe(
+              Effect.andThen(
+                Effect.sync(() => {
+                  delegated = true;
+                }),
+              ),
+              Effect.as({
+                sequence: 1,
+                storedEvents: [
+                  {
+                    sequence: 1,
+                    commandId: null,
+                    event: { type: "subagent.updated", payload: task },
+                  },
+                ],
+              } as never),
+            ),
+        }),
+        Layer.mock(ProviderRegistry.ProviderRegistry)({
+          getProviders: Effect.succeed([
+            providerSnapshot({
+              instanceId: codexInstanceId,
+              driver: ProviderDriverKind.make("codex"),
+              model: "gpt-5.4",
+            }),
+          ]),
+        }),
+        adapterRegistryLayer([codexInstanceId]),
+        Layer.mock(ProjectService.ProjectService)({}),
+        Layer.mock(SecretRequests.SecretRequests)({}),
+        Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),
+      );
+
+      yield* Effect.gen(function* () {
+        const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+        const rejected = yield* service
+          .delegateTask(scope, { task: "Build it", issue: "brad/tasks#99", mode: "async" })
+          .pipe(Effect.flip);
+        assert.include(rejected.message, "Unknown issue");
+        // An issue that cannot be linked must not leave an unattributed child behind.
+        assert.lengthOf(yield* Ref.get(dispatched), 0);
+
+        yield* service.delegateTask(scope, {
+          task: "Build it",
+          issue: "brad/tasks#7",
+          mode: "async",
+          clientRequestId: "delegate-issue-1",
+        });
+        const commands = yield* Ref.get(dispatched);
+        assert.lengthOf(commands, 1);
+        const request = commands[0] as { type: string; issue?: unknown };
+        assert.equal(request.type, "delegated_task.request");
+        assert.deepEqual(request.issue, link);
+        // The reference resolves against the delegating thread's project.
+        assert.deepEqual(resolved.at(-1), {
+          threadId: parentThreadId,
+          reference: "brad/tasks#7",
+        });
+      }).pipe(
+        Effect.provide(
+          OrchestratorMcpService.layer.pipe(
+            Layer.provide(Layer.merge(layerDependencies, SqlitePersistence.layerMemory)),
+          ),
+        ),
+      );
+    }),
+  );
+
   it.effect("resolves a driverKind target to a capable Antigravity instance", () =>
     Effect.gen(function* () {
       const dispatched = yield* Ref.make<ReadonlyArray<unknown>>([]);

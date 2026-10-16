@@ -629,7 +629,14 @@ export const make = Effect.gen(function* () {
     Effect.forkScoped,
   );
   yield* engine.streamDomainEvents.pipe(
-    Stream.filter((event) => event.type.startsWith("thread.") || event.type === "plan.updated"),
+    // run.updated moves a linked thread between queued, starting and running, which is
+    // what Plan's Working line shows; it needs only the local shells, never a tracker read.
+    Stream.filter(
+      (event) =>
+        event.type.startsWith("thread.") ||
+        event.type === "plan.updated" ||
+        event.type === "run.updated",
+    ),
     Stream.debounce("75 millis"),
     Stream.runForEach(() => publishLocal),
     Effect.forkScoped,

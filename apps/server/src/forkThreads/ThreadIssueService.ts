@@ -207,6 +207,15 @@ export function resolveThreadIssueReference(
 }
 
 export interface ThreadIssueService {
+  /**
+   * The link `link` would store for `reference`, resolved against the project of
+   * `threadId` but not written. Lets a thread that does not exist yet (a
+   * delegated child) be created already carrying its issue.
+   */
+  readonly resolveLink: (input: {
+    threadId: ThreadId;
+    reference: string;
+  }) => Effect.Effect<ThreadIssueLink, ThreadIssueOperationError>;
   readonly link: (input: {
     threadId: ThreadId;
     reference: string;
@@ -323,6 +332,30 @@ export const make = Effect.gen(function* () {
       ),
     );
 
+  /** Resolves `target` to the link to store, reading its title and state when Gitea answers in time. */
+  const buildLink = (target: ResolvedIssueTarget) =>
+    Effect.gen(function* () {
+      const fetchedIssue = yield* fetchThreadIssueMetadata(api, target).pipe(
+        Effect.timeoutOption("1 second"),
+        Effect.orElseSucceed(() => Option.none()),
+      );
+      if (Option.isSome(fetchedIssue) && isPullRequestIssue(fetchedIssue.value)) {
+        return yield* fail("That Gitea URL is a pull request, not an issue.");
+      }
+      const now = DateTime.formatIso(yield* DateTime.now);
+      return {
+        link: buildThreadIssueLink(target, Option.getOrNull(fetchedIssue), now),
+        fetched: Option.isSome(fetchedIssue),
+      };
+    });
+
+  const resolveLink: ThreadIssueService["resolveLink"] = (input) =>
+    Effect.gen(function* () {
+      const state = yield* context(input.threadId);
+      const target = yield* resolveTarget(input.reference, state);
+      return (yield* buildLink(target)).link;
+    });
+
   const link: ThreadIssueService["link"] = (input) =>
     Effect.gen(function* () {
       const state = yield* context(input.threadId);
@@ -332,15 +365,7 @@ export const make = Effect.gen(function* () {
         yield* refresh(input.threadId, target).pipe(Effect.ignore, Effect.forkDetach);
         return { link: existing, changed: false };
       }
-      const fetchedIssue = yield* fetchThreadIssueMetadata(api, target).pipe(
-        Effect.timeoutOption("1 second"),
-        Effect.orElseSucceed(() => Option.none()),
-      );
-      if (Option.isSome(fetchedIssue) && isPullRequestIssue(fetchedIssue.value)) {
-        return yield* fail("That Gitea URL is a pull request, not an issue.");
-      }
-      const now = DateTime.formatIso(yield* DateTime.now);
-      const link = buildThreadIssueLink(target, Option.getOrNull(fetchedIssue), now);
+      const { link, fetched } = yield* buildLink(target);
       yield* engine
         .dispatch({
           type: "thread.issue.link",
@@ -349,7 +374,7 @@ export const make = Effect.gen(function* () {
           link,
         })
         .pipe(Effect.mapError((error) => fail(error.message)));
-      if (Option.isNone(fetchedIssue)) {
+      if (!fetched) {
         yield* refresh(input.threadId, target).pipe(Effect.ignore, Effect.forkDetach);
       }
       return { link, changed: true };
@@ -385,5 +410,5 @@ export const make = Effect.gen(function* () {
       return { unlinked: true, issue };
     });
 
-  return { link, unlink, sync } satisfies ThreadIssueService;
+  return { resolveLink, link, unlink, sync } satisfies ThreadIssueService;
 });

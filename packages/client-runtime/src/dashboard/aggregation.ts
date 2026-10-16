@@ -6,6 +6,7 @@ import type {
   DashboardSnapshot,
   DashboardSource,
   DashboardTask,
+  DashboardWorker,
   ForkThreadMetadata,
   OrchestrationV2ThreadShell,
   OrchestrationV2ShellSnapshot,
@@ -133,7 +134,16 @@ type DashboardShell = Pick<
   "id" | "title" | "archivedAt" | "todoProgress" | "updatedAt"
 > &
   Partial<
-    Pick<OrchestrationV2ThreadShell, "settledOverride" | "status" | "planResumeState" | "queueHeld">
+    Pick<
+      OrchestrationV2ThreadShell,
+      | "settledOverride"
+      | "status"
+      | "planResumeState"
+      | "queueHeld"
+      | "activityRunStartedAt"
+      | "latestRunStartedAt"
+      | "issues"
+    >
   >;
 /** A run is in flight: working or waiting on someone. */
 const IN_FLIGHT_RUN_STATUSES: ReadonlySet<string> = new Set([
@@ -143,6 +153,26 @@ const IN_FLIGHT_RUN_STATUSES: ReadonlySet<string> = new Set([
   "running",
   "waiting",
 ]);
+/** Most workers one Plan row carries; the rest are not worth snapshot bytes. */
+const MAX_WORKERS = 8;
+const WORKER_STATE_ORDER = { running: 0, starting: 1, queued: 2 } as const;
+/**
+ * The run a thread is working on, as a Plan row shows it. Waiting on someone is
+ * left to the attention badge, and a held queue is not work in progress.
+ */
+function workerState(thread: DashboardShell): DashboardWorker["state"] | null {
+  switch (thread.status) {
+    case "running":
+      return "running";
+    case "preparing":
+    case "starting":
+      return "starting";
+    case "queued":
+      return thread.queueHeld === true ? null : "queued";
+    default:
+      return null;
+  }
+}
 export const isThreadInFlight = (thread: DashboardShell) =>
   (thread.queueHeld !== true || (thread.status !== "queued" && thread.status !== "idle")) &&
   thread.status !== undefined &&
@@ -371,6 +401,47 @@ export function aggregate(input: {
     for (const thread of trees.get(root.id)!)
       if (!localOwners.has(thread.id)) localOwners.set(thread.id, root.id);
   }
+  const workerShells = new Map(threads.map((thread) => [thread.id, thread]));
+  const rootIds = new Set(roots.map((root) => root.id));
+  // The cached issue rows learn of a new link only on the next tracker refresh; the
+  // shells already carry it, so a worker shows as soon as it is linked and running.
+  const shellLinks = new Map<string, ThreadId[]>();
+  for (const thread of threads)
+    for (const link of thread.issues ?? []) {
+      const key = issueId(link.host, link.repository, link.number);
+      shellLinks.set(key, [...(shellLinks.get(key) ?? []), thread.id]);
+    }
+  // A thread is working on an item when it holds an explicit link to it, is not a
+  // project head (a head's links mean intake), and has a run in flight. Links are
+  // already canonical, so a predecessor head resolves to its successor root.
+  const workersOf = (
+    issue: ProjectIssue,
+  ): { workers: DashboardWorker[] } | Record<string, never> => {
+    const workers: DashboardWorker[] = [];
+    const linked = [
+      ...issue.linkedThreadIds,
+      ...(shellLinks.get(issueId(issue.host, issue.repository, issue.number)) ?? []),
+    ];
+    for (const id of new Set(linked)) {
+      const thread = workerShells.get(id);
+      const state = thread && !rootIds.has(id) ? workerState(thread) : null;
+      if (!thread || !state) continue;
+      const started = thread.activityRunStartedAt ?? thread.latestRunStartedAt ?? null;
+      workers.push({
+        threadId: thread.id,
+        title: thread.title,
+        state,
+        startedAt: started ? DateTime.formatIso(started) : null,
+      });
+    }
+    workers.sort(
+      (a, b) =>
+        WORKER_STATE_ORDER[a.state] - WORKER_STATE_ORDER[b.state] ||
+        (a.startedAt ?? "9").localeCompare(b.startedAt ?? "9") ||
+        a.threadId.localeCompare(b.threadId),
+    );
+    return workers.length > 0 ? { workers: workers.slice(0, MAX_WORKERS) } : {};
+  };
   for (const root of roots) {
     const tree = trees.get(root.id)!;
     const issues = [...rows.entries()]
@@ -540,6 +611,7 @@ export function aggregate(input: {
               ? issue.plan.nextStep
               : (linked?.todoProgress?.currentStep?.text ?? null),
           attentionIds,
+          ...workersOf(issue),
         };
       });
     // A to-do list is a real plan, but a thread without a plan is not executive progress. Only
@@ -690,6 +762,7 @@ export function aggregate(input: {
           issueId(issue.host, issue.repository, number),
         ),
         taskIds: planTasks.filter((task) => task.workstreamId === id).map((task) => task.id),
+        ...workersOf(issue),
       };
     });
     for (const id of new Set(planTasks.map((task) => task.workstreamId)))

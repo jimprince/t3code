@@ -6853,6 +6853,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         }),
         runtimeMode: command.runtimeMode,
         interactionMode: command.interactionMode,
+        ...(command.issue === undefined ? {} : { issues: [command.issue] }),
       };
       const task: OrchestrationV2Subagent = {
         id: taskNodeId,
