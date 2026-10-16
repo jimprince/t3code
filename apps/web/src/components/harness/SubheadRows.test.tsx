@@ -170,7 +170,13 @@ describe("SubheadGroup", () => {
     const lost = run("code-review", {
       createdAt: "2026-10-12T09:00:00.000Z",
       finishedAt: "2026-10-12T09:05:00.000Z",
-      delivery: { id: "d-lost", status: "undelivered", messageId: null, attempts: 1, error: "ARCHIVED" },
+      delivery: {
+        id: "d-lost",
+        status: "undelivered",
+        messageId: null,
+        attempts: 1,
+        error: "ARCHIVED",
+      },
     });
     const delivered = run("code-review", {
       createdAt: "2026-10-15T09:00:00.000Z",

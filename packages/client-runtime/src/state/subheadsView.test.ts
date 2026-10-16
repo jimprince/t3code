@@ -421,14 +421,23 @@ describe("delivery that needs a look", () => {
       createdAt: "2026-10-16T08:00:00.000Z",
       finishedAt: "2026-10-16T08:05:00.000Z",
     });
-    const open = run({ subheadName: "code-review", status: "running", finishedAt: null, createdAt: "2026-10-10T09:00:00.000Z" });
+    const open = run({
+      subheadName: "code-review",
+      status: "running",
+      finishedAt: null,
+      createdAt: "2026-10-10T09:00:00.000Z",
+    });
     // The row itself still shows the old failure; only the head's bucket ignores it.
     expect(rowOf([staleFailure]).lastTone).toBe("error");
     expect(subheadNeedsAttention(rowOf([staleFailure, lost, held]), now)).toBe(false);
     expect(subheadNeedsAttention(rowOf([freshFailure]), now)).toBe(true);
     expect(subheadNeedsAttention(rowOf([open]), now)).toBe(true);
     expect(subheadNeedsAttention(rowOf([fine]), now)).toBe(false);
-    const freshLost = { ...lost, createdAt: "2026-10-16T08:00:00.000Z", finishedAt: "2026-10-16T08:05:00.000Z" };
+    const freshLost = {
+      ...lost,
+      createdAt: "2026-10-16T08:00:00.000Z",
+      finishedAt: "2026-10-16T08:05:00.000Z",
+    };
     expect(subheadNeedsAttention(rowOf([freshLost]), now)).toBe(true);
   });
 });
@@ -456,7 +465,13 @@ describe("delivery still retrying", () => {
       tone: "warning",
     });
     expect(
-      describeSubheadRun(run({ subheadName: "a", delivery: { id: "d-9", status: "pending", messageId: null, attempts: 3, error: null } }), context).delivery.text,
+      describeSubheadRun(
+        run({
+          subheadName: "a",
+          delivery: { id: "d-9", status: "pending", messageId: null, attempts: 3, error: null },
+        }),
+        context,
+      ).delivery.text,
     ).toBe("Retrying delivery");
     const running = describeSubheadRun(
       run({ subheadName: "a", status: "running", finishedAt: null, delivery: pending }),

@@ -285,7 +285,11 @@ it.layer(NodeServices.layer)("subhead run admission", (it) => {
             finishedAt: run.createdAt,
             virtualSubhead: {
               ...run.virtualSubhead!,
-              delivery: { ...run.virtualSubhead!.delivery, status, error: status === "held" ? "SETTLED" : null },
+              delivery: {
+                ...run.virtualSubhead!.delivery,
+                status,
+                error: status === "held" ? "SETTLED" : null,
+              },
             },
           });
         yield* finish(yield* send("lost-1"), "undelivered");
@@ -301,9 +305,13 @@ it.layer(NodeServices.layer)("subhead run admission", (it) => {
         expect(ids).toEqual(["fine-2", "retrying", "held", "lost-3"]);
         expect(ids).not.toContain("fine-1");
         expect(ids).not.toContain("lost-1");
-        expect(
-          (yield* service.list({ perSubhead: 0 })).map((row) => row.requestId),
-        ).toEqual(["retrying", "held", "lost-3", "lost-2", "lost-1"]);
+        expect((yield* service.list({ perSubhead: 0 })).map((row) => row.requestId)).toEqual([
+          "retrying",
+          "held",
+          "lost-3",
+          "lost-2",
+          "lost-1",
+        ]);
       }).pipe(Effect.provide(database)),
   );
 });

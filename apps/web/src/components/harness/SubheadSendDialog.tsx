@@ -167,8 +167,8 @@ export function SubheadSendDialog({
               ) : null}
               {receipt !== null ? (
                 <p role="status" className="break-words text-success-foreground">
-                  Sent. Run {receipt.runId} is {receipt.status}. Its result will appear in the
-                  history below; read it there.
+                  Sent. Run {receipt.runId.replace(/^subhead:/, "").slice(0, 8)} is {receipt.status}
+                  . Its result will appear in the history below; read it there.
                 </p>
               ) : null}
             </div>

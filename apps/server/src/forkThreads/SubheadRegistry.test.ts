@@ -50,7 +50,9 @@ it.layer(NodeServices.layer)("virtual registry", (it) => {
       // Without the administrative scope the desktop session is still refused.
       expect(
         yield* registry.edit("review", template, 1, "desktop-bootstrap").pipe(Effect.flip),
-      ).toMatchObject({ message: expect.stringContaining("creating principal or an administrator") });
+      ).toMatchObject({
+        message: expect.stringContaining("creating principal or an administrator"),
+      });
       const edited = yield* registry.edit(
         "review",
         { ...template, prompt: "Admin prompt" },
@@ -69,7 +71,13 @@ it.layer(NodeServices.layer)("virtual registry", (it) => {
       // An administrator still cannot move the fixed fields or revive a retired name.
       expect(
         yield* registry
-          .edit("review", { ...template, ownerThreadId: ThreadId.make("x") }, 2, "desktop-bootstrap", true)
+          .edit(
+            "review",
+            { ...template, ownerThreadId: ThreadId.make("x") },
+            2,
+            "desktop-bootstrap",
+            true,
+          )
           .pipe(Effect.flip),
       ).toMatchObject({ message: expect.stringContaining("immutable") });
       yield* registry.setState("review", "retire", "desktop-bootstrap", true);

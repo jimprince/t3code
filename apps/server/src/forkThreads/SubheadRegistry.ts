@@ -95,7 +95,9 @@ export const makeSubheadRegistry = Effect.gen(function* () {
       Effect.gen(function* () {
         const previous = yield* get(name);
         if (!mayChangeSubhead(previous, actor, administrator))
-          return yield* fail("Only the creating principal or an administrator may edit this subhead.");
+          return yield* fail(
+            "Only the creating principal or an administrator may edit this subhead.",
+          );
         if (previous.version !== expectedVersion)
           return yield* fail(
             `Template version conflict: expected ${expectedVersion}, current ${previous.version}.`,

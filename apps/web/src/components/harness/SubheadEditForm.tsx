@@ -138,7 +138,10 @@ export function SubheadEditForm({
         already open keep v{subhead.version}.
       </p>
       {latestVersion > subhead.version ? (
-        <div role="status" className="flex flex-col items-start gap-1.5 text-sm text-warning-foreground">
+        <div
+          role="status"
+          className="flex flex-col items-start gap-1.5 text-sm text-warning-foreground"
+        >
           <p>
             v{latestVersion} was saved while you were editing v{subhead.version}. Your draft is
             kept, but saving it will be refused until you reload.

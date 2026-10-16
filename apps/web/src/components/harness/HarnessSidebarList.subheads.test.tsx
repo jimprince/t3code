@@ -24,9 +24,13 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => vi.fn(), useParams: () => null }));
-vi.mock("../ui/sidebar", () => ({ useSidebar: () => ({ isMobile: false, setOpenMobile: vi.fn() }) }));
+vi.mock("../ui/sidebar", () => ({
+  useSidebar: () => ({ isMobile: false, setOpenMobile: vi.fn() }),
+}));
 vi.mock("../../hooks/useNowMinute", () => ({ useNowMinute: () => NOW }));
-vi.mock("../../hooks/useThreadActionMenu", () => ({ useThreadActionMenu: () => ({ openMenu: vi.fn() }) }));
+vi.mock("../../hooks/useThreadActionMenu", () => ({
+  useThreadActionMenu: () => ({ openMenu: vi.fn() }),
+}));
 vi.mock("../../state/entities", () => ({ useProjects: () => [] }));
 vi.mock("../../state/harness", () => ({
   useHarnessEnvironments: () => ({ environments: [], refresh: vi.fn() }),

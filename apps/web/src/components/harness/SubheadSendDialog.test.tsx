@@ -66,7 +66,10 @@ const close = () => act(() => root.render(null));
 const textbox = () => document.body.querySelector<HTMLTextAreaElement>("textarea")!;
 const type = (value: string) =>
   act(() => {
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(textbox(), value);
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(
+      textbox(),
+      value,
+    );
     textbox().dispatchEvent(new Event("input", { bubbles: true }));
   });
 const requestId = () => /request id (r-[0-9a-f]+)/.exec(document.body.textContent ?? "")?.[1];
@@ -96,10 +99,15 @@ describe("SubheadSendDialog", () => {
     open();
     const first = requestId();
     type("Review it");
-    call.mockResolvedValue({ ok: true, value: { runId: "run-42", status: "queued" } });
+    call.mockResolvedValue({
+      ok: true,
+      value: { runId: "subhead:abcdef0123456789", status: "queued" },
+    });
     await submit();
-    expect(call).toHaveBeenCalledWith(expect.objectContaining({ requestId: first, request: "Review it" }));
-    expect(document.body.textContent).toContain("Sent. Run run-42 is queued.");
+    expect(call).toHaveBeenCalledWith(
+      expect.objectContaining({ requestId: first, request: "Review it" }),
+    );
+    expect(document.body.textContent).toContain("Sent. Run abcdef01 is queued.");
     expect(onSent).toHaveBeenCalled();
     close();
     open();

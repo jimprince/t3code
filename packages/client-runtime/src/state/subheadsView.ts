@@ -149,9 +149,7 @@ const DAY_MS = 24 * 60 * 60_000;
 export function subheadNeedsAttention(row: SubheadRowView, now: number): boolean {
   return (
     row.openRuns.length > 0 ||
-    row.troubleRuns.some(
-      (run) => now - Date.parse(run.finishedAt ?? run.createdAt) <= DAY_MS,
-    )
+    row.troubleRuns.some((run) => now - Date.parse(run.finishedAt ?? run.createdAt) <= DAY_MS)
   );
 }
 

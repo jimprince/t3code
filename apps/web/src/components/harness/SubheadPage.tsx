@@ -15,7 +15,7 @@ import type { EnvironmentId, Subhead, SubheadRunRow, ThreadId } from "@t3tools/c
 import { formatLocalWhen } from "@t3tools/shared/localTime";
 import { useNavigate } from "@tanstack/react-router";
 import { ChevronLeftIcon } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import { isElectron } from "../../env";
 import { useNowMinute } from "../../hooks/useNowMinute";
@@ -205,9 +205,7 @@ function RunRow({
  * under the header row it stays for screen readers only.
  */
 function CellLabel({ children }: { readonly children: ReactNode }) {
-  return (
-    <span className="mr-1.5 text-xs text-muted-foreground @3xl/runs:sr-only">{children}</span>
-  );
+  return <span className="mr-1.5 text-xs text-muted-foreground @3xl/runs:sr-only">{children}</span>;
 }
 
 function RunHeader() {
@@ -248,7 +246,7 @@ function Template({
     ["Owning head", ownerTitle],
     [
       "Who may edit",
-      `${subhead.createdBy ?? "system"} (the creating principal) · name, project and head are fixed`,
+      `${subhead.createdBy ?? "system"} (the creating principal) or an administrator · name, project and head are fixed`,
     ],
   ];
   return (
@@ -338,14 +336,19 @@ export function SubheadPage({
   );
   const state = subhead ? subheadState(subhead) : null;
   const changeNotice = subhead ? subheadChangeNotice(subhead) : null;
-  const startEdit = () => subhead && setEditSession({ id: (editSession?.id ?? 0) + 1, snapshot: subhead });
-  // Reload restarts the open form from the newest version once the page has read it.
-  useEffect(() => {
-    if (reloadRequested && editSession && subhead && subhead.version !== editSession.snapshot.version) {
-      setEditSession({ id: editSession.id + 1, snapshot: subhead });
-      setReloadRequested(false);
-    }
-  }, [editSession, reloadRequested, subhead]);
+  const startEdit = () =>
+    subhead && setEditSession({ id: (editSession?.id ?? 0) + 1, snapshot: subhead });
+  // Reload restarts the open form from the newest version once the page has read it. Adjusting
+  // state while rendering is the supported way to follow a change in props without an effect.
+  if (
+    reloadRequested &&
+    editSession !== null &&
+    subhead &&
+    subhead.version !== editSession.snapshot.version
+  ) {
+    setEditSession({ id: editSession.id + 1, snapshot: subhead });
+    setReloadRequested(false);
+  }
 
   const changeState = async (next: "enable" | "disable" | "retire") => {
     if (!subhead) return;

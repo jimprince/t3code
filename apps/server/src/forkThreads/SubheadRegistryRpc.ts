@@ -98,9 +98,7 @@ export const makeSubheadRegistryRpc = Effect.gen(function* () {
           );
         case "state": {
           if (input.state === "enable") yield* validate(yield* registry.get(input.name));
-          return forCaller(
-            yield* registry.setState(input.name, input.state, actor, administrator),
-          );
+          return forCaller(yield* registry.setState(input.name, input.state, actor, administrator));
         }
       }
     }).pipe(

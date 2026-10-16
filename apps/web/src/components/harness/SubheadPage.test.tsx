@@ -12,7 +12,13 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const page = vi.hoisted(() => ({
-  current: { subhead: null as unknown, runs: [] as unknown[], loading: false, error: null, refresh: () => {} },
+  current: {
+    subhead: null as unknown,
+    runs: [] as unknown[],
+    loading: false,
+    error: null,
+    refresh: () => {},
+  },
 }));
 const call = vi.hoisted(() => vi.fn());
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => vi.fn() }));
@@ -72,7 +78,9 @@ const button = (label: string) =>
 const setValue = (element: HTMLInputElement | HTMLTextAreaElement, value: string) =>
   act(() => {
     const prototype =
-      element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      element instanceof HTMLTextAreaElement
+        ? HTMLTextAreaElement.prototype
+        : HTMLInputElement.prototype;
     Object.getOwnPropertyDescriptor(prototype, "value")!.set!.call(element, value);
     element.dispatchEvent(new Event("input", { bubbles: true }));
   });
