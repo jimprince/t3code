@@ -18,3 +18,9 @@ id = "delegate-task-explicit-issue"
 date = "2026-10-16"
 decided = "A subagent child no longer inherits its parent's issue links; delegate_task takes an optional issue that is resolved before dispatch and stored in the child's creation, so it exists before the first run."
 rationale = "Inherited links made every child look like it worked on every issue its parent held (#364); the explicit link reuses the issue-link resolution without a tracker stage change or comment."
+
+[[decision]]
+id = "delegate-task-link-is-worker-role"
+date = "2026-10-16"
+decided = "The link delegate_task's issue stores carries role \"worker\": it counts for Plan's Working line and is ignored by owning-project selection. Other issue links keep deciding ownership; no tracker stage changes."
+rationale = "A head delegating a child with another head's item must not pull the item onto its own Plan (#364 review S1)."

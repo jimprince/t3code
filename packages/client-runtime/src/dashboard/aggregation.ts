@@ -109,7 +109,7 @@ export function trackerSuccessors(
   const edges = new Map<ThreadId, ThreadId>();
   for (const [id, entries] of claims) {
     if (entries.length > 1) warn(id, "is claimed by more than one file (ignored)");
-    else if (flagged.has(id)) warn(id, "still has its own flagged file (ignored)");
+    else if (flagged.has(id)) warn(id, "still has its own tracker briefing file (ignored)");
     else edges.set(id, entries[0]!.successor);
   }
   const successors = new Map<ThreadId, ThreadId>();
@@ -122,7 +122,7 @@ export function trackerSuccessors(
     }
     if (seen.has(target)) warn(id, "is in a successor cycle (ignored)");
     else if (!current.has(target))
-      warn(id, "names a successor that is not an active project (ignored)");
+      warn(id, "is claimed by a file whose project is not active (ignored)");
     else successors.set(id, target);
   }
   return { successors, warnings };
@@ -345,6 +345,19 @@ export function aggregate(input: {
       return ids.length === 1 ? [[key, ids[0]!] as const] : [];
     }),
   );
+  const workerShells = new Map(threads.map((thread) => [thread.id, thread]));
+  const rootIds = new Set(roots.map((root) => root.id));
+  // The cached issue rows learn of a link change only on the next tracker refresh; the shells
+  // already carry it, so a worker shows as soon as it is linked and drops as soon as it is
+  // unlinked. Links a thread was delegated (role "worker") never decide ownership.
+  const shellLinks = new Map<string, ThreadId[]>();
+  const delegatedLinks = new Set<string>();
+  for (const thread of threads)
+    for (const link of thread.issues ?? []) {
+      const key = issueId(link.host, link.repository, link.number);
+      shellLinks.set(key, [...(shellLinks.get(key) ?? []), thread.id]);
+      if (link.role === "worker") delegatedLinks.add(`${key}|${thread.id}`);
+    }
   for (const [key, issue] of rows) {
     const waiting = waitingThreads.get(key);
     const candidates = roots.filter(
@@ -355,8 +368,9 @@ export function aggregate(input: {
     const waitingOwner = candidates
       .filter((root) => trees.get(root.id)!.some((t) => t.id === waiting))
       .sort((a, b) => trees.get(a.id)!.length - trees.get(b.id)!.length)[0];
+    const owningLinks = issue.linkedThreadIds.filter((id) => !delegatedLinks.has(`${key}|${id}`));
     const linked = candidates
-      .filter((root) => trees.get(root.id)!.some((t) => issue.linkedThreadIds.includes(t.id)))
+      .filter((root) => trees.get(root.id)!.some((t) => owningLinks.includes(t.id)))
       .sort(
         (a, b) => trees.get(a.id)!.length - trees.get(b.id)!.length || a.id.localeCompare(b.id),
       );
@@ -402,26 +416,19 @@ export function aggregate(input: {
     for (const thread of trees.get(root.id)!)
       if (!localOwners.has(thread.id)) localOwners.set(thread.id, root.id);
   }
-  const workerShells = new Map(threads.map((thread) => [thread.id, thread]));
-  const rootIds = new Set(roots.map((root) => root.id));
-  // The cached issue rows learn of a new link only on the next tracker refresh; the
-  // shells already carry it, so a worker shows as soon as it is linked and running.
-  const shellLinks = new Map<string, ThreadId[]>();
-  for (const thread of threads)
-    for (const link of thread.issues ?? []) {
-      const key = issueId(link.host, link.repository, link.number);
-      shellLinks.set(key, [...(shellLinks.get(key) ?? []), thread.id]);
-    }
   // A thread is working on an item when it holds an explicit link to it, is not a
   // project head (a head's links mean intake), and has a run in flight. Links are
   // already canonical, so a predecessor head resolves to its successor root.
   const workersOf = (
     issue: ProjectIssue,
-  ): { workers: DashboardWorker[] } | Record<string, never> => {
+  ): { workers: DashboardWorker[]; workerCount: number } | Record<string, never> => {
     const workers: DashboardWorker[] = [];
+    const key = issueId(issue.host, issue.repository, issue.number);
+    // A thread whose shell reports its links decides for itself; the cached row only speaks for
+    // threads whose server predates shell links.
     const linked = [
-      ...issue.linkedThreadIds,
-      ...(shellLinks.get(issueId(issue.host, issue.repository, issue.number)) ?? []),
+      ...issue.linkedThreadIds.filter((id) => workerShells.get(id)?.issues === undefined),
+      ...(shellLinks.get(key) ?? []),
     ];
     for (const id of new Set(linked)) {
       const thread = workerShells.get(id);
@@ -441,7 +448,9 @@ export function aggregate(input: {
         (a.startedAt ?? "9").localeCompare(b.startedAt ?? "9") ||
         a.threadId.localeCompare(b.threadId),
     );
-    return workers.length > 0 ? { workers: workers.slice(0, MAX_WORKERS) } : {};
+    return workers.length > 0
+      ? { workers: workers.slice(0, MAX_WORKERS), workerCount: workers.length }
+      : {};
   };
   for (const root of roots) {
     const tree = trees.get(root.id)!;
@@ -732,7 +741,7 @@ export function aggregate(input: {
       .map((task) => {
         if (!headerIds.has(task.id)) return task;
         // The epic's heading carries its workers; its own task row must not repeat them.
-        const { workers: _workers, ...rest } = task;
+        const { workers: _workers, workerCount: _count, ...rest } = task;
         return { ...rest, progress: null };
       });
     const workstreams = headers.map<DashboardProject["workstreams"][number]>((issue) => {

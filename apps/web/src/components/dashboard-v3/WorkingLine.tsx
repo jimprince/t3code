@@ -16,16 +16,19 @@ import { workingSummary } from "./dashboard.logic";
 export function WorkingLine({
   scoped,
   workers,
+  count,
   className,
 }: {
   readonly scoped: ScopedProject;
   readonly workers: ReadonlyArray<DashboardWorker> | undefined;
+  /** How many threads work on the row in all; `workers` may be capped. */
+  readonly count?: number | undefined;
   /** Placement in the row's layout. */
   readonly className?: string;
 }) {
   const { now } = useDashboardUi();
   const navigate = useNavigate();
-  const { named, more } = workingSummary(workers, now);
+  const { named, more } = workingSummary(workers, now, count);
   if (named.length === 0) return null;
   const open = (worker: DashboardWorker) => {
     const thread = resolveThreadLinkTarget(scoped.environmentId, worker.threadId);

@@ -638,7 +638,7 @@ describe("tracker head handover (#370)", () => {
     data.plans.push({ ...plan, rootThreadId: oldHead });
     const snapshot = aggregate(data);
     expect(snapshot.projects.some((p) => p.rootThreadId === oldHead)).toBe(true);
-    expect(snapshot.planMigration?.some((w) => /flagged/i.test(w.reason))).toBe(true);
+    expect(snapshot.planMigration?.some((w) => /tracker briefing file/i.test(w.reason))).toBe(true);
   });
   it("resolves a chain through a historical header and guards cycles", () => {
     const data = handoverInput(true);
@@ -782,13 +782,79 @@ describe("threads working on a Plan row (#364)", () => {
     expect(workersOf(data)).toBeUndefined();
     expect(aggregate(data).projects[0]?.tasks[0]).not.toHaveProperty("workers");
   });
-  it("keeps ownership where it was whether or not a child inherited the parent's link", () => {
-    const owner = (linked: ThreadId[]) =>
-      aggregate(scenario([running(w1)], [makeIssue(1, { linkedThreadIds: linked })])).projects.find(
-        (p) => p.tasks.some((t) => t.title === "Issue 1"),
-      )?.rootThreadId;
-    expect(owner([root])).toBe(root);
-    expect(owner([root, w1])).toBe(root);
+  // Product's head P owns the item; the T3 head T is a narrower sub-root of P, so on a linked tie T wins.
+  describe("with two heads", () => {
+    const P = ThreadId.make("product-head");
+    const T = ThreadId.make("t3-head");
+    const C = ThreadId.make("t3-child");
+    const Q = ThreadId.make("product-child");
+    const link = {
+      host: "git.test",
+      repository: "brad/repo",
+      number: 1,
+      url: "https://git.test/brad/repo/issues/1",
+      linkedAt: now,
+      snapshot: { title: "Issue 1", state: "open" as const, syncedAt: now },
+    };
+    const twoHeads = (childIssues: ReadonlyArray<unknown>, linkedThreadIds: ThreadId[]) => {
+      const issue = makeIssue(1, {
+        linkedThreadIds,
+        requestSource: { threadId: P, rootThreadId: P, messageId: "m" },
+      });
+      return {
+        ...input([issue]),
+        shells: [
+          running(P, { title: "Product" }),
+          running(T, { title: "T3" }),
+          running(C, { issues: childIssues }),
+          shellOf(Q),
+        ],
+        metadata: [
+          { threadId: P, parentThreadId: null, subproject: "on" as const },
+          { threadId: T, parentThreadId: P, subproject: "on" as const },
+          { threadId: C, parentThreadId: T },
+          { threadId: Q, parentThreadId: P },
+        ],
+        issues: new Map([
+          [P, [issue]],
+          [T, [issue]],
+        ]),
+      };
+    };
+    const place = (data: ReturnType<typeof twoHeads>) => {
+      const snapshot = aggregate(data);
+      const project = snapshot.projects.find((p) => p.tasks.some((t) => t.title === "Issue 1"));
+      return { owner: project?.rootThreadId, workers: project?.tasks[0]?.workers };
+    };
+    it("keeps the item on Product's Plan when the T3 head delegates a child with that issue", () => {
+      const delegated = { ...link, role: "worker" as const };
+      const { owner, workers } = place(twoHeads([delegated], [C]));
+      expect(owner).toBe(P);
+      expect(workers?.map((w) => w.threadId)).toEqual([C]);
+    });
+    it("still lets a thread's ordinary link decide ownership, as before", () => {
+      expect(place(twoHeads([link], [C])).owner).toBe(T);
+      // Links stored before children stopped inheriting keep deciding as they did; a new child
+      // without one leaves the item with the head that holds it.
+      expect(place(twoHeads([link], [P, C])).owner).toBe(T);
+      expect(place(twoHeads([], [P])).owner).toBe(P);
+    });
+  });
+  it("hides a worker the moment its own links drop the item, before the cached rows catch up", () => {
+    const link = {
+      host: "git.test",
+      repository: "brad/repo",
+      number: 1,
+      url: "https://git.test/brad/repo/issues/1",
+      linkedAt: now,
+      snapshot: { title: "Issue 1", state: "open" as const, syncedAt: now },
+    };
+    const stale = makeIssue(1, { linkedThreadIds: [w1] });
+    expect(workersOf(scenario([running(w1, { issues: [link] })], [stale]))).toHaveLength(1);
+    // Unlinked: the shell says so, the cached row still names the thread.
+    expect(workersOf(scenario([running(w1, { issues: [] })], [stale]))).toBeUndefined();
+    // A server that predates shell links says nothing, so the cached row still decides.
+    expect(workersOf(scenario([running(w1)], [stale]))).toHaveLength(1);
   });
   it("lists the longest-running first, deduplicates, and caps the list", () => {
     const many = Array.from({ length: 12 }, (_, i) =>
@@ -802,6 +868,7 @@ describe("threads working on a Plan row (#364)", () => {
       makeIssue(1, { linkedThreadIds: [...many.map((w) => w.id), many[0]!.id] }),
     ]);
     const workers = workersOf(data)!;
+    expect(aggregate(data).projects[0]?.tasks[0]?.workerCount).toBe(12);
     expect(workers).toHaveLength(8);
     expect(workers[0]?.threadId).toBe("m11");
     expect(new Set(workers.map((w) => w.threadId)).size).toBe(8);
@@ -831,6 +898,17 @@ describe("threads working on a Plan row (#364)", () => {
       .projects.flatMap((p) => p.tasks)
       .find((t) => t.title === "Issue 3");
     expect(task?.workers?.map((w) => w.threadId)).toEqual([worker]);
+  });
+  it("keeps a row being worked ahead of an idle one when the snapshot is over budget", () => {
+    const snapshot = aggregate(
+      scenario([running(w1)], [makeIssue(1), makeIssue(2, { linkedThreadIds: [w1] })]),
+    );
+    expect(snapshot.projects[0]?.tasks.map((t) => t.title)).toContain("Issue 1");
+    // Shrink the budget until exactly one row fits.
+    let kept: string[] = [];
+    for (let budget = 20_000; budget > 0 && kept.length !== 1; budget -= 25)
+      kept = compactSnapshot(snapshot, budget).projects[0]!.tasks.map((t) => t.title);
+    expect(kept).toEqual(["Issue 2"]);
   });
   it("survives the wire schema and compaction", () => {
     const snapshot = aggregate(

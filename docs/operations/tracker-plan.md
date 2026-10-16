@@ -129,7 +129,12 @@ running, starting or queued. Each name opens that thread; at most two show, then
 Waiting on Brad stays in the existing badge; settled, idle and held threads never
 show. The snapshot carries at most eight workers per row, recomputed locally on run
 and link changes with no tracker or provider read. A running thread linked to two
-items shows on both. Links stored before delegated children stopped inheriting their
+items shows on both. When more threads work on a row than the snapshot carries (eight), `+N`
+counts from the true total, and over budget a row being worked is kept ahead of an idle one.
+A thread's own current links decide whether it shows, so an unlink hides it at once; the
+cached tracker rows speak only for servers that do not report shell links. A link made by
+`delegate_task` with `issue` has role `worker`: it shows the child but is ignored when the
+snapshot picks the owning project; every other link keeps deciding ownership as before. Links stored before delegated children stopped inheriting their
 parent's issues still count when the thread is running.
 A handover warning shows its own reason ("t3-product.json: predecessor c7da3448 is
 claimed by more than one file (ignored)"), one line per distinct warning.

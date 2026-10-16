@@ -24,6 +24,11 @@ export const ThreadIssueLink = Schema.Struct({
   url: TrimmedNonEmptyString,
   linkedAt: IsoDateTime,
   snapshot: ThreadIssueSnapshot,
+  /**
+   * "worker": the thread was delegated this issue (delegate_task's issue). It shows as working on
+   * the item but never decides which project owns it. Absent for every other link.
+   */
+  role: Schema.optionalKey(Schema.Literal("worker")),
 });
 export type ThreadIssueLink = typeof ThreadIssueLink.Type;
 
