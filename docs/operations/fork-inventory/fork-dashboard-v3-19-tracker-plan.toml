@@ -17,6 +17,7 @@ files = [
   "apps/server/src/dashboard/DashboardStore.ts",
   "apps/server/src/dashboard/dashboard.test.ts",
   "apps/server/src/dashboard/DashboardService.trackerPlan.test.ts",
+  "apps/server/src/dashboard/DashboardService.workers.test.ts",
   "apps/server/src/projectIssues/ProjectIssuesService.ts",
   "apps/server/src/projectIssues/ProjectIssuesService.test.ts",
   "apps/server/src/projectIssues/epicProgress.logic.ts",
@@ -36,6 +37,7 @@ files = [
   "apps/web/src/components/dashboard-v3/DashboardView.tsx",
   "apps/web/src/components/dashboard-v3/DashboardView.trackerPlan.test.tsx",
   "apps/web/src/components/dashboard-v3/VariantA.tsx",
+  "apps/web/src/components/dashboard-v3/WorkingLine.tsx",
   "apps/web/src/components/dashboard-v3/context.tsx",
   "apps/web/src/components/dashboard-v3/dashboard.logic.eta.test.ts",
   "apps/web/src/components/dashboard-v3/dashboard.logic.test.ts",
@@ -46,6 +48,8 @@ files = [
   "docs/operations/tracker-plan.md",
   "docs/release-notes/entries/tracker-plan.toml",
   "docs/release-notes/entries/tracker-plan-handover.toml",
+  "docs/release-notes/entries/plan-working-threads.toml",
+  "docs/release-notes/entries/handover-warning-reasons.toml",
 ]
 
 [[decision]]
@@ -77,3 +81,15 @@ id = "predecessor-issue-discovery"
 date = "2026-10-16"
 decided = "Adopt each predecessor's per-root issue list as successor candidates and keep listing declared predecessors present in the shell, including settled heads."
 rationale = "Only the predecessor's discovery tree may contain its explicit links or additional repositories; reading canonical roots alone loses that work (#370 S2)."
+
+[[decision]]
+id = "working-threads-explicit-links"
+date = "2026-10-16"
+decided = "A thread is working on a Plan row when it holds an explicit issue link, is not a project head, and has a running, starting or queued run; shown as one capped Working line from local shells only."
+rationale = "Existing links alone mislabeled inherited and intake links as work (#364); inferring from markers, branches or nesting would repeat that."
+
+[[decision]]
+id = "handover-warning-reasons"
+date = "2026-10-16"
+decided = "Handover warnings render their own plain reason and are deduplicated by file and reason, not by file."
+rationale = "Calling a correctly bound file unbound hid what to fix, and two warnings on one file collapsed into one (#370 S3)."

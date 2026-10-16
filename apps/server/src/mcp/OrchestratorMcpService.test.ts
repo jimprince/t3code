@@ -2077,6 +2077,7 @@ describe("OrchestratorMcpService provider resolution", () => {
                 if (reject)
                   return yield* new ProjectIssuesError({ message: "Cannot record issue" });
               }),
+            resolve: () => Effect.die("unexpected issue resolve"),
           }),
           Layer.mock(ThreadManagementService.ThreadManagementService)({
             getThreadRecords: (id) =>

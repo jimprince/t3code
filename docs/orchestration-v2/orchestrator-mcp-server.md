@@ -221,6 +221,7 @@ type DelegateTaskInput = {
     model?: string;
   };
   title?: string;
+  issue?: string; // owner/repo#N or a configured Gitea issue URL
   role?: "implementation" | "research" | "review" | "design" | "test" | "general";
   mode?: "async" | "wait";
   timeoutMs?: number;
@@ -236,6 +237,12 @@ when it can run child tasks, and otherwise selects an available instance of
 that driver; an explicit `providerInstanceId` is honored exactly and fails
 when unavailable. Selecting a different provider without a model uses that
 provider's first advertised model.
+
+A child never inherits its parent's issue links (it already starts without the
+parent's pull-request links). `issue` links the one tracker issue the child works
+on, resolved before anything is created and stored in the child's creation, so the
+link exists before its first run and Plan can show the child as working on that item.
+A reference that cannot be resolved fails the call without creating a child.
 
 Each delegated review round uses a new `delegate_task` call with the original brief,
 prior findings, responses, and unresolved objections. Track each round by its own `taskId` and use

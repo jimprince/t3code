@@ -202,6 +202,7 @@ function makeHarness(options: HarnessOptions = {}) {
   const layerExternalServices = Layer.mergeAll(
     Layer.succeed(TaskIssues.TaskIssueLaunchService, {
       start: options.startIssue ?? (() => Effect.die("unexpected issue start")),
+      resolve: () => Effect.die("unexpected issue resolve"),
     }),
     WorktreeSetupTracker.layer,
     Layer.mock(ProjectCloneTracker.ProjectCloneTracker)({ get: () => Effect.succeed(null) }),

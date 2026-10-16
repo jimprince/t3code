@@ -12,3 +12,9 @@ id = "catchup-2908-issue-gated-launch"
 date = "2026-10-10"
 decided = "adapt"
 rationale = "Pass issue-gated launch through upstream direct RPC/MCP services and nominal startsThreads permissions (#9786–#9791, #10298), retaining caller mode ceilings, secret/webhook coverage and receipt-replay issue regression. Do not revive obsolete transport handlers. Static service/access/conflict review passed; composed issue-gated launch tests remain required."
+
+[[decision]]
+id = "delegate-task-explicit-issue"
+date = "2026-10-16"
+decided = "A subagent child no longer inherits its parent's issue links; delegate_task takes an optional issue that is resolved before dispatch and stored in the child's creation, so it exists before the first run."
+rationale = "Inherited links made every child look like it worked on every issue its parent held (#364); the explicit link reuses the issue-link resolution without a tracker stage change or comment."

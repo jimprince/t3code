@@ -1,0 +1,4 @@
+id = "plan-working-threads"
+category = "feature"
+functionality = "dashboard"
+text = "Plan rows show which threads are working on them right now, as a line like Working: Build the ledger · 12m. Each name opens its thread, and rows with nothing running look the same as before."
