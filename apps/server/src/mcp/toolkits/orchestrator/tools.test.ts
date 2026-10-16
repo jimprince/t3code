@@ -22,6 +22,7 @@ describe("orchestrator MCP tool guidance", () => {
     assert.include(DelegateTaskTool.description ?? "", "childThreadId is backing storage");
     assert.include(DelegateTaskTool.description ?? "", "never inherits this thread's own issue");
     assert.include(DelegateTaskTool.description ?? "", "does not change the item's tracker stage");
+    assert.include(DelegateTaskTool.description ?? "", "on a Plan that already lists it");
     assert.include(
       OrchestratorToolkit.tools.t3_thread_send.description ?? "",
       "Do not use a delegated task's childThreadId to start another review round",

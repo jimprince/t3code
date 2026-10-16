@@ -924,29 +924,29 @@ describe("threads working on a Plan row (#364)", () => {
       .find((t) => t.title === "Issue 3");
     expect(task?.workers?.map((w) => w.threadId)).toEqual([worker]);
   });
-  it("keeps a briefing project's row order when a worker starts", () => {
-    const issues = [1, 2, 3, 4, 5].map((n) => makeIssue(n));
-    const order = (workers: ThreadId[]) =>
+  it("emits a briefing project's rows as before #364, attention first, whether or not a worker runs", () => {
+    // Issue 4 needs review, so it carries an attention card; 6a24a8f3 emitted such rows first and
+    // left the rest in snapshot order.
+    const issues = (linked: ThreadId[]) =>
+      [1, 2, 3, 4, 5].map((n) =>
+        makeIssue(n, {
+          ...(n === 4 ? { labels: ["ask", "ask:task", "needs-review"] } : {}),
+          ...(n === 2 ? { linkedThreadIds: linked } : {}),
+        }),
+      );
+    const order = (workers: ThreadId[], linked: ThreadId[]) =>
       compactSnapshot(
         aggregate({
           ...scenario(
             workers.map((id) => running(id)),
-            issues,
+            issues(linked),
           ),
           plans: [],
-          trackerRoots: undefined,
         } as never),
       ).projects[0]!.tasks.map((t) => t.title);
-    const idle = order([]);
-    expect(idle).toHaveLength(5);
-    const busy = aggregate({
-      ...scenario(
-        [running(w1)],
-        [...issues.slice(0, 3), makeIssue(4, { linkedThreadIds: [w1] }), issues[4]!],
-      ),
-      plans: [],
-    } as never);
-    expect(compactSnapshot(busy).projects[0]!.tasks.map((t) => t.title)).toEqual(idle);
+    const base = ["Issue 4", "Issue 1", "Issue 2", "Issue 3", "Issue 5"];
+    expect(order([], [])).toEqual(base);
+    expect(order([w1], [w1])).toEqual(base);
   });
   it("keeps a row being worked ahead of an idle one when the snapshot is over budget", () => {
     const snapshot = aggregate(
