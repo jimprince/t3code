@@ -1,53 +1,44 @@
 import {
   attentionBlockers,
   blockerHeadline,
-  threadBlockers,
+  blockerSet,
   type Blocker,
 } from "@t3tools/client-runtime/dashboard/blockers";
 import { cardSummary } from "@t3tools/client-runtime/decision-card";
-import { liveAttention } from "@t3tools/client-runtime/dashboard/live";
+import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
 import {
   AuthOrchestrationOperateScope,
+  type DashboardProject,
   type DashboardSnapshot,
   type EnvironmentId,
   type ThreadId,
 } from "@t3tools/contracts";
 import { CheckIcon } from "lucide-react";
-import {
-  createContext,
-  use,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { cn } from "../../lib/utils";
 import { useBlockerSnapshot } from "../../state/dashboard";
+import { useServerConfigs } from "../../state/entities";
 import { useLiveRuntimeRequests } from "../../state/liveRuntimeRequests";
 import { useEnvironmentScope } from "../../state/session";
-import { DashboardUiProvider, type DecisionRow } from "../dashboard-v3/context";
+import type { DecisionRow } from "../dashboard-v3/context";
 import { formatClock } from "../dashboard-v3/dashboard.logic";
 import { DecisionAnswerArea } from "../dashboard-v3/DecisionAnswerArea";
 import { DecisionReceipt, lead } from "../dashboard-v3/decisions";
-import {
-  useAnswerPlan,
-  useDecisionAnswers,
-  type DecisionAnswers,
-} from "../dashboard-v3/useDecisionAnswers";
-import { useOrchestratorThreadShells } from "../orchestrators/useOrchestratorThreads";
+import { useAnswerPlan, type DecisionAnswers } from "../dashboard-v3/useDecisionAnswers";
 import { Button, InlineButton } from "../ui/button";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
+import { useAnswersHost } from "./BlockerAnswers";
 import {
+  pendingKey,
   useBlockerActions,
   useBlockerPermissions,
   useOpenThread,
   type BlockerActions,
+  type ThreadTarget,
 } from "./useBlockerActions";
 
-/** Past this many entries the popover lists the first few and "and N more" opens the rest in place. */
+/** Past this many waiting items the popover lists the first few and "and N more" opens the rest. */
 const SHOWN_FIRST = 3;
 
 /** A name that is a link wraps inside the popover instead of cutting the words that identify it. */
@@ -57,53 +48,20 @@ const LINK_TEXT =
 const KIND_WORD: Record<Blocker["kind"], string> = {
   "waiting-on-brad": "Waiting",
   failed: "Failed",
-  "blocked-line": "Blocked reply",
+  "blocked-line": "Blocked",
   stopped: "Stopped",
   "held-queue": "Queue held",
   "blocked-by": "Blocked by",
   "usage-limit": "Usage limit",
+  stuck: "Stuck",
+  "waiting-question": "Question",
 };
 
-interface BlockerAnswersHost {
-  readonly answers: DecisionAnswers;
-  /** A badge reports the decisions it lists, so a delivered answer stays answered while it lags. */
-  readonly report: (owner: string, keys: ReadonlySet<string> | null) => void;
-}
-
-const BlockerAnswersContext = createContext<BlockerAnswersHost | null>(null);
-
-/**
- * One answers hook for every badge under it (the sidebar list, a project page), so an answer's
- * Undo hold survives its popover closing and the badges agree on which decisions are still open.
- */
-export function BlockerAnswersProvider({ children }: { readonly children: ReactNode }) {
-  const answers = useDecisionAnswers();
-  const reported = useRef(new Map<string, ReadonlySet<string>>());
-  const reconcile = answers.reconcile;
-  const report = useCallback(
-    (owner: string, keys: ReadonlySet<string> | null) => {
-      if (keys) reported.current.set(owner, keys);
-      else reported.current.delete(owner);
-      reconcile(new Set([...reported.current.values()].flatMap((entry) => [...entry])));
-    },
-    [reconcile],
-  );
-  const host = useMemo(() => ({ answers, report }), [answers, report]);
-  return <BlockerAnswersContext value={host}>{children}</BlockerAnswersContext>;
-}
-
-/** The provider's answers, else the Dashboard's own when this badge sits inside one. */
-function useAnswersHost(): BlockerAnswersHost | null {
-  const own = use(BlockerAnswersContext);
-  const dashboard = use(DashboardUiProvider);
-  // Inside a Dashboard its answers win, so a card and a popover share one Undo and one receipt.
-  return useMemo(
-    () => (dashboard ? { answers: dashboard.answers, report: () => undefined } : own),
-    [own, dashboard],
-  );
-}
-
-const TONE = { red: "text-error", amber: "text-warning-foreground" } as const;
+const TONE = {
+  red: "text-error",
+  amber: "text-warning-foreground",
+  muted: "text-muted-foreground",
+} as const;
 
 /**
  * The badge and its one popover. The trigger keeps the word's colour and gets no chrome; the popup
@@ -195,45 +153,76 @@ function Receipts({ actions }: { readonly actions: BlockerActions }) {
   );
 }
 
+const ISO_TIME = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/;
+
+/** A usage-limit reason carries the reset as an ISO time; the reader gets their local clock. */
+const localizedReason = (blocker: Blocker, now: number) =>
+  blocker.kind === "usage-limit" && blocker.reason
+    ? blocker.reason.replace(ISO_TIME, (iso) => formatClock(iso, now))
+    : blocker.reason;
+
 /** One red blocker: what blocks (a link), why, and its own button when it has one. */
-function ThreadBlockerItem({
+function BlockerItem({
   blocker,
+  rowEnvironmentId,
   scopeRootId,
   actions,
+  now,
 }: {
   readonly blocker: Blocker;
-  readonly scopeRootId: ThreadId;
+  readonly rowEnvironmentId: EnvironmentId;
+  readonly scopeRootId: ThreadId | null;
   readonly actions: BlockerActions;
+  readonly now: number;
 }) {
   const { action } = blocker;
+  const environmentId = blocker.target.environmentId ?? rowEnvironmentId;
   const threadId = blocker.target.threadId;
+  const issueUrl = blocker.target.issueUrl;
+  const resumeTarget: ThreadTarget | null =
+    action?.type === "resume-plan" || action?.type === "resume-queue"
+      ? { environmentId, threadId: action.threadId }
+      : null;
   const resume =
-    action?.type === "resume-plan"
-      ? { label: "Resume from plan", run: () => actions.resumeFromPlan(action.threadId) }
-      : action?.type === "resume-queue"
-        ? { label: "Resume queue", run: () => actions.resumeThreadQueue(action.threadId) }
+    resumeTarget && action?.type === "resume-plan"
+      ? { label: "Resume from plan", run: () => actions.resumeFromPlan(resumeTarget) }
+      : resumeTarget && action?.type === "resume-queue"
+        ? { label: "Resume queue", run: () => actions.resumeThreadQueue(resumeTarget) }
         : null;
   const pending =
-    resume && threadId
-      ? actions.pending.has(`${action?.type === "resume-queue" ? "queue" : "plan"}:${threadId}`)
+    resume && resumeTarget
+      ? actions.pending.has(
+          pendingKey(action?.type === "resume-queue" ? "queue" : "plan", resumeTarget),
+        )
       : false;
+  const reason = localizedReason(blocker, now);
   return (
     <div className="flex flex-col gap-0.5 py-1" data-testid="blocker-item">
       <div className="flex items-baseline gap-1.5">
         <span className="shrink-0 text-error">{KIND_WORD[blocker.kind]}:</span>
         {threadId ? (
           <span className={LINK_TEXT}>
-            <InlineButton onClick={() => actions.openThread(threadId)}>{blocker.name}</InlineButton>
+            <InlineButton onClick={() => actions.openThread(environmentId, threadId)}>
+              {blocker.name}
+            </InlineButton>
+          </span>
+        ) : issueUrl ? (
+          <span className={LINK_TEXT}>
+            <InlineButton onClick={() => window.open(issueUrl, "_blank", "noopener,noreferrer")}>
+              {blocker.name}
+            </InlineButton>
           </span>
         ) : (
           <span className={`${LINK_TEXT} font-medium`}>{blocker.name}</span>
         )}
-        {blocker.owner && blocker.owner.threadId !== scopeRootId ? (
+        {blocker.owner &&
+        blocker.owner.threadId !== scopeRootId &&
+        blocker.owner.threadId !== threadId ? (
           <span className="shrink-0 text-muted-foreground">in {blocker.owner.name}</span>
         ) : null}
       </div>
-      {blocker.reason ? (
-        <div className="line-clamp-2 break-words text-muted-foreground">{blocker.reason}</div>
+      {reason ? (
+        <div className="line-clamp-2 break-words text-muted-foreground">{reason}</div>
       ) : null}
       {resume ? (
         <div>
@@ -253,92 +242,137 @@ function ThreadBlockerItem({
 }
 
 /**
- * The red popover: each blocked or stopped thread under the row by name with its reason, one
- * button per resumable one, and one "Settle N" for the failed retries together. Derived from the
- * shells the sidebar already holds, so opening it costs no request.
+ * A blocker on another environment is derived with the row's permissions; its action runs there, so
+ * it needs that server's capability. The operate scope is the server's to refuse, with a typed reason.
  */
-function ThreadBlockerList({
-  environmentId,
-  rootId,
-  actions,
+function useRemoteGate(rowEnvironmentId: EnvironmentId) {
+  const configs = useServerConfigs();
+  return (blocker: Blocker): Blocker => {
+    const environmentId = blocker.target.environmentId ?? rowEnvironmentId;
+    const { action } = blocker;
+    if (environmentId === rowEnvironmentId || action === null) return blocker;
+    const capabilities = configs.get(environmentId)?.environment.capabilities;
+    const supported =
+      action.type === "settle"
+        ? capabilities?.threadSettlement === true
+        : action.type === "resume-plan"
+          ? capabilities?.threadResumeFromPlan === true
+          : true;
+    return supported
+      ? blocker
+      : { ...blocker, action: null, actionReason: "This server does not support this action." };
+  };
+}
+
+/**
+ * The red popover body: every blocker by name with its reason and its own button when it has one.
+ * Nothing is folded away, so the one "Settle N" acts on exactly the N entries listed below it (the
+ * popup scrolls when the list is long). Heads and BLOCKED-only workers carry no Settle. The
+ * receipts and their Undo live in this popup, so they end when it closes.
+ */
+export function BlockerList({
+  blockers: derived,
+  rowEnvironmentId,
+  scopeRootId,
+  emptyText = "No thread is blocked",
+  children,
 }: {
-  readonly environmentId: EnvironmentId;
-  readonly rootId: ThreadId;
-  readonly actions: BlockerActions;
+  readonly blockers: ReadonlyArray<Blocker>;
+  readonly rowEnvironmentId: EnvironmentId;
+  readonly scopeRootId: ThreadId | null;
+  readonly emptyText?: string;
+  /** Extra links under the list (a task's "Open task"). */
+  readonly children?: ReactNode;
 }) {
-  const shells = useOrchestratorThreadShells();
-  const permissions = useBlockerPermissions(environmentId);
-  const [now] = useState(() => new Date().toISOString());
-  const blockers = useMemo(
-    () =>
-      threadBlockers(
-        shells.filter((shell) => shell.environmentId === environmentId),
-        rootId,
-        { ...permissions, now },
-      ),
-    [shells, environmentId, rootId, permissions, now],
-  );
-  const [expanded, setExpanded] = useState(false);
-  const shown = expanded ? blockers : blockers.slice(0, SHOWN_FIRST);
-  const settleIds = blockers.flatMap((blocker) =>
-    blocker.action?.type === "settle" ? blocker.action.threadIds : [],
+  const actions = useBlockerActions();
+  const gate = useRemoteGate(rowEnvironmentId);
+  const blockers = derived.map(gate);
+  const [now] = useState(() => Date.now());
+  const settleTargets: ThreadTarget[] = blockers.flatMap((blocker) =>
+    blocker.action?.type === "settle"
+      ? blocker.action.threadIds.map((threadId) => ({
+          environmentId: blocker.target.environmentId ?? rowEnvironmentId,
+          threadId,
+        }))
+      : [],
   );
   const settling = actions.pending.has("settle");
   return (
     <>
       <div className="font-medium">
-        {blockers.length === 0 ? "No thread is blocked" : blockerHeadline(blockers)}
+        {blockers.length === 0 ? emptyText : blockerHeadline(blockers)}
       </div>
-      {shown.map((blocker) => (
-        <ThreadBlockerItem
-          key={blocker.key}
-          blocker={blocker}
-          scopeRootId={rootId}
-          actions={actions}
-        />
-      ))}
-      {!expanded && blockers.length > SHOWN_FIRST ? (
-        <div>
-          <InlineButton tone="muted" onClick={() => setExpanded(true)}>
-            and {blockers.length - SHOWN_FIRST} more
-          </InlineButton>
-        </div>
-      ) : null}
-      {settleIds.length > 0 ? (
+      {settleTargets.length > 0 ? (
         <div>
           <Button
             size="xs"
             variant="outline"
             disabled={settling}
-            onClick={() => void actions.settleThreads(settleIds)}
+            onClick={() => void actions.settleThreads(settleTargets)}
           >
-            {settling ? "Settling" : `Settle ${settleIds.length}`}
+            {settling ? "Settling" : `Settle ${settleTargets.length}`}
           </Button>
         </div>
       ) : null}
       <Receipts actions={actions} />
+      {blockers.map((blocker) => (
+        <BlockerItem
+          key={blocker.key}
+          blocker={blocker}
+          rowEnvironmentId={rowEnvironmentId}
+          scopeRootId={scopeRootId}
+          actions={actions}
+          now={now}
+        />
+      ))}
+      {children}
     </>
   );
 }
 
+/** The popup body of a row's badge: the page's own list, else the summary's exact blocker set. */
+function RowBlockers({
+  summary,
+  blockers,
+}: {
+  readonly summary: OrchestratorSummary;
+  readonly blockers: ReadonlyArray<Blocker> | undefined;
+}) {
+  const environmentId = summary.root.environmentId;
+  const permissions = useBlockerPermissions(environmentId);
+  const [now] = useState(() => new Date().toISOString());
+  const derived = useMemo(
+    () => blockers ?? blockerSet(summary, { ...permissions, now }),
+    [blockers, summary, permissions, now],
+  );
+  return (
+    <BlockerList
+      blockers={derived}
+      rowEnvironmentId={environmentId}
+      scopeRootId={summary.root.id}
+    />
+  );
+}
+
 /**
- * The red "Blocked" on a row: opens the failed or held threads under it by name, with the one
- * action that clears each. Stays mounted so a Settle's receipt and Undo outlive the row's push.
+ * The red "Blocked" on a row: opens the failed, stopped or held threads under it by name, with the
+ * one action that clears each. The badge's count and its list are one set (`blockerSet`, or the
+ * page's `blockers` when it adds task causes), so they cannot disagree.
  */
 export function BlockedBadge({
-  environmentId,
-  rootId,
+  summary,
+  blockers,
   active,
   label = "Blocked",
   className,
 }: {
-  readonly environmentId: EnvironmentId;
-  readonly rootId: ThreadId;
+  readonly summary: OrchestratorSummary;
+  /** The page's own list (`projectBlockerSet`), when its count must include task causes. */
+  readonly blockers?: ReadonlyArray<Blocker> | undefined;
   readonly active: boolean;
   readonly label?: string;
   readonly className?: string;
 }) {
-  const actions = useBlockerActions(environmentId);
   const [open, setOpen] = useState(false);
   return (
     <BadgeShell
@@ -351,7 +385,7 @@ export function BlockedBadge({
       settledLabel="Cleared"
       active={active}
     >
-      <ThreadBlockerList environmentId={environmentId} rootId={rootId} actions={actions} />
+      <RowBlockers summary={summary} blockers={blockers} />
     </BadgeShell>
   );
 }
@@ -390,16 +424,20 @@ export function blockerOfRow(row: DecisionRow): Blocker {
   };
 }
 
-/** Rebuilds the Decisions row a snapshot attention belongs to, keyed as the Dashboard keys it. */
+/**
+ * Rebuilds the Decisions row an attention belongs to, keyed as the Dashboard keys it. A live ask
+ * the stored copy never had (navigation-only) belongs to the project its owner heads.
+ */
 function rowFor(
   snapshot: Pick<DashboardSnapshot, "projects">,
   environmentId: EnvironmentId,
   blocker: Blocker,
 ): DecisionRow | null {
   const attention = blocker.attention;
-  const project = snapshot.projects.find((candidate) =>
-    candidate.attention.some((entry) => entry.id === blocker.key),
-  );
+  const project =
+    snapshot.projects.find((candidate) =>
+      candidate.attention.some((entry) => entry.id === blocker.key),
+    ) ?? snapshot.projects.find((candidate) => candidate.rootThreadId === blocker.owner?.threadId);
   if (!attention || !project) return null;
   const key = `${environmentId}:${project.id}`;
   return { key: `${key}|${attention.id}`, scoped: { key, environmentId, project }, attention };
@@ -408,11 +446,14 @@ function rowFor(
 function WaitingItem({
   row,
   blocker,
+  scopeRootId,
   answers,
   onOpen,
 }: {
   readonly row: DecisionRow;
   readonly blocker: Blocker;
+  /** The row the popover decorates; an item from a project beneath it names that project. */
+  readonly scopeRootId: ThreadId | null;
   readonly answers: DecisionAnswers | null;
   readonly onOpen: () => void;
 }) {
@@ -421,8 +462,9 @@ function WaitingItem({
   if (answers && state) return <DecisionReceipt row={row} state={state} answers={answers} />;
   const { attention } = row;
   const summary = cardSummary(attention);
+  const answerable = answers !== null && blocker.action?.type === "answer";
   const links =
-    plan.mode === "questions" || plan.mode === "approval" ? null : (
+    answerable && (plan.mode === "questions" || plan.mode === "approval") ? null : (
       <InlineButton tone="muted" onClick={onOpen}>
         Open
       </InlineButton>
@@ -434,11 +476,14 @@ function WaitingItem({
         <span className={LINK_TEXT}>
           <InlineButton onClick={onOpen}>{attention.title}</InlineButton>
         </span>
+        {blocker.owner && scopeRootId && blocker.owner.threadId !== scopeRootId ? (
+          <span className="shrink-0 text-muted-foreground">in {blocker.owner.name}</span>
+        ) : null}
       </div>
       {summary ? (
         <div className="line-clamp-2 break-words text-muted-foreground">{lead(summary)}</div>
       ) : null}
-      {answers && blocker.action?.type === "answer" ? (
+      {answerable ? (
         <DecisionAnswerArea row={row} plan={plan} answers={answers} compact>
           {links}
         </DecisionAnswerArea>
@@ -465,6 +510,7 @@ export function WaitingList({
   asOf,
   stored,
   openItem,
+  scopeRootId = null,
 }: {
   readonly entries: ReadonlyArray<{ readonly row: DecisionRow; readonly blocker: Blocker }>;
   readonly headline: string;
@@ -472,6 +518,7 @@ export function WaitingList({
   /** True when the list comes from the copy stored on this device. */
   readonly stored: boolean;
   readonly openItem: (row: DecisionRow) => void;
+  readonly scopeRootId?: ThreadId | null;
 }) {
   const host = useAnswersHost();
   const answers = host?.answers ?? null;
@@ -500,6 +547,7 @@ export function WaitingList({
           key={row.key}
           row={row}
           blocker={blocker}
+          scopeRootId={scopeRootId}
           answers={answers}
           onOpen={() => openItem(row)}
         />
@@ -525,24 +573,62 @@ export function WaitingList({
   );
 }
 
+/** Every thread a row stands for, subprojects included, so a live ask finds its project. */
+function rowShells(summary: OrchestratorSummary): OrchestratorSummary["descendants"] {
+  return [summary.root, ...summary.descendants, ...summary.subprojects.flatMap(rowShells)];
+}
+
+/** The project a row's root heads, for a row the snapshot does not have (yet). */
+function minimalProject(summary: OrchestratorSummary, parentId: string | null): DashboardProject {
+  return {
+    id: `thread:${summary.root.id}`,
+    rootThreadId: summary.root.id,
+    parentId,
+    title: summary.root.title,
+    utility: false,
+    omittedTaskCount: 0,
+    workstreams: [],
+    tasks: [],
+    attention: [],
+    sourceIds: [],
+  };
+}
+
+/**
+ * The snapshot with a project added for every row of `summary` it lacks, so a live ask in a
+ * thread the snapshot never heard of is still listed with its row rather than shown as a bare count.
+ */
+function withRowProjects(
+  snapshot: Pick<DashboardSnapshot, "projects" | "asOf"> | null,
+  summary: OrchestratorSummary,
+): Pick<DashboardSnapshot, "projects" | "asOf"> {
+  const projects = [...(snapshot?.projects ?? [])];
+  const add = (row: OrchestratorSummary, parentId: string | null) => {
+    const existing = projects.find((project) => project.rootThreadId === row.root.id);
+    const id = existing ? existing.id : minimalProject(row, parentId).id;
+    if (!existing) projects.push(minimalProject(row, parentId));
+    for (const sub of row.subprojects) add(sub, id);
+  };
+  add(summary, null);
+  return { projects, asOf: snapshot?.asOf ?? new Date(0).toISOString() };
+}
+
 /**
  * The amber "Waiting on Brad" for a row of the sidebar or a project list: the tracker items and
- * thread asks under `rootId`, from the Dashboard snapshot a mounted Dashboard holds, else the copy
- * stored on this device (labelled "as of" in the popover). The count and the list read the same
- * entries, so they always agree; a snapshot that has nothing falls back to the thread-level count
- * the shells carry, plain and without a list.
+ * thread asks under the row, from the Dashboard snapshot a mounted Dashboard holds, else the copy
+ * stored on this device (labelled "as of" in the popover), unioned with the asks the live thread
+ * shells carry now. The count and the list read the same entries, so they always agree; with
+ * nothing listed it falls back to the thread-level count the shells carry, plain and without a list.
  */
 export function WaitingBadge({
-  environmentId,
-  rootId,
+  summary,
   fallbackCount,
   openItem,
   className,
   compactLabel = false,
 }: {
-  readonly environmentId: EnvironmentId;
-  readonly rootId: ThreadId;
-  /** The thread-level asks the shells count, used until a snapshot exists. */
+  readonly summary: OrchestratorSummary;
+  /** The thread-level asks the shells count, used when no item can be listed. */
   readonly fallbackCount: number;
   /** Where a click on an item's name goes; the default opens its issue or thread. */
   readonly openItem?: (row: DecisionRow) => void;
@@ -550,45 +636,56 @@ export function WaitingBadge({
   /** Shortens "Waiting on Brad 12" to "12" below the row's container width. */
   readonly compactLabel?: boolean;
 }) {
+  const environmentId = summary.root.environmentId;
+  const rootId = summary.root.id;
   const openDefault = useOpenDecisionRow();
   const { snapshot, stored } = useBlockerSnapshot(environmentId);
   const canOperate = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
   const live = useLiveRuntimeRequests();
   const view = useMemo(() => {
-    if (!snapshot) return null;
-    const result = attentionBlockers(snapshot, rootId, { stored, canOperate });
-    const blockers = result.blockers.filter(
-      (blocker) =>
-        blocker.attention &&
-        liveAttention(environmentId, [blocker.attention], live, stored ? "cached" : "live").length >
-          0,
-    );
-    const entries = blockers.flatMap((blocker) => {
-      const row = rowFor(snapshot, environmentId, blocker);
+    const scoped = withRowProjects(snapshot, summary);
+    const result = attentionBlockers(scoped, rootId, {
+      stored,
+      canOperate,
+      live,
+      shells: rowShells(summary),
+      environmentId,
+    });
+    const entries = result.blockers.flatMap((blocker) => {
+      const row = rowFor(scoped, environmentId, blocker);
       return row ? [{ row, blocker }] : [];
     });
-    return { entries, headline: blockerHeadline(blockers), asOf: result.asOf };
-  }, [snapshot, stored, canOperate, live, environmentId, rootId]);
-  const count = view?.entries.length ?? 0;
+    return {
+      entries,
+      headline: blockerHeadline(entries.map(({ blocker }) => blocker)),
+      asOf: snapshot ? result.asOf : null,
+    };
+  }, [snapshot, stored, canOperate, live, environmentId, rootId, summary]);
+  const count = view.entries.length;
   const host = useAnswersHost();
   const report = host?.report;
   const owner = `${environmentId}:${rootId}`;
-  const liveKeys = view?.entries.map(({ row }) => row.key).join("\n") ?? "";
+  const liveKeys = view.entries.map(({ row }) => row.key).join("\n");
   // The keys this row lists, so a delivered answer stays answered while the snapshot still lags.
   useEffect(() => {
     report?.(owner, new Set(liveKeys ? liveKeys.split("\n") : []));
     return () => report?.(owner, null);
   }, [report, owner, liveKeys]);
   const [open, setOpen] = useState(false);
+  const [renderedAt] = useState(() => Date.now());
   if (count === 0 && !open)
     return fallbackCount > 0 ? (
       <span className={cn("shrink-0 tabular-nums text-warning-foreground", className)}>
         {fallbackCount}
       </span>
     ) : null;
+  // A device-stored copy can be a day old: its count reads muted with its age in the label, unless a
+  // live ask (which the shells vouch for now) is among the items.
+  const stale =
+    stored && view.asOf !== null && !view.entries.some(({ row }) => row.attention.requestId);
   return (
     <BadgeShell
-      tone="amber"
+      tone={stale ? "muted" : "amber"}
       label={
         <>
           <span className={compactLabel ? "hidden @min-[22rem]/row:inline" : undefined}>
@@ -597,7 +694,7 @@ export function WaitingBadge({
           <span className="tabular-nums">{count}</span>
         </>
       }
-      ariaLabel={`Waiting on Brad, ${count}: the list and its answers`}
+      ariaLabel={`Waiting on Brad, ${count}${stale && view.asOf ? `, as of ${formatClock(view.asOf, renderedAt)}` : ""}: the list and its answers`}
       className={className}
       settledLabel="Answered"
       active={count > 0}
@@ -605,11 +702,12 @@ export function WaitingBadge({
       onOpenChange={setOpen}
     >
       <WaitingList
-        entries={view?.entries ?? []}
-        headline={view && count > 0 ? view.headline : "Waiting on Brad: nothing"}
-        asOf={view?.asOf ?? null}
+        entries={view.entries}
+        headline={count > 0 ? view.headline : "Waiting on Brad: nothing"}
+        asOf={view.asOf}
         stored={stored}
         openItem={openItem ?? openDefault}
+        scopeRootId={rootId}
       />
     </BadgeShell>
   );

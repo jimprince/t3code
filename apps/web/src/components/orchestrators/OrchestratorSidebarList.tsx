@@ -58,7 +58,8 @@ import { formatRelativeTimeLabel } from "../../timestampFormat";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { useUiStateStore } from "../../uiStateStore";
 import { ProjectFavicon } from "../ProjectFavicon";
-import { BlockedBadge, BlockerAnswersProvider, WaitingBadge } from "../blockers/BlockerBadge";
+import { BlockerAnswersProvider } from "../blockers/BlockerAnswers";
+import { BlockedBadge, WaitingBadge } from "../blockers/BlockerBadge";
 import { toastManager } from "../ui/toast";
 import { OrchestratorStatus } from "./OrchestratorStatus";
 import { SettledSubprojectsToggle, TaskFraction } from "./TaskFraction";
@@ -299,17 +300,8 @@ function SubprojectRow({
           />
           <span className="min-w-0 flex-1 truncate">{sub.root.title}</span>
           {purposeTag !== null ? <span className="shrink-0">{purposeTag}</span> : null}
-          <BlockedBadge
-            environmentId={sub.root.environmentId}
-            rootId={sub.root.id}
-            active={rollup.blocked > 0}
-          />
-          <WaitingBadge
-            environmentId={sub.root.environmentId}
-            rootId={sub.root.id}
-            fallbackCount={rollup.needsYou}
-            compactLabel
-          />
+          <BlockedBadge summary={sub} active={rollup.blocked > 0} />
+          <WaitingBadge summary={sub} fallbackCount={rollup.needsYou} compactLabel />
           <TaskFraction summary={sub} onActivate={openSubproject} />
           <span className="shrink-0 tabular-nums">
             {formatRelativeTimeLabel(rollup.latestActivityAt)}
@@ -457,12 +449,8 @@ function ProjectRow({
         <span className="flex min-w-0 w-full items-center gap-2 text-xs">
           <OrchestratorStatus status={summary.status} />
           <span className="ml-auto inline-flex items-center gap-2 text-sidebar-muted-foreground">
-            <WaitingBadge
-              environmentId={summary.root.environmentId}
-              rootId={summary.root.id}
-              fallbackCount={rollup.needsYou}
-              compactLabel
-            />
+            <BlockedBadge summary={summary} active={rollup.blocked > 0} />
+            <WaitingBadge summary={summary} fallbackCount={rollup.needsYou} compactLabel />
             {rollup.working > 0 ? (
               <span className="inline-flex items-center gap-1">
                 <UsersIcon className="size-3.5" />

@@ -3,7 +3,7 @@ import {
   liveRuntimeRequests,
   type LiveRuntimeRequests,
 } from "@t3tools/client-runtime/dashboard/live";
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { DashboardAttention, EnvironmentId } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
 import { useMemo } from "react";
 
@@ -11,9 +11,9 @@ import { useEnvironments } from "./environments";
 import { environmentSnapshotAtom } from "./shell";
 
 /**
- * The live threads that have a pending runtime request, per connected environment, as one string, so a
- * subscriber re-renders only when a request appears or resolves, not on each of the shell updates
- * a running agent makes. Keyed by the sorted environment ids, like the Dashboard's own snapshots.
+ * The live threads that have a pending runtime request, and the navigation-only asks they stand for,
+ * per connected environment, as one string, so a subscriber re-renders only when a request appears or
+ * resolves, not on each of the shell updates a running agent makes. Keyed by the sorted environment ids, like the Dashboard's own snapshots.
  */
 const liveRuntimeRequestsAtom = Atom.family((key: string) =>
   Atom.make((get) => {
@@ -26,7 +26,11 @@ const liveRuntimeRequestsAtom = Atom.family((key: string) =>
           threads: get(environmentSnapshotAtom(environmentId as EnvironmentId))?.threads ?? null,
         })),
     );
-    return JSON.stringify({ environments: [...live.environments], threads: [...live.threads] });
+    return JSON.stringify({
+      environments: [...live.environments],
+      threads: [...live.threads],
+      attention: [...(live.attention ?? [])],
+    });
   }).pipe(Atom.setIdleTTL(0)),
 );
 
@@ -46,7 +50,15 @@ export function useLiveRuntimeRequests(): LiveRuntimeRequests {
   );
   const key = useAtomValue(liveRuntimeRequestsAtom(ids));
   return useMemo(() => {
-    const parsed = JSON.parse(key) as { environments: string[]; threads: string[] };
-    return { environments: new Set(parsed.environments), threads: new Set(parsed.threads) };
+    const parsed = JSON.parse(key) as {
+      environments: string[];
+      threads: string[];
+      attention: Array<[string, DashboardAttention[]]>;
+    };
+    return {
+      environments: new Set(parsed.environments),
+      threads: new Set(parsed.threads),
+      attention: new Map(parsed.attention),
+    };
   }, [key]);
 }

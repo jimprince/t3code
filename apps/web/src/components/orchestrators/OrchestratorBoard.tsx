@@ -25,7 +25,7 @@ import {
   type ThreadId,
   withoutRetiredWidgets,
 } from "@t3tools/contracts";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import * as Schema from "effect/Schema";
 import {
   ArrowUpRightIcon,
@@ -67,13 +67,15 @@ import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { OrchestratorStatus } from "./OrchestratorStatus";
 import { useOrchestratorThreadShells } from "./useOrchestratorThreads";
 import { readOrchestratorLastVisit, recordOrchestratorVisit } from "./orchestratorVisit";
-import { BlockedBadge, BlockerAnswersProvider, WaitingBadge } from "../blockers/BlockerBadge";
+import { BlockerAnswersProvider } from "../blockers/BlockerAnswers";
+import { WaitingBadge, BlockedBadge } from "../blockers/BlockerBadge";
 import { DashboardView } from "../dashboard-v3/DashboardView";
 import { NEXT_CANVAS_ID, NextCanvas } from "../dashboard-v3/nextCanvas";
 import { ProjectAutomationsSlot } from "../projects/ProjectAutomationsSlot";
 import { ProjectDecisionFeed, useDecisionFeedCount } from "./ProjectDecisionFeed";
 import { ProjectIssuesBoard } from "./ProjectIssuesBoard";
 import { ProjectTaskPanel } from "./ProjectTaskPanel";
+import { ProjectBlockedCount } from "./ProjectBlockedCount";
 import { OpenTaskContext } from "./TaskLink";
 import { TeamStrip, useWorkstreamBands, WorkstreamBands } from "./WorkstreamBands";
 import type { TaskRef } from "./taskView.logic";
@@ -94,7 +96,6 @@ import { ProjectSection } from "./ProjectSection";
 import { ProjectIssuesSummary, ProjectRoadmapSummary } from "./ProjectTabSummaries";
 import { resolveProjectTab, type ProjectTab } from "./projectTabs.logic";
 import { HEALTH_LABEL, isHealthStale, latestWorkChangeAt } from "./projectHealth.logic";
-import { deriveBlocked, type BlockedRow } from "./projectWork.logic";
 import { projectReturnState } from "./projectNavigation";
 import { threadPurposes } from "@t3tools/client-runtime/state/thread-purpose";
 import {
@@ -102,7 +103,6 @@ import {
   projectSubagentRows,
   projectTrail,
   splitSettledSubagents,
-  subprojectBlocked,
   subprojectIsActive,
   subprojectNeedsYou,
 } from "@t3tools/client-runtime/state/projectSubprojects";
@@ -273,39 +273,8 @@ function NeedsYouCount({ summary }: { readonly summary: OrchestratorSummary }) {
   );
 }
 
-/** What is stuck on the project, derived from threads and tasks; the same rows feed the widget and the status line. */
 /** Without a recorded visit, "since your last visit" means the last day. */
 const FIRST_VISIT_WINDOW_MS = 24 * 60 * 60 * 1000;
-
-function useBlockedRows(summary: OrchestratorSummary): BlockedRow[] {
-  const { statuses, query } = useTaskStatuses(summary);
-  const now = query.dataUpdatedAt ?? 0;
-  return useMemo(
-    () =>
-      deriveBlocked({
-        blockedWorkers: summary.blocked,
-        issues: query.data?.issues ?? [],
-        statuses,
-        threads: [summary.root, ...summary.descendants],
-        rootThreadId: summary.root.id,
-        now,
-      }),
-    [now, query.data, statuses, summary.blocked, summary.descendants, summary.root],
-  );
-}
-
-/** "N blocked" in the status line: the blocked tags and notes under Workstreams, counted, plus blocked threads inside subprojects. */
-function BlockedCount({ summary }: { readonly summary: OrchestratorSummary }) {
-  const count = useBlockedRows(summary).length + subprojectBlocked(summary);
-  return (
-    <BlockedBadge
-      environmentId={summary.root.environmentId}
-      rootId={summary.root.id}
-      active={count > 0}
-      label={`${count} blocked`}
-    />
-  );
-}
 
 /** A subproject's health chip and sentence, from its own page data. */
 function SubprojectHealth({ summary }: { readonly summary: OrchestratorSummary }) {
@@ -496,16 +465,8 @@ function SubprojectTableRow({ sub }: { readonly sub: OrchestratorSummary }) {
       </span>
       <span className={`${SUBPROJECT_COLUMN.working} text-muted-foreground`}>{working}</span>
       <span className={SUBPROJECT_COLUMN.needsYou}>
-        <BlockedBadge
-          environmentId={sub.root.environmentId}
-          rootId={sub.root.id}
-          active={blocked}
-        />{" "}
-        <WaitingBadge
-          environmentId={sub.root.environmentId}
-          rootId={sub.root.id}
-          fallbackCount={sub.rollup.needsYou}
-        />
+        <BlockedBadge summary={sub} active={blocked} />{" "}
+        <WaitingBadge summary={sub} fallbackCount={sub.rollup.needsYou} />
       </span>
       <span className={`${SUBPROJECT_COLUMN.activity} text-xs text-muted-foreground`}>
         {formatRelativeTimeLabel(sub.rollup.latestActivityAt)}
@@ -1005,13 +966,9 @@ export function OrchestratorBoard({
               <WorkspaceBreadcrumb ariaLabel="Project breadcrumb">
                 {newDashboard ? (
                   <WorkspaceBreadcrumbItem className="shrink-0">
-                    <button
-                      type="button"
-                      className="cursor-pointer hover:text-foreground hover:underline"
-                      onClick={() => void navigate({ to: "/dashboard" })}
-                    >
+                    <Link to="/dashboard" className="hover:text-foreground hover:underline">
                       Home
-                    </button>
+                    </Link>
                     <span aria-hidden className="pl-2 sm:pl-3">
                       /
                     </span>
@@ -1088,7 +1045,7 @@ export function OrchestratorBoard({
                           </span>
                         ) : null}
                         <NeedsYouCount summary={summary} />
-                        <BlockedCount summary={summary} />
+                        <ProjectBlockedCount summary={summary} />
                         <span className="text-xs text-muted-foreground">
                           {summary.projects.map((project) => project.title).join(" · ")}
                         </span>

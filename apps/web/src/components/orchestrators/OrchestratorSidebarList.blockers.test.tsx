@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import { makeThreadFixture } from "../../test-fixtures";
 import projection from "../blockers/fixtures/blockersProjection.json";
+import { RECEIPT_MS } from "../blockers/useBlockerActions";
 
 const mocks = vi.hoisted(() => ({
   shells: [] as ReadonlyArray<unknown>,
@@ -22,6 +23,11 @@ const mocks = vi.hoisted(() => ({
   resumeQueue: vi.fn(),
   resumePlan: vi.fn(),
   navigate: vi.fn(),
+  live: {
+    environments: new Set<string>(),
+    threads: new Set<string>(),
+    attention: new Map<string, ReadonlyArray<unknown>>(),
+  },
 }));
 
 // Only the network and storage boundaries are replaced. The sidebar list, its rows, the badges, the
@@ -63,7 +69,7 @@ vi.mock("../../state/session", async (importOriginal) => ({
   useEnvironmentScope: () => mocks.operate,
 }));
 vi.mock("../../state/liveRuntimeRequests", () => ({
-  useLiveRuntimeRequests: () => ({ environments: new Set<string>(), threads: new Set<string>() }),
+  useLiveRuntimeRequests: () => mocks.live,
 }));
 vi.mock("../../state/threadLinks", () => ({
   resolveThreadLinkTarget: (environmentId: string, threadId: string) => ({
@@ -206,6 +212,7 @@ beforeEach(() => {
   window.localStorage.clear();
   mocks.operate = true;
   mocks.stored = false;
+  mocks.live = { environments: new Set(), threads: new Set(), attention: new Map() };
   mocks.snapshot = decode(projection);
   mocks.shells = tree(failedRetry(1), failedRetry(2), failedRetry(3));
   mocks.decide.mockResolvedValue(success({ notifiedThreadId: null, commentUrl: "http://git/c1" }));
@@ -413,5 +420,173 @@ describe("Waiting on Brad badge on a sidebar subproject row", () => {
     mocks.shells = tree();
     await render();
     expect(badge("Dashboard", "Waiting on Brad")).toBeNull();
+  });
+});
+
+describe("Blocked badge: the list is the set it acts on", () => {
+  const retries = (count: number) =>
+    Array.from({ length: count }, (_, index) => failedRetry(index + 1));
+
+  it("lists all five failed retries and Settle 5 settles exactly those, Undo restores exactly those", async () => {
+    mocks.shells = tree(...retries(5));
+    await render();
+    await open("Dashboard", "Blocked");
+    // Nothing is folded behind "and N more": every thread the button will settle is on screen.
+    expect(popup()!.querySelectorAll('[data-testid="blocker-item"]')).toHaveLength(5);
+    expect(popup()!.textContent).not.toContain("and 2 more");
+    for (const n of [1, 2, 3, 4, 5])
+      expect(popup()!.textContent).toContain(`v3-next-retired-r${n}`);
+
+    await act(async () => button("Settle 5").click());
+    const ids = ["retry-r1", "retry-r2", "retry-r3", "retry-r4", "retry-r5"];
+    expect(mocks.settle.mock.calls.map(([call]) => call.input.threadId)).toEqual(ids);
+    await act(async () => button("Undo").click());
+    expect(mocks.unsettle.mock.calls.map(([call]) => call.input.threadId)).toEqual(ids);
+  });
+
+  it("never settles a project head: a failed head is listed with its reason and left out of Settle N", async () => {
+    mocks.shells = tree(...retries(2)).map((shell) =>
+      shell.id === "dashboard-head"
+        ? {
+            ...shell,
+            ...thread("dashboard-head", "Dashboard", { source: { status: "failed" } }),
+            parentThreadId: ThreadId.make("product-head"),
+            subproject: "on" as const,
+          }
+        : shell,
+    );
+    await render();
+    await open("Product", "Blocked");
+    expect(popup()!.textContent).toContain("Project heads cannot be settled here");
+    expect(button("Settle 2")).toBeDefined();
+    await act(async () => button("Settle 2").click());
+    expect(mocks.settle.mock.calls.map(([call]) => call.input.threadId)).toEqual([
+      "retry-r1",
+      "retry-r2",
+    ]);
+  });
+
+  it("drops the receipt and its Undo when the popover closes, so a later blocked row never shows them", async () => {
+    await render();
+    await open("Dashboard", "Blocked");
+    await act(async () => button("Settle 3").click());
+    expect(popup()!.textContent).toContain("Settled 3");
+    await act(async () => badge("Dashboard", "Blocked")!.click());
+    expect(popup()).toBeNull();
+    // The row turns blocked again later; opening it must not offer to unsettle the old retries.
+    await render();
+    await open("Dashboard", "Blocked");
+    expect(popup()!.textContent).not.toContain("Settled 3");
+    expect(popup()!.textContent).not.toContain("Undo");
+  });
+
+  it("expires a receipt that stays open for a minute", async () => {
+    await render();
+    await open("Dashboard", "Blocked");
+    await act(async () => button("Settle 3").click());
+    expect(popup()!.textContent).toContain("Undo");
+    await act(async () => void (await vi.advanceTimersByTimeAsync(RECEIPT_MS + 50)));
+    expect(popup()!.textContent).not.toContain("Undo");
+    expect(popup()!.textContent).not.toContain("Settled 3");
+  });
+
+  it("shows a usage-limit reset on the reader's clock, not as an ISO string", async () => {
+    const reset = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString();
+    mocks.shells = tree(
+      thread("limited", "Limited lane", {
+        parent: "dashboard-head",
+        source: {
+          status: "failed",
+          latestRunId: "run-9",
+          lastError: "Usage limit reached",
+          lastErrorClass: "usage_limit",
+          usageLimitResetAt: reset,
+        },
+      }),
+    );
+    await render();
+    await open("Dashboard", "Blocked");
+    expect(popup()!.textContent).toContain("Usage limit, resets ");
+    expect(popup()!.textContent).not.toContain(reset);
+    expect(popup()!.textContent).toContain("Wait for the usage limit to reset");
+  });
+
+  it("puts a Blocked badge on the top-level project card for a failed worker under it", async () => {
+    mocks.shells = [
+      thread("head", "T3 Orchestrator"),
+      thread("worker", "Direct retry", {
+        parent: "head",
+        source: { status: "failed", latestRunId: "run-3", lastError: "Model at capacity" },
+      }),
+    ];
+    await render();
+    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label^="Blocked"]');
+    expect(trigger).not.toBeNull();
+    await act(async () => trigger!.click());
+    expect(popup()!.textContent).toContain("Direct retry");
+    expect(popup()!.textContent).toContain("Model at capacity");
+  });
+});
+
+describe("Waiting on Brad badge: stored items and live asks together", () => {
+  const liveApproval = {
+    id: "runtime:retry-r1:req-1",
+    taskId: "thread-plan:retry-r1",
+    blockingTaskIds: [] as string[],
+    requestId: "req-1",
+    title: "v3-next-retired-r1",
+    kind: "approval",
+    canRespond: false,
+    options: [] as unknown[],
+    priority: 1,
+    url: null,
+    threadId: "retry-r1",
+    updatedAt: now,
+    deadline: null,
+    question: "Open the thread to respond.",
+    sourceId: "local",
+  };
+  const withLiveApproval = () => {
+    mocks.shells = tree(failedRetry(1));
+    mocks.live = {
+      environments: new Set(["dev"]),
+      threads: new Set(["dev|retry-r1"]),
+      attention: new Map([["dev", [liveApproval]]]),
+    };
+  };
+
+  it("counts a live approval beside the stored tracker items and names the thread", async () => {
+    withLiveApproval();
+    mocks.stored = true;
+    await render();
+    // Dashboard's two stored items plus the approval that blocks a running agent now.
+    expect(badge("Dashboard", "Waiting on Brad")!.textContent).toContain("3");
+    await open("Dashboard", "Waiting on Brad");
+    expect(popup()!.textContent).toContain("v3-next-retired-r1");
+    expect(popup()!.querySelectorAll('[data-testid="blocker-item"]')).toHaveLength(3);
+  });
+
+  it("reads a stored-only count muted with its age in the label, and amber once a live ask is in it", async () => {
+    mocks.stored = true;
+    await render();
+    const stale = badge("Dashboard", "Waiting on Brad")!;
+    expect(stale.className).toContain("text-muted-foreground");
+    expect(stale.getAttribute("aria-label")).toMatch(/, as of /);
+    withLiveApproval();
+    await render();
+    const fresh = badge("Dashboard", "Waiting on Brad")!;
+    expect(fresh.className).toContain("text-warning-foreground");
+    expect(fresh.getAttribute("aria-label")).not.toContain("as of");
+  });
+
+  it("names the project an item comes from when it sits beneath the row", async () => {
+    await render();
+    await open("Product", "Waiting on Brad");
+    await act(async () => button("and 11 more").click());
+    // Product's own twelve say nothing; Dashboard's two name the project they belong to.
+    const owned = [...popup()!.querySelectorAll('[data-testid="blocker-item"]')].filter((item) =>
+      item.textContent?.includes("in Dashboard"),
+    );
+    expect(owned).toHaveLength(2);
   });
 });

@@ -7,7 +7,7 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useServerConfigs, waitForThreadShell } from "../../state/entities";
 import { useEnvironmentScope } from "../../state/session";
@@ -18,7 +18,7 @@ import { useOrchestrationCommand } from "../../state/use-orchestration-command";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { resumeFailureText } from "../dashboard-v3/resumeFromPlan.logic";
 
-/** What an explicit click did, kept in the popover until it closes. */
+/** What an explicit click did, kept in the popover until it closes or `RECEIPT_MS` passes. */
 export interface BlockerReceipt {
   readonly key: string;
   readonly text: string;
@@ -27,12 +27,21 @@ export interface BlockerReceipt {
   readonly open?: () => void;
 }
 
+/** A receipt, and the Undo on it, is gone after this long even if the popover stays open. */
+export const RECEIPT_MS = 60_000;
+
+/** A thread and the environment that holds it; thread ids are only unique within one. */
+export interface ThreadTarget {
+  readonly environmentId: EnvironmentId;
+  readonly threadId: ThreadId;
+}
+
 const failureText = (result: Parameters<typeof squashAtomCommandFailure>[0]) => {
   const error = squashAtomCommandFailure(result);
   return error instanceof Error && error.message ? error.message : "Could not reach the server.";
 };
 
-/** What this connection may do to the blocked threads, as `threadBlockers` takes it. */
+/** What this connection may do to the blocked threads, as the blocker derivation takes it. */
 export function useBlockerPermissions(
   environmentId: EnvironmentId,
 ): Omit<BlockerPermissions, "now"> {
@@ -41,8 +50,8 @@ export function useBlockerPermissions(
   const canSettle = capabilities?.threadSettlement === true;
   const canResumePlan = capabilities?.threadResumeFromPlan === true;
   return useMemo(
-    () => ({ canOperate, canSettle, canResumePlan, canResumeQueue: true }),
-    [canOperate, canSettle, canResumePlan],
+    () => ({ canOperate, canSettle, canResumePlan, canResumeQueue: true, environmentId }),
+    [canOperate, canSettle, canResumePlan, environmentId],
   );
 }
 
@@ -58,13 +67,19 @@ export function useOpenThread() {
   };
 }
 
+/** The key a button's pending state is tracked under. */
+export const pendingKey = (type: "queue" | "plan", target: ThreadTarget) =>
+  `${type}:${target.environmentId}:${target.threadId}`;
+
 /**
  * The state-changing buttons of a Blocked popover. Every one is an explicit click: it shows a
  * pending label, then leaves a receipt (with Undo for a settle, a way into the thread for a
- * resume) that stays until the host closes. Nothing here runs on its own and nothing hides a row;
- * the list changes when the next push says so.
+ * resume). Nothing here runs on its own and nothing hides a row; the list changes when the next
+ * push says so. The hook lives inside the popup, so closing it drops every receipt and Undo; a
+ * receipt also expires after `RECEIPT_MS`. Each call names the environment of the thread it acts
+ * on, since a remote worker can sit under a row of another environment.
  */
-export function useBlockerActions(environmentId: EnvironmentId) {
+export function useBlockerActions() {
   const settle = useOrchestrationCommand(threadEnvironment.settle, { reportFailure: false });
   const unsettle = useOrchestrationCommand(threadEnvironment.unsettle, { reportFailure: false });
   const resumeQueue = useOrchestrationCommand(threadEnvironment.resumeThreadQueue, {
@@ -73,11 +88,16 @@ export function useBlockerActions(environmentId: EnvironmentId) {
   const resumePlan = useOrchestrationCommand(resumeThreadFromPlan, { reportFailure: false });
   const navigate = useNavigate();
   const openThreadIn = useOpenThread();
-  const openThread = (threadId: ThreadId) => openThreadIn(environmentId, threadId);
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
   const [receipts, setReceipts] = useState<ReadonlyArray<BlockerReceipt>>([]);
   // A ref, not `pending`: a second click in the same frame still sees the old state.
   const inFlight = useRef(new Set<string>());
+
+  useEffect(() => {
+    if (receipts.length === 0) return;
+    const timer = setTimeout(() => setReceipts([]), RECEIPT_MS);
+    return () => clearTimeout(timer);
+  }, [receipts]);
 
   const run = async (key: string, work: () => Promise<BlockerReceipt>) => {
     if (inFlight.current.has(key)) return;
@@ -96,36 +116,38 @@ export function useBlockerActions(environmentId: EnvironmentId) {
     }
   };
 
-  const undoSettle = (threadIds: ReadonlyArray<ThreadId>) =>
+  // Undo restores exactly the threads this click settled. It unsettles with reason "user", which
+  // pins a thread active so auto-settle does not take it straight back; a thread that was never
+  // pinned before is therefore pinned after, an accepted difference from a perfect restore.
+  const undoSettle = (targets: ReadonlyArray<ThreadTarget>) =>
     run("settle", async () => {
-      const restored: ThreadId[] = [];
-      for (const threadId of threadIds) {
-        // reason "user" pins the thread active, so auto-settle does not take it straight back.
+      const restored: ThreadTarget[] = [];
+      for (const { environmentId, threadId } of targets) {
         const result = await unsettle({ environmentId, input: { threadId, reason: "user" } });
         if (result._tag !== "Success")
           return {
             key: "settle",
-            text: `Restored ${restored.length} of ${threadIds.length}: ${failureText(result)}`,
+            text: `Restored ${restored.length} of ${targets.length}: ${failureText(result)}`,
             failed: true,
           };
-        restored.push(threadId);
+        restored.push({ environmentId, threadId });
       }
       return { key: "settle", text: `Restored ${restored.length}`, failed: false };
     });
 
-  const settleThreads = (threadIds: ReadonlyArray<ThreadId>) =>
+  const settleThreads = (targets: ReadonlyArray<ThreadTarget>) =>
     run("settle", async () => {
-      const settled: ThreadId[] = [];
-      for (const threadId of threadIds) {
+      const settled: ThreadTarget[] = [];
+      for (const { environmentId, threadId } of targets) {
         const result = await settle({ environmentId, input: { threadId } });
         if (result._tag !== "Success")
           return {
             key: "settle",
-            text: `Settled ${settled.length} of ${threadIds.length}: ${failureText(result)}`,
+            text: `Settled ${settled.length} of ${targets.length}: ${failureText(result)}`,
             failed: true,
             ...(settled.length > 0 ? { undo: () => void undoSettle(settled) } : {}),
           };
-        settled.push(threadId);
+        settled.push({ environmentId, threadId });
       }
       return {
         key: "settle",
@@ -135,31 +157,35 @@ export function useBlockerActions(environmentId: EnvironmentId) {
       };
     });
 
-  const resumeThreadQueue = (threadId: ThreadId) =>
-    run(`queue:${threadId}`, async () => {
-      const result = await resumeQueue({ environmentId, input: { threadId } });
+  const resumeThreadQueue = (target: ThreadTarget) =>
+    run(pendingKey("queue", target), async () => {
+      const key = pendingKey("queue", target);
+      const result = await resumeQueue({
+        environmentId: target.environmentId,
+        input: { threadId: target.threadId },
+      });
       return result._tag === "Success"
         ? {
-            key: `queue:${threadId}`,
+            key,
             text: "Queue resumed",
             failed: false,
-            open: () => openThread(threadId),
+            open: () => openThreadIn(target.environmentId, target.threadId),
           }
-        : { key: `queue:${threadId}`, text: failureText(result), failed: true };
+        : { key, text: failureText(result), failed: true };
     });
 
-  const resumeFromPlan = (threadId: ThreadId) =>
-    run(`plan:${threadId}`, async () => {
-      const result = await resumePlan({ environmentId, input: { threadId } });
+  const resumeFromPlan = (target: ThreadTarget) =>
+    run(pendingKey("plan", target), async () => {
+      const key = pendingKey("plan", target);
+      const result = await resumePlan({
+        environmentId: target.environmentId,
+        input: { threadId: target.threadId },
+      });
       if (result._tag !== "Success")
-        return {
-          key: `plan:${threadId}`,
-          text: resumeFailureText(squashAtomCommandFailure(result)),
-          failed: true,
-        };
-      const ref = scopeThreadRef(environmentId, result.value.newThreadId);
+        return { key, text: resumeFailureText(squashAtomCommandFailure(result)), failed: true };
+      const ref = scopeThreadRef(target.environmentId, result.value.newThreadId);
       return {
-        key: `plan:${threadId}`,
+        key,
         text: "Resumed in a new thread",
         failed: false,
         // The route treats a thread whose shell has not arrived as missing and leaves it.
@@ -174,7 +200,14 @@ export function useBlockerActions(environmentId: EnvironmentId) {
       };
     });
 
-  return { pending, receipts, settleThreads, resumeThreadQueue, resumeFromPlan, openThread };
+  return {
+    pending,
+    receipts,
+    settleThreads,
+    resumeThreadQueue,
+    resumeFromPlan,
+    openThread: openThreadIn,
+  };
 }
 
 export type BlockerActions = ReturnType<typeof useBlockerActions>;

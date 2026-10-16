@@ -3,7 +3,7 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { useNavigate } from "@tanstack/react-router";
 import type { ThreadId } from "@t3tools/contracts";
 import { CheckIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { readThreadShells } from "../../state/entities";
 import { resolveThreadLinkTarget } from "../../state/threadLinks";
@@ -142,6 +142,15 @@ export function DecisionReceipt({
   const navigate = useNavigate();
   const { attention, scoped } = row;
   const told = toldOf(row);
+  // Undo takes focus when a hold starts, unless the answer was given in an open popover and this
+  // receipt is another surface's copy of it: stealing focus there would close the popover.
+  const undoRef = useRef<HTMLButtonElement>(null);
+  const held = state.kind === "held";
+  useEffect(() => {
+    if (!held) return;
+    const popup = document.querySelector('[data-slot="popover-popup"]');
+    if (!popup || popup.contains(undoRef.current)) undoRef.current?.focus();
+  }, [held]);
   const record = state.kind === "record" ? state.record : null;
   const failed = record?.delivery.phase === "failed";
   const landedThread =
@@ -168,7 +177,7 @@ export function DecisionReceipt({
       <div className="flex flex-wrap items-center gap-x-2 pl-5 text-xs text-muted-foreground">
         <span>{text}</span>
         {state.kind === "held" ? (
-          <InlineButton tone="muted" autoFocus onClick={state.undo}>
+          <InlineButton ref={undoRef} tone="muted" onClick={state.undo}>
             Undo
           </InlineButton>
         ) : failed ? (

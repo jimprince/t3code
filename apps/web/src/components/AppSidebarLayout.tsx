@@ -40,6 +40,7 @@ import { MainAppLocationTracker } from "./sidebar/mainAppLocation";
 import { DisconnectedSendFlusher } from "./DisconnectedSendFlusher";
 import { ServerRestartBanner } from "./ServerRestartBanner";
 import { ChiefOfStaffShortcut } from "./cos-tray/ChiefOfStaffShortcut";
+import { BlockerAnswersProvider } from "./blockers/BlockerAnswers";
 import { ChiefOfStaffTray } from "./cos-tray/ChiefOfStaffTray";
 import { useSidebarStageBackdropVariant } from "./SidebarStageBackdrop";
 import { useProjects } from "../state/entities";
@@ -310,56 +311,59 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
 
   return (
     <PanelAnimationSuppressionProvider value={panelAnimationsSuppressed}>
-      <SidebarProvider
-        className="h-dvh! min-h-0!"
-        data-panel-animations={routePanelAnimationsActive ? "true" : "false"}
-        defaultOpen
-        style={{
-          ...sidebarProviderStyle,
-          paddingTop: "var(--server-restart-banner-height, 0px)",
-          // The Chief of Staff peek bar sets this on a phone so it never covers the composer.
-          paddingBottom: "var(--cos-peek-height, 0px)",
-        }}
-      >
-        <SidebarBrandWidthProbe onWidthChange={setBrandWidth} />
-        <ProjectProjectionRetention />
-        <ServerRestartBanner />
-        <DisconnectedSendFlusher />
-        <Sidebar
-          side="left"
-          collapsible="offcanvas"
-          data-app-sidebar=""
-          role="navigation"
-          aria-label={isOnSettings ? "Settings" : "Threads"}
-          resizable={{
-            maxWidth: sidebarMaximumWidth,
-            minWidth: sidebarMinimumWidth,
-            shouldAcceptWidth: ({ currentWidth, nextWidth, wrapper }) =>
-              nextWidth <= currentWidth ||
-              wrapper.clientWidth - nextWidth >= THREAD_MAIN_CONTENT_MIN_WIDTH,
-            storageKey: THREAD_SIDEBAR_WIDTH_STORAGE_KEY,
-            onResize: setSidebarWidth,
+      {/* One answers hook for the sidebar, the pages and the pin: a decision answers once. */}
+      <BlockerAnswersProvider>
+        <SidebarProvider
+          className="h-dvh! min-h-0!"
+          data-panel-animations={routePanelAnimationsActive ? "true" : "false"}
+          defaultOpen
+          style={{
+            ...sidebarProviderStyle,
+            paddingTop: "var(--server-restart-banner-height, 0px)",
+            // The Chief of Staff peek bar sets this on a phone so it never covers the composer.
+            paddingBottom: "var(--cos-peek-height, 0px)",
           }}
         >
-          {isOnSettings ? (
-            <>
-              <SidebarChromeHeader isElectron={isElectron} />
-              <SettingsSidebarNav pathname={pathname} />
-            </>
-          ) : legacySidebarEnabled ? (
-            <LegacyThreadSidebar />
-          ) : (
-            <ThreadSidebar />
-          )}
-          <SidebarRail onDoubleClick={resetSidebarWidth} />
-        </Sidebar>
-        {children}
-        <ChiefOfStaffTray />
-        <ChiefOfStaffShortcut />
-        <SidebarControl />
-        <NavigationHistoryShortcuts />
-        <MainAppLocationTracker />
-      </SidebarProvider>
+          <SidebarBrandWidthProbe onWidthChange={setBrandWidth} />
+          <ProjectProjectionRetention />
+          <ServerRestartBanner />
+          <DisconnectedSendFlusher />
+          <Sidebar
+            side="left"
+            collapsible="offcanvas"
+            data-app-sidebar=""
+            role="navigation"
+            aria-label={isOnSettings ? "Settings" : "Threads"}
+            resizable={{
+              maxWidth: sidebarMaximumWidth,
+              minWidth: sidebarMinimumWidth,
+              shouldAcceptWidth: ({ currentWidth, nextWidth, wrapper }) =>
+                nextWidth <= currentWidth ||
+                wrapper.clientWidth - nextWidth >= THREAD_MAIN_CONTENT_MIN_WIDTH,
+              storageKey: THREAD_SIDEBAR_WIDTH_STORAGE_KEY,
+              onResize: setSidebarWidth,
+            }}
+          >
+            {isOnSettings ? (
+              <>
+                <SidebarChromeHeader isElectron={isElectron} />
+                <SettingsSidebarNav pathname={pathname} />
+              </>
+            ) : legacySidebarEnabled ? (
+              <LegacyThreadSidebar />
+            ) : (
+              <ThreadSidebar />
+            )}
+            <SidebarRail onDoubleClick={resetSidebarWidth} />
+          </Sidebar>
+          {children}
+          <ChiefOfStaffTray />
+          <ChiefOfStaffShortcut />
+          <SidebarControl />
+          <NavigationHistoryShortcuts />
+          <MainAppLocationTracker />
+        </SidebarProvider>
+      </BlockerAnswersProvider>
     </PanelAnimationSuppressionProvider>
   );
 }

@@ -4,13 +4,13 @@ import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { useDashboardData } from "../../state/dashboard";
+import { BlockerAnswersProvider, useSharedAnswers } from "../blockers/BlockerAnswers";
 import { useLiveRuntimeRequests } from "../../state/liveRuntimeRequests";
 import type { DashboardUi, DecisionRow } from "../dashboard-v3/context";
 import { DashboardUiProvider } from "../dashboard-v3/context";
 import { rankDecisions } from "../dashboard-v3/dashboard.logic";
 import { DecisionCard } from "../dashboard-v3/decisions";
 import { useMinuteClock } from "../dashboard-v3/prefs";
-import { useDecisionAnswers } from "../dashboard-v3/useDecisionAnswers";
 import { Button } from "../ui/button";
 
 /**
@@ -19,7 +19,20 @@ import { Button } from "../ui/button";
  * supplies the slice of the Dashboard context that card reads (the clock, the answers, and a way
  * to open a task).
  */
-export function CosDecisionPin({
+export function CosDecisionPin(props: {
+  readonly environmentId: EnvironmentId;
+  readonly id: string;
+  readonly open: boolean;
+  readonly onClose: () => void;
+}) {
+  return (
+    <BlockerAnswersProvider>
+      <CosDecisionPinBody {...props} />
+    </BlockerAnswersProvider>
+  );
+}
+
+function CosDecisionPinBody({
   environmentId,
   id,
   open,
@@ -33,7 +46,6 @@ export function CosDecisionPin({
   const { data, snapshotSource } = useDashboardData();
   const live = useLiveRuntimeRequests();
   const now = useMinuteClock();
-  const answers = useDecisionAnswers();
 
   const rows = useMemo<ReadonlyArray<DecisionRow>>(() => {
     const all = data.projects
@@ -54,8 +66,7 @@ export function CosDecisionPin({
   }, [data.projects, environmentId, live, snapshotSource]);
 
   const openKeys = useMemo(() => new Set(rows.map((row) => row.key)), [rows]);
-  const reconcile = answers.reconcile;
-  useEffect(() => reconcile(openKeys), [reconcile, openKeys]);
+  const answers = useSharedAnswers(openKeys);
 
   // An answered card that already left the snapshot stays on screen showing what happened.
   const shown = useMemo(

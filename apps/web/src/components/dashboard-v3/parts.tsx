@@ -1,11 +1,15 @@
 import { isNewlyFiled, newMarkTitle } from "@t3tools/client-runtime/dashboard/order";
-import { blockerHeadline } from "@t3tools/client-runtime/dashboard/blockers";
+import { blockerHeadline, taskBlockers } from "@t3tools/client-runtime/dashboard/blockers";
 import type { DashboardRelease, DashboardTask, ProjectRequestPlacer } from "@t3tools/contracts";
 import { CheckIcon } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
 import { cn } from "../../lib/utils";
-import { BadgeShell, blockerOfRow, WaitingList } from "../blockers/BlockerBadge";
+import { projectIssuesQuery } from "../../state/projectIssues";
+import { useEnvironmentQuery } from "../../state/query";
+import { BadgeShell, BlockerList, blockerOfRow, WaitingList } from "../blockers/BlockerBadge";
+import { useBlockerPermissions } from "../blockers/useBlockerActions";
+import { useOrchestratorThreadShells } from "../orchestrators/useOrchestratorThreads";
 import { InlineButton } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { useDashboardUi } from "./context";
@@ -173,7 +177,7 @@ export function WaitingOnYou({
   return (
     <BadgeShell
       tone="amber"
-      label={`${label}${keys.length > 1 ? ` (${keys.length})` : ""}`}
+      label={`${label}${entries.length > 1 ? ` (${entries.length})` : ""}`}
       ariaLabel={`${label}: the decisions blocking this and their answers`}
       settledLabel="Answered"
       active={entries.length > 0}
@@ -252,7 +256,6 @@ export function ProgressFigure({
   );
 }
 
-// "blocked" without an open decision means another issue holds the task, not Brad.
 const STATUS_WORDS: Record<DashboardTask["status"], string> = {
   pending: "queued",
   working: "in progress",
@@ -261,10 +264,47 @@ const STATUS_WORDS: Record<DashboardTask["status"], string> = {
   done: "done",
 };
 
+/** The popup of a task's Blocked badge: what actually blocks it, derived only while it is open. */
+function TaskBlockers({
+  scoped,
+  task,
+}: {
+  readonly scoped: ScopedProject;
+  readonly task: DashboardTask;
+}) {
+  const ui = useDashboardUi();
+  const shells = useOrchestratorThreadShells();
+  const { environmentId } = scoped;
+  const rootId = scoped.project.rootThreadId;
+  const issues = useEnvironmentQuery(
+    rootId ? projectIssuesQuery({ environmentId, input: { rootThreadId: rootId } }) : null,
+  ).data?.issues;
+  const permissions = useBlockerPermissions(environmentId);
+  const [now] = useState(() => new Date().toISOString());
+  const blockers = useMemo(
+    () => taskBlockers(task, shells, issues ?? [], { ...permissions, now }),
+    [task, shells, issues, permissions, now],
+  );
+  return (
+    <BlockerList
+      blockers={blockers}
+      rowEnvironmentId={environmentId}
+      scopeRootId={rootId}
+      emptyText={`Blocked: ${task.title}`}
+    >
+      <div>
+        <InlineButton tone="muted" onClick={() => ui.openTask(scoped, task)}>
+          Open task
+        </InlineButton>
+      </div>
+    </BlockerList>
+  );
+}
+
 /**
- * The red "Blocked" on a task the snapshot marks blocked with no decision behind it: another issue
- * holds it. The snapshot does not name that issue, so the popover says what is known and opens the
- * task, where "Blocked by #N" is written; there is no button because only that issue closing clears it.
+ * The red "Blocked" on a task the snapshot marks blocked with no decision behind it. The popover
+ * names the real cause: a held queue (with Resume queue), a failed or stopped thread, an open issue
+ * it depends on, or a question in its thread, and otherwise says only that the task is blocked.
  */
 function TaskBlocked({
   scoped,
@@ -273,7 +313,6 @@ function TaskBlocked({
   readonly scoped: ScopedProject;
   readonly task: DashboardTask;
 }) {
-  const ui = useDashboardUi();
   const [open, setOpen] = useState(false);
   return (
     <BadgeShell
@@ -285,15 +324,7 @@ function TaskBlocked({
       open={open}
       onOpenChange={setOpen}
     >
-      <div className="font-medium">Blocked: {task.title}</div>
-      <div className="text-muted-foreground">
-        Another issue holds this task. It clears when that issue closes.
-      </div>
-      <div>
-        <InlineButton tone="muted" onClick={() => ui.openTask(scoped, task)}>
-          Open task
-        </InlineButton>
-      </div>
+      <TaskBlockers scoped={scoped} task={task} />
     </BadgeShell>
   );
 }
@@ -426,21 +457,32 @@ export function TaskRow({
   );
 }
 
-function TaskFigure({
-  scoped,
-  task,
-  roll,
-  keys,
-  stale,
-  idle,
-}: {
+interface TaskFigureProps {
   readonly scoped: ScopedProject;
   readonly task: DashboardTask;
   readonly roll: Rollup;
   readonly keys: ReadonlyArray<string>;
   readonly stale: boolean;
   readonly idle: boolean;
-}) {
+}
+
+/** A blocked task with no decision behind it always carries the Blocked badge, whatever else it shows. */
+function TaskFigure(props: TaskFigureProps) {
+  const { scoped, task, keys } = props;
+  return (
+    <>
+      <TaskFigureBody {...props} />
+      {task.status === "blocked" && keys.length === 0 ? (
+        <>
+          {" "}
+          <TaskBlocked scoped={scoped} task={task} />
+        </>
+      ) : null}
+    </>
+  );
+}
+
+function TaskFigureBody({ task, roll, keys, stale, idle }: TaskFigureProps) {
   const { now } = useDashboardUi();
   if (task.status === "done") {
     const at = task.closedAt ?? knownConfirmation(task.progress);
@@ -492,9 +534,7 @@ function TaskFigure({
           <WaitingOnYou keys={keys} />
         ) : task.nextStep ? (
           task.nextStep
-        ) : task.status === "blocked" ? (
-          <TaskBlocked scoped={scoped} task={task} />
-        ) : (
+        ) : task.status === "blocked" ? null : (
           STATUS_WORDS[task.status]
         )}
       </span>

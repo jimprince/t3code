@@ -15,6 +15,7 @@ import { useLiveRuntimeRequests } from "../../state/liveRuntimeRequests";
 import { useSupervisionMetadata } from "../../state/forkSupervision";
 import { resolveThreadLinkTarget } from "../../state/threadLinks";
 import { buildThreadRouteParams } from "../../threadRoutes";
+import { BlockerAnswersProvider, useSharedAnswers } from "../blockers/BlockerAnswers";
 import { Sheet, SheetPopup } from "../ui/sheet";
 import { OpenTaskContext } from "../orchestrators/TaskLink";
 import { ProjectTaskPanel } from "../orchestrators/ProjectTaskPanel";
@@ -31,7 +32,6 @@ import { DecisionDialog } from "./decisions";
 import { useCollapsedKeys, useMinuteClock } from "./prefs";
 import { useOrderActions, type DashboardNotice, type PendingMoves } from "./orderActions";
 import { applyPendingMoves, snapshotHasCaughtUp, type PendingMove } from "./pendingMoves";
-import { useDecisionAnswers } from "./useDecisionAnswers";
 import { useVisitBaseline } from "./useVisitBaseline";
 import { VariantA } from "./VariantA";
 
@@ -52,12 +52,23 @@ export type DashboardScope =
  * same rows. It renders the last good snapshot at once and swaps a newer revision in whole; there
  * are no loading states, only "Not loaded yet" before the very first snapshot ever arrives.
  */
-export function DashboardView({
+export function DashboardView(props: {
+  readonly scope: DashboardScope;
+  /** Rendered above the Ask box and every section (the project's What's next canvas). */
+  readonly leading?: ReactNode;
+}) {
+  return (
+    <BlockerAnswersProvider>
+      <DashboardViewBody {...props} />
+    </BlockerAnswersProvider>
+  );
+}
+
+function DashboardViewBody({
   scope,
   leading,
 }: {
   readonly scope: DashboardScope;
-  /** Rendered above the Ask box and every section (the project's What's next canvas). */
   readonly leading?: ReactNode;
 }) {
   const state = useDashboardData();
@@ -65,7 +76,6 @@ export function DashboardView({
   const navigate = useNavigate();
   const openTaskInPage = use(OpenTaskContext);
   const collapse = useCollapsedKeys();
-  const answers = useDecisionAnswers();
   const metadata = useSupervisionMetadata();
   const [dialogKeys, setDialogKeys] = useState<ReadonlyArray<string>>([]);
   const [sheet, setSheet] = useState<{
@@ -209,8 +219,8 @@ export function DashboardView({
   }, [data.projects, liveRequests, snapshotSource]);
 
   const openKeys = useMemo(() => new Set(decisions.map((row) => row.key)), [decisions]);
-  const reconcileAnswers = answers.reconcile;
-  useEffect(() => reconcileAnswers(openKeys), [reconcileAnswers, openKeys]);
+  // The app shell's answers, so a decision answered in the sidebar or a popover shows its receipt here.
+  const answers = useSharedAnswers(openKeys);
   // A project page keeps its own baseline; it must never overwrite Home's. Without the project in
   // the snapshot there is nothing worth storing yet.
   const sinceLooked = useVisitBaseline(scopeKey, data, scope.kind === "home" || root !== null);
