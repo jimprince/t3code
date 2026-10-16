@@ -280,6 +280,9 @@ export function HarnessSidebarList() {
   const selectedCheck = useSelectedCheck();
   const { environments, refresh } = useHarnessEnvironments();
   const [idleExpanded, setIdleExpanded] = useState(false);
+  // The minute clock keeps "late" and "stale" current even when polling has stopped.
+  const nowMinute = useNowMinute();
+  const now = useMemo(() => Date.parse(`${nowMinute}:00Z`), [nowMinute]);
 
   const agents = useMemo(() => {
     const summaries = buildOrchestratorSummaries(threads, projects);
@@ -332,9 +335,6 @@ export function HarnessSidebarList() {
     () => environments.flatMap(({ snapshot }) => (snapshot === null ? [] : [snapshot])),
     [environments],
   );
-  // The minute clock keeps "late" and "stale" current even when polling has stopped.
-  const nowMinute = useNowMinute();
-  const now = useMemo(() => Date.parse(`${nowMinute}:00Z`), [nowMinute]);
   // A host whose last refresh failed can no longer confirm its rows, however recent they are.
   const unreachable = useMemo(
     () =>
