@@ -1501,7 +1501,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
     threadId === null
       ? Effect.succeed(acpMcpContext(undefined, self, threadId))
       : mcpSessions
-          .read(threadId)
+          .read(threadId, options.instanceId)
           .pipe(Effect.map((session) => acpMcpContext(session, self, threadId)));
   const driver = flavor.driver;
   const continuationRequests = options.continuationRequests;

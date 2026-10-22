@@ -468,8 +468,8 @@ export const layerWithOptions = (
         (mcpCredentialReservations.get(mcpReservationKey(threadId, mcpCredentialId)) ?? 0) > 0;
       const mcpPrepareLock = yield* KeyedLock.make<ThreadId>();
       /**
-       * Resolves (or mints) the thread's MCP credential and returns it with a
-       * reservation held; the caller must drop the reservation exactly once.
+       * Resolves (or mints) the thread/provider instance's MCP credential with
+       * a reservation held; the caller must drop the reservation exactly once.
        * Serialized per thread so two concurrent prepares cannot interleave
        * their rotate steps and revoke each other's freshly minted credential.
        */
@@ -498,7 +498,9 @@ export const layerWithOptions = (
                 >(["orchestration", "worktree", "pull-requests"]);
                 if (browserToolsAvailable) capabilities.add("preview");
                 if (deviceToolsAvailable) capabilities.add("device");
-                const existing = yield* mcpSessions.read(threadId);
+                // A thread can retain live runtimes for several providers.
+                // Each runtime keeps the credential its MCP client started with.
+                const existing = yield* mcpSessions.read(threadId, providerInstanceId);
                 if (existing !== undefined) {
                   // Reserve before the async resolve so a release cannot
                   // revoke the credential between validation and reservation.
@@ -524,11 +526,14 @@ export const layerWithOptions = (
                     resolved.capabilities.has("preview") === browserToolsAvailable &&
                     resolved.capabilities.has("device") === deviceToolsAvailable
                   ) {
+                    yield* mcpSessions.set(existing);
                     return { mcpCredentialId: existing.providerSessionId, issued: false };
                   }
                   dropMcpCredentialReservation(threadId, existing.providerSessionId);
                 }
-                yield* mcpSessionRegistry.revokeThread(threadId);
+                if (existing !== undefined) {
+                  yield* mcpSessionRegistry.revokeProviderSession(existing.providerSessionId);
+                }
                 const credential = yield* mcpSessionRegistry.issue({
                   threadId,
                   providerInstanceId,
@@ -542,7 +547,7 @@ export const layerWithOptions = (
             );
       /**
        * With a credential id, revocation is scoped to that credential and the
-       * config slot is cleared only while it still holds it; a replacement
+       * provider slot is cleared only while it still holds it; a replacement
        * session's newer credential survives. Without one (attach failed before
        * a credential was recorded), fall back to thread-wide revocation.
        */
@@ -551,15 +556,9 @@ export const layerWithOptions = (
           ? mcpSessionRegistry
               .revokeThread(threadId)
               .pipe(Effect.tap(() => mcpSessions.clear(threadId)))
-          : mcpSessionRegistry.revokeProviderSession(mcpCredentialId).pipe(
-              Effect.tap(() =>
-                Effect.gen(function* () {
-                  if ((yield* mcpSessions.read(threadId))?.providerSessionId === mcpCredentialId) {
-                    yield* mcpSessions.clear(threadId);
-                  }
-                }),
-              ),
-            );
+          : mcpSessionRegistry
+              .revokeProviderSession(mcpCredentialId)
+              .pipe(Effect.tap(() => mcpSessions.clear(threadId, mcpCredentialId)));
 
       const publishToSubscribers = (
         subscribers: Ref.Ref<
@@ -1032,8 +1031,7 @@ export const layerWithOptions = (
                           Array.from(current.values()).some(
                             (other) =>
                               other !== entry &&
-                              (other.attachedThreadIds.has(threadId) ||
-                                other.mcpCredentialIdByThread.get(threadId) === mcpCredentialId),
+                              other.mcpCredentialIdByThread.get(threadId) === mcpCredentialId,
                           );
                         return heldElsewhere
                           ? Effect.void
@@ -1401,10 +1399,9 @@ export const layerWithOptions = (
                             Array.from(current.values()).some(
                               (other) =>
                                 other.runtime !== attachedRuntime &&
-                                (other.attachedThreadIds.has(input.threadId) ||
-                                  (mcpCredentialId !== undefined &&
-                                    other.mcpCredentialIdByThread.get(input.threadId) ===
-                                      mcpCredentialId)),
+                                mcpCredentialId !== undefined &&
+                                other.mcpCredentialIdByThread.get(input.threadId) ===
+                                  mcpCredentialId,
                             )
                               ? Effect.void
                               : clearMcpSession(input.threadId, mcpCredentialId),
