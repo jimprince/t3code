@@ -26,3 +26,9 @@ decided = "adapt"
 rationale = "The rollback coverage waited for the healthy-version marker with existsSync, but writeText is a plain writeFile that creates the file before its bytes land, so a loaded runner read an empty marker and the case failed with expected '' to equal '1.2.3' in candidate CI while passing locally. Wait for the written version instead. Production keeps the plain write: the watchdog already re-reads the marker with cat on every five-second attempt."
 
 # v2-port-2689-m2: V2 hosted-work boundary guard and native staged install reservation; fork rollback keeps binary backup only.
+
+[[decision]]
+id = "dev-kit-progress-clock-synchronization"
+date = "2026-10-22"
+decided = "adapt"
+rationale = "The quiet-log progress integration test failed twice on loaded PR CI while passing the same-SHA candidate run. Use a Deferred for update-request admission and controlled log timestamps/status during virtual-clock ticks, instead of mixing real filesystem time and subprocess scheduling with TestClock and fixed settle delays. Keep the production update loop and separate real kit-script/log-reader tests."
