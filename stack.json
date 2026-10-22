@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "01f72e0dfc5d5b210792a79e5336d3764a98c6a7",
-  "head": "8e96479301410c1cbab836eb90ffaa02690dd0ec",
+  "prev": "67090261065b8a8fa39b9e5bd1574d6bca428332",
+  "head": "49fab4904dc578b832b41e59df759a09d0cc16be",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -192,14 +192,13 @@
     "fork-request-order",
     "fork-dashboard-v3-19-tracker-plan",
     "fork-dashboard-v3-20-order-ui",
-    "fix-provider-mcp-credentials",
-    "refresh-temp"
+    "fix-provider-mcp-credentials"
   ],
   "unapplied": [],
   "hidden": [],
   "patches": {
     "fix-provider-mcp-credentials": {
-      "oid": "fa2f18ec4bf2c4cd20907015315f7a61fc1a6761"
+      "oid": "49fab4904dc578b832b41e59df759a09d0cc16be"
     },
     "fork-3mf-preview": {
       "oid": "7f841a18fba5262f5127310e1da07e8de4a1f553"
@@ -767,9 +766,6 @@
     },
     "fork-worktree-cleanup": {
       "oid": "c1ae1e605a6fcefe0375780b4d3844a84d864a00"
-    },
-    "refresh-temp": {
-      "oid": "8e96479301410c1cbab836eb90ffaa02690dd0ec"
     }
   }
 }
