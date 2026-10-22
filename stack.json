@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "56aaad4e678a8a4070a91aacd105958accdfa9a3",
-  "head": "58be21fcc142124afca9ff94ef69b49e1f2142bd",
+  "prev": "6a3355dcc0fb17789cd9cfb8c5724288e0f0f5ec",
+  "head": "fa2f18ec4bf2c4cd20907015315f7a61fc1a6761",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -191,11 +191,15 @@
     "fork-thread-plan-progress",
     "fork-request-order",
     "fork-dashboard-v3-19-tracker-plan",
-    "fork-dashboard-v3-20-order-ui"
+    "fork-dashboard-v3-20-order-ui",
+    "fix-provider-mcp-credentials"
   ],
   "unapplied": [],
   "hidden": [],
   "patches": {
+    "fix-provider-mcp-credentials": {
+      "oid": "fa2f18ec4bf2c4cd20907015315f7a61fc1a6761"
+    },
     "fork-3mf-preview": {
       "oid": "7f841a18fba5262f5127310e1da07e8de4a1f553"
     },
