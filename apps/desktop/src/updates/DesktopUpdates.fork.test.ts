@@ -2,6 +2,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import type { DesktopUpdateState } from "@t3tools/contracts";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
@@ -11,6 +12,7 @@ import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
+import { vi } from "vite-plus/test";
 
 import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
@@ -21,6 +23,7 @@ import * as ElectronUpdater from "../electron/ElectronUpdater.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopUpdates from "./DesktopUpdates.ts";
+import * as DevKitUpdates from "./DevKitUpdates.ts";
 
 interface UpdatesHarnessOptions {
   readonly checkForUpdates?: Effect.Effect<
@@ -431,41 +434,53 @@ describe("DesktopUpdates in the Mac dev kit app", () => {
     );
   });
 
-  const settle = Effect.promise(() => new Promise((resolve) => setTimeout(resolve, 30)));
-
   it.effect("shows the kit's step and progress, and says plainly when the log goes quiet", () => {
     const kit = makeKitHome({ head: "abc1234", tip: "def5678", stuck: true });
-    kit.appendLog("==> Updating an earlier run\nProgress: resolved 99, reused 99\n");
+    let log = "==> Updating an earlier run\nProgress: resolved 99, reused 99\n";
+    kit.appendLog(log);
     const harness = devKitHarness(kit);
     const realNow = Date.now();
     const messages = () =>
       harness.sentStates.flatMap((state) => (state.message === null ? [] : [state.message]));
     return Effect.scoped(
       Effect.gen(function* () {
+        const requested = yield* Deferred.make<void>();
+        const requestUpdate = vi
+          .spyOn(DevKitUpdates, "requestUpdate")
+          .mockReturnValue(Deferred.succeed(requested, undefined).pipe(Effect.asVoid));
+        const readStatus = vi.spyOn(DevKitUpdates, "readStatus").mockReturnValue(
+          Effect.succeed({
+            branch: "live",
+            builtSha: "abc1234",
+            liveSha: "def5678",
+            needsUpdate: true,
+            workerRunning: true,
+            prebuild: null,
+          }),
+        );
+        // Keep filesystem time and subprocess scheduling out of virtual-clock
+        // ticks. Other kit tests exercise the real script and log readers.
+        const readLog = vi
+          .spyOn(DevKitUpdates, "readLog")
+          .mockImplementation((_kit, offset) =>
+            Effect.sync(() => Option.some({ text: log.slice(offset), mtimeMs: realNow })),
+          );
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => {
+            requestUpdate.mockRestore();
+            readStatus.mockRestore();
+            readLog.mockRestore();
+          }),
+        );
         yield* TestClock.setTime(realNow);
         const updates = yield* DesktopUpdates.DesktopUpdates;
         yield* updates.configure;
         yield* updates.check("test");
         const fiber = yield* Effect.forkChild(updates.startUpdate);
-        for (let attempt = 0; attempt < 100 && kit.requests() === 0; attempt += 1) {
-          yield* settle;
-        }
-        // Let the update loop reach its first sleep before the clock moves.
-        for (let attempt = 0; attempt < 10; attempt += 1) {
-          yield* settle;
-        }
-        kit.appendLog(
-          "\n==> Installing dependencies (vp i)\nProgress: resolved 12, reused 10, downloaded 0\n",
-        );
+        yield* Deferred.await(requested);
+        log +=
+          "\n==> Installing dependencies (vp i)\nProgress: resolved 12, reused 10, downloaded 0\n";
         yield* TestClock.adjust("5 seconds");
-        for (
-          let attempt = 0;
-          attempt < 100 &&
-          !messages().some((message) => message.includes("Installing dependencies"));
-          attempt += 1
-        ) {
-          yield* settle;
-        }
         const live = messages().findLast((message) => message.includes("Installing dependencies"));
         assert.include(live, "resolved 12, reused 10");
         assert.include(live, "5s elapsed");
@@ -473,11 +488,7 @@ describe("DesktopUpdates in the Mac dev kit app", () => {
         assert.notInclude(live, "earlier run");
         assert.notInclude(live, "may be stuck");
 
-        // The log stays silent: 25 more ticks is past the two quiet minutes.
-        for (let tick = 0; tick < 25; tick += 1) {
-          yield* TestClock.adjust("5 seconds");
-          yield* settle;
-        }
+        yield* TestClock.adjust("125 seconds");
         const stuck = messages().findLast((message) => message.includes("may be stuck"));
         assert.include(stuck, "No log activity for");
         assert.include(stuck, "launch.log");

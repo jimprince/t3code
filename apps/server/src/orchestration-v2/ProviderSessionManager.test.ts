@@ -356,14 +356,20 @@ const makeProviderAdapter = Effect.fnUntraced(function* (
           if (options.hangSessionScopeClose === true) yield* hangClose;
         }
         if (options.mcpConfigs !== undefined && options.spawnBeforeOpen === true) {
-          const mcpConfig = yield* mcpSessions.read(input.threadId);
+          const mcpConfig = yield* mcpSessions.read(
+            input.threadId,
+            input.modelSelection.instanceId,
+          );
           yield* Ref.update(options.mcpConfigs, (configs) => [...configs, mcpConfig]);
         }
         if (options.beforeOpen !== undefined) {
           yield* options.beforeOpen(input);
         }
         if (options.mcpConfigs !== undefined && options.spawnBeforeOpen !== true) {
-          const mcpConfig = yield* mcpSessions.read(input.threadId);
+          const mcpConfig = yield* mcpSessions.read(
+            input.threadId,
+            input.modelSelection.instanceId,
+          );
           yield* Ref.update(options.mcpConfigs, (configs) => [...configs, mcpConfig]);
         }
         const now = yield* DateTime.now;
@@ -446,6 +452,7 @@ const makeProviderAdapter = Effect.fnUntraced(function* (
 
 function layerTest(input: {
   readonly state: Ref.Ref<TestProviderRuntimeState>;
+  readonly secondInstanceId?: ProviderInstanceId;
   readonly idleTimeoutMs: number;
   readonly maxIdlePinMs?: number;
   readonly failEventStream?: boolean;
@@ -506,7 +513,32 @@ function layerTest(input: {
         ? {}
         : { scopeCloseReached: input.scopeCloseReached }),
       ...(input.resetThread === undefined ? {} : { resetThread: input.resetThread }),
-    }).pipe(Effect.map(ProviderAdapterRegistry.layerSingle)),
+    }).pipe(
+      Effect.map((adapter) =>
+        ProviderAdapterRegistry.layerFromAdapters([
+          adapter,
+          ...(input.secondInstanceId === undefined
+            ? []
+            : [
+                {
+                  ...adapter,
+                  instanceId: input.secondInstanceId,
+                  openSession: (openInput: Parameters<typeof adapter.openSession>[0]) =>
+                    adapter.openSession(openInput).pipe(
+                      Effect.map((runtime) => ({
+                        ...runtime,
+                        instanceId: input.secondInstanceId!,
+                        providerSession: {
+                          ...runtime.providerSession,
+                          providerInstanceId: input.secondInstanceId!,
+                        },
+                      })),
+                    ),
+                },
+              ]),
+        ]),
+      ),
+    ),
   );
   const layerConfiguredMcpRegistry =
     input.pauseResolve === undefined
@@ -2348,6 +2380,105 @@ it.effect(
             mcpConfigs,
           }),
         ),
+      );
+    }),
+);
+
+it.effect(
+  "ProviderSessionManagerV2 preserves MCP authentication when switching provider instances",
+  () =>
+    Effect.gen(function* () {
+      const state = yield* Ref.make(emptyState);
+      const mcpConfigs = yield* Ref.make<
+        ReadonlyArray<McpProviderSession.McpProviderSessionConfig | undefined>
+      >([]);
+      const secondInstanceId = ProviderInstanceId.make("codex-other-account");
+      yield* Effect.gen(function* () {
+        const eventSink = yield* EventSink.EventSinkV2;
+        const idAllocator = yield* IdAllocator.IdAllocatorV2;
+        const manager = yield* ProviderSessionManager.ProviderSessionManagerV2;
+        const registry = yield* McpSessionRegistry.McpSessionRegistry;
+        const threadId = ThreadId.make("thread-provider-switch-mcp-auth");
+        const now = yield* DateTime.now;
+        yield* eventSink.write({
+          events: [yield* makeThreadCreatedEvent({ idAllocator, threadId, now })],
+        });
+        const firstSessionId = yield* idAllocator.allocate.providerSession({
+          providerInstanceId: modelSelection.instanceId,
+          threadId,
+        });
+        const secondSessionId = yield* idAllocator.allocate.providerSession({
+          providerInstanceId: secondInstanceId,
+          threadId,
+        });
+        yield* manager.open({
+          threadId,
+          providerSessionId: firstSessionId,
+          modelSelection,
+          runtimePolicy,
+        });
+        const original = (yield* Ref.get(mcpConfigs))[0]!;
+        const firstToken = original.authorizationHeader.replace(/^Bearer\s+/, "");
+        assert.equal(
+          (yield* registry.resolve(firstToken))?.thread.providerInstanceId,
+          modelSelection.instanceId,
+        );
+
+        // No clock advance: provider switching alone must not revoke the token
+        // baked into the first provider's still-live MCP client.
+        yield* manager.open({
+          threadId,
+          providerSessionId: secondSessionId,
+          modelSelection: { ...modelSelection, instanceId: secondInstanceId },
+          runtimePolicy,
+        });
+        const second = (yield* Ref.get(mcpConfigs))[1]!;
+        const secondToken = second.authorizationHeader.replace(/^Bearer\s+/, "");
+        assert.equal(
+          (yield* registry.resolve(firstToken))?.thread.providerInstanceId,
+          modelSelection.instanceId,
+          "opening another provider must preserve authentication for the original live process",
+        );
+        assert.equal(
+          (yield* registry.resolve(secondToken))?.thread.providerInstanceId,
+          secondInstanceId,
+        );
+
+        yield* manager.detach({
+          providerSessionId: firstSessionId,
+          threadId,
+          detail: "Provider switch.",
+        });
+        yield* manager.open({
+          threadId,
+          providerSessionId: firstSessionId,
+          modelSelection,
+          runtimePolicy,
+        });
+        const mcpSessions = yield* McpProviderSessions.McpProviderSessions;
+        assert.equal(
+          (yield* mcpSessions.read(threadId))?.providerSessionId,
+          original.providerSessionId,
+          "returning to the original provider must reuse its original credential",
+        );
+        assert.equal(
+          (yield* registry.resolve(secondToken))?.thread.providerInstanceId,
+          secondInstanceId,
+        );
+        yield* manager.close(firstSessionId);
+        assert.isUndefined(
+          yield* registry.resolve(firstToken),
+          "closing a provider must revoke its credential even while another provider is attached",
+        );
+        assert.equal(
+          (yield* registry.resolve(secondToken))?.thread.providerInstanceId,
+          secondInstanceId,
+        );
+        yield* manager.close(secondSessionId);
+        assert.isUndefined(yield* registry.resolve(secondToken));
+        assert.isUndefined(yield* mcpSessions.read(threadId));
+      }).pipe(
+        Effect.provide(layerTest({ state, idleTimeoutMs: 60_000, mcpConfigs, secondInstanceId })),
       );
     }),
 );
