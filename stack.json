@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "67090261065b8a8fa39b9e5bd1574d6bca428332",
-  "head": "49fab4904dc578b832b41e59df759a09d0cc16be",
+  "prev": "5a525f094100ad2deff56f1400504ca7a4713ab2",
+  "head": "4e269d43067dafdbd69651278052a26d69fc3592",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -38,7 +38,9 @@
     "fork-restart-when-idle",
     "fork-nested-threads",
     "fork-resume-background-work",
-    "fork-overnight-updates",
+    "fork-overnight-updates"
+  ],
+  "unapplied": [
     "fork-spawn-budget",
     "fork-cross-project-thread-nesting",
     "fork-launch-health",
@@ -194,7 +196,6 @@
     "fork-dashboard-v3-20-order-ui",
     "fix-provider-mcp-credentials"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fix-provider-mcp-credentials": {
