@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "07fc86e60312e7f001bbd96c273de5f9550b71ab",
-  "head": "c1526ab19dcca0bcf6c9b8f0c2531ea94ef8d7e7",
+  "prev": "d4082b505a502119fe9b6f23b875e0b4e83f4990",
+  "head": "b4a2c2e177ab39cde62f8054d0e465ee0ed95d5d",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -193,8 +193,7 @@
     "fork-dashboard-v3-19-tracker-plan",
     "fork-dashboard-v3-20-order-ui",
     "fix-provider-mcp-credentials",
-    "fork-devkit-progress-test-clock",
-    "refresh-temp"
+    "fork-devkit-progress-test-clock"
   ],
   "unapplied": [],
   "hidden": [],
@@ -398,7 +397,7 @@
       "oid": "5fe2963a17712f645ebdaafa3e1d8df3f017cc3b"
     },
     "fork-devkit-progress-test-clock": {
-      "oid": "f85d9af1c82a3f77a0001d0191762e19edf61b46"
+      "oid": "b4a2c2e177ab39cde62f8054d0e465ee0ed95d5d"
     },
     "fork-direct-endpoints-enumeration": {
       "oid": "42a604dd2372c31befab70f2a3000da0468e2471"
@@ -771,9 +770,6 @@
     },
     "fork-worktree-cleanup": {
       "oid": "c1ae1e605a6fcefe0375780b4d3844a84d864a00"
-    },
-    "refresh-temp": {
-      "oid": "c1526ab19dcca0bcf6c9b8f0c2531ea94ef8d7e7"
     }
   }
 }
