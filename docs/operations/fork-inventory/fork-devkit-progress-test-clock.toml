@@ -1,0 +1,8 @@
+name = "fork-devkit-progress-test-clock"
+subject = "test(desktop): synchronize dev kit progress checks"
+class = "divergence"
+purpose = "Make the dev kit progress CI test deterministic across loaded runners by using one clock and an explicit update-request milestone, without changing updater behavior."
+retire_when = "The fork retires the dev kit progress fixture or its original tests supply equivalent deterministic clock coverage."
+depends_on = ["fork-overnight-updates"]
+roles = []
+note = "CI-only stabilization, independently droppable from both updater behavior and MCP credential repair. The existing quiet-log test failed in two PR CI attempts while the exact same source passed candidate CI. Its simulated clock raced real file timestamps and asynchronous script/log IO. Control the peripheral status/log reader for virtual ticks and await update-request admission with Deferred; retain separate real kit script and log-reader tests. A negative control raising the quiet threshold to four minutes still fails the repaired test. Refreshing the older product patch rewrites the intervening published stack and expands the PR comparison to 1,527 paths; keep this independent CI concern at the tip so the PR remains limited to its intended source changes."
